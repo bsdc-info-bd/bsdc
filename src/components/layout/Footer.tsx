@@ -1,5 +1,5 @@
 /* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { BsdcLogo, RrcLogo } from '@/components/branding/Logo';
 import { Github, Globe, Mail, MapPin } from 'lucide-react';
@@ -7,7 +7,13 @@ import { APP_EMAIL, APP_EMAIL_SECONDARY, FOUNDER_NAME, SISTER_PROJECT_NAME, SIST
 
 export function Footer() {
   const { t } = useTranslation();
+  const location = useLocation();
   const year = new Date().getFullYear();
+
+  // Automatically exclude global footer from the real-time chat interface
+  const isMessagesPage = location.pathname.startsWith('/messages');
+  if (isMessagesPage) return null;
+
   return (
     <footer className="mt-auto border-t border-surface-light-border bg-surface-light-muted dark:border-surface-dark-border dark:bg-[#0B0B0B]">
       <div className="bsdc-container grid gap-8 py-10 sm:grid-cols-2 lg:grid-cols-5">
