@@ -667,7 +667,21 @@
     "permRequest": "Allow",
     "permGranted": "{{name}} permission granted",
     "permDeniedHint": "Permission is blocked — allow BSDC from the address-bar lock icon, then retry",
-    "permReady": "Ready"
+    "permReady": "Ready",
+    "onboardingTitle": "Allow BSDC to reach you",
+    "onboardingDesc": "Tap Allow on each — your browser will show its real permission dialog.",
+    "onboardingAsk": "Ask",
+    "onboardingSkip": "Never ask again",
+    "onboardingLater": "Maybe later",
+    "onboardingIframeTitle": "Embedded preview detected",
+    "onboardingIframeDesc": "Browsers block permission dialogs inside embedded previews. Open BSDC in a new tab and this card will appear again automatically.",
+    "onboardingPrivacy": "You can change these anytime in Settings → Notifications → Permissions. BSDC never sells your data.",
+    "permNotifDesc": "Real browser notifications + push for new messages and updates",
+    "permLocDesc": "Nearby developers, location-ranked feed and accurate local content",
+    "permMicDesc": "Voice notes in messenger — tap Allow and speak",
+    "permTest": "Send test notification",
+    "permPushOn": "Web Push registered",
+    "permPushAsk": "Register for push"
   },
   "launch": {
     "title": "Launching soon",

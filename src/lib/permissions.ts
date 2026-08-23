@@ -30,6 +30,13 @@ export function openStandalone(): void {
   window.open(window.location.href, '_blank', 'noopener,noreferrer');
 }
 
+/** Open standalone with the auto-ask flag so the permission card reappears. */
+export function openPermissionsStandalone(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.set('bsdc-permissions', '1');
+  window.open(url.toString(), '_blank', 'noopener,noreferrer');
+}
+
 /** Query the current permission state without prompting. */
 export async function queryPermission(kind: PermissionKind): Promise<PermissionStateInfo> {
   if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unsupported';

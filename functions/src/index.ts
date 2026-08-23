@@ -15,9 +15,12 @@
  * Deploy: cd functions && npm i && npm run deploy
  */
 import { initializeApp } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getDatabase, getFirestore, FieldValue } from 'firebase-admin/firestore';
+
+const rtdbAdmin = getDatabase();
 import { getAuth } from 'firebase-admin/auth';
-import { onDocumentCreated } from 'firebase-functions/v2/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
+import { onDocumentCreated, onValueWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { onRequest } from 'firebase-functions/v2/https';
 
@@ -83,6 +86,57 @@ export const scheduledCleanup = onSchedule('every 60 minutes', async () => {
 
   await Promise.all([...storyDeletes, ...publishes, ...expiries]);
 });
+
+/* --------------------------------------------- real Web Push (FCM) */
+
+/**
+ * Real background push: when a chat message is written to Realtime DB, every
+ * other participant with registered browser push tokens (stored on their
+ * Firestore profile by lib/pushNotifications.ts) receives an FCM
+ * notification — even with the app closed.
+ */
+export const onChatMessagePush = onValueWritten(
+  { region: 'asia-southeast1', ref: 'chats/{chatId}/messages/{messageId}' },
+  async (event) => {
+    const after = event.data.after.val() as
+      | { senderId?: string; senderName?: string; text?: string; imageUrl?: string; audioUrl?: string; fileUrl?: string; fileName?: string }
+      | null;
+    if (!after) return; // deleted
+    const chatId = event.params.chatId;
+
+    const metaSnap = await rtdbAdmin.ref(`chats/${chatId}/metadata`).get();
+    const meta = (metaSnap.val() as { participantIds?: string[]; name?: string } | null) || {};
+    const participants = meta.participantIds || [];
+    const recipients = participants.filter((uid) => uid !== after.senderId);
+    if (recipients.length === 0) return;
+
+    const body =
+      after.text?.slice(0, 90) ||
+      (after.imageUrl ? 'Sent a photo' : after.audioUrl ? 'Sent a voice note' : after.fileUrl ? `Sent ${after.fileName || 'a file'}` : 'New message');
+
+    const tokens: string[] = [];
+    for (const uid of recipients) {
+      const userSnap = await db.doc(`users/${uid}`).get();
+      const pushTokens = (userSnap.data()?.pushTokens as string[] | undefined) || [];
+      tokens.push(...pushTokens);
+    }
+    if (tokens.length === 0) return;
+
+    await getMessaging().sendEachForMulticast({
+      notification: {
+        title: meta.name || after.senderName || 'BSDC',
+        body,
+      },
+      data: { url: '/messages' },
+      tokens,
+      android: { priority: 'high', notification: { icon: 'default', tag: 'bsdc-message' } },
+      webpush: {
+        notification: { icon: '/favicon-192.png', badge: '/favicon-192.png', tag: 'bsdc-message' },
+        fcmOptions: { link: 'https://www.bsdc.info.bd/messages' },
+      },
+    });
+  },
+);
 
 /* -------------------------------------------------------- sitemap.xml */
 

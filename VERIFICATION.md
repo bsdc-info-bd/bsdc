@@ -277,3 +277,31 @@ npm run dev       # probe routes listed above
       32px range slider targets
 
 **Gates after round 4:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · clean build + PWA.
+
+
+---
+
+## Fix round 5 — BSDC now actively ASKS; real native push
+
+**Why nothing asked before (root cause):** browsers only display the native permission
+dialog when a site calls `Notification.requestPermission()` / `getUserMedia()` /
+`getCurrentPosition()` from an explicit user gesture — BSDC previously only ran those
+behind Settings switches, and preview iframes auto-deny silently. Fixed end to end:
+
+- [x] **Permission onboarding card** — appears automatically once after sign-in
+      (2.5s, snooze 7 days / never-ask options) with three real Ask buttons that each
+      fire the genuine browser prompt from the tap gesture; reappears automatically when
+      opened standalone via `?bsdc-permissions=1` (the iframe escape hatch links there)
+- [x] Settings → Notifications → **Ask now** + **Send test notification** buttons
+- [x] **Native push layer** (`lib/pushNotifications.ts` + `public/firebase-messaging-sw.js`):
+      service-worker `showNotification` (works on Android Chrome where `new Notification`
+      throws), foreground FCM handler, notificationclick focuses and routes to the chat
+- [x] **Real Web Push registration**: FCM token via `VITE_FIREBASE_VAPID_KEY` stored on
+      `users/{uid}.pushTokens` (rules updated) — with graceful local-notification mode
+      when no VAPID key is configured
+- [x] **Real server push**: new `onChatMessagePush` Cloud Function (RTDB trigger,
+      asia-southeast1) delivers FCM multicast push to every participant's registered
+      device tokens when a chat message is written — background push with the app closed
+- [x] GlobalChatWatcher now notifies through the Service Worker (true native notifications)
+
+**Gates after round 5:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · clean build + PWA.

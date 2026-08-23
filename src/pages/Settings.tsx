@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   User, Lock, Palette, Bell, Keyboard, Download, Trash2, Languages, Moon, Sun, Save,
-  MapPin, LocateFixed,
+  MapPin, LocateFixed, Sparkles,
 } from 'lucide-react';
 import { auth, firebaseConfigured } from '@/config/firebase';
 import {
@@ -19,6 +19,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { PermissionRow } from '@/components/common/PermissionRow';
+import { registerWebPush, sendTestNotification } from '@/lib/pushNotifications';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ImageUploader } from '@/components/ui/ImageUploader';
 import { SEOHead } from '@/components/seo/SEOHead';
@@ -428,6 +429,23 @@ export default function Settings() {
           <TabsContent value="notifications">
             <div className="bsdc-surface divide-y divide-surface-light-border p-4 dark:divide-surface-dark-border">
               <p className="pb-1 text-sm font-bold">{t('settings.permissionsTitle')}</p>
+              <div className="flex flex-wrap gap-2 pb-2">
+                <Button size="sm" variant="outline" icon={<Sparkles className="h-4 w-4" aria-hidden />} onClick={() => window.dispatchEvent(new CustomEvent('bsdc:open-permissions'))}>
+                  {t('settings.onboardingAsk')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  icon={<Bell className="h-4 w-4" aria-hidden />}
+                  disabled={typeof Notification !== 'undefined' && Notification.permission !== 'granted'}
+                  onClick={() => {
+                    if (profile) void registerWebPush(profile.uid);
+                    void sendTestNotification();
+                  }}
+                >
+                  {t('settings.permTest')}
+                </Button>
+              </div>
               <PermissionRow kind="notifications" />
               <PermissionRow kind="microphone" />
               <PermissionRow kind="geolocation" />

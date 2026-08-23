@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { onChatList } from '@/lib/realtime';
 import { playBeep, unlockAudio } from '@/lib/chatSounds';
-import { showDesktopNotification } from '@/lib/permissions';
+import { showNativeNotification } from '@/lib/pushNotifications';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { UserChatEntry } from '@/types/chat';
@@ -75,9 +75,9 @@ export function GlobalChatWatcher() {
         if (soundRef.current) playBeep('received');
         // 2. In-app toast on every page.
         toast.message(title, { description: body, action: { label: 'Open', onClick: open }, duration: 6000 });
-        // 3. Desktop/browser notification only when permitted and the tab is hidden.
+        // 3. Real native notification (service-worker based) when the tab is hidden.
         if (document.hidden) {
-          showDesktopNotification(`${title} · BSDC`, body, { onClick: open });
+          void showNativeNotification({ title: `${title} · BSDC`, body, tag: 'bsdc-message', url: '/messages' });
         }
       }
     });

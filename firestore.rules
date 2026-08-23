@@ -51,7 +51,7 @@ service cloud.firestore {
                             && changedKeys().hasOnly(['displayName','username','avatar','coverPhoto','bio',
                               'bioTitle','location','geo','website','github','linkedin','twitter','skills',
                               'education','work','language','theme','lastActive','isOnline','emailVerified',
-                              'profileCompleted','onboardingStep','postCount','followerCount','followingCount',
+                              'profileCompleted','onboardingStep','pushTokens','postCount','followerCount','followingCount',
                               'bsdcPoints','streak','lastLoginDay','creatorProgramStatus','softwareLicenses',
                               'isCreator','updatedAt']))
                           // Founder bootstrap: the configured email may elevate itself to superadmin/admin.

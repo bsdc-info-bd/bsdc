@@ -10,6 +10,7 @@ import { FullPageLoader } from '@/components/ui/Skeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { CommandPalette, ShortcutsDialog } from '@/components/search/CommandPalette';
 import { GlobalChatWatcher } from '@/components/chat/GlobalChatWatcher';
+import { PermissionOnboarding } from '@/components/common/PermissionOnboarding';
 import { useAuthBootstrap } from '@/hooks/useAuth';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAuthStore } from '@/stores/authStore';
@@ -143,6 +144,7 @@ export default function App() {
           <BrowserRouter>
             <GlobalShortcuts />
             <GlobalChatWatcher />
+            <PermissionOnboarding />
             <CommandPalette />
             <ShortcutsDialog />
             <Toaster
