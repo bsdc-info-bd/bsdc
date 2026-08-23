@@ -29,6 +29,7 @@ import { useUIStore } from '@/stores/uiStore';
 /*  🎵  Audio Beep Utility — Web Audio API (safe for all browser policies)    */
 /* -------------------------------------------------------------------------- */
 let _audioCtx: AudioContext | null = null;
+
 function getAudioCtx(): AudioContext | null {
   try {
     if (typeof window === 'undefined') return null;
@@ -37,12 +38,19 @@ function getAudioCtx(): AudioContext | null {
       if (!Ctx) return null;
       _audioCtx = new Ctx();
     }
-    if (_audioCtx.state === 'suspended') void _audioCtx.resume().catch(() => {});
-    return _audioCtx;
+    const ctx = _audioCtx;
+    if (ctx) {
+      if (ctx.state === 'suspended') {
+        void ctx.resume().catch(() => {});
+      }
+      return ctx;
+    }
+    return null;
   } catch {
     return null;
   }
 }
+
 function playBeep(type: 'sent' | 'received' = 'sent') {
   try {
     const ctx = getAudioCtx();
@@ -153,7 +161,7 @@ export default function Messages() {
   const [searchParams] = useSearchParams();
   const activeChat = chatId || searchParams.get('chat') || null;
 
-  // Unlock audio on first user interaction (browser policy safe)
+  // Unlock audio context gracefully with direct user gestures
   useEffect(() => {
     const unlock = () => {
       getAudioCtx();
@@ -386,7 +394,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
     bottomRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
   }, [chat.messages.length]);
 
-  // 🔔 Beep on incoming message (not mine)
+  // 🔔 Beep triggers on active incoming message
   useEffect(() => {
     const msgs = chat.messages;
     if (!msgs.length) {
@@ -465,8 +473,8 @@ function ChatWindow({ chatId }: { chatId: string }) {
           <ArrowLeft className="h-5 w-5" aria-hidden />
         </button>
         {chat.metadata?.type === 'direct' && otherParticipants[0] ? (
-          <Link to={`/p/${otherParticipants[0].username}`} className="bsdc-hover-lift flex min-w-0 items-center gap-2.5 rounded-xl p-1 -m-1">
-            <ParticipantAvatar uid={otherParticipants[0].uid} name={otherParticipants[0].displayName} src={otherParticipants[0].avatar} />
+          <Link to={`/p/${otherParticipants[0].username || ''}`} className="bsdc-hover-lift flex min-w-0 items-center gap-2.5 rounded-xl p-1 -m-1">
+            <ParticipantAvatar uid={otherParticipants[0].uid} name={otherParticipants[0].displayName || ''} src={otherParticipants[0].avatar || ''} />
             <span className="min-w-0">
               <span className="block truncate text-sm font-bold sm:text-[15px]">{otherParticipants[0].displayName}</span>
               <span className="block text-[11px] text-neutral-400 sm:text-xs">
