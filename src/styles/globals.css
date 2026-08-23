@@ -1,0 +1,129 @@
+/* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white text-neutral-900 antialiased dark:bg-surface-dark dark:text-neutral-100;
+    font-family: 'Inter', 'Hind Siliguri', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    overflow-x: hidden;
+    min-height: 100dvh;
+  }
+
+  html[lang='bn'] body {
+    font-family: 'Hind Siliguri', 'Inter', system-ui, sans-serif;
+  }
+
+  #root {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  ::selection {
+    @apply bg-brand-500/30;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-500 ring-offset-1 ring-offset-white dark:ring-offset-surface-dark;
+  }
+
+  h1, h2, h3, h4 {
+    @apply break-words;
+  }
+
+  img {
+    @apply max-w-full;
+  }
+
+  /* Scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+  .dark * {
+    scrollbar-color: #3f3f46 transparent;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-neutral-300 dark:bg-neutral-700;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .bsdc-container {
+    @apply mx-auto w-full max-w-[1600px] px-3 sm:px-4 lg:px-6;
+  }
+
+  .bsdc-surface {
+    @apply rounded-xl border border-surface-light-border bg-white shadow-card dark:border-surface-dark-border dark:bg-surface-dark-muted;
+  }
+
+  .bsdc-input {
+    @apply w-full rounded-lg border border-surface-light-border bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400
+      focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/30
+      disabled:cursor-not-allowed disabled:opacity-60
+      dark:border-surface-dark-border dark:bg-surface-dark-raised dark:text-neutral-100 dark:placeholder:text-neutral-500;
+  }
+
+  .bsdc-label {
+    @apply mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300;
+  }
+
+  .bsdc-error-text {
+    @apply mt-1 text-xs font-medium text-red-600 dark:text-red-400;
+  }
+
+  .bsdc-chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+
+  .bsdc-prose {
+    @apply break-words leading-relaxed;
+  }
+  .bsdc-prose h1 { @apply mb-3 mt-5 text-2xl font-bold sm:text-3xl; }
+  .bsdc-prose h2 { @apply mb-2.5 mt-5 text-xl font-bold sm:text-2xl; }
+  .bsdc-prose h3 { @apply mb-2 mt-4 text-lg font-semibold sm:text-xl; }
+  .bsdc-prose h4 { @apply mb-2 mt-3 text-base font-semibold; }
+  .bsdc-prose p { @apply my-3; }
+  .bsdc-prose a { @apply font-medium text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700 dark:text-brand-400 dark:decoration-brand-700; }
+  .bsdc-prose ul { @apply my-3 list-disc space-y-1 pl-6; }
+  .bsdc-prose ol { @apply my-3 list-decimal space-y-1 pl-6; }
+  .bsdc-prose blockquote { @apply my-4 border-l-4 border-brand-500 bg-brand-50 px-4 py-2 italic dark:bg-brand-950/40; }
+  .bsdc-prose code { @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-[0.85em] text-brand-700 dark:bg-neutral-800 dark:text-brand-300; }
+  .bsdc-prose pre { @apply my-4 overflow-x-auto rounded-xl bg-[#0d1117] p-4 text-[13px] leading-relaxed; }
+  .bsdc-prose pre code { @apply bg-transparent p-0 text-neutral-100; }
+  .bsdc-prose table { @apply my-4 w-full border-collapse overflow-hidden text-sm; }
+  .bsdc-prose th { @apply border border-surface-light-border bg-neutral-50 px-3 py-2 text-left font-semibold dark:border-surface-dark-border dark:bg-neutral-800; }
+  .bsdc-prose td { @apply border border-surface-light-border px-3 py-2 dark:border-surface-dark-border; }
+  .bsdc-prose img { @apply my-4 rounded-xl; }
+  .bsdc-prose hr { @apply my-6 border-surface-light-border dark:border-surface-dark-border; }
+  .bsdc-prose input[type='checkbox'] { @apply mr-2 accent-brand-600; }
+
+  .bsdc-skeleton {
+    @apply animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800;
+  }
+
+  .bsdc-scroll-x {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bsdc-tap {
+    @apply select-none;
+    min-height: 44px;
+  }
+}

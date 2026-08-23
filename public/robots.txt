@@ -1,0 +1,22 @@
+# BSDC — Bangladesh Software Development Community
+# https://www.bsdc.info.bd
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /mod
+Disallow: /settings
+Disallow: /messages
+Disallow: /notifications
+Disallow: /bookmarks
+Disallow: /points
+Disallow: /verify-email
+Disallow: /create
+
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+Sitemap: https://www.bsdc.info.bd/sitemap.xml
