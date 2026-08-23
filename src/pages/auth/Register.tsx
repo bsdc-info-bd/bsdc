@@ -68,7 +68,9 @@ export default function Register() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-10 bsdc-fabric-hero">
+    <div className="relative flex min-h-dvh flex-col items-center justify-center overflow-hidden px-4 py-10 bsdc-mesh">
+      <span aria-hidden className="bsdc-orb left-[-10%] top-[-8%] h-64 w-64 bg-brand-500/60" />
+      <span aria-hidden className="bsdc-orb right-[-12%] bottom-[-10%] h-72 w-72 bg-fb-500/50" style={{ animationDelay: '-4s' }} />
       <SEOHead
         title="Create account — BSDC"
         description="Join the Bangladesh Software Development Community — free developer account with Google, GitHub, Yahoo or email."

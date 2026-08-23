@@ -45,11 +45,13 @@ proxies the domain; no Workers are used.
    ```bash
    firebase deploy --only firestore:rules,firestore:indexes
    ```
-3. **Realtime Database** (`asia-southeast1`): lock writes to authenticated users:
-   ```json
-   { "rules": { ".read": "auth != null", ".write": "auth != null" } }
+3. **Realtime Database** (`asia-southeast1`): deploy the hardened rules —
+   presence/typing are owner-scoped, chats/messages are participant-scoped, and
+   userChats entries are writable by chat participants:
+   ```bash
+   firebase deploy --only database
    ```
-   (Chats/typing/presence are user-scoped; tighten per-path as needed.)
+   Rules live in [`database.rules.json`](./database.rules.json).
 4. **Storage rules**: `firebase deploy --only storage`.
 5. **Cloud Functions (optional, recommended)**:
    ```bash

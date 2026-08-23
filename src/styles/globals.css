@@ -99,7 +99,8 @@
   .bsdc-prose h3 { @apply mb-2 mt-4 text-lg font-semibold sm:text-xl; }
   .bsdc-prose h4 { @apply mb-2 mt-3 text-base font-semibold; }
   .bsdc-prose p { @apply my-3; }
-  .bsdc-prose a { @apply font-medium text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700 dark:text-brand-400 dark:decoration-brand-700; }
+  .bsdc-prose a { @apply font-medium text-brand-600 underline decoration-brand-300 underline-offset-2 hover:text-brand-700 dark:text-brand-400 dark:decoration-brand-700; overflow-wrap: anywhere; }
+  .bsdc-prose :where(pre, code) { overflow-wrap: anywhere; }
   .bsdc-prose ul { @apply my-3 list-disc space-y-1 pl-6; }
   .bsdc-prose ol { @apply my-3 list-decimal space-y-1 pl-6; }
   .bsdc-prose blockquote { @apply my-4 border-l-4 border-brand-500 bg-brand-50 px-4 py-2 italic dark:bg-brand-950/40; }

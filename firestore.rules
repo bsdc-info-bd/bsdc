@@ -1,10 +1,19 @@
 rules_version = '2';
 // BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE.
+//
+// Role hierarchy: superadmin > admin > manager > moderator > verified > user > restricted > banned.
+// Design principles:
+//   1. Owner-scoped writes for content (author fields match auth.uid).
+//   2. Counter-field writes (views, reactions, comment counts, RSVPs, member counts)
+//      are open to signed-in non-banned users but restricted to those exact fields.
+//   3. Role/verification changes require staff, or the founder email bootstrap.
+//   4. Everything not matched explicitly is denied.
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function notBanned() { return userRole() != 'banned'; }
     function userRole() {
       return signedIn()
         ? (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role || 'user')
@@ -13,77 +22,125 @@ service cloud.firestore {
     function isSuperadmin() { return userRole() == 'superadmin'; }
     function isAdmin() { return userRole() in ['superadmin', 'admin']; }
     function isStaff() { return userRole() in ['superadmin', 'admin', 'manager', 'moderator']; }
-    function notBanned() { return userRole() != 'banned'; }
-    function isPostOwner(authorId) { return signedIn() && request.auth.uid == authorId; }
+    function founderEmail(uid) {
+      return isSelf(uid)
+        && resource.data.email == 'rahimchawdhury63@gmail.com'
+        && request.resource.data.role in ['superadmin', 'admin'];
+    }
+    function changedKeys() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function isCreate() { return resource == null; }
 
-    // ------------------------------------------------------------- users
+    // Counter fields a normal signed-in user may bump on any post.
+    function postCounterWrite() {
+      return signedIn() && notBanned()
+        && changedKeys().hasOnly(['viewCount', 'shareCount', 'bookmarkCount', 'commentCount',
+                                  'reactionCounts', 'reactionTotal', 'poll', 'updatedAt']);
+    }
+    function commentCounterWrite() {
+      return signedIn() && notBanned()
+        && changedKeys().hasOnly(['reactionCounts', 'reactionTotal', 'replyCount', 'accepted', 'updatedAt']);
+    }
+
+    // -------------------------------------------------------------- users
     match /users/{uid} {
       allow read: if true;
-      allow create: if isSelf(uid) || isSuperadmin();
-      // Role, points and verification fields are server-managed; superadmin bootstraps own role.
-      allow update: if (isSelf(uid)
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['displayName','username','avatar','coverPhoto','bio','bioTitle','location',
-                                       'website','github','linkedin','twitter','skills','education','work','language',
-                                       'theme','lastActive','isOnline','emailVerified','profileCompleted','onboardingStep',
-                                       'postCount','followerCount','followingCount','bsdcPoints','streak','lastLoginDay',
-                                       'creatorProgramStatus','softwareLicenses','isCreator','updatedAt','role','isVerified']))
-                    || (isSuperadmin() && request.resource.data.role == 'superadmin')
-                    || isAdmin()
-                    || (isStaff() && request.resource.data.diff(resource.data).affectedKeys()
-                                      .hasOnly(['role','isVerified','isCreator','creatorProgramStatus','updatedAt']));
+      allow create: if isSelf(uid);
+      allow update: if (
+                          // Profile self-service — privilege fields are NOT in this list.
+                          (isSelf(uid)
+                            && changedKeys().hasOnly(['displayName','username','avatar','coverPhoto','bio',
+                              'bioTitle','location','geo','website','github','linkedin','twitter','skills',
+                              'education','work','language','theme','lastActive','isOnline','emailVerified',
+                              'profileCompleted','onboardingStep','postCount','followerCount','followingCount',
+                              'bsdcPoints','streak','lastLoginDay','creatorProgramStatus','softwareLicenses',
+                              'isCreator','updatedAt']))
+                          // Founder bootstrap: the configured email may elevate itself to superadmin/admin.
+                          || founderEmail(uid)
+                          // Full admin control.
+                          || isAdmin()
+                          // Moderators may only manage non-privileged roles.
+                          || (isStaff()
+                              && (!('role' in changedKeys())
+                                  || request.resource.data.role in ['moderator','verified','user','restricted','banned'])
+                              && changedKeys().hasOnly(['role','isVerified','isCreator','creatorProgramStatus',
+                                  'displayName','username','avatar','bio','bioTitle','location','geo','updatedAt']))
+                          // Follow graph: the follower may bump the target's followerCount.
+                          || (signedIn() && notBanned()
+                              && changedKeys().hasOnly(['followerCount', 'updatedAt']))
+                          // Points transfers: sender may move balances (logged in /pointTransactions).
+                          || (signedIn() && notBanned()
+                              && changedKeys().hasOnly(['bsdcPoints', 'updatedAt']))
+                        );
       allow delete: if isSuperadmin();
 
-      match /notifications/{doc} { allow read, write: if false; }
+      // Notifications live in /notifications — block stray writes under user docs.
+      match /{sub=**} {
+        allow read: if isSelf(uid);
+        allow write: if false;
+      }
     }
 
     match /notifications/{uid}/items/{notifId} {
-      allow read: if isSelf(uid);
-      allow create: if signedIn() && notBanned();
-      allow update: if isSelf(uid);
+      allow read: if isSelf(uid) || isStaff();
+      // The actor must be the writer — prevents spoofing notifications as someone else.
+      allow create: if signedIn() && notBanned() && request.resource.data.actorId == request.auth.uid;
+      allow update: if isSelf(uid) && changedKeys().hasOnly(['read', 'updatedAt']);
       allow delete: if isSelf(uid) || isStaff();
     }
 
     match /usernames/{username} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow create: if signedIn() && isCreate() && request.resource.data.uid == request.auth.uid;
+      // Claim a free name or move your own reservation; releases use update with released=true.
+      allow update: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && (resource.data.uid == request.auth.uid || resource.data.uid == '');
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------- posts
+    // -------------------------------------------------------------- posts
     match /posts/{postId} {
       allow read: if true;
-      allow create: if signedIn() && notBanned() && request.resource.data.authorId == request.auth.uid;
-      allow update: if (isPostOwner(resource.data.authorId)
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['title','body','images','tags','visibility','status','scheduledAt','seoTitle',
-                                       'seoDescription','canonicalUrl','snippet','poll','edited','updatedAt','wikiRevisions',
-                                       'reactionCounts','reactionTotal','commentCount','viewCount','shareCount','bookmarkCount',
-                                       'pinned','featured']))
-                    || isStaff();
-      allow delete: if isPostOwner(resource.data.authorId) || isStaff();
+      allow create: if signedIn() && notBanned()
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.status in ['draft', 'published', 'scheduled'];
+      allow update: if (
+                        (request.auth.uid == resource.data.authorId
+                          && changedKeys().hasOnly(['title','body','images','tags','visibility','status',
+                            'scheduledAt','seoTitle','seoDescription','canonicalUrl','snippet','poll','job',
+                            'project','notice','edited','updatedAt','wikiRevisions','pinned',
+                            'reactionCounts','reactionTotal','commentCount','viewCount','shareCount',
+                            'bookmarkCount','publishedAt']))
+                        || postCounterWrite()
+                        || isStaff()
+                      );
+      allow delete: if request.auth.uid == resource.data.authorId || isStaff();
     }
 
     match /comments/{commentId} {
       allow read: if true;
       allow create: if signedIn() && notBanned() && request.resource.data.authorId == request.auth.uid;
-      allow update: if isPostOwner(resource.data.authorId)
-                    || isStaff()
-                    || request.resource.data.diff(resource.data).affectedKeys()
-                         .hasOnly(['reactionCounts','reactionTotal','accepted','deleted','body','edited','updatedAt']);
-      allow delete: if isPostOwner(resource.data.authorId) || isStaff();
+      allow update: if (
+                        (request.auth.uid == resource.data.authorId
+                          && changedKeys().hasOnly(['body','imageUrl','edited','deleted',
+                            'reactionCounts','reactionTotal','updatedAt']))
+                        || commentCounterWrite()
+                        || isStaff()
+                      );
+      allow delete: if request.auth.uid == resource.data.authorId || isStaff();
     }
 
     match /reactions/{reactionId} {
       allow read: if true;
-      allow create, update: if signedIn() && notBanned() && request.resource.data.userId == request.auth.uid;
-      allow delete: if signedIn() && request.auth.uid == resource.data.userId;
+      allow create, update: if signedIn() && notBanned()
+                            && request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /follows/{followId} {
       allow read: if true;
-      allow create, delete: if signedIn() && notBanned() && request.resource.data.followerId == request.auth.uid;
+      allow create, delete: if signedIn() && notBanned()
+                            && request.resource.data.followerId == request.auth.uid;
     }
 
     match /bookmarks/{bookmarkId} {
@@ -91,16 +148,23 @@ service cloud.firestore {
       allow write: if signedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    match /tags/{tag} {
+    match /tags/{tagName} {
       allow read: if true;
-      allow write: if signedIn() && notBanned();
+      // Anyone signed in may maintain tag counters (postCount only).
+      allow create: if signedIn() && notBanned();
+      allow update: if signedIn() && notBanned()
+                    && changedKeys().hasOnly(['postCount', 'name', 'updatedAt']);
+      allow delete: if isAdmin();
     }
 
     match /stories/{storyId} {
       allow read: if true;
       allow create: if signedIn() && notBanned() && request.resource.data.authorId == request.auth.uid;
-      allow update: if isPostOwner(resource.data.authorId) || signedIn(); // view increments
-      allow delete: if isPostOwner(resource.data.authorId) || isStaff();
+      // Owners edit freely; others may only record a view.
+      allow update: if (request.auth.uid == resource.data.authorId)
+                    || (signedIn() && notBanned()
+                        && changedKeys().hasOnly(['viewCount', 'viewers', 'updatedAt']));
+      allow delete: if request.auth.uid == resource.data.authorId || isStaff();
     }
 
     match /polls/{voteId} {
@@ -109,23 +173,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ------------------------------------------------------------ groups
+    // ------------------------------------------------------------- groups
     match /groups/{groupId} {
       allow read: if true;
       allow create: if signedIn() && notBanned() && request.resource.data.createdBy == request.auth.uid;
-      allow update: if signedIn() && notBanned() || isStaff();
+      allow update: if (
+                      request.auth.uid == resource.data.createdBy
+                      || isStaff()
+                      // Members may only bump memberCount when joining/leaving.
+                      || (signedIn() && notBanned() && changedKeys().hasOnly(['memberCount', 'updatedAt']))
+                    );
       allow delete: if isStaff();
     }
 
     match /groupMembers/{memberId} {
       allow read: if true;
-      allow write: if signedIn() && notBanned();
+      // Join freely (public), or leave yourself.
+      allow create: if signedIn() && notBanned() && request.resource.data.userId == request.auth.uid;
+      allow update: if isStaff()
+                    || (signedIn() && changedKeys().hasOnly(['role', 'joinedAt', 'updatedAt']));
+      allow delete: if signedIn() && resource.data.userId == request.auth.uid || isStaff();
     }
 
     // ------------------------------------------------------ infrastructure
     match /pointTransactions/{txId} {
       allow read: if true;
-      allow create: if signedIn() && notBanned();
+      // Sender is always the writer; balances are guarded in users.update + client transactions.
+      allow create: if signedIn() && notBanned() && request.resource.data.from == request.auth.uid;
       allow delete: if isAdmin();
     }
 
@@ -152,19 +226,38 @@ service cloud.firestore {
     match /marketplace/{listingId} {
       allow read: if true;
       allow create: if signedIn() && notBanned() && request.resource.data.sellerId == request.auth.uid;
-      allow update: if signedIn() || isStaff();
+      allow update: if (
+                      request.auth.uid == resource.data.sellerId
+                      || isStaff()
+                      // Saved-listing bookkeeping by any signed-in user.
+                      || (signedIn() && notBanned() && changedKeys().hasOnly(['savedBy', 'savedCount', 'updatedAt']))
+                    );
       allow delete: if isAdmin();
     }
 
     match /ads/{adId} {
       allow read: if true;
-      allow write: if isAdmin();
+      // Advertisers manage their own campaigns; metrics counters open to signed-in users.
+      allow create: if signedIn() && notBanned() && request.resource.data.advertiserId == request.auth.uid;
+      allow update: if (
+                      request.auth.uid == resource.data.advertiserId
+                      || isAdmin()
+                      || (signedIn() && notBanned()
+                          && changedKeys().hasOnly(['impressions','clicks','conversions','ctr','updatedAt']))
+                    );
+      allow delete: if isAdmin();
     }
 
     match /events/{eventId} {
       allow read: if true;
       allow create: if signedIn() && notBanned() && request.resource.data.hostId == request.auth.uid;
-      allow update: if signedIn() && notBanned() || isStaff();
+      allow update: if (
+                      request.auth.uid == resource.data.hostId
+                      || isStaff()
+                      // RSVP bookkeeping by any signed-in user.
+                      || (signedIn() && notBanned()
+                          && changedKeys().hasOnly(['rsvps','goingCount','interestedCount','updatedAt']))
+                    );
       allow delete: if isStaff();
     }
 
@@ -202,7 +295,7 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    match /analytics/{doc}/{sub} {
+    match /analytics/{document}/{sub} {
       allow read: if isAdmin();
       allow write: if isStaff();
     }

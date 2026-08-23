@@ -14,7 +14,7 @@ export function BsdcBadge({
   const Icon = variant.icon;
   return (
     <span
-      className={cn('inline-flex flex-col items-center gap-1.5', className)}
+      className={cn('bsdc-lift-3d inline-flex flex-col items-center gap-1.5 rounded-2xl', className)}
       role="img"
       aria-label={`${variant.label} badge — ${variant.description}`}
     >

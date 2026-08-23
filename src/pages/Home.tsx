@@ -12,7 +12,6 @@ import { SEOHead } from '@/components/seo/SEOHead';
 import { organizationSchema, websiteSchema } from '@/config/seo';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { LinkButton } from '@/components/ui/Button';
-import { cn } from '@/lib/utils';
 import type { PostSort } from '@/types/post';
 
 const QuickComposer = lazy(() => import('@/components/feed/QuickComposer'));
@@ -107,8 +106,8 @@ function LaunchCountdown({ target }: { target: number | null }) {
         <div className="mx-auto mt-6 grid max-w-lg grid-cols-4 gap-2 sm:gap-3" role="timer" aria-live="off">
           {cells.map((cell) => (
             <div key={cell.label} className="rounded-xl border border-brand-100 bg-white/80 py-3 shadow-card dark:border-brand-900 dark:bg-surface-dark-raised/80">
-              <p className={cn('text-2xl font-extrabold tabular-nums text-brand-700 dark:text-brand-300 sm:text-3xl', cell.label === t('launch.seconds') && 'animate-countdown-tick')}>
-                {String(cell.value).padStart(2, '0')}
+              <p className="text-2xl font-extrabold tabular-nums text-brand-700 dark:text-brand-300 sm:text-3xl">
+                <span key={`${cell.label}-${cell.value}`} className="bsdc-digit inline-block">{String(cell.value).padStart(2, '0')}</span>
               </p>
               <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">{cell.label}</p>
             </div>

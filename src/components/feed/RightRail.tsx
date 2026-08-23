@@ -2,12 +2,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Hash, TrendingUp, UserPlus, CalendarDays, Check, Plus } from 'lucide-react';
+import { Hash, TrendingUp, UserPlus, CalendarDays, Check, Plus, MapPin } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { VerifiedBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { followUser, fetchActiveUsers, fetchFollowerIds, fetchFollowingIds, fetchPopularTags } from '@/lib/data';
 import { suggestUsers } from '@/lib/feed-algorithm';
+import { haversineKm } from '@/lib/geo';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import { formatNumber } from '@/lib/utils';
@@ -21,6 +22,7 @@ export function RightRail() {
   const profile = useAuthStore((s) => s.profile);
   const language = useUIStore((s) => s.language);
   const [tags, setTags] = useState<{ name: string; postCount: number }[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [suggestions, setSuggestions] = useState<{ user: UserProfile; reason: string }[]>([]);
   const [events, setEvents] = useState<(CommunityEvent & { id: string })[]>([]);
   const [followed, setFollowed] = useState<Set<string>>(new Set());
@@ -38,6 +40,7 @@ export function RightRail() {
         ]);
         if (cancelled) return;
         setTags(tagList);
+        setUsers(users);
         setEvents(eventList.filter((e) => e.startsAt > Date.now()).slice(0, 3));
         if (profile) {
           setSuggestions(
@@ -92,6 +95,41 @@ export function RightRail() {
           </ul>
         </section>
       ) : null}
+
+      {profile?.geo
+        ? (() => {
+            const nearby = users
+              .filter((u) => u.uid !== profile.uid && u.geo)
+              .map((u) => ({ user: u, km: haversineKm(profile.geo!, u.geo!) }))
+              .sort((a, b) => a.km - b.km)
+              .slice(0, 3);
+            if (nearby.length === 0) return null;
+            return (
+              <section className="bsdc-surface p-4" aria-label={t('feed.nearbyDevs')}>
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
+                  <MapPin className="h-4 w-4 text-brand-600" aria-hidden />
+                  {t('feed.nearbyDevs')}
+                </h2>
+                <ul className="space-y-3">
+                  {nearby.map(({ user, km }) => (
+                    <li key={user.uid} className="flex items-center gap-2.5">
+                      <Link to={`/p/${user.username}`} className="shrink-0">
+                        <Avatar src={user.avatar} name={user.displayName} size={36} />
+                      </Link>
+                      <div className="min-w-0 flex-1">
+                        <Link to={`/p/${user.username}`} className="block truncate text-sm font-semibold hover:underline">{user.displayName}</Link>
+                        <p className="truncate text-xs text-neutral-400">{user.location || 'Bangladesh'}</p>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-bold text-brand-700 dark:bg-brand-950/60 dark:text-brand-300">
+                        {km < 1 ? '<1' : Math.round(km)} km
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            );
+          })()
+        : null}
 
       {profile && suggestions.length > 0 ? (
         <section className="bsdc-surface p-4" aria-label={t('feed.whoToFollow')}>

@@ -16,7 +16,7 @@ export function Footer() {
   const location = useLocation();
   const year = new Date().getFullYear();
 
-  // 🚫 CRITICAL: Do NOT render footer on messages / chat pages.
+  // CRITICAL: do not render the footer on messages/chat pages.
   // This prevents the footer from pushing the chat input box off-screen.
   const HIDDEN_PATHS = ['/messages', '/chat', '/dm'];
   const shouldHide = HIDDEN_PATHS.some((path) => location.pathname.startsWith(path));
@@ -29,7 +29,7 @@ export function Footer() {
   };
 
   return (
-    <footer className="relative mt-auto overflow-hidden border-t border-surface-light-border bg-gradient-to-br from-surface-light-muted via-white to-brand-50/30 dark:border-surface-dark-border dark:from-[#0B0B0B] dark:via-[#0B0B0B] dark:to-brand-950/20">
+    <footer className="relative mt-auto overflow-hidden border-t border-surface-light-border bg-gradient-to-br from-surface-light-muted via-white to-brand-50/30 pb-20 dark:border-surface-dark-border dark:from-[#0B0B0B] dark:via-[#0B0B0B] dark:to-brand-950/20 lg:pb-0">
       {/* Decorative gradient orbs */}
       <div className="pointer-events-none absolute -left-24 top-0 h-64 w-64 rounded-full bg-brand-500/5 blur-3xl" aria-hidden />
       <div className="pointer-events-none absolute -right-24 bottom-0 h-64 w-64 rounded-full bg-purple-500/5 blur-3xl" aria-hidden />

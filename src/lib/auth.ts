@@ -218,7 +218,7 @@ export async function claimUsername(uid: string, newUsername: string, oldUsernam
   const batch = await getDoc(doc(fsDb(), COL.usernames, lower));
   if (batch.exists() && batch.data().uid !== uid) throw new Error('Username is already taken');
   await setDoc(doc(fsDb(), COL.usernames, lower), { uid, createdAt: Date.now() });
-  if (oldUsername && oldUsername !== lower) await setDoc(doc(fsDb(), COL.usernames, oldUsername), { uid: '' , createdAt: 0, released: true });
+  if (oldUsername && oldUsername !== lower) await setDoc(doc(fsDb(), COL.usernames, oldUsername), { uid, createdAt: Date.now(), released: true });
   await updateDoc(doc(fsDb(), COL.users, uid), { username: lower, updatedAt: Date.now() });
 }
 

@@ -19,6 +19,7 @@ import type { Post, PostSort } from '@/types/post';
 import type { UserProfile } from '@/types/user';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
+import { topTags, typeAffinity } from '@/lib/personalization';
 
 export interface FeedResult {
   posts: Post[];
@@ -35,6 +36,8 @@ export function useFeed(sort: PostSort, filterType?: string, authorUsername?: st
   const [authors, setAuthors] = useState<Map<string, UserProfile>>(new Map());
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [secondDegree, setSecondDegree] = useState<Set<string>>(new Set());
+  const [personalTags, setPersonalTags] = useState<string[]>([]);
+  const [engagedTypes, setEngagedTypes] = useState<Partial<Record<string, number>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
@@ -45,15 +48,19 @@ export function useFeed(sort: PostSort, filterType?: string, authorUsername?: st
     setError('');
     (async () => {
       try {
-        const [recentPosts, activeUsers, myFollowing] = await Promise.all([
+        const [recentPosts, activeUsers, myFollowing, affinityTags, typeAff] = await Promise.all([
           fetchRecentPosts(200),
           fetchActiveUsers(100),
           profile ? fetchFollowingIds(profile.uid, 500) : Promise.resolve([] as string[]),
+          topTags(12).catch(() => [] as { tag: string; score: number }[]),
+          typeAffinity().catch(() => ({}) as Partial<Record<string, number>>),
         ]);
         if (cancelled) return;
         setPosts(recentPosts);
         setAuthors(new Map(activeUsers.map((u) => [u.uid, u])));
         setFollowingIds(new Set(myFollowing));
+        setPersonalTags(affinityTags.map((a) => a.tag));
+        setEngagedTypes(typeAff);
         if (myFollowing.length > 0) {
           const second = new Set<string>();
           for (const uid of myFollowing.slice(0, 30)) {
@@ -92,13 +99,14 @@ export function useFeed(sort: PostSort, filterType?: string, authorUsername?: st
     () => ({
       viewer: profile,
       followingIds,
-      followedTags: [],
+      // Affinity tags come from the user's REAL on-device interaction history.
+      followedTags: Array.from(new Set([...personalTags, ...(profile?.skills || [])])),
       groupIds: new Set(),
       secondDegreeIds: secondDegree,
-      engagedTypes: {},
+      engagedTypes,
       platformAvgEngagement: platformAverageEngagement(posts),
     }),
-    [profile, followingIds, secondDegree, posts],
+    [profile, followingIds, secondDegree, posts, personalTags, engagedTypes],
   );
 
   const ranked = useMemo(() => {

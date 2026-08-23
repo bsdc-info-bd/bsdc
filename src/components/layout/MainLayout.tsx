@@ -15,6 +15,9 @@ import { toast } from 'sonner';
 export function MainLayout() {
   const location = useLocation();
   const online = useOnlineStatus();
+  // Immersive app-like routes (chat) render edge-to-edge: no footer, no bottom nav,
+  // no main scroll padding — the chat owns the full viewport below the header.
+  const isImmersive = location.pathname.startsWith('/messages');
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
   const setSystemSettings = useUIStore((s) => s.setSystemSettings);
 
@@ -44,16 +47,16 @@ export function MainLayout() {
       <AnnouncementBanner />
       {!online ? <OfflineBanner /> : null}
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 px-3 sm:px-4 lg:px-6">
-        <Sidebar />
-        <main id="main-content" className="min-w-0 flex-1 py-4 pb-24 lg:pb-8">
+        {isImmersive ? null : <Sidebar />}
+        <main id="main-content" className={isImmersive ? 'min-w-0 flex-1 p-0' : 'min-w-0 flex-1 py-4 pb-24 lg:pb-8'}>
           <Suspense fallback={<FullPageLoader />}>
             <Outlet />
           </Suspense>
         </main>
       </div>
-      <Footer />
+      {isImmersive ? null : <Footer />}
       <MobileSidebar />
-      <BottomNav />
+      {isImmersive ? null : <BottomNav />}
     </div>
   );
 }

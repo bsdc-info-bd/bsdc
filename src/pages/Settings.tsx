@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   User, Lock, Palette, Bell, Keyboard, Download, Trash2, Languages, Moon, Sun, Save,
+  MapPin, LocateFixed,
 } from 'lucide-react';
 import { auth, firebaseConfigured } from '@/config/firebase';
 import {
@@ -25,6 +26,7 @@ import { USERNAME_PATTERN } from '@/config/constants';
 import { downloadBlob } from '@/lib/utils';
 import { promptPushPermission } from '@/config/onesignal';
 import { fetchRecentPosts } from '@/lib/data';
+import { detectMyPlace, searchPlaces, type GeoPoint, type ResolvedPlace } from '@/lib/geo';
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -54,6 +56,9 @@ export default function Settings() {
   const [work, setWork] = useState('');
   const [avatar, setAvatar] = useState<{ url: string; name: string }[]>([]);
   const [cover, setCover] = useState<{ url: string; name: string }[]>([]);
+  const [geo, setGeo] = useState<GeoPoint | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [placeSuggestions, setPlaceSuggestions] = useState<ResolvedPlace[]>([]);
   const [saving, setSaving] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -76,6 +81,7 @@ export default function Settings() {
     setWork(profile.work);
     setAvatar(profile.avatar ? [{ url: profile.avatar, name: 'avatar' }] : []);
     setCover(profile.coverPhoto ? [{ url: profile.coverPhoto, name: 'cover' }] : []);
+    setGeo(profile.geo);
   }, [profile]);
 
   useEffect(() => {
@@ -125,6 +131,7 @@ export default function Settings() {
         work,
         avatar: avatar[0]?.url || '',
         coverPhoto: cover[0]?.url || '',
+        geo,
         profileCompleted: Boolean(avatar[0] && bioTitle && bio && skillsList.length > 0 && location),
         updatedAt: Date.now(),
       };
@@ -188,6 +195,32 @@ export default function Settings() {
     }
   }
 
+  async function handleDetectLocation() {
+    setLocating(true);
+    try {
+      const place = await detectMyPlace();
+      setLocation(place.displayName);
+      setGeo(place.point);
+      toast.success(`${t('settings.locationDetected')}: ${place.displayName}`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not get your location');
+    } finally {
+      setLocating(false);
+    }
+  }
+
+  useEffect(() => {
+    if (location.trim().length < 3 || geo) {
+      setPlaceSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const results = await searchPlaces(location.trim(), 4).catch(() => []);
+      setPlaceSuggestions(results);
+    }, 600);
+    return () => clearTimeout(timer);
+  }, [location, geo]);
+
   if (!profile) return null;
 
   return (
@@ -228,8 +261,56 @@ export default function Settings() {
                 <Input label={t('settings.bioTitle')} value={bioTitle} onChange={(e) => setBioTitle(e.target.value)} maxLength={80} placeholder="Full-Stack Developer · Dhaka" />
                 <Textarea label={t('settings.bio')} value={bio} onChange={(e) => setBio(e.target.value)} maxRows={5} maxLength={500} />
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Input label={t('settings.location')} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Sylhet, Bangladesh" />
+                  <div className="relative">
+                    <Input label={t('settings.location')} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Sylhet, Bangladesh" />
+                    {placeSuggestions.length > 0 ? (
+                      <ul className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-xl border border-surface-light-border bg-white shadow-raised dark:border-surface-dark-border dark:bg-surface-dark-raised" role="listbox">
+                        {placeSuggestions.map((p) => (
+                          <li key={`${p.point.lat}-${p.point.lng}`}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setLocation(p.displayName);
+                                setGeo(p.point);
+                                setPlaceSuggestions([]);
+                              }}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-surface-dark"
+                            >
+                              <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
+                              <span className="min-w-0 truncate">{p.displayName}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                   <Input label={t('settings.website')} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="rrc.cloud.bsdc.info.bd" />
+                  <div className="sm:col-span-2">
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-brand-100 bg-brand-50/60 p-3 dark:border-brand-900 dark:bg-brand-950/30">
+                      <MapPin className="h-4 w-4 shrink-0 text-brand-600 dark:text-brand-400" aria-hidden />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold">{t('settings.locationDetect')}</p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                          {t('settings.locationHint')} — OpenStreetMap
+                          {geo ? <span className="ml-1 font-semibold text-brand-600 dark:text-brand-400">· {geo.lat.toFixed(3)}, {geo.lng.toFixed(3)}</span> : null}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        loading={locating}
+                        icon={<LocateFixed className="h-4 w-4" aria-hidden />}
+                        onClick={() => void handleDetectLocation()}
+                      >
+                        <span className="hidden min-[420px]:inline">{t('settings.locationUse')}</span>
+                      </Button>
+                      {geo ? (
+                        <Button size="sm" variant="ghost" onClick={() => setGeo(null)}>
+                          {t('settings.locationClear')}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
                   <Input label={t('settings.github')} value={github} onChange={(e) => setGithub(e.target.value)} placeholder="username" />
                   <Input label={t('settings.linkedin')} value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="username" />
                   <Input label={t('settings.twitter')} value={twitter} onChange={(e) => setTwitter(e.target.value)} placeholder="username" />

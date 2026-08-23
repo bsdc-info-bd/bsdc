@@ -164,3 +164,53 @@ npm run lint      # expect: no output (0 problems)
 npm test          # expect: 37 passed
 npm run dev       # probe routes listed above
 ```
+
+
+---
+
+## Fix round 2 — structure, responsive, rules, search, geo, effects
+
+**Triggered by owner QA on mobile (reference screenshots) + review feedback.**
+
+### Layout / responsive
+- [x] Messenger: global BottomNav (z-40) no longer overlays the chat composer — chat routes render in immersive mode (no footer, no bottom nav, no sidebar); owner's Messages rework preserved (keyboard-safe dvh/svh, safe-area composer, audio engine — lint/type-cleaned)
+- [x] Footer clears the fixed bottom nav on mobile (`pb-20 lg:pb-0`) — no more blocked/overlapped content on any page
+- [x] Removed stale `.bsdc-modal-content` CSS that fought the Modal component's own responsive classes
+- [x] Container queries: post image grids collapse to 1 column inside narrow cards
+- [x] `overscroll-behavior: contain` + momentum scrolling helper for app-like panes
+- [x] Fluid heading type (clamp), long-URL/`overflow-wrap: anywhere` protection in prose and code
+- [x] Tiny-screen hardening: ≤430px chrome tightening, ≤380px profile avatar offset, search paddings
+- [x] Safe-area insets preserved on chat composer + bottom nav
+
+### Firestore rules (rewritten — closes real holes)
+- [x] REACTIONS/VIEW/SHARE/COUNTER writes by non-owners are now allowed but **field-restricted** (`hasOnly(['viewCount','shareCount','reactionCounts',…])`) — previously reactions/views by viewers were silently denied
+- [x] Privilege escalation hole closed: users can no longer write `role`/`isVerified` to their own doc (old self-service list included them); founder email bootstrap is email-pinned in rules
+- [x] Moderators can only assign non-privileged roles; stories/groups/events/marketplace updates restricted to owner/staff/counter-only writes (previously any signed-in user could edit any group/event/story/listing)
+- [x] Notifications cannot be spoofed (`actorId == request.auth.uid`)
+- [x] Username reservations: create-only-if-absent + ownership checks (previously could be pointed at another uid)
+- [x] Follower-count / points-transfer cross-user counter writes explicitly allow-listed
+
+### Realtime DB rules (new: `database.rules.json`)
+- [x] RTDB rules shipped: `.info/connected` reads, owner-scoped presence/typing, participant-scoped chat metadata/messages, userChats writable by participants (fixes sender updating recipient's chat list)
+
+### Search system (rebuilt — was non-functional)
+- [x] New ranker: match quality (exact > word-prefix > substring > typo-tolerant Levenshtein) × field weight × popularity × recency × personalization (follows, tag affinity, skills, geo)
+- [x] **Live suggestion dropdown** in the header on every screen (debounced 160ms, keyboard nav, `/` shortcut, direct navigation)
+- [x] Trending searches computed from real indexed tag usage; recent searches persist
+- [x] Index lifecycle: built from real Firestore data with retry/backoff, TTL refresh, `refreshSearchIndex()`; graceful empty-index fallback
+- [x] `/search` page: smart-ranked results, match highlighting, "why this result" reasons, category tabs
+- [x] Unit-tested: 16 search tests + ranking behavior (personalization boost, geo boost, category filters)
+
+### Location (OpenStreetMap) & personalized feed
+- [x] `lib/geo.ts`: browser permission flow, Nominatim reverse geocoding, place autocomplete, haversine
+- [x] Settings → Location: "Use my location" (permission → OSM reverse geocode → profile.location + geo), city autocomplete, clear option
+- [x] Feed ranking: geo proximity multiplier (same city 1.35 → same region 1.18 → same country 1.1) with graceful string fallback
+- [x] "Developers near you" rail with km distances (real haversine on profile coordinates)
+- [x] Personalization engine (`lib/personalization.ts`): on-device interaction log (views+dwelling, reactions, comments, bookmarks, searches) → decaying tag/type affinities feeding the For You algorithm
+
+### CSS / motion layer
+- [x] `styles/effects.css`: glassmorphism, animated gradient text, mesh gradient backgrounds, floating orbs, 3D card lift/tilt (`preserve-3d`), shine sweep, 3D press buttons, digit flip, pop-in, conic 3D story ring — all GPU-composited and fully neutralized under `prefers-reduced-motion`
+- [x] Applied to: feed cards, auth pages, countdown, admin stat cards, branding badges, primary buttons, story rings
+
+### Gates after fix round 2
+- ✅ `tsc -b --force` strict: **0 errors** — ✅ `eslint .`: **0 problems** — ✅ `vitest`: **62/62** — ✅ emoji sweep: **0**

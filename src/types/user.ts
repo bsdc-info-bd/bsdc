@@ -1,5 +1,6 @@
 /* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
 import type { BaseEntity, LanguagePreference, ThemePreference, UserSnapshot } from './common';
+import type { GeoPoint } from '@/lib/geo';
 
 export type UserRole =
   | 'superadmin'
@@ -35,6 +36,7 @@ export interface UserProfile extends BaseEntity, UserSnapshot {
   bio: string;
   bioTitle: string;
   location: string;
+  geo: GeoPoint | null;
   website: string;
   github: string;
   linkedin: string;

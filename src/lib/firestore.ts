@@ -73,6 +73,7 @@ export function normalizeUser(data: DocumentData, uid: string): UserProfile {
     bio: str(data.bio),
     bioTitle: str(data.bioTitle),
     location: str(data.location),
+    geo: normalizeGeo(data.geo),
     website: str(data.website),
     github: str(data.github),
     linkedin: str(data.linkedin),
@@ -199,6 +200,14 @@ function str(v: unknown): string {
 function num(v: unknown): number {
   return typeof v === 'number' && Number.isFinite(v) ? v : 0;
 }
+function normalizeGeo(v: unknown): GeoPointT | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const lat = (v as { lat?: unknown }).lat;
+  const lng = (v as { lng?: unknown }).lng;
+  if (typeof lat !== 'number' || typeof lng !== 'number') return null;
+  return { lat, lng };
+}
+type GeoPointT = { lat: number; lng: number };
 function arr(v: unknown): string[] {
   return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
 }

@@ -69,6 +69,7 @@ function makeUser(overrides: Partial<UserProfile> = {}): UserProfile {
     bio: '',
     bioTitle: '',
     location: '',
+    geo: null,
     website: '',
     github: '',
     linkedin: '',

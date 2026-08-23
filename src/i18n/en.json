@@ -165,7 +165,9 @@
     "upcomingEvents": "Upcoming events",
     "createFirstPost": "Create the first post",
     "loadMore": "Load more",
-    "endOfFeed": "You are all caught up"
+    "endOfFeed": "You are all caught up",
+    "nearbyDevs": "Developers near you",
+    "nearby": "nearby"
   },
   "post": {
     "create": "Create",
@@ -626,7 +628,12 @@
     "themePref": "Theme",
     "savedToast": "Settings saved",
     "usernameAvailable": "Username is available",
-    "usernameTaken": "Username is already taken"
+    "usernameTaken": "Username is already taken",
+    "locationDetect": "Location & nearby ranking",
+    "locationHint": "Optional — enables nearby developers and location-boosted feed",
+    "locationUse": "Use my location",
+    "locationClear": "Remove",
+    "locationDetected": "Location detected"
   },
   "launch": {
     "title": "Launching soon",
@@ -674,5 +681,8 @@
   "offline": {
     "title": "You are offline",
     "body": "Check your internet connection. BSDC will reconnect automatically."
+  },
+  "search": {
+    "smartRanked": "Smart ranked"
   }
 }

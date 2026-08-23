@@ -26,7 +26,7 @@ import type { ChatMessage, UserChatEntry } from '@/types/chat';
 import { useUIStore } from '@/stores/uiStore';
 
 /* -------------------------------------------------------------------------- */
-/*  🎵  Ultra Audio Engine — Web Audio API with dual-tone envelopes           */
+/*  Ultra Audio Engine — Web Audio API with dual-tone envelopes                 */
 /* -------------------------------------------------------------------------- */
 let _audioCtx: AudioContext | null = null;
 let _audioUnlocked = false;
@@ -35,7 +35,8 @@ function getAudioCtx(): AudioContext | null {
   try {
     if (typeof window === 'undefined') return null;
     if (!_audioCtx) {
-      const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const w = window as Window & { webkitAudioContext?: typeof AudioContext };
+      const Ctx = window.AudioContext || w.webkitAudioContext;
       if (!Ctx) return null;
       _audioCtx = new Ctx();
     }
@@ -104,7 +105,7 @@ function playBeep(type: 'sent' | 'received' = 'sent') {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  🎨  Advanced Keyframes & Ultra Responsive Styling                         */
+/*  Advanced Keyframes & Ultra Responsive Styling                               */
 /* -------------------------------------------------------------------------- */
 const BSDC_CHAT_STYLES = `
 @keyframes bsdc-bubble-in-left {
@@ -603,6 +604,8 @@ function ChatWindow({ chatId }: { chatId: string }) {
       setNewMsgCount((c) => c + 1);
       setShowScrollBtn(true);
     }
+  // Deliberately keyed on messages.length (count changes), not array identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chat.messages.length, profile?.uid, scrollToBottom]);
 
   // Track scroll position for scroll-to-bottom button

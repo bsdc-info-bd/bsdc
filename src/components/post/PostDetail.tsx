@@ -8,6 +8,7 @@ import { CommentSection } from './CommentThread';
 import { Breadcrumbs, SEOHead } from '@/components/seo/SEOHead';
 import { breadcrumbSchema, postDetailRoute, postSchema } from '@/config/seo';
 import { getPostBySlug, incrementPostView } from '@/lib/data';
+import { trackInteraction } from '@/lib/personalization';
 import { extractDescription, formatNumber, timeAgo } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
 import { ErrorState } from '@/components/ui/EmptyState';
@@ -31,6 +32,12 @@ function usePostByRouteParam(): { post: Post | null; loading: boolean; error: st
         else {
           setPost(p);
           void incrementPostView(p.id);
+          const openedAt = Date.now();
+          trackInteraction({ kind: 'view', postId: p.id, postType: p.type, tags: p.tags, authorId: p.authorId, dwellSeconds: 0 });
+          // Record dwell time when the reader leaves the post.
+          window.setTimeout(() => {
+            trackInteraction({ kind: 'view', postId: p.id, postType: p.type, tags: p.tags, authorId: p.authorId, dwellSeconds: Math.round((Date.now() - openedAt) / 1000) });
+          }, 30000);
         }
       })
       .catch(() => !cancelled && setError('network'))

@@ -18,6 +18,7 @@ import { signOut } from '@/lib/auth';
 import { roleAtLeast } from '@/types/user';
 import { toast } from 'sonner';
 import { formatNumber } from '@/lib/utils';
+import { SearchSuggest } from '@/components/search/SearchSuggest';
 import { useState } from 'react';
 
 export function Header() {
@@ -55,15 +56,9 @@ export function Header() {
           <BsdcLogo height={34} />
         </Link>
 
-        <button
-          type="button"
-          onClick={() => setCommandPaletteOpen(true)}
-          className="bsdc-tap ml-1 hidden min-w-0 flex-1 items-center gap-2.5 rounded-full border border-surface-light-border bg-surface-light-muted px-4 text-sm text-neutral-400 transition-colors hover:border-brand-400 dark:border-surface-dark-border dark:bg-surface-dark-muted md:flex lg:max-w-md"
-        >
-          <Search className="h-4 w-4 shrink-0" aria-hidden />
-          <span className="truncate text-left">{t('common.searchPlaceholder')}</span>
-          <kbd className="ml-auto hidden shrink-0 rounded border border-neutral-300 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-400 dark:border-neutral-600 lg:block">Ctrl K</kbd>
-        </button>
+        <div className="ml-1 hidden min-w-0 flex-1 md:block lg:max-w-md">
+          <SearchSuggest />
+        </div>
 
         <button
           type="button"

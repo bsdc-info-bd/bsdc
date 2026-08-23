@@ -58,7 +58,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.label} className="bsdc-surface p-4">
+          <div key={card.label} className="bsdc-surface bsdc-lift-3d p-4">
             <div className="flex items-center justify-between gap-2">
               <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${card.color}`}>
                 <card.icon className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} aria-hidden />

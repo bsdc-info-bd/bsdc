@@ -13,9 +13,10 @@ import { Avatar } from '@/components/ui/Avatar';
 import { VerifiedBadge, RoleBadge } from '@/components/ui/Badge';
 import { ReactionButton } from './ReactionBar';
 import { POST_TYPE_META } from './postMeta';
+import { trackInteraction } from '@/lib/personalization';
 import {
-  getMyReaction, hasVoted, postRouteOf, removeReaction, setReaction, softDeletePost,
-  toggleBookmark, updatePost, votePoll,
+  getMyReaction, hasVoted, incrementShareCount, postRouteOf, removeReaction, setReaction,
+  softDeletePost, toggleBookmark, updatePost, votePoll,
 } from '@/lib/data';
 import { copyToClipboard, formatCurrency, formatNumber, timeAgo, truncate, cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -59,6 +60,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
       return;
     }
     setReactionState(type);
+    trackInteraction({ kind: 'reaction', postId: post.id, postType: post.type, tags: post.tags, authorId: post.authorId });
     try {
       await setReaction(post, profile, type);
       onEdited?.({ ...post, reactionTotal: post.reactionTotal + 1 });
@@ -82,7 +84,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
     const url = `${window.location.origin}${detailUrl}`;
     await copyToClipboard(url);
     toast.success(t('post.shareLinkCopied'));
-    void updatePost(post.id, {}).catch(() => undefined);
+    incrementShareCount(post.id);
   }
 
   async function handleBookmark() {
@@ -90,6 +92,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
       navigate('/login');
       return;
     }
+    trackInteraction({ kind: 'bookmark', postId: post.id, postType: post.type, tags: post.tags, authorId: post.authorId });
     try {
       const saved = await toggleBookmark(profile, post);
       setBookmarked(saved);
@@ -126,7 +129,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
   const canManage = profile && (profile.uid === post.authorId || roleAtLeast(profile.role, 'moderator'));
 
   return (
-    <article className="bsdc-surface bsdc-fabric-card-hover overflow-hidden" aria-label={post.title || `Post by ${post.authorName}`}>
+    <article className="bsdc-surface bsdc-lift-3d bsdc-tilt-card overflow-hidden" aria-label={post.title || `Post by ${post.authorName}`}>
       <div className="flex items-start gap-3 p-4 pb-3">
         <Link to={`/p/${post.authorUsername}`} aria-label={`${post.authorName} profile`}>
           <Avatar src={post.authorAvatar} name={post.authorName} size={42} />
@@ -304,7 +307,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
       </div>
 
       {post.images.length > 0 ? (
-        <div className="mt-3" style={{ marginBottom: post.images.length ? undefined : 0 }}>
+        <div className="bsdc-post-media mt-3">
           <ImageGrid images={post.images} title={post.title || post.body} onOpen={setLightboxIndex} />
         </div>
       ) : null}
@@ -402,7 +405,7 @@ function ImageGrid({ images, title, onOpen }: { images: string[]; title: string;
           ? 'grid-cols-2 sm:grid-cols-3'
           : 'grid-cols-2';
   return (
-    <div className={`grid gap-0.5 sm:gap-1 ${layout}`}>
+    <div className={`bsdc-post-media-grid grid gap-0.5 sm:gap-1 ${layout}`}>
       {images.slice(0, 4).map((src, i) => (
         <button
           key={`${src}-${i}`}

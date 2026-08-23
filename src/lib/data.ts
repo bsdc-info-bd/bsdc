@@ -227,6 +227,10 @@ function roleAtLeastView(viewer: UserProfile): boolean {
   return ['superadmin', 'admin', 'moderator'].includes(viewer.role);
 }
 
+export async function incrementShareCount(postId: string): Promise<void> {
+  await updateDoc(doc(fsDb(), COL.posts, postId), { shareCount: increment(1), updatedAt: Date.now() }).catch(() => undefined);
+}
+
 export async function incrementPostView(postId: string): Promise<void> {
   await updateDoc(doc(fsDb(), COL.posts, postId), { viewCount: increment(1) }).catch(() => undefined);
 }

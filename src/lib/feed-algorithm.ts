@@ -1,6 +1,7 @@
 /* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
 import type { Post } from '@/types/post';
 import type { UserProfile } from '@/types/user';
+import { geoBoost, type GeoPoint } from './geo';
 
 /**
  * BSDC personalized ranking algorithm — weighted scoring computed over REAL data only.
@@ -70,18 +71,16 @@ export function proximityScore(post: Post, ctx: FeedContext): number {
   return Math.min(6, score);
 }
 
-export function locationScore(post: Post, viewer: UserProfile | null, authorLocations: Map<string, string>): number {
-  if (!viewer?.location) return 1;
-  const authorLocation = authorLocations.get(post.authorId) || '';
-  if (!authorLocation) return 1;
-  const v = viewer.location.toLowerCase();
-  const a = authorLocation.toLowerCase();
-  if (v === a) return 1.2;
-  const vCity = v.split(',')[0]?.trim();
-  const aCity = a.split(',')[0]?.trim();
-  if (vCity && aCity && vCity === aCity) return 1.2;
-  if (a.includes('bangladesh') === v.includes('bangladesh')) return 1.1;
-  return 1;
+export interface AuthorGeoInfo {
+  location: string;
+  geo: GeoPoint | null;
+}
+
+export function locationScore(post: Post, viewer: UserProfile | null, authorGeo: Map<string, AuthorGeoInfo>): number {
+  if (!viewer) return 1;
+  const info = authorGeo.get(post.authorId);
+  if (!info) return 1;
+  return geoBoost(viewer.geo, viewer.location, info.geo, info.location);
 }
 
 export const FEED_WEIGHTS = {
@@ -97,7 +96,7 @@ export function scorePost(
   post: Post,
   ctx: FeedContext,
   author?: UserProfile | null,
-  authorLocations?: Map<string, string>,
+  authorLocations?: Map<string, AuthorGeoInfo>,
   now = Date.now(),
 ): number {
   const s =
@@ -115,9 +114,11 @@ export function scorePost(
 }
 
 export function rankFeed(posts: Post[], ctx: FeedContext, authors: Map<string, UserProfile>): ScoredPost[] {
-  const authorLocations = new Map<string, string>([...authors.entries()].map(([id, u]) => [id, u.location]));
+  const authorGeo = new Map<string, AuthorGeoInfo>(
+    [...authors.entries()].map(([id, u]) => [id, { location: u.location, geo: u.geo }]),
+  );
   return posts
-    .map((post) => ({ post, score: scorePost(post, ctx, authors.get(post.authorId), authorLocations) }))
+    .map((post) => ({ post, score: scorePost(post, ctx, authors.get(post.authorId), authorGeo) }))
     .sort((a, b) => b.score - a.score);
 }
 

@@ -16,14 +16,14 @@ export type ButtonVariant =
 export type ButtonSize = 'xs' | 'sm' | 'md' | 'lg';
 
 const variantClasses: Record<ButtonVariant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 shadow-sm',
-  secondary: 'bg-fb-600 text-white hover:bg-fb-700 active:bg-fb-800 shadow-sm',
+  primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 shadow-sm bsdc-press bsdc-shine',
+  secondary: 'bg-fb-600 text-white hover:bg-fb-700 active:bg-fb-800 shadow-sm bsdc-press bsdc-shine',
   outline:
     'border border-surface-light-border bg-transparent text-neutral-700 hover:bg-neutral-50 dark:border-surface-dark-border dark:text-neutral-200 dark:hover:bg-surface-dark-raised',
   ghost: 'bg-transparent text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-surface-dark-raised',
   danger: 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 shadow-sm',
   subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-950/50 dark:text-brand-300 dark:hover:bg-brand-900/50',
-  gradient: 'bg-brand-gradient text-white hover:opacity-95 shadow-raised',
+  gradient: 'bg-brand-gradient text-white hover:opacity-95 shadow-raised bsdc-press bsdc-shine',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

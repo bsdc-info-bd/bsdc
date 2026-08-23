@@ -30,23 +30,44 @@
   .bsdc-xs-hide {
     display: none !important;
   }
-  .bsdc-modal-content {
-    margin: 0 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    border-radius: 1rem 1rem 0 0;
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    max-height: 92dvh;
-  }
   .bsdc-table-card {
     display: block !important;
     width: 100%;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
+  /* Tighter chrome on tiny phones */
+  header .bsdc-tap {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+}
+
+/* Container queries: feed images collapse to single column inside narrow cards */
+.bsdc-post-media {
+  container-type: inline-size;
+}
+@container (max-width: 300px) {
+  .bsdc-post-media-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Momentum scrolling + contained overscroll for app-like panes */
+.bsdc-scroll-y {
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fluid display type */
+.bsdc-fluid-h1 {
+  font-size: clamp(1.25rem, 1rem + 2.2vw, 2.25rem);
+  line-height: 1.15;
+}
+.bsdc-fluid-h2 {
+  font-size: clamp(1.05rem, 0.95rem + 1vw, 1.6rem);
+  line-height: 1.2;
 }
 
 /* ---------- Tablets ---------- */

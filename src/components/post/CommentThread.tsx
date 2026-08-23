@@ -18,6 +18,7 @@ import { cn, timeAgo } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Markdown } from '@/components/ui/Markdown';
+import { trackInteraction } from '@/lib/personalization';
 
 export interface CommentNode extends Comment {
   accepted?: boolean;
@@ -73,6 +74,7 @@ export function CommentSection({ post }: { post: Post }) {
     const text = body.trim();
     if (!text) return;
     setSending(true);
+    trackInteraction({ kind: 'comment', postId: post.id, postType: post.type, tags: post.tags, authorId: post.authorId });
     try {
       const created = await addComment(post, profile, text, null);
       setComments((prev) => [...prev, created]);
