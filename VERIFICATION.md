@@ -244,3 +244,36 @@ npm run dev       # probe routes listed above
 - [x] Group/Channel creation is now a real system: full searchable community directory (recent contacts ranked first), selected-member chips, responsive picker
 
 **Gates after round 3:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · production build + PWA clean.
+
+
+---
+
+## Fix round 4 — real permissions, global message alerts, responsive creation flows
+
+**Permissions (the "denied even when allowed" bug — root-caused)**
+- [x] New `lib/permissions.ts`: live `navigator.permissions` queries + change watchers, gesture-safe
+      `requestMicrophone/requestLocation/requestNotifications`, precise error classification, iframe detection
+- [x] Root cause 1 fixed: embedded preview iframes block mic/geolocation — BSDC now detects this and offers
+      "Open in new tab" (the real fix users need when testing the preview)
+- [x] Root cause 2 fixed: hold-to-record requested the mic inside a setTimeout (breaks iOS Safari user-activation) —
+      the mic is now warmed synchronously on pointerdown and the recording reuses that stream
+- [x] Settings → Notifications → Permissions: live status chips (Allowed / Blocked / Not requested) for
+      Microphone, Location and Notifications with one-tap real browser requests
+- [x] Location flow uses the same iframe-aware errors with actionable toasts
+
+**Global messenger alerts (any page)**
+- [x] New `GlobalChatWatcher` mounted at the app root: real-time RTDB chat list listener for the signed-in user
+- [x] New incoming message (other chat, or tab hidden) → comfortable receive beep + in-app toast with Open action
+      + browser notification when permission granted and tab hidden; respects mute + sound toggle; first snapshot
+      baselined so refreshes never spam stale alerts
+- [x] Shared `lib/chatSounds.ts` (dual-oscillator WebAudio engine, unlocked on first gesture anywhere in the app)
+
+**Responsive creation flows**
+- [x] Group/Channel modal: `lg` size, segmented Group/Channel control, side-by-side name/description ≥560px,
+      member directory as a 2-column grid ≥560px with dvh-safe max height
+- [x] Post composer: salary row 2→3 columns ≥460px, Monaco editor `min(42dvh,380px)` height
+- [x] License + marketplace modals: `lg` size, grids collapse to one column below 460px
+- [x] Global CSS: 16px inputs on touch (no iOS zoom-on-focus), native date/datetime pickers hardened,
+      32px range slider targets
+
+**Gates after round 4:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · clean build + PWA.

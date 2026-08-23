@@ -655,7 +655,19 @@
     "locationHint": "ঐচ্ছিক — নিকটবর্তী ডেভেলপার ও অবস্থান-ভিত্তিক ফিড সক্রিয় করে",
     "locationUse": "আমার অবস্থান ব্যবহার করুন",
     "locationClear": "সরান",
-    "locationDetected": "অবস্থান শনাক্ত হয়েছে"
+    "locationDetected": "অবস্থান শনাক্ত হয়েছে",
+    "permissionsTitle": "অনুমতিসমূহ",
+    "permMic": "মাইক্রোফোন",
+    "permLocation": "অবস্থান",
+    "permNotifications": "নোটিফিকেশন",
+    "permAllowed": "অনুমোদিত",
+    "permBlocked": "ব্লকড",
+    "permAsk": "এখনও অনুরোধ করা হয়নি",
+    "permOpenTab": "অনুমতি দিতে নতুন ট্যাবে BSDC খুলুন",
+    "permRequest": "অনুমতি দিন",
+    "permGranted": "{{name}} অনুমতি অনুমোদিত হয়েছে",
+    "permDeniedHint": "অনুমতি ব্লকড — অ্যাড্রেস বারের লক আইকন থেকে BSDC-কে অনুমতি দিন, তারপর আবার চেষ্টা করুন",
+    "permReady": "প্রস্তুত"
   },
   "launch": {
     "title": "শীঘ্রই আসছে",

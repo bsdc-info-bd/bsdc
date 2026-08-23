@@ -14,7 +14,9 @@ import { useVoiceRecorder } from '@/components/chat/useVoiceRecorder';
 import { ImageEditorModal } from '@/components/chat/ImageEditorModal';
 import { VoiceNotePlayer, FileCard, ImageWithZoom } from '@/components/chat/MessageMedia';
 import { uploadVoiceNote, uploadPdf } from '@/lib/cloudinary-chat';
+import { playBeep, unlockAudio } from '@/lib/chatSounds';
 import { setChatArchived } from '@/lib/realtime';
+import { openStandalone } from '@/lib/permissions';
 import { fetchActiveUsers } from '@/lib/data';
 import { useAuthStore } from '@/stores/authStore';
 import { Avatar } from '@/components/ui/Avatar';
@@ -34,82 +36,6 @@ import { useUIStore } from '@/stores/uiStore';
 /* -------------------------------------------------------------------------- */
 /*  Ultra Audio Engine — Web Audio API with dual-tone envelopes                 */
 /* -------------------------------------------------------------------------- */
-let _audioCtx: AudioContext | null = null;
-let _audioUnlocked = false;
-
-function getAudioCtx(): AudioContext | null {
-  try {
-    if (typeof window === 'undefined') return null;
-    if (!_audioCtx) {
-      const w = window as Window & { webkitAudioContext?: typeof AudioContext };
-      const Ctx = window.AudioContext || w.webkitAudioContext;
-      if (!Ctx) return null;
-      _audioCtx = new Ctx();
-    }
-    const ctx = _audioCtx;
-    if (!ctx) return null;
-    if (ctx.state === 'suspended') {
-      void ctx.resume().catch(() => {});
-    }
-    return ctx;
-  } catch {
-    return null;
-  }
-}
-
-function playBeep(type: 'sent' | 'received' = 'sent') {
-  try {
-    if (!_audioUnlocked) return;
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    const now = ctx.currentTime;
-
-    // Master gain for envelope
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.connect(ctx.destination);
-
-    // Primary oscillator
-    const osc1 = ctx.createOscillator();
-    osc1.type = 'sine';
-
-    // Harmonic oscillator for warmth
-    const osc2 = ctx.createOscillator();
-    osc2.type = 'triangle';
-
-    if (type === 'sent') {
-      // Rising pleasant chirp
-      osc1.frequency.setValueAtTime(880, now);
-      osc1.frequency.exponentialRampToValueAtTime(1400, now + 0.13);
-      osc2.frequency.setValueAtTime(1320, now);
-      osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.13);
-      master.gain.exponentialRampToValueAtTime(0.14, now + 0.015);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-    } else {
-      // Soft receiving tone
-      osc1.frequency.setValueAtTime(660, now);
-      osc1.frequency.exponentialRampToValueAtTime(880, now + 0.16);
-      osc2.frequency.setValueAtTime(990, now);
-      osc2.frequency.exponentialRampToValueAtTime(1200, now + 0.16);
-      master.gain.exponentialRampToValueAtTime(0.11, now + 0.02);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
-    }
-
-    // Sub-mixer for harmonics
-    const gain2 = ctx.createGain();
-    gain2.gain.value = 0.3;
-    osc2.connect(gain2).connect(master);
-    osc1.connect(master);
-
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + 0.35);
-    osc2.stop(now + 0.35);
-  } catch {
-    /* silent fail */
-  }
-}
-
 /* -------------------------------------------------------------------------- */
 /*  Advanced Keyframes & Ultra Responsive Styling                               */
 /* -------------------------------------------------------------------------- */
@@ -323,15 +249,9 @@ export default function Messages() {
   const [searchParams] = useSearchParams();
   const activeChat = chatId || searchParams.get('chat') || null;
 
-  // Unlock browser audio policy on first gesture
+  // Unlock browser audio policy on first gesture (shared engine)
   useEffect(() => {
-    const unlock = () => {
-      _audioUnlocked = true;
-      getAudioCtx();
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('keydown', unlock);
-      window.removeEventListener('touchstart', unlock);
-    };
+    const unlock = () => unlockAudio();
     window.addEventListener('pointerdown', unlock, { once: true });
     window.addEventListener('keydown', unlock, { once: true });
     window.addEventListener('touchstart', unlock, { once: true });
@@ -789,10 +709,17 @@ function ChatWindow({ chatId }: { chatId: string }) {
         setVoiceUploading(false);
       }
     },
-    (code) => {
-      if (code === 'PERMISSION') toast.error('Microphone permission denied — allow access in browser settings');
-      else if (code === 'TOO_SHORT') toast.info('Hold the mic a little longer');
-      else toast.error('Could not start recording');
+    (code, message, openTab) => {
+      if (code === 'TOO_SHORT') {
+        toast.info('Hold the mic a little longer');
+        return;
+      }
+      toast.error(message, {
+        duration: 7000,
+        action: openTab
+          ? { label: 'Open in new tab', onClick: () => openStandalone() }
+          : undefined,
+      });
     },
   );
 
@@ -1204,6 +1131,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
                   status={voiceUploading ? 'processing' : recorder.status}
                   onStart={() => void recorder.start()}
                   onStop={recorder.stop}
+                  onWarmUp={recorder.warmUp}
                 />
                 <button
                   type="submit"
@@ -1635,6 +1563,7 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     <Modal
       open={open}
       onOpenChange={onOpenChange}
+      size="lg"
       title={type === 'channel' ? t('chat.newChannel') : t('chat.newGroup')}
       footer={
         <>
@@ -1648,21 +1577,39 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
       }
     >
       <div className="bsdc-scale-in space-y-3">
-        <div className="flex gap-2">
-          <Button size="sm" variant={type === 'group' ? 'primary' : 'outline'} onClick={() => setType('group')}>
-            {t('chat.newGroup')}
-          </Button>
-          <Button size="sm" variant={type === 'channel' ? 'primary' : 'outline'} onClick={() => setType('channel')}>
-            {t('chat.newChannel')}
-          </Button>
+        <div
+          role="tablist"
+          aria-label={t('common.create')}
+          className="grid grid-cols-2 gap-1 rounded-xl bg-neutral-100 p-1 dark:bg-surface-dark-raised"
+        >
+          {(['group', 'channel'] as const).map((option) => (
+            <button
+              key={option}
+              type="button"
+              role="tab"
+              aria-selected={type === option}
+              onClick={() => setType(option)}
+              className={cn(
+                'bsdc-tap flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold transition-all sm:text-sm',
+                type === option
+                  ? 'bg-white text-brand-700 shadow-sm dark:bg-surface-dark dark:text-brand-300'
+                  : 'text-neutral-500 hover:text-neutral-700 dark:text-neutral-400',
+              )}
+            >
+              {option === 'group' ? <Users className="h-4 w-4" aria-hidden /> : <Hash className="h-4 w-4" aria-hidden />}
+              {option === 'group' ? t('chat.newGroup') : t('chat.newChannel')}
+            </button>
+          ))}
         </div>
-        <Input label={t('chat.groupName')} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
-        <Input
-          label={t('chat.groupDescription')}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          maxLength={160}
-        />
+        <div className="grid gap-3 min-[560px]:grid-cols-2">
+          <Input label={t('chat.groupName')} value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+          <Input
+            label={t('chat.groupDescription')}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            maxLength={160}
+          />
+        </div>
         <div>
           <p className="bsdc-label">
             {t('chat.addMembers')} ({selected.length}/{people.length})
@@ -1694,7 +1641,7 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
               className="bsdc-input h-9 rounded-full pl-9 text-sm"
             />
           </div>
-          <ul className="bsdc-scrollbar max-h-52 space-y-1 overflow-y-auto rounded-xl border border-surface-light-border p-1.5 dark:border-surface-dark-border">
+          <ul className="bsdc-scrollbar grid max-h-[38dvh] min-[560px]:grid-cols-2 gap-1 overflow-y-auto rounded-xl border border-surface-light-border p-1.5 dark:border-surface-dark-border">
             {directoryLoading ? (
               <li className="p-3 text-xs text-neutral-400">{t('common.loading')}</li>
             ) : null}

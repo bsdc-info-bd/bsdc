@@ -18,6 +18,7 @@ import { useUIStore } from '@/stores/uiStore';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
+import { PermissionRow } from '@/components/common/PermissionRow';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ImageUploader } from '@/components/ui/ImageUploader';
 import { SEOHead } from '@/components/seo/SEOHead';
@@ -27,6 +28,9 @@ import { downloadBlob } from '@/lib/utils';
 import { promptPushPermission } from '@/config/onesignal';
 import { fetchRecentPosts } from '@/lib/data';
 import { detectMyPlace, searchPlaces, type GeoPoint, type ResolvedPlace } from '@/lib/geo';
+import {
+  describePermissionError, inIframe, openStandalone, queryPermission, requestNotifications,
+} from '@/lib/permissions';
 
 export default function Settings() {
   const { t } = useTranslation();
@@ -198,12 +202,27 @@ export default function Settings() {
   async function handleDetectLocation() {
     setLocating(true);
     try {
+      // Fail fast with precise guidance when blocked by an embedded preview iframe.
+      if (inIframe()) {
+        const state = await queryPermission('geolocation');
+        if (state !== 'granted') {
+          toast.error('Location is blocked inside embedded previews', {
+            duration: 8000,
+            action: { label: 'Open in new tab', onClick: () => openStandalone() },
+          });
+          return;
+        }
+      }
       const place = await detectMyPlace();
       setLocation(place.displayName);
       setGeo(place.point);
       toast.success(`${t('settings.locationDetected')}: ${place.displayName}`);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Could not get your location');
+      const action = describePermissionError('geolocation', e);
+      toast.error(action.message, {
+        duration: 8000,
+        action: action.openTab ? { label: 'Open in new tab', onClick: () => openStandalone() } : undefined,
+      });
     } finally {
       setLocating(false);
     }
@@ -408,8 +427,12 @@ export default function Settings() {
 
           <TabsContent value="notifications">
             <div className="bsdc-surface divide-y divide-surface-light-border p-4 dark:divide-surface-dark-border">
-              <Switch label={t('settings.pushEnable')} description="Browser push via OneSignal for messages, mentions and announcements" checked={Notification.permission === 'granted'} onCheckedChange={() => void promptPushPermission()} />
-              <Switch label={t('settings.soundEnable')} description="Play a soft chime for new notifications" checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+              <p className="pb-1 text-sm font-bold">{t('settings.permissionsTitle')}</p>
+              <PermissionRow kind="notifications" />
+              <PermissionRow kind="microphone" />
+              <PermissionRow kind="geolocation" />
+              <Switch label={t('settings.pushEnable')} description="Browser push via OneSignal for messages, mentions and announcements" checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'} onCheckedChange={() => void (async () => { const p = await requestNotifications(); if (p === 'granted') { await promptPushPermission(); toast.success('Notifications enabled'); } })()} />
+              <Switch label={t('settings.soundEnable')} description="Play a soft chime for new messages and notifications" checked={soundEnabled} onCheckedChange={setSoundEnabled} />
             </div>
           </TabsContent>
 

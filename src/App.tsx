@@ -9,6 +9,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { FullPageLoader } from '@/components/ui/Skeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { CommandPalette, ShortcutsDialog } from '@/components/search/CommandPalette';
+import { GlobalChatWatcher } from '@/components/chat/GlobalChatWatcher';
 import { useAuthBootstrap } from '@/hooks/useAuth';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAuthStore } from '@/stores/authStore';
@@ -141,6 +142,7 @@ export default function App() {
         <TooltipProvider>
           <BrowserRouter>
             <GlobalShortcuts />
+            <GlobalChatWatcher />
             <CommandPalette />
             <ShortcutsDialog />
             <Toaster

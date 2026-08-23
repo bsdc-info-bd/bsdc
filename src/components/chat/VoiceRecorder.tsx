@@ -14,16 +14,20 @@ export function MicButton({
   status,
   onStart,
   onStop,
+  onWarmUp,
 }: {
   status: RecorderStatus;
   onStart: () => void;
   onStop: () => void;
+  onWarmUp?: () => void;
 }) {
   const recording = status === 'recording';
   const holdTimer = useRef<number | null>(null);
   const heldRef = useRef(false);
 
   function down() {
+    // Acquire the mic INSIDE the gesture (iOS/iframe requirement).
+    onWarmUp?.();
     heldRef.current = false;
     holdTimer.current = window.setTimeout(() => {
       holdTimer.current = null;

@@ -128,3 +128,28 @@
     min-height: 44px;
   }
 }
+
+@layer base {
+  /* Prevent iOS auto-zoom: inputs need >=16px on touch devices. */
+  @media (pointer: coarse) {
+    input, select, textarea {
+      font-size: 16px;
+    }
+  }
+  /* Native date/time pickers need room on small screens. */
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'] {
+    min-width: 0;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  input[type='date']::-webkit-calendar-picker-indicator,
+  input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
+  /* Range sliders get comfortable touch targets. */
+  input[type='range'] {
+    min-height: 32px;
+  }
+}

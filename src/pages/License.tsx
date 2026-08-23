@@ -231,6 +231,7 @@ function RegisterLicenseModal({ open, onOpenChange }: { open: boolean; onOpenCha
     <Modal
       open={open}
       onOpenChange={onOpenChange}
+      size="lg"
       title={t('license.register')}
       footer={
         <>
@@ -241,7 +242,7 @@ function RegisterLicenseModal({ open, onOpenChange }: { open: boolean; onOpenCha
     >
       <div className="space-y-3">
         <Input label={t('license.softwareName')} value={softwareName} onChange={(e) => setSoftwareName(e.target.value)} maxLength={80} />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2">
           <Input label={t('license.version')} value={version} onChange={(e) => setVersion(e.target.value)} />
           <Select label={t('license.licenseType')} value={licenseType} onChange={(e) => setLicenseType(e.target.value)} options={LICENSE_TYPES.map((l) => ({ value: l, label: l }))} />
         </div>

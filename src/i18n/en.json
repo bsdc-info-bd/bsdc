@@ -655,7 +655,19 @@
     "locationHint": "Optional — enables nearby developers and location-boosted feed",
     "locationUse": "Use my location",
     "locationClear": "Remove",
-    "locationDetected": "Location detected"
+    "locationDetected": "Location detected",
+    "permissionsTitle": "Permissions",
+    "permMic": "Microphone",
+    "permLocation": "Location",
+    "permNotifications": "Notifications",
+    "permAllowed": "Allowed",
+    "permBlocked": "Blocked",
+    "permAsk": "Not requested yet",
+    "permOpenTab": "Open BSDC in a new tab to grant",
+    "permRequest": "Allow",
+    "permGranted": "{{name}} permission granted",
+    "permDeniedHint": "Permission is blocked — allow BSDC from the address-bar lock icon, then retry",
+    "permReady": "Ready"
   },
   "launch": {
     "title": "Launching soon",

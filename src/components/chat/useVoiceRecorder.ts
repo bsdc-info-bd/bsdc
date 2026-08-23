@@ -9,6 +9,7 @@
  * - Returns a { blob, durationSec, mime } ready for Cloudinary upload
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { describePermissionError, requestMicrophone } from '@/lib/permissions';
 
 export interface VoiceNoteResult {
   blob: Blob;
@@ -28,7 +29,10 @@ export function pickAudioMime(): string {
 
 export type RecorderStatus = 'idle' | 'requesting' | 'recording' | 'processing';
 
-export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onError?: (message: string) => void) {
+/** Precise, actionable failure codes surfaced to the UI. */
+export type RecorderError = 'IFRAME' | 'DENIED' | 'NO_DEVICE' | 'UNSUPPORTED' | 'TOO_SHORT' | 'FAILED';
+
+export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onError?: (code: RecorderError, message: string, openTab: boolean) => void) {
   const [status, setStatus] = useState<RecorderStatus>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => new Array(28).fill(0.08));
@@ -59,20 +63,43 @@ export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onErro
     recorderRef.current = null;
     streamRef.current = null;
     audioCtxRef.current = null;
+    warmPromiseRef.current = null;
   }, []);
 
   useEffect(() => () => teardown(), [teardown]);
+
+  /**
+   * Warm up the microphone on pointerdown — the getUserMedia call starts
+   * synchronously inside the user gesture, which iOS Safari and embedded
+   * iframes require. Recording later reuses this stream, so the hold-timer
+   * path never requests permission outside a gesture.
+   */
+  const warmPromiseRef = useRef<Promise<MediaStream> | null>(null);
+  const warmUp = useCallback(() => {
+    if (streamRef.current || warmPromiseRef.current) return;
+    const p = requestMicrophone()
+      .then((stream) => {
+        streamRef.current = stream;
+        return stream;
+      })
+      .catch((e) => {
+        warmPromiseRef.current = null;
+        throw e;
+      });
+    warmPromiseRef.current = p;
+  }, []);
 
   const start = useCallback(async () => {
     if (status === 'recording' || status === 'requesting') return;
     setStatus('requesting');
     cancelledRef.current = false;
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-      });
-      streamRef.current = stream;
-
+      if (!streamRef.current) {
+        warmUp();
+        if (warmPromiseRef.current) await warmPromiseRef.current;
+      }
+      if (!streamRef.current) throw new Error('Microphone unavailable');
+      const stream = streamRef.current;
       const mime = pickAudioMime();
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
       recorderRef.current = recorder;
@@ -84,7 +111,7 @@ export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onErro
         const duration = (Date.now() - startedAtRef.current) / 1000;
         teardown();
         if (cancelledRef.current || duration < 0.6 || chunksRef.current.length === 0) {
-          if (!cancelledRef.current && duration < 0.6) onErrorRef.current?.('TOO_SHORT');
+          if (!cancelledRef.current && duration < 0.6) onErrorRef.current?.('TOO_SHORT', 'Recording too short', false);
           setStatus('idle');
           setElapsed(0);
           setLevels(new Array(28).fill(0.08));
@@ -133,10 +160,16 @@ export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onErro
     } catch (e) {
       teardown();
       setStatus('idle');
-      const name = (e as Error).name || '';
-      onErrorRef.current?.(name === 'NotAllowedError' ? 'PERMISSION' : 'FAILED');
+      const action = describePermissionError('microphone', e);
+      const code: RecorderError =
+        action.code === 'iframe' ? 'IFRAME'
+        : action.code === 'denied-in-settings' ? 'DENIED'
+        : action.code === 'no-device' ? 'NO_DEVICE'
+        : action.code === 'unsupported' || action.code === 'insecure' ? 'UNSUPPORTED'
+        : 'FAILED';
+      onErrorRef.current?.(code, action.message, action.openTab === true);
     }
-  }, [status, teardown]);
+  }, [status, teardown, warmUp]);
 
   const stop = useCallback(() => {
     if (recorderRef.current?.state === 'recording') {
@@ -177,5 +210,5 @@ export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onErro
     },
   };
 
-  return { status, elapsed, levels, start, stop, cancel, holdHandlers, cancelled };
+  return { status, elapsed, levels, start, stop, cancel, warmUp, holdHandlers, cancelled };
 }

@@ -385,7 +385,7 @@ export function PostComposer({ initialType, groupId, groupName }: { initialType?
             />
             <div className="overflow-hidden rounded-xl border border-surface-light-border dark:border-surface-dark-border">
               <Editor
-                height="320px"
+                height="min(42dvh, 380px)"
                 defaultLanguage={snippetLanguage}
                 language={snippetLanguage}
                 theme="vs-dark"
@@ -446,7 +446,7 @@ export function PostComposer({ initialType, groupId, groupName }: { initialType?
               ]}
             />
             <Input label={t('common.location')} value={jobLocation} onChange={(e) => setJobLocation(e.target.value)} placeholder="Dhaka, Bangladesh" />
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 min-[460px]:grid-cols-3">
               <Input label={`${t('post.salary')} min`} type="number" min={0} value={salaryMin} onChange={(e) => setSalaryMin(e.target.value)} />
               <Input label="max" type="number" min={0} value={salaryMax} onChange={(e) => setSalaryMax(e.target.value)} />
               <Select

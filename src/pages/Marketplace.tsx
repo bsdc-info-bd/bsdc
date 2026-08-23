@@ -190,11 +190,11 @@ function CreateListingModal({ open, onOpenChange }: { open: boolean; onOpenChang
       <div className="space-y-3">
         <Input label={t('common.title')} value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} />
         <Textarea label={t('common.description')} value={description} onChange={(e) => setDescription(e.target.value)} maxRows={4} />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2">
           <Input label={t('marketplace.price')} type="number" min={0} value={price} onChange={(e) => setPrice(e.target.value)} />
           <Select label="Currency" value={currency} onChange={(e) => setCurrency(e.target.value as 'BDT' | 'USD')} options={[{ value: 'BDT', label: 'BDT' }, { value: 'USD', label: 'USD' }]} />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 min-[460px]:grid-cols-2">
           <Select label={t('marketplace.category')} value={category} onChange={(e) => setCategory(e.target.value)} options={MARKETPLACE_CATEGORIES.map((c) => ({ value: c, label: c }))} />
           <Select
             label={t('marketplace.condition')}
