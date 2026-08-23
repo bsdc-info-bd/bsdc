@@ -17,6 +17,9 @@ export function MainLayout() {
   const setMobileNavOpen = useUIStore((s) => s.setMobileNavOpen);
   const setSystemSettings = useUIStore((s) => s.setSystemSettings);
 
+  // Check if the current route is a message page
+  const isMessagePage = location.pathname.startsWith('/messages');
+
   useEffect(() => {
     setMobileNavOpen(false);
     window.scrollTo({ top: 0 });
@@ -32,27 +35,34 @@ export function MainLayout() {
   }, [online]);
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-white"
       >
         Skip to main content
       </a>
+      
+      {/* Hide header on mobile chat view if you want true full-screen, or keep it */}
       <Header />
       <AnnouncementBanner />
       {!online ? <OfflineBanner /> : null}
-      <div className="mx-auto flex w-full max-w-[1600px] flex-1 px-3 sm:px-4 lg:px-6">
-        <Sidebar />
-        <main id="main-content" className="min-w-0 flex-1 py-4 pb-24 lg:pb-8">
+
+      <div className="mx-auto flex w-full max-w-[1600px] flex-1 overflow-hidden px-3 sm:px-4 lg:px-6">
+        {!isMessagePage && <Sidebar />}
+        
+        {/* Main section becomes a rigid flex container when on messages */}
+        <main id="main-content" className={`min-w-0 flex-1 flex flex-col ${isMessagePage ? 'py-0 pb-0' : 'py-4 pb-24 lg:pb-8 overflow-y-auto'}`}>
           <Suspense fallback={<FullPageLoader />}>
             <Outlet />
           </Suspense>
         </main>
       </div>
-      <Footer />
-      <MobileSidebar />
-      <BottomNav />
+
+      {/* Hide footer and bottom nav on message pages so they don't block the input box */}
+      {!isMessagePage && <Footer />}
+      {!isMessagePage && <MobileSidebar />}
+      {!isMessagePage && <BottomNav />}
     </div>
   );
 }
