@@ -19,6 +19,15 @@ export interface ChatMessage {
   senderAvatar: string;
   text: string;
   imageUrl: string;
+  /** Voice note (Cloudinary secure_url) + recorded duration in seconds. */
+  audioUrl: string;
+  audioDuration: number;
+  audioMime: string;
+  /** Generic file attachment (PDF etc.) — Cloudinary secure_url + metadata. */
+  fileUrl: string;
+  fileName: string;
+  fileSize: number;
+  fileType: string;
   codeSnippet: string;
   codeLanguage: string;
   linkUrl: string;
@@ -64,6 +73,7 @@ export interface UserChatEntry {
   unreadCount: number;
   pinned: boolean;
   muted: boolean;
+  archived: boolean;
 }
 
 export interface PresenceInfo {

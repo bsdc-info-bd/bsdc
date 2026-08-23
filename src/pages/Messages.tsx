@@ -5,10 +5,17 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowLeft, Check, CheckCheck, Code2, ImagePlus, MessageSquarePlus, MoreVertical, Pin, PinOff,
   Reply, Search, Send, ShieldCheck, Trash2, Users, Pencil, VolumeOff, Volume2, LogOut, Hash,
-  ThumbsUp, Heart, PartyPopper, Flame, Smile, ChevronDown,
+  ThumbsUp, Heart, PartyPopper, Flame, Smile, ChevronDown, FileText, Archive, ArchiveRestore,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useChat, useChatList } from '@/hooks/useChat';
+import { MicButton, RecordingOverlay } from '@/components/chat/VoiceRecorder';
+import { useVoiceRecorder } from '@/components/chat/useVoiceRecorder';
+import { ImageEditorModal } from '@/components/chat/ImageEditorModal';
+import { VoiceNotePlayer, FileCard, ImageWithZoom } from '@/components/chat/MessageMedia';
+import { uploadVoiceNote, uploadPdf } from '@/lib/cloudinary-chat';
+import { setChatArchived } from '@/lib/realtime';
+import { fetchActiveUsers } from '@/lib/data';
 import { useAuthStore } from '@/stores/authStore';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
@@ -20,7 +27,6 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { uploadImage } from '@/lib/upload';
 import { cn, timeAgo } from '@/lib/utils';
-import { fetchActiveUsers } from '@/lib/data';
 import { onPresence } from '@/lib/realtime';
 import type { ChatMessage, UserChatEntry } from '@/types/chat';
 import { useUIStore } from '@/stores/uiStore';
@@ -412,6 +418,42 @@ function ChatListPanel({ activeChatId }: { activeChatId: string | null }) {
     return chats.filter((c) => c.name?.toLowerCase().includes(f) || c.chatId.toLowerCase().includes(f) || c.lastMessage.toLowerCase().includes(f));
   }, [chats, filter]);
 
+  // Active vs archived split (archived chats live in their own collapsible section)
+  const [showArchived, setShowArchived] = useState(false);
+  const activeChats = filtered.filter((c) => !c.archived);
+  const archivedChats = filtered.filter((c) => c.archived);
+
+  // Real-time incoming alerts: beep + in-app toast for messages in other chats
+  // (or when the window is in the background), with a jump-to-chat action.
+  const prevTimestamps = useRef<Record<string, number>>({});
+  const initialized = useRef(false);
+  useEffect(() => {
+    if (!profile) return;
+    if (!initialized.current) {
+      chats.forEach((c) => {
+        prevTimestamps.current[c.chatId] = c.lastMessageAt || 0;
+      });
+      if (chats.length > 0) initialized.current = true;
+      return;
+    }
+    for (const c of chats) {
+      const prev = prevTimestamps.current[c.chatId] || 0;
+      prevTimestamps.current[c.chatId] = c.lastMessageAt || 0;
+      if ((c.lastMessageAt || 0) <= prev) continue;
+      if (c.muted) continue;
+      if (c.lastSender === profile.displayName) continue;
+      if (c.chatId === activeChatId && !document.hidden) continue;
+      playBeep('received');
+      toast.message(c.name || c.lastSender || 'New message', {
+        description: c.lastMessage?.slice(0, 90),
+        action: {
+          label: 'Open',
+          onClick: () => navigate(`/messages/${c.chatId}`),
+        },
+      });
+    }
+  }, [chats, profile, activeChatId, navigate]);
+
   if (!profile) {
     navigate('/login');
     return null;
@@ -465,8 +507,51 @@ function ChatListPanel({ activeChatId }: { activeChatId: string | null }) {
         ) : filtered.length === 0 ? (
           <EmptyState title={t('chat.noChats')} body={t('chat.noChatsBody')} icon={<MessageSquarePlus className="h-10 w-10" aria-hidden />} />
         ) : (
+          <>
+          {archivedChats.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowArchived((v) => !v)}
+              className="mx-2 mb-1 mt-1.5 flex w-[calc(100%-1rem)] items-center gap-2 rounded-xl px-2.5 py-2 text-xs font-bold text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-surface-dark-raised"
+              aria-expanded={showArchived}
+            >
+              <Archive className="h-4 w-4" aria-hidden />
+              {t('chat.archived')}
+              <span className="ml-auto rounded-full bg-neutral-200 px-1.5 py-0.5 text-[10px] dark:bg-neutral-700">{archivedChats.length}</span>
+              <span className={cn('transition-transform', showArchived && 'rotate-180')} aria-hidden>▾</span>
+            </button>
+          ) : null}
+          {showArchived && archivedChats.length > 0 ? (
+            <ul className="mb-2 space-y-0.5 border-b border-surface-light-border p-1.5 opacity-75 dark:border-surface-dark-border">
+              {archivedChats.map((chat) => (
+                <li key={chat.chatId} className="bsdc-fade-slide-up">
+                  <div className="group/chip relative">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/messages/${chat.chatId}`)}
+                      className="bsdc-tap flex w-full items-center gap-2.5 rounded-xl p-2.5 text-left hover:bg-neutral-100/60 dark:hover:bg-surface-dark-raised/60"
+                    >
+                      <ChatAvatar name={chat.name || chatTitle(chat)} type={chat.type} ids={chat.participantIds || []} meId={profile.uid} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold">{chat.name || chatTitle(chat)}</span>
+                        <span className="block truncate text-xs text-neutral-400">{chat.lastMessage || '…'}</span>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={t('chat.unarchive')}
+                      onClick={() => void setChatArchived(profile.uid, chat.chatId, false)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-white/80 p-1.5 text-brand-600 opacity-0 shadow-sm transition-opacity group-hover/chip:opacity-100 dark:bg-surface-dark/80 dark:text-brand-400"
+                    >
+                      <ArchiveRestore className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <ul className="space-y-0.5 p-1.5">
-            {filtered.map((chat, idx) => (
+            {activeChats.map((chat, idx) => (
               <li key={chat.chatId} className="bsdc-fade-slide-up" style={{ animationDelay: `${Math.min(idx * 20, 200)}ms` }}>
                 <button
                   type="button"
@@ -502,6 +587,7 @@ function ChatListPanel({ activeChatId }: { activeChatId: string | null }) {
               </li>
             ))}
           </ul>
+          </>
         )}
       </div>
 
@@ -670,13 +756,87 @@ function ChatWindow({ chatId }: { chatId: string }) {
     setUploadingImage(true);
     try {
       const result = await uploadImage(file, 'casual', 'bsdc/chat');
-      await chat.send({ imageUrl: result.url });
+      await chat.send({
+        imageUrl: result.url,
+        replyTo: replyTo ? { id: replyTo.id, text: replyTo.text || 'Message', sender: replyTo.senderName } : null,
+      });
       playBeep('sent');
     } catch {
       toast.error('Image upload failed');
     } finally {
       setUploadingImage(false);
     }
+  }
+
+  // ---------- Voice notes ----------
+  const [voiceUploading, setVoiceUploading] = useState(false);
+  const recorder = useVoiceRecorder(
+    async (note) => {
+      if (!profile) return;
+      setVoiceUploading(true);
+      try {
+        const result = await uploadVoiceNote(note.blob, note.durationSec);
+        await chat.send({
+          audioUrl: result.url,
+          audioDuration: result.duration,
+          audioMime: note.mime,
+          replyTo: replyTo ? { id: replyTo.id, text: replyTo.text || 'Message', sender: replyTo.senderName } : null,
+        });
+        playBeep('sent');
+      } catch {
+        toast.error('Voice upload failed — check your connection');
+      } finally {
+        setVoiceUploading(false);
+      }
+    },
+    (code) => {
+      if (code === 'PERMISSION') toast.error('Microphone permission denied — allow access in browser settings');
+      else if (code === 'TOO_SHORT') toast.info('Hold the mic a little longer');
+      else toast.error('Could not start recording');
+    },
+  );
+
+  // ---------- PDF attachments ----------
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
+  async function sendPdf(file: File) {
+    if (!profile) return;
+    setPdfUploading(true);
+    setPdfProgress(0);
+    try {
+      const result = await uploadPdf(file, setPdfProgress);
+      await chat.send({
+        fileUrl: result.url,
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: 'pdf',
+        replyTo: replyTo ? { id: replyTo.id, text: replyTo.text || 'Message', sender: replyTo.senderName } : null,
+      });
+      playBeep('sent');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'PDF upload failed');
+    } finally {
+      setPdfUploading(false);
+      setPdfProgress(0);
+    }
+  }
+
+  // ---------- Image preview & edit ----------
+  const [editingImage, setEditingImage] = useState<File | null>(null);
+
+  // ---------- Archive ----------
+  const [archivedLocal, setArchivedLocal] = useState(false);
+  async function toggleArchive() {
+    if (!profile) return;
+    const next = !archivedLocal;
+    setArchivedLocal(next);
+    await setChatArchived(profile.uid, chatId, next).catch(() => {
+      setArchivedLocal(!next);
+      toast.error('Could not update archive');
+    });
+    toast.success(next ? t('chat.archivedToast') : t('chat.unarchivedToast'));
+    if (next) navigate('/messages');
   }
 
   // Enter to send, Shift+Enter for newline
@@ -781,6 +941,12 @@ function ChatWindow({ chatId }: { chatId: string }) {
                 {t('chat.mute')}
               </DropdownItem>
               <DropdownSeparator />
+              <DropdownItem
+                icon={archivedLocal ? <ArchiveRestore className="h-4 w-4" aria-hidden /> : <Archive className="h-4 w-4" aria-hidden />}
+                onSelect={() => void toggleArchive()}
+              >
+                {archivedLocal ? t('chat.unarchive') : t('chat.archive')}
+              </DropdownItem>
               <DropdownItem
                 danger
                 icon={<LogOut className="h-4 w-4" aria-hidden />}
@@ -958,7 +1124,18 @@ function ChatWindow({ chatId }: { chatId: string }) {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) void sendImage(file);
+                if (file) setEditingImage(file);
+                e.target.value = '';
+              }}
+            />
+            <input
+              ref={pdfInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) void sendPdf(file);
                 e.target.value = '';
               }}
             />
@@ -970,6 +1147,19 @@ function ChatWindow({ chatId }: { chatId: string }) {
               className="bsdc-tap bsdc-hover-lift bsdc-composer-icon-btn shrink-0 rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-brand-600 disabled:opacity-50 dark:hover:bg-surface-dark-raised sm:p-2.5"
             >
               <ImagePlus className="h-5 w-5" aria-hidden />
+            </button>
+            <button
+              type="button"
+              onClick={() => pdfInputRef.current?.click()}
+              disabled={pdfUploading}
+              aria-label={t('chat.sendPdf')}
+              className="bsdc-tap bsdc-hover-lift bsdc-composer-icon-btn shrink-0 rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-red-500 disabled:opacity-50 dark:hover:bg-surface-dark-raised sm:p-2.5"
+            >
+              {pdfUploading ? (
+                <span className="text-[10px] font-bold text-red-500">{pdfProgress}%</span>
+              ) : (
+                <FileText className="h-5 w-5" aria-hidden />
+              )}
             </button>
             <button
               type="button"
@@ -999,14 +1189,32 @@ function ChatWindow({ chatId }: { chatId: string }) {
               aria-label={t('chat.messagePlaceholder')}
               className="bsdc-composer-textarea min-w-0 flex-1 resize-none rounded-2xl text-sm"
             />
-            <button
-              type="submit"
-              className="bsdc-send-btn shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-white sm:h-11 sm:w-11"
-              aria-label={t('common.send')}
-              disabled={!text.trim()}
-            >
-              <Send className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
-            </button>
+            {recorder.status === 'recording' ? (
+              <div className="min-w-0 flex-1">
+                <RecordingOverlay
+                  levels={recorder.levels}
+                  elapsed={recorder.elapsed}
+                  onCancel={recorder.cancel}
+                  onStop={recorder.stop}
+                />
+              </div>
+            ) : (
+              <>
+                <MicButton
+                  status={voiceUploading ? 'processing' : recorder.status}
+                  onStart={() => void recorder.start()}
+                  onStop={recorder.stop}
+                />
+                <button
+                  type="submit"
+                  className="bsdc-send-btn shrink-0 flex h-10 w-10 items-center justify-center rounded-full text-white sm:h-11 sm:w-11"
+                  aria-label={t('common.send')}
+                  disabled={!text.trim()}
+                >
+                  {voiceUploading ? <Volume2 className="h-4 w-4 animate-pulse sm:h-5 sm:w-5" aria-hidden /> : <Send className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />}
+                </button>
+              </>
+            )}
           </form>
         </div>
       ) : (
@@ -1014,6 +1222,14 @@ function ChatWindow({ chatId }: { chatId: string }) {
           {t('chat.channelInfo')}
         </div>
       )}
+
+      {/* Image preview & editor */}
+      <ImageEditorModal
+        open={editingImage !== null}
+        file={editingImage}
+        onOpenChange={(o) => !o && setEditingImage(null)}
+        onSend={(edited) => void sendImage(edited)}
+      />
 
       {/* Code snippet modal */}
       <Modal open={codeOpen} onOpenChange={setCodeOpen} title={t('chat.sendCode')}>
@@ -1150,14 +1366,9 @@ function MessageBubble({
                   <p className="truncate">{message.replyToText?.slice(0, 80)}</p>
                 </div>
               ) : null}
-              {message.imageUrl ? (
-                <img
-                  src={message.imageUrl}
-                  alt="Chat image"
-                  loading="lazy"
-                  className="mb-1 max-h-64 w-full rounded-xl object-cover transition-transform hover:scale-[1.01]"
-                />
-              ) : null}
+              {message.imageUrl ? <ImageWithZoom src={message.imageUrl} mine={isMine} /> : null}
+              {message.audioUrl ? <VoiceNotePlayer message={message} mine={isMine} /> : null}
+              {message.fileUrl ? <FileCard message={message} mine={isMine} /> : null}
               {message.codeSnippet ? (
                 <pre
                   className={cn(
@@ -1365,26 +1576,39 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
     }
   }, [open]);
 
-  const participants = useMemo(() => {
-    const ids = new Set<string>();
-    for (const chat of chats) {
-      for (const id of chat.participantIds || []) if (id !== profile?.uid) ids.add(id);
-    }
-    return [...ids];
-  }, [chats, profile?.uid]);
+  const [people, setPeople] = useState<{ uid: string; displayName: string; username: string; avatar: string; bioTitle: string }[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [directoryLoading, setDirectoryLoading] = useState(false);
 
-  const [people, setPeople] = useState<{ uid: string; displayName: string; username: string; avatar: string }[]>([]);
+  // Real member directory: the full active community, recent contacts ranked first.
   useEffect(() => {
-    if (!open || participants.length === 0) return;
-    void fetchActiveUsers(80).then((list) => {
-      const recentIds = new Set(participants);
-      setPeople(
-        list
-          .filter((u) => recentIds.has(u.uid))
-          .map((u) => ({ uid: u.uid, displayName: u.displayName, username: u.username, avatar: u.avatar })),
-      );
-    });
-  }, [open, participants]);
+    if (!open) return;
+    setDirectoryLoading(true);
+    const recentIds = new Set<string>();
+    for (const chat of chats) {
+      for (const id of chat.participantIds || []) if (id !== profile?.uid) recentIds.add(id);
+    }
+    void fetchActiveUsers(120)
+      .then((list) => {
+        const mapped = list
+          .filter((u) => u.uid !== profile?.uid)
+          .map((u) => ({ uid: u.uid, displayName: u.displayName, username: u.username, avatar: u.avatar, bioTitle: u.bioTitle }));
+        mapped.sort((a, b) => Number(recentIds.has(b.uid)) - Number(recentIds.has(a.uid)));
+        setPeople(mapped);
+      })
+      .catch(() => undefined)
+      .finally(() => setDirectoryLoading(false));
+  }, [open, chats, profile?.uid]);
+
+  const visiblePeople = useMemo(() => {
+    const q = memberSearch.trim().toLowerCase();
+    if (!q) return people.slice(0, 24);
+    return people
+      .filter((p) => p.displayName.toLowerCase().includes(q) || p.username.toLowerCase().includes(q) || p.bioTitle.toLowerCase().includes(q))
+      .slice(0, 24);
+  }, [people, memberSearch]);
+
+  const selectedPeople = people.filter((p) => selected.includes(p.uid));
 
   async function create() {
     if (!profile || !name.trim()) {
@@ -1441,13 +1665,46 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
         />
         <div>
           <p className="bsdc-label">
-            {t('chat.addMembers')} ({selected.length})
+            {t('chat.addMembers')} ({selected.length}/{people.length})
           </p>
+          {selectedPeople.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {selectedPeople.map((p) => (
+                <button
+                  key={p.uid}
+                  type="button"
+                  onClick={() => setSelected((prev) => prev.filter((id) => id !== p.uid))}
+                  className="bsdc-chip gap-1.5 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:bg-brand-950/60 dark:text-brand-300"
+                  aria-label={`${t('common.delete')} ${p.displayName}`}
+                >
+                  <Avatar src={p.avatar} name={p.displayName} size={18} />
+                  {p.displayName.split(' ')[0]}
+                  <span aria-hidden className="font-bold">×</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          <div className="relative mb-2">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden />
+            <input
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              placeholder={t('chat.searchMembers')}
+              aria-label={t('chat.searchMembers')}
+              className="bsdc-input h-9 rounded-full pl-9 text-sm"
+            />
+          </div>
           <ul className="bsdc-scrollbar max-h-52 space-y-1 overflow-y-auto rounded-xl border border-surface-light-border p-1.5 dark:border-surface-dark-border">
-            {people.length === 0 ? (
-              <li className="p-2 text-xs text-neutral-400">Start direct chats first — your contacts appear here.</li>
+            {directoryLoading ? (
+              <li className="p-3 text-xs text-neutral-400">{t('common.loading')}</li>
             ) : null}
-            {people.map((p, idx) => (
+            {!directoryLoading && people.length === 0 ? (
+              <li className="p-2 text-xs text-neutral-400">{t('chat.directoryEmpty')}</li>
+            ) : null}
+            {!directoryLoading && visiblePeople.length === 0 && memberSearch ? (
+              <li className="p-2 text-xs text-neutral-400">{t('common.noResults')}</li>
+            ) : null}
+            {visiblePeople.map((p, idx) => (
               <li key={p.uid} className="bsdc-fade-slide-up" style={{ animationDelay: `${Math.min(idx * 20, 240)}ms` }}>
                 <label className="bsdc-hover-lift flex cursor-pointer items-center gap-2.5 rounded-lg p-2 hover:bg-neutral-50 dark:hover:bg-surface-dark-raised">
                   <input
@@ -1456,12 +1713,15 @@ function NewGroupModal({ open, onOpenChange }: { open: boolean; onOpenChange: (o
                     onChange={(e) =>
                       setSelected((prev) => (e.target.checked ? [...prev, p.uid] : prev.filter((id) => id !== p.uid)))
                     }
-                    className="h-4 w-4 accent-brand-600"
+                    className="h-4 w-4 shrink-0 accent-brand-600"
                   />
                   <Avatar src={p.avatar} name={p.displayName} size={30} />
-                  <span className="min-w-0">
+                  <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">{p.displayName}</span>
-                    <span className="block truncate text-xs text-neutral-400">@{p.username}</span>
+                    <span className="block truncate text-xs text-neutral-400">
+                      @{p.username}
+                      {p.bioTitle ? ` · ${p.bioTitle}` : ''}
+                    </span>
                   </span>
                 </label>
               </li>

@@ -19,6 +19,13 @@ const EMPTY_MESSAGE: Omit<ChatMessage, 'id'> = {
   senderAvatar: '',
   text: '',
   imageUrl: '',
+  audioUrl: '',
+  audioDuration: 0,
+  audioMime: '',
+  fileUrl: '',
+  fileName: '',
+  fileSize: 0,
+  fileType: '',
   codeSnippet: '',
   codeLanguage: '',
   linkUrl: '',
@@ -136,6 +143,13 @@ export interface SendMessageInput {
   senderAvatar: string;
   text?: string;
   imageUrl?: string;
+  audioUrl?: string;
+  audioDuration?: number;
+  audioMime?: string;
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
   codeSnippet?: string;
   codeLanguage?: string;
   linkUrl?: string;
@@ -170,6 +184,8 @@ export async function sendMessage(input: SendMessageInput): Promise<string> {
   const preview =
     message.text ||
     (message.imageUrl ? 'Photo' : '') ||
+    (message.audioUrl ? 'Voice note' : '') ||
+    (message.fileUrl ? (message.fileName || 'File') : '') ||
     (message.codeSnippet ? 'Code snippet' : 'Message');
   await Promise.all([
     set(msgRef, message),
@@ -263,6 +279,11 @@ export async function toggleChatPin(uid: string, chatId: string, pinned: boolean
 
 export async function toggleChatMute(uid: string, chatId: string, muted: boolean): Promise<void> {
   await update(userChatEntryRef(uid, chatId), { muted });
+}
+
+/** Archive / unarchive a conversation (hidden from the primary chat list). */
+export async function setChatArchived(uid: string, chatId: string, archived: boolean): Promise<void> {
+  await update(userChatEntryRef(uid, chatId), { archived });
 }
 
 export async function addChatParticipant(chatId: string, participant: ChatParticipant): Promise<void> {

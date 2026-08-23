@@ -214,3 +214,33 @@ npm run dev       # probe routes listed above
 
 ### Gates after fix round 2
 - ✅ `tsc -b --force` strict: **0 errors** — ✅ `eslint .`: **0 problems** — ✅ `vitest`: **62/62** — ✅ emoji sweep: **0**
+
+
+---
+
+## Fix round 3 — BSDC Messenger power-up (voice notes, PDF, image editing, archive, alerts)
+
+**Voice notes (MediaRecorder + Cloudinary)**
+- [x] `useVoiceRecorder` hook: getUserMedia permission flow, MediaRecorder (webm/opus → mp4 Safari fallback), AnalyserNode live level metering
+- [x] Tap-to-toggle AND press-and-hold recording with a 260ms hold threshold (pure pointer events — no double-fire), keyboard accessible
+- [x] Animated recording overlay: pulsing red state, live waveform bars, timer, slide-to-cancel (touch), trash-cancel, send
+- [x] `uploadVoiceNote()` — unsigned Cloudinary `/auto/upload` with progress → sent as `audioUrl`+`audioDuration` message
+- [x] Rendered as a voice-note card with custom waveform progress + standard HTML `<audio controls>` fallback player
+
+**PDF sharing**
+- [x] Dedicated input restricted to `application/pdf` (≤20 MB) → `uploadPdf()` raw upload → `fileUrl/fileName/fileSize/fileType` message
+- [x] Rendered as a PDF card (icon, name, size, download + open actions); inline upload progress % on the button
+
+**Image preview & editing before send**
+- [x] Canvas editor: rotate ±90°, flip, brightness/contrast/saturation sliders, grayscale, aspect crop presets (1:1 / 4:5 / 16:9), zoom crop — checkerboard backdrop, JPEG export ≤1440px
+- [x] Photos in chat now tap-to-zoom (full-screen overlay, Esc to close)
+
+**Real-time alerts**
+- [x] Comfortable WebAudio receive/send beeps (dual-oscillator envelopes) on message activity
+- [x] In-app toast for incoming messages in other chats (or when the tab is hidden) with an Open action; muted chats stay silent; reply context preserved on media sends
+
+**Chat list & organization**
+- [x] Archive system: collapsible "Archived" section with count, archive from the chat menu, one-tap unarchive (RTDB `userChats.archived`)
+- [x] Group/Channel creation is now a real system: full searchable community directory (recent contacts ranked first), selected-member chips, responsive picker
+
+**Gates after round 3:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · production build + PWA clean.

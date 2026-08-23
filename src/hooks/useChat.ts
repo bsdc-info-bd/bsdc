@@ -91,7 +91,7 @@ export function useChat(chatId: string | null) {
   }, [profile]);
 
   const send = useCallback(
-    async (payload: Partial<Pick<ChatMessage, 'text' | 'imageUrl' | 'codeSnippet' | 'codeLanguage' | 'linkUrl' | 'linkTitle' | 'linkImage'>> & { replyTo?: { id: string; text: string; sender: string } | null }) => {
+    async (payload: Partial<Pick<ChatMessage, 'text' | 'imageUrl' | 'codeSnippet' | 'codeLanguage' | 'linkUrl' | 'linkTitle' | 'linkImage' | 'audioUrl' | 'audioDuration' | 'audioMime' | 'fileUrl' | 'fileName' | 'fileSize' | 'fileType'>> & { replyTo?: { id: string; text: string; sender: string } | null }) => {
       if (!meParticipant || !chatId || !metadata) return;
       await sendMessage({
         chatId,
