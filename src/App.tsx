@@ -11,6 +11,8 @@ import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { CommandPalette, ShortcutsDialog } from '@/components/search/CommandPalette';
 import { GlobalChatWatcher } from '@/components/chat/GlobalChatWatcher';
 import { PermissionOnboarding } from '@/components/common/PermissionOnboarding';
+import { PermissionFab, PermissionsPage } from '@/components/common/PermissionFab';
+import { PromotionEngine } from '@/components/common/PromotionEngine';
 import { useAuthBootstrap } from '@/hooks/useAuth';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAuthStore } from '@/stores/authStore';
@@ -145,6 +147,8 @@ export default function App() {
             <GlobalShortcuts />
             <GlobalChatWatcher />
             <PermissionOnboarding />
+            <PermissionFab />
+            <PromotionEngine />
             <CommandPalette />
             <ShortcutsDialog />
             <Toaster
@@ -197,6 +201,7 @@ export default function App() {
                     <Route path="/branding" element={<Branding />} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/report" element={<ReportPage />} />
+                    <Route path="/permissions" element={<PermissionsPage />} />
                     <Route path="/offline" element={<OfflinePage />} />
                     <Route path="/500" element={<ServerError />} />
                     <Route

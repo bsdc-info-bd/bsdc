@@ -60,6 +60,11 @@ export async function registerWithEmail(displayName: string, email: string, pass
   await fbUpdateProfile(cred.user, { displayName });
   await sendEmailVerification(cred.user).catch(() => undefined);
   await ensureUserProfile(cred.user, displayName);
+  void import('@/lib/emailNotifications')
+    .then((m: { sendWelcomeEmail: (to: string, name: string) => Promise<unknown> }) =>
+      m.sendWelcomeEmail(email, displayName),
+    )
+    .catch(() => undefined);
   return cred.user;
 }
 

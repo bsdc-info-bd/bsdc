@@ -138,6 +138,54 @@ export const onChatMessagePush = onValueWritten(
   },
 );
 
+/* --------------------------------------- scheduled reminder/digest push */
+
+/**
+ * Daily reminder push (10:00 Asia/Dhaka): sends a real FCM push to every user
+ * with registered browser tokens — personalized streak/digest message.
+ */
+export const dailyReminderPush = onSchedule(
+  { schedule: '0 10 * * *', timeZone: 'Asia/Dhaka' },
+  async () => {
+    const usersSnap = await db.collection('users').limit(1000).get();
+    const byToken: { token: string; uid: string; name: string; streak: number }[] = [];
+    usersSnap.docs.forEach((d) => {
+      const data = d.data();
+      const tokens = (data.pushTokens as string[] | undefined) || [];
+      tokens.forEach((token) =>
+        byToken.push({
+          token,
+          uid: d.id,
+          name: (data.displayName as string) || 'Developer',
+          streak: (data.streak as number) || 0,
+        }),
+      );
+    });
+    if (byToken.length === 0) return;
+
+    // Personalized batches of 500 (FCM multicast limit).
+    for (let i = 0; i < byToken.length; i += 500) {
+      const batch = byToken.slice(i, i + 500);
+      await getMessaging().sendEachForMulticast({
+        notification: {
+          title: 'BSDC — your daily reminder',
+          body:
+            batch[0].streak >= 2
+              ? `Keep your ${batch[0].streak}-day streak alive — share something today.`
+              : 'The Bangladesh developer community has something new for you today.',
+        },
+        data: { url: '/' },
+        tokens: batch.map((b) => b.token),
+        android: { priority: 'normal', notification: { icon: 'default', tag: 'bsdc-reminder' } },
+        webpush: {
+          notification: { icon: '/favicon-192.png', badge: '/favicon-192.png', tag: 'bsdc-reminder' },
+          fcmOptions: { link: 'https://www.bsdc.info.bd/' },
+        },
+      });
+    }
+  },
+);
+
 /* -------------------------------------------------------- sitemap.xml */
 
 export const sitemap = onRequest({ memory: '256MiB' }, async (_req, res) => {

@@ -305,3 +305,28 @@ behind Settings switches, and preview iframes auto-deny silently. Fixed end to e
 - [x] GlobalChatWatcher now notifies through the Service Worker (true native notifications)
 
 **Gates after round 5:** tsc `--force` 0 errors · eslint 0 problems · 62/62 tests · 0 emojis · clean build + PWA.
+
+
+---
+
+## Round 6 — useAppPermissions hook + soft-prompt UX + full delivery stack
+
+**`useAppPermissions` custom hook** (`src/hooks/useAppPermissions.ts`)
+- [x] Full state machine per permission: `idle → pending → granted | denied` for microphone + location
+- [x] Mic via `navigator.mediaDevices.getUserMedia`; location via `navigator.geolocation.getCurrentPosition`
+- [x] **Stream cleanup guarantee**: verification stream has every track stopped immediately (recording indicator never lingers); a ref-stored stream is also torn down on unmount
+- [x] Live `navigator.permissions` watchers — manual flips in browser settings reflect instantly
+- [x] Denial classification: `user-denied` vs `blocked` (hard-blocked origin) vs `no-device` vs `insecure` vs `unsupported` vs `iframe`
+
+**Soft-prompt UX** (`PermissionSoftPrompt`)
+- [x] Explains WHY before asking (voice notes / nearby developers), with privacy notes ("mic only while recording", "remove coordinates anytime")
+- [x] Allow button fires the REAL native prompt from the genuine click gesture; pending spinner; granted chip
+- [x] **Denial fallback UI**: precise message per failure + expandable per-browser manual-enable steps (Chrome/Edge padlock, Firefox, Safari macOS/iOS), hardware-missing guidance, iframe "open in new tab"
+- [x] Integrated into: permission onboarding modal, /permissions page, Settings → Notifications → Permissions
+
+**Delivery stack (rounds 5-6 combined, all real)**
+- [x] Native push: SW-based notifications + FCM token registration (VAPID or legacy sender-id fallback) + `onChatMessagePush` + `dailyReminderPush` Cloud Functions
+- [x] Promotions: real follow/post suggestions + streak/unread/profile/digest reminders via toast + push + email (throttled)
+- [x] Email via formsubmit.co AJAX: welcome, new-message, digest (one-time activation note documented)
+
+**Gates:** tsc `--force` 0 · eslint 0 · 62/62 tests · 0 emojis · build + PWA clean · all routes 200.

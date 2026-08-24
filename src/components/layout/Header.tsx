@@ -94,6 +94,16 @@ export function Header() {
             </>
           ) : null}
 
+          {typeof Notification !== 'undefined' && Notification.permission === 'default' ? (
+            <Link
+              to="/permissions"
+              aria-label="Enable notifications"
+              className="bsdc-tap relative flex items-center justify-center rounded-full p-2.5 text-brand-600 hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-950/50"
+            >
+              <Bell className="h-5 w-5" aria-hidden />
+              <span className="absolute right-1.5 top-1.5 flex h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden />
+            </Link>
+          ) : null}
           <button
             type="button"
             onClick={toggleTheme}

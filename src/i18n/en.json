@@ -167,7 +167,9 @@
     "loadMore": "Load more",
     "endOfFeed": "You are all caught up",
     "nearbyDevs": "Developers near you",
-    "nearby": "nearby"
+    "nearby": "nearby",
+    "suggestedPosts": "Posts for you",
+    "suggestedFollows": "Suggested developers"
   },
   "post": {
     "create": "Create",
@@ -681,7 +683,9 @@
     "permMicDesc": "Voice notes in messenger — tap Allow and speak",
     "permTest": "Send test notification",
     "permPushOn": "Web Push registered",
-    "permPushAsk": "Register for push"
+    "permPushAsk": "Register for push",
+    "emailNotify": "Email notifications (FormSubmit)",
+    "emailNotifyDesc": "Get BSDC reminders and message alerts by email — delivered via formsubmit.co, no server needed"
   },
   "launch": {
     "title": "Launching soon",
@@ -732,5 +736,17 @@
   },
   "search": {
     "smartRanked": "Smart ranked"
+  },
+  "perms": {
+    "micWhy": "Record and share voice notes in BSDC messenger — hold the mic, speak, release to send.",
+    "micFeature": "Your mic turns on ONLY while you are recording, and the indicator goes off the instant you stop.",
+    "locWhy": "Find developers near you, rank your feed by what is happening around your city, and fill your location automatically.",
+    "locFeature": "Coordinates are stored only on your profile and can be removed anytime in Settings.",
+    "allow": "Allow",
+    "granted": "Allowed",
+    "retry": "Try again",
+    "privacy": "BSDC never records secretly and never sells your data. Change permissions anytime in Settings.",
+    "manualSteps": "How to enable it manually in your browser",
+    "retryLater": "Something went wrong — please try again in a moment."
   }
 }

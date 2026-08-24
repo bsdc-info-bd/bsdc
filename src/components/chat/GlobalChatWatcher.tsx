@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { onChatList } from '@/lib/realtime';
 import { playBeep, unlockAudio } from '@/lib/chatSounds';
 import { showNativeNotification } from '@/lib/pushNotifications';
+import { emailNotificationsEnabled, sendNewMessageEmail } from '@/lib/emailNotifications';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import type { UserChatEntry } from '@/types/chat';
@@ -78,12 +79,16 @@ export function GlobalChatWatcher() {
         // 3. Real native notification (service-worker based) when the tab is hidden.
         if (document.hidden) {
           void showNativeNotification({ title: `${title} · BSDC`, body, tag: 'bsdc-message', url: '/messages' });
+          // 4. Real email alert via formsubmit.co (self-inbox, throttled 10 min).
+          if (profile?.email && emailNotificationsEnabled()) {
+            void sendNewMessageEmail(profile.email, chat.lastSender || title, title);
+          }
         }
       }
     });
 
     return unsub;
-  }, [profile?.uid, profile?.displayName]);
+  }, [profile]);
 
   return null;
 }

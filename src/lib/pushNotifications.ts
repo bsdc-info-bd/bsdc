@@ -127,7 +127,6 @@ let foregroundHandlerBound = false;
  */
 export async function registerWebPush(uid: string): Promise<{ ok: boolean; token?: string; reason?: string }> {
   if (!firebaseConfigured) return { ok: false, reason: 'Firebase not configured' };
-  if (!VAPID_PUBLIC_KEY) return { ok: false, reason: 'VAPID key not configured — local notifications still work' };
   const supported = await isSupported().catch(() => false);
   if (!supported) return { ok: false, reason: 'Push not supported on this browser' };
   const state = getNotificationState();
@@ -138,10 +137,13 @@ export async function registerWebPush(uid: string): Promise<{ ok: boolean; token
     if (!app) return { ok: false, reason: 'Firebase app unavailable' };
     const swReg = (await getServiceWorkerRegistration()) ?? undefined;
     const messaging = getMessaging(app);
-    const token = await getToken(messaging, {
-      vapidKey: VAPID_PUBLIC_KEY,
-      serviceWorkerRegistration: swReg ?? undefined,
-    });
+    // With a VAPID key → standard subscription; without it → legacy FCM
+    // sender-id subscription (still a real Web Push registration).
+    const token = VAPID_PUBLIC_KEY
+      ? await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY, serviceWorkerRegistration: swReg ?? undefined })
+      : await getToken(messaging, { serviceWorkerRegistration: swReg ?? undefined }).catch(() =>
+          getToken(messaging, {}),
+        );
     if (!token) return { ok: false, reason: 'Could not obtain a push token' };
     await updateDoc(doc(fsDb(), COL.users, uid), {
       pushTokens: arrayUnion(token),
@@ -170,7 +172,10 @@ export async function unregisterWebPush(uid: string): Promise<void> {
     const app = getFirebaseApp();
     if (!app) return;
     const messaging = getMessaging(app);
-    const token = await getToken(messaging, { vapidKey: VAPID_PUBLIC_KEY }).catch(() => null);
+    const token = await getToken(
+      messaging,
+      VAPID_PUBLIC_KEY ? { vapidKey: VAPID_PUBLIC_KEY } : {},
+    ).catch(() => null);
     if (token) {
       await updateDoc(doc(fsDb(), COL.users, uid), {
         pushTokens: arrayRemove(token),

@@ -2,13 +2,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Hash, TrendingUp, UserPlus, CalendarDays, Check, Plus, MapPin } from 'lucide-react';
+import { Hash, TrendingUp, UserPlus, CalendarDays, Check, Plus, MapPin, Sparkles } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 import { VerifiedBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { followUser, fetchActiveUsers, fetchFollowerIds, fetchFollowingIds, fetchPopularTags } from '@/lib/data';
 import { suggestUsers } from '@/lib/feed-algorithm';
 import { haversineKm } from '@/lib/geo';
+import { useSuggestions } from '@/lib/suggestionStore';
+import { POST_TYPE_META } from './postMeta';
+import { Link as RouterLink } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import { formatNumber } from '@/lib/utils';
@@ -19,6 +22,8 @@ import { fetchEvents } from '@/lib/data';
 /** Community highlights rail — trending tags, who-to-follow (computed on real data), upcoming events. */
 export function RightRail() {
   const { t } = useTranslation();
+  const engineSuggestions = useSuggestions();
+  const suggestedPosts = engineSuggestions?.posts || [];
   const profile = useAuthStore((s) => s.profile);
   const language = useUIStore((s) => s.language);
   const [tags, setTags] = useState<{ name: string; postCount: number }[]>([]);
@@ -130,6 +135,36 @@ export function RightRail() {
             );
           })()
         : null}
+
+      {suggestedPosts.length > 0 ? (
+        <section className="bsdc-surface p-4" aria-label={t('feed.suggestedPosts')}>
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-bold">
+            <Sparkles className="h-4 w-4 text-brand-600" aria-hidden />
+            {t('feed.suggestedPosts')}
+          </h2>
+          <ul className="space-y-2.5">
+            {suggestedPosts.slice(0, 4).map((p) => {
+              const meta = POST_TYPE_META[p.type] || POST_TYPE_META.text;
+              return (
+                <li key={p.id}>
+                  <RouterLink
+                    to={`/${p.type === 'snippet' ? 'snippet' : p.type === 'text' || p.type === 'image' || p.type === 'poll' ? 'post' : p.type}/${p.slug}`}
+                    className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 hover:bg-neutral-50 dark:hover:bg-surface-dark-raised"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: `${meta.color}18`, color: meta.color }}>
+                      <meta.icon className="h-4 w-4" aria-hidden />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold">{p.title || p.body.slice(0, 48)}</span>
+                      <span className="block truncate text-xs text-neutral-400">@{p.authorUsername} · {p.reactionTotal + p.commentCount} engagements</span>
+                    </span>
+                  </RouterLink>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {profile && suggestions.length > 0 ? (
         <section className="bsdc-surface p-4" aria-label={t('feed.whoToFollow')}>

@@ -11,20 +11,17 @@
  */
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Mic, MapPin, Bell, Check, ShieldCheck, ExternalLink, Sparkles } from 'lucide-react';
+import { Bell, Check, ShieldCheck, ExternalLink, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import {
-  inIframe, queryPermission, requestMicrophone, requestLocation,
-  type PermissionKind, type PermissionStateInfo,
-} from '@/lib/permissions';
-import { openPermissionsStandalone } from '@/lib/permissions';
+import { inIframe, openPermissionsStandalone } from '@/lib/permissions';
 import {
   getNotificationState, registerWebPush, requestNotificationPermission, sendTestNotification,
 } from '@/lib/pushNotifications';
+import { PermissionSoftPrompt } from '@/components/permissions/PermissionSoftPrompt';
 
 const STORAGE_KEY = 'bsdc-perm-onboarding';
 const SNOOZE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -62,13 +59,13 @@ export function PermissionOnboarding() {
   const { t } = useTranslation();
   const profile = useAuthStore((s) => s.profile);
   const [open, setOpen] = useState(false);
-  const [micState, setMicState] = useState<PermissionStateInfo>('prompt');
-  const [locState, setLocState] = useState<PermissionStateInfo>('prompt');
   const [notifState, setNotifState] = useState<'granted' | 'denied' | 'default' | 'unsupported'>('default');
-  const [busy, setBusy] = useState<PermissionKind | null>(null);
-  const embedded = inIframe();
+  const [busy, setBusy] = useState<'notifications' | null>(null);
+  const [embedded] = useState(() => inIframe());
+  void profile;
 
-  // Auto-show once after sign-in (or when opened standalone with the flag).
+  // Auto-show after first paint (signed in OR out) or when opened standalone
+  // with the flag. Snooze lapses re-show — the FAB is always available too.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const forced = params.get('bsdc-permissions') === '1';
@@ -76,11 +73,10 @@ export function PermissionOnboarding() {
       setOpen(true);
       return;
     }
-    if (!profile) return;
     if (!shouldAutoShow()) return;
-    const timer = setTimeout(() => setOpen(true), 2500);
+    const timer = setTimeout(() => setOpen(true), 3000);
     return () => clearTimeout(timer);
-  }, [profile]);
+  }, [profile?.uid]);
 
   // On demand from Settings (or anywhere) via a custom event.
   useEffect(() => {
@@ -92,8 +88,6 @@ export function PermissionOnboarding() {
   // Live statuses.
   useEffect(() => {
     if (!open) return;
-    void queryPermission('microphone').then(setMicState);
-    void queryPermission('geolocation').then(setLocState);
     setNotifState(getNotificationState());
   }, [open]);
 
@@ -115,68 +109,8 @@ export function PermissionOnboarding() {
     }
   }
 
-  async function askLocation() {
-    setBusy('geolocation');
-    try {
-      await requestLocation();
-      setLocState('granted');
-      toast.success(t('settings.permGranted', { name: t('settings.permLocation') }));
-    } catch {
-      setLocState('denied');
-      toast.error(t('settings.permDeniedHint'), { duration: 8000 });
-    } finally {
-      setBusy(null);
-    }
-  }
 
-  async function askMicrophone() {
-    setBusy('microphone');
-    try {
-      const stream = await requestMicrophone();
-      stream.getTracks().forEach((track) => track.stop());
-      setMicState('granted');
-      toast.success(t('settings.permGranted', { name: t('settings.permMic') }));
-    } catch {
-      setMicState('denied');
-      toast.error(t('settings.permDeniedHint'), { duration: 8000 });
-    } finally {
-      setBusy(null);
-    }
-  }
 
-  const rows: {
-    kind: PermissionKind;
-    icon: typeof Mic;
-    titleKey: string;
-    descKey: string;
-    state: boolean;
-    onAsk: () => void;
-  }[] = [
-    {
-      kind: 'notifications',
-      icon: Bell,
-      titleKey: 'settings.permNotifications',
-      descKey: 'settings.permNotifDesc',
-      state: notifState === 'granted',
-      onAsk: () => void askNotifications(),
-    },
-    {
-      kind: 'geolocation',
-      icon: MapPin,
-      titleKey: 'settings.permLocation',
-      descKey: 'settings.permLocDesc',
-      state: locState === 'granted',
-      onAsk: () => void askLocation(),
-    },
-    {
-      kind: 'microphone',
-      icon: Mic,
-      titleKey: 'settings.permMic',
-      descKey: 'settings.permMicDesc',
-      state: micState === 'granted',
-      onAsk: () => void askMicrophone(),
-    },
-  ];
 
   return (
     <Modal
@@ -212,44 +146,41 @@ export function PermissionOnboarding() {
             </div>
           </div>
         ) : null}
-        {rows.map((row) => (
-          <div
-            key={row.kind}
-            className="flex items-center gap-3 rounded-xl border border-surface-light-border p-3 dark:border-surface-dark-border"
-          >
-            <span
-              className={cn(
-                'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl',
-                row.state
-                  ? 'bg-green-50 text-green-600 dark:bg-green-950/50 dark:text-green-400'
-                  : 'bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400',
-              )}
-            >
-              <row.icon className="h-5 w-5" aria-hidden />
+
+        {/* Notifications — real native prompt + Web Push registration + live test */}
+        <div className="flex items-center gap-3 rounded-2xl border border-surface-light-border p-4 dark:border-surface-dark-border">
+          <span className={cn(
+            'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl',
+            notifState === 'granted'
+              ? 'bg-green-100 text-green-600 dark:bg-green-950/60 dark:text-green-400'
+              : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-300',
+          )}>
+            <Bell className="h-5 w-5" aria-hidden />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-2 text-sm font-bold">
+              {t('settings.permNotifications')}
+              {notifState === 'granted' ? (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-950/60 dark:text-green-300">
+                  <ShieldCheck className="h-3 w-3" aria-hidden /> {t('settings.permAllowed')}
+                </span>
+              ) : null}
             </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2 text-sm font-bold">
-                {t(row.titleKey)}
-                {row.state ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-bold text-green-700 dark:bg-green-950/60 dark:text-green-300">
-                    <ShieldCheck className="h-3 w-3" aria-hidden /> {t('settings.permAllowed')}
-                  </span>
-                ) : null}
-              </span>
-              <span className="block text-xs text-neutral-500 dark:text-neutral-400">{t(row.descKey)}</span>
+            <span className="block text-xs text-neutral-500 dark:text-neutral-400">{t('settings.permNotifDesc')}</span>
+          </span>
+          {notifState === 'granted' ? (
+            <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
+              <Check className="h-4 w-4" aria-hidden />
             </span>
-            {row.state ? (
-              <span className="flex shrink-0 items-center gap-1 text-xs font-bold text-green-600 dark:text-green-400">
-                <Check className="h-4 w-4" aria-hidden />
-              </span>
-            ) : (
-              <Button size="sm" loading={busy === row.kind} onClick={row.onAsk} icon={<Sparkles className="h-4 w-4" aria-hidden />}>
-                {t('settings.onboardingAsk')}
-              </Button>
-            )}
-          </div>
-        ))}
-        <p className="text-center text-[11px] text-neutral-400">{t('settings.onboardingPrivacy')}</p>
+          ) : (
+            <Button size="sm" loading={busy === 'notifications'} onClick={() => void askNotifications()} icon={<Sparkles className="h-4 w-4" aria-hidden />}>
+              {t('settings.onboardingAsk')}
+            </Button>
+          )}
+        </div>
+
+        {/* Microphone + Location — the soft prompt explains WHY, then asks for real */}
+        <PermissionSoftPrompt />
       </div>
     </Modal>
   );

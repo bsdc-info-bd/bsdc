@@ -19,7 +19,9 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Switch } from '@/components/ui/Switch';
 import { PermissionRow } from '@/components/common/PermissionRow';
+import { PermissionSoftPrompt } from '@/components/permissions/PermissionSoftPrompt';
 import { registerWebPush, sendTestNotification } from '@/lib/pushNotifications';
+import { emailNotificationsEnabled, setEmailNotificationsEnabled } from '@/lib/emailNotifications';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/Tabs';
 import { ImageUploader } from '@/components/ui/ImageUploader';
 import { SEOHead } from '@/components/seo/SEOHead';
@@ -447,10 +449,18 @@ export default function Settings() {
                 </Button>
               </div>
               <PermissionRow kind="notifications" />
-              <PermissionRow kind="microphone" />
-              <PermissionRow kind="geolocation" />
+              <PermissionSoftPrompt />
               <Switch label={t('settings.pushEnable')} description="Browser push via OneSignal for messages, mentions and announcements" checked={typeof Notification !== 'undefined' && Notification.permission === 'granted'} onCheckedChange={() => void (async () => { const p = await requestNotifications(); if (p === 'granted') { await promptPushPermission(); toast.success('Notifications enabled'); } })()} />
               <Switch label={t('settings.soundEnable')} description="Play a soft chime for new messages and notifications" checked={soundEnabled} onCheckedChange={setSoundEnabled} />
+              <Switch
+                label={t('settings.emailNotify')}
+                description={t('settings.emailNotifyDesc')}
+                checked={emailNotificationsEnabled()}
+                onCheckedChange={(v) => {
+                  setEmailNotificationsEnabled(v);
+                  toast.success(t('settings.savedToast'));
+                }}
+              />
             </div>
           </TabsContent>
 
