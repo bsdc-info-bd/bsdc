@@ -195,6 +195,31 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.userId == request.auth.uid || isStaff();
     }
 
+    // ------------------------------------------------------ organizations
+    match /organizations/{organizationId} {
+      allow read: if signedIn() && exists(/databases/$(database)/documents/organizationMembers/$(organizationId + '_' + request.auth.uid));
+      allow create: if signedIn() && notBanned() && request.resource.data.ownerId == request.auth.uid;
+      allow update: if signedIn() && notBanned()
+                    && (resource.data.ownerId == request.auth.uid
+                        || isAdmin()
+                        || exists(/databases/$(database)/documents/organizationMembers/$(organizationId + '_' + request.auth.uid))
+                           && get(/databases/$(database)/documents/organizationMembers/$(organizationId + '_' + request.auth.uid)).data.role in ['owner', 'admin'])
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','description','logo','website','industry','size','memberCount','updatedAt']);
+      allow delete: if signedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+    }
+
+    match /organizationMembers/{memberId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || isAdmin()
+                    || exists(/databases/$(database)/documents/organizationMembers/$(resource.data.organizationId + '_' + request.auth.uid)));
+      allow create: if signedIn() && notBanned()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.role == 'owner'
+                    && get(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data.ownerId == request.auth.uid;
+      allow update, delete: if signedIn() && notBanned()
+                    && (resource.data.userId == request.auth.uid || isAdmin()
+                        || get(/databases/$(database)/documents/organizations/$(resource.data.organizationId)).data.ownerId == request.auth.uid);
+    }
+
     // ------------------------------------------------------ infrastructure
     match /pointTransactions/{txId} {
       allow read: if true;

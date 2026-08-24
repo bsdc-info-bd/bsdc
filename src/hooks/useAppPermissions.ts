@@ -170,8 +170,7 @@ export function useAppPermissions(): AppPermissionsApi {
       // "recording" indicator turns off right away. The actual voice-note
       // recorder opens its own stream later.
       stopStream(stream);
-      if (streamRef.current) stopStream(streamRef.current);
-      streamRef.current = stream;
+      streamRef.current = null;
       const result: PermissionStatus = { state: 'granted', failure: null, message: '' };
       if (mountedRef.current) setMicrophone(result);
       return result;

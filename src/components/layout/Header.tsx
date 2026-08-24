@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   Bell, Menu, MessageSquare, Moon, Search, Sun, Languages, ChevronDown, LogOut,
-  Settings as SettingsIcon, User as UserIcon, ShieldCheck, Bookmark, Plus, Zap,
+  Settings as SettingsIcon, User as UserIcon, ShieldCheck, Bookmark, Plus, Zap, Building2,
 } from 'lucide-react';
 import { BsdcLogo } from '@/components/branding/Logo';
 import { Avatar } from '@/components/ui/Avatar';
@@ -156,6 +156,9 @@ export function Header() {
                 </DropdownItem>
                 <DropdownItem icon={<SettingsIcon className="h-4 w-4" aria-hidden />} onSelect={() => navigate('/settings')}>
                   {t('nav.settings')}
+                </DropdownItem>
+                <DropdownItem icon={<Building2 className="h-4 w-4" aria-hidden />} onSelect={() => navigate('/organizations')}>
+                  Organizations & businesses
                 </DropdownItem>
                 {roleAtLeast(profile.role, 'moderator') ? (
                   <DropdownItem icon={<ShieldCheck className="h-4 w-4" aria-hidden />} onSelect={() => navigate(roleAtLeast(profile.role, 'admin') ? '/admin' : '/mod')}>

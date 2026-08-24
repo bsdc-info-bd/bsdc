@@ -43,6 +43,7 @@ const LicenseHome = lazy(() => import('@/pages/License').then((m) => ({ default:
 const LicenseVerify = lazy(() => import('@/pages/License').then((m) => ({ default: m.LicenseVerify })));
 const MarketplaceListing = lazy(() => import('@/pages/Marketplace').then((m) => ({ default: m.MarketplaceListingPage })));
 const Branding = lazy(() => import('@/pages/Branding'));
+const Organizations = lazy(() => import('@/pages/Organizations'));
 
 import {
   ExplorePage, TrendingPage, BlogPage, QaPage, SnippetsPage, DocsPage, WikiPage,
@@ -199,6 +200,7 @@ export default function App() {
                     <Route path="/privacy" element={<Privacy />} />
                     <Route path="/guidelines" element={<Guidelines />} />
                     <Route path="/branding" element={<Branding />} />
+                    <Route path="/organizations" element={<RequireAuth><Organizations /></RequireAuth>} />
                     <Route path="/search" element={<SearchPage />} />
                     <Route path="/report" element={<ReportPage />} />
                     <Route path="/permissions" element={<PermissionsPage />} />

@@ -57,6 +57,33 @@ export interface GroupMember extends BaseEntity {
   joinedAt: number;
 }
 
+export type OrganizationType = 'organization' | 'business';
+export type OrganizationMemberRole = 'owner' | 'admin' | 'member';
+
+export interface Organization extends BaseEntity {
+  name: string;
+  slug: string;
+  type: OrganizationType;
+  description: string;
+  logo: string;
+  website: string;
+  industry: string;
+  size: 'solo' | 'small' | 'medium' | 'large' | 'enterprise';
+  ownerId: string;
+  memberCount: number;
+  createdByName: string;
+}
+
+export interface OrganizationMember extends BaseEntity {
+  organizationId: string;
+  userId: string;
+  displayName: string;
+  username: string;
+  avatar: string;
+  role: OrganizationMemberRole;
+  joinedAt: number;
+}
+
 export interface Report extends BaseEntity {
   reporterId: string;
   reporterName: string;

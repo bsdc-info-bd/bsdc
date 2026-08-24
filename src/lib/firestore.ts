@@ -38,6 +38,8 @@ export const COL = {
   follows: 'follows',
   groups: 'groups',
   groupMembers: 'groupMembers',
+  organizations: 'organizations',
+  organizationMembers: 'organizationMembers',
   notifications: 'notifications',
   reports: 'reports',
   tags: 'tags',
