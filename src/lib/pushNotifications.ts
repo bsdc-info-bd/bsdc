@@ -16,6 +16,8 @@
  */
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+import { Capacitor } from '@capacitor/core';
+import { PushNotifications } from '@capacitor/push-notifications';
 import { getFirebaseApp, firebaseConfigured } from '@/config/firebase';
 import { COL, fsDb } from '@/lib/firestore';
 
@@ -30,6 +32,14 @@ export function getNotificationState(): NotificationState {
 
 /** Trigger the REAL native permission prompt (call from a click/tap handler). */
 export async function requestNotificationPermission(): Promise<NotificationState> {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const result = await PushNotifications.requestPermissions();
+      return result.receive === 'granted' ? 'granted' : result.receive === 'denied' ? 'denied' : 'default';
+    } catch {
+      return 'denied';
+    }
+  }
   if (typeof Notification === 'undefined') return 'unsupported';
   if (Notification.permission !== 'default') return Notification.permission as NotificationState;
   try {

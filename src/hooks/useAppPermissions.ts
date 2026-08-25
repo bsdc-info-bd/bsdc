@@ -87,18 +87,6 @@ function label(domain: 'microphone' | 'geolocation'): string {
   return domain === 'microphone' ? 'Microphone' : 'Location';
 }
 
-/** True when the Permissions API reports the origin as permanently blocked. */
-async function isHardBlocked(domain: 'microphone' | 'geolocation'): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return false;
-  const name = domain === 'microphone' ? 'microphone' : 'geolocation';
-  try {
-    const status = await navigator.permissions.query({ name } as PermissionDescriptor);
-    return status.state === 'denied';
-  } catch {
-    return false;
-  }
-}
-
 export function useAppPermissions(): AppPermissionsApi {
   const [microphone, setMicrophone] = useState<PermissionStatus>(IDLE);
   const [location, setLocation] = useState<PermissionStatus>(IDLE);
@@ -131,7 +119,7 @@ export function useAppPermissions(): AppPermissionsApi {
             setter({ state: 'granted', failure: null, message: '' });
           } else if (status.state === 'denied') {
             setter((prev) =>
-              prev.state === 'granted'
+              prev.state === 'idle' || prev.state === 'granted'
                 ? prev // keep optimistic granted until a request actually fails
                 : inIframe()
                   ? iframeStatus(domain)
@@ -175,12 +163,7 @@ export function useAppPermissions(): AppPermissionsApi {
       if (mountedRef.current) setMicrophone(result);
       return result;
     } catch (err) {
-      let result = classifyError('microphone', err);
-      if (result.failure === 'user-denied' && (await isHardBlocked('microphone'))) {
-        result = inIframe()
-          ? iframeStatus('microphone')
-          : { ...result, failure: 'blocked', message: 'Microphone is blocked for this site. Enable it from the padlock icon in the address bar, then reload.' };
-      }
+      const result = classifyError('microphone', err);
       if (mountedRef.current) setMicrophone(result);
       return result;
     }
@@ -205,12 +188,7 @@ export function useAppPermissions(): AppPermissionsApi {
       if (mountedRef.current) setLocation(result);
       return result;
     } catch (err) {
-      let result = classifyError('geolocation', err);
-      if (result.failure === 'user-denied' && (await isHardBlocked('geolocation'))) {
-        result = inIframe()
-          ? iframeStatus('geolocation')
-          : { ...result, failure: 'blocked', message: 'Location is blocked for this site. Enable it from the padlock icon in the address bar, then reload.' };
-      }
+      const result = classifyError('geolocation', err);
       if (mountedRef.current) setLocation(result);
       return result;
     }
