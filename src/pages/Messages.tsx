@@ -850,6 +850,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
           <VoiceCallPanel
             state={voiceCall.state}
             muted={voiceCall.muted}
+            metrics={voiceCall.metrics}
             incoming={voiceCall.incoming}
             peer={chat.metadata?.type === 'direct' ? otherParticipants[0] || null : null}
             onStart={() => void voiceCall.start()}

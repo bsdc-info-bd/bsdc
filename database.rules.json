@@ -1,7 +1,7 @@
 {
   "rules": {
-    ".read": "auth != null",
-    ".write": "auth != null",
+    ".read": false,
+    ".write": false,
     "presence": {
       "$uid": {
         ".read": "auth != null",
@@ -37,6 +37,25 @@
         "$chatId": {
           ".write": "auth != null && (auth.uid == $uid || !root.child('userChats/' + $uid + '/' + $chatId).exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists())"
         }
+      }
+    },
+    "calls": {
+      "$callId": {
+        ".read": "auth != null && (data.child('callerId').val() == auth.uid || data.child('calleeId').val() == auth.uid)",
+        ".write": "auth != null && (data.child('callerId').val() == auth.uid || data.child('calleeId').val() == auth.uid || newData.child('callerId').val() == auth.uid)",
+        ".validate": "newData.hasChildren(['id', 'callerId', 'calleeId', 'status', 'createdAt']) && newData.child('callerId').val() != newData.child('calleeId').val()",
+        "candidates": {
+          "$uid": {
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid && (root.child('calls/' + $callId + '/callerId').val() == auth.uid || root.child('calls/' + $callId + '/calleeId').val() == auth.uid)"
+          }
+        }
+      }
+    },
+    "incomingCalls": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && (auth.uid == $uid || (newData.child('caller').child('uid').val() == auth.uid && newData.child('id').val() != null))"
       }
     }
   }
