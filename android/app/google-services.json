@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1041487418449",
+    "firebase_url": "https://bsdc-bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "bsdc-bd",
+    "storage_bucket": "bsdc-bd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1041487418449:android:c87781c0676dbb3f6a9470",
+        "android_client_info": {
+          "package_name": "bd.info.bsdc.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1041487418449-1s9dco0ke3sut5mo50jvvmnlthsrkqk3.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAkGX5sYj4jgpCUE03YLsvN9xq50tKykCQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1041487418449-1s9dco0ke3sut5mo50jvvmnlthsrkqk3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
