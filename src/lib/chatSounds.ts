@@ -46,6 +46,24 @@ export function isAudioUnlocked(): boolean {
 
 export type ChatSound = 'sent' | 'received' | 'alert';
 
+let ringtoneTimer: number | null = null;
+
+/** Start a single controlled ring pattern; returns an idempotent stop function. */
+export function startRingtone(): () => void {
+  stopRingtone();
+  const ring = () => {
+    playBeep('alert');
+    ringtoneTimer = window.setTimeout(ring, 2400);
+  };
+  ring();
+  return stopRingtone;
+}
+
+export function stopRingtone(): void {
+  if (ringtoneTimer !== null) window.clearTimeout(ringtoneTimer);
+  ringtoneTimer = null;
+}
+
 /** Play a short, comfortable beep. */
 export function playBeep(type: ChatSound = 'sent'): void {
   try {

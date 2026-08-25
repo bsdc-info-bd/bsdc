@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { onChildAdded, onValue, push, ref, remove, set, update, type DataSnapshot } from 'firebase/database';
+import { get, onChildAdded, onValue, push, ref, remove, set, update, type DataSnapshot } from 'firebase/database';
 import { rtdb } from '@/config/firebase';
 import type { ChatParticipant } from '@/types/chat';
 
@@ -23,6 +23,8 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const callIdRef = useRef<string | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
+  const stateRef = useRef<CallState>('idle');
+  stateRef.current = state;
 
   const cleanup = useCallback(async (removeCall = true) => {
     cleanupRef.current?.();
@@ -44,16 +46,18 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
   useEffect(() => () => { void cleanup(); }, [cleanup]);
 
   useEffect(() => {
-    if (!uid) return;
+    // The app-root listener owns incoming calls. A chat page only starts calls
+    // and must not create a second listener for the same user.
+    if (!uid || peer) return;
     const callsRef = ref(rtdb(), `incomingCalls/${uid}`);
     return onChildAdded(callsRef, (snapshot) => {
       const call = snapshotValue<IncomingCall>(snapshot);
-      if (call && call.id && call.createdAt > Date.now() - 60_000 && state === 'idle') setIncoming(call);
+      if (call && call.id && call.createdAt > Date.now() - 60_000 && stateRef.current === 'idle') setIncoming(call);
     });
-  }, [uid, state]);
+  }, [uid, peer]);
 
-  const preparePeer = useCallback(async (callId: string) => {
-    if (!uid || !peer) throw new Error('Call participant unavailable');
+  const preparePeer = useCallback(async (callId: string, target: ChatParticipant) => {
+    if (!uid) throw new Error('Call participant unavailable');
     const connection = new RTCPeerConnection(ICE_SERVERS);
     peerRef.current = connection;
     const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1, sampleRate: 48000 } });
@@ -71,7 +75,7 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
       if (['failed', 'disconnected', 'closed'].includes(connection.connectionState)) setState('failed');
     };
     const ownCandidates = ref(rtdb(), `calls/${callId}/candidates/${uid}`);
-    const otherCandidates = ref(rtdb(), `calls/${callId}/candidates/${peer.uid}`);
+    const otherCandidates = ref(rtdb(), `calls/${callId}/candidates/${target.uid}`);
     const unsubscribeCandidates = onChildAdded(otherCandidates, (snapshot) => {
       const candidate = snapshotValue<RTCIceCandidateInit>(snapshot);
       if (candidate) void connection.addIceCandidate(candidate).catch(() => undefined);
@@ -79,28 +83,31 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
     connection.onicecandidate = (event) => { if (event.candidate) void set(push(ownCandidates), event.candidate.toJSON()); };
     cleanupRef.current = () => unsubscribeCandidates();
     return connection;
-  }, [peer, uid]);
+  }, [uid]);
 
   const start = useCallback(async () => {
     if (!uid || !peer || state !== 'idle' || !navigator.mediaDevices?.getUserMedia) return;
     setState('calling');
     try {
+      const presence = snapshotValue<{ online?: boolean }>(await get(ref(rtdb(), `presence/${peer.uid}`)));
+      if (!presence?.online) throw new Error('This user is offline');
       const callRef = push(ref(rtdb(), 'calls'));
       const callId = callRef.key;
       if (!callId) throw new Error('Could not create call');
       callIdRef.current = callId;
-      const connection = await preparePeer(callId);
+      const connection = await preparePeer(callId, peer);
       const offer = await connection.createOffer({ offerToReceiveAudio: true });
       await connection.setLocalDescription(offer);
-      await set(callRef, { id: callId, caller: { uid, displayName: 'BSDC member' }, callerId: uid, calleeId: peer.uid, status: 'ringing', offer: { type: offer.type, sdp: offer.sdp }, createdAt: Date.now() });
-      await set(ref(rtdb(), `incomingCalls/${peer.uid}/${callId}`), { id: callId, caller: { uid, displayName: 'BSDC member', username: '', avatar: '', role: 'member', joinedAt: Date.now() }, createdAt: Date.now() });
+      const caller: ChatParticipant = { uid, displayName: 'BSDC member', username: '', avatar: '', role: 'member', joinedAt: Date.now() };
+      await set(callRef, { id: callId, caller, callerId: uid, calleeId: peer.uid, status: 'ringing', offer: { type: offer.type, sdp: offer.sdp }, createdAt: Date.now() });
+      await set(ref(rtdb(), `incomingCalls/${peer.uid}/${callId}`), { id: callId, caller, createdAt: Date.now() });
       const unsubscribe = onValue(callRef, (snapshot) => { const value = snapshotValue<{ answer?: RTCSessionDescriptionInit; status?: string }>(snapshot); if (value?.answer && !connection.currentRemoteDescription) void connection.setRemoteDescription(value.answer); if (value?.status === 'ended') void cleanup(); });
       cleanupRef.current = () => { unsubscribe(); };
     } catch { await cleanup(); setState('failed'); }
   }, [cleanup, peer, preparePeer, state, uid]);
 
   const accept = useCallback(async () => {
-    if (!incoming || !uid || !peer) return;
+    if (!incoming || !uid) return;
     const callId = incoming.id;
     setIncoming(null); setState('connecting'); callIdRef.current = callId;
     try {
@@ -108,14 +115,14 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
       const snapshot = await new Promise<DataSnapshot>((resolve) => onValue(callRef, resolve, { onlyOnce: true }));
       const call = snapshotValue<{ offer: RTCSessionDescriptionInit }>(snapshot);
       if (!call?.offer) throw new Error('Call offer unavailable');
-      const connection = await preparePeer(callId);
+      const connection = await preparePeer(callId, incoming.caller);
       await connection.setRemoteDescription(call.offer);
       const answer = await connection.createAnswer(); await connection.setLocalDescription(answer);
       await update(callRef, { answer: { type: answer.type, sdp: answer.sdp }, status: 'connected' });
     } catch { await cleanup(); setState('failed'); }
-  }, [cleanup, incoming, peer, preparePeer, uid]);
+  }, [cleanup, incoming, preparePeer, uid]);
 
-  const decline = useCallback(async () => { if (incoming) { await remove(ref(rtdb(), `calls/${incoming.id}`)); if (peer) await remove(ref(rtdb(), `incomingCalls/${peer.uid}/${incoming.id}`)); } setIncoming(null); }, [incoming, peer]);
+  const decline = useCallback(async () => { if (incoming) { await remove(ref(rtdb(), `calls/${incoming.id}`)); if (uid) await remove(ref(rtdb(), `incomingCalls/${uid}/${incoming.id}`)); } setIncoming(null); }, [incoming, uid]);
   const end = useCallback(async () => { if (callIdRef.current) await update(ref(rtdb(), `calls/${callIdRef.current}`), { status: 'ended' }); await cleanup(); }, [cleanup]);
   const toggleMute = useCallback(() => { const next = !muted; streamRef.current?.getAudioTracks().forEach((track) => { track.enabled = !next; }); setMuted(next); }, [muted]);
 

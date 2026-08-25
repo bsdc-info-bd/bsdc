@@ -10,6 +10,7 @@ import { FullPageLoader } from '@/components/ui/Skeleton';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { CommandPalette, ShortcutsDialog } from '@/components/search/CommandPalette';
 import { GlobalChatWatcher } from '@/components/chat/GlobalChatWatcher';
+import { GlobalVoiceCallAlert } from '@/components/chat/GlobalVoiceCallAlert';
 import { PermissionOnboarding } from '@/components/common/PermissionOnboarding';
 import { PermissionFab, PermissionsPage } from '@/components/common/PermissionFab';
 import { PromotionEngine } from '@/components/common/PromotionEngine';
@@ -147,6 +148,7 @@ export default function App() {
           <BrowserRouter>
             <GlobalShortcuts />
             <GlobalChatWatcher />
+            <GlobalVoiceCallAlert />
             <PermissionOnboarding />
             <PermissionFab />
             <PromotionEngine />
