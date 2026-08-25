@@ -194,7 +194,7 @@ service cloud.firestore {
                     || (signedIn() && changedKeys().hasOnly(['role', 'joinedAt', 'updatedAt']));
       allow delete: if signedIn() && resource.data.userId == request.auth.uid || isStaff();
     }
-
+ 
     // ------------------------------------------------------ organizations
     match /organizations/{organizationId} {
       allow read: if signedIn() && exists(/databases/$(database)/documents/organizationMembers/$(organizationId + '_' + request.auth.uid));
