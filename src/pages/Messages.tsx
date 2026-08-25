@@ -11,6 +11,8 @@ import { toast } from 'sonner';
 import { useChat, useChatList } from '@/hooks/useChat';
 import { MicButton, RecordingOverlay } from '@/components/chat/VoiceRecorder';
 import { useVoiceRecorder } from '@/components/chat/useVoiceRecorder';
+import { VoiceCallPanel } from '@/components/chat/VoiceCallPanel';
+import { useVoiceCall } from '@/hooks/useVoiceCall';
 import { ImageEditorModal } from '@/components/chat/ImageEditorModal';
 import { VoiceNotePlayer, FileCard, ImageWithZoom } from '@/components/chat/MessageMedia';
 import { uploadVoiceNote, uploadPdf } from '@/lib/cloudinary-chat';
@@ -658,6 +660,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
     () => (chat.metadata?.participants || []).filter((p) => p.uid !== profile?.uid),
     [chat.metadata, profile?.uid],
   );
+  const voiceCall = useVoiceCall(profile?.uid || null, chat.metadata?.type === 'direct' ? otherParticipants[0] || null : null);
 
   async function send() {
     const value = text.trim();
@@ -844,6 +847,17 @@ function ChatWindow({ chatId }: { chatId: string }) {
             <ShieldCheck className="h-3.5 w-3.5" aria-hidden />
             {t('chat.secure')}
           </span>
+          <VoiceCallPanel
+            state={voiceCall.state}
+            muted={voiceCall.muted}
+            incoming={voiceCall.incoming}
+            peer={chat.metadata?.type === 'direct' ? otherParticipants[0] || null : null}
+            onStart={() => void voiceCall.start()}
+            onAccept={() => void voiceCall.accept()}
+            onDecline={() => void voiceCall.decline()}
+            onEnd={() => void voiceCall.end()}
+            onMute={voiceCall.toggleMute}
+          />
           <Dropdown open={menuOpen} onOpenChange={setMenuOpen}>
             <DropdownTrigger asChild>
               <button
@@ -890,6 +904,7 @@ function ChatWindow({ chatId }: { chatId: string }) {
           </Dropdown>
         </div>
       </header>
+      <audio ref={voiceCall.remoteAudioRef} autoPlay playsInline className="hidden" aria-hidden="true" />
 
       {/* Pinned message bar */}
       {chat.metadata?.pinnedMessageId ? (

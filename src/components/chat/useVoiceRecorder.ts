@@ -101,7 +101,7 @@ export function useVoiceRecorder(onDone: (note: VoiceNoteResult) => void, onErro
       if (!streamRef.current) throw new Error('Microphone unavailable');
       const stream = streamRef.current;
       const mime = pickAudioMime();
-      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime, audioBitsPerSecond: 128000 }) : new MediaRecorder(stream);
       recorderRef.current = recorder;
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {

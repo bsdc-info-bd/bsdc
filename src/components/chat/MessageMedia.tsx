@@ -28,14 +28,13 @@ export function VoiceNotePlayer({ message, mine }: { message: ChatMessage; mine:
           const el = audioRef.current;
           if (!el) return;
           if (el.paused) {
-            void el.play();
-            setPlaying(true);
+            void el.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
           } else {
             el.pause();
             setPlaying(false);
           }
         }}
-        aria-label={playing ? t('common.close') : t('common.send')}
+        aria-label={playing ? 'Pause voice note' : 'Play voice note'}
         className={cn(
           'bsdc-tap flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition-transform hover:scale-105',
           mine ? 'bg-white/25' : 'bg-brand-600',
@@ -144,6 +143,7 @@ export function FileCard({ message, mine }: { message: ChatMessage; mine: boolea
 /** Tap-to-zoom image overlay for photo messages. */
 export function ImageWithZoom({ src, mine }: { src: string; mine: boolean }) {
   const [zoom, setZoom] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!zoom) return;
@@ -154,10 +154,12 @@ export function ImageWithZoom({ src, mine }: { src: string; mine: boolean }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [zoom]);
 
+  if (failed) return <p className="mb-1 rounded-xl bg-black/10 px-3 py-2 text-xs text-neutral-500">Image unavailable</p>;
+
   return (
     <>
       <button type="button" onClick={() => setZoom(true)} className="mb-1 block overflow-hidden rounded-xl" aria-label="Zoom image">
-        <img src={src} alt="Chat image" loading="lazy" className="max-h-64 max-w-full rounded-xl object-cover transition-transform duration-300 hover:scale-[1.02]" />
+        <img src={src} alt="Chat image" loading="lazy" onError={() => setFailed(true)} className="block max-h-72 max-w-full rounded-xl object-contain transition-transform duration-300 hover:scale-[1.02]" />
       </button>
       {zoom ? (
         <div
@@ -166,7 +168,7 @@ export function ImageWithZoom({ src, mine }: { src: string; mine: boolean }) {
           aria-modal="true"
           onClick={() => setZoom(false)}
         >
-          <img src={src} alt="Chat image (zoomed)" className={cn('max-h-full max-w-full rounded-xl shadow-2xl', mine && 'ring-2 ring-white/30')} />
+          <img src={src} alt="Chat image (zoomed)" onError={() => setFailed(true)} className={cn('max-h-full max-w-full rounded-xl object-contain shadow-2xl', mine && 'ring-2 ring-white/30')} />
           <button type="button" className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white" aria-label="Close" onClick={() => setZoom(false)}>
             ×
           </button>
