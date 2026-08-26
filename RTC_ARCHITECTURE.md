@@ -77,6 +77,11 @@ const connection = new RTCPeerConnection({
 });
 ```
 
+BSDC intentionally uses no TURN service and has no paid RTC dependency. Calls
+use public STUN only and can fail behind symmetric NATs or restrictive
+corporate networks because those networks require a relay. The call engine now waits through transient
+`disconnected` states and attempts `restartIce()` before declaring failure.
+
 AEC, NS, and AGC are browser/OS media-engine features. They reduce echo and noise but cannot guarantee zero latency or zero echo on every device. The remote stream must be rendered exactly once through one audio element; BSDC does that with the call hook's `remoteAudioRef`.
 
 The BSDC audio engine additionally routes the microphone through `MediaStreamAudioSourceNode -> BiquadFilterNode(highpass 80Hz) -> DynamicsCompressorNode -> MediaStreamAudioDestinationNode`. The destination is never connected to `AudioContext.destination`, so the local microphone cannot feed back into the local speaker. Opus sender parameters target 128 kbps, 48 kHz fullband speech, in-band FEC, and DTX; the sender is reduced to 96 kbps or 64 kbps when live quality metrics degrade.
@@ -113,7 +118,7 @@ STUN-only P2P is appropriate for one-to-one calls but is not a production guaran
 2. The caller and callee join the same room through the SFU.
 3. The SFU forwards one encoded Opus stream per participant and prevents mesh fan-out.
 4. Firebase/FCM remains the signaling and wake-up layer for ringing, but never stores media credentials or long-lived tokens.
-5. A TURN server must be configured for P2P fallback or for the SFU deployment itself.
+5. A relay is required for a future SFU or for networks that block direct P2P; BSDC does not use one in the free client-only mode.
 
 Required environment/configuration before enabling an SFU client:
 

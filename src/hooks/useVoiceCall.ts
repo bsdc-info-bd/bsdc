@@ -8,7 +8,8 @@ export type CallState = 'idle' | 'calling' | 'ringing' | 'connecting' | 'connect
 export interface IncomingCall { id: string; caller: ChatParticipant; createdAt: number }
 
 const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
+  iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+  iceCandidatePoolSize: 10,
 };
 
 const EMPTY_METRICS: RtcAudioMetrics = { rttMs: 0, jitterMs: 0, packetLossRatio: 0, audioLevel: 0, bitrateKbps: 0, quality: 'excellent' };
@@ -95,7 +96,20 @@ export function useVoiceCall(uid: string | null, peer: ChatParticipant | null) {
     };
     connection.onconnectionstatechange = () => {
       if (connection.connectionState === 'connected') setState('connected');
-      if (['failed', 'disconnected', 'closed'].includes(connection.connectionState)) setState('failed');
+      if (connection.connectionState === 'disconnected') {
+        setState('connecting');
+        window.setTimeout(() => {
+          if (connection.connectionState === 'disconnected') void connection.restartIce();
+        }, 1500);
+      }
+      if (connection.connectionState === 'failed') {
+        setState('connecting');
+        void connection.restartIce();
+        window.setTimeout(() => {
+          if (connection.connectionState === 'failed') setState('failed');
+        }, 5000);
+      }
+      if (connection.connectionState === 'closed') setState('ended');
     };
     metricsTimerRef.current = window.setInterval(() => {
       void collectRtcMetrics(connection).then((next) => { setMetrics(next); return Promise.all(senders.map((sender) => adaptOpusBitrate(sender, next.quality))); });
