@@ -28,7 +28,7 @@ import { Markdown } from '@/components/ui/Markdown';
 import { Lightbox } from 'yet-another-react-lightbox';
 import type { UserRole } from '@/types/user';
 
-export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?: (id: string) => void; onEdited?: (post: Post) => void }) {
+export function FeedCard({ post, onDeleted, onEdited, showBody = true }: { post: Post; onDeleted?: (id: string) => void; onEdited?: (post: Post) => void; showBody?: boolean }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const profile = useAuthStore((s) => s.profile);
@@ -240,7 +240,7 @@ export function FeedCard({ post, onDeleted, onEdited }: { post: Post; onDeleted?
       </div>
 
       <div className="px-4">
-        <Markdown content={post.type === 'snippet' && post.snippet ? truncate(post.body, 220) : post.body} className="text-[15px]" />
+        {showBody ? <Markdown content={post.type === 'snippet' && post.snippet ? truncate(post.body, 220) : post.body} className="text-[15px]" /> : null}
         {post.type === 'snippet' && post.snippet ? (
           <Link to={detailUrl} className="mt-3 block overflow-hidden rounded-xl border border-surface-light-border bg-[#0d1117] dark:border-surface-dark-border">
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-2">

@@ -54,6 +54,7 @@ export interface ChatMetadata {
   isPublic: boolean;
   participants: ChatParticipant[];
   participantIds: string[];
+  participantMap?: Record<string, boolean>;
   createdBy: string;
   pinnedMessageId: string | null;
   lastMessage: string;

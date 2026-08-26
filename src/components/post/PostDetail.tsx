@@ -7,9 +7,10 @@ import { FeedCard } from '@/components/feed/FeedCard';
 import { CommentSection } from './CommentThread';
 import { Breadcrumbs, SEOHead } from '@/components/seo/SEOHead';
 import { breadcrumbSchema, postDetailRoute, postSchema } from '@/config/seo';
-import { getPostBySlug, incrementPostView } from '@/lib/data';
+import { findRelatedPosts, getPostBySlug, incrementPostView } from '@/lib/data';
 import { trackInteraction } from '@/lib/personalization';
-import { extractDescription, formatNumber, timeAgo } from '@/lib/utils';
+import { extractDescription, formatNumber, headingSlug, timeAgo } from '@/lib/utils';
+import { Markdown } from '@/components/ui/Markdown';
 import { useUIStore } from '@/stores/uiStore';
 import { ErrorState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -54,6 +55,12 @@ export function PostDetailPage() {
   const navigate = useNavigate();
   const language = useUIStore((s) => s.language);
   const { post, loading, error } = usePostByRouteParam();
+  const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
+
+  useEffect(() => {
+    if (!post) return;
+    findRelatedPosts(post).then(setRelatedPosts).catch(() => setRelatedPosts([]));
+  }, [post]);
 
   if (loading) {
     return (
@@ -130,7 +137,27 @@ export function PostDetailPage() {
         <TableOfContents body={post.body} />
       ) : null}
 
-      <FeedCard post={post} />
+      <FeedCard post={post} showBody={false} />
+
+      {post.body.trim() ? (
+        <article className="bsdc-surface mt-4 min-w-0 overflow-hidden p-4 sm:p-6" aria-label="Article content">
+          <Markdown content={post.body} className="text-[15px] sm:text-base" />
+        </article>
+      ) : null}
+
+      {relatedPosts.length > 0 ? (
+        <section className="mt-6" aria-labelledby="related-posts-heading">
+          <h2 id="related-posts-heading" className="mb-3 text-lg font-bold">Related posts</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {relatedPosts.map((related) => (
+              <a key={related.id} href={`/${postDetailRoute(related.type)}/${related.slug}`} className="bsdc-surface min-w-0 p-4 transition-colors hover:border-brand-300 dark:hover:border-brand-700">
+                <h3 className="truncate font-semibold">{related.title || 'Untitled post'}</h3>
+                <p className="mt-1 line-clamp-2 text-sm text-neutral-500">{extractDescription(related.body)}</p>
+              </a>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {post.type === 'snippet' && post.snippet ? (
         <section className="bsdc-surface mt-4 overflow-hidden" aria-label="Code">
@@ -181,7 +208,7 @@ export function TableOfContents({ body }: { body: string }) {
       <p className="mb-2 text-sm font-bold">{t('post.tableOfContents')}</p>
       <ol className="list-decimal space-y-1 pl-5 text-sm text-brand-600 dark:text-brand-400">
         {headings.map((h, i) => {
-          const id = h.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, '').replace(/\s+/g, '-');
+          const id = headingSlug(h);
           return (
             <li key={`${h}-${i}`}>
               <a href={`#${id}`} className="hover:underline">

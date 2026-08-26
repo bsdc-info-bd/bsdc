@@ -24,6 +24,10 @@ describe('readingMinutes', () => {
   it('returns at least 1 minute', () => {
     expect(readingMinutes('short')).toBe(1);
   });
+
+  it('rounds up long articles instead of under-reporting them', () => {
+    expect(readingMinutes('word '.repeat(201))).toBe(2);
+  });
   it('computes ~200 words per minute', () => {
     expect(readingMinutes('word '.repeat(600))).toBe(3);
   });

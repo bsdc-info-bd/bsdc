@@ -58,6 +58,7 @@ export function normalizeChatMetadata(raw: Record<string, unknown>, id: string):
     isPublic: Boolean(raw.isPublic),
     participants,
     participantIds: Array.isArray(raw.participantIds) ? (raw.participantIds as string[]) : participants.map((p) => p.uid),
+    participantMap: (raw.participantMap as Record<string, boolean>) || Object.fromEntries(participants.map((p) => [p.uid, true])),
     createdBy: (raw.createdBy as string) || '',
     pinnedMessageId: (raw.pinnedMessageId as string) || null,
     lastMessage: (raw.lastMessage as string) || '',
@@ -95,6 +96,7 @@ export async function ensureDirectChat(me: ChatParticipant, other: ChatParticipa
       isPublic: false,
       participants: [me, other],
       participantIds: [me.uid, other.uid],
+      participantMap: { [me.uid]: true, [other.uid]: true },
       createdBy: me.uid,
       pinnedMessageId: null,
       lastMessage: '',
@@ -126,6 +128,7 @@ export async function createGroupChat(
     isPublic,
     participants: [createdBy, ...participants.filter((p) => p.uid !== createdBy.uid)],
     participantIds: [createdBy.uid, ...participants.filter((p) => p.uid !== createdBy.uid).map((p) => p.uid)],
+    participantMap: Object.fromEntries([createdBy.uid, ...participants.filter((p) => p.uid !== createdBy.uid).map((p) => p.uid)].map((uid) => [uid, true])),
     createdBy: createdBy.uid,
     pinnedMessageId: null,
     lastMessage: '',
@@ -294,6 +297,7 @@ export async function addChatParticipant(chatId: string, participant: ChatPartic
   await update(metaRef, {
     participants: [...meta.participants, participant],
     participantIds: [...meta.participantIds, participant.uid],
+    participantMap: { ...(meta.participantMap || {}), [participant.uid]: true },
   });
   await update(userChatEntryRef(participant.uid, chatId), {
     chatId,
@@ -317,6 +321,7 @@ export async function removeChatParticipant(chatId: string, uid: string): Promis
   await update(metaRef, {
     participants: meta.participants.filter((p) => p.uid !== uid),
     participantIds: meta.participantIds.filter((id) => id !== uid),
+    participantMap: Object.fromEntries(meta.participantIds.filter((id) => id !== uid).map((id) => [id, true])),
   });
   await remove(userChatEntryRef(uid, chatId));
 }

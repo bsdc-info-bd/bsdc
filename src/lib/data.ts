@@ -170,7 +170,32 @@ export async function updatePost(postId: string, patch: Partial<Post>, editorSum
   const revision = editorSummary
     ? [...(prev?.wikiRevisions || []), { editorId: '', editorName: '', summary: editorSummary, editedAt: Date.now() }]
     : prev?.wikiRevisions || [];
-  await updateDoc(ref, { ...patch, edited: true, updatedAt: Date.now(), wikiRevisions: revision });
+  const nextBody = patch.body ?? prev?.body ?? '';
+  const nextTitle = patch.title ?? prev?.title ?? '';
+  await updateDoc(ref, {
+    ...patch,
+    readingMinutes: readingMinutes(`${nextTitle} ${nextBody}`),
+    edited: true,
+    updatedAt: Date.now(),
+    wikiRevisions: revision,
+  });
+}
+
+export async function findRelatedPosts(post: Post, limit = 4): Promise<Post[]> {
+  const posts = await fetchRecentPosts(200);
+  const tags = new Set(post.tags);
+  return posts
+    .filter((candidate) => candidate.id !== post.id && candidate.status === 'published' && candidate.visibility === 'public')
+    .map((candidate) => {
+      const sharedTags = candidate.tags.filter((tag) => tags.has(tag)).length;
+      const sameType = candidate.type === post.type ? 1 : 0;
+      const sameAuthor = candidate.authorId === post.authorId ? 1 : 0;
+      return { candidate, score: sharedTags * 4 + sameType + sameAuthor };
+    })
+    .sort((a, b) => b.score - a.score || (b.candidate.publishedAt || b.candidate.createdAt) - (a.candidate.publishedAt || a.candidate.createdAt))
+    .filter((entry) => entry.score > 0)
+    .slice(0, limit)
+    .map((entry) => entry.candidate);
 }
 
 export async function softDeletePost(postId: string, removed = true): Promise<void> {

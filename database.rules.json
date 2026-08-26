@@ -1,5 +1,6 @@
 {
   "rules": {
+    ".validate": "newData.exists()",
     ".read": false,
     ".write": false,
     "presence": {
@@ -19,13 +20,13 @@
     },
     "chats": {
       "$chatId": {
-        ".read": "auth != null && (!root.child('chats/' + $chatId + '/metadata/participantIds').exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists())",
+        ".read": "auth != null && (!data.child('metadata').exists() || data.child('metadata/participantMap').child(auth.uid).val() == true || data.child('metadata/createdBy').val() == auth.uid || data.child('metadata/isPublic').val() == true)",
         "metadata": {
-          ".write": "auth != null && (!root.child('chats/' + $chatId + '/metadata/participantIds').exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists() || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)"
+          ".write": "auth != null && ((!data.exists() && newData.child('createdBy').val() == auth.uid) || data.child('participantMap').child(auth.uid).val() == true || data.child('createdBy').val() == auth.uid)"
         },
         "messages": {
           "$messageId": {
-            ".write": "auth != null && (root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists() || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)",
+            ".write": "auth != null && (root.child('chats/' + $chatId + '/metadata/participantMap').child(auth.uid).val() == true || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)",
             ".validate": "newData.hasChildren(['senderId', 'createdAt']) && newData.child('senderId').val() == auth.uid"
           }
         }
@@ -35,7 +36,7 @@
       "$uid": {
         ".read": "auth != null && auth.uid == $uid",
         "$chatId": {
-          ".write": "auth != null && (auth.uid == $uid || !root.child('userChats/' + $uid + '/' + $chatId).exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists())"
+          ".write": "auth != null && (auth.uid == $uid || !root.child('userChats/' + $uid + '/' + $chatId).exists() || root.child('chats/' + $chatId + '/metadata/participantMap').child(auth.uid).val() == true || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)"
         }
       }
     },

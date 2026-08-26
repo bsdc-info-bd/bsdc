@@ -37,8 +37,25 @@ export function randomId(len = 8): string {
 }
 
 export function readingMinutes(text: string): number {
-  const words = text.trim().split(/\s+/).filter(Boolean).length;
-  return Math.max(1, Math.round(words / 200));
+  const clean = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/[#*_>`~[\]()!|-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const words = clean ? clean.split(/\s+/).length : 0;
+  return Math.max(1, Math.ceil(words / 200));
+}
+
+export function headingSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\p{L}\p{N}\s-]/gu, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 export function timeAgo(timestamp: number | null | undefined, locale = 'en'): string {

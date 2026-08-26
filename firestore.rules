@@ -15,9 +15,9 @@ service cloud.firestore {
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function notBanned() { return userRole() != 'banned'; }
     function userRole() {
-      return signedIn()
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         ? (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role || 'user')
-        : 'guest';
+        : (signedIn() ? 'user' : 'guest');
     }
     function isSuperadmin() { return userRole() == 'superadmin'; }
     function isAdmin() { return userRole() in ['superadmin', 'admin']; }
@@ -110,7 +110,7 @@ service cloud.firestore {
                             'scheduledAt','seoTitle','seoDescription','canonicalUrl','snippet','poll','job',
                             'project','notice','edited','updatedAt','wikiRevisions','pinned',
                             'reactionCounts','reactionTotal','commentCount','viewCount','shareCount',
-                            'bookmarkCount','publishedAt']))
+                            'bookmarkCount','publishedAt','readingMinutes','deleted']))
                         || postCounterWrite()
                         || isStaff()
                       );
@@ -139,13 +139,15 @@ service cloud.firestore {
 
     match /follows/{followId} {
       allow read: if true;
-      allow create, delete: if signedIn() && notBanned()
-                            && request.resource.data.followerId == request.auth.uid;
+      allow create: if signedIn() && notBanned()
+                    && request.resource.data.followerId == request.auth.uid;
+      allow delete: if signedIn() && notBanned() && resource.data.followerId == request.auth.uid;
     }
 
     match /bookmarks/{bookmarkId} {
       allow read: if true;
-      allow write: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow create, update: if signedIn() && notBanned() && request.resource.data.userId == request.auth.uid;
+      allow delete: if signedIn() && notBanned() && resource.data.userId == request.auth.uid;
     }
 
     match /tags/{tagName} {

@@ -7,7 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import Linkify from 'linkify-react';
-import { cn } from '@/lib/utils';
+import { cn, headingSlug } from '@/lib/utils';
 
 const sanitizeSchema = {
   ...defaultSchema,
@@ -39,6 +39,10 @@ export const Markdown = memo(function Markdown({ content, className }: { content
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSlug, [rehypeSanitize, sanitizeSchema], rehypeHighlight, [rehypeKatex, { throwOnError: false }]]}
           components={{
+            h1: ({ children }) => <h1 id={headingSlug(String(children))}>{children}</h1>,
+            h2: ({ children }) => <h2 id={headingSlug(String(children))}>{children}</h2>,
+            h3: ({ children }) => <h3 id={headingSlug(String(children))}>{children}</h3>,
+            h4: ({ children }) => <h4 id={headingSlug(String(children))}>{children}</h4>,
             a: ({ children, href }) => (
               <a href={href} target="_blank" rel="noopener noreferrer nofollow">
                 {children}
