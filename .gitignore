@@ -1,0 +1,54 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+dev-dist/
+build/
+
+# Environment files — never commit credentials
+.env
+.env.local
+.env.*.local
+
+# Testing
+coverage/
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Firebase
+.firebase/
+firebase-debug.log
+*-debug.log
+.runtimeconfig.json
+
+# Capacitor native build folders (regenerated via `npx cap sync`)
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+android/capacitor-cordova-android-plugins/build/
+ios/App/Pods/
+ios/App/build/
+ios/App/App/public/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">BSDC</string>
+    <string name="title_activity_main">BSDC</string>
+    <string name="package_name">bd.info.bsdc.app</string>
+    <string name="custom_url_scheme">bd.info.bsdc.app</string>
+</resources>

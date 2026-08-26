@@ -1,0 +1,214 @@
+/* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
+/* Modern effects layer — glassmorphism, 3D depth, motion. All effects are transform/opacity
+   only (GPU-composited) and disabled under prefers-reduced-motion. */
+
+/* ---------------------------------------------------------- Glass */
+.bsdc-glass {
+  background: color-mix(in srgb, #ffffff 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+}
+.dark .bsdc-glass {
+  background: color-mix(in srgb, #161616 72%, transparent);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* ----------------------------------------------------- Gradient text */
+.bsdc-gradient-text {
+  background: linear-gradient(120deg, #0A8F3F, #14B8A6 50%, #1877F2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  background-size: 200% auto;
+  animation: bsdc-gradient-pan 5s linear infinite;
+}
+@keyframes bsdc-gradient-pan {
+  to { background-position: 200% center; }
+}
+
+/* ----------------------------------------------------- Mesh gradient */
+.bsdc-mesh {
+  background-image:
+    radial-gradient(at 12% 8%, rgba(10, 143, 63, 0.22) 0px, transparent 55%),
+    radial-gradient(at 88% 12%, rgba(24, 119, 242, 0.18) 0px, transparent 52%),
+    radial-gradient(at 72% 88%, rgba(20, 184, 166, 0.18) 0px, transparent 50%),
+    radial-gradient(at 18% 92%, rgba(124, 58, 237, 0.12) 0px, transparent 48%);
+  background-size: 180% 180%;
+  animation: bsdc-mesh-drift 14s ease-in-out infinite alternate;
+}
+@keyframes bsdc-mesh-drift {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 100% 100%; }
+}
+
+/* ------------------------------------------------------- 3D depth */
+.bsdc-perspective {
+  perspective: 900px;
+}
+
+.bsdc-lift-3d {
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.bsdc-lift-3d:hover {
+  transform: translateY(-3px) rotateX(1.2deg) rotateY(-1.2deg) scale(1.005);
+  box-shadow:
+    0 18px 36px -14px rgba(10, 143, 63, 0.28),
+    0 6px 14px -8px rgba(0, 0, 0, 0.18);
+}
+
+/* Card hover with inner content popping toward the viewer */
+.bsdc-tilt-card {
+  transform-style: preserve-3d;
+}
+.bsdc-tilt-card:hover .bsdc-tilt-pop {
+  transform: translateZ(26px);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Shine sweep (buttons, banners) */
+.bsdc-shine {
+  position: relative;
+  overflow: hidden;
+}
+.bsdc-shine::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.35) 50%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 0.6s ease;
+  pointer-events: none;
+}
+.bsdc-shine:hover::after {
+  transform: translateX(120%);
+}
+
+/* Pressable 3D button */
+.bsdc-press {
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.14);
+}
+.bsdc-press:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.16);
+}
+.bsdc-press:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* Soft glow ring */
+.bsdc-glow {
+  box-shadow: 0 0 0 1px rgba(10, 143, 63, 0.25), 0 0 24px -6px rgba(10, 143, 63, 0.45);
+}
+.bsdc-glow-anim {
+  animation: bsdc-glow-pulse 2.4s ease-in-out infinite;
+}
+@keyframes bsdc-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(10, 143, 63, 0.25), 0 0 22px -8px rgba(10, 143, 63, 0.5); }
+  50% { box-shadow: 0 0 0 1px rgba(10, 143, 63, 0.45), 0 0 34px -6px rgba(10, 143, 63, 0.65); }
+}
+
+/* 3D flip (branding badges, cards) */
+.bsdc-flip {
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.bsdc-flip:hover {
+  transform: rotateY(180deg);
+}
+.bsdc-flip-face {
+  backface-visibility: hidden;
+}
+.bsdc-flip-back {
+  transform: rotateY(180deg);
+}
+
+/* Digit flip for countdown / stats */
+.bsdc-digit {
+  display: inline-block;
+  transform-origin: 50% 60%;
+  animation: bsdc-digit-flip 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes bsdc-digit-flip {
+  0% { transform: rotateX(-90deg); opacity: 0; }
+  60% { transform: rotateX(12deg); opacity: 1; }
+  100% { transform: rotateX(0deg); opacity: 1; }
+}
+
+/* Pop-in for toasts/badges/empty states */
+.bsdc-pop-in {
+  animation: bsdc-pop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+@keyframes bsdc-pop {
+  0% { transform: scale(0.85); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Floating orbs for hero/auth backgrounds */
+.bsdc-orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(46px);
+  opacity: 0.5;
+  animation: bsdc-orb-float 9s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes bsdc-orb-float {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(18px, -26px, 0) scale(1.12); }
+}
+
+/* Story ring conic spinner */
+.bsdc-ring-3d {
+  background: conic-gradient(from 180deg, #0A8F3F, #14B8A6, #1877F2, #DB2777, #0A8F3F);
+  animation: bsdc-ring-spin 6s linear infinite;
+}
+@keyframes bsdc-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Scroll-snap helper for mobile carousels */
+.bsdc-snap-x {
+  scroll-snap-type: x mandatory;
+}
+.bsdc-snap-x > * {
+  scroll-snap-align: start;
+}
+
+/* Checkerboard backdrop for the image editor */
+.bsdc-checker {
+  background-image:
+    linear-gradient(45deg, rgba(128, 128, 128, 0.18) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(128, 128, 128, 0.18) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(128, 128, 128, 0.18) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(128, 128, 128, 0.18) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+/* Reduced motion: neutralize everything above */
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-lift-3d:hover,
+  .bsdc-tilt-card:hover .bsdc-tilt-pop,
+  .bsdc-press:hover,
+  .bsdc-press:active {
+    transform: none;
+  }
+  .bsdc-gradient-text,
+  .bsdc-mesh,
+  .bsdc-ring-3d,
+  .bsdc-orb,
+  .bsdc-glow-anim,
+  .bsdc-digit,
+  .bsdc-pop-in,
+  .bsdc-shine::after {
+    animation: none !important;
+  }
+  .bsdc-flip:hover {
+    transform: none;
+  }
+}

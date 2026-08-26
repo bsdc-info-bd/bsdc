@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0A8F3F" />
+    <meta name="author" content="BSDC" />
+    <meta name="application-name" content="BSDC" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Bangladesh Software Development Community — BSDC</title>
+    <meta
+      name="description"
+      content="BSDC — The Pride of Bangladesh. Where developers unite: share knowledge, code, jobs, and build the software future of Bangladesh."
+    />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="canonical" href="https://www.bsdc.info.bd/" />
+
+    <!-- Open Graph defaults (pages override dynamically) -->
+    <meta property="og:site_name" content="Bangladesh Software Development Community" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Bangladesh Software Development Community — BSDC" />
+    <meta
+      property="og:description"
+      content="The Pride of Bangladesh — Where Developers Unite. Share knowledge, code, jobs, and build the software future of Bangladesh."
+    />
+    <meta property="og:url" content="https://www.bsdc.info.bd/" />
+    <meta property="og:image" content="https://www.bsdc.info.bd/assets/logos/og-default.png" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale:alternate" content="bn_BD" />
+
+    <!-- Twitter card defaults -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@bsdc_bd" />
+    <meta name="twitter:title" content="Bangladesh Software Development Community — BSDC" />
+    <meta
+      name="twitter:description"
+      content="The Pride of Bangladesh — Where Developers Unite."
+    />
+    <meta name="twitter:image" content="https://www.bsdc.info.bd/assets/logos/og-default.png" />
+
+    <!-- Performance: preconnect to critical third-party origins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://www.googletagmanager.com" />
+    <link rel="dns-prefetch" href="https://bsdc-bd.firebaseio.com" />
+    <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+    <link rel="dns-prefetch" href="https://api.imgbb.com" />
+    <link rel="dns-prefetch" href="https://cdn.onesignal.com" />
+<meta name="google-site-verification" content="4cB8jXI5vveseN_6FGX380G3wMxozRKMaUXxjS-3tNM" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+    />
+
+    <!-- OneSignal Web Push SDK -->
+    <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
+
+    <!-- Theme bootstrap: apply persisted/system theme before first paint to avoid flash -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('bsdc-theme');
+          var theme = stored === 'light' || stored === 'dark' ? stored : null;
+          if (!theme) {
+            theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+          var lang = localStorage.getItem('bsdc-language');
+          if (lang === 'bn' || lang === 'en') document.documentElement.lang = lang;
+        } catch (e) {
+          /* localStorage unavailable — default light theme */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      BSDC — Bangladesh Software Development Community requires JavaScript enabled. The Pride of
+      Bangladesh — Where Developers Unite.
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

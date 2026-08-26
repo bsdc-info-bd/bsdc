@@ -1,0 +1,63 @@
+{
+  "rules": {
+    ".validate": "newData.exists()",
+    ".read": false,
+    ".write": false,
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "typing": {
+      "$chatId": {
+        "$uid": {
+          ".read": "auth != null && (!root.child('chats/' + $chatId + '/metadata/participantIds').exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists())",
+          ".write": "auth != null && auth.uid == $uid && (!root.child('chats/' + $chatId + '/metadata/participantIds').exists() || root.child('chats/' + $chatId + '/metadata/participantIds').child(auth.uid).exists())",
+          ".validate": "newData.hasChildren(['isTyping', 'displayName', 'updatedAt'])"
+        }
+      }
+    },
+    "chats": {
+      "$chatId": {
+        ".read": "auth != null && (!data.child('metadata').exists() || data.child('metadata/participantMap').child(auth.uid).val() == true || data.child('metadata/createdBy').val() == auth.uid || data.child('metadata/isPublic').val() == true)",
+        "metadata": {
+          ".write": "auth != null && ((!data.exists() && newData.child('createdBy').val() == auth.uid) || data.child('participantMap').child(auth.uid).val() == true || data.child('createdBy').val() == auth.uid)"
+        },
+        "messages": {
+          "$messageId": {
+            ".write": "auth != null && (root.child('chats/' + $chatId + '/metadata/participantMap').child(auth.uid).val() == true || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)",
+            ".validate": "newData.hasChildren(['senderId', 'createdAt']) && newData.child('senderId').val() == auth.uid"
+          }
+        }
+      }
+    },
+    "userChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$chatId": {
+          ".write": "auth != null && (auth.uid == $uid || !root.child('userChats/' + $uid + '/' + $chatId).exists() || root.child('chats/' + $chatId + '/metadata/participantMap').child(auth.uid).val() == true || root.child('chats/' + $chatId + '/metadata/createdBy').val() == auth.uid)"
+        }
+      }
+    },
+    "calls": {
+      "$callId": {
+        ".read": "auth != null && (data.child('callerId').val() == auth.uid || data.child('calleeId').val() == auth.uid)",
+        ".write": "auth != null && (data.child('callerId').val() == auth.uid || data.child('calleeId').val() == auth.uid || newData.child('callerId').val() == auth.uid)",
+        ".validate": "newData.hasChildren(['id', 'callerId', 'calleeId', 'status', 'createdAt']) && newData.child('callerId').val() != newData.child('calleeId').val()",
+        "candidates": {
+          "$uid": {
+            ".read": "auth != null && auth.uid == $uid",
+            ".write": "auth != null && auth.uid == $uid && (root.child('calls/' + $callId + '/callerId').val() == auth.uid || root.child('calls/' + $callId + '/calleeId').val() == auth.uid)"
+          }
+        }
+      }
+    },
+    "incomingCalls": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && (auth.uid == $uid || (newData.child('caller').child('uid').val() == auth.uid && newData.child('id').val() != null))"
+      }
+    }
+  }
+}

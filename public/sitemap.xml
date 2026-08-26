@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.bsdc.info.bd/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>
+  <url><loc>https://www.bsdc.info.bd/explore</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/trending</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/blog</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/qa</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/snippets</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/docs</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/wiki</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/projects</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/jobs</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://www.bsdc.info.bd/events</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/groups</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/marketplace</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://www.bsdc.info.bd/directory</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.bsdc.info.bd/leaderboard</loc><changefreq>daily</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.bsdc.info.bd/creator-program</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.bsdc.info.bd/license</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://www.bsdc.info.bd/about</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bsdc.info.bd/contact</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://www.bsdc.info.bd/guidelines</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://www.bsdc.info.bd/terms</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+  <url><loc>https://www.bsdc.info.bd/privacy</loc><changefreq>yearly</changefreq><priority>0.4</priority></url>
+</urlset>

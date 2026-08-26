@@ -1,0 +1,64 @@
+/* BSDC — Bangladesh Software Development Community. Copyright (c) RRC Development. Proprietary — see LICENSE. */
+
+@keyframes bsdc-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes bsdc-slide-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bsdc-spin-slow {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes bsdc-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes bsdc-gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes bsdc-ring-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(10, 143, 63, 0.45); }
+  70% { box-shadow: 0 0 0 12px rgba(10, 143, 63, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(10, 143, 63, 0); }
+}
+
+.bsdc-animate-fade-in { animation: bsdc-fade-in 0.25s ease-out both; }
+.bsdc-animate-slide-up { animation: bsdc-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.bsdc-animate-float { animation: bsdc-float 3s ease-in-out infinite; }
+.bsdc-animate-spin-slow { animation: bsdc-spin-slow 8s linear infinite; }
+.bsdc-animate-ring-pulse { animation: bsdc-ring-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+
+.bsdc-gradient-animated {
+  background-size: 200% 200%;
+  animation: bsdc-gradient-shift 6s ease infinite;
+}
+
+/* Branded loading dots */
+.bsdc-loading-dots::after {
+  content: '';
+  animation: bsdc-dots 1.2s steps(4, end) infinite;
+}
+@keyframes bsdc-dots {
+  0% { content: ''; }
+  25% { content: '.'; }
+  50% { content: '..'; }
+  75% { content: '...'; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
