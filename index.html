@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FFFFFF" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B1220" />
+    <title>BSDC — Bangladesh Software Development Community</title>
+    <meta
+      name="description"
+      content="BSDC is the open social and professional platform for Bangladesh's software developers — technical publishing, communities, Q&A and real-time messaging in one place. Bangla and English."
+    />
+    <!--
+      Pre-paint theme class. Reads the same key the useTheme() hook persists,
+      avoiding a light/dark flash. Kept tiny and dependency-free.
+    -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('bsdc.theme');
+          var t = raw ? raw.replace(/^"|"$/g, '') : 'system';
+          var dark =
+            t === 'dark' ||
+            ((t === 'system' || !t) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch (e) {
+          /* noop */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

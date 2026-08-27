@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 25% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 11%;
+    --muted: 220 20% 96%;
+    --muted-foreground: 220 10% 40%;
+    --accent: 155 60% 94%;
+    --border: 220 15% 89%;
+    --ring: 155 92% 30%;
+  }
+
+  .dark {
+    --background: 220 45% 7%;
+    --foreground: 210 40% 96%;
+    --card: 219 40% 10%;
+    --card-foreground: 210 40% 96%;
+    --muted: 218 32% 13%;
+    --muted-foreground: 217 14% 66%;
+    --accent: 158 40% 16%;
+    --border: 218 26% 18%;
+    --ring: 158 90% 45%;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  /* Respect reduced-motion preferences. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Bangla locale: lead with a Bengali-first typeface. */
+  html[lang='bn'] body {
+    @apply font-bangla;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  ::selection {
+    @apply bg-primary-200 text-primary-900;
+  }
+  .dark ::selection {
+    @apply bg-primary-800 text-primary-100;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}

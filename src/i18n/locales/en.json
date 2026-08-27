@@ -1,0 +1,88 @@
+{
+  "app": {
+    "docTitle": "BSDC — Bangladesh Software Development Community",
+    "notFoundTitle": "Page not found — BSDC",
+    "notYetTitle": "Not yet implemented — BSDC"
+  },
+  "brand": {
+    "name": "BSDC",
+    "full": "Bangladesh Software Development Community",
+    "parent": "An initiative by RRC Development",
+    "founderName": "Rizwan Rahim Chowdhury"
+  },
+  "nav": {
+    "home": "Home",
+    "about": "About",
+    "roadmap": "Roadmap",
+    "contact": "Contact",
+    "theme": "Theme",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "themeSystem": "System",
+    "language": "Language",
+    "langBangla": "বাংলা",
+    "langEnglish": "English",
+    "skipToContent": "Skip to content",
+    "homeLink": "BSDC home",
+    "siteNav": "Site navigation"
+  },
+  "landing": {
+    "docTitle": "BSDC — Bangladesh Software Development Community",
+    "badge": "Built by the community, for the community",
+    "title": "Bangladesh's open home for software developers",
+    "subtitle": "BSDC brings the social graph, technical publishing, communities and Q&A together in one platform — designed mobile-first for Bangladesh, open to developers everywhere, in Bangla and English.",
+    "cta": "Explore the roadmap",
+    "aboutTitle": "One platform, four foundations",
+    "aboutBody": "BSDC merges the core mechanics of social networks, developer publishing, community forums and Q&A into a single product — with Bangla and English as co-equal languages from day one.",
+    "pillars": {
+      "connectTitle": "Connect",
+      "connectBody": "Follow developers, join public, closed or secret groups, and take part in events and RSVPs.",
+      "publishTitle": "Publish",
+      "publishBody": "Write articles, share code snippets with syntax highlighting, and showcase your projects.",
+      "discussTitle": "Discuss",
+      "discussBody": "Ask questions, vote on what matters, and build reputation through threaded discussion.",
+      "messageTitle": "Message",
+      "messageBody": "Real-time chat with typing indicators, presence, voice notes and message requests."
+    },
+    "roadmapTitle": "Build roadmap",
+    "roadmapBody": "Phased and verified — no faked features. Each phase ships only after the previous one passes its verification checklist.",
+    "phase": "Phase",
+    "phaseStatusShipped": "Shipped",
+    "phaseStatusPlanned": "Planned",
+    "phaseShippedNote": "Verified on this build.",
+    "contactTitle": "Contact",
+    "contactBody": "Questions, partnerships or feedback — reach the BSDC team directly.",
+    "emailUs": "Email us",
+    "founderLabel": "Founder & CEO",
+    "viewOnGithub": "View on GitHub"
+  },
+  "footer": {
+    "tagline": "The open home for Bangladesh's software developers.",
+    "platform": "Platform",
+    "project": "Project",
+    "contact": "Contact",
+    "license": "Source code licensed under the Boost Software License 1.0.",
+    "rights": "© 2026 BSDC. An initiative by RRC Development."
+  },
+  "notYet": {
+    "title": "Not built yet",
+    "plannedFor": "Planned for Phase {{phase}}",
+    "body": "The {{area}} area is on the build roadmap, but it is not implemented yet. Nothing here is faked: it will ship when its real backend exists and passes the verification checklist.",
+    "backHome": "Back to home"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you are looking for does not exist or has moved.",
+    "backHome": "Back to home"
+  },
+  "areas": {
+    "profile": "profile",
+    "post": "post",
+    "group": "group",
+    "page": "page",
+    "event": "event",
+    "job": "job listing",
+    "tag": "topic",
+    "search": "search"
+  }
+}
