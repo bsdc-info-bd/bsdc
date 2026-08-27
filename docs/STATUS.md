@@ -80,3 +80,9 @@ features whose rules are missing.
 - Real-browser verification could not run in this build sandbox (no browser
   binary, Playwright CDN unreachable) — it runs in CI instead
   (`verify-ui` job) and results are recorded in docs/VERIFICATION.md.
+- **CI workflows are authored but not yet on GitHub**: the connected GitHub
+  App lacks the `workflows` permission, so `.github/workflows/ci.yml` and
+  `.github/workflows/deploy-cloudflare.yml` exist in the local working tree
+  but were rejected on push. Once the GitHub connection is reconnected with
+  workflow permission (or the files are added manually), CI — including the
+  real-browser viewport verification — goes live on the next push.
