@@ -1,0 +1,279 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand-500: #0A8F3C;
+    --brand-600: #087a33;
+    --accent-500: #2563EB;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
+    @apply min-h-screen;
+    @apply overflow-x-hidden;
+    font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans Bengali', sans-serif;
+  }
+
+  .dark body {
+    @apply bg-gray-950 text-gray-100;
+  }
+
+  /* Scrollbar styles */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400 dark:bg-gray-600;
+  }
+}
+
+@layer components {
+  .border-border {
+    @apply border-gray-200 dark:border-gray-800;
+  }
+
+  /* Focus ring */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2 dark:focus:ring-offset-gray-950;
+  }
+
+  /* Skeleton loading */
+  .skeleton {
+    @apply bg-gray-200 dark:bg-gray-800 rounded animate-pulse;
+  }
+
+  .skeleton-text {
+    @apply skeleton h-4 w-full;
+  }
+
+  .skeleton-heading {
+    @apply skeleton h-6 w-3/4;
+  }
+
+  .skeleton-avatar {
+    @apply skeleton rounded-full;
+  }
+
+  /* Glass effect */
+  .glass {
+    @apply bg-white/80 dark:bg-gray-900/80 backdrop-blur-md;
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand-500 to-accent-500 bg-clip-text text-transparent;
+  }
+
+  /* Card */
+  .card {
+    @apply bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl;
+  }
+
+  .card-hover {
+    @apply card transition-shadow hover:shadow-md dark:hover:shadow-gray-800/50;
+  }
+
+  /* Button base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-950;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply select-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-brand-500 text-white hover:bg-brand-600 focus:ring-brand-500;
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-secondary {
+    @apply btn bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100;
+    @apply hover:bg-gray-200 dark:hover:bg-gray-700 focus:ring-gray-300;
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-outline {
+    @apply btn border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300;
+    @apply hover:bg-gray-50 dark:hover:bg-gray-800 focus:ring-gray-300;
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-600 dark:text-gray-400;
+    @apply hover:bg-gray-100 dark:hover:bg-gray-800 focus:ring-gray-300;
+    @apply px-3 py-2 text-sm;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    @apply px-4 py-2 text-sm;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3 text-base;
+  }
+
+  .btn-icon {
+    @apply btn p-2 rounded-lg;
+    @apply text-gray-500 dark:text-gray-400;
+    @apply hover:bg-gray-100 dark:hover:bg-gray-800;
+  }
+
+  /* Input */
+  .input {
+    @apply w-full rounded-lg border border-gray-300 dark:border-gray-700;
+    @apply bg-white dark:bg-gray-900;
+    @apply px-3 py-2 text-sm;
+    @apply text-gray-900 dark:text-gray-100;
+    @apply placeholder:text-gray-400 dark:placeholder:text-gray-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply transition-colors;
+  }
+
+  .input-error {
+    @apply border-red-500 focus:ring-red-500;
+  }
+
+  /* Textarea */
+  .textarea {
+    @apply input resize-none;
+    @apply min-h-[80px];
+  }
+
+  /* Badge */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply badge bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400;
+  }
+
+  .badge-secondary {
+    @apply badge bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300;
+  }
+
+  .badge-success {
+    @apply badge bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400;
+  }
+
+  .badge-danger {
+    @apply badge bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400;
+  }
+
+  /* Divider */
+  .divider {
+    @apply border-t border-gray-200 dark:border-gray-800;
+  }
+
+  /* Link */
+  .link {
+    @apply text-brand-500 hover:text-brand-600 hover:underline transition-colors;
+  }
+
+  /* Container */
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-narrow {
+    @apply mx-auto w-full max-w-3xl px-4 sm:px-6;
+  }
+
+  /* Page layout */
+  .page {
+    @apply min-h-screen pt-16 pb-20 md:pb-8;
+  }
+
+  /* Bottom nav safe area */
+  .bottom-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Prose overrides for dark mode */
+  .prose pre {
+    @apply bg-gray-900 dark:bg-gray-800 border border-gray-200 dark:border-gray-700;
+  }
+
+  .prose code {
+    @apply text-brand-600 dark:text-brand-400;
+  }
+
+  .prose a {
+    @apply text-brand-500 hover:text-brand-600;
+  }
+}
+
+@layer utilities {
+  /* Reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Hide scrollbar but allow scroll */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Line clamp */
+  .line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+}

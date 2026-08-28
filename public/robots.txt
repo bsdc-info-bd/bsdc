@@ -1,0 +1,50 @@
+# BSDC - robots.txt
+# https://bsdc.info.bd/robots.txt
+
+User-agent: *
+Allow: /
+Allow: /@*
+Allow: /article/*
+Allow: /question/*
+Allow: /showcase/*
+Allow: /tutorial/*
+Allow: /snippet/*
+Allow: /blog/*
+Allow: /jobs/*
+Allow: /projects/*
+Allow: /organizations/*
+Allow: /events/*
+Allow: /groups/*
+Allow: /marketplace/*
+Allow: /explore
+Allow: /trending
+Allow: /search
+Allow: /verify/license/*
+Allow: /reports/verify/*
+
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /manager
+Disallow: /manager/*
+Disallow: /moderator
+Disallow: /moderator/*
+Disallow: /settings
+Disallow: /settings/*
+Disallow: /messages
+Disallow: /messages/*
+Disallow: /notifications
+Disallow: /notifications/*
+Disallow: /bookmarks
+Disallow: /bookmarks/*
+Disallow: /create
+Disallow: /create/*
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /api/
+
+# Sitemaps
+Sitemap: https://bsdc.info.bd/sitemap.xml
+
+# Crawl-delay for respectful crawling
+Crawl-delay: 1

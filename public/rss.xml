@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <title>Bangladesh Software Development Community</title>
+    <link>https://bsdc.info.bd</link>
+    <description>The proud software development community of Bangladesh. Connect, share, learn, and grow with developers.</description>
+    <language>en</language>
+    <copyright>RRC Development</copyright>
+    <managingEditor>contact@bsdc.info.bd (BSDC)</managingEditor>
+    <webMaster>contact@bsdc.info.bd (BSDC)</webMaster>
+    <atom:link href="https://bsdc.info.bd/rss.xml" rel="self" type="application/rss+xml"/>
+    <generator>BSDC Platform</generator>
+    <ttl>60</ttl>
+    <!-- Feed items will be dynamically generated -->
+  </channel>
+</rss>
