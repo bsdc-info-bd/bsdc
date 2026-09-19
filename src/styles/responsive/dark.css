@@ -1,0 +1,33 @@
+/**
+ * BSDC — src/styles/responsive/dark.css
+ * Purpose : Cross-cutting dark-theme corrections that are not pure token swaps.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Photographic media is dimmed through --bsdc-media-dim, borders gain contrast against
+ *           elevated surfaces, and coloured badges are re-tinted for dark backgrounds.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+:root[data-theme="dark"],
+:root[data-theme="green-dark"] {
+  --bsdc-focus: var(--bsdc-green-300);
+}
+
+:root[data-theme="dark"] .bsdc-top-bar,
+:root[data-theme="green-dark"] .bsdc-top-bar {
+  border-block-end-color: color-mix(in srgb, var(--bsdc-border) 80%, #000000);
+}
+
+:root[data-theme="dark"] .bsdc-card[data-variant="elevated"],
+:root[data-theme="green-dark"] .bsdc-card[data-variant="elevated"] {
+  background-color: var(--bsdc-surface-2);
+}
+
+:root[data-theme="dark"] .bsdc-badge[data-tone="brand"],
+:root[data-theme="green-dark"] .bsdc-badge[data-tone="brand"] {
+  color: var(--bsdc-green-200);
+}
+
+:root[data-theme="dark"] img:not([data-no-dim="true"]),
+:root[data-theme="green-dark"] img:not([data-no-dim="true"]) {
+  filter: brightness(calc(1 - var(--bsdc-media-dim)));
+}

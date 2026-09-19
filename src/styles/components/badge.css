@@ -1,0 +1,91 @@
+/**
+ * BSDC — src/styles/components/badge.css
+ * Purpose : Status, count and role badges. Role is encoded by colour plus label text plus an SVG
+ *           glyph — never by emoji (PART 04 LAW-01).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Counts clamp visually at 99+ while the accessible label keeps the true number.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+  padding-inline: var(--bsdc-space-2);
+  padding-block: 2px;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  line-height: 1.5;
+  background-color: var(--bsdc-surface-2);
+  color: var(--bsdc-text-2);
+  white-space: nowrap;
+  max-inline-size: 100%;
+}
+
+.bsdc-badge[data-tone="success"] {
+  background-color: color-mix(in srgb, var(--bsdc-success) 16%, transparent);
+  color: var(--bsdc-success);
+}
+.bsdc-badge[data-tone="warning"] {
+  background-color: color-mix(in srgb, var(--bsdc-warning) 18%, transparent);
+  color: color-mix(in srgb, var(--bsdc-warning) 70%, var(--bsdc-text));
+}
+.bsdc-badge[data-tone="danger"] {
+  background-color: color-mix(in srgb, var(--bsdc-danger) 14%, transparent);
+  color: var(--bsdc-danger);
+}
+.bsdc-badge[data-tone="info"] {
+  background-color: color-mix(in srgb, var(--bsdc-info) 14%, transparent);
+  color: var(--bsdc-info);
+}
+.bsdc-badge[data-tone="brand"] {
+  background-color: color-mix(in srgb, var(--bsdc-green-500) 16%, transparent);
+  color: var(--bsdc-green-700);
+}
+.bsdc-badge[data-tone="verified"] {
+  background-color: color-mix(in srgb, var(--bsdc-verified) 16%, transparent);
+  color: var(--bsdc-verified);
+}
+.bsdc-badge[data-tone="admin"] {
+  background-color: color-mix(in srgb, var(--bsdc-admin) 16%, transparent);
+  color: var(--bsdc-admin);
+}
+.bsdc-badge[data-tone="moderator"] {
+  background-color: color-mix(in srgb, var(--bsdc-moderator) 18%, transparent);
+  color: color-mix(in srgb, var(--bsdc-moderator) 68%, var(--bsdc-text));
+}
+.bsdc-badge[data-tone="vendor"] {
+  background-color: color-mix(in srgb, var(--bsdc-vendor) 16%, transparent);
+  color: var(--bsdc-vendor);
+}
+.bsdc-badge[data-tone="money"] {
+  background-color: color-mix(in srgb, var(--bsdc-money) 16%, transparent);
+  color: var(--bsdc-money);
+}
+
+:root[data-theme="dark"] .bsdc-badge[data-tone="brand"],
+:root[data-theme="oled"] .bsdc-badge[data-tone="brand"],
+:root[data-theme="green-dark"] .bsdc-badge[data-tone="brand"] {
+  color: var(--bsdc-green-200);
+}
+
+.bsdc-badge__dot {
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+  flex: none;
+}
+
+.bsdc-badge[data-variant="count"] {
+  min-inline-size: 20px;
+  justify-content: center;
+  padding-inline: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bsdc-badge[data-variant="outline"] {
+  background-color: transparent;
+  border: var(--bsdc-hairline) solid currentColor;
+}

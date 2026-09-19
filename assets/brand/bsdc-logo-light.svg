@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC — single-colour light lockup for dark backgrounds. Source-available; not re-deployable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" role="img"
+     aria-label="BSDC - Bangladesh Software Development Community">
+  <g transform="translate(8 8)">
+    <rect width="64" height="64" rx="16" fill="none" stroke="#FFFFFF" stroke-width="3"/>
+    <path d="M32 12 16 20v14c0 11 7.5 17 16 19 8.5-2 16-8 16-19V20L32 12z"
+          fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M25 32l5 5 9-10" fill="none" stroke="#FFFFFF" stroke-width="3.5"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="90" y="44" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="34"
+        font-weight="800" fill="#FFFFFF" letter-spacing="-1">BSDC</text>
+  <text x="90" y="64" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="12"
+        font-weight="600" fill="#D3EDE0" letter-spacing="0.5">SOFTWARE DEVELOPMENT COMMUNITY</text>
+</svg>

@@ -1,0 +1,73 @@
+{
+  "title": "Projects",
+  "subtitle": "What the community is building, and who needs a hand.",
+  "start": "Add a project",
+  "commitment": {
+    "hours": "A few hours",
+    "part-time": "Part time",
+    "full-time": "Full time"
+  },
+  "tabs": {
+    "label": "Project lists",
+    "directory": "All projects",
+    "mine": "My projects",
+    "mineEmpty": "You have no projects yet. You could add the first one."
+  },
+  "list": {
+    "all": "All",
+    "label": "Project list",
+    "filterLabel": "Filter projects",
+    "recruitingOnly": "Looking for collaborators",
+    "count": "Showing {shown} of {total}",
+    "empty": {
+      "title": "No project matches these filters",
+      "description": "Clear one and look again."
+    }
+  },
+  "card": {
+    "repo": "Code",
+    "demo": "Demo",
+    "recruiting": "Needs collaborators · {count} roles",
+    "notRecruiting": "Not looking for collaborators right now"
+  },
+  "form": {
+    "title": "Project name",
+    "summary": "What it is, in one line",
+    "description": "The longer story",
+    "repo": "Repository link",
+    "demo": "Demo link",
+    "stack": "Stack",
+    "stackHint": "Separate with commas. Up to twelve.",
+    "status": "Status",
+    "roles": "Who you need",
+    "roleTitle": "Role",
+    "roleCommitment": "Time",
+    "addRole": "Add role",
+    "removeRole": "Remove role",
+    "cancel": "Cancel",
+    "publish": "Publish"
+  },
+  "detail": {
+    "close": "Close",
+    "join": "Join this project",
+    "leave": "Leave the project",
+    "filled": "Filled",
+    "open": "Open",
+    "repo": "See the code",
+    "demo": "See the demo"
+  },
+  "created": {
+    "bn": "Project published",
+    "en": "Project published"
+  },
+  "error": {
+    "default": {
+      "bn": "The project could not be saved.",
+      "en": "The project could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "Give the project a name and a one-line summary.",
+      "en": "Give the project a name and a one-line summary."
+    }
+  }
+}

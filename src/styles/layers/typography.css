@@ -1,0 +1,147 @@
+/**
+ * BSDC — src/styles/layers/typography.css
+ * Purpose : Type scale application, prose rhythm, numeral systems and code typography
+ *           (PART 08.02, PART 09.01).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Bangla numerals (০১২৩৪৫৬৭৮৯) are a presentation choice: the DOM keeps ASCII digits so
+ *           copying, sorting and screen readers stay correct (ADR-024). The `.bsdc-numerals-bn`
+ *           class renders Bengali digits with a font-variant fallback chain.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-text-2xs {
+  font-size: var(--fs-2xs);
+}
+.bsdc-text-xs {
+  font-size: var(--fs-xs);
+}
+.bsdc-text-sm {
+  font-size: var(--fs-sm);
+}
+.bsdc-text-base {
+  font-size: var(--fs-base);
+}
+.bsdc-text-md {
+  font-size: var(--fs-md);
+}
+.bsdc-text-lg {
+  font-size: var(--fs-lg);
+}
+.bsdc-text-xl {
+  font-size: var(--fs-xl);
+}
+.bsdc-text-2xl {
+  font-size: var(--fs-2xl);
+}
+.bsdc-text-3xl {
+  font-size: var(--fs-3xl);
+}
+.bsdc-text-4xl {
+  font-size: var(--fs-4xl);
+}
+.bsdc-text-hero {
+  font-size: var(--fs-hero);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.bsdc-text-muted {
+  color: var(--bsdc-text-2);
+}
+.bsdc-text-subtle {
+  color: var(--bsdc-text-3);
+}
+.bsdc-text-strong {
+  font-weight: 700;
+}
+
+/* Tabular numerals keep counters from shifting width as they animate (PART 08.07). */
+.bsdc-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Readable measure caps (PART 08.04 R-06). */
+.bsdc-prose {
+  max-width: 72ch;
+  font-size: var(--fs-md);
+  line-height: var(--lh-en);
+}
+
+.bsdc-prose:lang(bn) {
+  line-height: var(--lh-bn);
+}
+
+.bsdc-prose p + p {
+  margin-block-start: var(--bsdc-space-4);
+}
+
+.bsdc-prose h2 {
+  margin-block: var(--bsdc-space-8) var(--bsdc-space-3);
+}
+
+.bsdc-prose h3 {
+  margin-block: var(--bsdc-space-6) var(--bsdc-space-2);
+}
+
+.bsdc-prose ul,
+.bsdc-prose ol {
+  padding-inline-start: var(--bsdc-space-6);
+  margin-block: var(--bsdc-space-3);
+}
+
+.bsdc-prose li + li {
+  margin-block-start: var(--bsdc-space-2);
+}
+
+.bsdc-prose blockquote {
+  border-inline-start: 4px solid var(--bsdc-green-400);
+  padding-inline-start: var(--bsdc-space-4);
+  color: var(--bsdc-text-2);
+  margin-block: var(--bsdc-space-4);
+}
+
+.bsdc-prose code {
+  background-color: var(--bsdc-surface-2);
+  border-radius: var(--radius-xs);
+  padding: 0.15em 0.35em;
+}
+
+.bsdc-prose pre {
+  background-color: var(--bsdc-surface-2);
+  border-radius: var(--radius-md);
+  padding: var(--bsdc-space-4);
+  overflow-x: auto;
+  direction: ltr;
+}
+
+/* Code surfaces always read left-to-right even inside a Bangla document. */
+.bsdc-code,
+code,
+pre,
+kbd {
+  direction: ltr;
+  text-align: start;
+  font-family: var(--bsdc-font-code);
+}
+
+/* Bangla digit rendering for surfaces that opt in (settings: numerals). */
+.bsdc-numerals-bn {
+  font-feature-settings: "locl" 1;
+  font-variant-numeric: normal;
+}
+
+.bsdc-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bsdc-balance {
+  text-wrap: balance;
+}
+
+.bsdc-pretty {
+  text-wrap: pretty;
+}

@@ -1,0 +1,35 @@
+/**
+ * BSDC — src/styles/responsive/mobile-small.css
+ * Purpose : 320px to 359px — small Android phones and embedded webviews.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The header search field collapses to an icon; the primary action stays reachable.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 320px) and (max-width: 359.98px) {
+  :root {
+    --bsdc-space-unit: 3.5px;
+    --bsdc-header-height: 52px;
+  }
+
+  .bsdc-container {
+    padding-inline: 10px;
+  }
+
+  .bsdc-top-bar__search {
+    inline-size: 36px;
+  }
+
+  .bsdc-top-bar__search input {
+    display: none;
+  }
+
+  .bsdc-bottom-nav__label {
+    font-size: 9px;
+  }
+
+  .bsdc-chip {
+    padding-inline: var(--bsdc-space-2);
+    font-size: var(--fs-xs);
+  }
+}

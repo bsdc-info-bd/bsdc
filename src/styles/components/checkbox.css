@@ -1,0 +1,42 @@
+/**
+ * BSDC — src/styles/components/checkbox.css
+ * Purpose : Checkbox and indeterminate state (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The control box is 20px but the hit area is padded to 44px on touch (R-03).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-checkbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+  border: 2px solid var(--bsdc-border);
+  border-radius: var(--radius-xs);
+  background-color: var(--bsdc-surface);
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-checkbox[data-state="checked"],
+.bsdc-checkbox[data-state="indeterminate"] {
+  background-color: var(--bsdc-green-500);
+  border-color: var(--bsdc-green-500);
+  color: #ffffff;
+}
+
+.bsdc-checkbox[data-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bsdc-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-height: var(--bsdc-tap-target);
+  cursor: pointer;
+}

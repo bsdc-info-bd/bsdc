@@ -1,0 +1,62 @@
+/**
+ * BSDC — src/styles/components/empty-state.css
+ * Purpose : Empty and error states — illustration, one-line explanation, one primary action
+ *           (PART 09.02). Every list in the product has one of these.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The illustration is an inline SVG (never emoji) and is hidden from assistive tech
+ *           because the text already carries the meaning.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-8) var(--bsdc-space-4);
+  text-align: center;
+  min-block-size: 220px;
+}
+
+.bsdc-empty-state__illustration {
+  inline-size: min(180px, 60%);
+  block-size: auto;
+  color: var(--bsdc-green-500);
+  opacity: 0.9;
+}
+
+.bsdc-empty-state__title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.bsdc-empty-state__description {
+  max-inline-size: 42ch;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-8) var(--bsdc-space-4);
+  text-align: center;
+  min-block-size: 220px;
+}
+
+.bsdc-error-state__code {
+  font-family: var(--bsdc-font-code);
+  font-size: var(--fs-2xs);
+  color: var(--bsdc-text-3);
+}

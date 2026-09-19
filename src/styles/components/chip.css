@@ -1,0 +1,95 @@
+/**
+ * BSDC — src/styles/components/chip.css
+ * Purpose : Filter chips, tag chips and removable chips (PART 08.09, F-175).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Chips are the primary filter control on touch (44px minimum). The selected state also
+ *           carries an underline cue so meaning never depends on colour alone (LAW-14).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface);
+  color: var(--bsdc-text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  max-inline-size: 100%;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bsdc-chip {
+    min-height: 34px;
+  }
+}
+
+.bsdc-chip:hover:not([data-disabled="true"]) {
+  background-color: var(--bsdc-surface-2);
+  color: var(--bsdc-text);
+}
+
+.bsdc-chip[data-selected="true"] {
+  background-color: var(--bsdc-green-500);
+  border-color: var(--bsdc-green-500);
+  color: #ffffff;
+}
+
+.bsdc-chip[data-selected="true"] .bsdc-chip__label {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.bsdc-chip[data-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.bsdc-chip[data-size="sm"] {
+  min-height: 30px;
+  font-size: var(--fs-xs);
+  padding-inline: var(--bsdc-space-2);
+}
+
+.bsdc-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+  flex: none;
+}
+
+.bsdc-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-chip-rail {
+  display: flex;
+  gap: var(--bsdc-space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.bsdc-chip-rail::-webkit-scrollbar {
+  display: none;
+}
+
+.bsdc-chip-rail > .bsdc-chip {
+  scroll-snap-align: start;
+  flex: none;
+}

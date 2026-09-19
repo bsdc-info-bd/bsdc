@@ -1,0 +1,58 @@
+{
+  "title": "Stories",
+  "subtitle": "Twenty-four hour stories. They go away afterwards.",
+  "rail": {
+    "label": "Story rail",
+    "yourStory": "Your story",
+    "openFor": "Open the story from {name}"
+  },
+  "viewer": {
+    "label": "Watching a story",
+    "close": "Close the story",
+    "previous": "Previous frame",
+    "next": "Next frame",
+    "finish": "Finish",
+    "expiresIn": "{hours} hours left",
+    "altFallback": "Story image"
+  },
+  "composer": {
+    "label": "New story",
+    "open": "Add a story",
+    "choose": "Choose an image",
+    "caption": "Caption",
+    "publish": "Publish",
+    "publishing": "Publishing",
+    "cancel": "Cancel",
+    "previewAlt": "A preview of the image you chose"
+  },
+  "empty": {
+    "title": "No stories yet",
+    "description": "The community's first story could be yours.",
+    "action": "Add the first story"
+  },
+  "expiryNote": "Every story removes itself after twenty-four hours.",
+  "soonestExpiry": "The oldest story has about {hours} hours left.",
+  "published": {
+    "bn": "Story published",
+    "en": "Story published"
+  },
+  "error": {
+    "default": {
+      "bn": "The story could not be published.",
+      "en": "The story could not be published."
+    },
+    "imageOnly": {
+      "bn": "Stories take images only, never video.",
+      "en": "Stories take images only, never video."
+    },
+    "BSDC-DATA-007": {
+      "bn": "The story is missing something required.",
+      "en": "The story is missing something required."
+    },
+    "BSDC-NET-005": {
+      "bn": "The story could not be sent while offline.",
+      "en": "The story could not be sent while offline."
+    }
+  },
+  "deviceOnly": "You are seeing the stories this device already knows about."
+}

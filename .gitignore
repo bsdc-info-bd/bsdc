@@ -1,0 +1,60 @@
+# BSDC — .gitignore
+# Purpose: Keep the repository free of build output, secrets, editor noise and platform artefacts.
+# Owner  : RRC Development / BSDC Platform Team
+# Rule   : Secrets never enter git. Only .env.example (names, no values) is committed.
+
+# --- secrets / environment ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.keystore
+*.jks
+service-account*.json
+firebase-service-account.json
+google-services.json.txt
+
+# --- dependencies ---
+node_modules/
+.pnpm-store/
+.yarn/
+
+# --- build output ---
+dist/
+build/output/
+.vite/
+.vite-temp/
+coverage/
+*.tsbuildinfo
+.wrangler/
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+
+# --- logs ---
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# --- editors / OS ---
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# --- generated at build time (never hand-committed) ---
+public/sitemap*.xml
+public/feed*.xml
+public/images/generated/
+public/screenshots/
+.dev-dist/
+
+# Generated raster icons (npm run icons:generate)
+public/icons/
+public/favicon.svg
+public/logo-light.svg

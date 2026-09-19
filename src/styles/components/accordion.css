@@ -1,0 +1,74 @@
+/**
+ * BSDC — src/styles/components/accordion.css
+ * Purpose : Accordion for FAQ, settings groups and admin filters (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Height animation is driven by Radix CSS variables so it works without JavaScript
+ *           measurement and degrades to an instant switch under reduced motion.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-accordion__item {
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-accordion__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+  inline-size: 100%;
+  min-height: var(--bsdc-tap-target);
+  padding-block: var(--bsdc-space-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text);
+  text-align: start;
+}
+
+.bsdc-accordion__icon {
+  flex: none;
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-accordion__trigger[data-state="open"] .bsdc-accordion__icon {
+  transform: rotate(180deg);
+}
+
+.bsdc-accordion__content {
+  overflow: hidden;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-accordion__content[data-state="open"] {
+  animation: bsdc-accordion-down var(--motion-base) var(--ease-standard);
+}
+
+.bsdc-accordion__content[data-state="closed"] {
+  animation: bsdc-accordion-up var(--motion-fast) var(--ease-standard);
+}
+
+@keyframes bsdc-accordion-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+
+@keyframes bsdc-accordion-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-accordion__content[data-state="open"],
+  .bsdc-accordion__content[data-state="closed"] {
+    animation: none;
+  }
+}

@@ -1,0 +1,45 @@
+/**
+ * BSDC — src/styles/responsive/forced-colors.css
+ * Purpose : Windows High Contrast / forced-colors mode support (LAW-14).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : In forced-colors the browser removes author colours. State must therefore be conveyed
+ *           by system colours, borders and text — never by background colour alone.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (forced-colors: active) {
+  .bsdc-button,
+  .bsdc-chip,
+  .bsdc-input,
+  .bsdc-card,
+  .bsdc-select__trigger {
+    border: 1px solid ButtonBorder;
+    background-color: ButtonFace;
+    color: ButtonText;
+    forced-color-adjust: auto;
+  }
+
+  .bsdc-button[data-variant="primary"] {
+    background-color: Highlight;
+    color: HighlightText;
+  }
+
+  .bsdc-chip[data-selected="true"] {
+    border-width: 3px;
+    background-color: Highlight;
+    color: HighlightText;
+  }
+
+  .bsdc-badge {
+    border: 1px solid CanvasText;
+  }
+
+  .bsdc-switch[data-state="checked"] .bsdc-switch__thumb {
+    background-color: CanvasText;
+  }
+
+  .bsdc-presence-dot {
+    forced-color-adjust: none;
+    border: 1px solid CanvasText;
+  }
+}

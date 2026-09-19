@@ -1,0 +1,28 @@
+/**
+ * BSDC — src/styles/responsive/reduced-motion.css
+ * Purpose : Honour prefers-reduced-motion across the whole product (PART 08.03, PART 08.07).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Non-essential transitions collapse to a single frame; essential ones (focus, state
+ *           change) become instant colour swaps. Nothing animates by default here.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .bsdc-card[data-variant="interactive"]:hover {
+    transform: none;
+  }
+
+  .bsdc-skeleton {
+    animation: none !important;
+    background-image: none !important;
+  }
+}

@@ -1,0 +1,99 @@
+/**
+ * BSDC — src/styles/components/card.css
+ * Purpose : Six card variants used by every content surface (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Slots (header/body/footer) own their padding so a card can go edge-to-edge for media
+ *           while keeping text inset.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-card {
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.bsdc-card[data-variant="plain"] {
+  background-color: transparent;
+  border: none;
+}
+
+.bsdc-card[data-variant="elevated"] {
+  box-shadow: var(--shadow-2);
+  border-color: transparent;
+}
+
+.bsdc-card[data-variant="outlined"] {
+  background-color: transparent;
+}
+
+.bsdc-card[data-variant="glass"] {
+  background-color: var(--bsdc-glass-bg);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+}
+
+.bsdc-card[data-variant="interactive"] {
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-card[data-variant="interactive"]:hover {
+  border-color: var(--bsdc-green-300);
+  box-shadow: var(--shadow-3);
+  transform: translateY(-2px);
+}
+
+.bsdc-card[data-variant="brand"] {
+  background-image: linear-gradient(135deg, var(--bsdc-green-700) 0%, var(--bsdc-green-500) 100%);
+  color: var(--bsdc-green-50);
+  border-color: transparent;
+}
+
+.bsdc-card[data-padding="sm"] {
+  padding: var(--bsdc-space-3);
+}
+.bsdc-card[data-padding="md"] {
+  padding: var(--bsdc-space-4);
+}
+.bsdc-card[data-padding="lg"] {
+  padding: var(--bsdc-space-6);
+}
+
+.bsdc-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-4);
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-card__title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+}
+
+.bsdc-card__description {
+  margin-block-start: var(--bsdc-space-1);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-card__body {
+  padding: var(--bsdc-space-4);
+}
+
+.bsdc-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-4);
+  border-block-start: var(--bsdc-hairline) solid var(--bsdc-border);
+}

@@ -1,0 +1,28 @@
+/**
+ * BSDC — src/styles/components/virtual-list.css
+ * Purpose : Windowed list container (PART 04 LAW-20, PART 25).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Only the visible window is mounted. The sizer keeps scroll height stable, and the
+ *           container is scroll-contained so the page never rubber-bands on mobile.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-virtual-list {
+  position: relative;
+  inline-size: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  contain: strict;
+}
+
+.bsdc-virtual-list__sizer {
+  position: relative;
+  inline-size: 100%;
+}
+
+.bsdc-virtual-list__item {
+  position: absolute;
+  inset-inline: 0;
+  will-change: transform;
+}

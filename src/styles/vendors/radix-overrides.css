@@ -1,0 +1,68 @@
+/**
+ * BSDC — src/styles/vendors/radix-overrides.css
+ * Purpose : Maps Radix primitive state onto BSDC tokens so no Radix default colour ever leaks
+ *           into the product (PART 08.06).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Radix ships behaviour without styling; this file is the single place where its
+ *           data-state attributes are given BSDC-meaningful appearance.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+[data-radix-popper-content-wrapper] {
+  z-index: var(--z-dropdown);
+}
+
+[data-radix-popper-content-wrapper][data-side="top"] {
+  transform-origin: bottom center;
+}
+
+/* Shared animation contract for every Radix surface (menu, popover, select, tooltip). */
+@keyframes bsdc-radix-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bsdc-radix-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+[data-side][data-state="open"],
+[data-state="open"][data-radix-popper-content-wrapper] > * {
+  animation: bsdc-radix-in var(--motion-fast) var(--ease-standard) both;
+}
+
+[data-state="closed"][data-radix-popper-content-wrapper] > * {
+  animation: bsdc-radix-out var(--motion-instant) var(--ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-state],
+  [data-radix-popper-content-wrapper] > * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* Radix ScrollArea viewport must allow inline scrolling without a page-level scrollbar. */
+[data-radix-scroll-area-viewport] {
+  overscroll-behavior: contain;
+}
+
+/* Sonner toasts inherit our surface tokens rather than their own defaults. */
+[data-sonner-toaster] {
+  --normal-bg: var(--bsdc-surface);
+  --normal-border: var(--bsdc-border);
+  --normal-text: var(--bsdc-text);
+  z-index: var(--z-toast) !important;
+}

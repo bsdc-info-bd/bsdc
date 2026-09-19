@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC — wordmark only, for contexts where the mark is already present. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" role="img" aria-label="BSDC">
+  <text x="0" y="34" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="34"
+        font-weight="800" fill="#1B4332" letter-spacing="-1">BSDC</text>
+</svg>

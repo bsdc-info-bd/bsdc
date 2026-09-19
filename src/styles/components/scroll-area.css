@@ -1,0 +1,50 @@
+/**
+ * BSDC — src/styles/components/scroll-area.css
+ * Purpose : Scroll container with contained overscroll and thin scrollbars (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : overscroll-behavior: contain stops the page from rubber-banding when a nested list
+ *           reaches its end, which is essential on Android WebView.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-scroll-area {
+  position: relative;
+  overflow: hidden;
+}
+
+.bsdc-scroll-area__viewport {
+  inline-size: 100%;
+  block-size: 100%;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.bsdc-scroll-area__scrollbar {
+  display: flex;
+  touch-action: none;
+  user-select: none;
+  padding: 2px;
+  background-color: transparent;
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-scroll-area__scrollbar[data-orientation="vertical"] {
+  inline-size: 10px;
+}
+
+.bsdc-scroll-area__scrollbar[data-orientation="horizontal"] {
+  flex-direction: column;
+  block-size: 10px;
+}
+
+.bsdc-scroll-area__thumb {
+  flex: 1;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-border);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .bsdc-scroll-area__scrollbar {
+    inline-size: 4px;
+  }
+}

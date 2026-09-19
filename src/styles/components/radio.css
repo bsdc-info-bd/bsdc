@@ -1,0 +1,48 @@
+/**
+ * BSDC — src/styles/components/radio.css
+ * Purpose : Radio group items and cards (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Radio cards (plan selection, post type picker) use data-variant='card' and expose the
+ *           whole row as the selectable target.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-radio {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  flex: none;
+  border: 2px solid var(--bsdc-border);
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface);
+}
+
+.bsdc-radio[data-state="checked"] {
+  border-color: var(--bsdc-green-500);
+}
+
+.bsdc-radio__indicator {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-green-500);
+}
+
+.bsdc-radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+  cursor: pointer;
+  min-width: 0;
+}
+
+.bsdc-radio-card[data-state="checked"] {
+  border-color: var(--bsdc-green-500);
+  background-color: color-mix(in srgb, var(--bsdc-green-500) 8%, var(--bsdc-surface));
+}

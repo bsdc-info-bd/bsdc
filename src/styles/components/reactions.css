@@ -1,0 +1,163 @@
+/**
+ * BSDC — src/styles/components/reactions.css
+ * Purpose : Reaction row, chooser and glyph tints.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Every reaction control is at least 44 by 44 CSS pixels (PART 08.04 R-07): this is the
+ *   most-tapped row in the product. The chooser is a wrapping row rather than a floating popper,
+ *   so it cannot be clipped on a 250px screen and needs no positioning library.
+ *   Glyph colour comes from a token, which means a reaction is legible in all nine themes and in
+ *   forced-colors mode, where colour is ignored and the shape carries the meaning.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-reaction-glyph {
+  display: block;
+  color: var(--bsdc-text);
+}
+
+.bsdc-reaction-glyph[data-tint="blue"] {
+  color: var(--bsdc-reaction-like);
+}
+.bsdc-reaction-glyph[data-tint="rose"] {
+  color: var(--bsdc-reaction-love);
+}
+.bsdc-reaction-glyph[data-tint="amber"] {
+  color: var(--bsdc-reaction-care);
+}
+.bsdc-reaction-glyph[data-tint="yellow"] {
+  color: var(--bsdc-reaction-haha);
+}
+.bsdc-reaction-glyph[data-tint="violet"] {
+  color: var(--bsdc-reaction-wow);
+}
+.bsdc-reaction-glyph[data-tint="slate"] {
+  color: var(--bsdc-reaction-sad);
+}
+.bsdc-reaction-glyph[data-tint="red"] {
+  color: var(--bsdc-reaction-angry);
+}
+.bsdc-reaction-glyph[data-tint="green"] {
+  color: var(--bsdc-reaction-clap);
+}
+.bsdc-reaction-glyph[data-tint="orange"] {
+  color: var(--bsdc-reaction-fire);
+}
+.bsdc-reaction-glyph[data-tint="cyan"] {
+  color: var(--bsdc-reaction-mindblown);
+}
+
+.bsdc-reaction-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+}
+
+.bsdc-reaction-bar__summary {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-reaction-bar__stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bsdc-reaction-bar__badge {
+  margin-inline-start: -6px;
+  border-radius: var(--radius-full);
+  background: var(--bsdc-surface);
+  box-shadow: 0 0 0 2px var(--bsdc-surface);
+}
+
+.bsdc-reaction-bar__badge:first-child {
+  margin-inline-start: 0;
+}
+
+.bsdc-reaction-bar__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.bsdc-reaction-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-reaction-bar__button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+  min-inline-size: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--bsdc-text-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.bsdc-reaction-bar__button:hover:not(:disabled) {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-reaction-bar__button.is-active {
+  color: var(--bsdc-green-600);
+}
+
+.bsdc-reaction-bar__button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bsdc-reaction-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-1);
+  inline-size: 100%;
+  margin-block-start: var(--bsdc-space-2);
+  padding: var(--bsdc-space-2);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-xl);
+  background: var(--bsdc-surface);
+  box-shadow: var(--shadow-3);
+}
+
+.bsdc-reaction-picker__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: var(--bsdc-tap-target);
+  min-block-size: var(--bsdc-tap-target);
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+  transition: transform 120ms ease;
+}
+
+.bsdc-reaction-picker__item:hover {
+  background: var(--bsdc-surface-2);
+  transform: scale(1.12);
+}
+
+.bsdc-reaction-picker__item.is-selected {
+  border-color: var(--bsdc-green-500);
+  background: var(--bsdc-green-50);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-reaction-picker__item {
+    transition: none;
+  }
+  .bsdc-reaction-picker__item:hover {
+    transform: none;
+  }
+}

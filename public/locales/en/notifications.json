@@ -1,0 +1,13 @@
+{
+  "title": "Notifications",
+  "subtitle": "What happened around your work.",
+  "unread": "Unread: {{count}}",
+  "markAllRead": "Mark all as read",
+  "markRead": "Mark read",
+  "open": "Open",
+  "read": "Read",
+  "loading": "Loading notifications",
+  "emptyTitle": "No notifications",
+  "emptyBody": "When somebody reacts or replies, it shows up here.",
+  "deviceOnly": "Showing the notifications stored on this device."
+}

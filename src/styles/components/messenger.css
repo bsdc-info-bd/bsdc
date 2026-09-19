@@ -1,0 +1,316 @@
+/**
+ * BSDC — src/styles/components/messenger.css
+ * Purpose : Messenger: conversation rail, thread, bubbles, composer and typing line.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : On a phone the rail and the thread are the same column: the thread replaces the rail and
+ *   a back control returns to it. From 900px both are visible side by side. The layout is one
+ *   component with two arrangements, so state is never lost on a rotation.
+ *   Bubbles cap at 76% of the column so a long Bangla paragraph stays readable and the sender's
+ *   side stays distinguishable without relying on colour alone.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-messenger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bsdc-space-4);
+  min-inline-size: 0;
+}
+
+.bsdc-messenger[data-has-thread="true"] > .bsdc-messenger__rail {
+  display: none;
+}
+
+.bsdc-messenger[data-has-thread="false"] > .bsdc-messenger__thread {
+  display: none;
+}
+
+.bsdc-messenger__rail,
+.bsdc-messenger__thread {
+  min-inline-size: 0;
+}
+
+@media (min-width: 900px) {
+  .bsdc-messenger {
+    grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  }
+  .bsdc-messenger[data-has-thread="true"] > .bsdc-messenger__rail {
+    display: block;
+  }
+  .bsdc-messenger[data-has-thread="false"] > .bsdc-messenger__thread {
+    display: block;
+  }
+  .bsdc-messenger__back {
+    display: none;
+  }
+}
+
+.bsdc-conversations__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-conversations__item {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  inline-size: 100%;
+  min-block-size: var(--bsdc-tap-target);
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.bsdc-conversations__item:hover {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-conversations__item.is-active {
+  background: var(--bsdc-green-50);
+  border-color: var(--bsdc-green-200);
+}
+
+.bsdc-conversations__text {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bsdc-conversations__title {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text);
+  overflow-wrap: anywhere;
+}
+
+.bsdc-conversations__preview {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bsdc-conversations__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--bsdc-space-1);
+  font-size: var(--fs-2xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-conversations__loading {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--bsdc-space-6);
+}
+
+.bsdc-chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  min-inline-size: 0;
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-xl);
+  background: var(--bsdc-surface);
+  overflow: hidden;
+}
+
+.bsdc-chat__head {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-3);
+  border-block-end: 1px solid var(--bsdc-border);
+}
+
+.bsdc-chat__identity {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.bsdc-chat__title {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-chat__status {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-chat__offline {
+  margin: 0;
+  padding-inline: var(--bsdc-space-3);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-chat__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-3);
+  max-block-size: 60vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bsdc-chat__messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-bubble {
+  display: flex;
+  gap: var(--bsdc-space-2);
+  max-inline-size: 76%;
+  align-self: flex-start;
+}
+
+.bsdc-bubble.is-own {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.bsdc-bubble__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+  min-inline-size: 0;
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border-radius: var(--radius-bubble-chat);
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-bubble.is-own .bsdc-bubble__body {
+  background: var(--bsdc-green-100);
+}
+
+.bsdc-bubble__sender {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-bubble__text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bsdc-bubble__image {
+  max-inline-size: 100%;
+  block-size: auto;
+  border-radius: var(--radius-md);
+}
+
+.bsdc-bubble__voice audio {
+  max-inline-size: 100%;
+}
+
+.bsdc-bubble__document {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+  color: var(--bsdc-text);
+  overflow-wrap: anywhere;
+}
+
+.bsdc-bubble__meta {
+  display: flex;
+  gap: var(--bsdc-space-2);
+  font-size: var(--fs-2xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-typing {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding-inline: var(--bsdc-space-3);
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-typing__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.bsdc-typing__dots > span {
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: var(--radius-full);
+  background: var(--bsdc-text-3);
+  animation: bsdc-typing-pulse 1.2s infinite ease-in-out;
+}
+
+.bsdc-typing__dots > span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.bsdc-typing__dots > span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes bsdc-typing-pulse {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-typing__dots > span {
+    animation: none;
+    opacity: 0.6;
+  }
+}
+
+.bsdc-chat__composer {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-3);
+  border-block-start: 1px solid var(--bsdc-border);
+}
+
+.bsdc-chat__composer .bsdc-input {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.bsdc-chat__footer {
+  padding: 0 var(--bsdc-space-3) var(--bsdc-space-3);
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}

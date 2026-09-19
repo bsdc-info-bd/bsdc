@@ -1,0 +1,46 @@
+// BSDC — storage.rules
+// Purpose : Cloud Storage security rules.
+// Owner   : RRC Development / BSDC Platform Team
+// Notes   : LAW-05 — Firebase Storage is NOT the media store for user content. Durable images
+//           live in Cloudinary and bulk non-critical images in ImgBB. The single exception is
+//           KYC documentation, which must be readable only by staff and is never public.
+//           Everything outside /kyc is unconditionally denied, so a client bug cannot turn
+//           Firebase Storage into a general-purpose file host.
+// Licence : Source-available. Re-deployment or rebranding is not permitted.
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function signedIn() { return request.auth != null; }
+    function claimValue(key, fallback) { return request.auth.token.get(key, fallback); }
+    function role() { return claimValue('role', 'member'); }
+    function isRoot() { return claimValue('root', false) == true; }
+    function isAdmin() { return isRoot() || role() == 'admin'; }
+    function isModerator() { return isAdmin() || role() == 'moderator'; }
+    function isStaff() { return isModerator() || role() == 'support'; }
+    function isSuspended() { return claimValue('suspended', false) == true; }
+
+    // KYC documentation: owner may upload, staff may review, nobody else may read.
+    match /kyc/{uid}/{fileName} {
+      allow read: if signedIn() && isStaff() && !isSuspended();
+      allow write: if signedIn()
+                   && !isSuspended()
+                   && request.auth.uid == uid
+                   && request.resource != null
+                   && request.resource.size <= 10 * 1024 * 1024
+                   && request.resource.contentType.matches('image/png|image/jpeg|image/webp|application/pdf');
+      allow delete: if signedIn() && isAdmin();
+    }
+
+    // Signed licence seals and report artefacts are written by Admin SDK only.
+    match /system/{allPaths=**} {
+      allow read: if signedIn() && isStaff();
+      allow write: if false;
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

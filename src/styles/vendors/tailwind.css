@@ -1,0 +1,21 @@
+/**
+ * BSDC — src/styles/vendors/tailwind.css
+ * Purpose : Tailwind entry point. Preflight is disabled in tailwind.config.ts because
+ *           src/styles/layers/reset.css owns element defaults (ADR-008).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Order matters: this file is imported FIRST in src/styles/index.css so utilities win
+ *           over component CSS in the cascade while component CSS stays readable.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Third-party token bridging: Tailwind utilities reference CSS variables, and this layer makes
+   sure any library that reads plain CSS variables (Radix, Sonner, Framer Motion) sees ours. */
+@layer base {
+  :root {
+    --tw-bg-opacity: 1;
+  }
+}

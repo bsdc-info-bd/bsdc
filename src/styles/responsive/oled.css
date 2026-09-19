@@ -1,0 +1,30 @@
+/**
+ * BSDC — src/styles/responsive/oled.css
+ * Purpose : OLED pure-black refinements (PART 08.01 theme 3).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Surfaces become true black, media is dimmed further, and glow effects are removed so
+ *           no pixel is lit unnecessarily — battery savings on OLED panels.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+:root[data-theme="oled"] {
+  --bsdc-focus: var(--bsdc-green-300);
+}
+
+:root[data-theme="oled"] .bsdc-card,
+:root[data-theme="oled"] .bsdc-top-bar {
+  box-shadow: none;
+}
+
+:root[data-theme="oled"] .bsdc-button[data-tone="strong"] {
+  box-shadow: none;
+}
+
+:root[data-theme="oled"] .bsdc-skeleton {
+  background-color: #0b0f16;
+  background-image: linear-gradient(90deg, #0b0f16 0%, #121821 50%, #0b0f16 100%);
+}
+
+:root[data-theme="oled"] img:not([data-no-dim="true"]) {
+  filter: brightness(calc(1 - var(--bsdc-media-dim)));
+}

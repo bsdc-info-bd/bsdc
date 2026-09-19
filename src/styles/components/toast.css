@@ -1,0 +1,70 @@
+/**
+ * BSDC — src/styles/components/toast.css
+ * Purpose : Toast content styling for the Sonner host (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Toasts never cover the primary action on small screens (PART 08.04 R-17): below
+ *           768px they dock above the bottom navigation bar.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bsdc-space-3);
+  inline-size: 100%;
+  padding: var(--bsdc-space-3);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  box-shadow: var(--shadow-4);
+  color: var(--bsdc-text);
+}
+
+.bsdc-toast__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, var(--bsdc-green-500) 16%, transparent);
+  color: var(--bsdc-green-600);
+}
+
+.bsdc-toast[data-tone="success"] .bsdc-toast__icon {
+  background-color: color-mix(in srgb, var(--bsdc-success) 16%, transparent);
+  color: var(--bsdc-success);
+}
+.bsdc-toast[data-tone="error"] .bsdc-toast__icon {
+  background-color: color-mix(in srgb, var(--bsdc-danger) 14%, transparent);
+  color: var(--bsdc-danger);
+}
+.bsdc-toast[data-tone="warning"] .bsdc-toast__icon {
+  background-color: color-mix(in srgb, var(--bsdc-warning) 18%, transparent);
+  color: color-mix(in srgb, var(--bsdc-warning) 70%, var(--bsdc-text));
+}
+
+.bsdc-toast__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.bsdc-toast__title {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+
+.bsdc-toast__description {
+  margin-block-start: 2px;
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-2);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  [data-sonner-toaster][data-y-position="bottom"] {
+    bottom: calc(
+      var(--bsdc-bottom-nav-height) + var(--bsdc-safe-bottom) + var(--bsdc-space-2)
+    ) !important;
+  }
+}

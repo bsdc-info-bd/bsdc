@@ -1,0 +1,74 @@
+/**
+ * BSDC — src/styles/components/progress.css
+ * Purpose : Linear progress, circular progress ring and indeterminate state (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The ring uses stroke-dasharray maths computed in the component; this file owns only
+ *           geometry, colour tokens and the reduced-motion fallback.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-progress {
+  position: relative;
+  inline-size: 100%;
+  block-size: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface-3);
+  overflow: hidden;
+}
+
+.bsdc-progress__indicator {
+  block-size: 100%;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-green-500);
+  transition: transform var(--motion-base) var(--ease-standard);
+  transform-origin: left center;
+}
+
+.bsdc-progress[data-tone="warning"] .bsdc-progress__indicator {
+  background-color: var(--bsdc-warning);
+}
+.bsdc-progress[data-tone="danger"] .bsdc-progress__indicator {
+  background-color: var(--bsdc-danger);
+}
+
+.bsdc-progress[data-indeterminate="true"] .bsdc-progress__indicator {
+  inline-size: 40%;
+  animation: bsdc-progress-slide 1.2s var(--ease-standard) infinite;
+}
+
+@keyframes bsdc-progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+.bsdc-progress-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  inline-size: 64px;
+  block-size: 64px;
+}
+
+.bsdc-progress-ring__track,
+.bsdc-progress-ring__value {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.bsdc-progress-ring__label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-progress[data-indeterminate="true"] .bsdc-progress__indicator {
+    animation: none;
+    inline-size: 100%;
+  }
+}

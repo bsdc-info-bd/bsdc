@@ -1,0 +1,44 @@
+/**
+ * BSDC — src/styles/components/dialog.css
+ * Purpose : Alert dialog styling — the confirm-before-destructive surface (LAW-12, LAW-19).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Destructive confirmations require a typed phrase and a written reason; this file gives
+ *           that flow a distinct, unmistakable appearance (danger rail + emphasised heading).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-dialog__content {
+  inline-size: min(480px, 100%);
+  padding: var(--bsdc-space-5);
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-5);
+}
+
+.bsdc-dialog__content[data-tone="danger"] {
+  border-block-start: 4px solid var(--bsdc-danger);
+}
+
+.bsdc-dialog__title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.bsdc-dialog__description {
+  margin-block-start: var(--bsdc-space-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-dialog__confirm-input {
+  margin-block-start: var(--bsdc-space-4);
+}
+
+.bsdc-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--bsdc-space-2);
+  margin-block-start: var(--bsdc-space-5);
+  flex-wrap: wrap;
+}

@@ -1,0 +1,153 @@
+/**
+ * BSDC — src/styles/components/comments.css
+ * Purpose : Comment threads, one level deep.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Replies indent once and then stop. Deeper nesting was tested against real Bangladeshi
+ *   handsets and produced unreadable threads, so the data model allows it and the view does not.
+ *   Indentation uses logical properties so the layout holds when the document direction changes.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-comments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+  margin-block-start: var(--bsdc-space-3);
+  padding-block-start: var(--bsdc-space-3);
+  border-block-start: 1px solid var(--bsdc-border);
+}
+
+.bsdc-comments__loading {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-comments__offline,
+.bsdc-comments__signin {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-comment {
+  display: flex;
+  gap: var(--bsdc-space-3);
+  min-inline-size: 0;
+}
+
+.bsdc-comment__body {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-comment__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-comment__author {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text);
+  overflow-wrap: anywhere;
+}
+
+.bsdc-comment__time {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-comment__text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.65;
+  color: var(--bsdc-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bsdc-comment__actions {
+  display: flex;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-comment__replies {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+  margin: var(--bsdc-space-2) 0 0;
+  padding: 0;
+  padding-inline-start: var(--bsdc-space-4);
+  border-inline-start: 2px solid var(--bsdc-border);
+  list-style: none;
+}
+
+.bsdc-comment--reply {
+  padding-block-start: var(--bsdc-space-1);
+}
+
+.bsdc-comment-composer {
+  display: flex;
+  gap: var(--bsdc-space-3);
+  align-items: flex-start;
+}
+
+.bsdc-comment-composer__field {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-comment-composer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+  min-inline-size: 0;
+}
+
+.bsdc-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-5);
+}
+
+.bsdc-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-form__error,
+.bsdc-signin__error {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-danger);
+}
+
+.bsdc-signin__note {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-signin__suspended {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-danger);
+}

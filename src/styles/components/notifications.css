@@ -1,0 +1,110 @@
+/**
+ * BSDC — src/styles/components/notifications.css
+ * Purpose : The notification centre.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Unread rows carry a start-edge marker, not only a tint, so the distinction survives
+ *   high-contrast, monochrome and forced-colors themes where colour cannot be relied on.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-notifications {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-notifications__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-notifications__loading {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--bsdc-space-8);
+}
+
+.bsdc-notifications__offline {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-notifications__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-notification {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border);
+  border-inline-start: 3px solid var(--bsdc-green-500);
+  border-radius: var(--radius-lg);
+  background: var(--bsdc-surface);
+}
+
+.bsdc-notification.is-read {
+  border-inline-start-color: transparent;
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-notification__body {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-notification__text {
+  margin: 0;
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-notification__time {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-notification__actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-notification__icon {
+  display: inline-flex;
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-notification__link {
+  min-block-size: var(--bsdc-tap-target);
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--bsdc-space-2);
+  border-radius: var(--radius-md);
+  background: none;
+  border: 0;
+  color: var(--bsdc-green-600);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bsdc-notification__link:disabled {
+  color: var(--bsdc-text-3);
+  cursor: default;
+}

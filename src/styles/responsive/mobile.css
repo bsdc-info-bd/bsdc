@@ -1,0 +1,70 @@
+/**
+ * BSDC — src/styles/responsive/mobile.css
+ * Purpose : 360px to 767px — the default phone experience (PART 08.05 "feels like a mobile app").
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : R-04 bottom navigation. R-19 dialogs become bottom sheets. R-13 no horizontal scroll.
+ *           Content is single-column and the composer is reachable from a sticky FAB.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 360px) and (max-width: 767.98px) {
+  .bsdc-container {
+    padding-inline: var(--bsdc-space-3);
+  }
+
+  .bsdc-app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .bsdc-rail-nav,
+  .bsdc-right-rail {
+    display: none;
+  }
+
+  .bsdc-bottom-nav {
+    display: flex;
+  }
+
+  /* Full-bleed media is allowed on phones; text keeps its gutters. */
+  .bsdc-feed {
+    max-inline-size: 100%;
+  }
+
+  .bsdc-card[data-variant="interactive"]:hover {
+    transform: none;
+    box-shadow: var(--shadow-2);
+  }
+
+  /* Tables become card lists (R-20). */
+  .bsdc-table-wrap {
+    display: none;
+  }
+
+  .bsdc-table-card-list {
+    display: flex;
+  }
+
+  .bsdc-sheet__content[data-side="right"],
+  .bsdc-sheet__content[data-side="left"] {
+    inline-size: min(420px, 92vw);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .bsdc-table-card-list {
+    display: flex;
+  }
+
+  .bsdc-table-wrap {
+    display: none;
+  }
+
+  .bsdc-bottom-nav {
+    display: flex;
+  }
+
+  .bsdc-rail-nav,
+  .bsdc-right-rail {
+    display: none;
+  }
+}

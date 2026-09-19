@@ -1,0 +1,35 @@
+{
+  "title": "Feed",
+  "subtitle": "What the community is writing — newest first.",
+  "sortLabel": "Feed ordering",
+  "sort": {
+    "latest": "Latest",
+    "trending": "Trending"
+  },
+  "streamLabel": "Post stream",
+  "deviceOnly": "Showing the posts stored on this device. New posts arrive when the connection returns.",
+  "retry": "Try again",
+  "endOfFeed": "That is everything for now.",
+  "refreshing": "Looking for new posts",
+  "emptyTitle": "The feed is empty",
+  "emptyBody": "Write the first post. Yours appears the moment you publish it.",
+  "visibility": {
+    "public": "Public",
+    "followers": "Followers",
+    "group": "Group",
+    "private": "Private"
+  },
+  "comments": "Comments",
+  "share": "Share",
+  "save": "Save",
+  "saved": "Saved",
+  "unsave": "Remove",
+  "copyLink": "Copy link",
+  "delete": "Delete",
+  "report": "Report",
+  "moreActions": "More actions",
+  "verified": "Verified",
+  "edited": "Edited",
+  "linkCopied": "Link copied",
+  "openDocument": "Open document"
+}

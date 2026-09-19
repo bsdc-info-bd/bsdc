@@ -1,0 +1,72 @@
+/**
+ * BSDC — src/styles/components/tabs.css
+ * Purpose : Tab list, trigger and panel styling for feed tabs and settings (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The tab rail scrolls horizontally when it overflows; it never wraps and never widens
+ *           the page (PART 08.04 R-01). The active indicator is a bar plus weight, not colour only.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-tabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.bsdc-tabs__list {
+  display: flex;
+  gap: var(--bsdc-space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-tabs__list::-webkit-scrollbar {
+  display: none;
+}
+
+.bsdc-tabs__trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text-3);
+  white-space: nowrap;
+  flex: none;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-tabs__trigger[data-state="active"] {
+  color: var(--bsdc-green-600);
+  font-weight: 700;
+}
+
+:root[data-theme="dark"] .bsdc-tabs__trigger[data-state="active"],
+:root[data-theme="oled"] .bsdc-tabs__trigger[data-state="active"],
+:root[data-theme="green-dark"] .bsdc-tabs__trigger[data-state="active"] {
+  color: var(--bsdc-green-300);
+}
+
+.bsdc-tabs__trigger[data-state="active"]::after {
+  content: "";
+  position: absolute;
+  inset-block-end: -1px;
+  inset-inline: var(--bsdc-space-2);
+  block-size: 3px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}
+
+.bsdc-tabs__panel {
+  padding-block: var(--bsdc-space-4);
+  min-width: 0;
+}
+
+.bsdc-tabs__panel:focus-visible {
+  outline: 2px solid var(--bsdc-focus);
+  outline-offset: 2px;
+}

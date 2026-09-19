@@ -1,0 +1,72 @@
+{
+  "heading": "{name}",
+  "missing": {
+    "title": "This profile could not be found",
+    "description": "There is no member called {username}. The handle may have changed."
+  },
+  "private": {
+    "title": "This profile is private",
+    "description": "The member keeps this profile to themselves. Send a follow request and they will see it."
+  },
+  "tabs": {
+    "label": "Profile sections",
+    "posts": "Posts",
+    "about": "About"
+  },
+  "about": {
+    "empty": "No introduction has been written yet."
+  },
+  "followers": "Followers",
+  "following": "Following",
+  "follow": "Follow",
+  "unfollow": "Unfollow",
+  "pending": "Request sent",
+  "editProfile": "Edit profile",
+  "verified": "Verified",
+  "points": "Points",
+  "streak": "Streak",
+  "role": {
+    "guest": "Guest",
+    "member": "Member",
+    "creator": "Creator",
+    "vendor": "Vendor",
+    "mentor": "Mentor",
+    "support": "Support",
+    "moderator": "Moderator",
+    "admin": "Admin",
+    "root": "Root admin"
+  },
+  "field": {
+    "name": "Name",
+    "nameBn": "Name in Bangla",
+    "nameError": "A name needs at least two characters.",
+    "headline": "Headline",
+    "bio": "About you",
+    "skills": "Skills",
+    "skillsHint": "Separate with commas. Up to twenty.",
+    "district": "District",
+    "region": "Division",
+    "website": "Website"
+  },
+  "save": "Save",
+  "cancel": "Cancel",
+  "saved": {
+    "bn": "Profile saved",
+    "en": "Profile saved"
+  },
+  "saveFailed": {
+    "bn": "The profile could not be saved. Please try again.",
+    "en": "The profile could not be saved. Please try again."
+  },
+  "followFailed": {
+    "bn": "The follow could not be changed. Please try again.",
+    "en": "The follow could not be changed. Please try again."
+  },
+  "emptyTitle": "No posts yet",
+  "emptyBody": "The first post will be this member's.",
+  "viewer": {
+    "altFallback": "Profile photo"
+  },
+  "level": "Level {level}",
+  "levelProgress": "{points} points to the next level"
+}

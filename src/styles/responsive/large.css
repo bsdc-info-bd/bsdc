@@ -1,0 +1,30 @@
+/**
+ * BSDC — src/styles/responsive/large.css
+ * Purpose : 1680px to 2559px — the three-column shell with a wider feed and chat dock.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : R-13: rail + main + right rail + chat dock coexist with no horizontal scroll. The
+ *           chat dock is collapsed by default and expands without pushing content off-screen.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 1680px) and (max-width: 2559.98px) {
+  .bsdc-app-shell {
+    grid-template-columns: 264px minmax(0, 1fr) 360px;
+    gap: var(--bsdc-space-6);
+    max-inline-size: 1920px;
+    margin-inline: auto;
+  }
+
+  :root {
+    --bsdc-rail-width: 264px;
+    --bsdc-right-rail-width: 360px;
+  }
+
+  .bsdc-feed {
+    max-inline-size: 720px;
+  }
+
+  .bsdc-chat-dock {
+    display: flex;
+  }
+}

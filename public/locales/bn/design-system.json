@@ -1,0 +1,29 @@
+{
+  "title": "ডিজাইন সিস্টেম",
+  "subtitle": "প্ল্যাটফর্ম গড়ার প্রতিটি টোকেন, থিম ও প্রিমিটিভ। এই পাতাটিই চুক্তি।",
+  "tokensTitle": "ডিজাইন টোকেন",
+  "colorsTitle": "রং",
+  "typographyTitle": "টাইপোগ্রাফি",
+  "spacingTitle": "ফাঁকা স্থান",
+  "radiiTitle": "কোণ",
+  "elevationTitle": "উচ্চতা",
+  "motionTitle": "মোশন",
+  "zIndexTitle": "স্তর",
+  "themesTitle": "থিম",
+  "primitivesTitle": "প্রিমিটিভ",
+  "contrastTitle": "কনট্রাস্ট যাচাই",
+  "breakpointsTitle": "রেসপনসিভ চুক্তি",
+  "currentBreakpoint": "বর্তমান ব্রেকপয়েন্ট",
+  "viewportWidth": "ভিউপোর্ট প্রস্থ",
+  "navigationModel": "নেভিগেশন মডেল",
+  "flagsTitle": "ফিচার ফ্ল্যাগ",
+  "contrast": {
+    "foreground": "সামনে",
+    "background": "পেছনে",
+    "ratio": "অনুপাত",
+    "level": "WCAG স্তর"
+  },
+  "scaleSampleEn": "The quick brown fox jumps over the lazy dog",
+  "scaleSampleBn": "আমরা বাংলায় কাজ করি এবং বাংলাতেই ভাবি",
+  "primitiveHint": "প্রতিটি প্রিমিটিভ ইন্টারঅ্যাকটিভ। কীবোর্ড ফোকাস, টাচ টার্গেট ও ডার্ক থিম—সব আগে এখানেই পরীক্ষা করা হয়।"
+}

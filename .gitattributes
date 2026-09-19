@@ -1,0 +1,25 @@
+# BSDC — .gitattributes
+# Purpose: Deterministic diffs and explicit binary classification (PNGs/SVGs are never diffed as text).
+# Owner  : RRC Development / BSDC Platform Team
+* text=auto eol=lf
+
+*.ts   text diff=typescript
+*.tsx  text diff=typescript
+*.js   text
+*.mjs  text
+*.css  text
+*.json text
+*.md   text diff=markdown
+*.svg  text
+*.html text
+*.yml  text
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.avif binary
+*.ico binary
+*.woff2 binary
+*.pdf binary
+*.keystore binary

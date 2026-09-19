@@ -1,0 +1,181 @@
+/**
+ * BSDC — src/styles/layers/base.css
+ * Purpose : Element defaults for the BSDC shell: canvas, focus behaviour, skip link, scrollbars
+ *           and the language-aware line-height rule (PART 08.02, 08.04).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Bangla text runs at line-height 1.8 for matra clearance; English at 1.55. This is
+ *           declared once here and inherited by every component (PART 08.02).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+html {
+  font-family: var(--bsdc-font-ui);
+  font-size: calc(100% * var(--bsdc-font-scale));
+  line-height: var(--lh-en);
+  background-color: var(--bsdc-bg);
+  color: var(--bsdc-text);
+  overflow-x: hidden;
+}
+
+body {
+  font-size: var(--fs-base);
+  line-height: var(--lh-en);
+  background-color: var(--bsdc-bg);
+  color: var(--bsdc-text);
+  overscroll-behavior-y: none;
+}
+
+/* Bangla and Bangla-dominant subtrees get matra clearance. */
+:lang(bn),
+[lang="bn"] {
+  font-family: var(--bsdc-font-bn);
+  line-height: var(--lh-bn);
+}
+
+:lang(en),
+[lang="en"] {
+  line-height: var(--lh-en);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: var(--fs-3xl);
+}
+h2 {
+  font-size: var(--fs-2xl);
+}
+h3 {
+  font-size: var(--fs-xl);
+}
+h4 {
+  font-size: var(--fs-lg);
+}
+h5 {
+  font-size: var(--fs-md);
+}
+h6 {
+  font-size: var(--fs-base);
+}
+
+:lang(bn) h1,
+:lang(bn) h2,
+:lang(bn) h3 {
+  line-height: 1.45;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--bsdc-font-code);
+  font-size: 0.95em;
+  line-height: var(--lh-code);
+}
+
+/* Focus: visible, high-contrast, never removed (PART 04 LAW-14). */
+:focus-visible {
+  outline: 2px solid var(--bsdc-focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+::selection {
+  background-color: var(--bsdc-green-200);
+  color: var(--bsdc-green-900);
+}
+
+:root[data-theme="dark"] ::selection,
+:root[data-theme="oled"] ::selection,
+:root[data-theme="green-dark"] ::selection {
+  background-color: var(--bsdc-green-700);
+  color: var(--bsdc-green-50);
+}
+
+/* Scrollbars: thin, token-driven, and hidden when the surface is not scrollable. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bsdc-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--bsdc-border);
+  border-radius: var(--radius-full);
+  border: 3px solid var(--bsdc-bg);
+}
+
+/* Skip link: keyboard users reach the main content in one press. */
+.bsdc-skip-link {
+  position: fixed;
+  inset-block-start: var(--bsdc-space-2);
+  inset-inline-start: var(--bsdc-space-2);
+  z-index: var(--z-critical-banner);
+  padding: var(--bsdc-space-2) var(--bsdc-space-4);
+  border-radius: var(--radius-sm);
+  background-color: var(--bsdc-green-600);
+  color: #ffffff;
+  font-weight: 600;
+  transform: translateY(-200%);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* Screen-reader-only text that remains selectable for assistive technology. */
+.bsdc-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The app root: an app shell that never scrolls horizontally. */
+#root {
+  isolation: isolate;
+  min-height: 100dvh;
+}
+
+main {
+  display: block;
+}
+
+/* Long unbroken strings (URLs, code, Bengali compounds) must never widen the page. */
+.bsdc-break-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Media dimming in dark themes keeps bright photography comfortable at night. */
+.bsdc-media {
+  filter: brightness(calc(1 - var(--bsdc-media-dim)));
+}

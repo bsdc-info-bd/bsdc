@@ -1,0 +1,72 @@
+{
+  "heading": "{name}",
+  "missing": {
+    "title": "এই প্রোফাইল পাওয়া যায়নি",
+    "description": "{username} নামে কোনো সদস্য নেই। হ্যান্ডেলটি পরিবর্তন করা হতে পারে।"
+  },
+  "private": {
+    "title": "এই প্রোফাইল ব্যকিগত",
+    "description": "সদস্য তাঁর প্রোফাইল শুধু নিজের জন্য রেখেছেন। অনুরোধ পাঠালে তিনি দেখতে পাবেন।"
+  },
+  "tabs": {
+    "label": "প্রোফাইলের অংশ",
+    "posts": "পোস্ট",
+    "about": "পরিচয়"
+  },
+  "about": {
+    "empty": "এখনো পরিচিতি লেখা হয়নি।"
+  },
+  "followers": "অনুসরণকারী",
+  "following": "অনুসরণ করছেন",
+  "follow": "অনুসরণ করুন",
+  "unfollow": "অনুসরণ বন্ধ",
+  "pending": "অনুরোধ পাঠানো হয়েছে",
+  "editProfile": "প্রোফাইল সম্পাদনা",
+  "verified": "যাচাইকৃত",
+  "points": "পয়েন্ট",
+  "streak": "ধারা",
+  "role": {
+    "guest": "অতিথি",
+    "member": "সদস্য",
+    "creator": "নির্মাতা",
+    "vendor": "বিক্রেতা",
+    "mentor": "পরামর্শদাতা",
+    "support": "সহায়তা",
+    "moderator": "মডারেটর",
+    "admin": "প্রশাসক",
+    "root": "মূল প্রশাসক"
+  },
+  "field": {
+    "name": "নাম",
+    "nameBn": "নাম (বাংলা)",
+    "nameError": "নাম অন্তত দুই অক্ষরের হতে হবে।",
+    "headline": "পরিচিতি লাইন",
+    "bio": "নিজের কথা",
+    "skills": "দক্ষতা",
+    "skillsHint": "কমা দিয়ে আলাদা করুন। সর্বোচ্চ ২০টি।",
+    "district": "জেলা",
+    "region": "বিভাগ",
+    "website": "ওয়েবসাইট"
+  },
+  "save": "সংরক্ষণ করুন",
+  "cancel": "বাতিল",
+  "saved": {
+    "bn": "প্রোফাইল সংরক্ষিত",
+    "en": "Profile saved"
+  },
+  "saveFailed": {
+    "bn": "প্রোফাইল সংরক্ষণ করা যায়নি। আবার চেষ্টা করুন।",
+    "en": "The profile could not be saved. Please try again."
+  },
+  "followFailed": {
+    "bn": "অনুসরণ পরিবর্তন করা যায়নি। আবার চেষ্টা করুন।",
+    "en": "The follow could not be changed. Please try again."
+  },
+  "emptyTitle": "এখনো কোনো পোস্ট নেই",
+  "emptyBody": "প্রথম পোস্টটি এই সদস্যের হবে।",
+  "viewer": {
+    "altFallback": "প্রোফাইল ছবি"
+  },
+  "level": "লেভেল {level}",
+  "levelProgress": "পরের লেভেলে আরও {points} পয়েন্ট"
+}

@@ -1,0 +1,72 @@
+/**
+ * BSDC — src/styles/responsive/mobile-250.css
+ * Purpose : The 250px contract — the primary design target, not an afterthought (PART 08.04).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Verified by the CI matrix (PART 24.3): zero horizontal overflow, zero clipped Bangla,
+ *           no element may assume more than 250px of usable width at this breakpoint.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (max-width: 319.98px) {
+  :root {
+    --bsdc-space-unit: 3px;
+    --bsdc-header-height: 48px;
+    --bsdc-bottom-nav-height: 52px;
+    --radius-lg: 12px;
+    --radius-xl: 14px;
+    --radius-2xl: 18px;
+  }
+
+  /* Content gutters shrink to 8px; nothing may rely on a 16px safe margin. */
+  .bsdc-container {
+    padding-inline: 8px;
+  }
+
+  .bsdc-top-bar {
+    gap: 4px;
+    padding-inline: 6px;
+  }
+
+  .bsdc-top-bar__brand-text {
+    display: none;
+  }
+
+  .bsdc-bottom-nav__item {
+    font-size: 9px;
+    gap: 0;
+  }
+
+  .bsdc-bottom-nav__label {
+    display: none;
+  }
+
+  /* Two-column grids collapse to one; card paddings tighten. */
+  .bsdc-grid-auto {
+    grid-template-columns: 1fr !important;
+  }
+
+  .bsdc-card__body,
+  .bsdc-card__header,
+  .bsdc-card__footer {
+    padding: var(--bsdc-space-3);
+  }
+
+  .bsdc-button[data-size="md"] {
+    padding-inline: var(--bsdc-space-3);
+  }
+
+  /* Long words (URLs, Bengali compounds, code) must wrap rather than overflow. */
+  .bsdc-feed,
+  .bsdc-card,
+  .bsdc-chip {
+    overflow-wrap: anywhere;
+  }
+
+  .bsdc-modal__content {
+    border-radius: var(--radius-md);
+  }
+
+  .bsdc-avatar[data-size="2xl"] {
+    --bsdc-avatar-size: 96px;
+  }
+}

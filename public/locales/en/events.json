@@ -1,0 +1,123 @@
+{
+  "title": "Events",
+  "subtitle": "Meetups, workshops and hackathons, wherever they happen.",
+  "open": "Registrations open",
+  "closed": "Registrations closed",
+  "online": "Online",
+  "remoteAnywhere": "From anywhere",
+  "closesIn": "{count} days left",
+  "closesToday": "Closes today",
+  "noDeadline": "No closing date",
+  "rsvpCount": "{count} going",
+  "seatsLeft": "{count} seats left",
+  "tabs": {
+    "label": "Event lists",
+    "upcoming": "Upcoming",
+    "mine": "My events",
+    "mineEmpty": "You have not said you are going to anything yet."
+  },
+  "host": {
+    "start": "Host an event",
+    "cancel": "Close the form"
+  },
+  "list": {
+    "all": "All",
+    "label": "Event list",
+    "filterLabel": "Filter by type",
+    "empty": {
+      "title": "No events yet",
+      "description": "You could host the first one."
+    }
+  },
+  "phase": {
+    "upcoming": "Upcoming",
+    "live": "Live now",
+    "ended": "Ended",
+    "cancelled": "Cancelled"
+  },
+  "form": {
+    "title": "Event name",
+    "titleBn": "Event name in Bangla",
+    "description": "Description",
+    "mode": "How it happens",
+    "onlineUrl": "Online link",
+    "startsAt": "Starts",
+    "endsAt": "Ends",
+    "capacity": "Seats",
+    "capacityHint": "Zero means there is no seat limit.",
+    "tags": "Tags",
+    "tagsHint": "Separate with commas. Up to eight.",
+    "cancel": "Cancel",
+    "publish": "Publish"
+  },
+  "venue": {
+    "labelLabel": "Venue name",
+    "addressLabel": "Street address",
+    "areaLabel": "Area",
+    "divisionLabel": "Division",
+    "searchLabel": "Find the venue on the map",
+    "search": "Search the map",
+    "searchHint": "If the search finds nothing, type the venue name yourself.",
+    "notPicked": "No place has been chosen yet. Tap the map to set one.",
+    "picked": "The place is set.",
+    "mapUnavailable": "The map cannot load right now. You can carry on with the venue name alone.",
+    "searchExample": "For example: Shahjalal University of Science and Technology"
+  },
+  "rsvp": {
+    "label": "Your answer",
+    "closed": "The time for registering has passed.",
+    "full": "Every seat is taken. You can join the waiting list.",
+    "waitlist": "You are on the waiting list. You will be told if a seat opens.",
+    "unlimited": "There is no seat limit.",
+    "answered": "Your answer is saved.",
+    "failed": {
+      "bn": "Your answer could not be saved.",
+      "en": "Your answer could not be saved."
+    },
+    "seatsLeft": "{count} seats left"
+  },
+  "detail": {
+    "starts": "Starts",
+    "ends": "Ends",
+    "timezone": "Time zone",
+    "going": "Going",
+    "seats": "Seats free",
+    "venue": "Venue",
+    "venueLabel": "Where the event happens",
+    "mapAlt": "Map of {place}",
+    "joinOnline": "Join online",
+    "liveCount": "{count} people say they are here right now.",
+    "back": "Back to all events",
+    "missing": {
+      "title": "This event could not be found",
+      "description": "It may have been withdrawn or cancelled."
+    }
+  },
+  "saved": {
+    "bn": "Event published",
+    "en": "Event published"
+  },
+  "error": {
+    "default": {
+      "bn": "The event could not be saved.",
+      "en": "The event could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "The event is missing something required.",
+      "en": "The event is missing something required."
+    },
+    "BSDC-EVT-001": {
+      "bn": "The event has to end after it starts.",
+      "en": "The event has to end after it starts."
+    },
+    "BSDC-EVT-003": {
+      "bn": "Say how people get in: the place, or the link, whichever this event needs.",
+      "en": "Say how people get in: the place, or the link, whichever this event needs."
+    },
+    "BSDC-NET-005": {
+      "bn": "The event could not be sent while offline.",
+      "en": "The event could not be sent while offline."
+    }
+  },
+  "full": "Full"
+}

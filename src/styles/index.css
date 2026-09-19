@@ -1,0 +1,85 @@
+/**
+ * BSDC — src/styles/index.css
+ * Purpose : Style entry point. Imports every layer in a single, documented order.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Cascade order (ADR-008):
+ *             1. Tailwind (utilities last inside it, preflight disabled)
+ *             2. reset / base / tokens / themes / typography
+ *             3. component CSS
+ *             4. responsive contracts (250px -> 5120px)
+ *             5. utilities (win over components)
+ *             6. print
+ *           No component file may import another component file; index.css is the only aggregator.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@import "./vendors/tailwind.css";
+@import "./vendors/radix-overrides.css";
+
+@import "./layers/reset.css";
+@import "./layers/base.css";
+@import "./layers/tokens.css";
+@import "./layers/themes.css";
+@import "./layers/typography.css";
+
+@import "./components/button.css";
+@import "./components/input.css";
+@import "./components/card.css";
+@import "./components/avatar.css";
+@import "./components/badge.css";
+@import "./components/chip.css";
+@import "./components/skeleton.css";
+@import "./components/toast.css";
+@import "./components/modal.css";
+@import "./components/sheet.css";
+@import "./components/dialog.css";
+@import "./components/drawer.css";
+@import "./components/tooltip.css";
+@import "./components/dropdown.css";
+@import "./components/popover.css";
+@import "./components/tabs.css";
+@import "./components/switch.css";
+@import "./components/checkbox.css";
+@import "./components/radio.css";
+@import "./components/select.css";
+@import "./components/slider.css";
+@import "./components/separator.css";
+@import "./components/scroll-area.css";
+@import "./components/progress.css";
+@import "./components/accordion.css";
+@import "./components/empty-state.css";
+@import "./components/virtual-list.css";
+@import "./components/nav.css";
+@import "./components/feed.css";
+@import "./components/post.css";
+@import "./components/reactions.css";
+@import "./components/comments.css";
+@import "./components/messenger.css";
+@import "./components/notifications.css";
+@import "./components/groups.css";
+@import "./components/presence.css";
+@import "./components/composer.css";
+@import "./components/opportunities.css";
+@import "./components/table.css";
+
+@import "./responsive/mobile-250.css";
+@import "./responsive/mobile-small.css";
+@import "./responsive/mobile.css";
+@import "./responsive/tablet.css";
+@import "./responsive/laptop.css";
+@import "./responsive/desktop.css";
+@import "./responsive/large.css";
+@import "./responsive/tv-4k.css";
+@import "./responsive/ultra-wide.css";
+@import "./responsive/orientation.css";
+@import "./responsive/foldable.css";
+@import "./responsive/hover.css";
+@import "./responsive/pointer.css";
+@import "./responsive/reduced-motion.css";
+@import "./responsive/high-contrast.css";
+@import "./responsive/dark.css";
+@import "./responsive/oled.css";
+@import "./responsive/forced-colors.css";
+
+@import "./layers/utilities.css";
+@import "./layers/print.css";

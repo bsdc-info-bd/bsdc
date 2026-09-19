@@ -1,0 +1,121 @@
+{
+  "queue": {
+    "title": "Moderation queue",
+    "subtitle": "What has been reported, and what is still waiting for a decision.",
+    "label": "Moderation queue",
+    "filterLabel": "Filter by state",
+    "all": "All",
+    "noneInState": "No report is in this state.",
+    "empty": {
+      "title": "The queue is clear",
+      "description": "There is nothing waiting to be looked at."
+    }
+  },
+  "mine": {
+    "title": "Your reports",
+    "subtitle": "What you reported, and what became of it.",
+    "tabs": {
+      "label": "Your reports and appeals",
+      "reports": "Reports",
+      "appeals": "Appeals"
+    },
+    "empty": {
+      "title": "You have not reported anything",
+      "description": "If something breaks the rules, say so from here."
+    },
+    "appealsEmpty": "No appeal has been filed."
+  },
+  "state": {
+    "open": "Open",
+    "triaged": "Seen",
+    "actioned": "Action taken",
+    "dismissed": "Dismissed",
+    "escalated": "Escalated"
+  },
+  "category": {
+    "self-harm": "Self-harm",
+    "violence": "Violence",
+    "hate": "Hate",
+    "harassment": "Harassment",
+    "sexual": "Sexual content",
+    "scam": "Scam",
+    "misinformation": "Misinformation",
+    "ip": "Copyright",
+    "spam": "Spam",
+    "other": "Something else"
+  },
+  "target": {
+    "post": "Post",
+    "comment": "Comment",
+    "profile": "Profile",
+    "group": "Group",
+    "event": "Event",
+    "job": "Job",
+    "project": "Project",
+    "gig": "Service",
+    "message": "Message"
+  },
+  "card": {
+    "sla": "Answer due within {hours} hours",
+    "overdue": "Past the time we promised",
+    "targetType": "Type: {type}",
+    "decided": "This report has been decided {by}",
+    "byReviewer": "by a reviewer",
+    "bySystem": "on its own"
+  },
+  "decide": {
+    "action": "Action",
+    "note": "Reason (the author will see this)",
+    "noteHint": "The person this is about reads these words.",
+    "penalty": "This action removes {points} points.",
+    "submit": "Save the decision",
+    "done": {
+      "bn": "Decision saved",
+      "en": "Decision saved"
+    },
+    "failed": {
+      "bn": "The decision could not be saved.",
+      "en": "The decision could not be saved."
+    }
+  },
+  "file": {
+    "title": "Report this",
+    "description": "Your report reaches a person. Writing why makes a decision possible.",
+    "category": "What kind of problem",
+    "reason": "What happened",
+    "needMore": "Write {count} more characters.",
+    "privacyNote": "Your name is not given to the person you are reporting.",
+    "close": "Close the report",
+    "cancel": "Cancel",
+    "submit": "Send report",
+    "done": {
+      "bn": "Report sent",
+      "en": "Report sent"
+    },
+    "failed": {
+      "bn": "The report could not be sent. Please try again.",
+      "en": "The report could not be sent. Please try again."
+    }
+  },
+  "appeal": {
+    "explainer": "You can appeal once, within {days} days of the decision. Somebody who did not make it will look.",
+    "reason": "Why it is worth another look",
+    "submit": "Send appeal",
+    "notDecided": "You can appeal once a decision has been made.",
+    "alreadyUsed": "This decision has already been appealed.",
+    "status": {
+      "open": "Being looked at",
+      "upheld": "Decision changed",
+      "rejected": "Decision stands"
+    },
+    "done": {
+      "bn": "Appeal sent",
+      "en": "Appeal sent"
+    },
+    "failed": {
+      "bn": "The appeal could not be sent.",
+      "en": "The appeal could not be sent."
+    }
+  },
+  "summary": "Open {open}, action taken {actioned}, dismissed {dismissed}."
+}

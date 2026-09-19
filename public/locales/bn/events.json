@@ -1,0 +1,123 @@
+{
+  "title": "ইভেন্ট",
+  "subtitle": "মিটআপ, ওয়ার্কশপ ও হ্যাকাথন — যেখানেই হোক।",
+  "open": "নিবন্ধন খোলা",
+  "closed": "নিবন্ধন বন্ধ",
+  "online": "অনলাইন",
+  "remoteAnywhere": "যেকোনো জায়গা থেকে",
+  "closesIn": "{count} দিন বাকি",
+  "closesToday": "আজ শেষ",
+  "noDeadline": "কোনো শেষ তারিখ নেই",
+  "rsvpCount": "{count} জন যাবেন",
+  "seatsLeft": "{count}টি আসন বাকি",
+  "tabs": {
+    "label": "ইভেন্টের তালিকা",
+    "upcoming": "আসন্ন",
+    "mine": "আমার ইভেন্ট",
+    "mineEmpty": "আপনি কোনো ইভেন্টে যাবেন বলেননি।"
+  },
+  "host": {
+    "start": "ইভেন্ট আয়োজন করুন",
+    "cancel": "ফর্ম বন্ধ করুন"
+  },
+  "list": {
+    "all": "সব",
+    "label": "ইভেন্টের তালিকা",
+    "filterLabel": "ধরন বাছাই",
+    "empty": {
+      "title": "এখনো কোনো ইভেন্ট নেই",
+      "description": "প্রথম ইভেন্টটি আপনি আয়োজন করতে পারেন।"
+    }
+  },
+  "phase": {
+    "upcoming": "আসন্ন",
+    "live": "চলছে",
+    "ended": "শেষ",
+    "cancelled": "বাতিল"
+  },
+  "form": {
+    "title": "ইভেন্টের নাম",
+    "titleBn": "ইভেন্টের নাম (বাংলা)",
+    "description": "বিবরণ",
+    "mode": "কীভাবে হবে",
+    "onlineUrl": "অনলাইন লিংক",
+    "startsAt": "শুরু",
+    "endsAt": "শেষ",
+    "capacity": "আসন সংখ্যা",
+    "capacityHint": "০ দিলে আসনের সীমা থাকবে না।",
+    "tags": "ট্যাগ",
+    "tagsHint": "কমা দিয়ে আলাদা করুন। সর্বোচ্চ ৮টি।",
+    "cancel": "বাতিল",
+    "publish": "প্রকাশ করুন"
+  },
+  "venue": {
+    "labelLabel": "ভেন্যুর নাম",
+    "addressLabel": "ঠিকানা",
+    "areaLabel": "এলাকা",
+    "divisionLabel": "বিভাগ",
+    "searchLabel": "মানচিত্রে ভেন্যু খুঁজুন",
+    "search": "মানচিত্রে খুঁজুন",
+    "searchHint": "খোঁজা না পেলে ভেন্যুর নাম নিজেই লিখে দিন।",
+    "notPicked": "এখনো কোনো জায়গা বেছে নেওয়া হয়নি। মানচিত্রে টিপে জায়গা ঠিক করুন।",
+    "picked": "জায়গা ঠিক করা হয়েছে।",
+    "mapUnavailable": "মানচিত্র এখন লোড করা যাচ্ছে না। ভেন্যুর নাম লিখেই এগিয়ে যেতে পারেন।",
+    "searchExample": "যেমন: শাহজালাল বিজ্ঞান ও প্রযুক্তি বিশ্ববিদ্যালয়"
+  },
+  "rsvp": {
+    "label": "আপনার উত্তর",
+    "closed": "নিবন্ধনের সময় শেষ।",
+    "full": "সব আসন ভর্তি। অপেক্ষা তালিকায় নাম দেওয়া যাবে।",
+    "waitlist": "আপনি অপেক্ষা তালিকায় আছেন। আসন খালি হলে জানানো হবে।",
+    "unlimited": "আসনের কোনো সীমা নেই।",
+    "answered": "আপনার উত্তর সংরক্ষিত।",
+    "failed": {
+      "bn": "উত্তর সংরক্ষণ করা যায়নি।",
+      "en": "Your answer could not be saved."
+    },
+    "seatsLeft": "{count}টি আসন বাকি"
+  },
+  "detail": {
+    "starts": "শুরু",
+    "ends": "শেষ",
+    "timezone": "সময় অঞ্চল",
+    "going": "যাচ্ছেন",
+    "seats": "খালি আসন",
+    "venue": "ভেন্যু",
+    "venueLabel": "ইভেন্টের জায়গা",
+    "mapAlt": "{place} এর মানচিত্র",
+    "joinOnline": "অনলাইনে যোগ দিন",
+    "liveCount": "এই মুহূর্তে {count} জন উপস্থিত বলে জানিয়েছেন।",
+    "back": "সব ইভেন্টে ফিরুন",
+    "missing": {
+      "title": "ইভেন্টটি পাওয়া যায়নি",
+      "description": "এই ইভেন্টটি সরিয়ে নেওয়া বা বাতিল করা হতে পারে।"
+    }
+  },
+  "saved": {
+    "bn": "ইভেন্ট প্রকাশিত",
+    "en": "Event published"
+  },
+  "error": {
+    "default": {
+      "bn": "ইভেন্ট সংরক্ষণ করা যায়নি।",
+      "en": "The event could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "ইভেন্টের কিছু তথ্য বাকি আছে।",
+      "en": "The event is missing something required."
+    },
+    "BSDC-EVT-001": {
+      "bn": "ইভেন্টের শেষ সময়টি শুরুর সময়ের পরে হতে হবে।",
+      "en": "The event has to end after it starts."
+    },
+    "BSDC-EVT-003": {
+      "bn": "ইভেন্টে পৌঁছানোর উপায় বলুন: জায়গা বা লিংক, যা দরকার।",
+      "en": "Say how people get in: the place, or the link, whichever this event needs."
+    },
+    "BSDC-NET-005": {
+      "bn": "সংযোগ না থাকায় ইভেন্ট পাঠানো যায়নি।",
+      "en": "The event could not be sent while offline."
+    }
+  },
+  "full": "ভর্তি"
+}

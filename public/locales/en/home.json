@@ -1,0 +1,60 @@
+{
+  "heroTitle": "Bangladesh Software Development Community",
+  "heroSubtitle": "One place for Bangladeshi developers to learn, build, share and grow together.",
+  "heroCta": "Explore the platform",
+  "heroSecondary": "About BSDC",
+  "whatIsTitle": "What BSDC is",
+  "whatIsBody": "BSDC is a community platform for people who build software in Bangladesh and for Bangladesh. It brings discussion, learning, freelancing, hiring, local commerce and events into one place that belongs to the community itself.",
+  "principlesTitle": "How BSDC is run",
+  "principles": {
+    "communityFirst": {
+      "title": "Community first",
+      "body": "Members decide what matters. Product decisions are published, not hidden."
+    },
+    "transparent": {
+      "title": "Transparent by default",
+      "body": "Rules, moderation and platform changes are documented in public."
+    },
+    "local": {
+      "title": "Built for Bangladesh",
+      "body": "Bangla and English are both first-class. Payments, logistics and support are local."
+    },
+    "merit": {
+      "title": "Merit over noise",
+      "body": "Ranking rewards substance, consistency and real contribution."
+    }
+  },
+  "featuresTitle": "What you can do here",
+  "features": {
+    "feed": {
+      "title": "Community feed",
+      "body": "Posts, questions, polls, code and long-form writing with reactions and comments."
+    },
+    "groups": {
+      "title": "Groups",
+      "body": "Public, private and secret groups with roles, rules and moderation."
+    },
+    "marketplace": {
+      "title": "Marketplace",
+      "body": "Verified vendors sell to members with escrow-free, dispute-tracked orders."
+    },
+    "jobs": {
+      "title": "Jobs and hiring",
+      "body": "Post and apply for roles with a plain, honest application flow."
+    },
+    "events": {
+      "title": "Events and meetups",
+      "body": "Online and in-person events with registration and attendance."
+    },
+    "messaging": {
+      "title": "Messaging",
+      "body": "Direct and group chat with presence, typing and delivery receipts."
+    }
+  },
+  "networkTitle": "Part of the RRC network",
+  "networkBody": "BSDC runs inside a single Bangladeshi ecosystem: learning, cloud, news, knowledge and open source, all under one roof.",
+  "ctaTitle": "Build with us",
+  "ctaBody": "BSDC is being built in the open. Read the plan, follow the progress, and hold us to it.",
+  "ctaPrimary": "Read the blueprint",
+  "ctaSecondary": "Contact the team"
+}

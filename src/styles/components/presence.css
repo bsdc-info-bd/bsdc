@@ -1,0 +1,110 @@
+/**
+ * BSDC — src/styles/components/presence.css
+ * Purpose : Presence indicator and the account menu.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The dot carries a ring in the surface colour so it stays visible against an avatar. In
+ *   forced-colors mode the dot keeps its border, which is the only way to distinguish states when
+ *   the palette is replaced.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-presence__dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--bsdc-surface);
+  background: var(--bsdc-text-3);
+}
+
+.bsdc-presence[data-state="online"] .bsdc-presence__dot {
+  background: var(--bsdc-success);
+}
+
+.bsdc-presence[data-state="away"] .bsdc-presence__dot {
+  background: var(--bsdc-warning);
+}
+
+.bsdc-presence[data-state="offline"] .bsdc-presence__dot {
+  background: var(--bsdc-text-3);
+}
+
+.bsdc-presence__label {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-account {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.bsdc-account__trigger,
+.bsdc-account--guest {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-2);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--bsdc-text);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.bsdc-account__trigger:hover,
+.bsdc-account--guest:hover {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-account__label {
+  max-inline-size: 12ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bsdc-account__panel {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--bsdc-space-2));
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  min-inline-size: 240px;
+  max-inline-size: min(90vw, 320px);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-lg);
+  background: var(--bsdc-surface);
+  box-shadow: var(--shadow-3);
+}
+
+.bsdc-account__panel p {
+  margin: 0;
+}
+
+.bsdc-account__link {
+  min-block-size: var(--bsdc-tap-target);
+  display: inline-flex;
+  align-items: center;
+  padding-inline: var(--bsdc-space-2);
+  border-radius: var(--radius-md);
+  color: var(--bsdc-text);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+
+.bsdc-account__link:hover {
+  background: var(--bsdc-surface-2);
+}

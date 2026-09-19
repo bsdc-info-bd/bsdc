@@ -1,0 +1,23 @@
+{
+  "name": "bsdc-functions",
+  "version": "0.2.0-response2",
+  "private": true,
+  "description": "BSDC Cloud Functions. Server-side authority for passkeys, claims and lifecycle jobs.",
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.6.0",
+    "firebase-functions": "^6.6.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

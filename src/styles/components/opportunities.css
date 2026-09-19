@@ -1,0 +1,792 @@
+/**
+ * BSDC — src/styles/components/opportunities.css
+ * Purpose : Styling for search, profile, stories, events, jobs, projects, the freelancer hub,
+ *           gamification, moderation and the push desk.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Every grid here is `auto-fit` with a minimum, never a fixed column count, so the layout
+ *   survives from 250px to 5120px without a single breakpoint guessing at a device. No rule sets a
+ *   fixed width; the widest a card may grow is capped so a line of Bangla never runs past the point
+ *   where it stays readable.
+ *   Interactive targets are at least 44 CSS pixels on every axis (PART 09.03), and every row is
+ *   `min-width: 0` so a long unbroken handle pushes the layout nowhere — it truncates instead.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+/* ---------------------------------------------------------------- search ---- */
+
+.bsdc-search__form {
+  margin-block: var(--bsdc-space-3) var(--bsdc-space-4);
+}
+
+.bsdc-search__group {
+  margin-block-end: var(--bsdc-space-5);
+}
+
+.bsdc-search__groupTitle {
+  margin-block-end: var(--bsdc-space-2);
+  font-size: var(--bsdc-text-sm);
+  font-weight: 600;
+  color: var(--bsdc-ink-2);
+}
+
+.bsdc-search__hits {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-search__hit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  min-height: 44px;
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-1);
+  color: inherit;
+  text-decoration: none;
+}
+
+.bsdc-search__hit:hover,
+.bsdc-search__hit:focus-visible {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-search__kind {
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-search__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-search__note {
+  margin-block-start: var(--bsdc-space-3);
+  color: var(--bsdc-ink-3);
+}
+
+/* --------------------------------------------------------------- palette ---- */
+
+.bsdc-palette__input {
+  inline-size: 100%;
+}
+
+.bsdc-palette__list {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  margin-block-start: var(--bsdc-space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-palette__sectionTitle {
+  margin-block: var(--bsdc-space-3) var(--bsdc-space-1);
+  font-size: var(--bsdc-text-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-palette__item {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  min-height: 44px;
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border-radius: var(--bsdc-radius-md);
+  cursor: pointer;
+}
+
+.bsdc-palette__item[data-selected="true"],
+.bsdc-palette__item:hover {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-palette__shortcut {
+  display: inline-flex;
+  gap: var(--bsdc-space-1);
+  margin-inline-start: auto;
+}
+
+/* --------------------------------------------------------------- profile ---- */
+
+.bsdc-profile__about {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  max-inline-size: 68ch;
+}
+
+.bsdc-profile__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-profileCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--bsdc-space-3);
+  align-items: center;
+}
+
+.bsdc-profileCard__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --------------------------------------------------------------- stories ---- */
+
+.bsdc-storyRail {
+  display: flex;
+  gap: var(--bsdc-space-3);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding-block-end: var(--bsdc-space-2);
+}
+
+.bsdc-storyRail__item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.bsdc-storyRail__button {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  justify-items: center;
+  min-block-size: 44px;
+  min-inline-size: 44px;
+  padding: var(--bsdc-space-1);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.bsdc-storyRail__name {
+  max-inline-size: 5.5rem;
+  overflow: hidden;
+  font-size: var(--bsdc-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bsdc-storyViewer {
+  position: relative;
+  display: grid;
+  gap: var(--bsdc-space-2);
+  max-inline-size: 32rem;
+  margin-inline: auto;
+}
+
+.bsdc-storyViewer__bars {
+  display: flex;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-storyViewer__bar {
+  flex: 1;
+  block-size: 3px;
+  border-radius: var(--bsdc-radius-full);
+  background: var(--bsdc-surface-3);
+}
+
+.bsdc-storyViewer__barFill {
+  display: block;
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--bsdc-brand);
+}
+
+.bsdc-storyViewer__frame {
+  width: 100%;
+  height: auto;
+  max-block-size: 70dvh;
+  object-fit: contain;
+  border-radius: var(--bsdc-radius-lg);
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-storyViewer__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  justify-content: space-between;
+}
+
+.bsdc-storyComposer {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  max-inline-size: 32rem;
+}
+
+.bsdc-storyComposer__preview {
+  width: 100%;
+  height: auto;
+  border-radius: var(--bsdc-radius-md);
+}
+
+/* ---------------------------------------------------------------- events ---- */
+
+.bsdc-eventList__grid,
+.bsdc-projectList__grid,
+.bsdc-gigList__grid,
+.bsdc-jobs__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-eventCard__link,
+.bsdc-gigCard {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  color: inherit;
+  text-decoration: none;
+}
+
+.bsdc-eventCard__head,
+.bsdc-projectCard__head,
+.bsdc-orderCard__head,
+.bsdc-reportCard__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.bsdc-eventCard__title,
+.bsdc-projectCard__title,
+.bsdc-gigCard__title,
+.bsdc-orderCard__title,
+.bsdc-jobCard__title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--bsdc-text-md);
+  font-weight: 600;
+}
+
+.bsdc-eventCard__meta,
+.bsdc-jobCard__place,
+.bsdc-jobCard__company,
+.bsdc-jobCard__pay {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-eventCard__tags,
+.bsdc-jobCard__tags,
+.bsdc-projectCard__stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-eventForm__row,
+.bsdc-jobForm__row,
+.bsdc-projectForm__roleRow,
+.bsdc-gigForm__packageRow,
+.bsdc-application__row,
+.bsdc-broadcast__row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-eventForm__error,
+.bsdc-jobForm__error,
+.bsdc-gigForm__error,
+.bsdc-application__error,
+.bsdc-orderDialog__error {
+  margin-block: var(--bsdc-space-2);
+  color: var(--bsdc-danger);
+}
+
+.bsdc-eventForm__actions,
+.bsdc-jobForm__actions,
+.bsdc-gigForm__actions,
+.bsdc-projectForm__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  justify-content: flex-end;
+}
+
+.bsdc-eventDetail__facts,
+.bsdc-jobDetail__facts,
+.bsdc-orderCard__facts,
+.bsdc-bsdcQueue__counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
+  gap: var(--bsdc-space-3);
+  margin-block: var(--bsdc-space-3);
+}
+
+.bsdc-eventDetail__facts dt,
+.bsdc-jobDetail__facts dt,
+.bsdc-orderCard__facts dt {
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-eventDetail__cover {
+  width: 100%;
+  height: auto;
+  border-radius: var(--bsdc-radius-lg);
+}
+
+.bsdc-eventDetail__mapLink img,
+.bsdc-eventDetail__venue img {
+  width: 100%;
+  height: auto;
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-eventDetail__attribution {
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-venue__map {
+  block-size: 18rem;
+  inline-size: 100%;
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-rsvpBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  align-items: center;
+}
+
+/* ------------------------------------------------------------------ jobs ---- */
+
+.bsdc-jobFilters {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  margin-block-end: var(--bsdc-space-4);
+}
+
+.bsdc-jobFilters__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bsdc-application {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  max-inline-size: 44rem;
+}
+
+.bsdc-application--sent {
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-application__note,
+.bsdc-applications__note {
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border-inline-start: 3px solid var(--bsdc-brand);
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-applications__counts,
+.bsdc-queue__counts,
+.bsdc-leaderboard__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-4);
+  margin-block-end: var(--bsdc-space-3);
+}
+
+.bsdc-applications__count dt,
+.bsdc-queue__count dt {
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-applications__list,
+.bsdc-queue__list,
+.bsdc-freelancer__orders,
+.bsdc-moderation__own {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-applications__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-3);
+  border-block-start: 1px solid var(--bsdc-border);
+}
+
+.bsdc-applications__body {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  min-width: 0;
+}
+
+.bsdc-applications__letter,
+.bsdc-applications__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-applications__actions,
+.bsdc-reportCard__decide {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  grid-column: 1 / -1;
+}
+
+/* -------------------------------------------------------------- projects ---- */
+
+.bsdc-projectCard__foot,
+.bsdc-gigCard__foot,
+.bsdc-leaderboardPage__ownFacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bsdc-projectCard__recruiting,
+.bsdc-gigCard__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-projectCard__links {
+  display: inline-flex;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-projectForm__roles,
+.bsdc-gigForm__packages {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-projectForm__roleList,
+.bsdc-gigForm__packageList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-projectDetail__roles {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-projectDetail__links,
+.bsdc-jobDetail__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ------------------------------------------------------------ freelancer ---- */
+
+.bsdc-gigCard__cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-gigCard__seller {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-width: 0;
+}
+
+.bsdc-gigCard__price,
+.bsdc-orderCard__summary dd {
+  font-weight: 600;
+}
+
+.bsdc-orderDialog__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-orderDialog__payment {
+  padding: var(--bsdc-space-3);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-2);
+  font-size: var(--bsdc-text-sm);
+}
+
+.bsdc-orderDialog__actions,
+.bsdc-broadcast__confirmActions,
+.bsdc-reportDialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  justify-content: flex-end;
+}
+
+.bsdc-orderCard__review {
+  display: grid;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-orderCard__rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-height: 44px;
+}
+
+.bsdc-orderCard__rating select {
+  min-height: 44px;
+  min-inline-size: 4rem;
+}
+
+/* ---------------------------------------------------------- gamification ---- */
+
+.bsdc-points {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-level {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  justify-items: center;
+}
+
+.bsdc-badges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-badges__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  padding: var(--bsdc-space-2);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-badges__item[data-held="false"] {
+  opacity: 0.72;
+}
+
+.bsdc-badges__text {
+  display: grid;
+  min-width: 0;
+}
+
+.bsdc-streak {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  max-inline-size: 28rem;
+}
+
+.bsdc-streak__head {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-leaderboard {
+  display: grid;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-leaderboard__optOut {
+  display: grid;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-leaderboard__list {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-leaderboard__row {
+  display: grid;
+  grid-template-columns: 2.5rem auto minmax(0, 1fr) auto auto;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  min-height: 44px;
+  padding: var(--bsdc-space-1) var(--bsdc-space-2);
+  border-radius: var(--bsdc-radius-md);
+}
+
+.bsdc-leaderboard__row[data-viewer="true"] {
+  background: var(--bsdc-surface-2);
+  outline: 1px solid var(--bsdc-brand);
+}
+
+.bsdc-leaderboard__name {
+  display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-leaderboard__rank,
+.bsdc-leaderboard__points {
+  font-variant-numeric: tabular-nums;
+}
+
+.bsdc-leaderboardPage__own {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: var(--bsdc-space-4);
+  margin-block-end: var(--bsdc-space-5);
+}
+
+/* ------------------------------------------------------------ moderation ---- */
+
+.bsdc-queue {
+  display: grid;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-reportCard {
+  display: grid;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-reportCard[data-overdue="true"] {
+  border-color: var(--bsdc-danger);
+}
+
+.bsdc-reportCard__target,
+.bsdc-reportCard__reason {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-reportCard__reason {
+  color: var(--bsdc-ink-2);
+}
+
+.bsdc-moderation__ownItem {
+  display: grid;
+  gap: var(--bsdc-space-1);
+  padding: var(--bsdc-space-2);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-1);
+}
+
+.bsdc-appeal {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  max-inline-size: 36rem;
+}
+
+.bsdc-appeal__note,
+.bsdc-reportDialog__note {
+  font-size: var(--bsdc-text-sm);
+  color: var(--bsdc-ink-3);
+}
+
+/* ----------------------------------------------------------------- push ---- */
+
+.bsdc-push,
+.bsdc-broadcast {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  max-inline-size: 40rem;
+  justify-items: start;
+}
+
+.bsdc-push__head,
+.bsdc-broadcast__head {
+  display: grid;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-broadcast__confirm {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-warning);
+  border-radius: var(--bsdc-radius-md);
+}
+
+/* ---------------------------------------------------------------- shared ---- */
+
+.bsdc-eventDetail,
+.bsdc-jobDetail,
+.bsdc-projectDetail {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  max-inline-size: 72ch;
+}
+
+.bsdc-eventDetail__description,
+.bsdc-jobDetail__body {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bsdc-eventDetail__online {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+}
+
+@media (pointer: coarse) {
+  .bsdc-search__hit,
+  .bsdc-palette__item,
+  .bsdc-storyRail__button,
+  .bsdc-orderCard__rating {
+    min-block-size: 48px;
+  }
+}

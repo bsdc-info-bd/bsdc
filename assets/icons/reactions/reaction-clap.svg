@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC reaction glyph: clap. Icons are SVG only — the product ships no emoji (LAW-01). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="clap reaction" style="color:#16A34A">
+  <path d="M11 12.5L7.6 9.1a1.7 1.7 0 0 1 2.4-2.4l6.4 6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.6 10.9l3.3-3.3a1.7 1.7 0 0 1 2.4 2.4l-6.6 6.6a4.6 4.6 0 0 1-1.9 1.2l-4.1 1.2 1.2-4.1a4.6 4.6 0 0 1 1.2-1.9z" fill="currentColor"/>
+</svg>

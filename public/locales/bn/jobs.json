@@ -1,0 +1,141 @@
+{
+  "title": "চাকরি",
+  "subtitle": "বাংলাদেশের সফটওয়্যার কমিউনিটিতে খোলা সব পদ।",
+  "post": "চাকরি পোস্ট করুন",
+  "postRequiresCreator": "চাকরি পোস্ট করতে হলে আপনাকে নির্মাতা হতে হবে। প্রশাসকের কাছে অনুরোধ পাঠান।",
+  "open": "খোলা",
+  "closed": "বন্ধ",
+  "applied": "আবেদন করা হয়েছে",
+  "remoteAnywhere": "যেকোনো জায়গা থেকে",
+  "salaryUndisclosed": "বেতন জানানো হয়নি",
+  "closesIn": "{count} দিন বাকি",
+  "closesToday": "আজ শেষ",
+  "noDeadline": "কোনো শেষ তারিখ নেই",
+  "board": {
+    "empty": "এই ছাঁকনিতে কোনো চাকরি নেই। ছাঁকনি সরিয়ে দেখুন।"
+  },
+  "tabs": {
+    "label": "চাকরির তালিকা",
+    "board": "চাকরির বোর্ড",
+    "applied": "আমার আবেদন",
+    "appliedEmpty": "আপনি এখনো কোনো চাকরিতে আবেদন করেননি।"
+  },
+  "filters": {
+    "label": "চাকরি ছাঁকনি",
+    "type": "কাজের ধরন",
+    "workplace": "কোথায়",
+    "experience": "অভিজ্ঞতা",
+    "division": "বিভাগ",
+    "results": "{count}টি চাকরি",
+    "clear": "ছাঁকনি সরান ({count})"
+  },
+  "form": {
+    "company": "প্রতিষ্ঠানের নাম",
+    "title": "পদের নাম",
+    "description": "চাকরির বিবরণ",
+    "employmentType": "কাজের ধরন",
+    "workplace": "কাজের জায়গা",
+    "location": "অবস্থান",
+    "division": "বিভাগ",
+    "experience": "অভিজ্ঞতা",
+    "deadline": "শেষ তারিখ",
+    "discloseSalary": "বেতন দেখান",
+    "salaryMin": "সর্বনিম্ন বেতন",
+    "salaryMax": "সর্বোচ্চ বেতন",
+    "salaryHiddenNote": "বেতন দেখানো হবে না। তালিকায় “জানানো হয়নি” লেখা থাকবে।",
+    "currency": "মুদ্রা",
+    "period": "কিসের হিসাবে",
+    "skills": "দক্ষতা",
+    "skillsHint": "কমা দিয়ে আলাদা করুন। সর্বোচ্চ ২০টি।",
+    "externalUrl": "বাইরের আবেদন লিংক",
+    "externalUrlHint": "থাকলে আবেদন সেখানেই যাবে। না থাকলে আবেদন এখানেই পড়বে।",
+    "cancel": "বাতিল",
+    "post": "পোস্ট করুন"
+  },
+  "detail": {
+    "location": "অবস্থান",
+    "salary": "বেতন",
+    "deadline": "শেষ তারিখ",
+    "applicants": "আবেদন",
+    "signInToApply": "আবেদন করতে সাইন ইন করুন।",
+    "missing": {
+      "title": "চাকরিটি পাওয়া যায়নি",
+      "description": "এই চাকরিটি সরিয়ে নেওয়া বা পূরণ করা হতে পারে।"
+    }
+  },
+  "apply": {
+    "coverLetter": "আবেদনপত্র",
+    "needMore": "আরও {count} অক্ষর লিখুন।",
+    "portfolio": "পোর্টফোলিও লিংক",
+    "resume": "সিভি লিংক",
+    "expectedSalary": "প্রত্যাশিত বেতন",
+    "noticeDays": "নোটিশের দিন",
+    "submit": "আবেদন পাঠান",
+    "sentLabel": "আপনার আবেদন",
+    "sent": "আবেদন পাঠানো হয়েছে। বর্তমান অবস্থা: {status}",
+    "sentToast": {
+      "bn": "আবেদন পাঠানো হয়েছে",
+      "en": "Application sent"
+    }
+  },
+  "withdraw": {
+    "action": "আবেদন প্রত্যাহার করুন",
+    "done": {
+      "bn": "আবেদন প্রত্যাহার করা হয়েছে",
+      "en": "Application withdrawn"
+    }
+  },
+  "status": {
+    "submitted": "পাঠানো হয়েছে",
+    "reviewing": "দেখা হচ্ছে",
+    "shortlisted": "সংক্ষিপ্ত তালিকায়",
+    "interview": "সাক্ষাৎকার",
+    "hired": "নিয়োগ পেয়েছেন",
+    "rejected": "গ্রহণ করা হয়নি",
+    "withdrawn": "প্রত্যাহার",
+    "offered": "প্রস্তাব পাঠানো হয়েছে"
+  },
+  "applications": {
+    "label": "আবেদনসমূহ",
+    "empty": {
+      "title": "এখনো কোনো আবেদন নেই",
+      "description": "আবেদন এলে এখানে দেখা যাবে।"
+    },
+    "counts": "অবস্থা অনুযায়ী",
+    "portfolio": "পোর্টফোলিও",
+    "noteLabel": "আবেদনকারীকে যা জানাবেন",
+    "statusLabel": "নতুন অবস্থা",
+    "decide": "সিদ্ধান্ত দিন",
+    "close": "বন্ধ করুন",
+    "updated": {
+      "bn": "আবেদন হালনাগাদ",
+      "en": "Application updated"
+    }
+  },
+  "posted": {
+    "bn": "চাকরি পোস্ট করা হয়েছে",
+    "en": "Job posted"
+  },
+  "error": {
+    "default": {
+      "bn": "চাকরি সংরক্ষণ করা যায়নি।",
+      "en": "The job could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "চাকরির কিছু তথ্য বাকি আছে।",
+      "en": "The job is missing something required."
+    },
+    "BSDC-JOB-001": {
+      "bn": "এই চাকরিতে আবেদনের সময় শেষ।",
+      "en": "The closing date for this job has passed."
+    },
+    "BSDC-JOB-003": {
+      "bn": "আবেদনপত্র একটু বড় করুন।",
+      "en": "The cover letter needs to be longer."
+    },
+    "BSDC-JOB-004": {
+      "bn": "সর্বোচ্চ বেতন সর্বনিম্নের চেয়ে বেশি হতে হবে।",
+      "en": "The top of the range has to be above the bottom."
+    }
+  }
+}

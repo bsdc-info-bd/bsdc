@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC illustration: empty state. Source-available. Re-deployment or rebranding is not permitted. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" role="img" aria-label="empty state">
+  <rect x="26" y="30" width="148" height="92" rx="12" fill="none" stroke="currentColor" stroke-width="3" opacity="0.35"/><path d="M26 54h148" stroke="currentColor" stroke-width="3" opacity="0.35"/><circle cx="40" cy="42" r="4" fill="currentColor" opacity="0.5"/><circle cx="54" cy="42" r="4" fill="currentColor" opacity="0.35"/><path d="M52 76h96M52 92h64M52 108h40" stroke="currentColor" stroke-width="6" stroke-linecap="round" opacity="0.25"/>
+</svg>

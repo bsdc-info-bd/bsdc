@@ -1,0 +1,18 @@
+# BSDC — robots.txt (PART 10.06)
+# Source-available. Re-deployment or rebranding is not permitted.
+
+User-agent: *
+Allow: /
+Disallow: /messages
+Disallow: /notifications
+Disallow: /settings
+Disallow: /admin
+Disallow: /vendor
+Disallow: /search
+Disallow: /saved
+Disallow: /offline
+
+# Crawl-delay is courteous but must never block indexing of public content.
+Crawl-delay: 1
+
+Sitemap: https://www.bsdc.info.bd/sitemap.xml

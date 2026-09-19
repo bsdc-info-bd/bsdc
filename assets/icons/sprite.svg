@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BSDC UI sprite — assets/icons/sprite.svg
+  Purpose : Inline <use href="/icons/sprite.svg#id"> symbols for marks and glyphs that must render
+            identically across PDF exports, e-mails and the app. Component icons come from
+            lucide-react; this sprite owns brand marks and verification glyphs.
+  Owner   : RRC Development / BSDC Platform Team
+  Licence : Source-available. Re-deployment or rebranding is not permitted.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+  <symbol id="bsdc-shield" viewBox="0 0 80">
+    <rect width="80" height="80" rx="20" fill="currentColor"/><path d="M40 14 22 22v16c0 13 8.5 21 18 24 9.5-3 18-11 18-24V22L40 14z" fill="none" stroke="#FFFFFF" stroke-width="4" stroke-linejoin="round"/><path d="M31 40l6 6 12-13" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="bsdc-mark" viewBox="0 0 64">
+    <rect width="64" height="64" rx="16" fill="currentColor"/><path d="M32 12 16 20v14c0 11 7.5 17 16 19 8.5-2 16-8 16-19V20L32 12z" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linejoin="round"/><path d="M25 32l5 5 9-10" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="check" viewBox="0 0 24">
+    <path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="chevron-down" viewBox="0 0 24">
+    <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="chevron-right" viewBox="0 0 24">
+    <path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="close" viewBox="0 0 24">
+    <path d="M18 6 6 18M6 6l12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="menu" viewBox="0 0 24">
+    <path d="M3 6h18M3 12h18M3 18h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="search" viewBox="0 0 24">
+    <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="verified" viewBox="0 0 24">
+    <path d="M12 2 4 5.5v6C4 17 7.6 21.3 12 22c4.4-.7 8-5 8-10.5v-6L12 2z" fill="currentColor"/><path d="m8.5 12 2.5 2.5 4.5-5" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="lock" viewBox="0 0 24">
+    <rect x="4" y="10" width="16" height="11" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/>
+  </symbol>
+  <symbol id="offline" viewBox="0 0 24">
+    <path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M5 12.5a7 7 0 0 1 9-6.4M19 12.5a7 7 0 0 0-2.4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="reaction-angry" viewBox="0 0 24 24">
+    <g style="color:#E0245E"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.6 9.2l3 1.1M15.4 9.2l-3 1.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M8.6 16c1.2-1.4 5.6-1.4 6.8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/></g>
+  </symbol>
+  <symbol id="reaction-care" viewBox="0 0 24 24">
+    <g style="color:#F5B301"><path d="M12 20s-7-4.3-7-9.3A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.7c0 5-7 9.3-7 9.3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 12h8M9.5 14.6h5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></g>
+  </symbol>
+  <symbol id="reaction-clap" viewBox="0 0 24 24">
+    <g style="color:#16A34A"><path d="M11 12.5L7.6 9.1a1.7 1.7 0 0 1 2.4-2.4l6.4 6.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.6 10.9l3.3-3.3a1.7 1.7 0 0 1 2.4 2.4l-6.6 6.6a4.6 4.6 0 0 1-1.9 1.2l-4.1 1.2 1.2-4.1a4.6 4.6 0 0 1 1.2-1.9z" fill="currentColor"/></g>
+  </symbol>
+  <symbol id="reaction-fire" viewBox="0 0 24 24">
+    <g style="color:#F97316"><path d="M13 3c1.5 3.2.2 4.6-.6 5.8C11.2 10.6 10 12 10 14.6A4.4 4.4 0 0 0 14.4 19c2.5 0 4.6-2 4.6-4.6 0-3.4-2.4-4.4-2.4-4.4s.5-2.6 3.4-3.4c-.4 2.2.6 3.6.6 3.6S22 12 22 14.6A8 8 0 0 1 6 15.6C6 10.6 11 9 13 3z" fill="currentColor"/></g>
+  </symbol>
+  <symbol id="reaction-haha" viewBox="0 0 24 24">
+    <g style="color:#F5B301"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 14.5c1.3 1.6 6.7 1.6 8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M8.8 9.5v1.6M15.2 9.5v1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></g>
+  </symbol>
+  <symbol id="reaction-like" viewBox="0 0 24 24">
+    <g style="color:#1877F2"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3z" fill="currentColor"/><path d="M7 10l4.2-7.2a1.6 1.6 0 0 1 2.9 1.1L13.5 9H19a2 2 0 0 1 2 2.3l-1.2 7A2 2 0 0 1 17.8 20H7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></g>
+  </symbol>
+  <symbol id="reaction-love" viewBox="0 0 24 24">
+    <g style="color:#E0245E"><path d="M12 20.5S3.5 15 3.5 9.2A4.7 4.7 0 0 1 12 6.4a4.7 4.7 0 0 1 8.5 2.8C20.5 15 12 20.5 12 20.5z" fill="currentColor"/></g>
+  </symbol>
+  <symbol id="reaction-mindblown" viewBox="0 0 24 24">
+    <g style="color:#8B5CF6"><path d="M12 3a9 9 0 0 0-6 15.7V21l3.2-1.7A9 9 0 1 0 12 3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.4 9.4c1-1.5 5.6-1.6 7.2 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" fill="none"/></g>
+  </symbol>
+  <symbol id="reaction-sad" viewBox="0 0 24 24">
+    <g style="color:#4F91FF"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 16c1.2-1.5 5.8-1.5 7 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M9 9.8l1.6 1M15 9.8l-1.6 1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></g>
+  </symbol>
+  <symbol id="reaction-wow" viewBox="0 0 24 24">
+    <g style="color:#F5B301"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="9.2" cy="10.5" r="1.1" fill="currentColor"/><circle cx="14.8" cy="10.5" r="1.1" fill="currentColor"/><circle cx="12" cy="15.4" r="2.1" fill="none" stroke="currentColor" stroke-width="1.7"/></g>
+  </symbol>
+</svg>

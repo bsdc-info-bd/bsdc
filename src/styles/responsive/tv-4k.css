@@ -1,0 +1,46 @@
+/**
+ * BSDC — src/styles/responsive/tv-4k.css
+ * Purpose : 2560px and above — large monitors and 50-inch class televisions (PART 08.04 R-06).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Above 2560px the spacing scale multiplier grows so a huge screen gains breathing room
+ *           instead of looking like an enlarged phone screenshot. Type stays within the same
+ *           fluid clamp band; only spacing and max-widths grow.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 2560px) {
+  :root {
+    --bsdc-space-unit: 5px;
+    --bsdc-rail-width: 300px;
+    --bsdc-right-rail-width: 420px;
+    --bsdc-header-height: 64px;
+  }
+
+  .bsdc-app-shell {
+    grid-template-columns: 300px minmax(0, 1fr) 420px;
+    gap: var(--bsdc-space-8);
+    max-inline-size: 2200px;
+  }
+
+  .bsdc-feed {
+    max-inline-size: 780px;
+  }
+
+  .bsdc-container {
+    padding-inline: var(--bsdc-space-8);
+  }
+
+  body {
+    font-size: var(--fs-md);
+  }
+}
+
+@media (min-width: 3840px) {
+  :root {
+    --bsdc-space-unit: 6px;
+  }
+
+  .bsdc-app-shell {
+    max-inline-size: 2400px;
+  }
+}

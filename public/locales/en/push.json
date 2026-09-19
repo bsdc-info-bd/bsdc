@@ -1,0 +1,67 @@
+{
+  "title": "Web notifications",
+  "state": {
+    "enabled": "Notifications are on for this device.",
+    "off": "Notifications are off here. You can turn them on whenever you want.",
+    "blocked": "Your browser is blocking notifications. Allow them in its settings.",
+    "unsupported": "This browser cannot take web notifications."
+  },
+  "enable": "Turn notifications on",
+  "disable": "Turn notifications off",
+  "privacyNote": "We store a hash of the token, never the token itself.",
+  "enabled": {
+    "bn": "Notifications turned on",
+    "en": "Notifications turned on"
+  },
+  "disabled": {
+    "bn": "Notifications turned off",
+    "en": "Notifications turned off"
+  },
+  "broadcast": {
+    "title": "Broadcast desk",
+    "headline": "Headline",
+    "body": "Message",
+    "audience": "Who receives it",
+    "channel": "How it is sent",
+    "targetPath": "Where it opens",
+    "review": "Review it",
+    "confirmLabel": "Confirm the broadcast",
+    "confirm": "{audience} — this is sent by hand. Nothing on BSDC sends one automatically.",
+    "confirmSend": "Send it now",
+    "cancel": "Cancel",
+    "sent": {
+      "bn": "Sent to {count} people",
+      "en": "Sent to {count} people"
+    }
+  },
+  "audience": {
+    "all": "Everyone",
+    "members": "Members",
+    "creators": "Creators",
+    "vendors": "Vendors",
+    "staff": "Staff"
+  },
+  "channel": {
+    "push": "Web push",
+    "onesignal": "OneSignal",
+    "both": "Both"
+  },
+  "error": {
+    "default": {
+      "bn": "The notification could not be sent.",
+      "en": "The notification could not be sent."
+    },
+    "BSDC-PUSH-001": {
+      "bn": "Permission was refused. Allow it from your browser settings.",
+      "en": "Permission was refused. Allow it from your browser settings."
+    },
+    "BSDC-PUSH-002": {
+      "bn": "This browser or device cannot take push notifications.",
+      "en": "This browser or device cannot take push notifications."
+    },
+    "BSDC-NET-005": {
+      "bn": "Nothing could be sent while offline.",
+      "en": "Nothing could be sent while offline."
+    }
+  }
+}

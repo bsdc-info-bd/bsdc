@@ -1,0 +1,58 @@
+{
+  "title": "স্টোরি",
+  "subtitle": "চব্বিশ ঘণ্টার গল্প। পরে এগুলো মুছে যায়।",
+  "rail": {
+    "label": "স্টোরির সারি",
+    "yourStory": "আপনার স্টোরি",
+    "openFor": "{name} এর স্টোরি খুলুন"
+  },
+  "viewer": {
+    "label": "স্টোরি দেখা হচ্ছে",
+    "close": "স্টোরি বন্ধ করুন",
+    "previous": "আগের ফ্রেম",
+    "next": "পরের ফ্রেম",
+    "finish": "শেষ",
+    "expiresIn": "{hours} ঘণ্টা বাকি",
+    "altFallback": "স্টোরির ছবি"
+  },
+  "composer": {
+    "label": "নতুন স্টোরি",
+    "open": "স্টোরি যোগ করুন",
+    "choose": "একটি ছবি বেছে নিন",
+    "caption": "ক্যাপশন",
+    "publish": "প্রকাশ করুন",
+    "publishing": "প্রকাশ করা হচ্ছে",
+    "cancel": "বাতিল",
+    "previewAlt": "আপনার বেছে নেওয়া ছবির প্রাকদর্শন"
+  },
+  "empty": {
+    "title": "এখনো কোনো স্টোরি নেই",
+    "description": "কমিউনিটির প্রথম স্টোরিটি আপনার হতে পারে।",
+    "action": "প্রথম স্টোরি যোগ করুন"
+  },
+  "expiryNote": "প্রতিটি স্টোরি চব্বিশ ঘণ্টা পর নিজে থেকেই মুছে যায়।",
+  "soonestExpiry": "সবচেয়ে পুরোনো স্টোরিটি আরও প্রায় {hours} ঘণ্টা থাকবে।",
+  "published": {
+    "bn": "স্টোরি প্রকাশিত",
+    "en": "Story published"
+  },
+  "error": {
+    "default": {
+      "bn": "স্টোরি প্রকাশ করা যায়নি।",
+      "en": "The story could not be published."
+    },
+    "imageOnly": {
+      "bn": "স্টোরিতে শুধু ছবি দেওয়া যায়। ভিডিও নয়।",
+      "en": "Stories take images only, never video."
+    },
+    "BSDC-DATA-007": {
+      "bn": "স্টোরির তথ্য অসম্পূর্ণ।",
+      "en": "The story is missing something required."
+    },
+    "BSDC-NET-005": {
+      "bn": "সংযোগ না থাকায় স্টোরি পাঠানো যায়নি।",
+      "en": "The story could not be sent while offline."
+    }
+  },
+  "deviceOnly": "এই ডিভাইসে দেখা স্টোরিগুলোই দেখানো হচ্ছে।"
+}

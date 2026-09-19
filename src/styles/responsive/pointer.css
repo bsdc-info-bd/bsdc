@@ -1,0 +1,40 @@
+/**
+ * BSDC — src/styles/responsive/pointer.css
+ * Purpose : Pointer precision rules and tap-target sizing (PART 08.04 R-03).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Coarse pointers get 44px targets and larger radial focus; fine pointers get 32px and
+ *           denser controls. Keyboard focus is unaffected by pointer class.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (pointer: coarse) {
+  .bsdc-tap {
+    min-height: var(--bsdc-tap-target);
+    min-width: var(--bsdc-tap-target);
+  }
+
+  .bsdc-menu__item,
+  .bsdc-select__item {
+    min-height: var(--bsdc-tap-target);
+  }
+
+  .bsdc-slider__thumb {
+    inline-size: 26px;
+    block-size: 26px;
+  }
+
+  .bsdc-scroll-area__scrollbar {
+    inline-size: 4px;
+  }
+}
+
+@media (pointer: fine) {
+  .bsdc-tap {
+    min-height: var(--bsdc-tap-target-fine);
+    min-width: var(--bsdc-tap-target-fine);
+  }
+
+  .bsdc-table tbody td {
+    padding-block: var(--bsdc-space-2);
+  }
+}

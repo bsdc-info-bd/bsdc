@@ -1,0 +1,220 @@
+/**
+ * BSDC — src/styles/layers/themes.css
+ * Purpose : The nine switchable themes plus density modes (PART 08.01).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   :
+ *   ADR-008  Themes are pure variable overrides on `:root[data-theme="..."]`. No component
+ *            contains a theme branch, so adding a theme costs exactly one block here.
+ *   ADR-021  The pre-paint inline script in index.html sets `data-theme` before first paint,
+ *            so switching is instant and never flashes (no FOUC).
+ *   `auto` is resolved by the pre-paint script to `light` or `dark`; the block below is the
+ *   fallback for environments where the script could not run.
+ *   Density multiplies --bsdc-space-* through --bsdc-density (PART 08.08).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+/* 1 — Light (default) ---------------------------------------------------- */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bsdc-bg: #ffffff;
+  --bsdc-surface: #f7f8fa;
+  --bsdc-surface-2: #eef1f5;
+  --bsdc-surface-3: #e4e9f0;
+  --bsdc-border: #dde3ea;
+  --bsdc-text: #0b1220;
+  --bsdc-text-2: #4a5568;
+  --bsdc-text-3: #718096;
+  --bsdc-glass-bg: rgb(255 255 255 / 72%);
+  --bsdc-media-dim: 0;
+  --shadow-1: 0 1px 2px rgb(11 18 32 / 6%), 0 1px 1px rgb(11 18 32 / 4%);
+  --shadow-2: 0 2px 6px rgb(11 18 32 / 8%), 0 1px 2px rgb(11 18 32 / 6%);
+  --shadow-3: 0 6px 16px rgb(11 18 32 / 10%), 0 2px 4px rgb(11 18 32 / 6%);
+  --shadow-4: 0 12px 32px rgb(11 18 32 / 14%), 0 4px 8px rgb(11 18 32 / 6%);
+  --shadow-5: 0 24px 64px rgb(11 18 32 / 20%), 0 8px 16px rgb(11 18 32 / 8%);
+}
+
+/* 2 — Dark --------------------------------------------------------------- */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bsdc-bg: #0b1220;
+  --bsdc-surface: #131c2b;
+  --bsdc-surface-2: #1b2638;
+  --bsdc-surface-3: #223049;
+  --bsdc-border: #243247;
+  --bsdc-text: #e8eef6;
+  --bsdc-text-2: #aebacb;
+  --bsdc-text-3: #8593a6;
+  --bsdc-glass-bg: rgb(11 18 32 / 72%);
+  --bsdc-media-dim: 0.15;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 45%);
+  --shadow-3: 0 6px 16px rgb(0 0 0 / 50%);
+  --shadow-4: 0 12px 32px rgb(0 0 0 / 55%);
+  --shadow-5: 0 24px 64px rgb(0 0 0 / 65%);
+}
+
+/* 3 — OLED pure black ---------------------------------------------------- */
+:root[data-theme="oled"] {
+  color-scheme: dark;
+  --bsdc-bg: #000000;
+  --bsdc-surface: #05070b;
+  --bsdc-surface-2: #0b0f16;
+  --bsdc-surface-3: #121821;
+  --bsdc-border: #1d2634;
+  --bsdc-text: #f2f6fb;
+  --bsdc-text-2: #b6c2d2;
+  --bsdc-text-3: #8b98ab;
+  --bsdc-glass-bg: rgb(0 0 0 / 76%);
+  --bsdc-media-dim: 0.2;
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 60%);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 65%);
+  --shadow-3: 0 6px 16px rgb(0 0 0 / 70%);
+  --shadow-4: 0 12px 32px rgb(0 0 0 / 75%);
+  --shadow-5: 0 24px 64px rgb(0 0 0 / 85%);
+}
+
+/* 4 — Facebook blue (light) ---------------------------------------------- */
+:root[data-theme="blue"] {
+  color-scheme: light;
+  --bsdc-bg: #f0f2f5;
+  --bsdc-surface: #ffffff;
+  --bsdc-surface-2: #e9eef6;
+  --bsdc-surface-3: #dde6f4;
+  --bsdc-border: #d3dceb;
+  --bsdc-text: #050505;
+  --bsdc-text-2: #3c4a5e;
+  --bsdc-text-3: #656d7a;
+  --bsdc-focus: #1877f2;
+  --bsdc-glass-bg: rgb(240 242 245 / 78%);
+  --bsdc-media-dim: 0;
+}
+
+/* 5 — Green light -------------------------------------------------------- */
+:root[data-theme="green-light"] {
+  color-scheme: light;
+  --bsdc-bg: #f4faf6;
+  --bsdc-surface: #ffffff;
+  --bsdc-surface-2: #e7f4ec;
+  --bsdc-surface-3: #d8ecdf;
+  --bsdc-border: #cbe3d3;
+  --bsdc-text: #0d2a20;
+  --bsdc-text-2: #35564a;
+  --bsdc-text-3: #5c7d70;
+  --bsdc-glass-bg: rgb(244 250 246 / 78%);
+  --bsdc-media-dim: 0;
+}
+
+/* 6 — Green dark --------------------------------------------------------- */
+:root[data-theme="green-dark"] {
+  color-scheme: dark;
+  --bsdc-bg: #07160f;
+  --bsdc-surface: #0d2118;
+  --bsdc-surface-2: #12301f;
+  --bsdc-surface-3: #17402a;
+  --bsdc-border: #1e4c33;
+  --bsdc-text: #e6f5ec;
+  --bsdc-text-2: #a8cdb8;
+  --bsdc-text-3: #7fa891;
+  --bsdc-glass-bg: rgb(7 22 15 / 76%);
+  --bsdc-media-dim: 0.16;
+}
+
+/* 7 — High contrast (WCAG AAA) ------------------------------------------- */
+:root[data-theme="high-contrast"] {
+  color-scheme: light;
+  --bsdc-bg: #ffffff;
+  --bsdc-surface: #ffffff;
+  --bsdc-surface-2: #f2f2f2;
+  --bsdc-surface-3: #e6e6e6;
+  --bsdc-border: #000000;
+  --bsdc-text: #000000;
+  --bsdc-text-2: #1a1a1a;
+  --bsdc-text-3: #333333;
+  --bsdc-focus: #0033cc;
+  --bsdc-success: #005c22;
+  --bsdc-warning: #7a4a00;
+  --bsdc-danger: #a80000;
+  --bsdc-info: #0033cc;
+  --bsdc-verified: #00457a;
+  --bsdc-glass-bg: #ffffff;
+  --bsdc-media-dim: 0;
+  --blur-glass: 0px;
+}
+
+/* Fallback for users who ask the operating system for more contrast. */
+@media (prefers-contrast: more) {
+  :root[data-theme="light"] {
+    --bsdc-border: #8a95a3;
+    --bsdc-text-2: #2a3444;
+    --bsdc-text-3: #46505f;
+  }
+}
+
+/* 8 — Sepia (reading) ---------------------------------------------------- */
+:root[data-theme="sepia"] {
+  color-scheme: light;
+  --bsdc-bg: #f6f0e4;
+  --bsdc-surface: #fdf8ee;
+  --bsdc-surface-2: #efe5d2;
+  --bsdc-surface-3: #e6d9c1;
+  --bsdc-border: #ddcdb1;
+  --bsdc-text: #33291b;
+  --bsdc-text-2: #55492f;
+  --bsdc-text-3: #6f6144;
+  --bsdc-glass-bg: rgb(246 240 228 / 80%);
+  --bsdc-media-dim: 0.04;
+}
+
+/* 9 — Auto: resolved by the pre-paint script; this is the no-script fallback. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    color-scheme: dark;
+    --bsdc-bg: #0b1220;
+    --bsdc-surface: #131c2b;
+    --bsdc-surface-2: #1b2638;
+    --bsdc-surface-3: #223049;
+    --bsdc-border: #243247;
+    --bsdc-text: #e8eef6;
+    --bsdc-text-2: #aebacb;
+    --bsdc-text-3: #8593a6;
+    --bsdc-glass-bg: rgb(11 18 32 / 72%);
+    --bsdc-media-dim: 0.15;
+  }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Density modes (PART 08.08): comfortable 1.0, compact 0.8, spacious 1.25  *
+ * ------------------------------------------------------------------------ */
+:root[data-density="comfortable"] {
+  --bsdc-density: 1;
+}
+:root[data-density="compact"] {
+  --bsdc-density: 0.8;
+}
+:root[data-density="spacious"] {
+  --bsdc-density: 1.25;
+}
+
+/* Font scaling (PART 08.04 R-12): driven by the accessibility preferences panel. */
+:root {
+  --bsdc-font-scale: 1;
+}
+:root[data-font-scale="1.125"] {
+  --bsdc-font-scale: 1.125;
+}
+:root[data-font-scale="1.25"] {
+  --bsdc-font-scale: 1.25;
+}
+:root[data-font-scale="1.5"] {
+  --bsdc-font-scale: 1.5;
+}
+:root[data-font-scale="2"] {
+  --bsdc-font-scale: 2;
+}
+
+/* Reduced transparency (accessibility preference). */
+:root[data-transparency="reduced"] {
+  --bsdc-glass-bg: var(--bsdc-surface);
+  --blur-glass: 0px;
+}

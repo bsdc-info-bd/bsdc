@@ -1,0 +1,29 @@
+{
+  "addImage": "Add image",
+  "publish": "Publish",
+  "schedule": "Schedule",
+  "scheduleLabel": "Publish at (Dhaka time)",
+  "attachments": "Attached images",
+  "remove": "Remove",
+  "retry": "Try again",
+  "altText": "Image description",
+  "bytes": "bytes",
+  "uploading": "Uploading",
+  "uploadFailed": "The upload did not finish",
+  "visibilityLabel": "Who can see this",
+  "visibility": {
+    "public": "Everyone",
+    "followers": "Followers",
+    "group": "Group",
+    "private": "Only me"
+  },
+  "publishedTitle": "Post published",
+  "queuedTitle": "Post saved on this device",
+  "errors": {
+    "signInTitle": "Sign in",
+    "signInBody": "You need to sign in before you can publish.",
+    "emptyTitle": "Nothing to publish",
+    "emptyBody": "A post needs text, an image or a link."
+  },
+  "prompt": "What are you thinking? Write in Bangla or in English."
+}

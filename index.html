@@ -1,0 +1,66 @@
+<!doctype html>
+<!--
+  BSDC — index.html
+  Purpose : Document shell for the BSDC single-page application.
+  Owner   : RRC Development / BSDC Platform Team
+  Notes   : The inline script below is the ONLY inline script allowed in the product
+            (ADR-021). It runs before first paint to apply the persisted theme so the
+            user never sees a flash of the wrong theme (FOUC). It has no eval, no remote
+            fetch and stays well under 1 KB.
+            Real page titles, descriptions, canonical, hreflang, OG/Twitter tags and
+            JSON-LD are injected by the head manager (RESPONSE 5) and by the prerender
+            pipeline (build/prerender), which rewrites this shell per route.
+  Licence : Source-available. Re-deployment or rebranding is not permitted.
+-->
+<html lang="bn" dir="ltr" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>বাংলাদেশ সফটওয়্যার ডেভেলপমেন্ট কমিউনিটি — BSDC</title>
+    <meta
+      name="description"
+      content="BSDC — বাংলাদেশের ডেভেলপারদের ঘর। Code. Community. Commerce. One platform. A platform of RRC Development."
+    />
+    <meta name="theme-color" content="#2d6a4f" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="application-name" content="BSDC" />
+    <meta name="apple-mobile-web-app-title" content="BSDC" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="canonical" href="https://www.bsdc.info.bd/" />
+    <link rel="alternate" hreflang="bn-BD" href="https://www.bsdc.info.bd/bn/" />
+    <link rel="alternate" hreflang="en" href="https://www.bsdc.info.bd/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://www.bsdc.info.bd/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('bsdc:appearance');
+          var theme = stored && JSON.parse(stored).state ? JSON.parse(stored).state.theme : '';
+          if (!theme) {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (error) {
+          document.documentElement.setAttribute('data-theme', 'light');
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="bsdc-skip-link" href="#main-content">মূল কনটেন্টে যান / Skip to main content</a>
+    <div id="root"></div>
+    <noscript>
+      <div style="padding: 24px; font-family: system-ui, sans-serif">
+        <h1>BSDC — Bangladesh Software Development Community</h1>
+        <p>
+          এই পেজটি চালাতে JavaScript প্রয়োজন। অনুগ্রহ করে JavaScript চালু করুন। This page needs
+          JavaScript enabled to run.
+        </p>
+      </div>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

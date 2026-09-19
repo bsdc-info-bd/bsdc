@@ -1,0 +1,68 @@
+/**
+ * BSDC — src/styles/components/switch.css
+ * Purpose : Switch control for settings and feature-flag toggles (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The thumb travel and the track colour both encode state, so the control remains
+ *           legible in forced-colors mode where background colours are removed.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  inline-size: 44px;
+  block-size: 26px;
+  flex: none;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  transition: background-color var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-switch[data-state="checked"] {
+  background-color: var(--bsdc-green-500);
+  border-color: var(--bsdc-green-500);
+}
+
+.bsdc-switch[data-size="sm"] {
+  inline-size: 36px;
+  block-size: 20px;
+}
+
+.bsdc-switch__thumb {
+  display: block;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: var(--radius-full);
+  background-color: #ffffff;
+  box-shadow: var(--shadow-1);
+  transform: translateX(2px);
+  transition: transform var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-switch[data-size="sm"] .bsdc-switch__thumb {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.bsdc-switch[data-state="checked"] .bsdc-switch__thumb {
+  transform: translateX(22px);
+}
+
+.bsdc-switch[data-size="sm"][data-state="checked"] .bsdc-switch__thumb {
+  transform: translateX(18px);
+}
+
+.bsdc-switch[data-disabled="true"] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.bsdc-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+  min-height: var(--bsdc-tap-target);
+}

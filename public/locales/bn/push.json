@@ -1,0 +1,67 @@
+{
+  "title": "ওয়েব বিজ্ঞপ্তি",
+  "state": {
+    "enabled": "এই ডিভাইসে বিজ্ঞপ্তি চালু আছে।",
+    "off": "এই ডিভাইসে বিজ্ঞপ্তি বন্ধ। চাইলে চালু করতে পারেন।",
+    "blocked": "ব্রাউজারে বিজ্ঞপ্তি অবরুদ্ধ। ব্রাউজারের সেটিং থেকে অনুমতি দিন।",
+    "unsupported": "এই ব্রাউজার ওয়েব বিজ্ঞপ্তি সমর্থন করে না।"
+  },
+  "enable": "বিজ্ঞপ্তি চালু করুন",
+  "disable": "বিজ্ঞপ্তি বন্ধ করুন",
+  "privacyNote": "আমরা টোকেনের হ্যাশই সংরক্ষণ করি, টোকেন নিজে নয়।",
+  "enabled": {
+    "bn": "বিজ্ঞপ্তি চালু হয়েছে",
+    "en": "Notifications turned on"
+  },
+  "disabled": {
+    "bn": "বিজ্ঞপ্তি বন্ধ হয়েছে",
+    "en": "Notifications turned off"
+  },
+  "broadcast": {
+    "title": "সম্প্রচার ডেস্ক",
+    "headline": "শিরোনাম",
+    "body": "বার্তা",
+    "audience": "কারা পাবেন",
+    "channel": "কীভাবে পাঠাবেন",
+    "targetPath": "খুলবে কোথায়",
+    "review": "পর্যালোচনা করুন",
+    "confirmLabel": "সম্প্রচার নিশ্চিতকরণ",
+    "confirm": "{audience} — এই বার্তাটি হাতেই পাঠানো হবে, কোনো স্বয়ংক্রিয় নিয়ম নেই।",
+    "confirmSend": "এখনই পাঠান",
+    "cancel": "বাতিল",
+    "sent": {
+      "bn": "{count} জনের কাছে পাঠানো হয়েছে",
+      "en": "Sent to {count} people"
+    }
+  },
+  "audience": {
+    "all": "সবাই",
+    "members": "সদস্য",
+    "creators": "নির্মাতা",
+    "vendors": "বিক্রেতা",
+    "staff": "কর্মী"
+  },
+  "channel": {
+    "push": "ওয়েব পুশ",
+    "onesignal": "OneSignal",
+    "both": "দুটোতেই"
+  },
+  "error": {
+    "default": {
+      "bn": "বিজ্ঞপ্তি পাঠানো যায়নি।",
+      "en": "The notification could not be sent."
+    },
+    "BSDC-PUSH-001": {
+      "bn": "অনুমতি পাওয়া যায়নি। ব্রাউজারের সেটিং থেকে অনুমতি দিন।",
+      "en": "Permission was refused. Allow it from your browser settings."
+    },
+    "BSDC-PUSH-002": {
+      "bn": "এই ব্রাউজার বা ডিভাইস পুশ সমর্থন করে না।",
+      "en": "This browser or device cannot take push notifications."
+    },
+    "BSDC-NET-005": {
+      "bn": "সংযোগ না থাকায় পাঠানো যায়নি।",
+      "en": "Nothing could be sent while offline."
+    }
+  }
+}

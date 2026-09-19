@@ -1,0 +1,48 @@
+/**
+ * BSDC — src/styles/components/slider.css
+ * Purpose : Slider used by discovery preferences and volume control (F-180).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The thumb is 24px so it satisfies the 44px touch target once the track padding is
+ *           included; keyboard stepping is provided by Radix.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-slider {
+  position: relative;
+  display: flex;
+  align-items: center;
+  inline-size: 100%;
+  block-size: 24px;
+  touch-action: none;
+  user-select: none;
+}
+
+.bsdc-slider__track {
+  position: relative;
+  flex: 1;
+  block-size: 6px;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface-3);
+}
+
+.bsdc-slider__range {
+  position: absolute;
+  block-size: 100%;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-green-500);
+}
+
+.bsdc-slider__thumb {
+  display: block;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: var(--radius-full);
+  background-color: #ffffff;
+  border: 2px solid var(--bsdc-green-500);
+  box-shadow: var(--shadow-2);
+  outline: none;
+}
+
+.bsdc-slider__thumb:focus-visible {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bsdc-green-500) 28%, transparent);
+}

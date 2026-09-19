@@ -1,0 +1,497 @@
+// BSDC — firestore.rules
+// Purpose : Firestore security rules. Firestore is the durable source of truth (ADR-018).
+// Owner   : RRC Development / BSDC Platform Team
+// Notes   :
+//   LAW-03 — privilege is decided here and in custom claims, never in the client. The UI may
+//            hide a button; only this file decides whether the write is allowed.
+//   Every mutable document carries `updatedAt`; every deletable document is soft-deleted first
+//   (`deletedAt` + `deletedBy`) and purged by a scheduled job after the 30-day recovery window.
+//   Text ceilings mirror src/core/config/limits.ts. They are duplicated on purpose: a rule that
+//   trusted the client would not be a rule.
+// Licence : Source-available. Re-deployment or rebranding is not permitted.
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------------------------------------------------------------- identity
+    function signedIn() { return request.auth != null; }
+    function me() { return request.auth.uid; }
+    function claimValue(key, fallback) { return request.auth.token.get(key, fallback); }
+    function role() { return claimValue('role', 'member'); }
+    function isRoot() { return claimValue('root', false) == true; }
+    function isAdmin() { return isRoot() || role() == 'admin'; }
+    function isModerator() { return isAdmin() || role() == 'moderator'; }
+    function isSupport() { return isModerator() || role() == 'support'; }
+    function isVendor() { return isSupport() || role() == 'vendor'; }
+    function isSuspended() { return claimValue('suspended', false) == true; }
+    function emailVerified() { return claimValue('email_verified', false) == true; }
+    function contributing() { return signedIn() && !isSuspended() && emailVerified(); }
+    function isSelf(userId) { return signedIn() && me() == userId; }
+
+    // ---------------------------------------------------------------- request shape
+    function isCreating() { return resource == null && request.resource != null; }
+    function isUpdating() { return resource != null && request.resource != null; }
+    function isDeleting() { return request.resource == null; }
+    function incoming() { return request.resource.data; }
+    function outgoing() { return resource.data; }
+    function changed(field) { return !isUpdating() || incoming()[field] != outgoing()[field]; }
+    function unchanged(field) { return isCreating() || incoming()[field] == outgoing()[field]; }
+    function serverOwned(field) { return isCreating() || unchanged(field); }
+
+    function textFits(value, ceiling) { return value is string && value.size() <= ceiling; }
+    function isRecentTimestamp(value) {
+      return value is timestamp
+        && value <= request.time + duration.value(1, 'h')
+        && value >= request.time - duration.value(365, 'd');
+    }
+
+    function visibility(value) {
+      return value == 'public' || value == 'followers' || value == 'group' || value == 'private';
+    }
+
+    function reactionType(value) {
+      return value == 'like' || value == 'love' || value == 'care' || value == 'haha'
+        || value == 'wow' || value == 'sad' || value == 'angry' || value == 'clap'
+        || value == 'fire' || value == 'mindblown';
+    }
+
+    // ---------------------------------------------------------------- collections
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isSupport();
+      allow create: if isSelf(userId)
+                    && !isSuspended()
+                    && incoming().keys().hasOnly([
+                         'uid', 'username', 'displayName', 'displayNameBn', 'photoUrl',
+                         'headline', 'bio', 'locale', 'region', 'district', 'website',
+                         'role', 'createdAt', 'updatedAt', 'onboardingComplete',
+                         'socialLinks', 'skills', 'privacy'
+                       ])
+                    && textFits(incoming().username, 30)
+                    && incoming().username.matches('^[a-z0-9._]+$')
+                    && textFits(incoming().displayName, 60)
+                    && textFits(incoming().bio, 320)
+                    && incoming().role == 'member'
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if isSelf(userId)
+                    && !isSuspended()
+                    && serverOwned('role')
+                    && serverOwned('uid')
+                    && serverOwned('createdAt')
+                    && incoming().keys().hasOnly(outgoing().keys().concat(['updatedAt']))
+                    && (!('bio' in incoming()) || textFits(incoming().bio, 320))
+                    && (!('headline' in incoming()) || textFits(incoming().headline, 120))
+                    && (!('username' in incoming()) || textFits(incoming().username, 30))
+                    && isRecentTimestamp(incoming().updatedAt);
+      allow delete: if false;
+
+      match /saved/{postId} {
+        allow read: if isSelf(userId);
+        allow create: if isSelf(userId) && incoming().keys().hasOnly(['postId', 'savedAt']);
+        allow delete: if isSelf(userId);
+      }
+
+      match /drafts/{draftId} {
+        allow read, write, delete: if isSelf(userId)
+          && (!isUpdating() || textFits(incoming().body, 100000));
+      }
+
+      match /notifications/{notificationId} {
+        allow read: if isSelf(userId);
+        allow update: if isSelf(userId)
+                      && incoming().diff(outgoing()).affectedKeys().hasOnly(['read', 'readAt']);
+        allow delete: if isSelf(userId);
+        allow create: if false;
+      }
+
+      match /devices/{deviceId} {
+        allow read, write, delete: if isSelf(userId);
+      }
+    }
+
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if contributing() && incoming().keys().hasOnly(['uid', 'claimedAt']) && incoming().uid == me();
+      allow update: if isAdmin();
+      allow delete: if signedIn() && outgoing().uid == me();
+    }
+
+    match /posts/{postId} {
+      allow read: if isCreating()
+                  || outgoing().visibility == 'public'
+                  || outgoing().authorUid == me()
+                  || isSupport();
+      allow create: if contributing()
+                    && incoming().keys().hasAll(['authorUid', 'body', 'visibility', 'createdAt', 'updatedAt'])
+                    && incoming().authorUid == me()
+                    && textFits(incoming().body, 100000)
+                    && visibility(incoming().visibility)
+                    && incoming().deletedAt == null
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if ((isSelf(outgoing().authorUid) && !isSuspended()) || isModerator())
+                    && serverOwned('authorUid')
+                    && serverOwned('createdAt')
+                    && (!('body' in incoming()) || textFits(incoming().body, 100000))
+                    && (!('visibility' in incoming()) || visibility(incoming().visibility))
+                    && isRecentTimestamp(incoming().updatedAt);
+      allow delete: if isModerator() || (isSelf(outgoing().authorUid) && outgoing().deletedAt != null);
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if contributing()
+                      && incoming().authorUid == me()
+                      && textFits(incoming().body, 4000)
+                      && incoming().deletedAt == null
+                      && isRecentTimestamp(incoming().createdAt);
+        allow update: if ((isSelf(outgoing().authorUid) && !isSuspended()) || isModerator())
+                      && (!('body' in incoming()) || textFits(incoming().body, 4000));
+        allow delete: if isModerator() || (isSelf(outgoing().authorUid) && outgoing().deletedAt != null);
+      }
+
+      match /reactions/{uid} {
+        allow read: if true;
+        allow create, update: if isSelf(uid) && !isSuspended() && reactionType(incoming().type);
+        allow delete: if isSelf(uid);
+      }
+    }
+
+    function isMember(groupId) {
+      return signedIn() && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(me()));
+    }
+    function isGroupManager(groupId) {
+      return signedIn()
+        && (get(/databases/$(database)/documents/groups/$(groupId)/members/$(me())).data.role == 'manager'
+            || get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == me());
+    }
+
+    match /groups/{groupId} {
+      allow read: if isCreating() || outgoing().privacy != 'secret' || isMember(groupId) || isSupport();
+      allow create: if contributing()
+                    && incoming().ownerUid == me()
+                    && textFits(incoming().name, 80)
+                    && textFits(incoming().description, 2000);
+      allow update: if (isGroupManager(groupId) || isModerator())
+                    && (!('name' in incoming()) || textFits(incoming().name, 80))
+                    && (!('description' in incoming()) || textFits(incoming().description, 2000));
+      allow delete: if isModerator() || (isSelf(outgoing().ownerUid) && outgoing().deletedAt != null);
+
+      match /members/{uid} {
+        allow read: if true;
+        allow create: if isSelf(uid) && !isSuspended();
+        allow update: if isSelf(uid) || isGroupManager(groupId) || isModerator();
+        allow delete: if isSelf(uid) || isGroupManager(groupId) || isModerator();
+      }
+    }
+
+    match /conversations/{conversationId} {
+      allow read: if signedIn() && me() in outgoing().participantUids;
+      allow create: if contributing()
+                    && me() in incoming().participantUids
+                    && incoming().participantUids.size() >= 2;
+      allow update: if signedIn() && me() in outgoing().participantUids;
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if signedIn() && me() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
+        allow create: if contributing()
+                      && incoming().senderUid == me()
+                      && incoming().senderUid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids
+                      && textFits(incoming().body, 8000)
+                      && isRecentTimestamp(incoming().createdAt);
+        allow update: if signedIn()
+                      && me() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids
+                      && incoming().diff(outgoing()).affectedKeys().hasOnly(['deliveredAt', 'readAt', 'editedAt', 'body', 'deletedAt']);
+        allow delete: if isSelf(outgoing().senderUid) && outgoing().deletedAt != null;
+      }
+    }
+
+    match /mediaAssets/{assetId} {
+      allow read: if isSelf(outgoing().ownerUid) || isSupport();
+      allow create: if contributing()
+                    && incoming().ownerUid == me()
+                    && incoming().provider in ['cloudinary', 'imgbb']
+                    && incoming().kind != 'video';
+      allow update: if isSelf(outgoing().ownerUid) || isModerator();
+      allow delete: if isSelf(outgoing().ownerUid) || isModerator();
+    }
+
+    match /reports/{reportId} {
+      allow read: if isSupport();
+      allow create: if contributing()
+                    && incoming().reporterUid == me()
+                    && textFits(incoming().reasonText, 500);
+      allow update: if isSupport();
+      allow delete: if isAdmin();
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if false;
+      allow update, delete: if false;
+    }
+
+    match /appConfig/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /featureFlags/{flagKey} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /outboxMirror/{entryId} {
+      allow read, write: if false;
+    }
+
+    // ---------------------------------------------------------------- reputation
+    // A reputation record is written by Cloud Functions. A person may read their own and
+    // everybody else's public standing, and may only opt out of the leaderboard on their own
+    // record — that switch is the one part of gamification that has to be a personal choice.
+    match /users/{userId}/reputationEvents/{eventId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- social graph
+    match /users/{userId}/followers/{followerUid} {
+      allow read: if true;
+      allow create: if isSelf(followerUid) && !isSuspended();
+      allow update: if isSelf(followerUid) || isSelf(userId);
+      allow delete: if isSelf(followerUid) || isSelf(userId);
+    }
+
+    match /users/{userId}/following/{targetUid} {
+      allow read: if isSelf(userId) || isSupport();
+      allow create: if isSelf(userId) && !isSuspended();
+      allow update: if isSelf(userId);
+      allow delete: if isSelf(userId);
+    }
+
+    match /users/{userId}/badges/{badgeId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ---------------------------------------------------------------- stories
+    // A story is public while it lives, and the only thing a reader may write is the fact that
+    // they watched it. The `expiresAt` field is server-owned once written: a story's promise is
+    // that it goes away, and a client that could extend it would break that promise.
+    match /stories/{storyId} {
+      allow read: if isCreating()
+                  || outgoing().visibility == 'public'
+                  || outgoing().authorUid == me()
+                  || isSupport();
+      allow create: if contributing()
+                    && incoming().authorUid == me()
+                    && textFits(incoming().caption, 300)
+                    && incoming().mediaUrl is string
+                    && incoming().deletedAt == null
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if (isSelf(outgoing().authorUid) && !isSuspended()) || isModerator()
+                    && (!('caption' in incoming()) || textFits(incoming().caption, 300));
+      allow delete: if isModerator() || (isSelf(outgoing().authorUid) && outgoing().deletedAt != null);
+
+      match /views/{uid} {
+        allow read: if isSelf(uid)
+                    || get(/databases/$(database)/documents/stories/$(storyId)).data.authorUid == me()
+                    || isSupport();
+        allow create: if isSelf(uid) && !isSuspended();
+        allow update, delete: if isSelf(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- events
+    match /events/{eventId} {
+      allow read: if isCreating()
+                  || outgoing().status == 'published'
+                  || outgoing().ownerUid == me()
+                  || isSupport();
+      allow create: if contributing()
+                    && incoming().ownerUid == me()
+                    && textFits(incoming().title, 120)
+                    && textFits(incoming().description, 100000)
+                    && incoming().deletedAt == null
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if (isSelf(outgoing().ownerUid) && !isSuspended()) || isModerator()
+                    && serverOwned('ownerUid')
+                    && serverOwned('createdAt')
+                    && (!('title' in incoming()) || textFits(incoming().title, 120))
+                    && isRecentTimestamp(incoming().updatedAt);
+      allow delete: if isModerator() || (isSelf(outgoing().ownerUid) && outgoing().deletedAt != null);
+
+      // An answer belongs to the person who gave it. The organiser may read every answer to their
+      // own event and may move an application through the pipeline, but may never answer on
+      // somebody else's behalf.
+      match /rsvps/{uid} {
+        allow read: if isSelf(uid)
+                    || get(/databases/$(database)/documents/events/$(eventId)).data.ownerUid == me()
+                    || isSupport();
+        allow create, update: if isSelf(uid) && !isSuspended();
+        allow delete: if isSelf(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- jobs
+    match /jobs/{jobId} {
+      allow read: if isCreating()
+                  || outgoing().status != 'draft'
+                  || outgoing().employerUid == me()
+                  || isSupport();
+      allow create: if contributing()
+                    && incoming().employerUid == me()
+                    && textFits(incoming().title, 120)
+                    && textFits(incoming().description, 100000)
+                    && incoming().applicationCount == 0
+                    && incoming().deletedAt == null
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if (isSelf(outgoing().employerUid) && !isSuspended()) || isModerator()
+                    && serverOwned('employerUid')
+                    && serverOwned('applicationCount')
+                    && serverOwned('createdAt');
+      allow delete: if isModerator() || (isSelf(outgoing().employerUid) && outgoing().deletedAt != null);
+
+      // The document id is the applicant id, which is what makes a second application impossible
+      // rather than merely unlikely. A candidate may read their own application; the employer may
+      // read and advance every one; nobody may read a rival's cover letter.
+      match /applications/{uid} {
+        allow read: if isSelf(uid)
+                    || get(/databases/$(database)/documents/jobs/$(jobId)).data.employerUid == me()
+                    || isSupport();
+        allow create: if isSelf(uid)
+                      && contributing()
+                      && textFits(incoming().coverLetter, 4000)
+                      && incoming().deletedAt == null;
+        allow update: if isSelf(uid)
+                      || get(/databases/$(database)/documents/jobs/$(jobId)).data.employerUid == me();
+        allow delete: if isSelf(uid);
+      }
+    }
+
+    // ---------------------------------------------------------------- projects
+    match /projects/{projectId} {
+      allow read: if isCreating()
+                  || outgoing().visibility == 'public'
+                  || outgoing().ownerUid == me()
+                  || me() in outgoing().memberUids
+                  || isSupport();
+      allow create: if contributing()
+                    && incoming().ownerUid == me()
+                    && textFits(incoming().title, 100)
+                    && textFits(incoming().summary, 240)
+                    && incoming().deletedAt == null
+                    && isRecentTimestamp(incoming().createdAt);
+      allow update: if (isSelf(outgoing().ownerUid) && !isSuspended()) || isModerator()
+                    && serverOwned('ownerUid')
+                    && serverOwned('createdAt');
+      allow delete: if isModerator() || (isSelf(outgoing().ownerUid) && outgoing().deletedAt != null);
+
+      match /members/{uid} {
+        allow read: if true;
+        allow create: if isSelf(uid) && !isSuspended();
+        allow update: if isSelf(uid)
+                      || get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid == me();
+        allow delete: if isSelf(uid)
+                      || get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid == me();
+      }
+    }
+
+    // ---------------------------------------------------------------- freelancer hub
+    match /gigs/{gigId} {
+      allow read: if isCreating()
+                  || outgoing().status != 'draft'
+                  || outgoing().freelancerUid == me()
+                  || isSupport();
+      allow create: if isVendor()
+                    && contributing()
+                    && incoming().freelancerUid == me()
+                    && textFits(incoming().title, 100)
+                    && textFits(incoming().description, 100000)
+                    && incoming().packages.size() >= 1
+                    && incoming().packages.size() <= 3
+                    && incoming().deletedAt == null;
+      allow update: if (isSelf(outgoing().freelancerUid) && !isSuspended()) || isModerator()
+                    && serverOwned('freelancerUid')
+                    && serverOwned('ratingSum')
+                    && serverOwned('ratingCount')
+                    && serverOwned('completedOrders');
+      allow delete: if isModerator() || (isSelf(outgoing().freelancerUid) && outgoing().deletedAt != null);
+    }
+
+    // An order is a written agreement between two people. Both of them read it; only the
+    // freelancer moves the work forward and only the buyer rates it afterwards. BSDC holds no
+    // money, and no rule here pretends otherwise — there is no payment field to write.
+    match /gigOrders/{orderId} {
+      allow read: if isSelf(outgoing().buyerUid) || isSelf(outgoing().freelancerUid) || isSupport();
+      allow create: if contributing()
+                    && isSelf(incoming().buyerUid)
+                    && incoming().freelancerUid != me()
+                    && textFits(incoming().requirement, 2000)
+                    && incoming().rating == 0
+                    && incoming().deletedAt == null;
+      allow update: if isSelf(outgoing().freelancerUid)
+                    && incoming().diff(outgoing()).affectedKeys().hasOnly(
+                         ['status', 'deliveredAt', 'completedAt', 'updatedAt', 'deletedAt']
+                       );
+      allow update: if isSelf(outgoing().buyerUid)
+                    && incoming().diff(outgoing()).affectedKeys().hasOnly(
+                         ['status', 'rating', 'review', 'updatedAt', 'deletedAt']
+                       )
+                    && (!('rating' in incoming()) || (incoming().rating >= 1 && incoming().rating <= 5))
+                    && (!('review' in incoming()) || textFits(incoming().review, 600));
+      allow delete: if false;
+    }
+
+    // ---------------------------------------------------------------- moderation
+    // An appeal is filed once, against a decision, and read by somebody who did not make it. The
+    // rule enforces the second part as well as the first: a reviewer reading their own decision
+    // back is not an appeal.
+    match /appeals/{appealId} {
+      allow read: if isSelf(outgoing().appellantUid) || isSupport();
+      allow create: if contributing()
+                    && incoming().appellantUid == me()
+                    && textFits(incoming().reasonText, 500)
+                    && incoming().status == 'open'
+                    && incoming().reviewedBy == '';
+      // Somebody who decided the report may not decide its appeal. That is the whole point of one.
+      allow update: if isSupport() && outgoing().reviewedBy != me();
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------- broadcasts (LAW-09)
+    // A broadcast may be drafted by an admin and nothing else. It may never be sent from a client:
+    // `status` and `sentAt` are server-owned, so the only way a broadcast reaches anyone is a
+    // Cloud Function that an admin called by pressing a button. There is no schedule field at all.
+    match /broadcasts/{broadcastId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+                    && incoming().authorUid == me()
+                    && textFits(incoming().title, 80)
+                    && textFits(incoming().body, 240)
+                    && incoming().status == 'draft'
+                    && incoming().sentAt == null
+                    && incoming().scheduledAt == null
+                    && incoming().recipientCount == 0;
+      allow update: if isAdmin()
+                    && serverOwned('status')
+                    && serverOwned('sentAt')
+                    && serverOwned('scheduledAt')
+                    && serverOwned('recipientCount')
+                    && serverOwned('authorUid');
+      allow delete: if isAdmin();
+    }
+
+    // ---------------------------------------------------------------- server-owned ledgers
+    match /rateLimits/{key} {
+      allow read, write: if false;
+    }
+
+    match /passkeys/{key} {
+      allow read, write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

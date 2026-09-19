@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC reaction glyph: sad. Icons are SVG only — the product ships no emoji (LAW-01). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="sad reaction" style="color:#4F91FF">
+  <circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8.5 16c1.2-1.5 5.8-1.5 7 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/><path d="M9 9.8l1.6 1M15 9.8l-1.6 1" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+</svg>

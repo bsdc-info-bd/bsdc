@@ -1,0 +1,104 @@
+/**
+ * BSDC — src/styles/components/modal.css
+ * Purpose : Centred dialog surface for pointer-fine viewports (PART 08.04 R-19).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Below 641px the Modal component renders the Sheet variant instead, so this file owns
+ *           the desktop geometry only: centring, max height, scroll containment and backdrop.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  background-color: rgb(0 0 0 / 55%);
+  display: grid;
+  place-items: center;
+  padding: var(--bsdc-space-4);
+  animation: bsdc-fade-in var(--motion-fast) var(--ease-standard) both;
+}
+
+.bsdc-modal__content {
+  inline-size: min(560px, 100%);
+  max-block-size: min(88dvh, 900px);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-5);
+  overflow: hidden;
+  animation: bsdc-modal-in var(--motion-base) var(--ease-emphasised) both;
+}
+
+.bsdc-modal__content[data-size="sm"] {
+  inline-size: min(420px, 100%);
+}
+.bsdc-modal__content[data-size="lg"] {
+  inline-size: min(760px, 100%);
+}
+.bsdc-modal__content[data-size="xl"] {
+  inline-size: min(1024px, 100%);
+}
+.bsdc-modal__content[data-size="full"] {
+  inline-size: 100%;
+  block-size: 100%;
+  border-radius: 0;
+}
+
+.bsdc-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-4);
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-modal__title {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.bsdc-modal__body {
+  padding: var(--bsdc-space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.bsdc-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-4);
+  border-block-start: var(--bsdc-hairline) solid var(--bsdc-border);
+  flex-wrap: wrap;
+}
+
+@keyframes bsdc-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes bsdc-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-modal__overlay,
+  .bsdc-modal__content {
+    animation: none;
+  }
+}

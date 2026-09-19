@@ -1,0 +1,98 @@
+{
+  "title": "Freelancer hub",
+  "subtitle": "The services people in this community offer, and what they charge.",
+  "offer": "Offer a service",
+  "offerRequiresVendor": "You need to be a vendor to offer a service. Ask an admin and they will look at it.",
+  "tabs": {
+    "label": "Freelancer sections",
+    "gigs": "All services",
+    "sales": "What you are delivering",
+    "purchases": "What you bought",
+    "salesEmpty": "No orders have come to you yet.",
+    "purchasesEmpty": "You have not bought any service yet."
+  },
+  "list": {
+    "all": "All",
+    "label": "Service list",
+    "filterLabel": "Filter by category",
+    "count": "{count} services",
+    "empty": {
+      "title": "No services yet",
+      "description": "Yours could be the first."
+    }
+  },
+  "card": {
+    "from": "From {price} taka",
+    "new": "New"
+  },
+  "form": {
+    "title": "Service name",
+    "category": "Category",
+    "description": "Description",
+    "skills": "Skills",
+    "skillsHint": "Separate with commas. Up to twenty.",
+    "packages": "Packages",
+    "packageName": "Package name",
+    "packagePrice": "Price in taka",
+    "packageDays": "Delivery in days",
+    "packageRevisions": "Revisions",
+    "packageDescription": "What this package includes",
+    "addPackage": "Add package",
+    "removePackage": "Remove package",
+    "cancel": "Cancel",
+    "publish": "Publish"
+  },
+  "order": {
+    "title": "Order {gig}",
+    "description": "Once you confirm, this order is written down as an agreement between you two.",
+    "package": "Package",
+    "requirement": "What you need",
+    "requirementHint": "The clearer you write it, the better the work comes back.",
+    "price": "Price",
+    "due": "Delivery",
+    "revisions": "Revisions",
+    "paymentNote": "BSDC does not hold money. How you pay is between you and the seller. This order is the written agreement.",
+    "ref": "Order reference",
+    "dueIn": "{count} days left",
+    "rateLabel": "Rating",
+    "reviewLabel": "Your review",
+    "submitReview": "Send the review",
+    "confirm": "Confirm the order",
+    "cancel": "Cancel",
+    "close": "Close",
+    "placed": {
+      "bn": "Order placed",
+      "en": "Order placed"
+    },
+    "updated": {
+      "bn": "Order updated",
+      "en": "Order updated"
+    },
+    "rated": {
+      "bn": "Your review was recorded",
+      "en": "Your review was recorded"
+    }
+  },
+  "created": {
+    "bn": "Service published",
+    "en": "Service published"
+  },
+  "error": {
+    "default": {
+      "bn": "The service could not be saved.",
+      "en": "The service could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "The service is missing something required.",
+      "en": "The service is missing something required."
+    },
+    "BSDC-GIG-001": {
+      "bn": "Add at least one package with a price and a delivery time.",
+      "en": "Add at least one package with a price and a delivery time."
+    },
+    "BSDC-GIG-002": {
+      "bn": "You cannot buy your own service.",
+      "en": "You cannot buy your own service."
+    }
+  }
+}

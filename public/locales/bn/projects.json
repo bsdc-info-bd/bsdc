@@ -1,0 +1,73 @@
+{
+  "title": "প্রকল্প",
+  "subtitle": "কমিউনিটি যা বানাচ্ছে, আর কার সাহায্য দরকার।",
+  "start": "প্রকল্প যোগ করুন",
+  "commitment": {
+    "hours": "কয়েক ঘণ্টা",
+    "part-time": "খণ্ডকালীন",
+    "full-time": "পূর্ণকালীন"
+  },
+  "tabs": {
+    "label": "প্রকল্পের তালিকা",
+    "directory": "সব প্রকল্প",
+    "mine": "আমার প্রকল্প",
+    "mineEmpty": "আপনার কোনো প্রকল্প নেই। প্রথমটি যোগ করতে পারেন।"
+  },
+  "list": {
+    "all": "সব",
+    "label": "প্রকল্পের তালিকা",
+    "filterLabel": "প্রকল্প বাছাই",
+    "recruitingOnly": "সহযোগী খুঁজছে",
+    "count": "{shown}টি দেখানো হচ্ছে, মোট {total}টির মধ্যে",
+    "empty": {
+      "title": "এই ছাঁকনিতে কোনো প্রকল্প নেই",
+      "description": "ছাঁকনি সরিয়ে আবার দেখুন।"
+    }
+  },
+  "card": {
+    "repo": "কোড",
+    "demo": "ডেমো",
+    "recruiting": "সহযোগী চাই · {count}টি ভূমিকা",
+    "notRecruiting": "এই মুহূর্তে সহযোগী খোঁজা হচ্ছে না"
+  },
+  "form": {
+    "title": "প্রকল্পের নাম",
+    "summary": "এক লাইনে কী",
+    "description": "বিস্তারিত",
+    "repo": "রিপোজিটরি লিংক",
+    "demo": "ডেমো লিংক",
+    "stack": "প্রযুক্তি",
+    "stackHint": "কমা দিয়ে আলাদা করুন। সর্বোচ্চ ১২টি।",
+    "status": "অবস্থা",
+    "roles": "কার সাহায্য দরকার",
+    "roleTitle": "ভূমিকা",
+    "roleCommitment": "সময়",
+    "addRole": "ভূমিকা যোগ করুন",
+    "removeRole": "ভূমিকা সরান",
+    "cancel": "বাতিল",
+    "publish": "প্রকাশ করুন"
+  },
+  "detail": {
+    "close": "বন্ধ করুন",
+    "join": "যোগ দিন",
+    "leave": "প্রকল্প ছাড়ুন",
+    "filled": "পূরণ হয়েছে",
+    "open": "খোলা",
+    "repo": "কোড দেখুন",
+    "demo": "ডেমো দেখুন"
+  },
+  "created": {
+    "bn": "প্রকল্প প্রকাশিত",
+    "en": "Project published"
+  },
+  "error": {
+    "default": {
+      "bn": "প্রকল্প সংরক্ষণ করা যায়নি।",
+      "en": "The project could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "প্রকল্পের নাম ও এক লাইনের সারাংশ দিন।",
+      "en": "Give the project a name and a one-line summary."
+    }
+  }
+}

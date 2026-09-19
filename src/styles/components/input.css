@@ -1,0 +1,147 @@
+/**
+ * BSDC — src/styles/components/input.css
+ * Purpose : Field, textarea, group and helper-text styling (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Error, hint and counter rows belong to the field, not the page: screen readers receive
+ *           them through aria-describedby wired by the React component.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+  min-width: 0;
+}
+
+.bsdc-field__label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-field__required {
+  color: var(--bsdc-danger);
+  margin-inline-start: 2px;
+}
+
+.bsdc-input {
+  inline-size: 100%;
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-2);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+  color: var(--bsdc-text);
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard);
+}
+
+.bsdc-input::placeholder {
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-input:hover:not(:disabled) {
+  border-color: var(--bsdc-green-300);
+}
+
+.bsdc-input:focus-visible {
+  outline: none;
+  border-color: var(--bsdc-green-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bsdc-green-500) 22%, transparent);
+}
+
+.bsdc-input[data-invalid="true"] {
+  border-color: var(--bsdc-danger);
+}
+
+.bsdc-input[data-invalid="true"]:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bsdc-danger) 22%, transparent);
+}
+
+.bsdc-input:disabled {
+  background-color: var(--bsdc-surface-2);
+  color: var(--bsdc-text-3);
+  cursor: not-allowed;
+}
+
+.bsdc-textarea {
+  inline-size: 100%;
+  min-height: var(--bsdc-tap-target);
+  min-block-size: 96px;
+  padding-inline: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-2);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+  color: var(--bsdc-text);
+  resize: vertical;
+  line-height: var(--lh-en);
+}
+
+.bsdc-textarea:focus-visible {
+  outline: none;
+  border-color: var(--bsdc-green-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bsdc-green-500) 22%, transparent);
+}
+
+.bsdc-field__hint {
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-field__error {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-1);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--bsdc-danger);
+}
+
+.bsdc-field__counter {
+  font-size: var(--fs-2xs);
+  color: var(--bsdc-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.bsdc-field__counter[data-over="true"] {
+  color: var(--bsdc-danger);
+  font-weight: 700;
+}
+
+.bsdc-input-group {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  inline-size: 100%;
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+}
+
+.bsdc-input-group:focus-within {
+  border-color: var(--bsdc-green-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bsdc-green-500) 22%, transparent);
+}
+
+.bsdc-input-group__affix {
+  display: inline-flex;
+  align-items: center;
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-input-group > .bsdc-input {
+  border: none;
+  background: none;
+  padding: 0;
+  min-height: 32px;
+}
+
+.bsdc-input-group > .bsdc-input:focus-visible {
+  box-shadow: none;
+}

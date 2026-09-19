@@ -1,0 +1,21 @@
+{
+  "appearance": "চেহারা",
+  "theme": "থিম",
+  "fontScale": "অক্ষরের আকার",
+  "themes": {
+    "light": "লাইট",
+    "dark": "ডার্ক",
+    "oled": "OLED কালো",
+    "blue": "ফেসবুক ব্লু",
+    "green-light": "সবুজ লাইট",
+    "green-dark": "সবুজ ডার্ক",
+    "high-contrast": "হাই কনট্রাস্ট",
+    "sepia": "সেপিয়া",
+    "auto": "সিস্টেম অনুযায়ী"
+  },
+  "density": {
+    "comfortable": "আরামদায়ক",
+    "compact": "ঘন",
+    "spacious": "প্রশস্ত"
+  }
+}

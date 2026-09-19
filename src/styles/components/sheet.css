@@ -1,0 +1,113 @@
+/**
+ * BSDC — src/styles/components/sheet.css
+ * Purpose : Bottom sheet for touch viewports and side sheet for pointer-fine (PART 08.04 R-19).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Sheets honour safe-area insets, support the drag-to-dismiss gesture driven by the
+ *           React component, and trap focus (LAW-14).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-sheet__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  background-color: rgb(0 0 0 / 55%);
+  animation: bsdc-fade-in var(--motion-fast) var(--ease-standard) both;
+}
+
+.bsdc-sheet__content {
+  position: fixed;
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  box-shadow: var(--shadow-5);
+}
+
+.bsdc-sheet__content[data-side="bottom"] {
+  inset-inline: 0;
+  inset-block-end: 0;
+  border-start-start-radius: var(--radius-2xl);
+  border-start-end-radius: var(--radius-2xl);
+  max-block-size: 92dvh;
+  padding-block-end: var(--bsdc-safe-bottom);
+  animation: bsdc-sheet-up var(--motion-base) var(--ease-emphasised) both;
+}
+
+.bsdc-sheet__content[data-side="right"] {
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: min(420px, 92vw);
+  border-start-start-radius: var(--radius-xl);
+  border-end-start-radius: var(--radius-xl);
+  animation: bsdc-sheet-left var(--motion-base) var(--ease-emphasised) both;
+}
+
+.bsdc-sheet__content[data-side="left"] {
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: min(420px, 92vw);
+  border-start-end-radius: var(--radius-xl);
+  border-end-end-radius: var(--radius-xl);
+  animation: bsdc-sheet-right var(--motion-base) var(--ease-emphasised) both;
+}
+
+.bsdc-sheet__handle {
+  inline-size: 44px;
+  block-size: 4px;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-border);
+  margin: var(--bsdc-space-2) auto;
+  flex: none;
+}
+
+.bsdc-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-4);
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-sheet__body {
+  padding: var(--bsdc-space-4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  flex: 1;
+}
+
+@keyframes bsdc-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes bsdc-sheet-left {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes bsdc-sheet-right {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-sheet__overlay,
+  .bsdc-sheet__content {
+    animation: none;
+  }
+}

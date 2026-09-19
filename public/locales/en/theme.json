@@ -1,0 +1,21 @@
+{
+  "appearance": "Appearance",
+  "theme": "Theme",
+  "fontScale": "Text size",
+  "themes": {
+    "light": "Light",
+    "dark": "Dark",
+    "oled": "OLED black",
+    "blue": "Facebook blue",
+    "green-light": "Green light",
+    "green-dark": "Green dark",
+    "high-contrast": "High contrast",
+    "sepia": "Sepia",
+    "auto": "Match system"
+  },
+  "density": {
+    "comfortable": "Comfortable",
+    "compact": "Compact",
+    "spacious": "Spacious"
+  }
+}

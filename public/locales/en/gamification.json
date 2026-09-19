@@ -1,0 +1,51 @@
+{
+  "points": {
+    "unit": "points",
+    "explainer": "Points come from writing, replying, helping and turning up. They cannot be bought or traded."
+  },
+  "level": {
+    "label": "Level {level}",
+    "ringLabel": "Level {level}, {percent} percent of the way through",
+    "remaining": "{points} more points until level {next}",
+    "maxed": "You are at the top of the ladder"
+  },
+  "badges": {
+    "label": "Badges",
+    "progress": "Needs {need}, you have {have}",
+    "tier": {
+      "bronze": "Bronze",
+      "silver": "Silver",
+      "gold": "Gold",
+      "platinum": "Platinum"
+    }
+  },
+  "streak": {
+    "days": "{count} day streak",
+    "progressLabel": "{days} days to the next bonus",
+    "nextBonus": "Keep going {days} more days for the next bonus",
+    "bonusAwarded": "You are earning a {points} point bonus right now",
+    "maxed": "You are on the largest bonus",
+    "explainer": "Days are counted in Bangladesh time. Visiting late at night and again after midnight does not break a streak."
+  },
+  "board": {
+    "title": "Leaderboard",
+    "subtitle": "Who is showing up, and how much. Only those who chose to appear do.",
+    "label": "Leaderboard",
+    "windowLabel": "Period",
+    "window": {
+      "weekly": "This week",
+      "monthly": "This month",
+      "all": "All time"
+    },
+    "optOut": "Show me on the leaderboard",
+    "optOutHint": "Turning this off removes you from the list. Your points stay exactly as they are.",
+    "level": "Level {level}",
+    "yourStanding": "Your standing",
+    "yourRank": "You are in place {rank}",
+    "signInHint": "Sign in to see where you stand.",
+    "empty": {
+      "title": "Nothing recorded for this period",
+      "description": "Try a different period."
+    }
+  }
+}

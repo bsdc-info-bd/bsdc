@@ -1,0 +1,79 @@
+/**
+ * BSDC — src/styles/components/dropdown.css
+ * Purpose : Menu, submenu, item, separator and shortcut styling (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Menu items are 44px tall on touch and 34px with a pointer; destructive items are
+ *           colour-coded AND prefixed with an icon so meaning is never colour-only.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-menu__content {
+  z-index: var(--z-dropdown);
+  min-inline-size: 200px;
+  max-inline-size: min(320px, 92vw);
+  padding: var(--bsdc-space-1);
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-4);
+}
+
+.bsdc-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-height: 40px;
+  padding-inline: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .bsdc-menu__item {
+    min-height: var(--bsdc-tap-target);
+  }
+}
+
+.bsdc-menu__item[data-highlighted="true"] {
+  background-color: var(--bsdc-surface-2);
+}
+
+.bsdc-menu__item[data-disabled="true"] {
+  color: var(--bsdc-text-3);
+  cursor: not-allowed;
+}
+
+.bsdc-menu__item[data-tone="danger"] {
+  color: var(--bsdc-danger);
+}
+
+.bsdc-menu__item[data-tone="danger"][data-highlighted="true"] {
+  background-color: color-mix(in srgb, var(--bsdc-danger) 14%, transparent);
+}
+
+.bsdc-menu__shortcut {
+  margin-inline-start: auto;
+  font-size: var(--fs-2xs);
+  color: var(--bsdc-text-3);
+  font-family: var(--bsdc-font-code);
+}
+
+.bsdc-menu__separator {
+  height: var(--bsdc-hairline);
+  background-color: var(--bsdc-border);
+  margin-block: var(--bsdc-space-1);
+}
+
+.bsdc-menu__label {
+  padding: var(--bsdc-space-2) var(--bsdc-space-3) var(--bsdc-space-1);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bsdc-text-3);
+}

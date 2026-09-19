@@ -1,0 +1,29 @@
+{
+  "addImage": "ছবি যোগ করুন",
+  "publish": "প্রকাশ করুন",
+  "schedule": "নির্ধারিত সময়ে প্রকাশ করুন",
+  "scheduleLabel": "প্রকাশের সময় (ঢাকা সময়)",
+  "attachments": "সংযুক্ত ছবি",
+  "remove": "সরিয়ে দিন",
+  "retry": "আবার চেষ্টা করুন",
+  "altText": "ছবির বর্ণনা",
+  "bytes": "বাইট",
+  "uploading": "আপলোড হচ্ছে",
+  "uploadFailed": "আপলোড শেষ হয়নি",
+  "visibilityLabel": "কে দেখতে পাবে",
+  "visibility": {
+    "public": "সবাই",
+    "followers": "অনুসারীরা",
+    "group": "গ্রুপ",
+    "private": "শুধু আমি"
+  },
+  "publishedTitle": "পোস্ট প্রকাশিত হয়েছে",
+  "queuedTitle": "পোস্ট সংরক্ষিত হয়েছে",
+  "errors": {
+    "signInTitle": "সাইন ইন করুন",
+    "signInBody": "পোস্ট করতে সাইন ইন করতে হবে।",
+    "emptyTitle": "পোস্ট খালি",
+    "emptyBody": "একটি পোস্টে লেখা, ছবি বা লিংক থাকতে হবে।"
+  },
+  "prompt": "কী ভাবছেন? বাংলায় বা ইংরেজিতে লিখুন।"
+}

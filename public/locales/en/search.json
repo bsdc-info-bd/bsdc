@@ -1,0 +1,54 @@
+{
+  "title": "Search",
+  "subtitle": "People, posts, groups, events, jobs, projects and services in one place.",
+  "field": {
+    "label": "What are you looking for",
+    "hint": "Type a name, a skill or a topic"
+  },
+  "q": "Search",
+  "palette": {
+    "title": "Command palette",
+    "description": "Type to search, or pick one of the commands below.",
+    "close": "Close the palette",
+    "label": "Search and commands",
+    "recent": "Recent searches",
+    "seeAll": "See all results",
+    "goTo": "Go to this result",
+    "hint": "Search or type a command"
+  },
+  "results": {
+    "label": "Search results",
+    "empty": "Nothing matched those words.",
+    "local": "These results came from this device. The full list arrives when the connection returns."
+  },
+  "noResults": {
+    "title": "Nothing found",
+    "description": "Try different words, or check the spelling."
+  },
+  "source": {
+    "deviceOnly": "From data kept on this device"
+  },
+  "kindsHint": "All {count} kinds are searched at once.",
+  "kind": {
+    "people": "People",
+    "posts": "Posts",
+    "groups": "Groups",
+    "events": "Events",
+    "jobs": "Jobs",
+    "projects": "Projects",
+    "gigs": "Services"
+  },
+  "command": {
+    "home": "Go to home",
+    "feed": "Open the feed",
+    "groups": "Browse groups",
+    "events": "Browse events",
+    "jobs": "Open the job board",
+    "projects": "Browse projects",
+    "freelancer": "Open the freelancer hub",
+    "leaderboard": "Open the leaderboard",
+    "messages": "Open messages",
+    "notifications": "Open notifications",
+    "moderation": "Open the moderation queue"
+  }
+}

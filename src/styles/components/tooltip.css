@@ -1,0 +1,24 @@
+/**
+ * BSDC — src/styles/components/tooltip.css
+ * Purpose : Tooltip surface (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Tooltips are supplementary: they never contain the only copy of essential information,
+ *           and on touch they are suppressed by the component (no hover available).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-tooltip__content {
+  z-index: var(--z-dropdown);
+  max-inline-size: min(280px, 80vw);
+  padding: var(--bsdc-space-2) var(--bsdc-space-3);
+  border-radius: var(--radius-sm);
+  background-color: var(--bsdc-text);
+  color: var(--bsdc-bg);
+  font-size: var(--fs-xs);
+  line-height: 1.45;
+  box-shadow: var(--shadow-3);
+}
+
+.bsdc-tooltip__arrow {
+  fill: var(--bsdc-text);
+}

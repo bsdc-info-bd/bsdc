@@ -1,0 +1,48 @@
+/**
+ * BSDC — src/styles/responsive/orientation.css
+ * Purpose : Orientation-specific rules (PART 08.04 R-09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : In landscape on a short viewport the header condenses, the bottom nav becomes a side
+ *           rail, and media viewers go full-bleed. Nothing may rely on 600px of height.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (orientation: landscape) and (max-height: 480px) {
+  :root {
+    --bsdc-header-height: 44px;
+  }
+
+  .bsdc-top-bar {
+    block-size: 44px;
+  }
+
+  .bsdc-bottom-nav {
+    inset-inline-end: 0;
+    inset-inline-start: auto;
+    inset-block: var(--bsdc-header-height) 0;
+    flex-direction: column;
+    inline-size: 64px;
+    block-size: auto;
+    border-block-start: none;
+    border-inline-start: var(--bsdc-hairline) solid var(--bsdc-border);
+    padding-block-end: 0;
+  }
+
+  .bsdc-bottom-nav__item {
+    flex: 0 0 56px;
+  }
+
+  .bsdc-modal__content {
+    max-block-size: 94dvh;
+  }
+
+  .bsdc-sheet__content[data-side="bottom"] {
+    max-block-size: 96dvh;
+  }
+}
+
+@media (orientation: portrait) {
+  .bsdc-bottom-nav {
+    flex-direction: row;
+  }
+}

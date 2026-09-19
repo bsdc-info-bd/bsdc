@@ -1,0 +1,33 @@
+/**
+ * BSDC — src/styles/responsive/laptop.css
+ * Purpose : 1024px to 1279px — the rail-navigation shell (PART 08.04 R-04).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Left rail plus feed. The right rail waits for 1280px so the feed keeps 680px.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 1024px) and (max-width: 1279.98px) {
+  .bsdc-app-shell {
+    grid-template-columns: var(--bsdc-rail-width) minmax(0, 1fr);
+  }
+
+  .bsdc-rail-nav {
+    display: flex;
+  }
+
+  .bsdc-bottom-nav {
+    display: none;
+  }
+
+  .bsdc-right-rail {
+    display: none;
+  }
+
+  .bsdc-app-shell__main {
+    padding-block-end: var(--bsdc-space-8);
+  }
+
+  .bsdc-container {
+    padding-inline: var(--bsdc-space-5);
+  }
+}

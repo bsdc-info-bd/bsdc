@@ -1,0 +1,63 @@
+/**
+ * BSDC — src/styles/components/skeleton.css
+ * Purpose : Loading placeholders that match the final layout exactly (F-168, CLS budget).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The shimmer is disabled under prefers-reduced-motion (PART 08.07) and every skeleton
+ *           reserves the real content box so nothing shifts when data arrives (CLS < 0.05).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-skeleton {
+  display: block;
+  inline-size: 100%;
+  border-radius: var(--radius-sm);
+  background-color: var(--bsdc-surface-2);
+  background-image: linear-gradient(
+    90deg,
+    var(--bsdc-surface-2) 0%,
+    var(--bsdc-surface-3) 50%,
+    var(--bsdc-surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: bsdc-shimmer 1.4s linear infinite;
+}
+
+.bsdc-skeleton[data-variant="text"] {
+  block-size: 0.85em;
+  margin-block: 0.35em;
+}
+
+.bsdc-skeleton[data-variant="circle"] {
+  border-radius: var(--radius-full);
+  aspect-ratio: 1 / 1;
+}
+
+.bsdc-skeleton[data-variant="rect"] {
+  border-radius: var(--radius-md);
+}
+
+.bsdc-skeleton-line-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-skeleton-line-group > .bsdc-skeleton:last-child {
+  inline-size: 62%;
+}
+
+@keyframes bsdc-shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bsdc-skeleton {
+    animation: none;
+    background-image: none;
+  }
+}

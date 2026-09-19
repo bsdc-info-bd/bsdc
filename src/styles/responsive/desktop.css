@@ -1,0 +1,36 @@
+/**
+ * BSDC — src/styles/responsive/desktop.css
+ * Purpose : 1280px to 1679px — the classic three-region desktop layout.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Rail + feed + right rail. The right rail is a complementary region: it is skipped by
+ *           the skip link and never contains the page's only copy of anything.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 1280px) and (max-width: 1679.98px) {
+  .bsdc-app-shell {
+    grid-template-columns: var(--bsdc-rail-width) minmax(0, 1fr) var(--bsdc-right-rail-width);
+    gap: var(--bsdc-space-5);
+  }
+
+  .bsdc-rail-nav {
+    display: flex;
+  }
+
+  .bsdc-right-rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bsdc-space-4);
+    padding-block: var(--bsdc-space-4);
+    padding-inline-end: var(--bsdc-space-4);
+    position: sticky;
+    inset-block-start: var(--bsdc-header-height);
+    block-size: calc(100dvh - var(--bsdc-header-height));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .bsdc-container {
+    padding-inline: var(--bsdc-space-6);
+  }
+}

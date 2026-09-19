@@ -1,0 +1,40 @@
+/**
+ * BSDC — src/styles/components/separator.css
+ * Purpose : Horizontal and vertical dividers (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Separators are decorative by default; pass a label to render a content divider.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-separator {
+  flex: none;
+  background-color: var(--bsdc-border);
+}
+
+.bsdc-separator[data-orientation="horizontal"] {
+  block-size: var(--bsdc-hairline);
+  inline-size: 100%;
+}
+
+.bsdc-separator[data-orientation="vertical"] {
+  inline-size: var(--bsdc-hairline);
+  block-size: 100%;
+  min-block-size: 1em;
+}
+
+.bsdc-separator--labelled {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  color: var(--bsdc-text-3);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.bsdc-separator--labelled::before,
+.bsdc-separator--labelled::after {
+  content: "";
+  flex: 1;
+  block-size: var(--bsdc-hairline);
+  background-color: var(--bsdc-border);
+}

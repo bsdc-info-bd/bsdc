@@ -1,0 +1,238 @@
+/**
+ * BSDC — src/styles/components/post.css
+ * Purpose : The post card: header, body, media grid and action row.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The media frame reserves space through aspect-ratio so an arriving image cannot shift
+ *   the page (PART 25, CLS < 0.05). Overflow is clipped on the cross axis only, never on the block
+ *   axis, so a long Bangla paragraph grows instead of being cut.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-post {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+  min-inline-size: 0;
+}
+
+.bsdc-post__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-post__identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+  min-inline-size: 0;
+  flex: 1;
+}
+
+.bsdc-post__author {
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--bsdc-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-post__author:hover {
+  text-decoration: underline;
+}
+
+.bsdc-post__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-post__edited,
+.bsdc-post__meta > span[aria-hidden="true"] {
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-post__menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.bsdc-post__menu-list {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(100% + var(--bsdc-space-1));
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 200px;
+  padding: var(--bsdc-space-1);
+  background: var(--bsdc-surface);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+
+.bsdc-post__menu-list > * {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-2);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text);
+  text-decoration: none;
+}
+
+.bsdc-post__menu-list > *:hover {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-post__body {
+  font-size: var(--fs-base);
+  line-height: 1.7;
+  color: var(--bsdc-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.bsdc-post__media {
+  display: grid;
+  gap: 2px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.bsdc-post__media.is-single {
+  grid-template-columns: 1fr;
+}
+
+.bsdc-post__media.is-pair {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bsdc-post__media.is-triple {
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+}
+
+.bsdc-post__media.is-triple > :first-child {
+  grid-row: span 2;
+}
+
+.bsdc-post__media.is-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.bsdc-post__figure {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.bsdc-post__figure-frame {
+  display: block;
+  inline-size: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.bsdc-post__figure-frame > img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  aspect-ratio: inherit;
+}
+
+.bsdc-post__figure figcaption {
+  padding-block: var(--bsdc-space-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-post__document {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-block-size: var(--bsdc-tap-target);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-lg);
+  background: var(--bsdc-surface-2);
+  color: var(--bsdc-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-post__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-1);
+  border-block-start: 1px solid var(--bsdc-border);
+  padding-block-start: var(--bsdc-space-2);
+}
+
+.bsdc-feed__list,
+.bsdc-comments__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-feed__offline,
+.bsdc-feed__error {
+  margin: 0;
+  padding: var(--bsdc-space-3);
+  border-radius: var(--radius-md);
+  background: var(--bsdc-surface-2);
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-feed__error {
+  color: var(--bsdc-danger);
+}
+
+.bsdc-page__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+  margin-block-end: var(--bsdc-space-4);
+}
+
+.bsdc-page__filters,
+.bsdc-page__panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  align-items: center;
+}
+
+.bsdc-page__panel {
+  flex-direction: column;
+  align-items: stretch;
+  margin-block-end: var(--bsdc-space-4);
+  padding: var(--bsdc-space-4);
+  border: 1px solid var(--bsdc-border);
+  border-radius: var(--radius-lg);
+  background: var(--bsdc-surface);
+}
+
+.bsdc-page__note {
+  margin-block: var(--bsdc-space-3);
+  font-size: var(--fs-sm);
+}
+
+.bsdc-page__loading {
+  display: flex;
+  justify-content: center;
+  padding-block: var(--bsdc-space-8);
+}

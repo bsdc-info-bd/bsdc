@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC — shield mark only, used by verification seals, PDFs and report headers. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="BSDC shield">
+  <defs>
+    <linearGradient id="bsdcShieldGradient" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2D6A4F"/>
+      <stop offset="1" stop-color="#1B4332"/>
+    </linearGradient>
+  </defs>
+  <rect width="80" height="80" rx="20" fill="url(#bsdcShieldGradient)"/>
+  <path d="M40 14 22 22v16c0 13 8.5 21 18 24 9.5-3 18-11 18-24V22L40 14z"
+        fill="none" stroke="#52B788" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M31 40l6 6 12-13" fill="none" stroke="#FFFFFF" stroke-width="4.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,35 @@
+/**
+ * BSDC — src/styles/responsive/ultra-wide.css
+ * Purpose : 3440px ultra-wide and 5120px 5K displays.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Ultra-wide screens get more breathing room and a wider marketplace grid, never a
+ *           stretched single column. Marketplace content is allowed to use up to 1280px
+ *           (PART 08.04 R-06) and the admin shell up to 1600px.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 3440px) {
+  .bsdc-app-shell {
+    max-inline-size: 2560px;
+    gap: var(--bsdc-space-10);
+  }
+
+  .bsdc-market-grid {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    max-inline-size: 1600px;
+  }
+
+  .bsdc-admin-shell {
+    max-inline-size: 1800px;
+  }
+}
+
+@media (min-width: 5120px) {
+  :root {
+    --bsdc-space-unit: 7px;
+  }
+
+  .bsdc-app-shell {
+    max-inline-size: 2800px;
+  }
+}

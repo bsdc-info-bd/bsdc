@@ -1,0 +1,93 @@
+/**
+ * BSDC — src/styles/layers/print.css
+ * Purpose : Print stylesheet for A4 documents and 4x6 thermal labels (PART 08.04 R-14).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Reports, invoices, licences, order labels and profiles must print cleanly. App chrome,
+ *           navigation and interactive affordances are removed; links print their resolved URL.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@page {
+  size: A4;
+  margin: 14mm 12mm;
+}
+
+@page :first {
+  margin-top: 18mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  .bsdc-no-print,
+  [data-print="hide"] {
+    display: none !important;
+  }
+
+  [data-print="show"] {
+    display: block !important;
+  }
+
+  /* App chrome is never part of a printed document. */
+  .bsdc-top-bar,
+  .bsdc-bottom-nav,
+  .bsdc-rail-nav,
+  .bsdc-chat-dock,
+  .bsdc-toast-region,
+  .bsdc-command-palette {
+    display: none !important;
+  }
+
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    color: #333333;
+    word-break: break-all;
+  }
+
+  .bsdc-card,
+  .bsdc-surface-raised {
+    border: 1px solid #cccccc !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+  }
+
+  table {
+    break-inside: auto;
+  }
+
+  tr {
+    break-inside: avoid;
+  }
+
+  img {
+    max-width: 100% !important;
+  }
+
+  /* Thermal 4x6 labels (PART 20.4): a tight page box with no margin. */
+  .bsdc-label-4x6 {
+    width: 100mm;
+    height: 150mm;
+    margin: 0;
+    padding: 4mm;
+  }
+
+  @page label-4x6 {
+    size: 100mm 150mm;
+    margin: 0;
+  }
+
+  .bsdc-label-4x6 {
+    page: label-4x6;
+  }
+}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC — OpenSearch description. Source-available; not re-deployable. -->
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>BSDC</ShortName>
+  <Description>Search BSDC — Bangladesh Software Development Community</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Image width="32" height="32" type="image/png">https://www.bsdc.info.bd/icons/favicon-32.png</Image>
+  <Url type="text/html" method="get" template="https://www.bsdc.info.bd/search?q={searchTerms}" />
+  <Url type="application/opensearchdescription+xml" rel="self" template="https://www.bsdc.info.bd/opensearch.xml" />
+  <Language>bn-BD</Language>
+  <Language>en</Language>
+</OpenSearchDescription>

@@ -1,0 +1,119 @@
+/**
+ * BSDC — src/styles/components/nav.css
+ * Purpose : Bottom navigation, left rail, right rail and header geometry (PART 08.04 R-04, R-18).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Exactly one navigation model is visible at any width: bottom nav at or below 768px,
+ *           rail nav from 1024px, three-column shell from 1680px. The rules live in
+ *           src/styles/responsive/*.css; this file owns the shared appearance.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-top-bar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-sticky-header);
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  block-size: var(--bsdc-header-height);
+  padding-inline: var(--bsdc-space-3);
+  padding-block-start: var(--bsdc-safe-top);
+  background-color: var(--bsdc-glass-bg);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-bottom-nav {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: var(--z-mobile-nav);
+  display: flex;
+  align-items: stretch;
+  block-size: calc(var(--bsdc-bottom-nav-height) + var(--bsdc-safe-bottom));
+  padding-block-end: var(--bsdc-safe-bottom);
+  background-color: var(--bsdc-glass-bg);
+  backdrop-filter: blur(var(--blur-glass));
+  -webkit-backdrop-filter: blur(var(--blur-glass));
+  border-block-start: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-bottom-nav__item {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-inline-size: 44px;
+  font-size: var(--fs-2xs);
+  font-weight: 600;
+  color: var(--bsdc-text-3);
+  padding-block: var(--bsdc-space-1);
+}
+
+.bsdc-bottom-nav__item[aria-current="page"] {
+  color: var(--bsdc-green-600);
+}
+
+:root[data-theme="dark"] .bsdc-bottom-nav__item[aria-current="page"],
+:root[data-theme="oled"] .bsdc-bottom-nav__item[aria-current="page"],
+:root[data-theme="green-dark"] .bsdc-bottom-nav__item[aria-current="page"] {
+  color: var(--bsdc-green-300);
+}
+
+.bsdc-bottom-nav__badge {
+  position: absolute;
+  inset-block-start: 4px;
+  inset-inline-start: 58%;
+}
+
+.bsdc-rail-nav {
+  position: sticky;
+  inset-block-start: var(--bsdc-header-height);
+  z-index: var(--z-sidebar);
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+  inline-size: var(--bsdc-rail-width);
+  block-size: calc(100dvh - var(--bsdc-header-height));
+  padding: var(--bsdc-space-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-inline-end: var(--bsdc-hairline) solid var(--bsdc-border);
+}
+
+.bsdc-rail-nav__item {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--bsdc-text-2);
+}
+
+.bsdc-rail-nav__item[aria-current="page"] {
+  background-color: color-mix(in srgb, var(--bsdc-green-500) 12%, transparent);
+  color: var(--bsdc-green-700);
+  font-weight: 700;
+}
+
+.bsdc-rail-nav__item:hover {
+  background-color: var(--bsdc-surface-2);
+}
+
+.bsdc-app-shell {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: calc(100dvh - var(--bsdc-header-height));
+}
+
+.bsdc-app-shell__main {
+  min-width: 0;
+  padding-block-end: calc(var(--bsdc-bottom-nav-height) + var(--bsdc-safe-bottom));
+}

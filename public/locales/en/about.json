@@ -1,0 +1,32 @@
+{
+  "title": "About BSDC",
+  "introTitle": "A platform, not a page",
+  "introBody": "BSDC exists because Bangladeshi developers were scattered across a dozen groups, pages and chat apps. This platform puts the community back in one place that the community can actually own.",
+  "ownershipTitle": "Who owns BSDC",
+  "ownershipBody": "BSDC is a platform of RRC Development. RRC Development owns the platform, funds it and is accountable for it.",
+  "ownerLabel": "Owner and Chief Executive",
+  "ownerName": "Rizwan Rahim Chowdhury",
+  "transparencyTitle": "Transparency commitments",
+  "transparency": {
+    "roadmap": {
+      "title": "Public roadmap",
+      "body": "What is planned, what is shipped and what slipped is published."
+    },
+    "moderation": {
+      "title": "Open rules",
+      "body": "Community rules, enforcement and appeals are documented and versioned."
+    },
+    "data": {
+      "title": "Honest data handling",
+      "body": "What we collect, why we collect it and how long we keep it is stated in plain language."
+    },
+    "money": {
+      "title": "Clear money flows",
+      "body": "Fees, payouts and refunds are shown before you commit to anything."
+    }
+  },
+  "contactTitle": "Contact",
+  "contactBody": "Write to us for partnerships, press, moderation appeals or accessibility issues.",
+  "legalTitle": "Legal",
+  "legalBody": "The BSDC source is public for transparency. It is not open for re-deployment or rebranding: copying the platform to run it under another name is not permitted."
+}

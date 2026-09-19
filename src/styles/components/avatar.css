@@ -1,0 +1,137 @@
+/**
+ * BSDC — src/styles/components/avatar.css
+ * Purpose : Avatar, avatar group and presence ring (PART 08.09, F-029).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Rings encode role (verified, creator, vendor, admin, moderator, event) through
+ *           --bsdc-ring-color and never change the avatar box size.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-avatar {
+  --bsdc-avatar-size: 40px;
+  --bsdc-ring-color: transparent;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--bsdc-avatar-size);
+  block-size: var(--bsdc-avatar-size);
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface-2);
+  color: var(--bsdc-text-2);
+  font-weight: 700;
+  font-size: calc(var(--bsdc-avatar-size) * 0.38);
+  overflow: hidden;
+  flex: none;
+  user-select: none;
+}
+
+.bsdc-avatar[data-size="2xs"] {
+  --bsdc-avatar-size: 20px;
+}
+.bsdc-avatar[data-size="xs"] {
+  --bsdc-avatar-size: 28px;
+}
+.bsdc-avatar[data-size="sm"] {
+  --bsdc-avatar-size: 36px;
+}
+.bsdc-avatar[data-size="md"] {
+  --bsdc-avatar-size: 44px;
+}
+.bsdc-avatar[data-size="lg"] {
+  --bsdc-avatar-size: 64px;
+}
+.bsdc-avatar[data-size="xl"] {
+  --bsdc-avatar-size: 96px;
+}
+.bsdc-avatar[data-size="2xl"] {
+  --bsdc-avatar-size: 128px;
+}
+
+.bsdc-avatar[data-shape="rounded"] {
+  border-radius: var(--radius-md);
+}
+.bsdc-avatar[data-shape="square"] {
+  border-radius: var(--radius-sm);
+}
+
+.bsdc-avatar__image {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bsdc-avatar[data-ring="true"] {
+  box-shadow:
+    0 0 0 2px var(--bsdc-bg),
+    0 0 0 4px var(--bsdc-ring-color);
+}
+
+.bsdc-avatar[data-ring-kind="verified"] {
+  --bsdc-ring-color: var(--bsdc-verified);
+}
+.bsdc-avatar[data-ring-kind="creator"] {
+  --bsdc-ring-color: var(--bsdc-reaction-mindblown);
+}
+.bsdc-avatar[data-ring-kind="vendor"] {
+  --bsdc-ring-color: var(--bsdc-vendor);
+}
+.bsdc-avatar[data-ring-kind="admin"] {
+  --bsdc-ring-color: var(--bsdc-admin);
+}
+.bsdc-avatar[data-ring-kind="moderator"] {
+  --bsdc-ring-color: var(--bsdc-moderator);
+}
+.bsdc-avatar[data-ring-kind="story"] {
+  --bsdc-ring-color: var(--bsdc-green-500);
+}
+.bsdc-avatar[data-ring-kind="story-seen"] {
+  --bsdc-ring-color: var(--bsdc-border);
+}
+
+.bsdc-presence-dot {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  inline-size: 28%;
+  block-size: 28%;
+  min-inline-size: 8px;
+  min-block-size: 8px;
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-text-3);
+  box-shadow: 0 0 0 2px var(--bsdc-bg);
+}
+
+.bsdc-presence-dot[data-state="online"] {
+  background-color: var(--bsdc-success);
+}
+.bsdc-presence-dot[data-state="away"] {
+  background-color: var(--bsdc-warning);
+}
+
+.bsdc-avatar-group {
+  display: inline-flex;
+  align-items: center;
+}
+
+.bsdc-avatar-group > * + * {
+  margin-inline-start: -0.3em;
+}
+
+.bsdc-avatar-group > * {
+  box-shadow: 0 0 0 2px var(--bsdc-bg);
+}
+
+.bsdc-avatar-group__more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--bsdc-avatar-size, 40px);
+  block-size: var(--bsdc-avatar-size, 40px);
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-surface-3);
+  color: var(--bsdc-text-2);
+  font-size: var(--fs-2xs);
+  font-weight: 700;
+}

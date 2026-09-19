@@ -1,0 +1,26 @@
+/**
+ * BSDC — src/styles/components/popover.css
+ * Purpose : Popover surface used by filters, pickers and inline help (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : On viewports below 641px the component renders a Sheet instead, so popover geometry
+ *           only needs to be correct where there is room for it.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-popover__content {
+  z-index: var(--z-dropdown);
+  inline-size: min(360px, calc(100vw - var(--bsdc-space-8)));
+  max-block-size: min(70dvh, 640px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--bsdc-space-3);
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-4);
+}
+
+.bsdc-popover__arrow {
+  fill: var(--bsdc-surface);
+  stroke: var(--bsdc-border);
+}

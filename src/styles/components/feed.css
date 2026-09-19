@@ -1,0 +1,50 @@
+/**
+ * BSDC — src/styles/components/feed.css
+ * Purpose : Feed column, item separation and the new-posts pill (F-166).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The feed column is capped at 680px (PART 08.04 R-06) and centred; at or above 1680px
+ *           it becomes the middle column of the three-column shell.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-feed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-4);
+  inline-size: 100%;
+  max-inline-size: 680px;
+  margin-inline: auto;
+}
+
+.bsdc-feed__sentinel {
+  block-size: 1px;
+  inline-size: 100%;
+}
+
+.bsdc-feed__end {
+  padding-block: var(--bsdc-space-8);
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-new-posts-pill {
+  position: sticky;
+  inset-block-start: calc(var(--bsdc-header-height) + var(--bsdc-space-2));
+  z-index: calc(var(--z-sticky-header) - 1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  margin-inline: auto;
+  padding: var(--bsdc-space-2) var(--bsdc-space-4);
+  border-radius: var(--radius-full);
+  background-color: var(--bsdc-green-500);
+  color: #ffffff;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  box-shadow: var(--shadow-3);
+}
+
+.bsdc-feed__ad-slot {
+  padding-block: var(--bsdc-space-2);
+}

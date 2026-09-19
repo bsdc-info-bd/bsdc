@@ -1,0 +1,44 @@
+BSDC — Bangladesh Software Development Community
+Copyright (c) 2026 RRC Development. All rights reserved.
+
+PRODUCT
+  Name        : BSDC (Bangladesh Software Development Community)
+  Tagline     : Code. Community. Commerce. One platform.
+  Owner       : Rizwan Rahim Chowdhury — Owner, CEO, Founder and Lead Developer
+  Organisation: RRC Development (Rizwan Rahim Chowdhury Development)
+  Legal line  : a platform of RRC Development
+  Website     : https://www.bsdc.info.bd
+  Preview     : https://bsdc.pages.dev
+  Repository  : https://github.com/bsdc-info-bd/bsdc
+  Android     : bd.info.bsdc.app
+
+CONTACT
+  General     : hello@bsdc.info.bd
+  Operations  : bsdc.rrc@gmail.com
+  Root admin  : rrc@bsdc.info.bd
+
+LICENCE
+  The BSDC source is public for transparency and is not open for re-deployment or rebranding.
+  See the LICENSE file for the complete BSDC Source-Available Licence, Version 1.0.
+  Every source file carries the BSDC ownership and licence header. Removing it is a breach.
+
+TRADEMARKS
+  "BSDC", the BSDC wordmark, the BSDC shield, the BSDC application icon and the phrase
+  "a platform of RRC Development" are marks of RRC Development. This licence grants no right
+  to use them outside the single authorised deployment at https://www.bsdc.info.bd.
+
+NETWORK
+  BSDC is part of the RRC network: RRC Development, BSDC Cloud, BSDC News, BSDC Wiki,
+  BSDC Docs and the BSDC source repository. See src/core/config/app.ts (NETWORK_SITES).
+
+THIRD-PARTY NOTICES
+  This product depends on open-source libraries, each under its own licence, including:
+  React, React Router, TypeScript, Vite, Tailwind CSS, Radix UI, TanStack Query, Zustand,
+  i18next and react-i18next, lucide-react, Sonner, Framer Motion, dayjs, Zod, React Hook Form,
+  Firebase SDKs, and build-time tooling (ESLint, Prettier, Vitest, Testing Library).
+  Run `npm ls --prod` for the exact dependency graph of any build.
+
+ACCESSIBILITY AND PRIVACY
+  BSDC targets WCAG 2.1 AA as the floor and WCAG 2.1 AAA in the high-contrast theme.
+  Bangla and English are both first-class. No secret, passkey or private key is shipped in any
+  client bundle; all privileged operations are authorised server-side.

@@ -1,0 +1,79 @@
+/**
+ * BSDC — src/styles/components/table.css
+ * Purpose : Data tables for admin, vendor and report surfaces (PART 08.04 R-20, PART 05.03 note).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Tables become card lists at or below 768px (R-20) — never a horizontal scroll for
+ *           primary data. The desktop grid keeps a sticky header for long admin lists.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-table-wrap {
+  inline-size: 100%;
+  overflow-x: auto;
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+}
+
+.bsdc-table {
+  inline-size: 100%;
+  font-size: var(--fs-sm);
+  border-collapse: collapse;
+}
+
+.bsdc-table thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background-color: var(--bsdc-surface-2);
+  text-align: start;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bsdc-text-2);
+  padding: var(--bsdc-space-3);
+  white-space: nowrap;
+}
+
+.bsdc-table tbody td {
+  padding: var(--bsdc-space-3);
+  border-block-start: var(--bsdc-hairline) solid var(--bsdc-border);
+  vertical-align: middle;
+}
+
+.bsdc-table tbody tr:hover {
+  background-color: var(--bsdc-surface-2);
+}
+
+.bsdc-table tbody tr[data-selected="true"] {
+  background-color: color-mix(in srgb, var(--bsdc-green-500) 10%, transparent);
+}
+
+.bsdc-table__numeric {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.bsdc-table-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-table-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--bsdc-space-1) var(--bsdc-space-3);
+  padding: var(--bsdc-space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+}
+
+.bsdc-table-card__label {
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bsdc-text-3);
+}

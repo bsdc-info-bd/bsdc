@@ -1,0 +1,163 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['state', 'lastChanged'])",
+        "state": {
+          ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'away' || newData.val() === 'offline')"
+        },
+        "lastChanged": {
+          ".validate": "newData.isNumber()"
+        },
+        "device": {
+          ".validate": "newData.isString() && newData.val().length <= 32"
+        },
+        "locale": {
+          ".validate": "newData.isString() && newData.val().length <= 8"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    },
+    "conversationMembers": {
+      "$conversationId": {
+        ".read": "auth != null && data.child(auth.uid).val() === true",
+        "$uid": {
+          ".write": "auth != null && (auth.uid === $uid || root.child('conversationMembers/' + $conversationId + '/' + auth.uid).val() === true)",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "typing": {
+      "$conversationId": {
+        ".read": "auth != null && root.child('conversationMembers/' + $conversationId + '/' + auth.uid).val() === true",
+        "$uid": {
+          ".write": "auth != null && auth.uid === $uid && root.child('conversationMembers/' + $conversationId + '/' + auth.uid).val() === true",
+          ".validate": "newData.hasChildren(['at']) || newData.val() === null",
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "receipts": {
+      "$conversationId": {
+        ".read": "auth != null && root.child('conversationMembers/' + $conversationId + '/' + auth.uid).val() === true",
+        "$messageId": {
+          "$uid": {
+            ".write": "auth != null && auth.uid === $uid && root.child('conversationMembers/' + $conversationId + '/' + auth.uid).val() === true",
+            ".validate": "newData.hasChildren(['state'])",
+            "state": {
+              ".validate": "newData.isString() && (newData.val() === 'delivered' || newData.val() === 'read')"
+            },
+            "at": {
+              ".validate": "newData.isNumber()"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    },
+    "notificationFanout": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$notificationId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.hasChildren(['type']) || newData.val() === null",
+          "type": {
+            ".validate": "newData.isString() && newData.val().length <= 64"
+          },
+          "read": {
+            ".validate": "newData.isBoolean()"
+          },
+          "at": {
+            ".validate": "newData.isNumber()"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    },
+    "liveCounters": {
+      "$entityId": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.isNumber()",
+        "views": {
+          ".validate": "newData.isNumber()"
+        },
+        "reactions": {
+          ".validate": "newData.isNumber()"
+        },
+        "comments": {
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+    "liveEvents": {
+      ".read": "auth != null",
+      "$scope": {
+        ".read": "auth != null",
+        ".write": false
+      }
+    },
+    "liveAttendees": {
+      ".read": "auth != null",
+      "$eventId": {
+        ".write": "auth != null && root.child('eventsHosts/' + $eventId + '/' + auth.uid).val() === true",
+        ".validate": "newData.isNumber()"
+      }
+    },
+    "eventsHosts": {
+      ".read": "auth != null",
+      "$eventId": {
+        "$uid": {
+          ".write": false,
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "storySeen": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$storyId": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber() || newData.val() === null"
+        }
+      }
+    },
+    "gigQueue": {
+      "$orderId": {
+        ".read": "auth != null && newData.child('buyerUid').val() === auth.uid",
+        ".write": "auth != null && (!data.exists() && newData.child('buyerUid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['gigId', 'packageName', 'buyerUid', 'requirement'])",
+        "gigId": {
+          ".validate": "newData.isString() && newData.val().length <= 64"
+        },
+        "packageName": {
+          ".validate": "newData.isString() && newData.val().length <= 40"
+        },
+        "buyerUid": {
+          ".validate": "newData.isString() && newData.val() === auth.uid"
+        },
+        "requirement": {
+          ".validate": "newData.isString() && newData.val().length <= 2000"
+        },
+        "$other": {
+          ".validate": false
+        }
+      }
+    }
+  }
+}

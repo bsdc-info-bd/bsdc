@@ -1,0 +1,98 @@
+{
+  "title": "ফ্রিল্যান্স হাব",
+  "subtitle": "কমিউনিটির মানুষ যে সেবা দেন, আর কিসের বিনিময়ে।",
+  "offer": "সেবা যোগ করুন",
+  "offerRequiresVendor": "সেবা দিতে হলে আপনাকে বিক্রেতা হতে হবে। প্রশাসকের কাছে অনুরোধ পাঠান।",
+  "tabs": {
+    "label": "ফ্রিল্যান্সের অংশ",
+    "gigs": "সব সেবা",
+    "sales": "যা বিক্রি করছেন",
+    "purchases": "যা কিনেছেন",
+    "salesEmpty": "আপনার কাছে কোনো অর্ডার আসেনি।",
+    "purchasesEmpty": "আপনি এখনো কোনো সেবা কেনেননি।"
+  },
+  "list": {
+    "all": "সব",
+    "label": "সেবার তালিকা",
+    "filterLabel": "বিভাগ বাছাই",
+    "count": "{count}টি সেবা",
+    "empty": {
+      "title": "এখনো কোনো সেবা নেই",
+      "description": "প্রথম সেবাটি আপনি দিতে পারেন।"
+    }
+  },
+  "card": {
+    "from": "{price} টাকা থেকে",
+    "new": "নতুন"
+  },
+  "form": {
+    "title": "সেবার নাম",
+    "category": "বিভাগ",
+    "description": "বিবরণ",
+    "skills": "দক্ষতা",
+    "skillsHint": "কমা দিয়ে আলাদা করুন। সর্বোচ্চ ২০টি।",
+    "packages": "প্যাকেজ",
+    "packageName": "প্যাকেজের নাম",
+    "packagePrice": "দাম (টাকা)",
+    "packageDays": "ডেলিভারি (দিন)",
+    "packageRevisions": "সংশোধন",
+    "packageDescription": "এই প্যাকেজে যা পাবেন",
+    "addPackage": "প্যাকেজ যোগ করুন",
+    "removePackage": "প্যাকেজ সরান",
+    "cancel": "বাতিল",
+    "publish": "প্রকাশ করুন"
+  },
+  "order": {
+    "title": "{gig} অর্ডার করুন",
+    "description": "একবার জমা দিলে এই অর্ডারটি লেখা হয়ে যায়।",
+    "package": "প্যাকেজ",
+    "requirement": "আপনি কী চান",
+    "requirementHint": "যত পরিষ্কার লিখবেন, কাজ তত ভালো হবে।",
+    "price": "দাম",
+    "due": "ডেলিভারি",
+    "revisions": "সংশোধন",
+    "paymentNote": "BSDC টাকা রাখে না। কীভাবে টাকা দেবেন, তা আপনি ও বিক্রেতা নিজেরাই ঠিক করবেন। এই অর্ডারটি কেবল লেখা চুক্তি।",
+    "ref": "অর্ডার নম্বর",
+    "dueIn": "{count} দিন বাকি",
+    "rateLabel": "রেটিং",
+    "reviewLabel": "আপনার মতামত",
+    "submitReview": "মতামত জমা দিন",
+    "confirm": "অর্ডার নিশ্চিত করুন",
+    "cancel": "বাতিল",
+    "close": "বন্ধ করুন",
+    "placed": {
+      "bn": "অর্ডার দেওয়া হয়েছে",
+      "en": "Order placed"
+    },
+    "updated": {
+      "bn": "অর্ডার হালনাগাদ",
+      "en": "Order updated"
+    },
+    "rated": {
+      "bn": "মতামত জমা পড়েছে",
+      "en": "Your review was recorded"
+    }
+  },
+  "created": {
+    "bn": "সেবা প্রকাশিত",
+    "en": "Service published"
+  },
+  "error": {
+    "default": {
+      "bn": "সেবা সংরক্ষণ করা যায়নি।",
+      "en": "The service could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "সেবার কিছু তথ্য বাকি আছে।",
+      "en": "The service is missing something required."
+    },
+    "BSDC-GIG-001": {
+      "bn": "অন্তত একটি প্যাকেজের দাম ও সময় দিন।",
+      "en": "Add at least one package with a price and a delivery time."
+    },
+    "BSDC-GIG-002": {
+      "bn": "নিজের সেবা নিজে কেনা যায় না।",
+      "en": "You cannot buy your own service."
+    }
+  }
+}

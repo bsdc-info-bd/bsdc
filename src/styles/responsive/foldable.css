@@ -1,0 +1,42 @@
+/**
+ * BSDC — src/styles/responsive/foldable.css
+ * Purpose : Foldables and dual-screen devices (PART 08.04 R-10).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Content must never cross the hinge: when two viewport segments are detected the feed
+ *           is confined to one segment and the detail pane occupies the other.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (horizontal-viewport-segments: 2) {
+  .bsdc-app-shell {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--bsdc-space-2);
+    padding-inline: env(viewport-segment-right 0 0);
+  }
+
+  .bsdc-app-shell__main {
+    grid-column: 1;
+    padding-inline-end: env(viewport-segment-left 1 0);
+  }
+
+  .bsdc-right-rail {
+    grid-column: 2;
+    display: flex;
+    padding-inline-start: env(viewport-segment-right 0 0);
+  }
+
+  .bsdc-bottom-nav {
+    display: none;
+  }
+}
+
+@media (vertical-viewport-segments: 2) {
+  .bsdc-app-shell {
+    grid-template-rows: 1fr 1fr;
+  }
+
+  .bsdc-feed {
+    max-block-size: 50dvh;
+    overflow-y: auto;
+  }
+}

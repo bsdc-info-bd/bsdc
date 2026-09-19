@@ -1,0 +1,15 @@
+{
+  "title": "Comments",
+  "writeComment": "Write a comment",
+  "writeReply": "Write a reply",
+  "shortcut": "Press Ctrl + Enter to send",
+  "post": "Comment",
+  "reply": "Reply",
+  "cancel": "Cancel",
+  "delete": "Delete",
+  "loading": "Loading comments",
+  "emptyTitle": "No comments yet",
+  "emptyBody": "Write the first one — every conversation here starts with somebody speaking up.",
+  "signInToComment": "Sign in to join the conversation.",
+  "deviceOnly": "Showing the comments stored on this device. The rest arrive when the connection returns."
+}

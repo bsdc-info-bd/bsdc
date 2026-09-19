@@ -1,0 +1,205 @@
+/**
+ * BSDC — src/styles/layers/tokens.css
+ * Purpose : The complete design token layer: colour, spacing, typography, radius, elevation,
+ *           motion, z-index, blur, focus and density (PART 08.01, 08.02, 08.03).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   :
+ *   ADR-008  Every token is a CSS custom property declared once here. Tailwind utilities map to
+ *            these variables (tailwind.config.ts) so a theme swap changes variables, never classes.
+ *   ADR-009  Breakpoint numbers live in src/core/config/breakpoints.ts; the media queries in
+ *            src/styles/responsive/*.css use the same pixel values.
+ *   No component may hard-code a colour, a spacing value or a duration. ESLint and review enforce
+ *   this; the design-system lab ( /design-system ) renders the token catalogue for visual audit.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ------------------------------------------------------------------ *
+   * 1. Brand palette — primary green (BSDC identity)                    *
+   * ------------------------------------------------------------------ */
+  --bsdc-green-50: #eaf6f0;
+  --bsdc-green-100: #d3ede0;
+  --bsdc-green-200: #a8dbc1;
+  --bsdc-green-300: #7bc9a4;
+  --bsdc-green-400: #52b788;
+  --bsdc-green-500: #2d6a4f;
+  --bsdc-green-600: #26795b;
+  --bsdc-green-700: #1b4332;
+  --bsdc-green-800: #14342a;
+  --bsdc-green-900: #0d2a20;
+
+  /* ------------------------------------------------------------------ *
+   * 2. Accent blue — Facebook-like familiarity, BSDC-tuned              *
+   * ------------------------------------------------------------------ */
+  --bsdc-blue-50: #eaf2ff;
+  --bsdc-blue-100: #d6e6ff;
+  --bsdc-blue-200: #a9cbff;
+  --bsdc-blue-300: #7caeff;
+  --bsdc-blue-400: #4f91ff;
+  --bsdc-blue-500: #1877f2;
+  --bsdc-blue-600: #1461c7;
+  --bsdc-blue-700: #104b9c;
+  --bsdc-blue-800: #0c3773;
+  --bsdc-blue-900: #08244a;
+
+  /* ------------------------------------------------------------------ *
+   * 3. Neutrals — light theme defaults (overridden per theme)           *
+   * ------------------------------------------------------------------ */
+  --bsdc-bg: #ffffff;
+  --bsdc-surface: #f7f8fa;
+  --bsdc-surface-2: #eef1f5;
+  --bsdc-surface-3: #e4e9f0;
+  --bsdc-border: #dde3ea;
+  --bsdc-text: #0b1220;
+  --bsdc-text-2: #4a5568;
+  --bsdc-text-3: #718096;
+
+  /* ------------------------------------------------------------------ *
+   * 4. Semantic colours                                                 *
+   * ------------------------------------------------------------------ */
+  --bsdc-success: #16a34a;
+  --bsdc-warning: #f59e0b;
+  --bsdc-danger: #dc2626;
+  --bsdc-info: #1877f2;
+  --bsdc-verified: #0ea5e9;
+  --bsdc-admin: #7c3aed;
+  --bsdc-moderator: #f59e0b;
+  --bsdc-vendor: #0d9488;
+  --bsdc-money: #0f766e;
+  --bsdc-focus: #1877f2;
+  --bsdc-glass-bg: rgb(255 255 255 / 72%);
+
+  /* ------------------------------------------------------------------ *
+   * 5. Reaction colours — SVG fills only, never emoji (LAW-01)          *
+   * ------------------------------------------------------------------ */
+  --bsdc-reaction-like: #1877f2;
+  --bsdc-reaction-love: #e0245e;
+  --bsdc-reaction-care: #f5b301;
+  --bsdc-reaction-haha: #f5b301;
+  --bsdc-reaction-wow: #f5b301;
+  --bsdc-reaction-sad: #4f91ff;
+  --bsdc-reaction-angry: #e0245e;
+  --bsdc-reaction-fire: #f97316;
+  --bsdc-reaction-mindblown: #8b5cf6;
+  --bsdc-reaction-clap: #16a34a;
+
+  /* ------------------------------------------------------------------ *
+   * 6. Spacing — 4px base scale with hairlines and a density multiplier *
+   * ------------------------------------------------------------------ */
+  --bsdc-density: 1;
+  --bsdc-space-unit: 4px;
+  --bsdc-hairline: 1px;
+  --bsdc-space-0: 0px;
+  --bsdc-space-px: 1px;
+  --bsdc-space-1: calc(var(--bsdc-space-unit) * 1 * var(--bsdc-density));
+  --bsdc-space-2: calc(var(--bsdc-space-unit) * 2 * var(--bsdc-density));
+  --bsdc-space-3: calc(var(--bsdc-space-unit) * 3 * var(--bsdc-density));
+  --bsdc-space-4: calc(var(--bsdc-space-unit) * 4 * var(--bsdc-density));
+  --bsdc-space-5: calc(var(--bsdc-space-unit) * 5 * var(--bsdc-density));
+  --bsdc-space-6: calc(var(--bsdc-space-unit) * 6 * var(--bsdc-density));
+  --bsdc-space-7: calc(var(--bsdc-space-unit) * 7 * var(--bsdc-density));
+  --bsdc-space-8: calc(var(--bsdc-space-unit) * 8 * var(--bsdc-density));
+  --bsdc-space-9: calc(var(--bsdc-space-unit) * 9 * var(--bsdc-density));
+  --bsdc-space-10: calc(var(--bsdc-space-unit) * 10 * var(--bsdc-density));
+  --bsdc-space-11: calc(var(--bsdc-space-unit) * 11 * var(--bsdc-density));
+  --bsdc-space-12: calc(var(--bsdc-space-unit) * 12 * var(--bsdc-density));
+  --bsdc-space-14: calc(var(--bsdc-space-unit) * 14 * var(--bsdc-density));
+  --bsdc-space-16: calc(var(--bsdc-space-unit) * 16 * var(--bsdc-density));
+  --bsdc-space-20: calc(var(--bsdc-space-unit) * 20 * var(--bsdc-density));
+  --bsdc-space-24: calc(var(--bsdc-space-unit) * 24 * var(--bsdc-density));
+
+  /* ------------------------------------------------------------------ *
+   * 7. Typography — fluid clamp() scale, working from 250px upward      *
+   * ------------------------------------------------------------------ */
+  --bsdc-font-ui:
+    "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, "Noto Sans Bengali",
+    sans-serif;
+  --bsdc-font-bn:
+    "Noto Sans Bengali", "Hind Siliguri", "SolaimanLipi", "Kalpurush", var(--bsdc-font-ui);
+  --bsdc-font-code: "JetBrains Mono", "Fira Code", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --fs-2xs: clamp(0.625rem, 0.6rem + 0.12vw, 0.6875rem);
+  --fs-xs: clamp(0.6875rem, 0.66rem + 0.14vw, 0.75rem);
+  --fs-sm: clamp(0.75rem, 0.72rem + 0.16vw, 0.875rem);
+  --fs-base: clamp(0.8125rem, 0.78rem + 0.2vw, 1rem);
+  --fs-md: clamp(0.9375rem, 0.9rem + 0.25vw, 1.125rem);
+  --fs-lg: clamp(1.0625rem, 1rem + 0.35vw, 1.375rem);
+  --fs-xl: clamp(1.25rem, 1.15rem + 0.6vw, 1.75rem);
+  --fs-2xl: clamp(1.5rem, 1.35rem + 0.9vw, 2.25rem);
+  --fs-3xl: clamp(1.875rem, 1.6rem + 1.4vw, 3rem);
+  --fs-4xl: clamp(2.25rem, 1.9rem + 2.2vw, 4rem);
+  --fs-hero: clamp(2.5rem, 2rem + 4vw, 6rem);
+
+  /* Bangla needs matra clearance; English reads tighter (PART 08.02). */
+  --lh-en: 1.55;
+  --lh-bn: 1.8;
+  --lh-tight: 1.25;
+  --lh-code: 1.6;
+
+  /* ------------------------------------------------------------------ *
+   * 8. Radius                                                           *
+   * ------------------------------------------------------------------ */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 28px;
+  --radius-full: 9999px;
+  --radius-bubble-chat: 18px;
+
+  /* ------------------------------------------------------------------ *
+   * 9. Elevation — light theme shadows                                  *
+   * ------------------------------------------------------------------ */
+  --shadow-1: 0 1px 2px rgb(11 18 32 / 6%), 0 1px 1px rgb(11 18 32 / 4%);
+  --shadow-2: 0 2px 6px rgb(11 18 32 / 8%), 0 1px 2px rgb(11 18 32 / 6%);
+  --shadow-3: 0 6px 16px rgb(11 18 32 / 10%), 0 2px 4px rgb(11 18 32 / 6%);
+  --shadow-4: 0 12px 32px rgb(11 18 32 / 14%), 0 4px 8px rgb(11 18 32 / 6%);
+  --shadow-5: 0 24px 64px rgb(11 18 32 / 20%), 0 8px 16px rgb(11 18 32 / 8%);
+  --blur-glass: 14px;
+
+  /* ------------------------------------------------------------------ *
+   * 10. Motion                                                          *
+   * ------------------------------------------------------------------ */
+  --motion-instant: 90ms;
+  --motion-fast: 160ms;
+  --motion-base: 240ms;
+  --motion-slow: 400ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-emphasised: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  /* ------------------------------------------------------------------ *
+   * 11. Z-index map — documented, never ad-hoc (PART 08.03)             *
+   * ------------------------------------------------------------------ */
+  --z-base: 0;
+  --z-sticky-header: 100;
+  --z-sidebar: 150;
+  --z-mobile-nav: 180;
+  --z-dropdown: 200;
+  --z-chat-dock: 250;
+  --z-sheet: 300;
+  --z-modal: 400;
+  --z-lightbox: 500;
+  --z-command-palette: 600;
+  --z-toast: 700;
+  --z-call-overlay: 800;
+  --z-critical-banner: 900;
+  --z-dev-overlay: 9999;
+
+  /* ------------------------------------------------------------------ *
+   * 12. Interaction targets and misc                                    *
+   * ------------------------------------------------------------------ */
+  --bsdc-tap-target: 44px;
+  --bsdc-tap-target-fine: 32px;
+  --bsdc-media-dim: 0;
+  --bsdc-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bsdc-safe-top: env(safe-area-inset-top, 0px);
+  --bsdc-safe-left: env(safe-area-inset-left, 0px);
+  --bsdc-safe-right: env(safe-area-inset-right, 0px);
+  --bsdc-header-height: 56px;
+  --bsdc-bottom-nav-height: 56px;
+  --bsdc-rail-width: 240px;
+  --bsdc-right-rail-width: 340px;
+}

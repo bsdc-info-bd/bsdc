@@ -1,0 +1,141 @@
+{
+  "title": "Jobs",
+  "subtitle": "Every open role in Bangladesh's software community.",
+  "post": "Post a job",
+  "postRequiresCreator": "You need to be a creator to post a job. Ask an admin and they will look at it.",
+  "open": "Open",
+  "closed": "Closed",
+  "applied": "Applied",
+  "remoteAnywhere": "From anywhere",
+  "salaryUndisclosed": "Salary not disclosed",
+  "closesIn": "{count} days left",
+  "closesToday": "Closes today",
+  "noDeadline": "No closing date",
+  "board": {
+    "empty": "No job matches these filters. Clear one and look again."
+  },
+  "tabs": {
+    "label": "Job lists",
+    "board": "Job board",
+    "applied": "My applications",
+    "appliedEmpty": "You have not applied for anything yet."
+  },
+  "filters": {
+    "label": "Job filters",
+    "type": "Type of work",
+    "workplace": "Where",
+    "experience": "Experience",
+    "division": "Division",
+    "results": "{count} jobs",
+    "clear": "Clear filters ({count})"
+  },
+  "form": {
+    "company": "Company name",
+    "title": "Role",
+    "description": "Job description",
+    "employmentType": "Type of work",
+    "workplace": "Where the work happens",
+    "location": "Location",
+    "division": "Division",
+    "experience": "Experience",
+    "deadline": "Closing date",
+    "discloseSalary": "Show the salary",
+    "salaryMin": "Lowest salary",
+    "salaryMax": "Highest salary",
+    "salaryHiddenNote": "The salary will stay hidden. The board will say it was not disclosed.",
+    "currency": "Currency",
+    "period": "Measured per",
+    "skills": "Skills",
+    "skillsHint": "Separate with commas. Up to twenty.",
+    "externalUrl": "External application link",
+    "externalUrlHint": "When there is one, applications go there. Without one, they arrive here.",
+    "cancel": "Cancel",
+    "post": "Post"
+  },
+  "detail": {
+    "location": "Location",
+    "salary": "Salary",
+    "deadline": "Closing date",
+    "applicants": "Applicants",
+    "signInToApply": "Sign in to apply.",
+    "missing": {
+      "title": "This job could not be found",
+      "description": "It may have been withdrawn or already filled."
+    }
+  },
+  "apply": {
+    "coverLetter": "Cover letter",
+    "needMore": "Write {count} more characters.",
+    "portfolio": "Portfolio link",
+    "resume": "Résumé link",
+    "expectedSalary": "Expected salary",
+    "noticeDays": "Notice period in days",
+    "submit": "Send application",
+    "sentLabel": "Your application",
+    "sent": "Your application has been sent. Current status: {status}",
+    "sentToast": {
+      "bn": "Application sent",
+      "en": "Application sent"
+    }
+  },
+  "withdraw": {
+    "action": "Withdraw application",
+    "done": {
+      "bn": "Application withdrawn",
+      "en": "Application withdrawn"
+    }
+  },
+  "status": {
+    "submitted": "Sent",
+    "reviewing": "Being reviewed",
+    "shortlisted": "Shortlisted",
+    "interview": "Interview",
+    "hired": "Hired",
+    "rejected": "Not taken forward",
+    "withdrawn": "Withdrawn",
+    "offered": "Offered"
+  },
+  "applications": {
+    "label": "Applications",
+    "empty": {
+      "title": "No applications yet",
+      "description": "They will appear here as they arrive."
+    },
+    "counts": "By status",
+    "portfolio": "Portfolio",
+    "noteLabel": "What the applicant will read",
+    "statusLabel": "New status",
+    "decide": "Decide",
+    "close": "Close",
+    "updated": {
+      "bn": "Application updated",
+      "en": "Application updated"
+    }
+  },
+  "posted": {
+    "bn": "Job posted",
+    "en": "Job posted"
+  },
+  "error": {
+    "default": {
+      "bn": "The job could not be saved.",
+      "en": "The job could not be saved."
+    },
+    "BSDC-DATA-007": {
+      "bn": "The job is missing something required.",
+      "en": "The job is missing something required."
+    },
+    "BSDC-JOB-001": {
+      "bn": "The closing date for this job has passed.",
+      "en": "The closing date for this job has passed."
+    },
+    "BSDC-JOB-003": {
+      "bn": "The cover letter needs to be longer.",
+      "en": "The cover letter needs to be longer."
+    },
+    "BSDC-JOB-004": {
+      "bn": "The top of the range has to be above the bottom.",
+      "en": "The top of the range has to be above the bottom."
+    }
+  }
+}

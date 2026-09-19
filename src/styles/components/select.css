@@ -1,0 +1,79 @@
+/**
+ * BSDC — src/styles/components/select.css
+ * Purpose : Select trigger, viewport and option styling (PART 08.09).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The trigger keeps a 44px minimum height on touch and truncates long labels rather than
+ *           widening its container (R-01, R-03).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bsdc-space-2);
+  inline-size: 100%;
+  min-height: var(--bsdc-tap-target);
+  padding-inline: var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-2);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  background-color: var(--bsdc-surface);
+  color: var(--bsdc-text);
+  font-size: var(--fs-base);
+  text-align: start;
+  min-width: 0;
+}
+
+.bsdc-select__trigger[data-placeholder="true"] {
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-select__value {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.bsdc-select__content {
+  z-index: var(--z-dropdown);
+  min-inline-size: var(--radix-select-trigger-width, 200px);
+  max-block-size: min(60dvh, 420px);
+  overflow: hidden;
+  background-color: var(--bsdc-surface);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-4);
+}
+
+.bsdc-select__viewport {
+  padding: var(--bsdc-space-1);
+}
+
+.bsdc-select__item {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  min-height: 40px;
+  padding-inline: var(--bsdc-space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .bsdc-select__item {
+    min-height: var(--bsdc-tap-target);
+  }
+}
+
+.bsdc-select__item[data-highlighted="true"] {
+  background-color: var(--bsdc-surface-2);
+}
+
+.bsdc-select__item[data-state="checked"] {
+  font-weight: 700;
+  color: var(--bsdc-green-600);
+}

@@ -1,0 +1,37 @@
+/**
+ * BSDC — src/styles/responsive/hover.css
+ * Purpose : Hover affordances only where hovering exists (PART 08.04 R-15).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Touch devices never see a hover-only affordance; pointer devices may get richer
+ *           previews. This prevents "sticky hover" states on Android WebView.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (hover: none) {
+  .bsdc-hover-only {
+    display: none !important;
+  }
+
+  /* Touch devices must not keep a hover background after a tap. */
+  .bsdc-card[data-variant="interactive"]:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: var(--bsdc-border);
+  }
+
+  .bsdc-rail-nav__item:hover,
+  .bsdc-menu__item[data-highlighted="true"] {
+    background-color: transparent;
+  }
+}
+
+@media (hover: hover) {
+  .bsdc-hover-card {
+    visibility: hidden;
+  }
+
+  .bsdc-hover-trigger:hover .bsdc-hover-card,
+  .bsdc-hover-trigger:focus-within .bsdc-hover-card {
+    visibility: visible;
+  }
+}

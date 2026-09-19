@@ -1,0 +1,29 @@
+{
+  "title": "Design system",
+  "subtitle": "Every token, theme and primitive the platform is built from. This page is the contract.",
+  "tokensTitle": "Design tokens",
+  "colorsTitle": "Colour",
+  "typographyTitle": "Typography",
+  "spacingTitle": "Spacing",
+  "radiiTitle": "Radii",
+  "elevationTitle": "Elevation",
+  "motionTitle": "Motion",
+  "zIndexTitle": "Layering",
+  "themesTitle": "Themes",
+  "primitivesTitle": "Primitives",
+  "contrastTitle": "Contrast check",
+  "breakpointsTitle": "Responsive contract",
+  "currentBreakpoint": "Current breakpoint",
+  "viewportWidth": "Viewport width",
+  "navigationModel": "Navigation model",
+  "flagsTitle": "Feature flags",
+  "contrast": {
+    "foreground": "Foreground",
+    "background": "Background",
+    "ratio": "Ratio",
+    "level": "WCAG level"
+  },
+  "scaleSampleEn": "The quick brown fox jumps over the lazy dog",
+  "scaleSampleBn": "আমরা বাংলায় কাজ করি এবং বাংলাতেই ভাবি",
+  "primitiveHint": "Each primitive is interactive. Keyboard focus, touch targets and dark themes all apply here first."
+}

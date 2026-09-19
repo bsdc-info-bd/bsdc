@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- BSDC illustration: error state. Source-available. Re-deployment or rebranding is not permitted. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 140" role="img" aria-label="error state">
+  <path d="M100 18 30 128h140L100 18z" fill="none" stroke="currentColor" stroke-width="4" stroke-linejoin="round"/><path d="M100 58v34" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="100" cy="106" r="5" fill="currentColor"/>
+</svg>

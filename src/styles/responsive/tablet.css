@@ -1,0 +1,43 @@
+/**
+ * BSDC — src/styles/responsive/tablet.css
+ * Purpose : 768px to 1023px — tablets, small laptop windows and landscape phones.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The bottom nav is replaced by a compact top navigation; the shell stays single column
+ *           because two columns would squeeze Bangla prose below a readable measure.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .bsdc-container {
+    padding-inline: var(--bsdc-space-4);
+  }
+
+  .bsdc-bottom-nav {
+    display: none;
+  }
+
+  .bsdc-app-shell__main {
+    padding-block-end: var(--bsdc-space-8);
+  }
+
+  .bsdc-rail-nav {
+    display: none;
+  }
+
+  .bsdc-table-wrap {
+    display: block;
+  }
+
+  .bsdc-table-card-list {
+    display: none;
+  }
+
+  /* Two-up grids are safe here and above. */
+  .bsdc-grid-auto {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  }
+
+  .bsdc-feed {
+    max-inline-size: 680px;
+  }
+}

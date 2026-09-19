@@ -1,0 +1,100 @@
+/**
+ * BSDC — src/styles/components/groups.css
+ * Purpose : Group cards and the group grid.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The grid is intrinsic: columns appear when there is room for at least 260px each, so it
+ *   works from 250px to 5120px without a single breakpoint. The cover strip reserves its aspect
+ *   ratio, which keeps the grid from reflowing as covers arrive.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-groups__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: var(--bsdc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-group-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-3);
+  min-inline-size: 0;
+  block-size: 100%;
+}
+
+.bsdc-group-card__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-group-card__cover {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: 16 / 6;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--bsdc-green-500), var(--bsdc-blue-500));
+  background-size: cover;
+  background-position: center;
+}
+
+.bsdc-group-card__identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bsdc-space-1);
+}
+
+.bsdc-group-card__name {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--bsdc-text);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-group-card__name:hover {
+  text-decoration: underline;
+}
+
+.bsdc-group-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bsdc-space-2);
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-3);
+}
+
+.bsdc-group-card__meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.bsdc-group-card__description {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.65;
+  color: var(--bsdc-text-2);
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bsdc-group-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  margin-block-start: auto;
+}
+
+.bsdc-group-card__link {
+  font-size: var(--fs-sm);
+  color: var(--bsdc-green-600);
+  text-decoration: none;
+}

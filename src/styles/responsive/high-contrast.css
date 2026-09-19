@@ -1,0 +1,42 @@
+/**
+ * BSDC — src/styles/responsive/high-contrast.css
+ * Purpose : System-level and user-selected high contrast support (PART 08.01 theme 7, LAW-14).
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Borders are strengthened, decorative backgrounds are removed and every text/background
+ *           pair is pushed to at least 7:1 so the product passes WCAG AAA while the mode is on.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+@media (prefers-contrast: more) {
+  .bsdc-card,
+  .bsdc-input,
+  .bsdc-chip,
+  .bsdc-select__trigger,
+  .bsdc-menu__content,
+  .bsdc-popover__content {
+    border-width: 2px;
+  }
+
+  .bsdc-glass {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: var(--bsdc-bg);
+  }
+
+  .bsdc-text-muted,
+  .bsdc-field__hint,
+  .bsdc-empty-state__description {
+    color: var(--bsdc-text);
+  }
+}
+
+:root[data-theme="high-contrast"] {
+  --bsdc-text-2: #1a1a1a;
+  --bsdc-text-3: #333333;
+}
+
+:root[data-theme="high-contrast"] .bsdc-card,
+:root[data-theme="high-contrast"] .bsdc-input {
+  border-width: 2px;
+  border-color: #000000;
+}

@@ -1,0 +1,32 @@
+{
+  "title": "Groups",
+  "subtitle": "Find your people — by topic, by city, by stack.",
+  "startCreating": "Start a group",
+  "cancel": "Cancel",
+  "create": "Create group",
+  "loading": "Loading groups",
+  "emptyTitle": "No groups yet",
+  "emptyBody": "Start the first one. Beginning small is the right way to begin.",
+  "deviceOnly": "Showing the groups stored on this device.",
+  "signInToJoin": "Sign in to join a group.",
+  "join": "Join",
+  "leave": "Leave",
+  "open": "Open group",
+  "privacy": {
+    "public": "Open to everyone",
+    "closed": "Members only",
+    "secret": "Secret"
+  },
+  "fields": {
+    "name": "Group name",
+    "description": "Description",
+    "privacy": "Privacy",
+    "region": "Division",
+    "regionOptional": "Division (optional)",
+    "district": "District",
+    "districtOptional": "District (optional)"
+  },
+  "errors": {
+    "shortName": "A group name must be at least three characters."
+  }
+}
