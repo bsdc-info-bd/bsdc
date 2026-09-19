@@ -74,6 +74,9 @@ describe('opportunity routes', () => {
             <App />
           </Suspense>,
         );
+        await new Promise((done) => {
+          setTimeout(done, 0);
+        });
       });
 
       await waitFor(
@@ -83,16 +86,6 @@ describe('opportunity routes', () => {
         },
         { timeout: 8000 },
       );
-
-      // A lazy route chunk resolves on a microtask. Flushing it inside act means React sees the
-      // update during the test rather than after it, which is both what a browser does and what
-      // keeps the console clean; an act warning is otherwise a test artefact that fails a test
-      // for a reason that has nothing to do with the screen under test.
-      await act(async () => {
-        await new Promise((done) => {
-          setTimeout(done, 0);
-        });
-      });
 
       // A missing namespace renders the raw key, which always contains a dot or an underscore.
       expect(document.body.textContent ?? '').not.toMatch(
