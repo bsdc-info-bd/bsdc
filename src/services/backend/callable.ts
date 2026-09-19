@@ -61,6 +61,18 @@ export interface CallableMap {
     request: { kind: string; entityId: string; confirmation: string };
     response: { purged: boolean };
   };
+  registerReport: {
+    request: {
+      reportId: string;
+      kind: string;
+      title: string;
+      integrity: string;
+      generatedAt: string;
+      rowCount: number;
+      verificationUrl: string;
+    };
+    response: { reportId: string };
+  };
 }
 
 export type CallableName = keyof CallableMap;

@@ -92,7 +92,7 @@
     "liveCounters": {
       "$entityId": {
         ".read": "auth != null",
-        ".write": "auth != null",
+        ".write": false,
         ".validate": "newData.isNumber()",
         "views": {
           ".validate": "newData.isNumber()"

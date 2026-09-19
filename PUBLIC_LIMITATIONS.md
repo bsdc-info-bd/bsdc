@@ -196,3 +196,72 @@ it was scanning a handful of files and passing trivially. With the response 3 co
 "then upcoming soonest-first", which the `coming ?soon` marker matches. The comment was reworded.
 The gate is real from this response onward, and it is worth assuming that any check reading
 `git ls-files` was inert before the first commit and is now live.
+
+---
+
+## Response 4 — logged constraints
+
+### L4-01 — The emulator suite has still not been run, because this workspace has no Java runtime
+
+`firebase emulators:exec` needs Java, and Java is not installed here and cannot be installed: the
+account has no root and no `sudo`. Rather than claim a suite that was never executed, this response
+extends the static gates that can actually be run, and says plainly what each one does and does not
+cover.
+
+`npm run check:rules` (response 3) covers `firestore.rules`: brace and quote balance, a rule for
+every collection and subcollection in `src/core/config/collections.ts`, no unconditional write, and
+a catch-all deny in last position.
+
+`npm run check:rtdb` (new here) covers `database.rules.json`: the root denies reads and writes, every
+path in `RTDB_PATHS` has a rule, no node allows `.write: true` or a write rule that never mentions
+`auth`, paths only a Cloud Function may write say so, and no leaf is left without either a validate
+rule or a wildcard that catches the rest.
+
+What neither gate can do is prove behaviour: that a non-member still cannot read a secret group, or
+that a receipt cannot be written by somebody outside the conversation. Those are the assertions the
+emulator suite will make, and it remains unrun. Where a rule matters to a person's safety, the
+response 4 code states the intended behaviour in a comment at the rule so the gap is visible at the
+point of use instead of buried in this file.
+
+### L4-02 — The PDF text layer is Latin; Bangla lives on the screen
+
+The core PDF fonts cannot render Bengali conjuncts, so the printed document carries the Latin
+transliteration of each label while the on-screen report — the one a Bengali reader actually reads —
+is real Bangla. Embedding a Bengali-capable font would add roughly 300 KB to every generated PDF.
+The transliteration is stored beside the Bangla label rather than derived at print time, so nothing
+is invented in the moment. A printed report is therefore checkable by anybody but best read by a
+Bengali reader on a screen.
+
+### L4-03 — A report counts what the platform can see at the moment it is issued
+
+The moderation report reads the queue the viewer is entitled to, which for a non-staff account is
+their own reports and not the whole queue. The events and jobs reports read the listings, which are
+capped pages. The members report uses Firestore's server-side count aggregation, so it is exact
+rather than paged. A report therefore states what it counted and does not claim to be a census:
+there is no extrapolation and no filled gap anywhere in the catalogue.
+
+A report issued while the device is offline still produces a complete PDF with a valid id, stamp,
+hash and QR code; only the server record is missing, and the screen says so. The document is not
+verifiable until the device syncs, and the verification page answers "we hold no record yet" rather
+than dressing that up as a pass.
+
+### L4-04 — A group manager may remove a member but may not mint another manager
+
+With two member tiers, letting a manager promote a member hands out the keys to the group to anybody
+who was asked once, and the owner would then need staff intervention to take them back. Only the
+group's owner, or staff, may grant the manager role. A manager may still remove a member, which is
+the power a manager needs day to day. The comparison in `mayAssignRole` is written against a rank
+table rather than hardcoded, so adding a third tier later cannot accidentally grant it to everybody.
+
+### L4-05 — Live counters are now server-write-only
+
+`liveCounters/$entityId` previously allowed any signed-in account to write any value, which made a
+counter a thing anybody could set rather than a thing the platform counts. It is now `.write: false`,
+written by a Cloud Function. The read rule is unchanged: any signed-in account may read the counter.
+
+### L4-06 — Shell headroom is 5.13 KB gzip
+
+The initial shell is 174.87 KB gzip against the 180 KB budget. Response 4 added the administration
+and reports routes to the route table rather than to the entry chunk; jsPDF (126.49 KB gzip) and
+html2canvas (47.48 KB) both sit behind the dynamic import inside the report composer, so a visitor who
+never issues a report never downloads either. Response 5 must keep the same discipline.

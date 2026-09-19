@@ -2,7 +2,7 @@
   "name": "bsdc",
   "version": "0.2.0-response2",
   "private": true,
-  "description": "BSDC — Bangladesh Software Development Community. A platform of RRC Development.",
+  "description": "BSDC \u2014 Bangladesh Software Development Community. A platform of RRC Development.",
   "license": "SEE LICENSE IN LICENSE",
   "author": {
     "name": "Rizwan Rahim Chowdhury",
@@ -45,7 +45,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:env": "tsx scripts/verify-env.ts",
-    "verify": "npm run format:check && npm run lint && npm run lint:no-emoji && npm run typecheck && npm run check:placeholders && npm run check:workers && npm run check:rules && npm run test && npm run build",
+    "verify": "npm run format:check && npm run lint && npm run lint:no-emoji && npm run typecheck && npm run check:placeholders && npm run check:workers && npm run check:rules && npm run check:rtdb && npm run test && npm run build",
     "icons:generate": "node tools/generate-sprite.mjs && node tools/generate-icons.mjs",
     "clean": "rimraf dist .vite-temp coverage",
     "analyze": "ANALYZE=true npm run build",
@@ -53,7 +53,8 @@
     "icons:sprite": "node tools/generate-sprite.mjs",
     "messaging:config": "node tools/generate-messaging-config.mjs",
     "verify:functions": "npm --prefix functions run build && npx tsx --test functions/src/*.test.ts",
-    "check:rules": "node scripts/check-rules.mjs"
+    "check:rules": "node scripts/check-rules.mjs",
+    "check:rtdb": "node scripts/check-rtdb.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",

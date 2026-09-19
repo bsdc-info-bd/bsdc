@@ -50,12 +50,28 @@ docs/
   SELF-AUDIT-1.md  — ` header by `npm run docs:tree`, so it cannot drift.
   SELF-AUDIT-2.md
   SELF-AUDIT-3.md
+  SELF-AUDIT-4.md
 eslint.config.js  — Flat ESLint configuration enforcing the engineering rules of conduct (PART 01.04)
 firebase.json
 firestore.indexes.json
 firestore.rules
 functions/
   .gitignore
+  lib/
+    claims.js  — Custom-claim authority: the only code allowed to grant or revoke privilege (LAW-03).
+    claims.js.map
+    env.js  — Typed, fail-fast access to server-only configuration.
+    env.js.map
+    index.js  — Cloud Function entry points. Everything that must be trusted runs here (LAW-03).
+    index.js.map
+    passkey.js  — Passkey derivation and constant-time verification (PART 05.06, LAW-06).
+    passkey.js.map
+    passkey.test.js  — Proves the passkey derivation: salted, peppered, constant-time and never stored.
+    passkey.test.js.map
+    profile.js  — Account provisioning: user document and username reservation on first sign-in.
+    profile.js.map
+    rateLimit.js  — Server-side attempt throttling for privileged entry points (PART 05.06).
+    rateLimit.js.map
   package-lock.json
   package.json
   src/
@@ -78,6 +94,7 @@ public/
     bn/
       a11y.json
       about.json
+      admin.json
       auth.json
       comments.json
       common.json
@@ -103,12 +120,14 @@ public/
       projects.json
       push.json
       reactions.json
+      reports.json
       search.json
       stories.json
       theme.json
     en/
       a11y.json
       about.json
+      admin.json
       auth.json
       comments.json
       common.json
@@ -134,6 +153,7 @@ public/
       projects.json
       push.json
       reactions.json
+      reports.json
       search.json
       stories.json
       theme.json
@@ -145,6 +165,7 @@ public/
 scripts/
   check-no-placeholders.sh  — LAW-02 gate: no placeholder, demo, sample or fake content may ship.
   check-no-workers.sh  — ADR-036 gate: BSDC uses no Cloudflare Worker, at all, ever.
+  check-rtdb.mjs  — Static gate over the Realtime Database rules (database.rules.json).
   check-rules.mjs  — Static gate over firestore.rules: every collection the client can reach has a rule,
   generate-repo-tree.mjs  — Regenerates docs/01-REPO-TREE.md from the filesystem and the file headers.
   verify-env.ts  — Environment guard run before every build (PART 06.01).
@@ -178,6 +199,7 @@ src/
       collections.ts  — Every Firestore collection and Realtime Database path in one typed registry.
       features.ts  — The plugin / feature-flag registry seed (PART 04 LAW-11, PART 19.2/17).
       firebase.ts  — Client Firebase options and backend mode, derived from public environment variables.
+      flags.ts  — Runtime feature-flag state: schedules, precedence and window validation.
       limits.ts  — Every numeric product limit in one auditable place (PART 29.1, PART 11.03).
       moderation.ts  — The moderation vocabulary: report categories, severities, queue states, SLAs.
       navigation.ts  — The navigation model: which destinations appear in the bottom nav, the rail and the
@@ -200,18 +222,26 @@ src/
       bus.ts  — A tiny typed event bus for cross-module notifications that must not create import
     flags/
       flagClient.ts  — Feature-flag state with local override, scheduling and change events (PART 04 LAW-11).
+    lib/
+      pdf.ts  — Turns a sealed report into a PDF nobody has to take on trust.
+      report.ts  — Report identity: the id, the generated-at stamp, the integrity hash and the verify URL.
     logger/
       logger.ts  — Structured logging with redaction and pluggable transports (PART 24.4).
       redact.ts  — Redaction of secrets and personal data before anything is logged (PART 06.01).
     result/
       Result.ts  — Explicit success/failure values for fallible operations (PART 24.4).
   entities/
+    admin/
+      audit.ts  — The audit trail: what was done, to whom, by whom, and what it looked like before.
+      recovery.ts  — The recovery bin: what was soft-deleted, when it disappears, and what can come back.
+      repository.ts  — The administrator's reads and writes: flags, roles, the audit trail and the bin.
     comment/
       model.ts  — The comment entity: shape, defaults and threading rules.
       repository.ts  — Comment persistence: paging, create, edit, soft delete and live threads.
     conversation/
       model.ts  — Conversations and chat messages: shape, ids, titles and read state.
       repository.ts  — Messenger persistence: threads, message pages, sends and read receipts.
+      thread.ts  — Message reactions, reply threads, attachment validation and delivery state.
     event/
       model.ts  — The event entity: where a community meets, on a map or on a call.
       repository.ts  — Event persistence: publish, browse, answer an invitation, and manage a venue.
@@ -221,6 +251,7 @@ src/
     group/
       model.ts  — The group entity: privacy model, membership roles and defaults.
       repository.ts  — Group persistence: listing, creating, joining, leaving and live membership.
+      requests.ts  — Join requests, group roles and the visibility rule a secret group relies on.
     job/
       model.ts  — The job entity and the application entity behind it.
       repository.ts  — Job persistence, and the application pipeline behind it.
@@ -246,6 +277,10 @@ src/
     reaction/
       model.ts  — Reactions as data: one per person per post, plus the derived summary.
       repository.ts  — Reaction persistence: set, clear and watch.
+    report/
+      catalog.ts  — The reports BSDC issues, and the rows each one is made of.
+      document.ts  — The record of an issued report, and the verdict a verifier reaches from it.
+      repository.ts  — Issuing a report and checking one.
     reputation/
       model.ts  — Reputation: points, level, streak and the badges they have earned.
       repository.ts  — Reputation reads: a record, a leaderboard, and the opt-out switch.
@@ -257,6 +292,14 @@ src/
       model.ts  — The Real Story entity: a 24-hour frame of someone's day, and nothing more.
       repository.ts  — Story persistence: publish, read the live rail, record a view, expire and recover.
   features/
+    admin/
+      AdminScope.tsx  — The wrapper that decides whether an administration screen is shown at all.
+      AuditTrail.tsx  — The trail: who did what, to whom, and what it was before.
+      FlagMatrix.tsx  — The feature register: what is on, what is off, and what is off between two dates.
+      PasskeyDialog.tsx  — The passkey gate that stands in front of a privileged change.
+      RecoveryBin.tsx  — The recovery bin: what was deleted, what can still come back, and when it stops being
+      RoleAssignment.tsx  — The form that changes somebody's standing on the platform.
+      index.ts  — Public surface of the administration feature.
     auth/
       RequireAuth.tsx  — Route guard for surfaces that need an identity.
       SessionProvider.tsx  — The one React context that owns identity, claims and the profile in view.
@@ -349,6 +392,10 @@ src/
       ReactionGlyph.tsx  — One reaction glyph, drawn from the published sprite.
       ReactionPicker.tsx  — The ten-reaction chooser, opened from a long press, hover or keyboard focus.
       index.ts  — Public surface of the reactions feature.
+    reports/
+      ReportComposer.tsx  — Generate a report: choose one, see its rows, then issue it as a verifiable PDF.
+      VerificationCard.tsx  — The public checker: paste an id or a URL, learn whether the document is the one we issued.
+      index.ts  — Public surface of the reports feature.
     search/
       CommandPalette.tsx  — The command palette: one keystroke to anywhere, and one place to search from.
       SearchDialog.tsx  — The dialog that hosts the command palette, and the global shortcut that opens it.
@@ -366,6 +413,12 @@ src/
   pages/
     about/
       AboutPage.tsx  — Who BSDC is, who owns it and what transparency commitments bind it (PART 31.4).
+    admin/
+      AdminAuditPage.tsx  — The audit trail screen.
+      AdminFeaturesPage.tsx  — The feature register screen.
+      AdminOverviewPage.tsx  — The administration home: how much is switched off, how much is about to be lost, and
+      AdminRecoveryPage.tsx  — The recovery bin screen.
+      AdminRolesPage.tsx  — The role assignment screen.
     design-system/
       DesignSystemPage.tsx  — The living design-system lab: tokens, themes, typography, primitives, contrast and the
       tokenGroups.ts  — The token catalogue rendered by the design-system lab (PART 08.09, 08.10).
@@ -397,6 +450,9 @@ src/
       ProfilePage.tsx  — One member, in public: who they are, what they post, and what they build.
     projects/
       ProjectsPage.tsx  — The project directory, and the place a builder asks for help.
+    reports/
+      ReportsPage.tsx  — Where a staff member issues a report.
+      VerifyReportPage.tsx  — The public verification page the QR code points at.
     search/
       SearchPage.tsx  — The full search route: everything the platform found, grouped by kind.
     stories/
@@ -523,6 +579,7 @@ src/
   styles/
     components/
       accordion.css  — Accordion for FAQ, settings groups and admin filters (PART 08.09).
+      admin.css  — The administration console: panels, the flag register, the audit table, the bin.
       avatar.css  — Avatar, avatar group and presence ring (PART 08.09, F-029).
       badge.css  — Status, count and role badges. Role is encoded by colour plus label text plus an SVG
       button.css  — Button appearance: 12 variants, 4 sizes, 3 tones (PART 08.09).
@@ -606,9 +663,11 @@ src/
       backendGateway.test.ts  — Proves the gateway degrades instead of breaking (ADR-019).
       commentModel.test.ts  — Proves comment construction and one-level threading.
       conversationModel.test.ts  — Proves conversation identity, message construction and read-receipt maths.
+      conversationThread.test.ts  — Proves message reactions, edit windows, delivery state and reply threading.
       eventModel.test.ts  — Proves event validation, phase, seat maths and RSVP waiting-list behaviour.
       flags.test.ts  — Unit coverage for the feature-flag client, including scheduled windows (LAW-11).
       gigModel.test.ts  — Proves the freelancer hub's money and time rules.
+      groupRequests.test.ts  — Proves join requests, group roles and the secret-group visibility rule.
       jobModel.test.ts  — Proves the job board's honesty rules: salary, deadlines and applications.
       limits.test.ts  — Unit coverage for the platform limit registry and validators (PART 11.03).
       listenerRegistry.test.ts  — Proves every realtime subscription is reference-counted and always released.
@@ -621,6 +680,7 @@ src/
       permissions.test.ts  — Proves the entitlement matrix behaves as documented (PART 05.02, LAW-03).
       postModel.test.ts  — Proves post construction, scheduling, visibility and edit rights.
       reactions.test.ts  — Proves reaction counting, summary derivation and optimistic updates are exact.
+      reportIdentity.test.ts  — Proves that a report can be checked: ids are well-formed, hashes are real, the same
       reputationModel.test.ts  — Proves the level curve, the streak rules and the leaderboard ranking.
       routeTable.test.ts  — Proves the route table is consistent: every live route is translatable, indexable
       searchRanking.test.ts  — Proves that search answers the question a person asked, in both scripts.
@@ -663,4 +723,4 @@ vite.config.ts  — Build and dev-server configuration for the BSDC application 
 vitest.config.ts  — Test runner configuration for unit and component suites.
 ```
 
-Files described: 546.
+Files described: 598.

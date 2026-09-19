@@ -1,0 +1,34 @@
+{
+  "title": "Reports",
+  "subtitle": "Every report BSDC issues carries an id, the instant it was generated, a SHA-256 hash of its own contents and a URL anybody can check it at.",
+  "kind": "Report",
+  "loading": "Counting",
+  "issue": "Generate PDF",
+  "building": "Building the document",
+  "issued": "Issued {{id}}.",
+  "integrity": "SHA-256",
+  "verifyLink": "Open the verification page",
+  "registered": "Registered — it can be checked by anyone",
+  "notRegistered": "Not registered yet — the device could not reach the server, so it cannot be checked until it syncs",
+  "notAllowed": "Your role cannot issue this report.",
+  "noCrypto": "This browser does not expose SHA-256, so no report can be issued with a truthful integrity hash.",
+  "error": {
+    "default": "The report could not be issued.",
+    "BSDC-REPORT-001": "The numbers could not be counted. Try again once the data has loaded.",
+    "BSDC-REPORT-002": "The document could not be built.",
+    "BSDC-REPORT-003": "This browser does not expose SHA-256, so no truthful hash can be printed."
+  },
+  "verify": {
+    "title": "Check a report",
+    "subtitle": "Paste the report id, or the whole verification URL, and the hash printed underneath it.",
+    "idOrUrl": "Report id or verification URL",
+    "hash": "Integrity hash",
+    "hashHint": "Sixty-four hexadecimal characters, printed on the document.",
+    "check": "Check",
+    "confirmed": "Confirmed",
+    "refused": "Does not match",
+    "unknown": "No record yet",
+    "malformed": "Not a report id",
+    "checked": "Checked"
+  }
+}

@@ -280,6 +280,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Reports are registered by a Cloud Function at the moment they are issued, so that the hash
+    // printed on a PDF can be checked against something the holder of that PDF cannot rewrite.
+    // Reading needs no session at all: a verification page behind a sign-in would verify nothing.
+    match /reportDocuments/{reportId} {
+      allow read: if true;
+      allow create, update, delete: if false;
+    }
+
     match /appConfig/{docId} {
       allow read: if true;
       allow write: if isAdmin();

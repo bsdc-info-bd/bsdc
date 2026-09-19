@@ -49,6 +49,8 @@ export const NAMESPACES = [
   'gamification',
   'moderation',
   'push',
+  'admin',
+  'reports',
 ] as const;
 
 void i18next

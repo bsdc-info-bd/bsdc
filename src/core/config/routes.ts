@@ -208,6 +208,21 @@ export const ROUTES: readonly RouteMeta[] = [
     noindex: true,
   },
   {
+    path: '/reports',
+    titleKey: 'reports',
+    status: 'live',
+    flag: FLAG_KEYS.reports,
+    requiresAuth: true,
+    noindex: true,
+  },
+  {
+    path: '/verify/:reportId',
+    titleKey: 'reports',
+    status: 'live',
+    flag: FLAG_KEYS.reports,
+    noindex: true,
+  },
+  {
     path: '/market',
     titleKey: 'marketplace',
     status: 'planned',

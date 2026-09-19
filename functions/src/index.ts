@@ -367,6 +367,68 @@ export const setFeatureFlag = onCall(
 );
 
 /**
+ * Registers an issued report so that anybody holding it can check it later.
+ *
+ * The record is what gives a report's integrity hash its meaning: anybody can print a hash, but
+ * only the server can say which hash belongs to which report id. The write is therefore
+ * server-side, append-only, and carries the issuing account so a report can be traced back to the
+ * person who generated it. An id that has already been registered keeps its original record — a
+ * second registration cannot rewrite what the first one said.
+ *
+ * @param request callable request carrying the report identity and its integrity hash
+ * @returns the registered report id
+ */
+export const registerReport = onCall({ region: REGION }, async (request) => {
+  if (request.auth === undefined) {
+    throw new HttpsError('unauthenticated', 'Sign in to issue a report.');
+  }
+  const actorRole = (request.auth.token?.['role'] ?? 'member') as Role;
+  if (rankOf(actorRole) < rankOf('support')) {
+    throw new HttpsError('permission-denied', 'Only staff may issue a report.');
+  }
+
+  const reportId = request.data?.['reportId'];
+  const kind = request.data?.['kind'];
+  const title = request.data?.['title'];
+  const integrity = request.data?.['integrity'];
+  const generatedAt = request.data?.['generatedAt'];
+  const rowCount = request.data?.['rowCount'];
+  const url = request.data?.['verificationUrl'];
+  if (typeof reportId !== 'string' || !/^BSDC-[A-Z]{1,6}-\d{8}-[0-9A-Z]{8}$/.test(reportId)) {
+    throw new HttpsError('invalid-argument', 'A well-formed report id is required.');
+  }
+  if (typeof integrity !== 'string' || !/^[0-9a-f]{64}$/.test(integrity)) {
+    throw new HttpsError('invalid-argument', 'A SHA-256 integrity hash is required.');
+  }
+  if (typeof title !== 'string' || typeof kind !== 'string') {
+    throw new HttpsError('invalid-argument', 'A title and a kind are required.');
+  }
+
+  const reference = getFirestore().doc(`reportDocuments/${reportId}`);
+  const existing = await reference.get();
+  if (existing.exists) {
+    // Already registered: keep the first record, so a later call cannot move the goalposts.
+    return { reportId };
+  }
+
+  await reference.set({
+    reportId,
+    kind,
+    title,
+    integrity,
+    generatedAt: typeof generatedAt === 'string' ? generatedAt : new Date().toISOString(),
+    generatedByUid: request.auth.uid,
+    rowCount: typeof rowCount === 'number' ? rowCount : 0,
+    verificationUrl: typeof url === 'string' ? url : '',
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  logger.info('report issued', { reportId, kind, actorUid: request.auth.uid });
+  return { reportId };
+});
+
+/**
  * Restores a soft-deleted document inside its recovery window.
  * @param request callable request carrying `{ kind, entityId }`
  * @returns whether it was restored

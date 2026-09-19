@@ -33,6 +33,7 @@ export const COLLECTIONS = {
   gigs: 'gigs',
   gigOrders: 'gigOrders',
   broadcasts: 'broadcasts',
+  reportDocuments: 'reportDocuments',
   reputationEvents: 'reputationEvents',
 } as const;
 

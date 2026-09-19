@@ -24,5 +24,6 @@
   "moderation": "Moderation",
   "eventDetail": "Event",
   "jobDetail": "Job",
-  "admin": "Administration"
+  "admin": "Administration",
+  "reports": "Reports"
 }

@@ -86,6 +86,12 @@ const AdminAuditPage = lazy(async () => ({
 const AdminRecoveryPage = lazy(async () => ({
   default: (await import('@/pages/admin/AdminRecoveryPage')).AdminRecoveryPage,
 }));
+const ReportsPage = lazy(async () => ({
+  default: (await import('@/pages/reports/ReportsPage')).ReportsPage,
+}));
+const VerifyReportPage = lazy(async () => ({
+  default: (await import('@/pages/reports/VerifyReportPage')).VerifyReportPage,
+}));
 const NotFoundPage = lazy(async () => ({
   default: (await import('@/pages/system/NotFoundPage')).NotFoundPage,
 }));
@@ -294,6 +300,22 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<RouteFallback />}>
             <AdminRecoveryPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'reports',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <ReportsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'verify/:reportId',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <VerifyReportPage />
           </Suspense>
         ),
       },
