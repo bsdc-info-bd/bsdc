@@ -186,18 +186,18 @@ satisfied is recorded as a NOTE and cross-referenced in `PUBLIC_LIMITATIONS.md`;
 
 ## Build ledger — response 3
 
-| Metric                                  | Response 2 | Response 3 | Change     |
-| --------------------------------------- | ---------- | ---------- | ---------- |
-| TypeScript sources (`src`, no tests)    | 210        | 304        | +94        |
-| TypeScript lines                        | 22 372     | 37 300     | +14 928    |
-| CSS files / lines                       | 66 / 5 546 | 67 / 6 339 | +1 / +793  |
-| Test files / tests                      | 20 / 138   | 30 / 299   | +10 / +161 |
-| Dictionaries (namespaces × locales)     | 20 × 2     | 30 × 2     | +10 × 2    |
-| Live routes                             | 8          | 19         | +11        |
-| Firestore rule lines                    | 251        | 497        | +246       |
-| Realtime Database rule lines            | 68         | 163        | +95        |
-| Composite indexes                       | 11         | 52         | +41        |
-| Feature modules                         | 35         | 52         | +17        |
-| Initial shell JS (gzip)                 | 171.65 KB  | 173.76 KB  | +2.11 KB   |
-| Largest route chunk (gzip)              | 12.39 KB   | 161.96 KB  | venue map  |
-| Emoji / placeholder / Worker violations | 0 / 0 / 0  | 0 / 0 / 0  | unchanged  |
+| Metric                                  | Response 2   | Response 3 | Change     |
+| --------------------------------------- | ------------ | ---------- | ---------- |
+| TypeScript sources (`src`, no tests)    | 210          | 304        | +94        |
+| TypeScript lines                        | 22 372       | 37 300     | +14 928    |
+| CSS files / lines                       | 66 / 5 546   | 67 / 6 339 | +1 / +793  |
+| Test files / tests                      | 20 / 138     | 30 / 299   | +10 / +161 |
+| Dictionaries (namespaces × locales)     | 20 × 2       | 30 × 2     | +10 × 2    |
+| Live routes                             | 8            | 19         | +11        |
+| Firestore rule lines                    | 251          | 497        | +246       |
+| Realtime Database rule lines            | 68           | 163        | +95        |
+| Composite indexes                       | 11           | 52         | +41        |
+| Feature module files (excl. barrels)    | not recorded | 69         | measured   |
+| Initial shell JS (gzip)                 | 171.65 KB    | 173.76 KB  | +2.11 KB   |
+| Largest route chunk (gzip)              | 12.39 KB     | 161.96 KB  | venue map  |
+| Emoji / placeholder / Worker violations | 0 / 0 / 0    | 0 / 0 / 0  | unchanged  |
