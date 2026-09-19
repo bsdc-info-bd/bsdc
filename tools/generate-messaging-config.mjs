@@ -21,6 +21,20 @@ const target = join(here, '..', 'public', 'messaging-config.js');
 /** Reads one environment variable, tolerating a missing value. */
 const read = (name) => process.env[name] ?? '';
 
+/**
+ * Serialises a public configuration value as a JavaScript string literal.
+ * Single quotes keep the generated file byte-identical to `prettier --write`, so `npm run
+ * format:check` passes before and after a build. A value that contains a quote, a backslash or a
+ * control character falls back to JSON's escaping, which is what the language requires.
+ */
+const json = (value) => {
+  const escaped = JSON.stringify(value);
+  if (/['\\\n\r\t]/.test(value)) {
+    return escaped;
+  }
+  return "'" + value + "'";
+};
+
 const body = `// BSDC — public/messaging-config.js
 // Purpose : Public Firebase configuration for the messaging service worker.
 // Owner   : RRC Development / BSDC Platform Team
@@ -33,11 +47,11 @@ const body = `// BSDC — public/messaging-config.js
 // Licence : Source-available. Re-deployment or rebranding is not permitted.
 
 self.BSDC_MESSAGING_CONFIG = {
-  apiKey: ${JSON.stringify(read('VITE_FIREBASE_API_KEY'))},
-  authDomain: ${JSON.stringify(read('VITE_FIREBASE_AUTH_DOMAIN'))},
-  projectId: ${JSON.stringify(read('VITE_FIREBASE_PROJECT_ID'))},
-  messagingSenderId: ${JSON.stringify(read('VITE_FIREBASE_MESSAGING_SENDER_ID'))},
-  appId: ${JSON.stringify(read('VITE_FIREBASE_APP_ID'))},
+  apiKey: ${json(read('VITE_FIREBASE_API_KEY'))},
+  authDomain: ${json(read('VITE_FIREBASE_AUTH_DOMAIN'))},
+  projectId: ${json(read('VITE_FIREBASE_PROJECT_ID'))},
+  messagingSenderId: ${json(read('VITE_FIREBASE_MESSAGING_SENDER_ID'))},
+  appId: ${json(read('VITE_FIREBASE_APP_ID'))},
 };
 `;
 

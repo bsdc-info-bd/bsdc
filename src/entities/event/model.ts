@@ -234,7 +234,7 @@ export function newRsvp(
 }
 
 /**
- * Sorts events for the list: live first, then upcoming soonest-first, then ended newest-first.
+ * Sorts events for the list: live first, then those with the nearest start, then ended newest-first.
  * @param events the events
  * @param now optional instant
  * @returns a sorted copy

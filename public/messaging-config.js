@@ -10,9 +10,9 @@
 // Licence : Source-available. Re-deployment or rebranding is not permitted.
 
 self.BSDC_MESSAGING_CONFIG = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  messagingSenderId: '',
+  appId: '',
 };

@@ -187,3 +187,12 @@ Payment is arranged between the two people involved. `gigOrders` has no payment 
 the order dialog states this before anything is confirmed. The order record is the written
 agreement between buyer and seller, not a receipt. Adding escrow would change what the platform is
 responsible for, which is not a decision this build makes on the community's behalf.
+
+### L3-10 — LAW-02 only became a real gate once the tree was committed
+
+`scripts/check-no-placeholders.sh` scans `git ls-files`, so while responses 1 and 2 sat untracked
+it was scanning a handful of files and passing trivially. With the response 3 commit it scans all
+537 tracked files and immediately found a hit: a doc comment in `src/entities/event/model.ts` reading
+"then upcoming soonest-first", which the `coming ?soon` marker matches. The comment was reworded.
+The gate is real from this response onward, and it is worth assuming that any check reading
+`git ls-files` was inert before the first commit and is now live.
