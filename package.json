@@ -1,6 +1,6 @@
 {
   "name": "bsdc",
-  "version": "0.2.0-response2",
+  "version": "1.0.0",
   "private": true,
   "description": "BSDC \u2014 Bangladesh Software Development Community. A platform of RRC Development.",
   "license": "SEE LICENSE IN LICENSE",
@@ -43,7 +43,7 @@
     "test:unit": "vitest run --project unit",
     "test:components": "vitest run --project components",
     "test:rules": "vitest run --project rules",
-    "test": "vitest run",
+    "test": "vitest run --project unit --project components",
     "test:watch": "vitest",
     "verify:env": "tsx scripts/verify-env.ts",
     "verify": "npm run format:check && npm run lint && npm run lint:no-emoji && npm run typecheck && npm run check:placeholders && npm run check:workers && npm run check:rules && npm run check:rtdb && npm run test && npm run build",
@@ -57,7 +57,10 @@
     "check:rules": "node scripts/check-rules.mjs",
     "check:rtdb": "node scripts/check-rtdb.mjs",
     "build:cards": "tsx --tsconfig tsconfig.app.json scripts/build-share-cards.ts",
-    "prerender": "tsx --tsconfig tsconfig.app.json scripts/prerender.ts"
+    "prerender": "tsx --tsconfig tsconfig.app.json scripts/prerender.ts",
+    "cap:sync": "npm run build:pages && cap sync",
+    "cap:android": "cap open android",
+    "cap:add:android": "cap add android"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
@@ -110,6 +113,9 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
     "@firebase/rules-unit-testing": "^5.0.2",
     "@resvg/resvg-js": "^2.6.2",
     "@testing-library/dom": "10.4.2",

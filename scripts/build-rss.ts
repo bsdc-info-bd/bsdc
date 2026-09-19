@@ -126,9 +126,9 @@ function atomXml(items: readonly PublicContentItem[], now: Date): string {
 }
 
 /** Writes both feeds. */
-async function main(): Promise<void> {
+function main(): void {
   const now = new Date();
-  const items = await loadPublicContent();
+  const items = loadPublicContent();
   const out = resolve(process.cwd(), 'public');
   mkdirSync(out, { recursive: true });
   writeFileSync(resolve(out, 'feed.xml'), rssXml(items, now), 'utf8');
@@ -138,4 +138,4 @@ async function main(): Promise<void> {
   );
 }
 
-await main();
+main();

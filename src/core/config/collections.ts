@@ -40,6 +40,7 @@ export const COLLECTIONS = {
 /** Firestore subcollections, keyed by their parent collection. */
 export const SUBCOLLECTIONS = {
   saved: 'saved',
+  settings: 'settings',
   drafts: 'drafts',
   devices: 'devices',
   comments: 'comments',
@@ -147,13 +148,32 @@ export function notificationPath(uid: string, notificationId: string): string {
 }
 
 /**
- * Path of a saved-post marker.
+ * Path of the saved-items collection of an account.
  * @param uid account id
- * @param postId post id
+ * @returns the collection path
+ */
+/**
+ * Path of a per-account settings document, e.g. `users/{uid}/settings/notifications`.
+ * @param uid account id
+ * @param documentId settings document id
  * @returns the document path
  */
-export function savedPostPath(uid: string, postId: string): string {
-  return docPath(COLLECTIONS.users, uid, SUBCOLLECTIONS.saved, postId);
+export function userSettingPath(uid: string, documentId: string): string {
+  return docPath(COLLECTIONS.users, uid, SUBCOLLECTIONS.settings, documentId);
+}
+
+export function savedCollectionPath(uid: string): string {
+  return docPath(COLLECTIONS.users, uid, SUBCOLLECTIONS.saved);
+}
+
+/**
+ * Path of a saved-item marker, whose id is `${kind}:${entityId}`.
+ * @param uid account id
+ * @param itemId saved-item id
+ * @returns the document path
+ */
+export function savedItemPath(uid: string, itemId: string): string {
+  return docPath(COLLECTIONS.users, uid, SUBCOLLECTIONS.saved, itemId);
 }
 
 /**

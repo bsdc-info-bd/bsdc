@@ -11,6 +11,7 @@ export { useControllableState } from './useControllableState';
 export { useCountdown, type CountdownState } from './useCountdown';
 export { useDebounce } from './useDebounce';
 export { useEventListener } from './useEventListener';
+export { useFlag } from './useFlag';
 export { useInterval } from './useInterval';
 export { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect';
 export { useLocalStorageState } from './useLocalStorageState';

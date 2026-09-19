@@ -1,0 +1,42 @@
+{
+  "title": "Marketplace",
+  "subtitle": "Services offered by members of the Bangladesh Software Development Community. Every price is real, every review is earned.",
+  "searchLabel": "Search the marketplace",
+  "searchPlaceholder": "Search by service, skill or seller",
+  "sortLabel": "Sort",
+  "sort": {
+    "recommended": "Recommended",
+    "newest": "Newest",
+    "rating": "Best rated",
+    "price": "Lowest price"
+  },
+  "categoryLabel": "Category",
+  "category": {
+    "all": "All categories"
+  },
+  "priceLabel": "Budget",
+  "price": {
+    "any": "Any budget",
+    "upTo": "Up to {{amount}}"
+  },
+  "count": "{{count}} service listed",
+  "reset": "Reset filters",
+  "emptyTitle": "No service matches this",
+  "emptyBody": "Nobody is offering that here yet, or the filters are too narrow. Reset them to see everything.",
+  "listLabel": "Services",
+  "sheetDescription": "Sold by {{seller}}",
+  "memberSince": "Selling since {{date}}",
+  "rating": "{{value}} from {{count}} review",
+  "newListing": "New listing",
+  "delivered": "{{count}} delivered",
+  "skillsLabel": "Skills",
+  "packagesTitle": "What you get",
+  "packageTerms": "{{days}} day delivery, {{revisions}} revision",
+  "order": "Order now",
+  "orderedTitle": "Order placed",
+  "orderedBody": "Your order {{id}} is with the seller. You can follow it from Freelancing.",
+  "escrowNote": "BSDC introduces you and keeps the record. The work, the money and the delivery are between you and the member you hire.",
+  "sourceNote": "Listings from {{source}}.",
+  "sourceServer": "the server",
+  "sourceDevice": "this device"
+}

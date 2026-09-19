@@ -23,6 +23,7 @@ import {
   w3cDate,
   type PublicContentItem,
 } from './lib/public-content';
+import { localePath } from '../src/shared/lib/url';
 
 /** Maximum URLs in one sitemap file. The specification says 50,000. */
 const MAX_URLS_PER_FILE = 45_000;
@@ -43,6 +44,8 @@ interface Entry {
   readonly lastmod: string;
   readonly changeFrequency: string;
   readonly priority: number;
+  /** Locale-agnostic path, used to emit the hreflang alternates of this URL. */
+  readonly path: string;
 }
 
 /**
@@ -56,6 +59,7 @@ function entries(items: readonly PublicContentItem[]): readonly Entry[] {
     (route) => route.status === 'live' && route.noindex !== true && !route.path.includes(':'),
   ).map((route) => ({
     loc: `${SITE_URL}${route.path === '/' ? '/' : route.path}`,
+    path: route.path,
     lastmod: w3cDate(now.toISOString(), now),
     changeFrequency: route.changeFrequency ?? 'monthly',
     priority: route.priority ?? 0.5,
@@ -63,6 +67,7 @@ function entries(items: readonly PublicContentItem[]): readonly Entry[] {
 
   const dynamicEntries: Entry[] = items.map((item) => ({
     loc: `${SITE_URL}${item.path}`,
+    path: item.path,
     lastmod: w3cDate(item.updatedAt, now),
     changeFrequency: item.kind === 'event' ? 'daily' : 'weekly',
     priority: KIND_PRIORITY[item.kind],
@@ -83,15 +88,22 @@ function entries(items: readonly PublicContentItem[]): readonly Entry[] {
  */
 function sitemapXml(items: readonly Entry[]): string {
   const urls = items
-    .map(
-      (entry) =>
+    .map((entry) => {
+      const alternates = [
+        `<xhtml:link rel="alternate" hreflang="bn-BD" href="${escapeXml(SITE_URL + localePath('bn', entry.path))}" />`,
+        `<xhtml:link rel="alternate" hreflang="en-GB" href="${escapeXml(SITE_URL + localePath('en', entry.path))}" />`,
+        `<xhtml:link rel="alternate" hreflang="x-default" href="${escapeXml(entry.loc)}" />`,
+      ].join('\n    ');
+      return (
         `  <url>\n    <loc>${escapeXml(entry.loc)}</loc>\n` +
+        `    ${alternates}\n` +
         `    <lastmod>${entry.lastmod}</lastmod>\n` +
         `    <changefreq>${entry.changeFrequency}</changefreq>\n` +
-        `    <priority>${entry.priority.toFixed(1)}</priority>\n  </url>`,
-    )
+        `    <priority>${entry.priority.toFixed(1)}</priority>\n  </url>`
+      );
+    })
     .join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n${urls}\n</urlset>\n`;
 }
 
 /**
@@ -113,9 +125,9 @@ function indexXml(files: readonly string[], now: Date): string {
 }
 
 /** Writes every sitemap file and the index. */
-async function main(): Promise<void> {
+function main(): void {
   const now = new Date();
-  const all = entries(await loadPublicContent());
+  const all = entries(loadPublicContent());
   const out = resolve(process.cwd(), 'public');
   mkdirSync(out, { recursive: true });
 
@@ -137,4 +149,4 @@ async function main(): Promise<void> {
   );
 }
 
-await main();
+main();

@@ -15,8 +15,10 @@ import { BottomNavWidget } from '@/widgets/mobile-nav/BottomNavWidget';
 import { useBadgeStore } from '@/shared/stores/badges';
 import { RouteErrorBoundary } from '../boundaries/RouteErrorBoundary';
 import { useAnnounce } from '@/shared/hooks';
+import { useSession } from '@/features/auth';
 import { emit } from '@/core/events/bus';
 import { PageHead } from '@/features/seo';
+import { InstallPrompt, OfflineBanner } from '@/features/pwa';
 
 /**
  * Badge synchronisation lives behind a lazy boundary so the shell paints without the messenger
@@ -41,6 +43,7 @@ const CommandPaletteHost = lazy(async () => ({
 export function RootLayout(): React.ReactElement {
   const location = useLocation();
   const announce = useAnnounce();
+  const { locale } = useSession();
   // Badge counts are written by a lazily loaded component, so the shell paints without the
   // messenger and notification modules in the initial bundle. Each value is selected separately:
   // a selector that builds a new object on every call would re-render the shell forever.
@@ -71,8 +74,10 @@ export function RootLayout(): React.ReactElement {
           </RouteErrorBoundary>
         </main>
       </div>
+      <InstallPrompt locale={locale} />
       <SiteFooter />
       <BottomNavWidget counts={counts} />
+      <OfflineBanner locale={locale} />
       <Suspense fallback={null}>
         <BadgeSync />
       </Suspense>

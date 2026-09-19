@@ -21,6 +21,7 @@ import { dirname, join, resolve } from 'node:path';
 import { ROUTES } from '../src/core/config/routes';
 import { BRAND, CONTACT, NETWORK_SITES, OWNERSHIP, SITE_URL } from '../src/core/config/app';
 import { escapeXml } from './lib/public-content';
+import { localePath } from '../src/shared/lib/url';
 
 /** Where the built application lives. */
 const DIST = resolve(process.cwd(), 'dist');
@@ -102,11 +103,12 @@ function jsonLd(path: string, titleEn: string): Record<string, unknown> {
 }
 
 /**
- * Builds the head tags for one route.
- * @param path the route path
+ * Builds the head tags for one route in one language.
+ * @param path the locale-agnostic route path
  * @param titleKey the nav key
  * @param descriptionEn English description
  * @param descriptionBn Bangla description
+ * @param locale which language this document is written in, or `x-default` for the bare URL
  * @returns the tag block
  */
 function headTags(
@@ -114,27 +116,34 @@ function headTags(
   titleKey: string,
   descriptionEn: string,
   descriptionBn: string,
+  locale: 'bn' | 'en' | 'x-default',
 ): string {
-  const url = `${SITE_URL}${path === '/' ? '/' : path}`;
+  const bareUrl = `${SITE_URL}${path === '/' ? '/' : path}`;
+  const url = locale === 'x-default' ? bareUrl : SITE_URL + localePath(locale, path);
+  const isBangla = locale === 'bn';
   const titleEn = `${label(titleKey, 'en')} — ${BRAND.short}`;
+  const titleBn = `${label(titleKey, 'bn')} — ${BRAND.short}`;
+  const title = isBangla ? titleBn : titleEn;
+  const description = isBangla ? descriptionBn : descriptionEn;
   const cardName = path === '/' ? 'home' : path.replace(/^\//, '').replace(/\//g, '-');
   const card = `${SITE_URL}/cards/${cardName}.png`;
+  const primaryLocale = isBangla ? 'bn_BD' : 'en_GB';
+  const alternateLocale = isBangla ? 'en_GB' : 'bn_BD';
 
   return [
-    `<title>${escapeXml(titleEn)}</title>`,
-    `<meta name="description" content="${escapeXml(descriptionEn)}" />`,
-    `<meta name="description" lang="bn" content="${escapeXml(descriptionBn)}" />`,
+    `<title>${escapeXml(title)}</title>`,
+    `<meta name="description" content="${escapeXml(description)}" />`,
     `<link rel="canonical" href="${escapeXml(url)}" />`,
-    `<link rel="alternate" hreflang="bn-BD" href="${escapeXml(url)}?lng=bn" />`,
-    `<link rel="alternate" hreflang="en-GB" href="${escapeXml(url)}?lng=en" />`,
-    `<link rel="alternate" hreflang="x-default" href="${escapeXml(url)}" />`,
+    `<link rel="alternate" hreflang="bn-BD" href="${escapeXml(SITE_URL + localePath('bn', path))}" />`,
+    `<link rel="alternate" hreflang="en-GB" href="${escapeXml(SITE_URL + localePath('en', path))}" />`,
+    `<link rel="alternate" hreflang="x-default" href="${escapeXml(bareUrl)}" />`,
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="${escapeXml(BRAND.nameEn)}" />`,
-    `<meta property="og:locale" content="bn_BD" />`,
-    `<meta property="og:locale:alternate" content="en_GB" />`,
+    `<meta property="og:locale" content="${primaryLocale}" />`,
+    `<meta property="og:locale:alternate" content="${alternateLocale}" />`,
     `<meta property="og:url" content="${escapeXml(url)}" />`,
     `<meta property="og:title" content="${escapeXml(titleEn)}" />`,
-    `<meta property="og:title:bn" content="${escapeXml(`${label(titleKey, 'bn')} — ${BRAND.short}`)}" />`,
+    `<meta property="og:title:bn" content="${escapeXml(titleBn)}" />`,
     `<meta property="og:description" content="${escapeXml(descriptionEn)}" />`,
     `<meta property="og:description:bn" content="${escapeXml(descriptionBn)}" />`,
     `<meta property="og:image" content="${escapeXml(card)}" />`,
@@ -174,27 +183,42 @@ function main(): void {
       meta.descriptionEn ?? `${BRAND.nameEn} — ${label(route.titleKey, 'en')}. ${BRAND.taglineEn}`;
     const descriptionBn =
       meta.descriptionBn ?? `${BRAND.nameBn} — ${label(route.titleKey, 'bn')}। ${BRAND.taglineBn}`;
-    // The whole region is replaced, not appended to: a document with two titles is a document
-    // whose title depends on which one a crawler happens to read first.
-    const document = shell.replace(
-      region,
-      `<!--bsdc:head-->\n    ${headTags(
-        route.path,
-        route.titleKey,
-        descriptionEn,
-        descriptionBn,
-      )}\n    <!--/bsdc:head-->`,
-    );
-    const target =
-      route.path === '/' ? join(DIST, 'index.html') : join(DIST, route.path, 'index.html');
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, document, 'utf8');
-    written += 1;
+
+    // Three documents per route: the bare one, and one per language. The sitemap declares the
+    // language URLs as alternates, so they have to answer with a real 200 and not a shell that
+    // says the wrong thing about which language it is in.
+    for (const locale of ['x-default', 'bn', 'en'] as const) {
+      // The whole region is replaced, not appended to: a document with two titles is a document
+      // whose title depends on which one a crawler happens to read first.
+      const document = shell
+        .replace(
+          region,
+          `<!--bsdc:head-->\n    ${headTags(
+            route.path,
+            route.titleKey,
+            descriptionEn,
+            descriptionBn,
+            locale,
+          )}\n    <!--/bsdc:head-->`,
+        )
+        .replace(/<html lang="[a-z-]*"/u, `<html lang="${locale === 'bn' ? 'bn' : 'en'}"`);
+      const target =
+        locale === 'x-default'
+          ? route.path === '/'
+            ? join(DIST, 'index.html')
+            : join(DIST, route.path, 'index.html')
+          : join(DIST, locale, route.path === '/' ? 'index.html' : join(route.path, 'index.html'));
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, document, 'utf8');
+      written += 1;
+    }
   }
 
   // A single-page app on a static host still needs a 404 document, and it should say what it is.
   writeFileSync(join(DIST, '404.html'), readFileSync(join(DIST, 'index.html'), 'utf8'), 'utf8');
-  console.info(`[bsdc] prerendered ${written} route(s) and wrote 404.html`);
+  console.info(
+    `[bsdc] prerendered ${written} document(s): every public route in Bangla, English and the bare URL; 404.html written.`,
+  );
 }
 
 main();

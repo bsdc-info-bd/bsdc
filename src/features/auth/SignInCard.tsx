@@ -22,7 +22,7 @@ import { USERNAME } from '@/core/config/limits';
 import { useSession } from './useSession';
 
 /** Why the sign-in surface appeared. */
-export type SignInReason = 'default' | 'messenger' | 'notifications' | 'settings';
+export type SignInReason = 'default' | 'messenger' | 'notifications' | 'settings' | 'saved';
 
 /** Props for the sign-in card. */
 export interface SignInCardProps {

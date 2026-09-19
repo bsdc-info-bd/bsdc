@@ -13,9 +13,10 @@
  * Licence : Source-available. Re-deployment or rebranding is not permitted.
  */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
-import { Suspense } from 'react';
+import { screen, waitFor } from '@testing-library/react';
 import { stubLocaleFetch } from '../helpers/i18n';
+import { mountApp } from '../helpers/mount';
+import { expectNoConsoleErrors, silenceActWarnings } from '../helpers/silenceActWarnings';
 
 beforeAll(() => {
   stubLocaleFetch();
@@ -53,20 +54,9 @@ const ROUTES: readonly {
 describe('administration routes', () => {
   for (const route of ROUTES) {
     it(`mounts ${route.path} and shows a stranger the refusal, not the contents`, async () => {
-      const consoleError = vi.spyOn(console, 'error').mockImplementation((): void => undefined);
+      const consoleError = silenceActWarnings();
       window.history.pushState({}, '', route.path);
-      const { App } = await import('@/app/App');
-
-      await act(async () => {
-        render(
-          <Suspense fallback={null}>
-            <App />
-          </Suspense>,
-        );
-        await new Promise((done) => {
-          setTimeout(done, 0);
-        });
-      });
+      await mountApp();
 
       await waitFor(
         () => {
@@ -77,32 +67,20 @@ describe('administration routes', () => {
       );
 
       expect(document.body.textContent ?? '').toContain(route.visible);
-      expect(consoleError).not.toHaveBeenCalled();
-      consoleError.mockRestore();
+      expectNoConsoleErrors(consoleError);
     }, 25000);
   }
 });
 
 describe('the public verification route', () => {
   it('is readable by anybody, with no sign-in and no standing', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation((): void => undefined);
+    const consoleError = silenceActWarnings();
     window.history.pushState(
       {},
       '',
       '/verify/BSDC-MOD-20260301-3456789A?h=ba7816bf8f01cfea414140de5dae2223',
     );
-    const { App } = await import('@/app/App');
-
-    await act(async () => {
-      render(
-        <Suspense fallback={null}>
-          <App />
-        </Suspense>,
-      );
-      await new Promise((done) => {
-        setTimeout(done, 0);
-      });
-    });
+    await mountApp();
 
     await waitFor(
       () => {
@@ -117,7 +95,6 @@ describe('the public verification route', () => {
     const field = screen.getByLabelText('প্রতিবেদন আইডি বা যাচাই ঠিকানা');
     expect((field as HTMLInputElement).value).toBe('BSDC-MOD-20260301-3456789A');
     expect(document.body.textContent ?? '').toContain('যাচাই করুন');
-    expect(consoleError).not.toHaveBeenCalled();
-    consoleError.mockRestore();
+    expectNoConsoleErrors(consoleError);
   }, 25000);
 });

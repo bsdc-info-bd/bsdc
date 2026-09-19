@@ -85,9 +85,40 @@ service cloud.firestore {
                     && isRecentTimestamp(incoming().updatedAt);
       allow delete: if false;
 
-      match /saved/{postId} {
+      // Bookmarks. One document per saved thing, keyed `${kind}:${entityId}`. The stored title and
+      // link are denormalised on purpose: the list must render from the device mirror with no
+      // network, and the rules cap how much text a bookmark may carry from another member.
+      match /saved/{itemId} {
         allow read: if isSelf(userId);
-        allow create: if isSelf(userId) && incoming().keys().hasOnly(['postId', 'savedAt']);
+        allow create: if isSelf(userId)
+                      && incoming().keys().hasOnly([
+                           'kind', 'entityId', 'title', 'titleLang', 'subtitle', 'href',
+                           'savedAt', 'updatedAt'
+                         ])
+                      && (incoming().kind == 'post' || incoming().kind == 'job'
+                          || incoming().kind == 'event' || incoming().kind == 'project'
+                          || incoming().kind == 'gig')
+                      && textFits(incoming().entityId, 128)
+                      && textFits(incoming().title, 140)
+                      && (incoming().titleLang == 'bn' || incoming().titleLang == 'en')
+                      && textFits(incoming().subtitle, 120)
+                      && incoming().href.matches('^/[A-Za-z0-9._~/?=&%-]*$')
+                      && isRecentTimestamp(incoming().savedAt);
+        allow update: if false;
+        allow delete: if isSelf(userId);
+      }
+
+      // Per-account settings. The client may only write the shapes this file spells out, so a
+      // broken build cannot widen what the platform is allowed to email or push.
+      match /settings/{documentId} {
+        allow read: if isSelf(userId);
+        allow create, update: if isSelf(userId)
+                      && documentId.matches('^[a-z-]{2,40}$')
+                      && incoming().keys().hasOnly(['kind', 'value', 'updatedAt'])
+                      && (incoming().kind == 'notifications'
+                          || incoming().kind == 'privacy'
+                          || incoming().kind == 'appearance')
+                      && textFits(incoming().value, 8000);
         allow delete: if isSelf(userId);
       }
 

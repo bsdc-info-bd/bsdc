@@ -36,8 +36,8 @@ const DEFAULT_FILE = 'build/public-content.json';
  * Loads the public content list, from whichever source is available.
  * @returns the items, newest first
  */
-export async function loadPublicContent(): Promise<readonly PublicContentItem[]> {
-  const override = process.env['BSDC_PUBLIC_CONTENT'];
+export function loadPublicContent(): readonly PublicContentItem[] {
+  const override = process.env.BSDC_PUBLIC_CONTENT;
   const candidates = [override ?? '', DEFAULT_FILE].filter((path) => path.length > 0);
   for (const candidate of candidates) {
     const file = resolve(process.cwd(), candidate);

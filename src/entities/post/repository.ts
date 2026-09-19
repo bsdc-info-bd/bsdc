@@ -10,18 +10,12 @@
  */
 import type { Query as QueryShape, QueryConstraint } from 'firebase/firestore';
 
-import { COLLECTIONS, postPath, savedPostPath } from '@/core/config/collections';
+import { COLLECTIONS, postPath } from '@/core/config/collections';
 import { AppError } from '@/core/errors/AppError';
 import { firestoreDb } from '@/services/firebase/app';
 import { fromDocument, fromQuery, translateFirestoreError } from '@/services/firebase/firestore';
 import { acquireListener, type Unsubscribe } from '@/services/realtime/registry';
-import {
-  mirrorGet,
-  mirrorList,
-  mirrorPut,
-  mirrorRestore,
-  mirrorSoftDelete,
-} from '@/services/offline/mirror';
+import { mirrorGet, mirrorPut, mirrorRestore, mirrorSoftDelete } from '@/services/offline/mirror';
 import {
   readThrough,
   writeThrough,
@@ -270,60 +264,6 @@ export async function restorePost(postId: string): Promise<WriteThroughResult> {
       }
     },
   );
-}
-
-/**
- * Adds or removes a post from the viewer's saved list.
- * @param uid viewer account id
- * @param postId post id
- * @param saved desired state
- * @returns the write outcome
- */
-export async function setSaved(
-  uid: string,
-  postId: string,
-  saved: boolean,
-): Promise<WriteThroughResult> {
-  const now = new Date().toISOString();
-  await mirrorPut('saved', {
-    id: postId,
-    postId,
-    uid,
-    saved,
-    savedAt: now,
-    updatedAt: now,
-    deletedAt: null,
-  });
-  const post = await mirrorGet<Post>('posts', postId);
-  if (post !== undefined) await mirrorPut('posts', { ...post, saved, updatedAt: post.updatedAt });
-
-  return await writeThrough(
-    'saved',
-    { id: postId, postId, uid, saved, savedAt: now, updatedAt: now, deletedAt: null },
-    { kind: 'saved.toggle', entityId: postId, payload: { postId, saved } },
-    async () => {
-      const { doc, setDoc, deleteDoc } = await import('firebase/firestore');
-      const db = await firestoreDb();
-      try {
-        if (saved) await setDoc(doc(db, savedPostPath(uid, postId)), { postId, savedAt: now });
-        else await deleteDoc(doc(db, savedPostPath(uid, postId)));
-      } catch (error) {
-        throw translateFirestoreError(error, 'saved.toggle');
-      }
-    },
-  );
-}
-
-/**
- * Lists saved posts from the device mirror.
- * @returns the saved posts
- */
-export async function listSavedPosts(): Promise<readonly Post[]> {
-  return await mirrorList<Post>('posts', {
-    orderBy: 'createdAt',
-    direction: 'desc',
-    where: [(post: Post) => post.saved],
-  });
 }
 
 /**

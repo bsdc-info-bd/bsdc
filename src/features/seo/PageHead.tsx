@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { BRAND, CONTACT, NETWORK_SITES, OWNERSHIP, SITE_URL } from '@/core/config/app';
 import { ROUTES } from '@/core/config/routes';
 import type { Locale } from '@/core/config/app';
+import { localePath, stripLocale } from '@/shared/lib/url';
 
 /**
  * Finds the route table entry for a pathname. Parameterised paths match by their prefix, so
@@ -132,7 +133,8 @@ export function PageHead(): null {
 
   useEffect(() => {
     const pathname = location.pathname;
-    const route = matchRoute(pathname);
+    const barePath = stripLocale(pathname);
+    const route = matchRoute(barePath);
     const url = `${SITE_URL}${pathname === '/' ? '/' : pathname}`;
     const titleKey = route?.titleKey ?? 'home';
     const labelEn = t(titleKey, { lng: 'en' });
@@ -142,7 +144,7 @@ export function PageHead(): null {
     const descriptionEn = `${BRAND.nameEn} — ${labelEn}. ${BRAND.taglineEn}`;
     const descriptionBn = `${BRAND.nameBn} — ${labelBn}। ${BRAND.taglineBn}`;
     const card = `${SITE_URL}/cards/${
-      pathname === '/' ? 'home' : pathname.replace(/^\//, '').replace(/\//g, '-')
+      barePath === '/' ? 'home' : barePath.replace(/^\//, '').replace(/\//g, '-')
     }.png`;
 
     document.title = locale === 'bn' ? titleBn : titleEn;
@@ -151,8 +153,8 @@ export function PageHead(): null {
     setMeta('name', 'description', locale === 'bn' ? descriptionBn : descriptionEn);
     setMeta('name', 'robots', route?.noindex === true ? 'noindex, nofollow' : null);
     setLink('canonical', url);
-    setLink('alternate', `${url}?lng=bn`, 'bn-BD');
-    setLink('alternate', `${url}?lng=en`, 'en-GB');
+    setLink('alternate', `${SITE_URL}${localePath('bn', barePath)}`, 'bn-BD');
+    setLink('alternate', `${SITE_URL}${localePath('en', barePath)}`, 'en-GB');
     setLink('alternate', url, 'x-default');
 
     setMeta('property', 'og:type', 'website');

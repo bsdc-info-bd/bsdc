@@ -25,11 +25,11 @@ const OUT_DIR = resolve(process.cwd(), 'public/cards');
 
 /** Latin font used when no Bengali font is available, and for the wordmark always. */
 const LATIN_FONT =
-  process.env['BSDC_CARD_FONT'] ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
+  process.env.BSDC_CARD_FONT ?? '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf';
 
 /** A Bengali-capable font, when one has been supplied. */
 const BANGLA_FONT =
-  process.env['BSDC_CARD_FONT_BN'] ??
+  process.env.BSDC_CARD_FONT_BN ??
   ['assets/fonts/NotoSansBengali-Bold.ttf', 'assets/fonts/HindSiliguri-Bold.ttf'].find((path) =>
     existsSync(resolve(process.cwd(), path)),
   );

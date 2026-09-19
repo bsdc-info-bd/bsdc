@@ -60,6 +60,10 @@
 @import "./components/presence.css";
 @import "./components/composer.css";
 @import "./components/opportunities.css";
+@import "./components/saved.css";
+@import "./components/market.css";
+@import "./components/settings.css";
+@import "./components/pwa.css";
 @import "./components/table.css";
 @import "./components/admin.css";
 

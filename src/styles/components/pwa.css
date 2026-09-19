@@ -1,0 +1,52 @@
+/**
+ * BSDC — src/styles/components/pwa.css
+ * Purpose : Styling for the install offer and the offline banner.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Both sit at the bottom of the shell, above the navigation, and neither may cover what a
+ *   person is reading. The offline banner is a status, not an error: it uses the neutral surface and
+ *   the ink colours, never the danger palette, because nothing has failed.
+ *   Safe-area insets are respected so neither is hidden behind a home indicator on a phone with one.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-pwa__prompt {
+  position: fixed;
+  z-index: var(--bsdc-z-sticky);
+  inset-inline: var(--bsdc-space-3);
+  inset-block-end: calc(var(--bsdc-space-3) + env(safe-area-inset-bottom, 0px));
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  max-width: 640px;
+  margin-inline: auto;
+  box-shadow: var(--bsdc-shadow-3);
+}
+
+.bsdc-pwa__copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bsdc-pwa__offline {
+  position: sticky;
+  z-index: var(--bsdc-z-sticky);
+  inset-block-end: 0;
+  padding: var(--bsdc-space-2) var(--bsdc-space-4);
+  padding-block-end: calc(var(--bsdc-space-2) + env(safe-area-inset-bottom, 0px));
+  border-block-start: 1px solid var(--bsdc-border-1);
+  background: var(--bsdc-surface-2);
+  color: var(--bsdc-ink-2);
+  text-align: center;
+}
+
+@media (max-width: 400px) {
+  .bsdc-pwa__prompt {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .bsdc-pwa__prompt > :first-child {
+    display: none;
+  }
+}

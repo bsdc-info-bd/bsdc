@@ -1,0 +1,139 @@
+/**
+ * BSDC — src/styles/components/market.css
+ * Purpose : Styling for the public marketplace and the gig sheet.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : The grid is `auto-fit` with a minimum, so it is one column at 250px and six at 5120px
+ *   without a breakpoint guessing at a device. Package rows stack rather than scroll sideways: a
+ *   price table you have to swipe to read is a price table people misread.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-market {
+  display: grid;
+  gap: var(--bsdc-space-4);
+}
+
+.bsdc-market__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: var(--bsdc-space-3);
+  align-items: end;
+}
+
+.bsdc-market__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bsdc-market__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--bsdc-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ------------------------------------------------------------------- sheet ---- */
+
+.bsdc-gigSheet {
+  display: grid;
+  gap: var(--bsdc-space-4);
+}
+
+.bsdc-gigSheet__seller {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.bsdc-gigSheet__name {
+  margin: 0;
+  font-weight: 600;
+  color: var(--bsdc-ink-1);
+}
+
+.bsdc-gigSheet__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-gigSheet__body {
+  margin: 0;
+  color: var(--bsdc-ink-2);
+  line-height: 1.7;
+}
+
+.bsdc-gigSheet__skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--bsdc-text-sm);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-gigSheet__skills li::before {
+  content: "#";
+  opacity: 0.6;
+}
+
+.bsdc-gigSheet__packagesTitle {
+  margin: 0;
+  font-size: var(--bsdc-text-md);
+  font-weight: 700;
+  color: var(--bsdc-ink-1);
+}
+
+.bsdc-gigSheet__packages {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--bsdc-space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-gigSheet__package {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border-1);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-1);
+}
+
+.bsdc-gigSheet__packageHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.bsdc-gigSheet__packageBody {
+  margin: 0;
+  font-size: var(--bsdc-text-sm);
+  color: var(--bsdc-ink-2);
+}
+
+.bsdc-gigSheet__order {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  justify-items: start;
+}
+
+@media (max-width: 560px) {
+  .bsdc-market__filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

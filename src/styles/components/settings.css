@@ -1,0 +1,143 @@
+/**
+ * BSDC — src/styles/components/settings.css
+ * Purpose : Styling for the settings screen.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : One column, stacked, because a phone at 250px scrolls one list far more comfortably
+ *   than it swipes between four tabs. The notification grid keeps its three channel columns down to
+ *   the narrowest screen by shrinking the label instead of the switches, so a person can still
+ *   compare channels at a glance.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-settings {
+  display: grid;
+  gap: var(--bsdc-space-5);
+}
+
+.bsdc-settings__body {
+  display: grid;
+  gap: var(--bsdc-space-4);
+}
+
+.bsdc-settings__jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+  margin-block-start: var(--bsdc-space-2);
+}
+
+.bsdc-settings__jump a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--bsdc-green-700);
+  text-decoration: underline;
+}
+
+.bsdc-settings__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  gap: var(--bsdc-space-3);
+  margin: 0;
+}
+
+.bsdc-settings__stats dt {
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+}
+
+.bsdc-settings__stats dd {
+  margin: 0;
+  min-width: 0;
+  font-weight: 600;
+  color: var(--bsdc-ink-1);
+  overflow-wrap: anywhere;
+}
+
+.bsdc-settings__stores {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--bsdc-text-sm);
+}
+
+.bsdc-settings__stores li {
+  display: flex;
+  gap: var(--bsdc-space-3);
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 32px;
+  padding-block: 2px;
+  border-block-end: 1px solid var(--bsdc-border-1);
+}
+
+.bsdc-settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-3);
+}
+
+.bsdc-settings__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+}
+
+/* ------------------------------------------------------- notification grid ---- */
+
+.bsdc-settings__switchGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  gap: var(--bsdc-space-2) var(--bsdc-space-3);
+  align-items: center;
+}
+
+.bsdc-settings__switchGridHead {
+  font-size: var(--bsdc-text-xs);
+  font-weight: 700;
+  color: var(--bsdc-ink-3);
+  text-align: center;
+}
+
+.bsdc-settings__switchRow {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  gap: var(--bsdc-space-2) var(--bsdc-space-3);
+  padding-block: var(--bsdc-space-1);
+  border-block-end: 1px solid var(--bsdc-border-1);
+}
+
+.bsdc-settings__switchLabel {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--bsdc-text-sm);
+  color: var(--bsdc-ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* `subgrid` is progressive enhancement: where it is unsupported the row still lays out as a grid. */
+@supports not (grid-template-columns: subgrid) {
+  .bsdc-settings__switchRow {
+    grid-template-columns: minmax(0, 1fr) repeat(3, auto);
+  }
+}
+
+.bsdc-settings__quiet {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border-1);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-settings__quietHours {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: var(--bsdc-space-3);
+}

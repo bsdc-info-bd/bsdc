@@ -10,7 +10,7 @@
  * Licence : Source-available. Re-deployment or rebranding is not permitted.
  */
 import { FLAG_REGISTRY, isFlagOnByDefault, type FlagDefinition } from '../config/features';
-import { emit } from '../events/bus';
+import { emit, on } from '../events/bus';
 
 /** A scheduled on/off window in ISO strings. */
 export interface FlagSchedule {
@@ -100,6 +100,17 @@ export function isEnabled(key: string, now: Date = new Date()): boolean {
     return override.enabled;
   }
   return isFlagOnByDefault(key);
+}
+
+/**
+ * Subscribes to flag changes. The provider in the app layer is the only React that touches flags
+ * directly; everything below it asks through src/shared/hooks/useFlag.ts, which is what keeps the
+ * layering rule intact (ADR-003).
+ * @param handler called whenever any flag changes
+ * @returns an unsubscribe function
+ */
+export function onFlagChange(handler: () => void): () => void {
+  return on('flag:changed', () => handler());
 }
 
 /**

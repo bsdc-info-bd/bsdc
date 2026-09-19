@@ -16,7 +16,7 @@ import { SignInCard } from './SignInCard';
 export interface RequireAuthProps {
   readonly children: ReactNode;
   /** Message shown above the sign-in form, explaining why it appeared. */
-  readonly reason?: 'default' | 'messenger' | 'notifications' | 'settings';
+  readonly reason?: 'default' | 'messenger' | 'notifications' | 'settings' | 'saved';
 }
 
 /**

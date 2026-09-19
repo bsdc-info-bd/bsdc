@@ -17,6 +17,14 @@
 | PWA install experience and Capacitor Android build                                                                        | Public web assets are complete (manifest, icons, service worker); the native wrapper lands with the release pipeline         | R5                       |
 | CI workflows                                                                                                              | Quality gates are scripted and runnable locally (`verify`); the workflow files land with the release pipeline                | R5                       |
 
+### Deferred rows closed in R5
+
+- `build:sitemap`, `build:rss`, `build:cards`, `prerender`, `build:pages` — implemented and gated.
+- Prerender pipeline, sitemap with hreflang, RSS/Atom, JSON-LD, share cards — build pipeline only, no Workers.
+- PWA install prompt + offline banner — shipped behind `pwa.*` flags; service worker already present.
+- Capacitor Android config `bd.info.bsdc.app` — `capacitor.config.ts` + generated `android/` (not committed, L5-02).
+- CI workflow _files_ — written under `.github/workflows/`; push blocked by L5-05.
+
 ## Hard constraints that shape the product
 
 | Constraint                                             | What ships instead                                                                                        |
@@ -265,3 +273,66 @@ The initial shell is 174.87 KB gzip against the 180 KB budget. Response 4 added 
 and reports routes to the route table rather than to the entry chunk; jsPDF (126.49 KB gzip) and
 html2canvas (47.48 KB) both sit behind the dynamic import inside the report composer, so a visitor who
 never issues a report never downloads either. Response 5 must keep the same discipline.
+
+---
+
+## Response 5 — logged constraints
+
+### L5-01 — Share cards are English-only: the container has no Bengali font
+
+`scripts/build-share-cards.ts` draws OG and Twitter cards with the system canvas. This workspace
+ships no Noto Sans Bengali binary, so Bangla conjuncts would render as boxes. Cards therefore use
+the English title and description for every public route, while the on-screen page itself is real
+Bangla with a correct `og:locale` of `bn_BD` and hreflang alternates. Embedding a Bengali font would
+add roughly 300 KB to every card generation run; the English card is honest about what it can draw
+rather than lying about what it cannot.
+
+### L5-02 — The `android/` tree is generated and is not committed
+
+`capacitor.config.ts` sets `appId: 'bd.info.bsdc.app'`, `appName: 'BSDC'`, `webDir: 'dist'`. Running
+`npx cap add android` produces a Gradle project whose `applicationId` and `namespace` are both
+`bd.info.bsdc.app`. That tree is a build artefact of the config file and of a machine with the
+Android SDK; committing it would freeze a generated snapshot that drifts from every subsequent
+`cap sync`. `.gitignore` excludes `android/` entirely. A release machine runs
+`npm run build:pages && npx cap sync` and opens Android Studio from there.
+
+### L5-03 — The rules emulator suite still only runs where Java is installed
+
+Response 4's L4-01 still holds: this workspace has no Java runtime and cannot install one. The
+static gates (`check:rules`, `check:rtdb`) run on every `npm run verify`. The behavioural emulator
+suite (`npm run test:rules`, the `rules-emulator.yml` workflow) is written and is intended for CI
+runners that have Java 17 and the Firebase emulator suite. The workflow files themselves live under
+`.github/workflows/` locally; the GitHub App that owns this repository refuses to accept workflow
+file creation without the `workflows` permission, so they remain untracked until a maintainer with
+that permission lands them.
+
+### L5-04 — Local `git push` is blocked by a dead GitHub token
+
+The GH_TOKEN issued to this sandbox is no longer valid (`gh auth status` reports the failure;
+`git push` fails with "could not read Username for 'https://github.com'"). Commits are made locally
+on `arena/01a0b584-bsdc`. Restoring the GitHub connection in Arena is the only way to publish them.
+Earlier response 4 work that did push (`c51ccf5`) is on the remote; everything after that is local
+until credentials return.
+
+### L5-05 — Workflow files cannot be pushed by the GitHub App
+
+Pushing `.github/workflows/quality.yml` or `rules-emulator.yml` is rejected with "refusing to allow
+a GitHub App to create or update workflow … without `workflows` permission". The files are present
+locally, excluded from every commit with `git add -A -- . ':!.github'`, and documented here so the
+gap is not silent. A maintainer with the `workflows` permission lands them once.
+
+### L5-06 — Shell headroom after the completion surfaces
+
+Response 5 added the saved-items, marketplace, settings and PWA surfaces. The initial shell stays
+under the 180 KB gzip budget by keeping those routes lazy and by putting the install prompt and the
+offline banner behind their feature flags. Heavy libraries (jsPDF, html2canvas, Monaco, Leaflet)
+remain dynamically imported inside the feature that needs them. Re-measure on every release;
+headroom is not a permanent property of the bundle.
+
+### L5-07 — Completion of the deferred-by-design table
+
+The R1 deferred rows for sitemap, RSS, prerender, share cards, PWA install, Capacitor Android and
+CI workflow _scripts_ are closed in this response. The three rows that remain open are the ones
+above: Bengali share-card glyphs (L5-01), a committed `android/` tree (L5-02, deliberately not), and
+the emulator / workflow / push gaps that are properties of this sandbox rather than of the product
+(L5-03, L5-04, L5-05).

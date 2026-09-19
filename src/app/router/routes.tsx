@@ -10,11 +10,12 @@
  * Licence : Source-available. Re-deployment or rebranding is not permitted.
  */
 import { lazy, Suspense } from 'react';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, RouterProvider, type RouteObject } from 'react-router-dom';
 import { RootLayout } from '../layouts/RootLayout';
 import { PublicLayout } from '../layouts/PublicLayout';
 import { ErrorLayout } from '../layouts/ErrorLayout';
 import { RouteErrorBoundary } from '../boundaries/RouteErrorBoundary';
+import { LOCALES } from '@/core/config/app';
 import { FeedSkeleton } from '@/shared/ui/Skeleton';
 import { EmptyState } from '@/shared/ui/EmptyState';
 
@@ -86,6 +87,15 @@ const AdminAuditPage = lazy(async () => ({
 const AdminRecoveryPage = lazy(async () => ({
   default: (await import('@/pages/admin/AdminRecoveryPage')).AdminRecoveryPage,
 }));
+const SavedPage = lazy(async () => ({
+  default: (await import('@/pages/saved/SavedPage')).SavedPage,
+}));
+const MarketPage = lazy(async () => ({
+  default: (await import('@/pages/market/MarketPage')).MarketPage,
+}));
+const SettingsPage = lazy(async () => ({
+  default: (await import('@/pages/settings/SettingsPage')).SettingsPage,
+}));
 const ReportsPage = lazy(async () => ({
   default: (await import('@/pages/reports/ReportsPage')).ReportsPage,
 }));
@@ -117,210 +127,270 @@ function RouteFallback(): React.ReactElement {
   );
 }
 
+/**
+ * The routed screens, defined once and mounted under both the bare path and a locale prefix, so
+ * `/feed` and `/bn/feed` are the same screen rather than two trees that can drift apart.
+ * @returns the children of the application shell
+ */
+function appChildren(): RouteObject[] {
+  return [
+    {
+      index: true,
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <HomePage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'design-system',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <DesignSystemPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'feed',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <FeedPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'groups',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <GroupsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'messages',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <MessagesPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'notifications',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <NotificationsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'saved',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <SavedPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'search',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <SearchPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'u/:username',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <ProfilePage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'stories',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <StoriesPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'events',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <EventsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'events/:eventId',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <EventDetailPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'jobs',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <JobsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'jobs/:jobId',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <JobDetailPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'market',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <MarketPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'projects',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <ProjectsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'freelancer',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <FreelancerPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'leaderboard',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <LeaderboardPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'moderation',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <ModerationPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'settings',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <SettingsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'admin',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <AdminOverviewPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'admin/features',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <AdminFeaturesPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'admin/roles',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <AdminRolesPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'admin/audit',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <AdminAuditPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'admin/recovery',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <AdminRecoveryPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'reports',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <ReportsPage />
+        </Suspense>
+      ),
+    },
+    {
+      path: 'verify/:reportId',
+      element: (
+        <Suspense fallback={<RouteFallback />}>
+          <VerifyReportPage />
+        </Suspense>
+      ),
+    },
+  ];
+}
+
+/**
+ * Builds the two application trees: the bare one, and the Bangla and English prefixed one.
+ * The prefixed tree refuses any prefix that is not a real locale by throwing a 404, so `/bn`
+ * is a language and `/anything-else` is a missing page.
+ * @returns the route objects for both trees
+ */
+function appTrees(): RouteObject[] {
+  const trees: RouteObject[] = [
+    {
+      path: '/',
+      element: <RootLayout />,
+      errorElement: (
+        <ErrorLayout>
+          <ErrorPage />
+        </ErrorLayout>
+      ),
+      children: appChildren(),
+    },
+  ];
+
+  for (const locale of LOCALES) {
+    trees.push({
+      path: `/${locale}`,
+      element: <RootLayout />,
+      errorElement: (
+        <ErrorLayout>
+          <ErrorPage />
+        </ErrorLayout>
+      ),
+      children: appChildren(),
+    });
+  }
+
+  return trees;
+}
+
 const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <RootLayout />,
-    errorElement: (
-      <ErrorLayout>
-        <ErrorPage />
-      </ErrorLayout>
-    ),
-    children: [
-      {
-        index: true,
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <HomePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'design-system',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <DesignSystemPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'feed',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <FeedPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'groups',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <GroupsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'messages',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <MessagesPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'notifications',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <NotificationsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'search',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <SearchPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'u/:username',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <ProfilePage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'stories',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <StoriesPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'events',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <EventsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'events/:eventId',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <EventDetailPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'jobs',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <JobsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'jobs/:jobId',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <JobDetailPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'projects',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <ProjectsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'freelancer',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <FreelancerPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'leaderboard',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <LeaderboardPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'moderation',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <ModerationPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'admin',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <AdminOverviewPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'admin/features',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <AdminFeaturesPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'admin/roles',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <AdminRolesPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'admin/audit',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <AdminAuditPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'admin/recovery',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <AdminRecoveryPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'reports',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <ReportsPage />
-          </Suspense>
-        ),
-      },
-      {
-        path: 'verify/:reportId',
-        element: (
-          <Suspense fallback={<RouteFallback />}>
-            <VerifyReportPage />
-          </Suspense>
-        ),
-      },
-    ],
-  },
+  ...appTrees(),
   {
     element: <PublicLayout />,
     errorElement: (

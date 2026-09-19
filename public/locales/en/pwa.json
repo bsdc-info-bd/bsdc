@@ -1,0 +1,15 @@
+{
+  "install": {
+    "title": "Keep BSDC on this device",
+    "body": "Opens like an app, works with a weak signal, and keeps your place.",
+    "action": "Install",
+    "dismiss": "Not now"
+  },
+  "offline": {
+    "body": "You are offline. What you have already read stays readable, and anything you do now is kept and sent when the connection returns.",
+    "queued": "You are offline. {{count}} change is waiting to be sent.",
+    "queued_other": "You are offline. {{count}} changes are waiting to be sent.",
+    "emptyTitle": "You are offline",
+    "emptyBody": "Nothing is cached for this screen yet. Content loads automatically when the connection returns."
+  }
+}

@@ -24,7 +24,7 @@ import {
   presencePath,
   reactionPath,
   receiptPath,
-  savedPostPath,
+  savedItemPath,
   typingPath,
   userPath,
 } from '@/core/config/collections';
@@ -43,7 +43,7 @@ describe('firestore paths', () => {
     expect(groupMemberPath('g1', 'u1')).toBe('groups/g1/members/u1');
     expect(messagePath('cv1', 'm1')).toBe('conversations/cv1/messages/m1');
     expect(notificationPath('u1', 'n1')).toBe('users/u1/notifications/n1');
-    expect(savedPostPath('u1', 'p1')).toBe('users/u1/saved/p1');
+    expect(savedItemPath('u1', 'post:p1')).toBe('users/u1/saved/post:p1');
     expect(draftPath('u1', 'd1')).toBe('users/u1/drafts/d1');
   });
 

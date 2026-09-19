@@ -1,0 +1,157 @@
+{
+  "title": "Settings",
+  "subtitle": "How BSDC looks, what it may tell you, who may see you, and what this device keeps.",
+  "jumpLabel": "Jump to a section",
+  "appearance": {
+    "title": "Appearance",
+    "theme": "Theme",
+    "density": "Density",
+    "fontScale": "Text size",
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "oled": "OLED black",
+      "blue": "Facebook blue",
+      "green-light": "Green light",
+      "green-dark": "Green dark",
+      "high-contrast": "High contrast",
+      "sepia": "Sepia",
+      "auto": "Match system"
+    },
+    "densities": {
+      "comfortable": "Comfortable",
+      "compact": "Compact",
+      "spacious": "Spacious"
+    },
+    "scales": {
+      "1": "Normal",
+      "1.125": "Large",
+      "1.25": "Larger",
+      "1.5": "Largest",
+      "2": "Accessibility 200%"
+    },
+    "banglaNumerals": "Bangla numerals",
+    "banglaNumeralsNote": "Counts and dates in ০১২৩ instead of 0123.",
+    "reduceMotion": "Reduce motion",
+    "reduceMotionNote": "Removes animation and parallax across the platform.",
+    "reduceTransparency": "Reduce transparency",
+    "reduceTransparencyNote": "Solid surfaces instead of blurred glass, which also helps low-end devices.",
+    "largeTargets": "Larger touch targets",
+    "largeTargetsNote": "Every tap target grows to at least 56 pixels."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "subtitle": "Choose what reaches you, and where. Moderation decisions and account security always arrive.",
+    "gridLabel": "Notification preferences",
+    "channel": {
+      "inApp": "In app",
+      "push": "Push",
+      "email": "Email"
+    },
+    "type": {
+      "reaction": "Reactions",
+      "comment": "Comments",
+      "reply": "Replies",
+      "mention": "Mentions",
+      "follow": "New followers",
+      "message": "Messages",
+      "groupInvite": "Group invites",
+      "groupJoin": "Group activity",
+      "jobApplication": "Job applications",
+      "order": "Orders",
+      "payment": "Payments",
+      "moderation": "Moderation",
+      "system": "Account and security"
+    },
+    "quiet": "Quiet hours",
+    "quietNote": "Hold push notifications overnight. Urgent moderation and security notices still arrive.",
+    "quietStart": "From",
+    "quietEnd": "Until",
+    "hour": "{{hour}}:00",
+    "quietNow": "Quiet hours are active now",
+    "quietLater": "Quiet hours are set and waiting",
+    "source": {
+      "remote": "Saved to your account, on every device you sign in to.",
+      "local": "Saved on this device. The account copy will update when the network returns.",
+      "default": "Defaults. Change anything and it is saved to your account."
+    }
+  },
+  "privacy": {
+    "title": "Privacy",
+    "subtitle": "Who may see your profile and the details on it.",
+    "visibilityLabel": "Who can open your profile",
+    "visibility": {
+      "public": "Anyone, including visitors who are not signed in",
+      "members": "Signed-in members only",
+      "private": "Only people you approve"
+    },
+    "showEmail": "Show my email on my profile",
+    "showEmailNote": "Off by default. Your email is never shown in search results either way.",
+    "showRegion": "Show my region",
+    "showRegionNote": "Shows your division, not your district or anything more precise.",
+    "showLastSeen": "Show when I was last active",
+    "showLastSeenNote": "Presence is rounded to the nearest five minutes."
+  },
+  "data": {
+    "title": "Data and storage",
+    "subtitle": "BSDC keeps a copy of your own content on this device so the platform works with no signal.",
+    "records": "Records on this device",
+    "queued": "Changes waiting to sync",
+    "storage": "Storage",
+    "durable": "Durable (IndexedDB)",
+    "sessionOnly": "This session only",
+    "storesLabel": "What this device is holding",
+    "store": {
+      "profiles": "Profiles",
+      "posts": "Posts",
+      "comments": "Comments",
+      "drafts": "Drafts",
+      "saved": "Saved items",
+      "outbox": "Pending changes",
+      "messages": "Messages",
+      "notifications": "Notifications",
+      "media": "Media",
+      "events": "Events",
+      "jobs": "Jobs"
+    },
+    "checkedAt": "Checked at {{time}}.",
+    "empty": "This device is holding nothing yet. It will fill as you use the platform.",
+    "export": "Export my data",
+    "exportNote": "The content this device holds, in JSON. It is your copy of your own words.",
+    "exportedBn": "রপ্তানি হয়েছে",
+    "exportedEn": "Your data is downloading",
+    "clear": "Clear data on this device",
+    "clearTitle": "Clear everything on this device?",
+    "clearBody": "This empties the offline copy on this device only. Your account on the server is untouched, and the app will refill as you use it. Type BSDC to confirm.",
+    "clearConfirm": "Clear this device",
+    "cancel": "Keep it",
+    "clearedBn": "মুছে ফেলা হয়েছে",
+    "clearedEn": "This device is empty now"
+  },
+  "account": {
+    "title": "Account",
+    "email": "Signed in as",
+    "deviceOnly": "A device-local account",
+    "id": "Account id",
+    "role": "Role",
+    "roles": {
+      "guest": "Visitor",
+      "member": "Member",
+      "creator": "Verified creator",
+      "vendor": "Vendor",
+      "support": "Support",
+      "moderator": "Moderator",
+      "admin": "Administrator"
+    },
+    "source": "Session",
+    "sourceDevice": "This device only",
+    "sourceRemote": "Cloud account",
+    "verified": "Email verified",
+    "unverified": "Email not verified yet",
+    "suspended": "Suspended",
+    "root": "Root administrator",
+    "refresh": "Refresh permissions",
+    "signOut": "Sign out",
+    "closingNote": "Closing your account is not a button yet: until the scheduled job ships, write to {{email}} and a person will do it with you."
+  }
+}

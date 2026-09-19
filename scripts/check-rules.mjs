@@ -56,9 +56,16 @@ if (parenDepth !== 0) {
   problems.push(`unbalanced parentheses: ${parenDepth} left open`);
 }
 
-const singleQuotes = (rules.match(/'/gu) ?? []).length;
+// Comments are stripped before counting: an apostrophe in an English sentence is not an
+// unterminated string, and a rule file nobody may write naturally in is a rule file that
+// stops being reviewed.
+const ruleCode = rules
+  .split('\n')
+  .map((line) => line.replace(/\/\/.*$/u, ''))
+  .join('\n');
+const singleQuotes = (ruleCode.match(/'/gu) ?? []).length;
 if (singleQuotes % 2 !== 0) {
-  problems.push('an odd number of single quotes: a string is unterminated');
+  problems.push('an odd number of single quotes in rule code: a string is unterminated');
 }
 
 // ------------------------------------------------------------------ coverage

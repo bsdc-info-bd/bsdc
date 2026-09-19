@@ -96,7 +96,7 @@ export const ROUTES: readonly RouteMeta[] = [
   {
     path: '/saved',
     titleKey: 'saved',
-    status: 'planned',
+    status: 'live',
     flag: FLAG_KEYS.feed,
     requiresAuth: true,
     noindex: true,
@@ -225,7 +225,7 @@ export const ROUTES: readonly RouteMeta[] = [
   {
     path: '/market',
     titleKey: 'marketplace',
-    status: 'planned',
+    status: 'live',
     flag: FLAG_KEYS.marketplace,
     changeFrequency: 'hourly',
     priority: 0.9,
@@ -233,7 +233,7 @@ export const ROUTES: readonly RouteMeta[] = [
   {
     path: '/settings',
     titleKey: 'settings',
-    status: 'planned',
+    status: 'live',
     flag: FLAG_KEYS.shell,
     requiresAuth: true,
     noindex: true,

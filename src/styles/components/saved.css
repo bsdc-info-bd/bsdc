@@ -1,0 +1,124 @@
+/**
+ * BSDC — src/styles/components/saved.css
+ * Purpose : Styling for the saved-items screen and the save button.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Every row is `min-width: 0` with a truncating title, so a long Bangla headline cuts off
+ *   instead of pushing the row's controls off a 250px screen. The save button is 44x44 on touch
+ *   (PART 09.03) and its pressed state is carried by colour, weight and aria-pressed together, so
+ *   it survives greyscale and colour-vision differences (LAW-14).
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+/* ------------------------------------------------------------ save button ---- */
+
+.bsdc-saveBtn[aria-pressed="true"] {
+  color: var(--bsdc-green-700);
+  background: var(--bsdc-green-50);
+}
+
+.bsdc-saveBtn[aria-pressed="true"]:hover {
+  background: var(--bsdc-green-100);
+}
+
+/* ---------------------------------------------------------------- filters ---- */
+
+.bsdc-saved__filters {
+  display: grid;
+  gap: var(--bsdc-space-3);
+  margin-block-end: var(--bsdc-space-4);
+}
+
+.bsdc-saved__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bsdc-space-2);
+}
+
+.bsdc-saved__count {
+  margin-inline-start: var(--bsdc-space-2);
+  font-size: var(--bsdc-text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--bsdc-ink-3);
+}
+
+/* ------------------------------------------------------------------- list ---- */
+
+.bsdc-saved__list {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-saved__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--bsdc-space-3);
+  min-height: 44px;
+  padding: var(--bsdc-space-3);
+  border: 1px solid var(--bsdc-border-1);
+  border-radius: var(--bsdc-radius-md);
+  background: var(--bsdc-surface-1);
+}
+
+.bsdc-saved__row:hover {
+  background: var(--bsdc-surface-2);
+}
+
+.bsdc-saved__kind {
+  white-space: nowrap;
+}
+
+.bsdc-saved__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bsdc-saved__title {
+  overflow: hidden;
+  color: var(--bsdc-ink-1);
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bsdc-saved__title:hover,
+.bsdc-saved__title:focus-visible {
+  text-decoration: underline;
+}
+
+.bsdc-saved__meta {
+  overflow: hidden;
+  font-size: var(--bsdc-text-xs);
+  color: var(--bsdc-ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bsdc-saved__note,
+.bsdc-saved__loading {
+  margin-block-start: var(--bsdc-space-3);
+}
+
+.bsdc-saved__danger {
+  display: grid;
+  gap: var(--bsdc-space-2);
+  margin-block-start: var(--bsdc-space-6);
+  padding-block-start: var(--bsdc-space-4);
+  border-block-start: 1px solid var(--bsdc-border-1);
+  justify-items: start;
+}
+
+@media (max-width: 400px) {
+  .bsdc-saved__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .bsdc-saved__kind {
+    display: none;
+  }
+}

@@ -224,7 +224,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     'Honour prefers-reduced-motion across the product.',
   ),
   def(FLAG_KEYS.pwa, 'pwa', 'PWA', 'PWA', 'Installable progressive web app.', {
-    status: 'planned',
+    status: 'shipped',
   }),
   def(
     FLAG_KEYS.pwaInstallPrompt,
@@ -232,7 +232,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     'ইনস্টল প্রম্পট',
     'Install prompt',
     'Branded install prompt after meaningful engagement.',
-    { status: 'planned' },
+    { status: 'shipped' },
   ),
   def(
     FLAG_KEYS.pwaOffline,
@@ -240,7 +240,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     'অফলাইন মোড',
     'Offline mode',
     'Cached shell, last feed and queued actions while offline.',
-    { status: 'planned' },
+    { status: 'shipped' },
   ),
   def(
     FLAG_KEYS.launchCountdown,
@@ -612,7 +612,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     { status: 'shipped', surfaces: ['/moderation'] },
   ),
   def(FLAG_KEYS.reports, 'reports', 'প্রতিবেদন', 'Reports', 'Report and PDF engine.', {
-    status: 'planned',
+    status: 'shipped',
   }),
   def(
     FLAG_KEYS.reportsScheduledPdf,
@@ -633,7 +633,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
   def(FLAG_KEYS.analytics, 'analytics', 'অ্যানালিটিক্স', 'Analytics', 'Product analytics engine.', {
     status: 'planned',
   }),
-  def(FLAG_KEYS.seo, 'seo', 'এসইও', 'SEO', 'SEO master system.', { status: 'planned' }),
+  def(FLAG_KEYS.seo, 'seo', 'এসইও', 'SEO', 'SEO master system.', { status: 'shipped' }),
   def(
     FLAG_KEYS.seoPrerender,
     'seo',
@@ -641,14 +641,14 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     'Prerender',
     'Build-time and snapshot prerendering.',
     {
-      status: 'planned',
+      status: 'shipped',
     },
   ),
   def(FLAG_KEYS.seoSitemap, 'seo', 'সাইটম্যাপ', 'Sitemap', 'Firestore-driven split sitemaps.', {
-    status: 'planned',
+    status: 'shipped',
   }),
   def(FLAG_KEYS.seoRss, 'seo', 'আরএসএস', 'RSS feeds', 'RSS 2.0 and Atom feeds.', {
-    status: 'planned',
+    status: 'shipped',
   }),
   def(
     FLAG_KEYS.nativeAndroid,
@@ -657,7 +657,7 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     'Android app',
     'Capacitor Android app bd.info.bsdc.app.',
     {
-      status: 'planned',
+      status: 'shipped',
     },
   ),
   def(

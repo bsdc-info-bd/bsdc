@@ -51,6 +51,10 @@ export const NAMESPACES = [
   'push',
   'admin',
   'reports',
+  'saved',
+  'market',
+  'settings',
+  'pwa',
 ] as const;
 
 void i18next

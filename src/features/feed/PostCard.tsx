@@ -27,12 +27,13 @@ import { copyText, shareNative } from '@/shared/lib/clipboard';
 import { toastSuccess } from '@/shared/ui/toast';
 import type { Profile } from '@/entities/profile/model';
 import { canEditPost, type Post } from '@/entities/post/model';
-import { setSaved, softDeletePost } from '@/entities/post/repository';
+import { softDeletePost } from '@/entities/post/repository';
 import type { ReactionSummary } from '@/entities/reaction/model';
 import { summariseReactions } from '@/entities/reaction/model';
 import { peekReactionSummary, watchReactions } from '@/entities/reaction/repository';
 import { ReactionBar } from '@/features/reactions';
 import { CommentThread } from '@/features/comments';
+import { useSavedItems } from '@/features/saved';
 import { PostMedia } from './PostMedia';
 
 /** Props for the post card. */
@@ -66,7 +67,8 @@ export function PostCard({
   const [summary, setSummary] = useState<ReactionSummary>(() =>
     summariseReactions([], viewer?.uid ?? null),
   );
-  const [saved, setSavedState] = useState(post.saved);
+  const savedApi = useSavedItems(viewer?.uid ?? null);
+  const saved = savedApi.isSaved('post', post.id);
   const [menuOpen, setMenuOpen] = useState(false);
   const [threadOpen, setThreadOpen] = useState(showComments);
   const [busy, setBusy] = useState(false);
@@ -99,9 +101,14 @@ export function PostCard({
    */
   async function toggleSave(): Promise<void> {
     if (viewer === null) return;
-    const next = !saved;
-    setSavedState(next);
-    await setSaved(viewer.uid, post.id, next);
+    await savedApi.toggle({
+      kind: 'post',
+      entityId: post.id,
+      title: post.body,
+      titleLang: post.language === 'en' ? 'en' : 'bn',
+      subtitle: authorName,
+      href: `/post/${post.id}`,
+    });
   }
 
   /**
