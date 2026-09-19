@@ -23,5 +23,6 @@
   "leaderboard": "Leaderboard",
   "moderation": "Moderation",
   "eventDetail": "Event",
-  "jobDetail": "Job"
+  "jobDetail": "Job",
+  "admin": "Administration"
 }

@@ -13,7 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { Suspense } from 'react';
 
 const localesRoot = resolve(process.cwd(), 'public/locales');
@@ -64,11 +64,17 @@ describe('opportunity routes', () => {
       window.history.pushState({}, '', route.path);
       const { App } = await import('@/app/App');
 
-      render(
-        <Suspense fallback={null}>
-          <App />
-        </Suspense>,
-      );
+      // Rendering inside an async act lets the lazy route chunk resolve while React is still
+      // watching, which is what a browser does when it fetches a chunk. Rendering outside act and
+      // waiting afterwards leaves the resolution to land between two tests, where React warns
+      // about it and the warning lands on whichever test happens to be running.
+      await act(async () => {
+        render(
+          <Suspense fallback={null}>
+            <App />
+          </Suspense>,
+        );
+      });
 
       await waitFor(
         () => {
@@ -77,6 +83,16 @@ describe('opportunity routes', () => {
         },
         { timeout: 8000 },
       );
+
+      // A lazy route chunk resolves on a microtask. Flushing it inside act means React sees the
+      // update during the test rather than after it, which is both what a browser does and what
+      // keeps the console clean; an act warning is otherwise a test artefact that fails a test
+      // for a reason that has nothing to do with the screen under test.
+      await act(async () => {
+        await new Promise((done) => {
+          setTimeout(done, 0);
+        });
+      });
 
       // A missing namespace renders the raw key, which always contains a dot or an underscore.
       expect(document.body.textContent ?? '').not.toMatch(

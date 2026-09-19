@@ -1,0 +1,307 @@
+/**
+ * BSDC — src/styles/components/admin.css
+ * Purpose : The administration console: panels, the flag register, the audit table, the bin.
+ * Owner   : RRC Development / BSDC Platform Team
+ * Notes   : Every panel is a card list at 250px and a two-column grid when there is room. The
+ *   audit table follows R-20: it becomes a stack of cards at or below 768px rather than a table
+ *   somebody has to scroll sideways to read, and its header stays sticky on desktop for long lists.
+ *   Tap targets stay at or above 44px, which matters more here than anywhere: these are the row
+ *   controls that decide whether something comes back or goes for good.
+ * Licence : Source-available. Re-deployment or rebranding is not permitted.
+ */
+
+.bsdc-admin__panels {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+  margin-block-start: var(--space-4);
+}
+
+.bsdc-admin__panelLink {
+  display: grid;
+  gap: var(--space-2);
+  min-block-size: 44px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+}
+
+.bsdc-admin__panelLink:hover,
+.bsdc-admin__panelLink:focus-visible {
+  background-color: var(--bsdc-surface-2);
+}
+
+.bsdc-admin__recent {
+  margin-block-start: var(--space-4);
+}
+
+.bsdc-admin__recentList {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-admin__recentList li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  overflow-wrap: anywhere;
+}
+
+/* ----------------------------------------------------------------- flags */
+
+.bsdc-flags__head {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+
+.bsdc-flags__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-flags__row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+}
+
+.bsdc-flags__rowMain {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.bsdc-flags__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-flags__meta code {
+  overflow-wrap: anywhere;
+}
+
+.bsdc-flags__rowAction {
+  flex: 0 0 auto;
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.bsdc-flags__editor,
+.bsdc-flags__window {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bsdc-flags__actions,
+.bsdc-passkey__actions,
+.bsdc-bin__actions,
+.bsdc-roles__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.bsdc-passkey {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bsdc-passkey__actions .bsdc-button {
+  min-block-size: 44px;
+}
+
+/* ----------------------------------------------------------------- audit */
+
+.bsdc-audit__head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.bsdc-audit__filters {
+  display: grid;
+  gap: var(--space-3);
+  margin-block: var(--space-4);
+}
+
+.bsdc-audit__scroll {
+  overflow: auto;
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+}
+
+.bsdc-audit__table {
+  inline-size: 100%;
+  font-size: var(--fs-sm);
+  border-collapse: collapse;
+}
+
+.bsdc-audit__table th,
+.bsdc-audit__table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  vertical-align: top;
+  border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+  overflow-wrap: anywhere;
+}
+
+.bsdc-audit__table thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 1;
+  background-color: var(--bsdc-surface-2);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.bsdc-audit__role {
+  display: block;
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-audit__before {
+  color: var(--bsdc-text-muted);
+}
+
+/* ------------------------------------------------------------------- bin */
+
+.bsdc-bin__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bsdc-bin__row {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: var(--bsdc-hairline) solid var(--bsdc-border);
+  border-radius: var(--radius-md);
+}
+
+.bsdc-bin__rowMain {
+  display: grid;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.bsdc-bin__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-bin__rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.bsdc-bin__rowActions .bsdc-button {
+  min-block-size: 44px;
+}
+
+.bsdc-bin__confirm {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* ----------------------------------------------------------------- roles */
+
+.bsdc-roles {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.bsdc-roles__grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+}
+
+/* ------------------------------------------------------- wider viewports */
+
+@media (min-width: 768px) {
+  .bsdc-admin__panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bsdc-flags__head {
+    grid-template-columns: 1fr minmax(240px, 320px);
+    align-items: end;
+  }
+
+  .bsdc-flags__window,
+  .bsdc-audit__filters,
+  .bsdc-roles__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bsdc-bin__row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (min-width: 1280px) {
+  .bsdc-admin__panels {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/**
+ * R-20: the audit table becomes a card list on a phone. Each row keeps its own labels, so the
+ * columns are still named when the table head is gone.
+ */
+@media (max-width: 768px) {
+  .bsdc-audit__table thead {
+    display: none;
+  }
+
+  .bsdc-audit__table,
+  .bsdc-audit__table tbody,
+  .bsdc-audit__table tr,
+  .bsdc-audit__table td {
+    display: block;
+    inline-size: 100%;
+  }
+
+  .bsdc-audit__table tr {
+    padding: var(--space-3);
+    border-block-end: var(--bsdc-hairline) solid var(--bsdc-border);
+  }
+
+  .bsdc-audit__table td {
+    padding: var(--space-1) 0;
+    border: 0;
+  }
+}

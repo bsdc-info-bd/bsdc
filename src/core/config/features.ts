@@ -111,6 +111,10 @@ export const FLAG_KEYS = {
   seoSitemap: 'seo.sitemap',
   seoRss: 'seo.rss',
   nativeAndroid: 'native.android',
+  adminConsole: 'admin.console',
+  adminFeatureFlags: 'admin.featureFlags',
+  adminAuditTrail: 'admin.auditTrail',
+  adminRecoveryBin: 'admin.recoveryBin',
 } as const;
 
 export type FlagKey = (typeof FLAG_KEYS)[keyof typeof FLAG_KEYS];
@@ -655,6 +659,44 @@ export const FLAG_REGISTRY: readonly FlagDefinition[] = [
     {
       status: 'planned',
     },
+  ),
+  def(
+    FLAG_KEYS.adminConsole,
+    'admin',
+    'প্রশাসন কনসোল',
+    'Admin console',
+    'Administration: roles, feature flags, audit trail and the recovery bin.',
+    {
+      passkeyRequired: true,
+      surfaces: ['/admin', '/admin/features', '/admin/roles', '/admin/audit', '/admin/recovery'],
+    },
+  ),
+  def(
+    FLAG_KEYS.adminFeatureFlags,
+    'admin',
+    'ফিচার ফ্ল্যাগ',
+    'Feature flags',
+    'The plugin register: switch a capability off, or schedule it between two dates.',
+    {
+      passkeyRequired: true,
+      surfaces: ['/admin/features'],
+    },
+  ),
+  def(
+    FLAG_KEYS.adminAuditTrail,
+    'admin',
+    'অডিট ট্রেইল',
+    'Audit trail',
+    'The immutable record of every privileged action, with what changed.',
+    { surfaces: ['/admin/audit'] },
+  ),
+  def(
+    FLAG_KEYS.adminRecoveryBin,
+    'admin',
+    'রিকভারি বিন',
+    'Recovery bin',
+    'Restore or permanently purge soft-deleted content inside its thirty-day window.',
+    { surfaces: ['/admin/recovery'] },
   ),
 ];
 

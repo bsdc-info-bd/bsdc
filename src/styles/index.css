@@ -61,6 +61,7 @@
 @import "./components/composer.css";
 @import "./components/opportunities.css";
 @import "./components/table.css";
+@import "./components/admin.css";
 
 @import "./responsive/mobile-250.css";
 @import "./responsive/mobile-small.css";

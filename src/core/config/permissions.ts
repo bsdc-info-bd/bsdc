@@ -272,3 +272,28 @@ export const ROLE_LABELS: Readonly<Record<Role, { readonly bn: string; readonly 
   admin: { bn: 'অ্যাডমিন', en: 'Admin' },
   root: { bn: 'রুট অ্যাডমিন', en: 'Root admin' },
 };
+
+/**
+ * Roles an administrator may hand to somebody else.
+ *
+ * `guest` is not a role anybody is given, and `root` cannot be delegated: the Cloud Function
+ * refuses it, and offering it on a form would be offering something the platform will not do.
+ */
+export const ASSIGNABLE_ROLES = [
+  'member',
+  'creator',
+  'vendor',
+  'support',
+  'moderator',
+  'admin',
+] as const satisfies readonly Role[];
+
+/**
+ * Labels a role in the viewer's language.
+ * @param role the role
+ * @param locale the viewer's locale
+ * @returns the label
+ */
+export function roleLabel(role: Role, locale: 'bn' | 'en'): string {
+  return locale === 'bn' ? ROLE_LABELS[role].bn : ROLE_LABELS[role].en;
+}

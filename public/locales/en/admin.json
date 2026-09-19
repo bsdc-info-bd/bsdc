@@ -1,0 +1,127 @@
+{
+  "title": "Administration",
+  "subtitle": "Feature flags, roles, the audit trail and the recovery bin. Every change here is recorded with who made it and what it was before.",
+  "denied": {
+    "title": "Administrators only",
+    "description": "This screen is for accounts holding the administrator role. If you believe you should have access, write to hello@bsdc.info.bd from the address on your account."
+  },
+  "nav": {
+    "overview": "Overview",
+    "flags": "Features",
+    "members": "Roles",
+    "audit": "Audit trail",
+    "recovery": "Recovery bin"
+  },
+  "overview": {
+    "flagsOff": "{{count}} of {{total}} features are off",
+    "pendingAudit": "Recent entries",
+    "expiring": "{{count}} item(s) leave the recovery bin within three days",
+    "empty": "Nothing has been recorded yet."
+  },
+  "flags": {
+    "title": "Feature register",
+    "subtitle": "Every capability is a plugin. All of them ship switched on; switching one off takes the plugin passkey, and can be scheduled to happen between two dates.",
+    "search": "Search features",
+    "column": {
+      "feature": "Feature",
+      "state": "State",
+      "schedule": "Schedule"
+    },
+    "state": {
+      "on": "On",
+      "off": "Off",
+      "forcedOff": "Off — kill switch",
+      "scheduled": "On a schedule",
+      "notStarted": "Starts {{date}}",
+      "ended": "Window closed",
+      "default": "Default"
+    },
+    "module": "Module",
+    "status": "Build status",
+    "schedule": {
+      "open": "Schedule",
+      "startsAt": "Turns on",
+      "endsAt": "Turns off",
+      "clear": "Clear schedule",
+      "none": "No schedule",
+      "pending": "Scheduled",
+      "expired": "Expired"
+    },
+    "passkey": {
+      "title": "Plugin passkey",
+      "description": "This feature is protected. Enter the plugin passkey to confirm the change. It is checked on the server and is never stored, logged or sent back.",
+      "label": "Passkey",
+      "submit": "Confirm change",
+      "cancel": "Cancel",
+      "hint": "Five attempts are allowed every fifteen minutes.",
+      "error": "The passkey was not accepted.",
+      "error.BSDC-NET-004": "Too many attempts. Wait for the cooldown window to pass.",
+      "error.BSDC-AUTH-005": "That passkey was not accepted.",
+      "error.BSDC-NET-005": "The server could not be reached. Nothing was changed."
+    },
+    "save": "Save",
+    "saving": "Saving",
+    "saved": "{{name}} is now {{state}}.",
+    "note": "Note for the audit trail",
+    "notePlaceholder": "Why this change is being made",
+    "killSwitch": "Kill switch — overrides the schedule",
+    "empty": "No feature matches that search."
+  },
+  "members": {
+    "title": "Roles and standing",
+    "subtitle": "Assigning a role is decided on the server. The root role cannot be delegated, and every assignment is written to the audit trail with the reason you give.",
+    "uid": "Account id",
+    "uidPlaceholder": "The account id of the person",
+    "role": "Role",
+    "reason": "Reason",
+    "reasonPlaceholder": "Why this person is being given this role",
+    "submit": "Assign role",
+    "submitting": "Assigning",
+    "done": "The role has been assigned.",
+    "reasonRequired": "A reason is required before a role can change.",
+    "ladder": "The ladder runs member, verified creator, support, moderator, admin, root. Each step includes the ones below it.",
+    "rootNote": "Only the root administrator may assign a role, and root cannot be handed to somebody else."
+  },
+  "audit": {
+    "title": "Audit trail",
+    "subtitle": "Every privileged action, newest first, with what the value was before and what it became. Entries are never edited and never deleted; they are kept for two years.",
+    "search": "Search by account, target or reason",
+    "action": "All actions",
+    "column": {
+      "when": "When",
+      "action": "Action",
+      "actor": "By",
+      "target": "Target",
+      "change": "Change",
+      "reason": "Reason"
+    },
+    "empty": "No entry matches that filter.",
+    "summary": "{{count}} entries",
+    "retained": "Retained until {{date}}"
+  },
+  "recovery": {
+    "title": "Recovery bin",
+    "subtitle": "Deleted things stay here for thirty days. After that the nightly purge removes them for good.",
+    "empty": "The bin is empty. Nothing is waiting to be recovered.",
+    "kind": "Kind",
+    "deletedOn": "Deleted",
+    "purgeOn": "Removed after",
+    "daysLeft": "{{count}} day(s) left",
+    "expiring": "Leaving soon",
+    "restore": "Restore",
+    "restoring": "Restoring",
+    "restored": "The item has been put back.",
+    "purge": "Delete now",
+    "purging": "Deleting",
+    "purged": "The item has been deleted permanently.",
+    "confirm": {
+      "title": "Delete this permanently?",
+      "description": "There is no recovery from this. Type the item id to confirm.",
+      "label": "Item id",
+      "submit": "Delete permanently",
+      "cancel": "Cancel",
+      "mismatch": "The id you typed does not match."
+    },
+    "ownerNote": "You may restore what you own. Staff may restore anything still inside its window."
+  }
+}

@@ -255,6 +255,237 @@ export const claimUsername = onCall({ region: REGION }, async (request) => {
 });
 
 /**
+ * Turns a feature flag on or off, optionally inside a scheduled window.
+ *
+ * Two locks, because this is the switch that can take a whole feature away from everybody at once:
+ * the caller must hold the admin role, and when the flag is marked `passkeyRequired` the caller
+ * must also present the plugin passkey. The passkey is verified against the PBKDF2 record with a
+ * five-attempt-per-fifteen-minute limit, and is never written to the document, the log or the
+ * response. Both the previous and the next state are written to the audit trail, so a flag can be
+ * put back the way it was without anybody having to remember what it was.
+ *
+ * @param request callable request carrying `{ key, enabled, forceOff, startsAt, endsAt, note, passkey }`
+ * @returns the resulting state
+ */
+export const setFeatureFlag = onCall(
+  { region: REGION, secrets: [PASSKEY_PEPPER, ROOT_PASSKEY_HASH] },
+  async (request) => {
+    const actorRole = (request.auth?.token?.['role'] ?? 'member') as Role;
+    if (rankOf(actorRole) < rankOf('admin') && request.auth?.token?.['root'] !== true) {
+      throw new HttpsError('permission-denied', 'Only an administrator may change a feature flag.');
+    }
+
+    const key = request.data?.['key'];
+    const enabled = request.data?.['enabled'];
+    const forceOff = request.data?.['forceOff'];
+    const startsAt = request.data?.['startsAt'];
+    const endsAt = request.data?.['endsAt'];
+    const note = request.data?.['note'];
+    const passkey = request.data?.['passkey'];
+    if (typeof key !== 'string' || key.length === 0 || !/^[a-z][a-zA-Z0-9.]{2,80}$/.test(key)) {
+      throw new HttpsError('invalid-argument', 'A valid flag key is required.');
+    }
+    if (typeof enabled !== 'boolean' || typeof forceOff !== 'boolean') {
+      throw new HttpsError('invalid-argument', 'A boolean state is required.');
+    }
+    const document = await getFirestore().doc(`featureFlags/${key}`).get();
+    const existing = document.data() as
+      | { enabled?: boolean; forceOff?: boolean; startsAt?: string | null; endsAt?: string | null }
+      | undefined;
+
+    // A flag marked passkeyRequired cannot be moved without the passkey. The requirement is read
+    // from the stored register, not from the client, so a caller cannot talk their way out of it,
+    // and a flag with no recorded requirement is treated as requiring one.
+    const passkeyRequired = document.get('passkeyRequired') !== false;
+    if (passkeyRequired) {
+      if (typeof passkey !== 'string' || passkey.length === 0) {
+        throw new HttpsError('permission-denied', 'This flag requires the plugin passkey.');
+      }
+      const actor = request.auth?.uid ?? 'anonymous';
+      const throttle = await recordAttempt(actor, `passkey:plugin`);
+      if (!throttle.allowed) {
+        throw new HttpsError(
+          'resource-exhausted',
+          'Too many attempts. Try again after the cooldown window.',
+          { retryAt: throttle.retryAt },
+        );
+      }
+      const record: PasskeyRecord = ((await getFirestore().doc(`passkeys/plugin`).get()).data() as
+        PasskeyRecord | undefined) ?? {
+        salt: ROOT_PASSKEY_SALT.value(),
+        hash: ROOT_PASSKEY_HASH.value(),
+        iterations: PASSKEY_ITERATIONS,
+        updatedAt: '1970-01-01T00:00:00.000Z',
+      };
+      if (!verifyPasskey(passkey, record, PASSKEY_PEPPER.value())) {
+        throw new HttpsError('permission-denied', 'The passkey was not accepted.', {
+          attemptsUsed: throttle.attemptsUsed,
+        });
+      }
+      await clearAttempts(actor, 'passkey:plugin');
+    }
+
+    const actorUid = request.auth?.uid ?? 'system';
+    await getFirestore()
+      .doc(`featureFlags/${key}`)
+      .set(
+        {
+          key,
+          enabled,
+          forceOff,
+          startsAt: typeof startsAt === 'string' ? startsAt : null,
+          endsAt: typeof endsAt === 'string' ? endsAt : null,
+          note: typeof note === 'string' ? note : '',
+          updatedByUid: actorUid,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+    await getFirestore()
+      .doc(`auditLogs/flag-${key}-${Date.now()}`)
+      .set({
+        action: startsAt !== null || endsAt !== null ? 'flag.schedule' : 'flag.toggle',
+        actorUid,
+        actorRole,
+        targetUid: '',
+        targetType: 'flag',
+        targetId: key,
+        before: JSON.stringify({
+          enabled: existing?.enabled ?? true,
+          forceOff: existing?.forceOff ?? false,
+        }),
+        after: JSON.stringify({ enabled, forceOff }),
+        reason: typeof note === 'string' ? note : '',
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+    logger.info('feature flag updated', { key, enabled, forceOff, actorUid });
+    return { key, enabled };
+  },
+);
+
+/**
+ * Restores a soft-deleted document inside its recovery window.
+ * @param request callable request carrying `{ kind, entityId }`
+ * @returns whether it was restored
+ */
+export const restoreSoftDeleted = onCall({ region: REGION }, async (request) => {
+  if (request.auth === undefined) {
+    throw new HttpsError('unauthenticated', 'Sign in to restore an item.');
+  }
+  const kind = request.data?.['kind'];
+  const entityId = request.data?.['entityId'];
+  if (typeof kind !== 'string' || typeof entityId !== 'string' || entityId.length === 0) {
+    throw new HttpsError('invalid-argument', 'A kind and an entity id are required.');
+  }
+
+  const actorRole = (request.auth.token?.['role'] ?? 'member') as Role;
+  const isStaff = rankOf(actorRole) >= rankOf('support');
+  const document = getFirestore().doc(`${kind}s/${entityId}`);
+  const snapshot = await document.get();
+  if (!snapshot.exists) {
+    throw new HttpsError('not-found', 'That item is not in the recovery bin.');
+  }
+  const ownerUid = snapshot.get('ownerUid') as string | undefined;
+  if (!isStaff && ownerUid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the owner or staff may restore this item.');
+  }
+  const deletedAt = snapshot.get('deletedAt') as string | null | undefined;
+  if (typeof deletedAt !== 'string' || deletedAt.length === 0) {
+    throw new HttpsError('failed-precondition', 'That item was not deleted.');
+  }
+  const closedAt = Date.parse(deletedAt) + 30 * 24 * 60 * 60 * 1000;
+  if (Date.now() >= closedAt) {
+    throw new HttpsError('failed-precondition', 'The recovery window for this item has closed.');
+  }
+
+  await document.set(
+    {
+      deletedAt: null,
+      restoredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  await getFirestore()
+    .doc(`auditLogs/restore-${entityId}-${Date.now()}`)
+    .set({
+      action: 'content.restore',
+      actorUid: request.auth.uid,
+      actorRole,
+      targetUid: ownerUid ?? '',
+      targetType: kind,
+      targetId: entityId,
+      before: 'deleted',
+      after: 'restored',
+      reason: '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  return { restored: true };
+});
+
+/**
+ * Purges a soft-deleted document permanently, before its window closes.
+ *
+ * The caller must type the entity id back as a confirmation. There is no undo, and an operator who
+ * is asked to do something irreversible by hand makes fewer irreversible mistakes.
+ *
+ * @param request callable request carrying `{ kind, entityId, confirmation }`
+ * @returns whether it was purged
+ */
+export const purgeSoftDeleted = onCall({ region: REGION }, async (request) => {
+  if (request.auth === undefined) {
+    throw new HttpsError('unauthenticated', 'Sign in to purge an item.');
+  }
+  const kind = request.data?.['kind'];
+  const entityId = request.data?.['entityId'];
+  const confirmation = request.data?.['confirmation'];
+  if (typeof kind !== 'string' || typeof entityId !== 'string' || entityId.length === 0) {
+    throw new HttpsError('invalid-argument', 'A kind and an entity id are required.');
+  }
+  if (confirmation !== entityId) {
+    throw new HttpsError(
+      'invalid-argument',
+      'Type the item id exactly to confirm that it will be deleted permanently.',
+    );
+  }
+
+  const actorRole = (request.auth.token?.['role'] ?? 'member') as Role;
+  const isStaff = rankOf(actorRole) >= rankOf('support');
+  const document = getFirestore().doc(`${kind}s/${entityId}`);
+  const snapshot = await document.get();
+  if (!snapshot.exists) {
+    throw new HttpsError('not-found', 'That item does not exist.');
+  }
+  const ownerUid = snapshot.get('ownerUid') as string | undefined;
+  if (!isStaff && ownerUid !== request.auth.uid) {
+    throw new HttpsError('permission-denied', 'Only the owner or staff may purge this item.');
+  }
+
+  await document.delete();
+  await getFirestore()
+    .doc(`auditLogs/purge-${entityId}-${Date.now()}`)
+    .set({
+      action: 'content.purge',
+      actorUid: request.auth.uid,
+      actorRole,
+      targetUid: ownerUid ?? '',
+      targetType: kind,
+      targetId: entityId,
+      before: 'deleted',
+      after: 'purged',
+      reason: '',
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  logger.info('item purged before window close', { kind, entityId, actorUid: request.auth.uid });
+  return { purged: true };
+});
+
+/**
  * Purges documents whose recovery window has closed.
  * Runs daily in Asia/Dhaka; the window itself is 30 days (soft delete first, purge after).
  */

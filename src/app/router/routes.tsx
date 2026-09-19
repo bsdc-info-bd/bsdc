@@ -71,6 +71,21 @@ const LeaderboardPage = lazy(async () => ({
 const ModerationPage = lazy(async () => ({
   default: (await import('@/pages/moderation/ModerationPage')).ModerationPage,
 }));
+const AdminOverviewPage = lazy(async () => ({
+  default: (await import('@/pages/admin/AdminOverviewPage')).AdminOverviewPage,
+}));
+const AdminFeaturesPage = lazy(async () => ({
+  default: (await import('@/pages/admin/AdminFeaturesPage')).AdminFeaturesPage,
+}));
+const AdminRolesPage = lazy(async () => ({
+  default: (await import('@/pages/admin/AdminRolesPage')).AdminRolesPage,
+}));
+const AdminAuditPage = lazy(async () => ({
+  default: (await import('@/pages/admin/AdminAuditPage')).AdminAuditPage,
+}));
+const AdminRecoveryPage = lazy(async () => ({
+  default: (await import('@/pages/admin/AdminRecoveryPage')).AdminRecoveryPage,
+}));
 const NotFoundPage = lazy(async () => ({
   default: (await import('@/pages/system/NotFoundPage')).NotFoundPage,
 }));
@@ -239,6 +254,46 @@ const router = createBrowserRouter([
         element: (
           <Suspense fallback={<RouteFallback />}>
             <ModerationPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'admin',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <AdminOverviewPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'admin/features',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <AdminFeaturesPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'admin/roles',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <AdminRolesPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'admin/audit',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <AdminAuditPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'admin/recovery',
+        element: (
+          <Suspense fallback={<RouteFallback />}>
+            <AdminRecoveryPage />
           </Suspense>
         ),
       },

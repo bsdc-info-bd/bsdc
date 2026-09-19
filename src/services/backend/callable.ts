@@ -37,6 +37,30 @@ export interface CallableMap {
     request: { targetUid: string; following: boolean };
     response: { following: boolean; followerCount: number };
   };
+  setFeatureFlag: {
+    request: {
+      key: string;
+      enabled: boolean;
+      forceOff: boolean;
+      startsAt: string | null;
+      endsAt: string | null;
+      note: string;
+      passkey: string;
+    };
+    response: { key: string; enabled: boolean };
+  };
+  assignRole: {
+    request: { uid: string; role: string; reason: string };
+    response: { role: string };
+  };
+  restoreSoftDeleted: {
+    request: { kind: string; entityId: string };
+    response: { restored: boolean };
+  };
+  purgeSoftDeleted: {
+    request: { kind: string; entityId: string; confirmation: string };
+    response: { purged: boolean };
+  };
 }
 
 export type CallableName = keyof CallableMap;
