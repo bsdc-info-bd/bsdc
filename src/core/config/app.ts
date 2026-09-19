@@ -119,8 +119,16 @@ export const NETWORK_SITES = [
   },
 ] as const;
 
-/** Environment-derived runtime configuration with safe fallbacks. */
-const env = import.meta.env;
+/**
+ * Environment-derived runtime configuration with safe fallbacks.
+ *
+ * `import.meta.env` is filled in by Vite. The build scripts in `scripts/` import this module
+ * through tsx, where no bundler has touched it, so the object is optional by the time it arrives
+ * here — an empty one simply means every value falls back to its documented default, which is
+ * exactly what a sitemap or a feed built from source should use.
+ */
+const env =
+  (import.meta as ImportMeta & { env?: Readonly<Record<string, string | undefined>> }).env ?? {};
 
 /** Canonical site URL used for canonicals, OG tags and JSON-LD `@id` URIs. */
 export const SITE_URL: string = env.VITE_APP_URL ?? 'https://www.bsdc.info.bd';

@@ -16,6 +16,7 @@ import { useBadgeStore } from '@/shared/stores/badges';
 import { RouteErrorBoundary } from '../boundaries/RouteErrorBoundary';
 import { useAnnounce } from '@/shared/hooks';
 import { emit } from '@/core/events/bus';
+import { PageHead } from '@/features/seo';
 
 /**
  * Badge synchronisation lives behind a lazy boundary so the shell paints without the messenger
@@ -58,6 +59,7 @@ export function RootLayout(): React.ReactElement {
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg">
+      <PageHead />
       <a className="bsdc-skip-link" href="#main-content">
         Skip to content
       </a>

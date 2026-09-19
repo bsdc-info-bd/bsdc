@@ -8,14 +8,17 @@
             user never sees a flash of the wrong theme (FOUC). It has no eval, no remote
             fetch and stays well under 1 KB.
             Real page titles, descriptions, canonical, hreflang, OG/Twitter tags and
-            JSON-LD are injected by the head manager (RESPONSE 5) and by the prerender
-            pipeline (build/prerender), which rewrites this shell per route.
+            JSON-LD are set at runtime by the head manager (src/features/seo/PageHead) and
+            written into the static document by the prerender step (scripts/prerender.ts),
+            which replaces everything between the bsdc:head markers for each public route.
+            Both read the same route table, so the two can never disagree.
   Licence : Source-available. Re-deployment or rebranding is not permitted.
 -->
 <html lang="bn" dir="ltr" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!--bsdc:head-->
     <title>বাংলাদেশ সফটওয়্যার ডেভেলপমেন্ট কমিউনিটি — BSDC</title>
     <meta
       name="description"
@@ -28,9 +31,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <link rel="canonical" href="https://www.bsdc.info.bd/" />
-    <link rel="alternate" hreflang="bn-BD" href="https://www.bsdc.info.bd/bn/" />
-    <link rel="alternate" hreflang="en" href="https://www.bsdc.info.bd/en/" />
+    <link rel="alternate" hreflang="bn-BD" href="https://www.bsdc.info.bd/?lng=bn" />
+    <link rel="alternate" hreflang="en-GB" href="https://www.bsdc.info.bd/?lng=en" />
     <link rel="alternate" hreflang="x-default" href="https://www.bsdc.info.bd/" />
+    <!--/bsdc:head-->
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" />

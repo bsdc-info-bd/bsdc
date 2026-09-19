@@ -42,6 +42,19 @@ export default defineConfig({
           include: ['src/**/*.test.tsx', 'src/tests/components/**/*.test.tsx'],
         },
       },
+      {
+        extends: true,
+        test: {
+          // The rule suites need a live emulator. They are never part of `npm run test`, which
+          // stays runnable with nothing but node: `emulators:exec` supplies the emulator and then
+          // `npm run test:rules` runs this project against it.
+          name: 'rules',
+          environment: 'node',
+          include: ['tests/emulator/**/*.test.ts'],
+          testTimeout: 30_000,
+          hookTimeout: 60_000,
+        },
+      },
     ],
   },
 });

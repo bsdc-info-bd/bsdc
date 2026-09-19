@@ -28,9 +28,9 @@
     "dev": "vite",
     "dev:host": "vite --host 0.0.0.0",
     "build": "npm run verify:env && npm run icons:sprite && npm run messaging:config && vite build",
-    "build:pages": "npm run build && npm run build:sitemap && npm run build:rss",
-    "build:sitemap": "echo \"[bsdc] sitemap pipeline lands in RESPONSE 5 (see build/sitemap)\" && exit 0",
-    "build:rss": "echo \"[bsdc] rss pipeline lands in RESPONSE 5 (see build/rss)\" && exit 0",
+    "build:pages": "npm run build:sitemap && npm run build:rss && npm run build:cards && npm run build && npm run prerender",
+    "build:sitemap": "tsx --tsconfig tsconfig.app.json scripts/build-sitemap.ts",
+    "build:rss": "tsx --tsconfig tsconfig.app.json scripts/build-rss.ts",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "lint": "eslint . --max-warnings 0",
@@ -42,6 +42,7 @@
     "format:check": "prettier --check \"**/*.{ts,tsx,js,mjs,css,json,md,html,yml}\"",
     "test:unit": "vitest run --project unit",
     "test:components": "vitest run --project components",
+    "test:rules": "vitest run --project rules",
     "test": "vitest run",
     "test:watch": "vitest",
     "verify:env": "tsx scripts/verify-env.ts",
@@ -54,7 +55,9 @@
     "messaging:config": "node tools/generate-messaging-config.mjs",
     "verify:functions": "npm --prefix functions run build && npx tsx --test functions/src/*.test.ts",
     "check:rules": "node scripts/check-rules.mjs",
-    "check:rtdb": "node scripts/check-rtdb.mjs"
+    "check:rtdb": "node scripts/check-rtdb.mjs",
+    "build:cards": "tsx --tsconfig tsconfig.app.json scripts/build-share-cards.ts",
+    "prerender": "tsx --tsconfig tsconfig.app.json scripts/prerender.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "3.10.0",
@@ -107,6 +110,7 @@
     "zustand": "5.0.15"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
     "@resvg/resvg-js": "^2.6.2",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "^6.9.1",
