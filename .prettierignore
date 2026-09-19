@@ -1,0 +1,20 @@
+# BSDC — .prettierignore
+# Purpose : Keep generated output out of the formatting gate.
+# Owner   : RRC Development / BSDC Platform Team
+# Rule    : `npm run format:check` runs over a wide glob so nothing hand-written escapes it. That
+#           same glob reaches compiler output, which is not hand-written, cannot be formatted by
+#           changing its source, and would otherwise fail the gate for a reason nobody can fix.
+#           Everything listed here is produced by a build and already excluded from git.
+
+dist/
+functions/lib/
+coverage/
+public/icons/
+public/favicon.svg
+public/logo-light.svg
+public/sitemap*.xml
+public/feed*.xml
+public/messaging-config.js
+node_modules/
+*.log
+*.map

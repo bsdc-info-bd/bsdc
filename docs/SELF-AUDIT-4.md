@@ -107,7 +107,7 @@ satisfied is recorded as a NOTE and cross-referenced in `PUBLIC_LIMITATIONS.md`;
 | Z18 | No report extrapolates or fills a gap it did not count                          | PASS   | catalog rowsFor                |
 | Z19 | The catalogue is bilingual at the point each row is built                       | PASS   | buildReportPayload             |
 | Z20 | A report cannot be issued where SHA-256 is unavailable                          | PASS   | canSeal + BSDC-REPORT-003      |
-| Z21 | Report identity is proven by 27 tests                                           | PASS   | reportIdentity.test.ts         |
+| Z21 | Report identity is proven by 28 tests                                           | PASS   | reportIdentity.test.ts         |
 
 ## AA2. Data plane and gates
 
@@ -130,9 +130,9 @@ satisfied is recorded as a NOTE and cross-referenced in `PUBLIC_LIMITATIONS.md`;
 
 | #    | Check                                                                  | Result | Evidence                                       |
 | ---- | ---------------------------------------------------------------------- | ------ | ---------------------------------------------- |
-| AB1  | 385 tests pass across 32 files                                         | PASS   | npx vitest run                                 |
-| AB2  | 86 new tests were added in this response                               | PASS   | 3 unit files                                   |
-| AB3  | The route smoke test is stable across repeated full runs               | PASS   | 3 consecutive runs                             |
+| AB1  | 393 tests pass across 34 files                                         | PASS   | npx vitest run                                 |
+| AB2  | 94 new tests were added in this response                               | PASS   | 3 unit files, 1 component file                 |
+| AB3  | Both route smoke tests are stable across repeated full runs            | PASS   | 3 consecutive runs                             |
 | AB4  | A lazy chunk resolving between tests no longer fails an unrelated test | PASS   | render inside act                              |
 | AB5  | ESLint passes with --max-warnings 0                                    | PASS   | npm run lint                                   |
 | AB6  | TypeScript passes under strict with noUncheckedIndexedAccess           | PASS   | npm run typecheck                              |
@@ -175,7 +175,7 @@ satisfied is recorded as a NOTE and cross-referenced in `PUBLIC_LIMITATIONS.md`;
 | TypeScript sources (`src`, no tests)    | 304        | 332        | +28       |
 | TypeScript lines                        | 37 300     | 42 630     | +5 330    |
 | CSS files / lines                       | 67 / 6 339 | 68 / 6 647 | +1 / +308 |
-| Test files / tests                      | 30 / 299   | 32 / 385   | +2 / +86  |
+| Test files / tests                      | 30 / 299   | 34 / 393   | +4 / +94  |
 | Dictionaries (namespaces x locales)     | 30 x 2     | 32 x 2     | +2 x 2    |
 | Live routes                             | 19         | 29         | +10       |
 | Feature module files (excl. barrels)    | 69         | 77         | +8        |
@@ -188,3 +188,11 @@ satisfied is recorded as a NOTE and cross-referenced in `PUBLIC_LIMITATIONS.md`;
 | Largest route chunk (gzip)              | 161.96 KB  | 161.96 KB  | unchanged |
 | Largest lazy chunk (gzip)               | 43.49 KB   | 126.49 KB  | jsPDF     |
 | Emoji / placeholder / Worker violations | 0 / 0 / 0  | 0 / 0 / 0  | unchanged |
+
+### Response 4 addendum — the administration routes under test
+
+`src/tests/components/adminRoutes.test.tsx` mounts all six administration screens and the public
+verification screen in Bangla. Each administration route is asserted to show a signed-out visitor the
+refusal rather than the register, which is the property that matters and the one a unit test cannot
+see. The verification route is asserted to be readable by anybody with the id from the path already
+filled in.
