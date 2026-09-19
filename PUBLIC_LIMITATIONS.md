@@ -306,13 +306,12 @@ runners that have Java 17 and the Firebase emulator suite. The workflow files th
 file creation without the `workflows` permission, so they remain untracked until a maintainer with
 that permission lands them.
 
-### L5-04 — Local `git push` is blocked by a dead GitHub token
+### L5-04 — Local `git push` was blocked; credentials restored
 
-The GH_TOKEN issued to this sandbox is no longer valid (`gh auth status` reports the failure;
-`git push` fails with "could not read Username for 'https://github.com'"). Commits are made locally
-on `arena/01a0b584-bsdc`. Restoring the GitHub connection in Arena is the only way to publish them.
-Earlier response 4 work that did push (`c51ccf5`) is on the remote; everything after that is local
-until credentials return.
+During Response 5 the GH_TOKEN briefly failed (`could not read Username for 'https://github.com'`),
+so early R5 commits sat local-only. Credentials were restored before close-out: commit `caef133`
+(and the follow-up that amends this note) is on `origin/arena/01a0b584-bsdc`. The gap is closed for
+ordinary source pushes; workflow-file pushes remain blocked under L5-05.
 
 ### L5-05 — Workflow files cannot be pushed by the GitHub App
 
