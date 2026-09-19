@@ -177,9 +177,48 @@ service cloud.firestore {
 
       match /members/{uid} {
         allow read: if true;
-        allow create: if isSelf(uid) && !isSuspended();
-        allow update: if isSelf(uid) || isGroupManager(groupId) || isModerator();
-        allow delete: if isSelf(uid) || isGroupManager(groupId) || isModerator();
+        // Joining makes you a member. Only the group's owner may create a manager row, because
+        // otherwise the way to become a manager of any group would simply be to ask.
+        allow create: if contributing()
+                      && isSelf(uid)
+                      && !isSuspended()
+                      && incoming().uid == me()
+                      && (incoming().role == 'member'
+                          || get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == me());
+        // A member may change their own notification setting and leave; a manager may change
+        // roles. Nobody may promote themselves, which is why the two branches are separate.
+        allow update: if isSelf(uid)
+                      && incoming().diff(outgoing()).affectedKeys().hasOnly(['notifications', 'updatedAt', 'deletedAt'])
+                      && incoming().role == outgoing().role;
+        // Only the owner, or staff, may grant a manager role (see requests.ts#mayAssignRole).
+        allow update: if (get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == me()
+                          || isModerator())
+                      && uid != get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid
+                      && incoming().role in ['member', 'manager'];
+        allow delete: if isSelf(uid)
+                      || isModerator()
+                      || (isGroupManager(groupId)
+                          && uid != get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid);
+      }
+
+      match /joinRequests/{uid} {
+        allow read: if isSelf(uid) || isGroupManager(groupId) || isSupport();
+        allow create: if contributing()
+                      && isSelf(uid)
+                      && incoming().uid == me()
+                      && incoming().state == 'pending'
+                      && textFits(incoming().message, 400);
+        // The applicant may withdraw. A manager decides, and the decision records who decided,
+        // so the request itself is the audit trail for the group's membership.
+        allow update: if isSelf(uid)
+                      && incoming().state == 'withdrawn'
+                      && outgoing().state == 'pending';
+        allow update: if isGroupManager(groupId)
+                      && outgoing().state == 'pending'
+                      && incoming().state in ['approved', 'declined']
+                      && incoming().decidedByUid == me()
+                      && textFits(incoming().decisionNote, 300);
+        allow delete: if isSelf(uid);
       }
     }
 
@@ -200,8 +239,19 @@ service cloud.firestore {
                       && isRecentTimestamp(incoming().createdAt);
         allow update: if signedIn()
                       && me() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids
-                      && incoming().diff(outgoing()).affectedKeys().hasOnly(['deliveredAt', 'readAt', 'editedAt', 'body', 'deletedAt']);
+                      && incoming().diff(outgoing()).affectedKeys().hasOnly(['deliveredTo', 'readBy', 'editedAt', 'body', 'attachment', 'deletedAt', 'updatedAt'])
+                      && incoming().senderUid == outgoing().senderUid;
         allow delete: if isSelf(outgoing().senderUid) && outgoing().deletedAt != null;
+
+        match /reactions/{uid} {
+          allow read: if signedIn()
+                      && me() in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantUids;
+          allow create, update: if contributing()
+                      && isSelf(uid)
+                      && incoming().uid == me()
+                      && incoming().type in ['like', 'love', 'care', 'haha', 'wow', 'sad', 'angry', 'clap', 'fire', 'mindblown'];
+          allow delete: if isSelf(uid);
+        }
       }
     }
 

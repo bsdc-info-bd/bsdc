@@ -16,8 +16,10 @@ export const DB_NAME = 'bsdc-offline';
  * Schema version. Bump it and add a migration when a store changes shape.
  * Version 2 added the discovery and opportunity stores (stories, events, jobs, applications,
  * projects, gigs, orders, follows, reputation, broadcasts, appeals).
+ * Version 3 added the response 4 stores (message reactions, group join requests, the audit trail,
+ * the feature-flag register and the recovery bin).
  */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 /** Every object store in the mirror. */
 export const STORES = [
@@ -46,6 +48,11 @@ export const STORES = [
   'broadcasts',
   'appeals',
   'reports',
+  'messageReactions',
+  'joinRequests',
+  'audit',
+  'flags',
+  'recovery',
 ] as const;
 
 export type StoreName = (typeof STORES)[number];

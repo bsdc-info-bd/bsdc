@@ -64,6 +64,12 @@ export const TEXT_LIMITS = {
   storyCaption: 300,
   productDescription: 5_000,
   reportReason: 500,
+  /** What someone writes when asking to join a closed group. */
+  joinRequestMessage: 400,
+  /** What a manager writes back when declining. */
+  joinRequestNote: 300,
+  /** What an administrator records as the reason for a privileged change. */
+  auditNote: 500,
 } as const;
 
 /** Image contexts and their upload ceilings (PART 29.1 STEP 3). */
@@ -129,6 +135,12 @@ export const RATE_LIMITS = {
 
 /** Voice note ceiling (F-387): 20 seconds, exactly as specified. */
 export const VOICE_NOTE_MAX_SECONDS = 20;
+
+/**
+ * Voice note byte ceiling. Twenty seconds of Opus at 24 kbps mono is about 60 KB, so 256 KB is
+ * four times what the format needs and still small enough that a chat sends on a weak connection.
+ */
+export const VOICE_NOTE_MAX_BYTES = 256 * 1024;
 
 /** Retention and recovery windows (LAW-19). */
 export const RETENTION = {

@@ -9,7 +9,14 @@
  *   Typing indicators and presence are not here — they are the Realtime Database's job.
  * Licence : Source-available. Re-deployment or rebranding is not permitted.
  */
-import { COLLECTIONS, SUBCOLLECTIONS, messagePath } from '@/core/config/collections';
+import {
+  COLLECTIONS,
+  SUBCOLLECTIONS,
+  messagePath,
+  messageReactionPath,
+} from '@/core/config/collections';
+import { AppError } from '@/core/errors/AppError';
+import type { ReactionType } from '@/core/config/reactions';
 import { firestoreDb } from '@/services/firebase/app';
 import { fromQuery, translateFirestoreError } from '@/services/firebase/firestore';
 import { acquireListener, type Unsubscribe } from '@/services/realtime/registry';
@@ -21,6 +28,7 @@ import {
   type WriteThroughResult,
 } from '@/services/offline/sync';
 import type { ChatMessage, Conversation } from './model';
+import { editMessage, type MessageReaction } from './thread';
 
 /** Messages loaded per page. */
 export const MESSAGE_PAGE_SIZE = 30;
@@ -260,4 +268,233 @@ export function watchMessages(
  */
 export async function peekConversation(conversationId: string): Promise<Conversation | undefined> {
   return await mirrorGet<Conversation>('conversations', conversationId);
+}
+
+/**
+ * Adds, changes or removes the viewer's reaction on one message.
+ *
+ * The reaction is its own document keyed by the account, so the decision is made locally with no
+ * read required and the security rules can refuse a write that touches anybody else's reaction.
+ * Toggling the reaction already held removes the document, because a reaction left behind as a
+ * tombstone would still count in the summary for thirty days.
+ *
+ * @param conversationId conversation id
+ * @param messageId message id
+ * @param uid the reacting account
+ * @param type the reaction chosen
+ * @returns the write outcome
+ */
+export async function reactToMessage(
+  conversationId: string,
+  messageId: string,
+  uid: string,
+  type: ReactionType,
+): Promise<WriteThroughResult> {
+  const id = `${messageId}:${uid}`;
+  const existing = await mirrorGet<MessageReaction>('messageReactions', id);
+  const removing = existing?.type === type && existing.deletedAt == null;
+  const now = new Date().toISOString();
+  const record: MessageReaction = {
+    id,
+    messageId,
+    conversationId,
+    uid,
+    type,
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    deletedAt: removing ? now : null,
+  };
+
+  return await writeThrough(
+    'messageReactions',
+    record,
+    {
+      kind: 'message.react',
+      entityId: id,
+      payload: { conversationId, messageId, uid, type, removing },
+    },
+    async () => {
+      const { doc, setDoc, deleteDoc } = await import('firebase/firestore');
+      const db = await firestoreDb();
+      try {
+        const reference = doc(db, messageReactionPath(conversationId, messageId, uid));
+        if (removing) {
+          await deleteDoc(reference);
+          return;
+        }
+        await setDoc(reference, {
+          messageId,
+          conversationId,
+          uid,
+          type,
+          createdAt: record.createdAt,
+          updatedAt: now,
+          deletedAt: null,
+        });
+      } catch (error) {
+        throw translateFirestoreError(error, 'message.react');
+      }
+    },
+  );
+}
+
+/**
+ * Edits a message the viewer sent, inside the two-minute window.
+ * @param message the message as it stands
+ * @param body the replacement text
+ * @returns the write outcome, or a refused result when the window has closed
+ */
+export async function editSentMessage(
+  message: ChatMessage,
+  body: string,
+): Promise<WriteThroughResult> {
+  const next = editMessage(message, body);
+  if (next === null) {
+    return {
+      synced: false,
+      queued: false,
+      error: new AppError('BSDC-CHAT-008', { messageId: message.id }),
+    };
+  }
+  return await writeThrough(
+    'messages',
+    next,
+    {
+      kind: 'message.edit',
+      entityId: message.id,
+      payload: { conversationId: message.conversationId, body: next.body },
+    },
+    async () => {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const db = await firestoreDb();
+      try {
+        await updateDoc(doc(db, messagePath(message.conversationId, message.id)), {
+          body: next.body,
+          editedAt: next.editedAt,
+          updatedAt: next.updatedAt,
+        });
+      } catch (error) {
+        throw translateFirestoreError(error, 'message.edit');
+      }
+    },
+  );
+}
+
+/**
+ * Unsends a message: the body is cleared and the tombstone remains, so the thread keeps its shape
+ * and the other participants see a line that says a message was removed rather than a gap they
+ * have to explain to themselves.
+ * @param message the message to unsend
+ * @returns the write outcome
+ */
+export async function unsendMessage(message: ChatMessage): Promise<WriteThroughResult> {
+  const now = new Date().toISOString();
+  const next: ChatMessage = {
+    ...message,
+    body: '',
+    attachment: null,
+    deletedAt: now,
+    updatedAt: now,
+  };
+  return await writeThrough(
+    'messages',
+    next,
+    {
+      kind: 'message.unsend',
+      entityId: message.id,
+      payload: { conversationId: message.conversationId },
+    },
+    async () => {
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const db = await firestoreDb();
+      try {
+        await updateDoc(doc(db, messagePath(message.conversationId, message.id)), {
+          body: '',
+          attachment: null,
+          deletedAt: now,
+          updatedAt: now,
+        });
+      } catch (error) {
+        throw translateFirestoreError(error, 'message.unsend');
+      }
+    },
+  );
+}
+
+/**
+ * Reads every reaction in one conversation.
+ *
+ * One collection-group query rather than one read per message: the record carries the conversation
+ * id precisely so a whole thread's reactions cost a single round trip. The composite index on
+ * `conversationId` is declared in firestore.indexes.json.
+ *
+ * @param conversationId conversation id
+ * @returns the reaction records
+ */
+export async function listMessageReactions(
+  conversationId: string,
+): Promise<readonly MessageReaction[]> {
+  try {
+    const {
+      collectionGroup,
+      query: buildQuery,
+      where,
+      getDocs,
+    } = await import('firebase/firestore');
+    const db = await firestoreDb();
+    const snapshot = await getDocs(
+      buildQuery(
+        collectionGroup(db, SUBCOLLECTIONS.reactions),
+        where('conversationId', '==', conversationId),
+      ),
+    );
+    const records = fromQuery<MessageReaction>(snapshot);
+    for (const record of records) void mirrorPut('messageReactions', record);
+    return records;
+  } catch (error) {
+    throw translateFirestoreError(error, 'message.reactions');
+  }
+}
+
+/**
+ * Watches a conversation's reactions so somebody else's reaction appears without a refresh.
+ * @param conversationId conversation id
+ * @param handler receives the records
+ * @returns a release function
+ */
+export function watchMessageReactions(
+  conversationId: string,
+  handler: (records: readonly MessageReaction[]) => void,
+): Unsubscribe {
+  return acquireListener(`message-reactions:${conversationId}`, 'messageReactions', async () => {
+    const {
+      collectionGroup,
+      query: buildQuery,
+      where,
+      onSnapshot,
+    } = await import('firebase/firestore');
+    const db = await firestoreDb();
+    return onSnapshot(
+      buildQuery(
+        collectionGroup(db, SUBCOLLECTIONS.reactions),
+        where('conversationId', '==', conversationId),
+      ),
+      (snapshot) => {
+        handler(fromQuery<MessageReaction>(snapshot));
+      },
+    );
+  });
+}
+
+/**
+ * Reads the reactions already held on this device, for the first paint of a chat.
+ * @param conversationId conversation id
+ * @returns the cached reaction records
+ */
+export async function peekMessageReactions(
+  conversationId: string,
+): Promise<readonly MessageReaction[]> {
+  return await mirrorList<MessageReaction>('messageReactions', {
+    where: [(record: MessageReaction) => record.conversationId === conversationId],
+  });
 }

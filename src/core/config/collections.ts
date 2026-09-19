@@ -44,6 +44,7 @@ export const SUBCOLLECTIONS = {
   comments: 'comments',
   reactions: 'reactions',
   members: 'members',
+  joinRequests: 'joinRequests',
   messages: 'messages',
   followers: 'followers',
   following: 'following',
@@ -375,4 +376,38 @@ export function liveAttendeesPath(eventId: string): string {
  */
 export function storySeenPath(uid: string, storyId: string): string {
   return `${RTDB_PATHS.storySeen}/${uid}/${storyId}`;
+}
+
+/**
+ * Path of one person's reaction to one chat message: the account id is the document id, which is
+ * what lets the rules refuse a write that touches somebody else's reaction.
+ * @param conversationId conversation id
+ * @param messageId message id
+ * @param uid reacting account id
+ * @returns the document path
+ */
+export function messageReactionPath(
+  conversationId: string,
+  messageId: string,
+  uid: string,
+): string {
+  return docPath(
+    COLLECTIONS.conversations,
+    conversationId,
+    SUBCOLLECTIONS.messages,
+    messageId,
+    SUBCOLLECTIONS.reactions,
+    uid,
+  );
+}
+
+/**
+ * Path of one person's request to join one group. The account id is the document id, so asking
+ * twice updates the same request instead of creating two for a manager to arbitrate.
+ * @param groupId group id
+ * @param uid applicant account id
+ * @returns the document path
+ */
+export function groupJoinRequestPath(groupId: string, uid: string): string {
+  return docPath(COLLECTIONS.groups, groupId, SUBCOLLECTIONS.joinRequests, uid);
 }
