@@ -13,6 +13,7 @@ import bd.info.bsdc.app.data.ProfileRepository
 import bd.info.bsdc.app.media.CloudinaryMediaUploader
 import bd.info.bsdc.app.messaging.ChatRepository
 import bd.info.bsdc.app.notifications.NotificationRepository
+import com.cloudinary.android.MediaManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
@@ -27,6 +28,11 @@ class BsdcApplication : Application() {
         if (firebaseConfigured && !BuildConfig.DEBUG) {
             FirebaseAppCheck.getInstance()
                 .installAppCheckProviderFactory(PlayIntegrityAppCheckProviderFactory.getInstance())
+        }
+        if (BuildConfig.CLOUDINARY_CLOUD_NAME.isNotBlank()) {
+            // Official Cloudinary Android SDK configuration. Only cloud_name is client-visible;
+            // upload authorization remains the locked unsigned preset supplied per request.
+            MediaManager.init(this, mapOf("cloud_name" to BuildConfig.CLOUDINARY_CLOUD_NAME))
         }
         createNotificationChannels()
 

@@ -32,7 +32,7 @@ functions/                   trusted notification and counter backend
 .github/workflows/           cloud build, artifacts, optional Play publishing
 ```
 
-The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. Cloudinary is called with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients.
+The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. The official **Cloudinary Android SDK** dispatches uploads with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients.
 
 ## Secure configuration — required before release
 
