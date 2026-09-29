@@ -54,20 +54,25 @@ jobs:
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -euo pipefail
-          values=("$GOOGLE_SERVICES_JSON" "$CLOUDINARY_CLOUD_NAME" "$CLOUDINARY_UPLOAD_PRESET" "$GOOGLE_WEB_CLIENT_ID")
-          present=0
-          for value in "${values[@]}"; do [ -n "$value" ] && present=$((present + 1)); done
-          if [ "$present" -eq 0 ]; then
+          declare -A required=(
+            [GOOGLE_SERVICES_JSON]="$GOOGLE_SERVICES_JSON"
+            [CLOUDINARY_CLOUD_NAME]="$CLOUDINARY_CLOUD_NAME"
+            [CLOUDINARY_UPLOAD_PRESET]="$CLOUDINARY_UPLOAD_PRESET"
+            [GOOGLE_WEB_CLIENT_ID]="$GOOGLE_WEB_CLIENT_ID"
+          )
+          missing=()
+          for name in "${!required[@]}"; do [ -z "${required[$name]}" ] && missing+=("$name"); done
+          if [ "${#missing[@]}" -eq 4 ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "No protected runtime configuration is available; source validation will continue without an APK artifact."
             exit 0
           fi
-          if [ "$present" -ne 4 ]; then
-            echo "Set all runtime secrets together: GOOGLE_SERVICES_JSON, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET, GOOGLE_WEB_CLIENT_ID." >&2
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error title=Missing BSDC runtime secrets::Add these Actions secrets: ${missing[*]}"
             exit 1
           fi
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          python3 - <<'PY'
+          if ! python3 - <<'PY'
           import json
           config = json.load(open("app/google-services.json", encoding="utf-8"))
           expected = "bd.info.bsdc.app"
@@ -75,6 +80,10 @@ jobs:
           assert expected in packages, f"google-services.json does not contain {expected}"
           assert config.get("project_info", {}).get("project_id"), "Firebase project ID is missing"
           PY
+          then
+            echo "::error title=Invalid GOOGLE_SERVICES_JSON::Use the raw Firebase Console Android JSON for package bd.info.bsdc.app, without Markdown fences or base64 encoding."
+            exit 1
+          fi
           cat > local.properties <<EOF
           CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME
           CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET
