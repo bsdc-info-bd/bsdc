@@ -110,7 +110,9 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: |
-          summary="$(tail -n 80 gradle-build.log | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
+          # Prefer diagnostic lines from the full log over the stack-trace-only tail.
+          summary="$(grep -Ei -A3 -B2 '(^e:|error:|failure:|caused by:|exception:)' gradle-build.log | tail -n 100 | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
+          if [ -z "$summary" ]; then summary="$(tail -n 80 gradle-build.log | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"; fi
           echo "::error title=Gradle build failure::$summary"
       - name: Upload Gradle diagnostic log
         if: ${{ failure() }}
