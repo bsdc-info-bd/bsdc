@@ -155,13 +155,18 @@ class AuthRepository(private val gate: FirebaseGate) {
     }
 
     private suspend fun ensureProfile(user: FirebaseUser) {
-        val ref = FirebaseFirestore.getInstance().collection("profiles").document(user.uid)
-        val existing = ref.get().await()
-        if (!existing.exists()) {
-            val safeBase = UsernamePolicy.suggestFrom(user.displayName ?: user.email ?: "member")
-            ref.set(
-                mapOf(
-                    "username" to safeBase,
+        val firestore = FirebaseFirestore.getInstance()
+        val ref = firestore.collection("profiles").document(user.uid)
+        // OAuth providers do not ask for a handle in their native consent screen. Make a stable,
+        // collision-resistant starter handle and reserve it in the same transaction as the profile.
+        val safeBase = UsernamePolicy.suggestFrom(user.displayName ?: user.email ?: "member").take(20)
+        val handle = "${safeBase.take(20)}_${user.uid.takeLast(8).lowercase()}".take(30)
+        firestore.runTransaction { transaction ->
+            if (!transaction.get(ref).exists()) {
+                val handleRef = firestore.collection("handles").document(handle)
+                check(!transaction.get(handleRef).exists()) { "Could not reserve a starter username." }
+                transaction.set(ref, mapOf(
+                    "username" to handle,
                     "displayName" to (user.displayName ?: "BSDC member"),
                     "photoUrl" to user.photoUrl?.toString(),
                     "bio" to "",
@@ -171,9 +176,10 @@ class AuthRepository(private val gate: FirebaseGate) {
                     "verified" to false,
                     "createdAt" to FieldValue.serverTimestamp(),
                     "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
-        }
+                ))
+                transaction.set(handleRef, mapOf("uid" to user.uid, "createdAt" to FieldValue.serverTimestamp()))
+            }
+        }.await()
     }
 }
 
