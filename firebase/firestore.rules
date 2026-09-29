@@ -15,7 +15,12 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username == handle;
-      allow update, delete: if false;
+      allow update: if false;
+      // A handle can only be released in the same transaction that points the owner profile
+      // at a different, already-reserved handle.
+      allow delete: if signedIn()
+        && resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username != handle;
     }
 
     match /profiles/{uid} {
@@ -23,10 +28,17 @@ service cloud.firestore {
       allow create: if isSelf(uid)
         && request.resource.data.username is string
         && request.resource.data.displayName is string;
-      allow update: if isSelf(uid)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      allow update: if isSelf(uid) && (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'bio', 'skills', 'locationLabel', 'photoUrl', 'coverUrl', 'updatedAt'
-        ]);
+        ])
+        || (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username', 'updatedAt'])
+          && request.resource.data.username is string
+          && getAfter(/databases/$(database)/documents/handles/$(request.resource.data.username)).data.uid == request.auth.uid
+          && !existsAfter(/databases/$(database)/documents/handles/$(resource.data.username))
+        )
+      );
       allow delete: if false;
 
       match /following/{targetUid} {

@@ -50,6 +50,56 @@ class ProfileRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not update profile.", t)
     }
 
+    fun observeFollowing(targetUid: String): Flow<Boolean> = callbackFlow {
+        if (!gate.isConfigured) {
+            trySend(false); close(); return@callbackFlow
+        }
+        val viewerId = FirebaseAuth.getInstance().currentUser?.uid
+        if (viewerId == null || viewerId == targetUid) {
+            trySend(false); close(); return@callbackFlow
+        }
+        val registration = database.collection("profiles").document(viewerId).collection("following").document(targetUid)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) close(error) else trySend(snapshot?.exists() == true)
+            }
+        awaitClose(registration::remove)
+    }
+
+    suspend fun updateMyMedia(photoUrl: String? = null, coverUrl: String? = null): RepositoryResult<Unit> = try {
+        gate.requireConfigured()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to edit your profile.")
+        require(photoUrl != null || coverUrl != null) { "No profile media was selected." }
+        val updates = mutableMapOf<String, Any?>("updatedAt" to FieldValue.serverTimestamp())
+        photoUrl?.let { updates["photoUrl"] = it }
+        coverUrl?.let { updates["coverUrl"] = it }
+        database.collection("profiles").document(uid).set(updates, SetOptions.merge()).await()
+        RepositoryResult.Success(Unit)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not update profile media.", t)
+    }
+
+    suspend fun changeMyUsername(rawUsername: String): RepositoryResult<String> = try {
+        gate.requireConfigured()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to change your username.")
+        require(bd.info.bsdc.app.auth.UsernamePolicy.isValid(rawUsername)) { bd.info.bsdc.app.auth.UsernamePolicy.message }
+        val next = bd.info.bsdc.app.auth.UsernamePolicy.normalise(rawUsername)
+        val profileRef = database.collection("profiles").document(uid)
+        database.runTransaction { transaction ->
+            val profile = transaction.get(profileRef)
+            val current = profile.getString("username") ?: error("Profile is missing a username.")
+            if (current != next) {
+                val nextHandle = database.collection("handles").document(next)
+                check(!transaction.get(nextHandle).exists()) { "That username is unavailable." }
+                transaction.set(nextHandle, mapOf("uid" to uid, "createdAt" to FieldValue.serverTimestamp()))
+                transaction.update(profileRef, "username", next, "updatedAt", FieldValue.serverTimestamp())
+                transaction.delete(database.collection("handles").document(current))
+            }
+        }.await()
+        RepositoryResult.Success(next)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not change username.", t)
+    }
+
     suspend fun follow(targetUid: String): RepositoryResult<Boolean> = try {
         gate.requireConfigured()
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to follow members.")

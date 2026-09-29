@@ -103,6 +103,25 @@ class CommunityRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not update reaction.", t)
     }
 
+    fun observePostsByAuthor(authorId: String, limit: Long = 50): Flow<List<CommunityPost>> = callbackFlow {
+        if (!gate.isConfigured) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val registration = database.collection("posts")
+            .whereEqualTo("authorId", authorId)
+            .whereEqualTo("visibility", PostVisibility.PUBLIC.name)
+            .whereEqualTo("status", "published")
+            .orderBy("createdAt", Query.Direction.DESCENDING)
+            .limit(limit)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) close(error)
+                else trySend(snapshot?.documents.orEmpty().mapNotNull { it.toObject(CommunityPost::class.java) })
+            }
+        awaitClose(registration::remove)
+    }
+
     fun observeComments(postId: String): Flow<List<PostComment>> = callbackFlow {
         if (!gate.isConfigured) {
             trySend(emptyList()); close(); return@callbackFlow

@@ -40,6 +40,7 @@ import coil.compose.AsyncImage
 @Composable
 fun PostCard(
     post: CommunityPost,
+    onAuthorClick: () -> Unit,
     onReact: () -> Unit,
     onComment: () -> Unit,
     onMore: () -> Unit,
@@ -52,27 +53,32 @@ fun PostCard(
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (post.authorPhotoUrl != null) {
-                    AsyncImage(
-                        model = post.authorPhotoUrl,
-                        contentDescription = "${post.authorName} profile",
-                        modifier = Modifier.size(42.dp).clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    ProfileGlyph(post.authorName)
-                }
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(post.authorName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                    val timestamp = post.createdAt?.toDate()?.time ?: System.currentTimeMillis()
-                    Text(
-                        "@${post.authorHandle} · ${DateUtils.getRelativeTimeSpanString(timestamp)}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                Row(
+                    modifier = Modifier.weight(1f).clickable(onClick = onAuthorClick),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (post.authorPhotoUrl != null) {
+                        AsyncImage(
+                            model = post.authorPhotoUrl,
+                            contentDescription = "${post.authorName} profile",
+                            modifier = Modifier.size(42.dp).clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        ProfileGlyph(post.authorName)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(post.authorName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        val timestamp = post.createdAt?.toDate()?.time ?: System.currentTimeMillis()
+                        Text(
+                            "@${post.authorHandle} · ${DateUtils.getRelativeTimeSpanString(timestamp)}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
                 IconButton(onClick = onMore) {
                     Icon(Icons.Outlined.MoreHoriz, contentDescription = "Post actions")

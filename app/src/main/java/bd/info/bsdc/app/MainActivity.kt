@@ -12,8 +12,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AddCircleOutline
@@ -26,6 +29,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,6 +48,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
@@ -152,54 +158,132 @@ private fun CommunityShell(
             targetPath?.startsWith("/profile") == true -> nav.navigate("profile")
         }
     }
-    Scaffold(bottomBar = { CommunityNavigation(nav.currentDestination?.route ?: "feed") { route ->
+    val backStackEntry by nav.currentBackStackEntryAsState()
+    val selectedRoute = backStackEntry?.destination?.route ?: "feed"
+    val navigateToRoot: (String) -> Unit = { route ->
         nav.navigate(route) {
             popUpTo(nav.graph.findStartDestination().id) { saveState = true }
             launchSingleTop = true
             restoreState = true
         }
-    } }) { padding ->
-        NavHost(navController = nav, startDestination = "feed", modifier = Modifier.padding(padding)) {
-            composable("feed") {
-                val vm: FeedViewModel = viewModel(factory = BsdcViewModelFactory { FeedViewModel(container) })
-                FeedScreen(vm) { nav.navigate("compose") }
+    }
+    // A rail prevents crowded five-item navigation on tablets/foldables and leaves a wider
+    // content column for code posts, profiles and messages. Compact phones keep bottom tabs.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val useNavigationRail = maxWidth >= 840.dp
+        if (useNavigationRail) {
+            Row(Modifier.fillMaxSize()) {
+                CommunityNavigationRail(selectedRoute, navigateToRoot)
+                CommunityDestinations(nav, container, userId, onSignOut, Modifier.weight(1f))
             }
-            composable("compose") {
-                val vm: ComposerViewModel = viewModel(factory = BsdcViewModelFactory { ComposerViewModel(container) })
-                ComposerScreen(vm, onPublished = { nav.navigate("feed") { popUpTo("feed") { inclusive = false } } }, onBack = { nav.popBackStack() })
+        } else {
+            Scaffold(bottomBar = { CommunityNavigation(selectedRoute, navigateToRoot) }) { padding ->
+                CommunityDestinations(nav, container, userId, onSignOut, Modifier.padding(padding))
             }
-            composable("inbox") {
-                val vm: InboxViewModel = viewModel(factory = BsdcViewModelFactory { InboxViewModel(container) })
-                InboxScreen(vm) { id -> nav.navigate("chat/${Uri.encode(id)}") }
-            }
-            composable("alerts") {
-                val vm: NotificationsViewModel = viewModel(factory = BsdcViewModelFactory { NotificationsViewModel(container) })
-                NotificationsScreen(vm)
-            }
-            composable("profile") {
-                val vm: ProfileViewModel = viewModel(factory = BsdcViewModelFactory { ProfileViewModel(container, userId) })
-                ProfileScreen(vm, onSignOut)
-            }
-            composable("chat/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
-                val id = entry.arguments?.getString("id").orEmpty()
-                val vm: ChatRoomViewModel = viewModel(key = "chat-$id", factory = BsdcViewModelFactory { ChatRoomViewModel(container, id) })
-                ChatRoomScreen(vm) { nav.popBackStack() }
-            }
+        }
+    }
+
+}
+
+
+@Composable
+private fun CommunityDestinations(
+    nav: androidx.navigation.NavHostController,
+    container: bd.info.bsdc.app.core.AppContainer,
+    userId: String,
+    onSignOut: () -> Unit,
+    modifier: Modifier
+) {
+    NavHost(navController = nav, startDestination = "feed", modifier = modifier) {
+        composable("feed") {
+            val vm: FeedViewModel = viewModel(factory = BsdcViewModelFactory { FeedViewModel(container) })
+            FeedScreen(
+                viewModel = vm,
+                onCompose = { nav.navigate("compose") },
+                onOpenProfile = { memberId ->
+                    nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
+                }
+            )
+        }
+        composable("compose") {
+            val vm: ComposerViewModel = viewModel(factory = BsdcViewModelFactory { ComposerViewModel(container) })
+            ComposerScreen(vm, onPublished = { nav.navigate("feed") { popUpTo("feed") { inclusive = false } } }, onBack = { nav.popBackStack() })
+        }
+        composable("inbox") {
+            val vm: InboxViewModel = viewModel(factory = BsdcViewModelFactory { InboxViewModel(container) })
+            InboxScreen(vm) { id -> nav.navigate("chat/${Uri.encode(id)}") }
+        }
+        composable("alerts") {
+            val vm: NotificationsViewModel = viewModel(factory = BsdcViewModelFactory { NotificationsViewModel(container) })
+            NotificationsScreen(vm)
+        }
+        composable("profile") {
+            val vm: ProfileViewModel = viewModel(factory = BsdcViewModelFactory { ProfileViewModel(container, userId) })
+            ProfileScreen(
+                viewModel = vm,
+                onSignOut = onSignOut,
+                onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") },
+                onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") }
+            )
+        }
+        composable("member/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) { entry ->
+            val memberId = entry.arguments?.getString("uid").orEmpty()
+            val vm: ProfileViewModel = viewModel(key = "member-$memberId", factory = BsdcViewModelFactory { ProfileViewModel(container, memberId) })
+            ProfileScreen(
+                viewModel = vm,
+                onSignOut = onSignOut,
+                onOpenProfile = { nextMemberId -> nav.navigate(if (nextMemberId == userId) "profile" else "member/${Uri.encode(nextMemberId)}") },
+                onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") },
+                onBack = { nav.popBackStack() }
+            )
+        }
+        composable("chat/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            val id = entry.arguments?.getString("id").orEmpty()
+            val vm: ChatRoomViewModel = viewModel(key = "chat-$id", factory = BsdcViewModelFactory { ChatRoomViewModel(container, id) })
+            ChatRoomScreen(vm) { nav.popBackStack() }
+        }
+    }
+}
+
+private data class CommunityDestination(
+    val route: String,
+    val label: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector
+)
+
+private fun communityDestinations() = listOf(
+    CommunityDestination("feed", "Feed", Icons.Outlined.Home),
+    CommunityDestination("compose", "Create", Icons.Outlined.AddCircleOutline),
+    CommunityDestination("inbox", "Inbox", Icons.Outlined.ChatBubbleOutline),
+    CommunityDestination("alerts", "Alerts", Icons.Outlined.NotificationsNone),
+    CommunityDestination("profile", "Profile", Icons.Outlined.PersonOutline)
+)
+
+@Composable
+private fun CommunityNavigation(selectedRoute: String, navigate: (String) -> Unit) {
+    NavigationBar {
+        communityDestinations().forEach { item ->
+            NavigationBarItem(
+                selected = selectedRoute == item.route,
+                onClick = { navigate(item.route) },
+                icon = { Icon(item.icon, item.label) },
+                label = { Text(item.label) },
+                alwaysShowLabel = false
+            )
         }
     }
 }
 
 @Composable
-private fun CommunityNavigation(selectedRoute: String, navigate: (String) -> Unit) {
-    NavigationBar {
-        listOf(
-            Triple("feed", "Feed", Icons.Outlined.Home),
-            Triple("compose", "Create", Icons.Outlined.AddCircleOutline),
-            Triple("inbox", "Inbox", Icons.Outlined.ChatBubbleOutline),
-            Triple("alerts", "Alerts", Icons.Outlined.NotificationsNone),
-            Triple("profile", "Profile", Icons.Outlined.PersonOutline)
-        ).forEach { (route, label, icon) ->
-            NavigationBarItem(selected = selectedRoute == route, onClick = { navigate(route) }, icon = { Icon(icon, label) }, label = { Text(label) })
+private fun CommunityNavigationRail(selectedRoute: String, navigate: (String) -> Unit) {
+    NavigationRail {
+        communityDestinations().forEach { item ->
+            NavigationRailItem(
+                selected = selectedRoute == item.route,
+                onClick = { navigate(item.route) },
+                icon = { Icon(item.icon, item.label) },
+                label = { Text(item.label) }
+            )
         }
     }
 }

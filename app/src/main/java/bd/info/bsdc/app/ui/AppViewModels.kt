@@ -163,20 +163,92 @@ class ComposerViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
-data class ProfileUiState(val profile: UserProfile? = null, val loading: Boolean = true, val error: String? = null)
-class ProfileViewModel(private val container: AppContainer, uid: String) : ViewModel() {
-    val state = container.profiles.observeProfile(uid).catch { emit(null) }
+data class ProfileActionState(
+    val busy: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
+)
+
+/** Shared model for the signed-in profile and real public member profile routes. */
+class ProfileViewModel(private val container: AppContainer, val profileId: String) : ViewModel() {
+    private val viewerId = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.uid.orEmpty()
+    val isOwnProfile: Boolean = viewerId == profileId
+    val state = container.profiles.observeProfile(profileId).catch { emit(null) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
-    private val _updateMessage = MutableStateFlow<String?>(null)
-    val updateMessage = _updateMessage.asStateFlow()
+    val posts = container.community.observePostsByAuthor(profileId).catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val isFollowing = container.profiles.observeFollowing(profileId).catch { emit(false) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    private val _action = MutableStateFlow(ProfileActionState())
+    val action = _action.asStateFlow()
+    private val _conversationId = MutableStateFlow<String?>(null)
+    val conversationId = _conversationId.asStateFlow()
 
     fun update(displayName: String, bio: String, skills: String, location: String) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
         val skillList = skills.split(',', '\n').map(String::trim).filter(String::isNotBlank)
-        _updateMessage.value = when (val result = container.profiles.updateMyProfile(displayName, bio, skillList, location)) {
-            is RepositoryResult.Success -> "Profile updated"
-            is RepositoryResult.Failure -> result.message
+        _action.value = when (val result = container.profiles.updateMyProfile(displayName, bio, skillList, location)) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Profile updated")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
         }
     }
+
+    fun changeUsername(username: String) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.profiles.changeMyUsername(username)) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Username changed to @${result.value}")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
+    fun uploadAvatar(uri: Uri) = uploadProfileImage(uri, isAvatar = true)
+    fun uploadCover(uri: Uri) = uploadProfileImage(uri, isAvatar = false)
+
+    private fun uploadProfileImage(uri: Uri, isAvatar: Boolean) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        when (val upload = container.media.upload(uri, if (isAvatar) "BSDC profile photo" else "BSDC profile cover")) {
+            is RepositoryResult.Failure -> _action.value = ProfileActionState(error = upload.message)
+            is RepositoryResult.Success -> {
+                if (upload.value.resourceType != bd.info.bsdc.app.model.MediaKind.IMAGE) {
+                    _action.value = ProfileActionState(error = "Profile media must be an image.")
+                } else {
+                    val update = if (isAvatar) container.profiles.updateMyMedia(photoUrl = upload.value.secureUrl)
+                    else container.profiles.updateMyMedia(coverUrl = upload.value.secureUrl)
+                    _action.value = when (update) {
+                        is RepositoryResult.Success -> ProfileActionState(message = if (isAvatar) "Profile photo updated" else "Cover image updated")
+                        is RepositoryResult.Failure -> ProfileActionState(error = update.message)
+                    }
+                }
+            }
+        }
+    }
+
+    fun toggleFollow() = viewModelScope.launch {
+        if (isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.profiles.follow(profileId)) {
+            is RepositoryResult.Success -> ProfileActionState(message = if (result.value) "Following this developer" else "Unfollowed this developer")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
+    fun messageMember() = viewModelScope.launch {
+        if (isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        when (val result = container.chat.ensureDirectConversation(profileId)) {
+            is RepositoryResult.Success -> {
+                _action.value = ProfileActionState()
+                _conversationId.value = result.value
+            }
+            is RepositoryResult.Failure -> _action.value = ProfileActionState(error = result.message)
+        }
+    }
+
+    fun consumeConversation() { _conversationId.value = null }
 }
 
 class NotificationsViewModel(private val container: AppContainer) : ViewModel() {
