@@ -1,17 +1,27 @@
-name: Android verification and artifacts
+name: BSDC Android APK and AAB
 
 on:
   push:
     branches: [arena/01a0ed9c-bsdc]
   pull_request:
   workflow_dispatch:
+    inputs:
+      build_signed_release:
+        description: Build a signed release APK and AAB when release signing secrets are configured
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
 
+concurrency:
+  group: bsdc-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   android:
-    name: Test, lint, and build Android
+    name: Build verified BSDC Android artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -22,47 +32,95 @@ jobs:
           java-version: '17'
           cache: gradle
       - uses: android-actions/setup-android@v3
-      - name: Install Android SDK platform
+      - name: Install pinned Android SDK platform
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
-      - name: Restore protected Firebase configuration when available
+
+      # A workflow with no configuration still runs source checks, but deliberately never uploads
+      # an APK that would only show the app's configuration-required screen.
+      - name: Materialize and validate protected runtime configuration
+        id: runtime_config
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
           CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json; fi
+          set -euo pipefail
+          values=("$GOOGLE_SERVICES_JSON" "$CLOUDINARY_CLOUD_NAME" "$CLOUDINARY_UPLOAD_PRESET" "$GOOGLE_WEB_CLIENT_ID")
+          present=0
+          for value in "${values[@]}"; do [ -n "$value" ] && present=$((present + 1)); done
+          if [ "$present" -eq 0 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "No protected runtime configuration is available; source validation will continue without an APK artifact."
+            exit 0
+          fi
+          if [ "$present" -ne 4 ]; then
+            echo "Set all runtime secrets together: GOOGLE_SERVICES_JSON, CLOUDINARY_CLOUD_NAME, CLOUDINARY_UPLOAD_PRESET, GOOGLE_WEB_CLIENT_ID." >&2
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          python3 - <<'PY'
+          import json
+          config = json.load(open("app/google-services.json", encoding="utf-8"))
+          expected = "bd.info.bsdc.app"
+          packages = [c.get("client_info", {}).get("android_client_info", {}).get("package_name") for c in config.get("client", [])]
+          assert expected in packages, f"google-services.json does not contain {expected}"
+          assert config.get("project_info", {}).get("project_id"), "Firebase project ID is missing"
+          PY
           cat > local.properties <<EOF
           CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME
           CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET
           GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID
           EOF
-      - name: Test, lint, APK, and unsigned bundle
-        run: ./gradlew test lint assembleDebug bundleRelease --stacktrace
-      - name: Create signed release artifacts when signing secrets exist
-        if: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' && secrets.RELEASE_STORE_PASSWORD != '' && secrets.RELEASE_KEY_ALIAS != '' && secrets.RELEASE_KEY_PASSWORD != '' }}
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests, Android lint, and debug APK build
+        run: ./gradlew test lint assembleDebug --stacktrace
+
+      - name: Materialize release signing configuration
+        id: signing
+        if: ${{ steps.runtime_config.outputs.configured == 'true' && inputs.build_signed_release }}
         env:
           RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
           RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
+          set -euo pipefail
+          for name in RELEASE_KEYSTORE_BASE64 RELEASE_STORE_PASSWORD RELEASE_KEY_ALIAS RELEASE_KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then echo "Missing required signing secret: $name" >&2; exit 1; fi
+          done
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
+          test -s release.keystore
           cat >> local.properties <<EOF
           RELEASE_STORE_FILE=release.keystore
           RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD
           RELEASE_KEY_ALIAS=$RELEASE_KEY_ALIAS
           RELEASE_KEY_PASSWORD=$RELEASE_KEY_PASSWORD
           EOF
-          ./gradlew clean assembleRelease bundleRelease --stacktrace
-      - name: Upload APK and AAB
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed release APK and AAB
+        if: ${{ steps.signing.outputs.signed == 'true' }}
+        run: ./gradlew clean assembleRelease bundleRelease --stacktrace
+
+      - name: Generate artifact checksums
+        if: ${{ steps.runtime_config.outputs.configured == 'true' }}
+        run: |
+          find app/build/outputs -type f \( -name '*.apk' -o -name '*.aab' \) -print0 | sort -z | xargs -0 sha256sum > BSDC-ARTIFACTS-SHA256.txt
+          cat BSDC-ARTIFACTS-SHA256.txt
+
+      - name: Upload functional APK and optional signed AAB
+        if: ${{ steps.runtime_config.outputs.configured == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: bsdc-android-${{ github.sha }}
+          name: bsdc-android-${{ github.run_number }}
           if-no-files-found: error
+          retention-days: 30
           path: |
             app/build/outputs/apk/**/*.apk
             app/build/outputs/bundle/**/*.aab
+            BSDC-ARTIFACTS-SHA256.txt
 
   functions-typecheck:
     name: Type-check Firebase Functions
@@ -77,6 +135,6 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: functions/package.json
+          cache-dependency-path: functions/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck

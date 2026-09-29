@@ -56,7 +56,8 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
+            // Keep the registered Firebase package ID for CI-installed test APKs. A separate
+            // Firebase Android app is required before introducing any applicationId suffix.
             versionNameSuffix = "-debug"
         }
         release {

@@ -55,7 +55,7 @@ Credentials were included in the original request. Client Firebase identifiers a
 
 ## Cloud-only builds and releases
 
-`Android verification and artifacts` runs tests, lint, debug APK, and release AAB builds on GitHub Actions. It works unsigned when signing values are absent and uploads the artifact for testing.
+`BSDC Android APK and AAB` runs tests, lint, and a Firebase-configured APK build on GitHub Actions. It never uploads an APK when runtime Firebase/Cloudinary configuration is absent, so an artifact cannot silently be a configuration-only shell. See the exact GitHub secret names, Firebase checks, signing flow, and web-only build instructions in [`docs/GITHUB_ACTIONS_SECRETS.md`](docs/GITHUB_ACTIONS_SECRETS.md).
 
 To produce a signed release, configure these repository secrets:
 
