@@ -98,7 +98,28 @@ jobs:
           echo "configured=true" >> "$GITHUB_OUTPUT"
 
       - name: Unit tests, Android lint, and debug APK build
-        run: ./gradlew test lint assembleDebug --stacktrace
+        shell: bash
+        run: |
+          set -o pipefail
+          ./gradlew test lint assembleDebug --stacktrace 2>&1 | tee gradle-build.log
+          exit "${PIPESTATUS[0]}"
+
+      # The log artifact and redacted annotation make remote build failures diagnosable even when
+      # GitHub's temporary runner-log endpoint is unavailable to a restricted integration token.
+      - name: Surface Gradle failure summary
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          summary="$(tail -n 80 gradle-build.log | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
+          echo "::error title=Gradle build failure::$summary"
+      - name: Upload Gradle diagnostic log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsdc-gradle-diagnostic-${{ github.run_number }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: gradle-build.log
 
       - name: Materialize release signing configuration
         id: signing
