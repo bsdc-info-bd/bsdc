@@ -1,0 +1,88 @@
+# BSDC Android
+
+Native Android client for **Bangladesh Software Development Community (BSDC)** — a platform of RRC Development. The app id is fixed to `bd.info.bsdc.app` and the client is written in Kotlin with Jetpack Compose plus a small Java safety boundary.
+
+This repository deliberately starts with a secure, deployable social-community core rather than pretending that a list of “1000+ features” is implemented. The checked-in implementation is real code with no seeded users, posts, messages, or fake analytics. Additional products (commerce, ads, licenses, reports, admin portals, deep-learning retrieval) should be delivered as separately designed, access-controlled backend modules, not as unverified UI claims.
+
+## Implemented mobile core
+
+- Email/password account creation, sign-in, password reset, verification email, Google, GitHub, and configurable Yahoo OAuth flows.
+- Firebase Auth session handling and a configuration-safe startup state.
+- Public real-time Firestore feed, deterministic local ranking, freshness decay, negative-feedback penalty support, 7% stable exploration, and author diversity.
+- Native post composer: text, language, visibility, tags, Cloudinary image upload, and Cloudinary voice-note upload. Video MIME types are rejected on-device.
+- Firestore-backed reactions, comments, reports, post metadata, profiles, handles, follower/following records, notifications, device records, and engagement events.
+- Realtime Database direct conversations, live message stream, typing indicators, read state, and only image/audio attachment kinds.
+- FCM foreground notification service, Android 13 notification permission, device-token registration, notification center, and verified Android App Links for `bsdc.info.bd`.
+- Firebase Functions for retry-safe engagement/follower counts and server-side comment, reaction, follow, and chat push notifications. No FCM server credential is embedded in the app.
+- Light/dark/system theme persistence, English/Bangla post-language selection, material accessibility semantics, responsive Compose layouts, and no emoji-only controls.
+- Firestore/Realtime Database rules, Firestore composite indexes, Android lint/tests, and GitHub Actions APK/AAB artifact and optional Play publishing workflows.
+
+## Architecture
+
+```text
+app/                         Native Android client
+  auth/                      Firebase Auth and provider flows
+  data/                      Firestore profiles, posts, comments, follows
+  messaging/                 Realtime Database message transport
+  media/                     unsigned Cloudinary image/audio uploader
+  notifications/             FCM handling and Firestore inbox
+  feed/                      transparent ranking/diversity layer
+firebase/                    Firestore / Realtime DB policies and indexes
+functions/                   trusted notification and counter backend
+.github/workflows/           cloud build, artifacts, optional Play publishing
+```
+
+The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. Cloudinary is called with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients.
+
+## Secure configuration — required before release
+
+The app compiles without Firebase configuration so CI can validate the Android code safely. It intentionally displays an explicit configuration screen at runtime until configuration is injected.
+
+1. Download the correct `google-services.json` for Android package `bd.info.bsdc.app` from Firebase. Put it in `app/google-services.json` only on your device, or save the whole JSON as GitHub secret `GOOGLE_SERVICES_JSON`. The real file is ignored by Git.
+2. Set these protected GitHub Action secrets:
+   - `GOOGLE_SERVICES_JSON`
+   - `GOOGLE_WEB_CLIENT_ID`
+   - `CLOUDINARY_CLOUD_NAME`
+   - `CLOUDINARY_UPLOAD_PRESET`
+3. In Cloudinary create/lock an unsigned preset: restrict its folder, allow only image/audio formats, set size limits, disallow unsigned eager transformations, and review abuse controls. Do **not** place a Cloudinary API secret in Android, GitHub variables, Firebase, or this repository.
+4. In Firebase Authentication enable Email/Password, Google, GitHub, and a correctly configured Yahoo OIDC provider (`yahoo.com`). Add the Android SHA-1/SHA-256 signing fingerprints and the authorized OAuth redirect domains.
+5. Deploy `firebase/firestore.rules`, `firebase/firestore.indexes.json`, `firebase/database.rules.json`, and `functions/` to the intended Firebase project from a protected CI identity. Functions are what send automatic push notifications; clients cannot securely send FCM to other users.
+6. Publish `https://www.bsdc.info.bd/.well-known/assetlinks.json` with the release signing certificate SHA-256 before claiming verified App Links.
+
+### Secret incident response
+
+Credentials were included in the original request. Client Firebase identifiers and an unsigned preset are expected to be visible in a mobile application, but a **Cloudinary API secret and a OneSignal REST API key are server secrets**. Rotate/revoke any such values that were shared, remove them from history/logs, and store replacement values only in protected CI/server secret stores. This repository intentionally contains neither secret and does not use a OneSignal REST key from the client.
+
+## Cloud-only builds and releases
+
+`Android verification and artifacts` runs tests, lint, debug APK, and release AAB builds on GitHub Actions. It works unsigned when signing values are absent and uploads the artifact for testing.
+
+To produce a signed release, configure these repository secrets:
+
+- `RELEASE_KEYSTORE_BASE64`
+- `RELEASE_STORE_PASSWORD`
+- `RELEASE_KEY_ALIAS`
+- `RELEASE_KEY_PASSWORD`
+
+The manual `Publish BSDC to Google Play` workflow only runs when those secrets and `PLAY_SERVICE_ACCOUNT_JSON` exist. It targets `bd.info.bsdc.app` and requires an already-created Play Console app. Nothing is uploaded to production automatically.
+
+## Validation
+
+The Android workflow executes:
+
+```text
+./gradlew test lint assembleDebug bundleRelease --stacktrace
+```
+
+The custom `gradlew` bootstraps the pinned Gradle 8.9 distribution for cloud CI without committing a binary wrapper JAR. The functions job type-checks `functions/src/index.ts` independently.
+
+## Important production boundaries
+
+- “End-to-end encrypted like WhatsApp” must not be claimed until a reviewed multi-device key-agreement and double-ratchet protocol, recovery model, key transparency, and independent security audit are implemented. The current Firebase chat transport is access-controlled but not E2EE.
+- A genuine ANN/two-tower/transformer recommender needs protected data pipelines, consent, feature governance, evaluation, abuse review, and compute budget. `FeedRankingEngine` is explicitly a transparent, on-device re-ranker; it is not marketed as a neural backend.
+- Firebase Functions, FCM, Cloudinary, Google Play, and large-scale social data have quotas, terms, and potentially billing requirements. “Unlimited fully free production social network” is not technically or commercially guaranteed by any codebase.
+- Admin roles must use Firebase custom claims issued by a trusted backend. A hard-coded “admin passkey” is not a safe authorization mechanism and is intentionally not implemented.
+
+## Brand
+
+BSDC is Bangladesh Software Development Community, an open community for Bangladeshi and worldwide developers. Owner/CEO: Rizwan Rahim Chowdhury / RRC Development. Contact: `hello@bsdc.info.bd`.

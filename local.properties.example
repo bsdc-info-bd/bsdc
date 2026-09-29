@@ -1,0 +1,11 @@
+# Copy to local.properties for a development build. Do not commit local.properties.
+# These are client-visible deployment values, not server secrets.
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_UPLOAD_PRESET=your_locked_unsigned_preset
+GOOGLE_WEB_CLIENT_ID=your_web_oauth_client_id.apps.googleusercontent.com
+
+# Optional signing values. CI accepts the same keys as protected repository secrets.
+# RELEASE_STORE_FILE=release.keystore
+# RELEASE_STORE_PASSWORD=
+# RELEASE_KEY_ALIAS=
+# RELEASE_KEY_PASSWORD=

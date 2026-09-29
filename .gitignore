@@ -1,0 +1,26 @@
+# Android/Gradle
+.gradle/
+build/
+**/build/
+*.iml
+.local/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# Deployment configuration. Firebase options, keystores and upload configuration must be
+# injected by local secure storage or GitHub Actions secrets, never committed.
+app/google-services.json
+*.jks
+*.keystore
+keystore.properties
+
+# IDE and operating system
+.idea/
+.vscode/
+.DS_Store
+
+# Node/Firebase functions
+functions/node_modules/
+functions/lib/
+functions/.env

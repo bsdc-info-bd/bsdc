@@ -1,0 +1,39 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "conversations": {
+      "$conversationId": {
+        ".read": "auth != null && data.child('participants').child(auth.uid).val() === true",
+        ".write": "auth != null && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true && newData.child('kind').val() === 'direct') || (data.child('participants').child(auth.uid).val() === true && newData.child('participants').child(auth.uid).val() === true))",
+        "participants": {
+          "$uid": {
+            ".validate": "(!data.exists() && newData.val() === true) || (data.exists() && newData.val() === data.val())"
+          }
+        },
+        "lastMessage": { ".validate": "newData.isString() && newData.val().length <= 120" },
+        "lastMessageAt": { ".validate": "newData.isNumber()" }
+      },
+      ".indexOn": ["lastMessageAt"]
+    },
+    "messages": {
+      "$conversationId": {
+        ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+        "$messageId": {
+          ".write": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.child('senderId').val() === auth.uid && newData.child('senderId').val() === auth.uid))",
+          ".validate": "newData.hasChildren(['senderId', 'kind', 'sentAt']) && newData.child('kind').val() in ['text', 'image', 'audio'] && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 4000))"
+        },
+        ".indexOn": ["sentAt"]
+      }
+    },
+    "typing": {
+      "$conversationId": {
+        "$uid": {
+          ".read": "auth != null && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".write": "auth != null && auth.uid === $uid && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
+          ".validate": "newData.val() === true || newData.val() === false"
+        }
+      }
+    }
+  }
+}

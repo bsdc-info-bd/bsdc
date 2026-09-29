@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    function isStaff() { return signedIn() && request.auth.token.role in ['admin', 'moderator']; }
+    function postIsPublic(postId) {
+      return get(/databases/$(database)/documents/posts/$(postId)).data.visibility == 'PUBLIC'
+        && get(/databases/$(database)/documents/posts/$(postId)).data.status == 'published';
+    }
+
+    match /handles/{handle} {
+      allow get, list: if true;
+      // The profile/handle pair is created atomically by the registration transaction.
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username == handle;
+      allow update, delete: if false;
+    }
+
+    match /profiles/{uid} {
+      allow get, list: if true;
+      allow create: if isSelf(uid)
+        && request.resource.data.username is string
+        && request.resource.data.displayName is string;
+      allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'bio', 'skills', 'locationLabel', 'photoUrl', 'coverUrl', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /following/{targetUid} {
+        allow read: if isSelf(uid);
+        allow create, delete: if isSelf(uid) && targetUid != uid;
+        allow update: if false;
+      }
+      match /followers/{followerUid} {
+        allow read: if isSelf(uid) || isSelf(followerUid);
+        allow create, delete: if isSelf(followerUid) && followerUid != uid;
+        allow update: if false;
+      }
+      match /devices/{deviceId} {
+        allow read, create, update, delete: if isSelf(uid);
+      }
+      match /notifications/{notificationId} {
+        allow read: if isSelf(uid);
+        allow update: if isSelf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
+        allow create, delete: if false;
+      }
+      match /engagement/{postId} {
+        allow read, create, update, delete: if isSelf(uid);
+      }
+    }
+
+    match /posts/{postId} {
+      allow get, list: if resource.data.visibility == 'PUBLIC' && resource.data.status == 'published'
+        || (signedIn() && resource.data.authorId == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 10000
+        && request.resource.data.media.size() <= 10
+        && request.resource.data.status == 'published';
+      // Engagement counters and ranking are server-managed. Authors may only edit their own
+      // content fields, never impersonate another author or rewrite metric values.
+      allow update: if signedIn() && resource.data.authorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'body', 'tags', 'media', 'visibility', 'language', 'updatedAt'
+        ]);
+      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+
+      match /reactions/{uid} {
+        allow get: if isSelf(uid);
+        allow list: if false;
+        allow create: if isSelf(uid) && request.resource.data.type is string;
+        allow delete: if isSelf(uid);
+        allow update: if false;
+      }
+      match /comments/{commentId} {
+        allow read: if postIsPublic(postId) || (signedIn() && get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+        allow create: if signedIn()
+          && request.resource.data.authorId == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() > 0
+          && request.resource.data.body.size() <= 2000;
+        allow update: if signedIn() && resource.data.authorId == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'updatedAt']);
+        allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      }
+    }
+
+    match /reports/{reportId} {
+      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow read, update: if isStaff();
+      allow delete: if false;
+    }
+
+    // Administrative collections are exclusively accessed from trusted Functions/Admin SDK.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

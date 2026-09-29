@@ -1,0 +1,6 @@
+<resources>
+    <color name="brand_green">#1B4332</color>
+    <color name="brand_green_light">#52B788</color>
+    <color name="brand_blue">#2563EB</color>
+    <color name="transparent">#00000000</color>
+</resources>
