@@ -58,11 +58,10 @@ jobs:
             [GOOGLE_SERVICES_JSON]="$GOOGLE_SERVICES_JSON"
             [CLOUDINARY_CLOUD_NAME]="$CLOUDINARY_CLOUD_NAME"
             [CLOUDINARY_UPLOAD_PRESET]="$CLOUDINARY_UPLOAD_PRESET"
-            [GOOGLE_WEB_CLIENT_ID]="$GOOGLE_WEB_CLIENT_ID"
           )
           missing=()
           for name in "${!required[@]}"; do [ -z "${required[$name]}" ] && missing+=("$name"); done
-          if [ "${#missing[@]}" -eq 4 ]; then
+          if [ "${#missing[@]}" -eq 3 ]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
             echo "No protected runtime configuration is available; source validation will continue without an APK artifact."
             exit 0
@@ -72,18 +71,25 @@ jobs:
             exit 1
           fi
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
-          if ! python3 - <<'PY'
+          if ! GOOGLE_CLIENT_FROM_FIREBASE="$(python3 - <<'PY'
           import json
           config = json.load(open("app/google-services.json", encoding="utf-8"))
           expected = "bd.info.bsdc.app"
           packages = [c.get("client_info", {}).get("android_client_info", {}).get("package_name") for c in config.get("client", [])]
           assert expected in packages, f"google-services.json does not contain {expected}"
           assert config.get("project_info", {}).get("project_id"), "Firebase project ID is missing"
+          web_clients = [entry.get("client_id", "") for client in config.get("client", []) for entry in client.get("oauth_client", []) if entry.get("client_type") == 3]
+          assert web_clients and web_clients[0].endswith(".apps.googleusercontent.com"), "Web OAuth client is missing"
+          print(web_clients[0])
           PY
+          )"
           then
             echo "::error title=Invalid GOOGLE_SERVICES_JSON::Use the raw Firebase Console Android JSON for package bd.info.bsdc.app, without Markdown fences or base64 encoding."
             exit 1
           fi
+          # The Firebase JSON is the source of truth. An optional Actions secret can override it
+          # for an intentionally separate Web OAuth client, but is not necessary for BSDC.
+          GOOGLE_WEB_CLIENT_ID="${GOOGLE_WEB_CLIENT_ID:-$GOOGLE_CLIENT_FROM_FIREBASE}"
           cat > local.properties <<EOF
           CLOUDINARY_CLOUD_NAME=$CLOUDINARY_CLOUD_NAME
           CLOUDINARY_UPLOAD_PRESET=$CLOUDINARY_UPLOAD_PRESET

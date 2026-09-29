@@ -54,8 +54,22 @@ jobs:
           CLOUDINARY_UPLOAD_PRESET: ${{ secrets.CLOUDINARY_UPLOAD_PRESET }}
           GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
         run: |
-          echo "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
-          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json; fi
+          set -euo pipefail
+          for name in GOOGLE_SERVICES_JSON CLOUDINARY_CLOUD_NAME CLOUDINARY_UPLOAD_PRESET; do
+            if [ -z "${!name}" ]; then echo "Missing required runtime secret: $name" >&2; exit 1; fi
+          done
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 --decode > release.keystore
+          printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+          if [ -z "$GOOGLE_WEB_CLIENT_ID" ]; then
+            GOOGLE_WEB_CLIENT_ID="$(python3 - <<'PY'
+          import json
+          config = json.load(open("app/google-services.json", encoding="utf-8"))
+          clients = [entry.get("client_id", "") for client in config.get("client", []) for entry in client.get("oauth_client", []) if entry.get("client_type") == 3]
+          assert clients and clients[0].endswith(".apps.googleusercontent.com")
+          print(clients[0])
+          PY
+            )"
+          fi
           cat > local.properties <<EOF
           RELEASE_STORE_FILE=release.keystore
           RELEASE_STORE_PASSWORD=$RELEASE_STORE_PASSWORD

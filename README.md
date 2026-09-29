@@ -41,9 +41,9 @@ The app compiles without Firebase configuration so CI can validate the Android c
 1. Download the correct `google-services.json` for Android package `bd.info.bsdc.app` from Firebase. Put it in `app/google-services.json` only on your device, or save the whole JSON as GitHub secret `GOOGLE_SERVICES_JSON`. The real file is ignored by Git.
 2. Set these protected GitHub Action secrets:
    - `GOOGLE_SERVICES_JSON`
-   - `GOOGLE_WEB_CLIENT_ID`
    - `CLOUDINARY_CLOUD_NAME`
    - `CLOUDINARY_UPLOAD_PRESET`
+   - Optional: `GOOGLE_WEB_CLIENT_ID` (the workflow otherwise reads the Firebase Web client from `GOOGLE_SERVICES_JSON`).
 3. In Cloudinary create/lock an unsigned preset: restrict its folder, allow only image/audio formats, set size limits, disallow unsigned eager transformations, and review abuse controls. Do **not** place a Cloudinary API secret in Android, GitHub variables, Firebase, or this repository.
 4. In Firebase Authentication enable Email/Password, Google, GitHub, and a correctly configured Yahoo OIDC provider (`yahoo.com`). Add the Android SHA-1/SHA-256 signing fingerprints and the authorized OAuth redirect domains.
 5. Deploy `firebase/firestore.rules`, `firebase/firestore.indexes.json`, `firebase/database.rules.json`, and `functions/` to the intended Firebase project from a protected CI identity. Functions are what send automatic push notifications; clients cannot securely send FCM to other users.

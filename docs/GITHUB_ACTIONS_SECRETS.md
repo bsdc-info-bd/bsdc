@@ -6,14 +6,15 @@ Do not paste any secret into a commit, issue, pull request, APK source file, or 
 
 ## 1. Required runtime secrets
 
-All four are required together before the workflow uploads an APK. If none are set, the workflow still runs source tests and lint, but intentionally does **not** upload an unusable/configuration-only APK. If only some are set, the workflow fails early with a precise configuration error.
+The three required values below must be configured together before the workflow uploads an APK. If none are set, the workflow still runs source tests and lint, but intentionally does **not** upload an unusable/configuration-only APK. If only some are set, the workflow fails early with a precise configuration error.
 
 | Secret name | Exact value to paste | Why it is required |
 |---|---|---|
-| `GOOGLE_SERVICES_JSON` | The **complete raw JSON text** downloaded from Firebase Console for Android package `bd.info.bsdc.app`. Paste JSON directly; do not base64 encode it and do not wrap it in Markdown fences. | Activates the Firebase Android client: Auth, Firestore, Realtime Database, Messaging, and App Check configuration. |
-| `GOOGLE_WEB_CLIENT_ID` | The Web OAuth client ID ending in `.apps.googleusercontent.com` from the Firebase/Google Cloud project. | Needed by the native Google sign-in flow to request an ID token. |
+| `GOOGLE_SERVICES_JSON` | The **complete raw JSON text** downloaded from Firebase Console for Android package `bd.info.bsdc.app`. Paste JSON directly; do not base64 encode it and do not wrap it in Markdown fences. | Activates the Firebase Android client: Auth, Firestore, Realtime Database, Messaging, App Check, and provides the real Web OAuth client ID. |
 | `CLOUDINARY_CLOUD_NAME` | Your Cloudinary cloud name. | Initializes the official Cloudinary Android SDK. |
 | `CLOUDINARY_UPLOAD_PRESET` | The name of the BSDC **unsigned** upload preset. | Authorizes constrained client-side image/audio uploads without exposing an API secret. |
+
+`GOOGLE_WEB_CLIENT_ID` is now optional. When it is not set, the workflow safely reads the `client_type: 3` Web OAuth client ID from `GOOGLE_SERVICES_JSON`, which is the correct BSDC Firebase source of truth. Add that optional secret only if you intentionally use a separate Web OAuth client.
 
 ### Cloudinary preset requirements
 
@@ -76,7 +77,7 @@ Automatic mobile push is sent from trusted Firebase Functions through FCM. It do
 ## 6. Build steps in GitHub’s web UI
 
 1. Push or merge the Android workflow to the target branch.
-2. Add the four runtime secrets above.
+2. Add the three required runtime secrets above (and the optional OAuth override only if needed).
 3. Open **Actions → BSDC Android APK and AAB → Run workflow**.
 4. Choose the BSDC branch and leave **Build signed release APK and AAB** off for a test/debug APK, or turn it on only after all signing secrets are configured.
 5. When the run succeeds, open the run’s **Artifacts** section and download `bsdc-android-<run number>`.
