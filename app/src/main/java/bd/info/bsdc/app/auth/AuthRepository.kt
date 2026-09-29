@@ -38,9 +38,10 @@ class AuthRepository(private val gate: FirebaseGate) {
             close()
             return@callbackFlow
         }
-        val listener = FirebaseAuth.getInstance().addAuthStateListener { auth ->
+        val listener = FirebaseAuth.AuthStateListener { auth ->
             trySend(auth.currentUser?.let(AuthState::SignedIn) ?: AuthState.SignedOut)
         }
+        FirebaseAuth.getInstance().addAuthStateListener(listener)
         awaitClose { FirebaseAuth.getInstance().removeAuthStateListener(listener) }
     }
 

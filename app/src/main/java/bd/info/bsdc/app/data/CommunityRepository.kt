@@ -158,16 +158,21 @@ class CommunityRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not submit report.", t)
     }
 
-    suspend fun recordDwell(postId: String, visibleMillis: Long): RepositoryResult<Unit> = try {
-        gate.requireConfigured()
-        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return RepositoryResult.Success(Unit)
-        if (visibleMillis < 1_500) return RepositoryResult.Success(Unit)
-        database.collection("profiles").document(uid).collection("engagement").document(postId).set(
-            mapOf("lastDwellMs" to visibleMillis.coerceAtMost(120_000), "updatedAt" to Timestamp.now()),
-            com.google.firebase.firestore.SetOptions.merge()
-        ).await()
-        RepositoryResult.Success(Unit)
-    } catch (t: Throwable) {
-        RepositoryResult.Failure(t.message ?: "Could not record engagement.", t)
+    suspend fun recordDwell(postId: String, visibleMillis: Long): RepositoryResult<Unit> {
+        return try {
+            gate.requireConfigured()
+            val uid = FirebaseAuth.getInstance().currentUser?.uid
+            if (uid == null || visibleMillis < 1_500) {
+                RepositoryResult.Success(Unit)
+            } else {
+                database.collection("profiles").document(uid).collection("engagement").document(postId).set(
+                    mapOf("lastDwellMs" to visibleMillis.coerceAtMost(120_000), "updatedAt" to Timestamp.now()),
+                    com.google.firebase.firestore.SetOptions.merge()
+                ).await()
+                RepositoryResult.Success(Unit)
+            }
+        } catch (t: Throwable) {
+            RepositoryResult.Failure(t.message ?: "Could not record engagement.", t)
+        }
     }
 }
