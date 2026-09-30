@@ -33,16 +33,19 @@ No email address, passkey, or client-side flag grants administrator powers. In p
 
 Location, address-book contacts, and camera access are high-risk capabilities. They must be requested only after a member starts a clearly named feature and accepts a just-in-time explanation of purpose, data flow, retention, and revocation. They must never be requested at first launch or used to create a hidden profile.
 
-The current member-facing release uses the system document/photo picker for media and manual profile location labels. It does not request location, contacts, or camera permissions yet because no complete, access-controlled personalization or contact-discovery service has been deployed. This is intentional least privilege, not a missing fake feature.
+The member profile now exposes three separately disclosed, off-by-default tools. They are not requested at first launch:
 
-Before enabling any of these capabilities, BSDC must provide:
+- **Camera profile photo:** the member asks to capture a photo, then Android requests `CAMERA`. The photo is buffered in app cache and uploaded as the member’s public profile image only after that requested capture succeeds. The member can remove the public profile reference and disable future camera use.
+- **Approximate city suggestion:** the member asks to use `ACCESS_COARSE_LOCATION` once. The app uses the device location and geocoder only in memory to suggest a city label; the member reviews it before saving. Latitude, longitude, accuracy, and timestamps are never written to Firebase or used for feed ranking. Revoking the feature removes the public `locationLabel`; the Android permission itself can additionally be revoked in system settings.
+- **One-contact invite:** after an explicit disclosure and `READ_CONTACTS` grant, Android’s contact picker selects one recipient. The app reads that recipient only to prefill an external email or SMS draft. It does not upload, hash, match, cache, or persist any contact fields. This is an invite handoff, not an unsafe claim that BSDC has server-side contact discovery.
 
-- per-feature consent and revocation controls;
-- a private Firebase schema and Rules path, never public profile fields for raw contacts or precise coordinates;
-- trusted backend validation and retention/deletion policy;
-- a data-minimizing location strategy (coarse or on-device personalization by default);
-- opt-in contact discovery with normalized, salted/peppered server-side matching design and no raw address-book upload;
-- a real in-app camera workflow if `CAMERA` is requested. System camera/photo-picker handoff should be preferred when it meets the use case.
+Each acknowledgement is stored locally in DataStore and can be turned off independently. These local switches never override Android’s runtime permission system. Raw contacts and precise coordinates have no Firestore schema or Rules path.
+
+### Retention and production operation
+
+Profile image object deletion requires Cloudinary administrative credentials and therefore cannot safely happen in an APK. Removing a photo immediately removes its public Firestore reference. Before a production upload preset is enabled, operations must enforce a Cloudinary lifecycle/cleanup policy (or a trusted backend deletion worker) for unreferenced profile image objects, and document its retention period. The unsigned preset must continue to restrict folder, MIME/resource type, transformations, size, and abuse controls server-side. This remaining operational control is tracked as a production prerequisite rather than being hidden behind a client-side secret.
+
+Any future **contact discovery** must be a separate reviewed backend feature with normalized, salted/peppered server-side matching, no raw address-book upload, private Rules, retention/deletion controls, and a new consent flow. It must not reuse the one-contact invite path.
 
 ## Environment progression
 

@@ -1,5 +1,11 @@
 package bd.info.bsdc.app.ui.screens
 
+import android.Manifest
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.ContactsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -46,12 +52,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import bd.info.bsdc.app.model.UserProfile
 import bd.info.bsdc.app.ui.NotificationsViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.components.PostCard
 import coil.compose.AsyncImage
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,10 +78,38 @@ fun ProfileScreen(
     val following by viewModel.isFollowing.collectAsStateWithLifecycle()
     val action by viewModel.action.collectAsStateWithLifecycle()
     val conversationId by viewModel.conversationId.collectAsStateWithLifecycle()
+    val privacyPreferences by viewModel.privacyPreferences.collectAsStateWithLifecycle()
+    val locationSuggestion by viewModel.locationSuggestion.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::uploadAvatar) }
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::uploadCover) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var privacyDisclosure by remember { mutableStateOf<PrivacyDisclosure?>(null) }
+    val cameraCapture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { captured ->
+        val uri = pendingCameraUri
+        pendingCameraUri = null
+        if (captured && uri != null) viewModel.uploadCapturedAvatar(uri)
+        else if (uri != null) context.deleteTemporaryCapture(uri)
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) context.profileCameraUri()?.let { uri ->
+            pendingCameraUri = uri
+            cameraCapture.launch(uri)
+        } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+        else viewModel.showActionError("Camera permission was not granted. You can still choose a profile image from your device.")
+    }
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.suggestApproximateLocation(context)
+        else viewModel.showActionError("Approximate location was not granted. You can still enter a city manually.")
+    }
+    val contactPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickContact()) { uri ->
+        if (uri != null) context.prepareAndLaunchContactInvite(uri, viewModel::showActionError)
+    }
+    val contactPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) contactPicker.launch(null)
+        else viewModel.showActionError("Contacts permission was not granted. BSDC cannot prepare an invite without a recipient.")
+    }
 
     LaunchedEffect(conversationId) {
         conversationId?.let {
@@ -131,6 +168,43 @@ fun ProfileScreen(
                         action.message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                     }
                 }
+                if (viewModel.isOwnProfile) {
+                    item(key = "privacy-controls") {
+                        PrivacyAndPersonalizationCard(
+                            profile = member,
+                            preferences = privacyPreferences,
+                            busy = action.busy,
+                            onTakeCameraPhoto = {
+                                if (privacyPreferences.cameraProfilePhotoConsent) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                                        context.profileCameraUri()?.let { uri ->
+                                            pendingCameraUri = uri
+                                            cameraCapture.launch(uri)
+                                        } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+                                    } else cameraPermission.launch(Manifest.permission.CAMERA)
+                                } else privacyDisclosure = PrivacyDisclosure.CAMERA
+                            },
+                            onStopCamera = { viewModel.setCameraProfilePhotoConsent(false) },
+                            onRemoveProfilePhoto = viewModel::removeProfilePhoto,
+                            onSuggestCity = {
+                                if (privacyPreferences.approximateLocationConsent) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                                        viewModel.suggestApproximateLocation(context)
+                                    } else locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                                } else privacyDisclosure = PrivacyDisclosure.LOCATION
+                            },
+                            onStopLocation = viewModel::revokeApproximateLocation,
+                            onInviteContact = {
+                                if (privacyPreferences.contactInviteConsent) {
+                                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                                        contactPicker.launch(null)
+                                    } else contactPermission.launch(Manifest.permission.READ_CONTACTS)
+                                } else privacyDisclosure = PrivacyDisclosure.CONTACTS
+                            },
+                            onStopContactInvite = { viewModel.setContactInviteConsent(false) }
+                        )
+                    }
+                }
                 item(key = "tabs") {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         AssistChip(onClick = { selectedTab = 0 }, label = { Text("Posts ${posts.size}") })
@@ -171,6 +245,149 @@ fun ProfileScreen(
             }
         )
     }
+
+    privacyDisclosure?.let { disclosure ->
+        SensitiveFeatureDisclosureDialog(
+            disclosure = disclosure,
+            onDismiss = { privacyDisclosure = null },
+            onContinue = {
+                privacyDisclosure = null
+                when (disclosure) {
+                    PrivacyDisclosure.CAMERA -> {
+                        viewModel.setCameraProfilePhotoConsent(true)
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+                            context.profileCameraUri()?.let { uri ->
+                                pendingCameraUri = uri
+                                cameraCapture.launch(uri)
+                            } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+                        } else cameraPermission.launch(Manifest.permission.CAMERA)
+                    }
+                    PrivacyDisclosure.LOCATION -> {
+                        viewModel.setApproximateLocationConsent(true)
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            viewModel.suggestApproximateLocation(context)
+                        } else locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                    }
+                    PrivacyDisclosure.CONTACTS -> {
+                        viewModel.setContactInviteConsent(true)
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED) {
+                            contactPicker.launch(null)
+                        } else contactPermission.launch(Manifest.permission.READ_CONTACTS)
+                    }
+                }
+            }
+        )
+    }
+    locationSuggestion?.let { label ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissLocationSuggestion,
+            title = { Text("Use this public city?") },
+            text = { Text("BSDC suggests \"$label\". Only this label will be saved to your public profile; the device coordinates used to suggest it are not stored.") },
+            confirmButton = { TextButton(onClick = { viewModel.saveSuggestedLocation(label) }, enabled = !action.busy) { Text("Save city") } },
+            dismissButton = { TextButton(onClick = viewModel::dismissLocationSuggestion, enabled = !action.busy) { Text("Keep manual location") } }
+        )
+    }
+}
+
+private enum class PrivacyDisclosure { CAMERA, LOCATION, CONTACTS }
+
+@Composable
+private fun SensitiveFeatureDisclosureDialog(
+    disclosure: PrivacyDisclosure,
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit
+) {
+    val (title, body, continueLabel) = when (disclosure) {
+        PrivacyDisclosure.CAMERA -> Triple(
+            "Use camera for a profile photo?",
+            "BSDC will request camera access only to capture a profile image you requested. The capture is held in temporary app storage, then uploaded to the configured BSDC image service as your public profile photo. You can remove the public profile reference later.",
+            "Continue to camera"
+        )
+        PrivacyDisclosure.LOCATION -> Triple(
+            "Use approximate location once?",
+            "BSDC will ask Android only for approximate location to suggest a city-level public profile label. Raw coordinates are not stored, uploaded, or used to rank your feed. You review the suggestion before it is saved and can remove it at any time.",
+            "Find my city"
+        )
+        PrivacyDisclosure.CONTACTS -> Triple(
+            "Choose one contact to invite?",
+            "BSDC will request Contacts permission only to read the one recipient you choose in Android’s picker and prepare an email or SMS draft. It does not upload or save names, email addresses, or phone numbers. Your email or SMS app sends the invite only if you choose to send it.",
+            "Open contact picker"
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { Text(body) },
+        confirmButton = { TextButton(onClick = onContinue) { Text(continueLabel) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } }
+    )
+}
+
+private fun Context.profileCameraUri(): Uri? = runCatching {
+    val directory = File(cacheDir, "profile-camera").apply { mkdirs() }
+    val image = File.createTempFile("profile-", ".jpg", directory)
+    FileProvider.getUriForFile(this, "$packageName.fileprovider", image)
+}.getOrNull()
+
+private fun Context.deleteTemporaryCapture(uri: Uri) {
+    runCatching { contentResolver.delete(uri, null, null) }
+}
+
+private data class ContactInviteTarget(val name: String, val email: String?, val phone: String?)
+
+private fun Context.prepareAndLaunchContactInvite(uri: Uri, onError: (String) -> Unit) {
+    val target = runCatching { readInviteTarget(uri) }.getOrElse {
+        onError("BSDC could not read the contact you selected.")
+        return
+    }
+    if (target == null || (target.email.isNullOrBlank() && target.phone.isNullOrBlank())) {
+        onError("Choose a contact with an email address or mobile number to prepare an invite.")
+        return
+    }
+    val recipient = target.email ?: target.phone.orEmpty()
+    val body = "Hi ${target.name}, I’m part of Bangladesh Software Development Community. Join me on BSDC to connect, learn, publish, and collaborate with developers."
+    val intent = if (target.email != null) {
+        Intent(Intent.ACTION_SENDTO, Uri.fromParts("mailto", recipient, null)).apply {
+            putExtra(Intent.EXTRA_SUBJECT, "Join me on BSDC")
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+    } else {
+        Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", recipient, null)).apply {
+            putExtra("sms_body", body)
+        }
+    }
+    runCatching { startActivity(Intent.createChooser(intent, "Invite ${target.name}")) }
+        .onFailure { onError("No email or SMS app is available for this invite.") }
+}
+
+@Suppress("MissingPermission") // READ_CONTACTS is checked immediately before the one-contact picker is launched.
+private fun Context.readInviteTarget(uri: Uri): ContactInviteTarget? {
+    val contact = contentResolver.query(
+        uri,
+        arrayOf(ContactsContract.Contacts._ID, ContactsContract.Contacts.DISPLAY_NAME),
+        null,
+        null,
+        null
+    )?.use { cursor ->
+        if (!cursor.moveToFirst()) return@use null
+        cursor.getLong(cursor.getColumnIndexOrThrow(ContactsContract.Contacts._ID)) to
+            (cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)) ?: "a developer")
+    } ?: return null
+    val email = contentResolver.query(
+        ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+        arrayOf(ContactsContract.CommonDataKinds.Email.ADDRESS),
+        "${ContactsContract.CommonDataKinds.Email.CONTACT_ID} = ?",
+        arrayOf(contact.first.toString()),
+        null
+    )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    val phone = contentResolver.query(
+        ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+        arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
+        "${ContactsContract.CommonDataKinds.Phone.CONTACT_ID} = ?",
+        arrayOf(contact.first.toString()),
+        null
+    )?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+    return ContactInviteTarget(contact.second, email, phone)
 }
 
 @Composable

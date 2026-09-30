@@ -78,6 +78,32 @@ class ProfileRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not update profile media.", t)
     }
 
+    /** Removes the public profile reference. Media-object deletion stays server-side because a
+     * mobile app must never carry Cloudinary deletion credentials. */
+    suspend fun removeMyPhoto(): RepositoryResult<Unit> = try {
+        gate.requireConfigured()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to edit your profile.")
+        database.collection("profiles").document(uid).update(
+            "photoUrl", FieldValue.delete(),
+            "updatedAt", FieldValue.serverTimestamp()
+        ).await()
+        RepositoryResult.Success(Unit)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not remove your profile photo.", t)
+    }
+
+    suspend fun clearMyLocation(): RepositoryResult<Unit> = try {
+        gate.requireConfigured()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to edit your profile.")
+        database.collection("profiles").document(uid).update(
+            "locationLabel", FieldValue.delete(),
+            "updatedAt", FieldValue.serverTimestamp()
+        ).await()
+        RepositoryResult.Success(Unit)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not remove your public location.", t)
+    }
+
     suspend fun changeMyUsername(rawUsername: String): RepositoryResult<String> = try {
         gate.requireConfigured()
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to change your username.")

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Ephemeral capture buffer. The image is uploaded only after an explicit profile-photo action. -->
+    <cache-path name="profile_camera" path="profile-camera/" />
+</paths>

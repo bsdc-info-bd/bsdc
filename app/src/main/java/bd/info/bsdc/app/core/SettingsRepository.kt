@@ -17,7 +17,12 @@ data class AppPreferences(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val language: LanguagePreference = LanguagePreference.ENGLISH,
     val reduceMotion: Boolean = false,
-    val useRankedFeed: Boolean = true
+    val useRankedFeed: Boolean = true,
+    // These local switches record that a member has read the feature-specific disclosure. They
+    // never replace Android's runtime permission, and they are all off by default.
+    val cameraProfilePhotoConsent: Boolean = false,
+    val approximateLocationConsent: Boolean = false,
+    val contactInviteConsent: Boolean = false
 )
 
 class SettingsRepository(private val context: Context) {
@@ -28,7 +33,10 @@ class SettingsRepository(private val context: Context) {
             language = values[LANGUAGE]?.let { runCatching { LanguagePreference.valueOf(it) }.getOrNull() }
                 ?: LanguagePreference.ENGLISH,
             reduceMotion = values[REDUCE_MOTION] ?: false,
-            useRankedFeed = values[RANKED_FEED] ?: true
+            useRankedFeed = values[RANKED_FEED] ?: true,
+            cameraProfilePhotoConsent = values[CAMERA_PROFILE_PHOTO_CONSENT] ?: false,
+            approximateLocationConsent = values[APPROXIMATE_LOCATION_CONSENT] ?: false,
+            contactInviteConsent = values[CONTACT_INVITE_CONSENT] ?: false
         )
     }
 
@@ -36,11 +44,17 @@ class SettingsRepository(private val context: Context) {
     suspend fun setLanguage(value: LanguagePreference) = context.dataStore.edit { it[LANGUAGE] = value.name }
     suspend fun setReduceMotion(value: Boolean) = context.dataStore.edit { it[REDUCE_MOTION] = value }
     suspend fun setRankedFeed(value: Boolean) = context.dataStore.edit { it[RANKED_FEED] = value }
+    suspend fun setCameraProfilePhotoConsent(value: Boolean) = context.dataStore.edit { it[CAMERA_PROFILE_PHOTO_CONSENT] = value }
+    suspend fun setApproximateLocationConsent(value: Boolean) = context.dataStore.edit { it[APPROXIMATE_LOCATION_CONSENT] = value }
+    suspend fun setContactInviteConsent(value: Boolean) = context.dataStore.edit { it[CONTACT_INVITE_CONSENT] = value }
 
     private companion object {
         val THEME = stringPreferencesKey("theme")
         val LANGUAGE = stringPreferencesKey("language")
         val REDUCE_MOTION = booleanPreferencesKey("reduce_motion")
         val RANKED_FEED = booleanPreferencesKey("ranked_feed")
+        val CAMERA_PROFILE_PHOTO_CONSENT = booleanPreferencesKey("camera_profile_photo_consent")
+        val APPROXIMATE_LOCATION_CONSENT = booleanPreferencesKey("approximate_location_consent")
+        val CONTACT_INVITE_CONSENT = booleanPreferencesKey("contact_invite_consent")
     }
 }

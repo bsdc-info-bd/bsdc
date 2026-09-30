@@ -23,6 +23,7 @@ import bd.info.bsdc.app.model.MediaKind
 import bd.info.bsdc.app.model.PostVisibility
 import bd.info.bsdc.app.model.ReactionType
 import bd.info.bsdc.app.model.UserProfile
+import bd.info.bsdc.app.privacy.ApproximateLocationResolver
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -362,11 +363,15 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val isFollowing = container.profiles.observeFollowing(profileId).catch { emit(false) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val privacyPreferences = container.settings.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppPreferences())
 
     private val _action = MutableStateFlow(ProfileActionState())
     val action = _action.asStateFlow()
     private val _conversationId = MutableStateFlow<String?>(null)
     val conversationId = _conversationId.asStateFlow()
+    private val _locationSuggestion = MutableStateFlow<String?>(null)
+    val locationSuggestion = _locationSuggestion.asStateFlow()
 
     fun update(displayName: String, bio: String, skills: String, location: String) = viewModelScope.launch {
         if (!isOwnProfile) return@launch
@@ -402,10 +407,74 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
         }
     }
 
+    fun showActionError(message: String) { _action.value = ProfileActionState(error = message) }
+
+    fun setCameraProfilePhotoConsent(value: Boolean) = viewModelScope.launch {
+        container.settings.setCameraProfilePhotoConsent(value)
+    }
+
+    fun setApproximateLocationConsent(value: Boolean) = viewModelScope.launch {
+        container.settings.setApproximateLocationConsent(value)
+    }
+
+    fun setContactInviteConsent(value: Boolean) = viewModelScope.launch {
+        container.settings.setContactInviteConsent(value)
+    }
+
+    /** Gets a one-time city-level suggestion. Coordinates never leave the resolver's memory. */
+    fun suggestApproximateLocation(context: Context) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        try {
+            _locationSuggestion.value = ApproximateLocationResolver(context.applicationContext).suggestCityLabel()
+            _action.value = ProfileActionState()
+        } catch (error: Throwable) {
+            _action.value = ProfileActionState(error = error.message ?: "Could not find an approximate city.")
+        }
+    }
+
+    fun saveSuggestedLocation(label: String) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        val current = state.value ?: return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.profiles.updateMyProfile(
+            displayName = current.displayName,
+            bio = current.bio,
+            skills = current.skills,
+            locationLabel = label
+        )) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Public city label updated")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+        _locationSuggestion.value = null
+    }
+
+    fun dismissLocationSuggestion() { _locationSuggestion.value = null }
+
+    fun revokeApproximateLocation() = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        container.settings.setApproximateLocationConsent(false)
+        _action.value = when (val result = container.profiles.clearMyLocation()) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Location personalization stopped and public city removed")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
+    fun removeProfilePhoto() = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.profiles.removeMyPhoto()) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Profile photo removed from BSDC")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
     fun uploadAvatar(uri: Uri) = uploadProfileImage(uri, isAvatar = true)
+    fun uploadCapturedAvatar(uri: Uri) = uploadProfileImage(uri, isAvatar = true, discardAfterUpload = true)
     fun uploadCover(uri: Uri) = uploadProfileImage(uri, isAvatar = false)
 
-    private fun uploadProfileImage(uri: Uri, isAvatar: Boolean) = viewModelScope.launch {
+    private fun uploadProfileImage(uri: Uri, isAvatar: Boolean, discardAfterUpload: Boolean = false) = viewModelScope.launch {
         if (!isOwnProfile) return@launch
         _action.value = ProfileActionState(busy = true)
         when (val upload = container.media.upload(uri, if (isAvatar) "BSDC profile photo" else "BSDC profile cover")) {
@@ -423,6 +492,7 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
                 }
             }
         }
+        if (discardAfterUpload) container.media.discardLocalCameraCapture(uri)
     }
 
     fun toggleFollow() = viewModelScope.launch {

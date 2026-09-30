@@ -91,6 +91,13 @@ class CloudinaryMediaUploader(private val context: Context) {
             .dispatch()
     }
 
+    /** Deletes only a BSDC FileProvider cache URI after a camera capture is handled. */
+    fun discardLocalCameraCapture(uri: Uri) {
+        if (uri.authority == "${context.packageName}.fileprovider") {
+            runCatching { context.contentResolver.delete(uri, null, null) }
+        }
+    }
+
     private fun contentSize(uri: Uri): Long {
         context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst() && !cursor.isNull(0)) return cursor.getLong(0)
