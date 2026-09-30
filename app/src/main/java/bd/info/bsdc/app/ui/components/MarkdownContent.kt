@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Code
@@ -60,7 +59,11 @@ fun MarkdownDocument(
                 line.startsWith("# ") -> { Text(line.removePrefix("# "), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); used++ }
                 line.startsWith("## ") -> { Text(line.removePrefix("## "), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); used++ }
                 line.startsWith("### ") -> { Text(line.removePrefix("### "), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold); used++ }
-                line.startsWith("> ") -> { Text("“${line.removePrefix("> ")}"", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge); used++ }
+                line.startsWith("> ") -> {
+                    val quote = line.removePrefix("> ")
+                    Text("“$quote”", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyLarge)
+                    used++
+                }
                 line.startsWith("- ") || line.startsWith("* ") -> { Text("• ${line.drop(2)}", style = MaterialTheme.typography.bodyLarge); used++ }
                 line.matches(Regex("\\d+\\. .*")) -> { Text(line, style = MaterialTheme.typography.bodyLarge); used++ }
                 line.isNotBlank() && !line.startsWith("{{") -> { MarkdownLine(line); used++ }
