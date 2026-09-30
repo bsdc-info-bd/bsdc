@@ -1,6 +1,7 @@
 package bd.info.bsdc.app
 
 import android.app.Application
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
@@ -56,14 +57,22 @@ class BsdcApplication : Application() {
                 CHANNEL_MESSAGES,
                 getString(R.string.notification_channel_messages),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = getString(R.string.notification_channel_description) }
+            ).apply {
+                description = getString(R.string.notification_channel_description)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(true)
+            }
         )
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_COMMUNITY,
                 getString(R.string.notification_channel_community),
                 NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = getString(R.string.notification_channel_description) }
+            ).apply {
+                description = getString(R.string.notification_channel_description)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(true)
+            }
         )
     }
 

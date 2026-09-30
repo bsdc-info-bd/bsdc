@@ -306,28 +306,63 @@ class NotificationsViewModel(private val container: AppContainer) : ViewModel() 
     fun markRead(id: String) = viewModelScope.launch { container.notifications.markRead(id) }
 }
 
+data class InboxUiState(
+    val conversations: List<bd.info.bsdc.app.model.DirectConversation> = emptyList(),
+    val creatingGroup: Boolean = false,
+    val error: String? = null,
+    val createdConversationId: String? = null
+)
+
 class InboxViewModel(private val container: AppContainer) : ViewModel() {
-    val conversations = container.chat.observeConversations()
-        .catch { emit(emptyList()) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    private val _state = MutableStateFlow(InboxUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.chat.observeConversations().catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { conversations -> _state.value = _state.value.copy(conversations = conversations) }
+        }
+    }
+
+    fun createGroup(title: String, description: String, handles: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(creatingGroup = true, error = null)
+        when (val result = container.chat.createGroup(title, description, handles)) {
+            is RepositoryResult.Success -> _state.value = _state.value.copy(creatingGroup = false, createdConversationId = result.value)
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(creatingGroup = false, error = result.message)
+        }
+    }
+
+    fun consumeCreatedConversation() { _state.value = _state.value.copy(createdConversationId = null) }
 }
 
 data class ChatRoomUiState(
+    val conversation: bd.info.bsdc.app.model.DirectConversation? = null,
     val messages: List<bd.info.bsdc.app.model.ChatMessage> = emptyList(),
     val typing: Set<String> = emptySet(),
     val sending: Boolean = false,
+    val uploading: Boolean = false,
     val error: String? = null
 )
 
 class ChatRoomViewModel(private val container: AppContainer, private val conversationId: String) : ViewModel() {
     private val _state = MutableStateFlow(ChatRoomUiState())
     val state = _state.asStateFlow()
+    private var typingJob: kotlinx.coroutines.Job? = null
 
     init {
         viewModelScope.launch {
+            container.chat.observeConversation(conversationId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { conversation -> _state.value = _state.value.copy(conversation = conversation) }
+        }
+        viewModelScope.launch {
             container.chat.observeMessages(conversationId).catch { error ->
                 _state.value = _state.value.copy(error = error.message)
-            }.collect { messages -> _state.value = _state.value.copy(messages = messages) }
+            }.collect { messages ->
+                _state.value = _state.value.copy(messages = messages)
+                container.chat.markSeen(conversationId)
+            }
         }
         viewModelScope.launch {
             container.chat.observeTyping(conversationId).catch { emit(emptySet()) }
@@ -344,7 +379,52 @@ class ChatRoomViewModel(private val container: AppContainer, private val convers
         }
     }
 
-    fun typing(value: Boolean) = viewModelScope.launch { container.chat.setTyping(conversationId, value) }
+    fun attach(uri: Uri) = viewModelScope.launch {
+        _state.value = _state.value.copy(uploading = true, error = null)
+        when (val upload = container.media.upload(uri)) {
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(uploading = false, error = upload.message)
+            is RepositoryResult.Success -> {
+                val kind = if (upload.value.resourceType == bd.info.bsdc.app.model.MediaKind.IMAGE) "image" else "audio"
+                when (val result = container.chat.sendAttachment(conversationId, kind, upload.value.secureUrl)) {
+                    is RepositoryResult.Success -> _state.value = _state.value.copy(uploading = false)
+                    is RepositoryResult.Failure -> _state.value = _state.value.copy(uploading = false, error = result.message)
+                }
+            }
+        }
+    }
+
+    fun edit(messageId: String, body: String) = viewModelScope.launch {
+        when (val result = container.chat.editMessage(conversationId, messageId, body)) {
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(error = result.message)
+            is RepositoryResult.Success -> Unit
+        }
+    }
+
+    fun remove(messageId: String) = viewModelScope.launch {
+        when (val result = container.chat.deleteMessage(conversationId, messageId)) {
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(error = result.message)
+            is RepositoryResult.Success -> Unit
+        }
+    }
+
+    fun draftChanged(hasText: Boolean) {
+        typingJob?.cancel()
+        if (!hasText) {
+            viewModelScope.launch { container.chat.setTyping(conversationId, false) }
+            return
+        }
+        viewModelScope.launch { container.chat.setTyping(conversationId, true) }
+        typingJob = viewModelScope.launch {
+            kotlinx.coroutines.delay(1_800)
+            container.chat.setTyping(conversationId, false)
+        }
+    }
+
+    override fun onCleared() {
+        typingJob?.cancel()
+        viewModelScope.launch { container.chat.setTyping(conversationId, false) }
+        super.onCleared()
+    }
 }
 
 class BsdcViewModelFactory(private val create: () -> ViewModel) : ViewModelProvider.Factory {

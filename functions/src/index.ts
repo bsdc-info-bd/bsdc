@@ -139,14 +139,18 @@ export const notifyChatParticipants = onValueCreated(
     if (!message.senderId) return;
     const conversation = (await getDatabase().ref(`conversations/${event.params.conversationId}`).get()).val() as {
       participants?: Record<string, boolean>;
+      kind?: string;
+      title?: string;
     } | null;
     const recipients = Object.keys(conversation?.participants ?? {}).filter((uid) => uid !== message.senderId);
     const sender = (await firestore.doc(`profiles/${message.senderId}`).get()).data();
+    const senderName = String(sender?.displayName || "BSDC member");
     const preview = message.kind === "image" ? "Sent an image" : message.kind === "audio" ? "Sent a voice note" : String(message.body || "New message");
+    const groupTitle = String(conversation?.title || "BSDC group");
     await Promise.all(recipients.map((uid) => notifyUser(uid, {
       kind: "message",
-      title: String(sender?.displayName || "BSDC message"),
-      body: preview,
+      title: conversation?.kind === "group" ? groupTitle : senderName,
+      body: conversation?.kind === "group" ? `${senderName}: ${preview}` : preview,
       targetPath: `/messages/${event.params.conversationId}`,
       actorId: message.senderId,
     })));

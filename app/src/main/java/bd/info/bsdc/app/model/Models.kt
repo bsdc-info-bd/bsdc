@@ -80,10 +80,15 @@ data class PostComment(
 
 data class DirectConversation(
     val id: String = "",
+    val kind: String = "direct",
+    val title: String = "",
+    val description: String = "",
+    val createdBy: String? = null,
     val participantIds: List<String> = emptyList(),
     val lastMessage: String = "",
     val lastMessageAt: Long = 0,
-    val unreadBy: Map<String, Long> = emptyMap()
+    val unreadBy: Map<String, Long> = emptyMap(),
+    val memberCount: Long = 0
 )
 
 data class ChatMessage(
@@ -94,6 +99,7 @@ data class ChatMessage(
     val attachmentUrl: String? = null,
     val sentAt: Long = 0,
     val editedAt: Long? = null,
+    val deletedAt: Long? = null,
     val seenBy: Map<String, Long> = emptyMap(),
     val replyToId: String? = null
 )

@@ -11,7 +11,7 @@ This repository deliberately starts with a secure, deployable social-community c
 - Public real-time Firestore feed, deterministic local ranking, freshness decay, negative-feedback penalty support, 7% stable exploration, and author diversity.
 - Native post composer: text, language, visibility, tags, Cloudinary image upload, and Cloudinary voice-note upload. Video MIME types are rejected on-device.
 - Firestore-backed reactions, comments, reports, post metadata, profiles, handles, follower/following records, notifications, device records, and engagement events.
-- Realtime Database direct conversations, live message stream, typing indicators, read state, and only image/audio attachment kinds.
+- Realtime Database direct and group conversations, live message stream, unread counts, typing indicators with disconnect cleanup, soft message removal, read state, group creation by BSDC handle, and image/audio attachments only.
 - FCM foreground notification service, Android 13 notification permission, device-token registration, notification center, and verified Android App Links for `bsdc.info.bd`.
 - Firebase Functions for retry-safe engagement/follower counts and server-side comment, reaction, follow, and chat push notifications. No FCM server credential is embedded in the app.
 - Light/dark/system theme persistence, English/Bangla post-language selection, material accessibility semantics, responsive Compose layouts, and no emoji-only controls.
@@ -32,7 +32,7 @@ functions/                   trusted notification and counter backend
 .github/workflows/           cloud build, artifacts, optional Play publishing
 ```
 
-The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. The official **Cloudinary Android SDK** dispatches uploads with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients.
+The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. The official **Cloudinary Android SDK** dispatches uploads with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients. See [`docs/MESSENGER_ARCHITECTURE.md`](docs/MESSENGER_ARCHITECTURE.md) for the membership-protected direct/group messaging schema and deployment boundary.
 
 ## Secure configuration — required before release
 
