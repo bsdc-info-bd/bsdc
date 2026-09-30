@@ -25,7 +25,7 @@ class ModerationRepository(private val gate: FirebaseGate) {
     suspend fun hasStaffRole(): Boolean = runCatching {
         gate.requireConfigured()
         val user = FirebaseAuth.getInstance().currentUser ?: return@runCatching false
-        val role = user.getIdTokenResult(true).await().claims["role"] as? String
+        val role = user.getIdToken(true).await().claims["role"] as? String
         role in STAFF_ROLES
     }.getOrDefault(false)
 
