@@ -32,7 +32,7 @@ import bd.info.bsdc.app.ui.SettingsViewModel
 /** Native, offline-safe product controls. Analytics remains disabled until the member opts in. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLegal: () -> Unit) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -108,6 +108,16 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     }
                     Text(
                         "You can change this choice at any time. Collection is disabled by default before you choose.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            item("legal") {
+                SettingCard("Terms & privacy", "Review the versioned BSDC Terms of Use and Privacy Notice accepted for this account.") {
+                    TextButton(onClick = onOpenLegal) { Text("Review current documents") }
+                    Text(
+                        "Material document changes require a new acceptance before community access continues.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

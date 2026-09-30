@@ -1,4 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getDatabase } from "firebase-admin/database";
@@ -15,6 +16,12 @@ initializeApp();
 
 const REGION = "asia-southeast1";
 const firestore = getFirestore();
+const CURRENT_LEGAL_VERSION = "2026-09-30";
+const LEGAL_ACCEPTANCE_CLAIM = "legalAcceptanceVersion";
+const REQUIRED_LEGAL_DOCUMENTS = [
+  { id: "terms-2026-09-30", version: CURRENT_LEGAL_VERSION },
+  { id: "privacy-2026-09-30", version: CURRENT_LEGAL_VERSION },
+] as const;
 
 type DeviceRecord = { token?: string };
 type NotificationPayload = {
@@ -66,6 +73,41 @@ async function notifyUser(uid: string, payload: NotificationPayload): Promise<vo
     }
   }));
 }
+
+/**
+ * Database rules trust only this Admin-issued claim for community writes. The source Firestore
+ * records are immutable and rule-validated, so a mobile client cannot mint its own authorization.
+ * Existing custom claims (for example staff role) are preserved when the legal-version claim is set.
+ */
+export const grantLegalAccessAfterAcceptance = onDocumentWritten(
+  { document: "profiles/{uid}/legalAcceptances/{documentId}", region: REGION },
+  async (event) => {
+    if (!event.data?.after.exists) return;
+    const uid = event.params.uid;
+    const records = await Promise.all(
+      REQUIRED_LEGAL_DOCUMENTS.map(({ id }) => firestore.doc(`profiles/${uid}/legalAcceptances/${id}`).get()),
+    );
+    const allCurrent = records.every((record, index) => {
+      const expected = REQUIRED_LEGAL_DOCUMENTS[index];
+      const data = record.data();
+      return data?.documentId === expected.id
+        && data?.documentVersion === expected.version
+        && data?.source === "android_native"
+        && (data?.locale === "en" || data?.locale === "bn")
+        && data?.acceptedAt != null;
+    });
+    if (!allCurrent) return;
+
+    const auth = getAuth();
+    const user = await auth.getUser(uid);
+    if (user.customClaims?.[LEGAL_ACCEPTANCE_CLAIM] === CURRENT_LEGAL_VERSION) return;
+    await auth.setCustomUserClaims(uid, {
+      ...(user.customClaims ?? {}),
+      [LEGAL_ACCEPTANCE_CLAIM]: CURRENT_LEGAL_VERSION,
+    });
+    logger.info("Granted current BSDC legal access", { uid, version: CURRENT_LEGAL_VERSION });
+  },
+);
 
 export const countPostReactions = onDocumentWritten(
   { document: "posts/{postId}/reactions/{uid}", region: REGION },

@@ -6,6 +6,8 @@ import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.RepositoryResult
 import bd.info.bsdc.app.core.guarded
+import bd.info.bsdc.app.data.LegalConsentRepository
+import bd.info.bsdc.app.privacy.LegalDocuments
 import bd.info.bsdc.app.model.UserProfile
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
@@ -32,7 +34,10 @@ sealed interface AuthState {
     data class SignedIn(val user: FirebaseUser) : AuthState
 }
 
-class AuthRepository(private val gate: FirebaseGate) {
+class AuthRepository(
+    private val gate: FirebaseGate,
+    private val legalConsents: LegalConsentRepository
+) {
     fun observeAuth(): Flow<AuthState> = callbackFlow {
         if (!gate.isConfigured) {
             trySend(AuthState.ConfigurationRequired)
@@ -55,9 +60,11 @@ class AuthRepository(private val gate: FirebaseGate) {
         email: String,
         password: String,
         displayName: String,
-        username: String
+        username: String,
+        acceptedCurrentDocuments: Boolean
     ): RepositoryResult<FirebaseUser> = try {
         gate.requireConfigured()
+        require(acceptedCurrentDocuments) { "Read and accept the current BSDC Terms and Privacy Notice to create an account." }
         require(displayName.trim().length in 2..60) { "Enter a display name between 2 and 60 characters." }
         require(UsernamePolicy.isValid(username)) { UsernamePolicy.message }
         val auth = FirebaseAuth.getInstance()
@@ -84,6 +91,13 @@ class AuthRepository(private val gate: FirebaseGate) {
                 )
             )
         }.await()
+        // Account creation is not treated as document acceptance. The immutable records are
+        // written after Firebase establishes the account identity, and the app gate remains in
+        // place if this write cannot complete.
+        when (val consent = legalConsents.acceptCurrent(LegalDocuments.ENGLISH)) {
+            is RepositoryResult.Success -> Unit
+            is RepositoryResult.Failure -> error(consent.message)
+        }
         user.sendEmailVerification().await()
         RepositoryResult.Success(user)
     } catch (t: Throwable) {

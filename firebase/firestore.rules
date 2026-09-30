@@ -3,6 +3,11 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
+    // Issued only by grantLegalAccessAfterAcceptance in trusted Functions after both immutable
+    // current-version acceptance records are verified. It gates all community writes.
+    function hasCurrentLegalAccess() {
+      return signedIn() && request.auth.token.legalAcceptanceVersion == '2026-09-30';
+    }
     function isStaff() { return signedIn() && request.auth.token.role in ['admin', 'moderator']; }
     function isOrgMember(orgId) {
       return signedIn() && orgId is string
@@ -30,6 +35,19 @@ service cloud.firestore {
         && (data.status != 'scheduled' || data.scheduledAt is timestamp)
         && (data.organizationId == null || isOrgMember(data.organizationId));
     }
+    // Acceptance documents are versioned and immutable. A member can only create the two exact
+    // current documents for their own profile; server time prevents a client-chosen acceptance time.
+    function validLegalAcceptance(documentId, data) {
+      return data.keys().hasOnly(['documentId', 'documentVersion', 'acceptedAt', 'locale', 'source'])
+        && data.documentId == documentId
+        && data.acceptedAt == request.time
+        && data.locale in ['en', 'bn']
+        && data.source == 'android_native'
+        && (
+          (documentId == 'terms-2026-09-30' && data.documentVersion == '2026-09-30')
+          || (documentId == 'privacy-2026-09-30' && data.documentVersion == '2026-09-30')
+        );
+    }
 
     match /handles/{handle} {
       allow get, list: if true;
@@ -55,7 +73,7 @@ service cloud.firestore {
       allow create: if isSelf(uid)
         && request.resource.data.username is string
         && request.resource.data.displayName is string;
-      allow update: if isSelf(uid) && (
+      allow update: if isSelf(uid) && hasCurrentLegalAccess() && (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'bio', 'skills', 'locationLabel', 'photoUrl', 'coverUrl', 'updatedAt'
         ])
@@ -68,42 +86,47 @@ service cloud.firestore {
       );
       allow delete: if false;
 
-      match /following/{targetUid} {
+      match /legalAcceptances/{documentId} {
         allow read: if isSelf(uid);
-        allow create, delete: if isSelf(uid) && targetUid != uid;
+        allow create: if isSelf(uid) && validLegalAcceptance(documentId, request.resource.data);
+        allow update, delete: if false;
+      }
+      match /following/{targetUid} {
+        allow read: if isSelf(uid) && hasCurrentLegalAccess();
+        allow create, delete: if isSelf(uid) && hasCurrentLegalAccess() && targetUid != uid;
         allow update: if false;
       }
       match /followers/{followerUid} {
-        allow read: if isSelf(uid) || isSelf(followerUid);
-        allow create, delete: if isSelf(followerUid) && followerUid != uid;
+        allow read: if (isSelf(uid) || isSelf(followerUid)) && hasCurrentLegalAccess();
+        allow create, delete: if isSelf(followerUid) && hasCurrentLegalAccess() && followerUid != uid;
         allow update: if false;
       }
       match /devices/{deviceId} {
-        allow read, create, update, delete: if isSelf(uid);
+        allow read, create, update, delete: if isSelf(uid) && hasCurrentLegalAccess();
       }
       match /notifications/{notificationId} {
-        allow read: if isSelf(uid);
-        allow update: if isSelf(uid)
+        allow read: if isSelf(uid) && hasCurrentLegalAccess();
+        allow update: if isSelf(uid) && hasCurrentLegalAccess()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead']);
         allow create, delete: if false;
       }
       match /engagement/{postId} {
-        allow read, create, update, delete: if isSelf(uid);
+        allow read, create, update, delete: if isSelf(uid) && hasCurrentLegalAccess();
       }
       // A member’s saved posts are a private index. No save count is trusted from the client.
       match /bookmarks/{postId} {
-        allow read: if isSelf(uid);
-        allow create: if isSelf(uid)
+        allow read: if isSelf(uid) && hasCurrentLegalAccess();
+        allow create: if isSelf(uid) && hasCurrentLegalAccess()
           && request.resource.data.keys().hasOnly(['postId', 'savedAt'])
           && request.resource.data.postId == postId
           && postIsPublic(postId);
-        allow delete: if isSelf(uid);
+        allow delete: if isSelf(uid) && hasCurrentLegalAccess();
         allow update: if false;
       }
       // A private index lets a member choose their organizations without querying other members.
       match /organizationMemberships/{orgId} {
-        allow read: if isSelf(uid);
-        allow create: if signedIn()
+        allow read: if isSelf(uid) && hasCurrentLegalAccess();
+        allow create: if hasCurrentLegalAccess()
           && request.resource.data.organizationId == orgId
           && getAfter(/databases/$(database)/documents/organizations/$(orgId)/members/$(uid)).data.organizationId == orgId
           && (isSelf(uid) || isOrgOwner(orgId));
@@ -113,21 +136,21 @@ service cloud.firestore {
 
     match /organizations/{orgId} {
       allow get, list: if true;
-      allow create: if signedIn()
+      allow create: if hasCurrentLegalAccess()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.name is string && request.resource.data.name.size() >= 3
         && request.resource.data.handle is string && request.resource.data.handle.size() >= 3;
-      allow update: if isOrgOwner(orgId)
+      allow update: if hasCurrentLegalAccess() && isOrgOwner(orgId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'description', 'photoUrl', 'memberCount', 'updatedAt'
         ]);
       allow delete: if false;
 
       match /members/{uid} {
-        allow get, list: if signedIn();
+        allow get, list: if hasCurrentLegalAccess();
         // Initial owner membership is created atomically with the organization. Later editor
         // additions can only be made by the organization owner and mirror into the user's index.
-        allow create: if (isOrgOwner(orgId)
+        allow create: if hasCurrentLegalAccess() && (isOrgOwner(orgId)
           || (isSelf(uid) && getAfter(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == uid))
           && request.resource.data.organizationId == orgId
           && request.resource.data.role in ['owner', 'editor'];
@@ -137,24 +160,24 @@ service cloud.firestore {
 
     match /series/{seriesId} {
       allow get, list: if true;
-      allow create: if signedIn()
+      allow create: if hasCurrentLegalAccess()
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 3
         && request.resource.data.description is string
         && request.resource.data.description.size() <= 280;
-      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+      allow update: if hasCurrentLegalAccess() && resource.data.ownerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'updatedAt']);
-      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
+      allow delete: if hasCurrentLegalAccess() && resource.data.ownerId == request.auth.uid;
     }
 
     match /posts/{postId} {
       allow get, list: if (resource.data.visibility == 'PUBLIC' && resource.data.status == 'published')
-        || (signedIn() && resource.data.authorId == request.auth.uid);
-      allow create: if signedIn() && validPost(request.resource.data);
+        || (hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid);
+      allow create: if hasCurrentLegalAccess() && validPost(request.resource.data);
       // Published posts remain published from the client. The trusted scheduler (Admin SDK)
       // promotes scheduled records; it bypasses rules rather than expanding client authority.
-      allow update: if signedIn() && resource.data.authorId == request.auth.uid
+      allow update: if hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid
         && validPost(request.resource.data)
         && (resource.data.status != 'published' || request.resource.data.status == 'published')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -163,30 +186,30 @@ service cloud.firestore {
           'organizationId', 'organizationName', 'organizationHandle', 'coAuthorIds',
           'coAuthorNames', 'updatedAt'
         ]);
-      allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+      allow delete: if hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid;
 
       match /reactions/{uid} {
-        allow get: if isSelf(uid);
+        allow get: if isSelf(uid) && hasCurrentLegalAccess();
         allow list: if false;
-        allow create: if isSelf(uid) && request.resource.data.type is string;
-        allow delete: if isSelf(uid);
+        allow create: if isSelf(uid) && hasCurrentLegalAccess() && request.resource.data.type is string;
+        allow delete: if isSelf(uid) && hasCurrentLegalAccess();
         allow update: if false;
       }
       match /comments/{commentId} {
-        allow read: if postIsPublic(postId) || (signedIn() && get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
-        allow create: if signedIn()
+        allow read: if postIsPublic(postId) || (hasCurrentLegalAccess() && get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+        allow create: if hasCurrentLegalAccess()
           && request.resource.data.authorId == request.auth.uid
           && request.resource.data.body is string
           && request.resource.data.body.size() > 0
           && request.resource.data.body.size() <= 2000;
-        allow update: if signedIn() && resource.data.authorId == request.auth.uid
+        allow update: if hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'updatedAt']);
-        allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
+        allow delete: if hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid;
       }
     }
 
     match /reports/{reportId} {
-      allow create: if signedIn() && request.resource.data.reporterId == request.auth.uid;
+      allow create: if hasCurrentLegalAccess() && request.resource.data.reporterId == request.auth.uid;
       allow read, update: if isStaff();
       allow delete: if false;
     }

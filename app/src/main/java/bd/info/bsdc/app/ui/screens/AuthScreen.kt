@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +33,8 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import bd.info.bsdc.app.privacy.LegalDocument
+import bd.info.bsdc.app.privacy.LegalDocuments
 import bd.info.bsdc.app.ui.AuthViewModel
 import bd.info.bsdc.app.ui.components.BsdcBrand
 
@@ -43,6 +47,8 @@ fun AuthScreen(viewModel: AuthViewModel) {
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
+    var acceptedCurrentDocuments by remember { mutableStateOf(false) }
+    var openLegalDocument by remember { mutableStateOf<LegalDocument?>(null) }
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -71,11 +77,23 @@ fun AuthScreen(viewModel: AuthViewModel) {
             trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "Hide" else "Show") } },
             singleLine = true
         )
+        if (state.createAccount) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = acceptedCurrentDocuments, onCheckedChange = { acceptedCurrentDocuments = it }, enabled = !state.busy)
+                Column(Modifier.weight(1f)) {
+                    Text("I have read and accept the current BSDC Terms of Use and Privacy Notice.", style = MaterialTheme.typography.bodySmall)
+                    Row {
+                        TextButton(onClick = { openLegalDocument = LegalDocument.TERMS_OF_USE }, enabled = !state.busy) { Text("Terms") }
+                        TextButton(onClick = { openLegalDocument = LegalDocument.PRIVACY_NOTICE }, enabled = !state.busy) { Text("Privacy") }
+                    }
+                }
+            }
+        }
         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
         Button(
             onClick = {
-                if (state.createAccount) viewModel.signUp(email, password, displayName, username)
+                if (state.createAccount) viewModel.signUp(email, password, displayName, username, acceptedCurrentDocuments)
                 else viewModel.signIn(email, password)
             },
             enabled = !state.busy,
@@ -109,9 +127,15 @@ fun AuthScreen(viewModel: AuthViewModel) {
             Text(if (state.createAccount) "Already have an account? Sign in" else "New to BSDC? Create an account")
         }
         Text(
-            "By continuing, you agree to BSDC’s community guidelines and privacy policy.",
+            if (state.createAccount) "Account creation is available only after you explicitly accept the current documents above." else "New accounts explicitly accept the current Terms of Use and Privacy Notice before entering BSDC.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+    openLegalDocument?.let { document ->
+        LegalDocumentDialog(
+            document = LegalDocuments.document(document, LegalDocuments.ENGLISH),
+            onDismiss = { openLegalDocument = null }
         )
     }
 }

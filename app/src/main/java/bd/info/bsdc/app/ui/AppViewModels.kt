@@ -14,6 +14,7 @@ import bd.info.bsdc.app.core.AppPreferences
 import bd.info.bsdc.app.core.LanguagePreference
 import bd.info.bsdc.app.core.ThemePreference
 import bd.info.bsdc.app.core.RepositoryResult
+import bd.info.bsdc.app.data.LegalConsentState
 import bd.info.bsdc.app.feed.FeedRankingEngine
 import bd.info.bsdc.app.content.PublishingTools
 import bd.info.bsdc.app.data.PostDraft
@@ -60,6 +61,46 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setAnalyticsConsent(value: AnalyticsConsent) = viewModelScope.launch { container.settings.setAnalyticsConsent(value) }
 }
 
+data class LegalConsentActionState(
+    val busy: Boolean = false,
+    val error: String? = null
+)
+
+/** The authenticated community is unavailable until the current server-backed document records exist. */
+class LegalConsentViewModel(private val container: AppContainer, private val uid: String) : ViewModel() {
+    private val _consent = MutableStateFlow<LegalConsentState>(LegalConsentState.Loading)
+    val consent = _consent.asStateFlow()
+    private var observation: kotlinx.coroutines.Job? = null
+
+    private val _action = MutableStateFlow(LegalConsentActionState())
+    val action = _action.asStateFlow()
+
+    init { observeAcceptance() }
+
+    fun accept(locale: String) = viewModelScope.launch {
+        _action.value = LegalConsentActionState(busy = true)
+        _action.value = when (val result = container.legalConsents.acceptCurrent(locale)) {
+            is RepositoryResult.Success -> LegalConsentActionState()
+            is RepositoryResult.Failure -> LegalConsentActionState(error = result.message)
+        }
+    }
+
+    fun retry() {
+        _action.value = LegalConsentActionState()
+        observeAcceptance()
+    }
+
+    private fun observeAcceptance() {
+        observation?.cancel()
+        _consent.value = LegalConsentState.Loading
+        observation = viewModelScope.launch {
+            container.legalConsents.observeCurrentAcceptance(uid)
+                .catch { error -> emit(LegalConsentState.Unavailable(error.message ?: "BSDC could not check document acceptance.")) }
+                .collect { _consent.value = it }
+        }
+    }
+}
+
 data class AuthUiState(
     val createAccount: Boolean = false,
     val busy: Boolean = false,
@@ -74,8 +115,8 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     fun setCreateAccount(value: Boolean) { _state.value = _state.value.copy(createAccount = value, error = null, message = null) }
 
     fun signIn(email: String, password: String) = launch { repository.signIn(email, password) }
-    fun signUp(email: String, password: String, displayName: String, username: String) = launch {
-        repository.signUp(email, password, displayName, username)
+    fun signUp(email: String, password: String, displayName: String, username: String, acceptedCurrentDocuments: Boolean) = launch {
+        repository.signUp(email, password, displayName, username, acceptedCurrentDocuments)
     }
     fun google(context: Context) = launch { repository.signInWithGoogle(context) }
     fun provider(activity: Activity, providerId: String) = launch { repository.signInWithProvider(activity, providerId) }

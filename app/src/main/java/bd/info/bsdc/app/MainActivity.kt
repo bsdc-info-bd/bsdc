@@ -61,6 +61,7 @@ import bd.info.bsdc.app.ui.ChatRoomViewModel
 import bd.info.bsdc.app.ui.ComposerViewModel
 import bd.info.bsdc.app.ui.FeedViewModel
 import bd.info.bsdc.app.ui.InboxViewModel
+import bd.info.bsdc.app.ui.LegalConsentViewModel
 import bd.info.bsdc.app.ui.NotificationsViewModel
 import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
@@ -73,6 +74,8 @@ import bd.info.bsdc.app.ui.screens.ChatRoomScreen
 import bd.info.bsdc.app.ui.screens.ComposerScreen
 import bd.info.bsdc.app.ui.screens.FeedScreen
 import bd.info.bsdc.app.ui.screens.InboxScreen
+import bd.info.bsdc.app.ui.screens.LegalConsentGateScreen
+import bd.info.bsdc.app.ui.screens.LegalDocumentsScreen
 import bd.info.bsdc.app.ui.screens.NotificationsScreen
 import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
@@ -124,7 +127,18 @@ private fun BsdcApp(container: bd.info.bsdc.app.core.AppContainer, targetPath: S
                 val vm: AuthViewModel = viewModel(factory = BsdcViewModelFactory { AuthViewModel(container.auth) })
                 AuthScreen(vm)
             }
-            is AuthState.SignedIn -> CommunityShell(container, session.user.uid, targetPath, app::signOut)
+            is AuthState.SignedIn -> {
+                val legal: LegalConsentViewModel = viewModel(
+                    key = "legal-${session.user.uid}",
+                    factory = BsdcViewModelFactory { LegalConsentViewModel(container, session.user.uid) }
+                )
+                val legalState by legal.consent.collectAsStateWithLifecycle()
+                if (legalState is bd.info.bsdc.app.data.LegalConsentState.Accepted) {
+                    CommunityShell(container, session.user.uid, targetPath, app::signOut)
+                } else {
+                    LegalConsentGateScreen(legal, preferences.language, app::signOut)
+                }
+            }
         }
     }
 }
@@ -269,7 +283,14 @@ private fun CommunityDestinations(
         }
         composable("settings") {
             val vm: SettingsViewModel = viewModel(factory = BsdcViewModelFactory { SettingsViewModel(container) })
-            SettingsScreen(vm) { nav.popBackStack() }
+            SettingsScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenLegal = { nav.navigate("legal") }
+            )
+        }
+        composable("legal") {
+            LegalDocumentsScreen { nav.popBackStack() }
         }
         composable("member/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) { entry ->
             val memberId = entry.arguments?.getString("uid").orEmpty()
