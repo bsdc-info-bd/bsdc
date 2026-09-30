@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
+import android.provider.MediaStore
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -95,11 +96,14 @@ fun ProfileScreen(
         else if (uri != null) context.deleteTemporaryCapture(uri)
     }
     val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) context.profileCameraUri()?.let { uri ->
-            pendingCameraUri = uri
-            cameraCapture.launch(uri)
-        } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
-        else viewModel.showActionError("Camera permission was not granted. You can still choose a profile image from your device.")
+        when {
+            !granted -> viewModel.showActionError("Camera permission was not granted. You can still choose a profile image from your device.")
+            !context.hasCameraCaptureHandler() -> viewModel.showActionError("No camera app is available on this device. You can still choose a profile image.")
+            else -> context.profileCameraUri()?.let { uri ->
+                pendingCameraUri = uri
+                cameraCapture.launch(uri)
+            } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+        }
     }
     val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.suggestApproximateLocation(context)
@@ -179,10 +183,11 @@ fun ProfileScreen(
                             onTakeCameraPhoto = {
                                 if (privacyPreferences.cameraProfilePhotoConsent) {
                                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                                        context.profileCameraUri()?.let { uri ->
+                                        if (context.hasCameraCaptureHandler()) context.profileCameraUri()?.let { uri ->
                                             pendingCameraUri = uri
                                             cameraCapture.launch(uri)
                                         } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+                                        else viewModel.showActionError("No camera app is available on this device. You can still choose a profile image.")
                                     } else cameraPermission.launch(Manifest.permission.CAMERA)
                                 } else privacyDisclosure = PrivacyDisclosure.CAMERA
                             },
@@ -258,10 +263,11 @@ fun ProfileScreen(
                     PrivacyDisclosure.CAMERA -> {
                         viewModel.setCameraProfilePhotoConsent(true)
                         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                            context.profileCameraUri()?.let { uri ->
+                            if (context.hasCameraCaptureHandler()) context.profileCameraUri()?.let { uri ->
                                 pendingCameraUri = uri
                                 cameraCapture.launch(uri)
                             } ?: viewModel.showActionError("BSDC could not prepare a private camera capture.")
+                            else viewModel.showActionError("No camera app is available on this device. You can still choose a profile image.")
                         } else cameraPermission.launch(Manifest.permission.CAMERA)
                     }
                     PrivacyDisclosure.LOCATION -> {
@@ -324,6 +330,9 @@ private fun SensitiveFeatureDisclosureDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text("Not now") } }
     )
 }
+
+private fun Context.hasCameraCaptureHandler(): Boolean =
+    Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(packageManager) != null
 
 private fun Context.profileCameraUri(): Uri? = runCatching {
     val directory = File(cacheDir, "profile-camera").apply { mkdirs() }
