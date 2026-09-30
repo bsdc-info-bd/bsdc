@@ -315,7 +315,7 @@ private fun communityDestinations() = listOf(
 
 @Composable
 private fun CommunityNavigation(selectedRoute: String, navigate: (String) -> Unit) {
-    NavigationBar {
+    NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
         communityDestinations().forEach { item ->
             NavigationBarItem(
                 selected = selectedRoute == item.route,
@@ -330,7 +330,7 @@ private fun CommunityNavigation(selectedRoute: String, navigate: (String) -> Uni
 
 @Composable
 private fun CommunityNavigationRail(selectedRoute: String, navigate: (String) -> Unit) {
-    NavigationRail {
+    NavigationRail(containerColor = MaterialTheme.colorScheme.surface) {
         communityDestinations().forEach { item ->
             NavigationRailItem(
                 selected = selectedRoute == item.route,

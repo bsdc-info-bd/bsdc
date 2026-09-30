@@ -226,9 +226,7 @@ fun ProfileScreen(
                             PostCard(
                                 post = post,
                                 onAuthorClick = { onOpenProfile(post.authorId) },
-                                onReact = {},
                                 onComment = { onOpenPost(post.id) },
-                                onMore = {},
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
                         }

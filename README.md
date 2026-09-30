@@ -18,7 +18,7 @@ This repository deliberately starts with a secure, deployable social-community c
 - Light/dark/system theme persistence, English/Bangla post-language selection, material accessibility semantics, responsive Compose layouts, and no emoji-only controls.
 - Firestore/Realtime Database rules, Firestore composite indexes, Android lint/tests, and GitHub Actions APK/AAB artifact and optional Play publishing workflows.
 
-See [`docs/BUILD_ARCHITECTURE.md`](docs/BUILD_ARCHITECTURE.md) for the centralized Gradle version catalog, SDK/toolchain, Credential Manager, and environment decisions. The native-only boundary and sensitive-feature data flows are recorded in [`docs/NATIVE_PRODUCT_BOUNDARY.md`](docs/NATIVE_PRODUCT_BOUNDARY.md).
+See [`docs/BUILD_ARCHITECTURE.md`](docs/BUILD_ARCHITECTURE.md) for the centralized Gradle version catalog, SDK/toolchain, Credential Manager, and environment decisions. The native-only boundary and sensitive-feature data flows are recorded in [`docs/NATIVE_PRODUCT_BOUNDARY.md`](docs/NATIVE_PRODUCT_BOUNDARY.md). The original responsive light/dark visual system is documented in [`docs/NATIVE_DESIGN_SYSTEM.md`](docs/NATIVE_DESIGN_SYSTEM.md).
 
 ## Architecture
 

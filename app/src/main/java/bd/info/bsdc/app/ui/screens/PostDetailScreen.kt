@@ -65,9 +65,6 @@ fun PostDetailScreen(viewModel: PostDetailViewModel, onBack: () -> Unit, onOpenP
                     PostCard(
                         post = post,
                         onAuthorClick = { onOpenProfile(post.authorId) },
-                        onReact = {},
-                        onComment = {},
-                        onMore = {},
                         expanded = true,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )

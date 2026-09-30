@@ -48,7 +48,7 @@ fun SeriesScreen(viewModel: SeriesViewModel, onBack: () -> Unit, onOpenPost: (St
             }
             if (state.posts.isEmpty()) item("empty") { Text("The published parts of this series will appear here.", modifier = Modifier.padding(20.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(state.posts, key = { it.id }) { post ->
-                PostCard(post, onAuthorClick = { onOpenProfile(post.authorId) }, onReact = {}, onComment = { onOpenPost(post.id) }, onMore = {}, modifier = Modifier.padding(horizontal = 12.dp))
+                PostCard(post, onAuthorClick = { onOpenProfile(post.authorId) }, onComment = { onOpenPost(post.id) }, modifier = Modifier.padding(horizontal = 12.dp))
             }
             state.error?.let { item("error") { Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } }
         }
@@ -86,7 +86,7 @@ fun OrganizationScreen(viewModel: OrganizationViewModel, onBack: () -> Unit, onO
             item("posts") { Text("Published by this organization", modifier = Modifier.padding(horizontal = 16.dp), style = MaterialTheme.typography.titleMedium) }
             if (state.posts.isEmpty()) item("empty") { Text("No public organization posts yet.", modifier = Modifier.padding(horizontal = 18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(state.posts, key = { it.id }) { post ->
-                PostCard(post, onAuthorClick = { onOpenProfile(post.authorId) }, onReact = {}, onComment = { onOpenPost(post.id) }, onMore = {}, modifier = Modifier.padding(horizontal = 12.dp))
+                PostCard(post, onAuthorClick = { onOpenProfile(post.authorId) }, onComment = { onOpenPost(post.id) }, modifier = Modifier.padding(horizontal = 12.dp))
             }
             state.message?.let { item("message") { Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.primary) } }
             state.error?.let { item("error") { Text(it, modifier = Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) } }
