@@ -92,6 +92,6 @@ The debug APK is Firebase-configured and uses the real package ID, but Google Si
 - Deploy the Firebase rules, indexes, and Functions from this repository before allowing user traffic.
 - Configure App Check / Play Integrity for the release app.
 - Configure FCM and Android notification permission flow.
-- Serve a valid `https://www.bsdc.info.bd/.well-known/assetlinks.json` containing the release certificate SHA-256 for verified Android App Links.
+- Do not claim website App Links for this standalone client. If Android-owned links are enabled later, publish a valid `assetlinks.json` only on the approved Android link domain with the release certificate SHA-256.
 
 The project treats missing backend configuration as an error rather than generating demo content or pretending an unconfigured APK is production-ready.

@@ -97,8 +97,10 @@ class MainActivity : ComponentActivity() {
         targetPath = intent.targetPath()
     }
 
+    // Navigation targets come from trusted in-app notifications. This native client does not
+    // register website App Links or depend on browser routes while the Android link domain is
+    // intentionally undecided.
     private fun Intent.targetPath(): String? = getStringExtra(EXTRA_TARGET_PATH)
-        ?: data?.takeIf { it.host in setOf("www.bsdc.info.bd", "bsdc.info.bd") }?.path
 
     companion object {
         const val EXTRA_TARGET_PATH = "bsdc_target_path"

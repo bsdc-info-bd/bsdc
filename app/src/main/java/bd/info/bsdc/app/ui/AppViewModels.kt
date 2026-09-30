@@ -2,7 +2,6 @@ package bd.info.bsdc.app.ui
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -56,14 +55,12 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     val state = _state.asStateFlow()
 
     fun setCreateAccount(value: Boolean) { _state.value = _state.value.copy(createAccount = value, error = null, message = null) }
-    fun googleIntent(context: Context): Intent? = runCatching { repository.googleIntent(context) }
-        .onFailure { _state.value = _state.value.copy(error = it.message) }.getOrNull()
 
     fun signIn(email: String, password: String) = launch { repository.signIn(email, password) }
     fun signUp(email: String, password: String, displayName: String, username: String) = launch {
         repository.signUp(email, password, displayName, username)
     }
-    fun finishGoogle(data: Intent?) = launch { repository.finishGoogleSignIn(data) }
+    fun google(context: Context) = launch { repository.signInWithGoogle(context) }
     fun provider(activity: Activity, providerId: String) = launch { repository.signInWithProvider(activity, providerId) }
     fun resetPassword(email: String) = launch(success = "If an account exists, a reset email has been sent.") {
         repository.sendPasswordReset(email)

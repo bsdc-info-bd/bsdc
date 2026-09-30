@@ -14,8 +14,8 @@ bd.info.bsdc.app
 2. Firebase Console → **Project settings → Your apps → BSDC Android app** → register SHA-1 and SHA-256 for every signing key used to test or release the app.
    - The GitHub Actions debug artifact uses a debug signing key.
    - The production AAB/APK uses the configured release signing key.
-3. Verify that the Web OAuth client ID in the Firebase configuration is available. The Android workflow reads the `client_type: 3` client ID from `GOOGLE_SERVICES_JSON` and supplies it to the native Google token flow.
-4. Do not use an Android client ID where a Web client ID is required. A mismatch causes Google sign-in error code 10; the app surfaces an actionable SHA-fingerprint message.
+3. Verify that the Web OAuth client ID in the Firebase configuration is available. The Android workflow reads the `client_type: 3` client ID from `GOOGLE_SERVICES_JSON` and supplies it to Android Credential Manager's Google ID flow.
+4. Do not use an Android client ID where a Web client ID is required. A mismatch causes Credential Manager/Firebase token rejection; register the app signing SHA-1 and SHA-256 before testing.
 
 ## GitHub
 

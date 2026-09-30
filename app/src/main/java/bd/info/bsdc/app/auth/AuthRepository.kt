@@ -2,15 +2,16 @@ package bd.info.bsdc.app.auth
 
 import android.app.Activity
 import android.content.Context
-import android.content.Intent
 import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.RepositoryResult
 import bd.info.bsdc.app.core.guarded
 import bd.info.bsdc.app.model.UserProfile
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.auth.AuthCredential
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
@@ -89,28 +90,31 @@ class AuthRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not create account.", t)
     }
 
-    fun googleIntent(context: Context): Intent {
+    /**
+     * Uses Android Credential Manager rather than the legacy Google Sign-In activity result.
+     * The Firebase Web OAuth client ID is public app configuration, never a client secret.
+     */
+    suspend fun signInWithGoogle(context: Context): RepositoryResult<FirebaseUser> = try {
         gate.requireConfigured()
         check(BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotBlank()) {
             "Google sign-in has not been configured for this build."
         }
-        val options = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestIdToken(BuildConfig.GOOGLE_WEB_CLIENT_ID)
-            .requestEmail()
+        val option = GetGoogleIdOption.Builder()
+            .setServerClientId(BuildConfig.GOOGLE_WEB_CLIENT_ID)
+            .setFilterByAuthorizedAccounts(false)
+            .setAutoSelectEnabled(true)
             .build()
-        return GoogleSignIn.getClient(context, options).signInIntent
-    }
-
-    suspend fun finishGoogleSignIn(data: Intent?): RepositoryResult<FirebaseUser> = try {
-        gate.requireConfigured()
-        val account = GoogleSignIn.getSignedInAccountFromIntent(data)
-            .getResult(ApiException::class.java)
-        val token = account.idToken ?: error("Google did not return an identity token.")
+        val response = CredentialManager.create(context).getCredential(
+            context = context,
+            request = GetCredentialRequest.Builder().addCredentialOption(option).build()
+        )
+        val token = GoogleIdTokenCredential.createFrom(response.credential.data).idToken
         authenticate(GoogleAuthProvider.getCredential(token, null))
     } catch (t: Throwable) {
-        val message = if (t is ApiException && t.statusCode == 10) {
-            "Google sign-in was rejected. Register this app signing SHA-1 and SHA-256 in Firebase."
-        } else readableAuthError(t, "Google sign-in")
+        val message = when (t) {
+            is GetCredentialException -> "No Google credential was selected. You can try again or use another sign-in method."
+            else -> readableAuthError(t, "Google sign-in")
+        }
         RepositoryResult.Failure(message, t)
     }
 

@@ -3,8 +3,6 @@ package bd.info.bsdc.app.ui.screens
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -45,10 +43,6 @@ fun AuthScreen(viewModel: AuthViewModel) {
     var displayName by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
-    val googleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        viewModel.finishGoogle(it.data)
-    }
-
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(horizontal = 24.dp, vertical = 32.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -95,9 +89,9 @@ fun AuthScreen(viewModel: AuthViewModel) {
         }
         HorizontalDivider(Modifier.padding(vertical = 6.dp))
         Text("Or continue with a secure provider", style = MaterialTheme.typography.labelLarge)
-        Text("Google, GitHub, and Yahoo authentication is completed by Firebase in the provider browser flow.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Google uses Android Credential Manager; GitHub and Yahoo use Firebase’s secure provider browser flow.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(
-            onClick = { viewModel.googleIntent(context)?.let(googleLauncher::launch) },
+            onClick = { viewModel.google(context) },
             enabled = !state.busy,
             modifier = Modifier.fillMaxWidth()
         ) { Text("Continue with Google") }

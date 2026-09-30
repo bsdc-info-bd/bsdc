@@ -13,10 +13,12 @@ This repository deliberately starts with a secure, deployable social-community c
 - Firestore-backed private drafts, trusted scheduled publishing, four-tag discovery limit, structured multi-part series, organization profiles/editor membership, and bounded co-author credit lines resolved against real BSDC handles. See [`docs/PUBLISHING_ARCHITECTURE.md`](docs/PUBLISHING_ARCHITECTURE.md).
 - Firestore-backed reactions, comments, reports, post metadata, profiles, handles, follower/following records, notifications, device records, and engagement events.
 - Realtime Database direct and group conversations, live message stream, unread counts, typing indicators with disconnect cleanup, soft message removal, read state, group creation by BSDC handle, and image/audio attachments only.
-- FCM foreground notification service, Android 13 notification permission, device-token registration, notification center, and verified Android App Links for `bsdc.info.bd`.
+- FCM foreground notification service, Android 13 notification permission, device-token registration, and notification center. The APK currently has no website App Link dependency; future native-link ownership is documented separately.
 - Firebase Functions for retry-safe engagement/follower counts and server-side comment, reaction, follow, and chat push notifications. No FCM server credential is embedded in the app.
 - Light/dark/system theme persistence, English/Bangla post-language selection, material accessibility semantics, responsive Compose layouts, and no emoji-only controls.
 - Firestore/Realtime Database rules, Firestore composite indexes, Android lint/tests, and GitHub Actions APK/AAB artifact and optional Play publishing workflows.
+
+See [`docs/BUILD_ARCHITECTURE.md`](docs/BUILD_ARCHITECTURE.md) for the centralized Gradle version catalog, SDK/toolchain, Credential Manager, and environment decisions.
 
 ## Architecture
 
@@ -33,7 +35,7 @@ functions/                   trusted notification and counter backend
 .github/workflows/           cloud build, artifacts, optional Play publishing
 ```
 
-The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. The official **Cloudinary Android SDK** dispatches uploads with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients. See [`docs/MESSENGER_ARCHITECTURE.md`](docs/MESSENGER_ARCHITECTURE.md) for the membership-protected direct/group messaging schema and deployment boundary.
+The client uses Firestore for durable community data and Realtime Database for latency-sensitive chat. The official **Cloudinary Android SDK** dispatches uploads with an **unsigned upload preset**; the app never needs or stores a Cloudinary API secret. Firestore counters are owned by trusted Functions rather than writable by arbitrary clients. See [`docs/MESSENGER_ARCHITECTURE.md`](docs/MESSENGER_ARCHITECTURE.md) for the membership-protected direct/group messaging schema and [`docs/NATIVE_PRODUCT_BOUNDARY.md`](docs/NATIVE_PRODUCT_BOUNDARY.md) for the native-only backend, link, staff-access, and sensitive-permission decisions.
 
 ## Secure configuration — required before release
 
@@ -48,7 +50,7 @@ The app compiles without Firebase configuration so CI can validate the Android c
 3. In Cloudinary create/lock an unsigned preset: restrict its folder, allow only image/audio formats, set size limits, disallow unsigned eager transformations, and review abuse controls. Do **not** place a Cloudinary API secret in Android, GitHub variables, Firebase, or this repository.
 4. In Firebase Authentication enable Email/Password, Google, GitHub, and a correctly configured Yahoo OIDC provider (`yahoo.com`). Add the Android SHA-1/SHA-256 signing fingerprints and the authorized OAuth redirect domains. Follow the provider-by-provider production checklist in [`docs/FIREBASE_OAUTH_SETUP.md`](docs/FIREBASE_OAUTH_SETUP.md).
 5. Deploy `firebase/firestore.rules`, `firebase/firestore.indexes.json`, `firebase/database.rules.json`, and `functions/` to the intended Firebase project from a protected CI identity. Functions are what send automatic push notifications; clients cannot securely send FCM to other users.
-6. Publish `https://www.bsdc.info.bd/.well-known/assetlinks.json` with the release signing certificate SHA-256 before claiming verified App Links.
+6. Do not publish or claim App Links for an unrelated website. Before enabling future Android links, choose an Android-owned domain and publish its reviewed `assetlinks.json` using the release signing certificate SHA-256.
 
 ### Secret incident response
 
