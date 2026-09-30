@@ -39,7 +39,8 @@ object PublishingTools {
                 if (key != null && value.isNotBlank()) metadata[key] = value.take(280)
             }
         }
-        return FrontmatterResult(metadata, normalized.substring(close + delimiter.length + 2), true)
+        // Skip the closing delimiter's line break and the conventional blank separator.
+        return FrontmatterResult(metadata, normalized.substring(close + delimiter.length + 2).trimStart(), true)
     }
 
     fun withFrontmatter(content: String, metadata: Map<String, String>): String {
