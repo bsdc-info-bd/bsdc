@@ -108,21 +108,36 @@ class AuthRepository(private val gate: FirebaseGate) {
         val token = account.idToken ?: error("Google did not return an identity token.")
         authenticate(GoogleAuthProvider.getCredential(token, null))
     } catch (t: Throwable) {
-        RepositoryResult.Failure(t.message ?: "Google sign-in failed.", t)
+        val message = if (t is ApiException && t.statusCode == 10) {
+            "Google sign-in was rejected. Register this app signing SHA-1 and SHA-256 in Firebase."
+        } else readableAuthError(t, "Google sign-in")
+        RepositoryResult.Failure(message, t)
     }
 
+    /**
+     * Firebase-hosted OAuth browser flow. GitHub and Yahoo secrets/configuration live solely in
+     * Firebase Authentication; neither provider client secret is ever present in the APK.
+     */
     suspend fun signInWithProvider(activity: Activity, providerId: String): RepositoryResult<FirebaseUser> = try {
         gate.requireConfigured()
-        require(providerId in setOf("github.com", "yahoo.com")) { "Unsupported identity provider." }
-        val provider = OAuthProvider.newBuilder(providerId).build()
-        val user = FirebaseAuth.getInstance()
-            .startActivityForSignInWithProvider(activity, provider)
-            .await()
-            .user ?: error("Provider did not return an account.")
+        val auth = FirebaseAuth.getInstance()
+        val provider = when (providerId) {
+            "github.com" -> OAuthProvider.newBuilder(providerId)
+                .setScopes(listOf("read:user", "user:email"))
+                .build()
+            "yahoo.com" -> OAuthProvider.newBuilder(providerId)
+                .setScopes(listOf("openid", "profile", "email"))
+                .build()
+            else -> error("Unsupported identity provider.")
+        }
+        // Continue an in-flight browser redirect after process recreation rather than launching
+        // a duplicate provider tab. Firebase owns state/PKCE validation for this exchange.
+        val result = auth.pendingAuthResult ?: auth.startActivityForSignInWithProvider(activity, provider)
+        val user = result.await().user ?: error("Provider did not return an account.")
         ensureProfile(user)
         RepositoryResult.Success(user)
     } catch (t: Throwable) {
-        RepositoryResult.Failure(t.message ?: "Sign-in failed.", t)
+        RepositoryResult.Failure(readableAuthError(t, "provider sign-in"), t)
     }
 
     suspend fun sendPasswordReset(email: String): RepositoryResult<Unit> = try {
@@ -144,6 +159,18 @@ class AuthRepository(private val gate: FirebaseGate) {
 
     fun signOut() {
         if (gate.isConfigured) FirebaseAuth.getInstance().signOut()
+    }
+
+    private fun readableAuthError(error: Throwable, action: String): String {
+        val code = (error as? com.google.firebase.auth.FirebaseAuthException)?.errorCode
+        return when (code) {
+            "ERROR_OPERATION_NOT_ALLOWED" -> "This provider is not enabled in BSDC Firebase Authentication yet."
+            "ERROR_ACCOUNT_EXISTS_WITH_DIFFERENT_CREDENTIAL" -> "This email already uses a different sign-in method. Sign in with that method first."
+            "ERROR_INVALID_CREDENTIAL", "ERROR_INVALID_IDP_RESPONSE" -> "The identity provider response was rejected. Check the provider setup and app SHA fingerprints."
+            "ERROR_NETWORK_REQUEST_FAILED" -> "BSDC could not reach the authentication service. Check your connection and try again."
+            "ERROR_USER_DISABLED" -> "This BSDC account has been disabled."
+            else -> "Could not complete $action. Please try again."
+        }
     }
 
     private suspend fun authenticate(credential: AuthCredential): RepositoryResult<FirebaseUser> = try {

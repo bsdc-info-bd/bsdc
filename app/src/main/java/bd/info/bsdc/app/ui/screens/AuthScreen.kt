@@ -94,6 +94,8 @@ fun AuthScreen(viewModel: AuthViewModel) {
             TextButton(onClick = { viewModel.resetPassword(email) }, modifier = Modifier.fillMaxWidth()) { Text("Forgot password?") }
         }
         HorizontalDivider(Modifier.padding(vertical = 6.dp))
+        Text("Or continue with a secure provider", style = MaterialTheme.typography.labelLarge)
+        Text("Google, GitHub, and Yahoo authentication is completed by Firebase in the provider browser flow.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Button(
             onClick = { viewModel.googleIntent(context)?.let(googleLauncher::launch) },
             enabled = !state.busy,
