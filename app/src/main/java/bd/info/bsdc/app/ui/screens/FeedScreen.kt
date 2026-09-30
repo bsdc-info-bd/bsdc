@@ -30,7 +30,7 @@ import bd.info.bsdc.app.ui.components.PostCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun FeedScreen(viewModel: FeedViewModel, onCompose: () -> Unit, onOpenProfile: (String) -> Unit) {
+fun FeedScreen(viewModel: FeedViewModel, onCompose: () -> Unit, onOpenProfile: (String) -> Unit, onOpenPost: (String) -> Unit) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.actionMessage) { state.actionMessage?.let { snackbar.showSnackbar(it) } }
@@ -50,7 +50,7 @@ fun FeedScreen(viewModel: FeedViewModel, onCompose: () -> Unit, onOpenProfile: (
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(state.posts, key = { it.id }) { post ->
-                    PostCard(post = post, onAuthorClick = { onOpenProfile(post.authorId) }, onReact = { viewModel.react(post.id) }, onComment = onCompose, onMore = {})
+                    PostCard(post = post, onAuthorClick = { onOpenProfile(post.authorId) }, onReact = { viewModel.react(post.id) }, onComment = { onOpenPost(post.id) }, onMore = {})
                 }
             }
         }

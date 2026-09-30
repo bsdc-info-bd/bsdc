@@ -61,6 +61,7 @@ import bd.info.bsdc.app.ui.ComposerViewModel
 import bd.info.bsdc.app.ui.FeedViewModel
 import bd.info.bsdc.app.ui.InboxViewModel
 import bd.info.bsdc.app.ui.NotificationsViewModel
+import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.screens.AuthScreen
 import bd.info.bsdc.app.ui.screens.ChatRoomScreen
@@ -68,7 +69,9 @@ import bd.info.bsdc.app.ui.screens.ComposerScreen
 import bd.info.bsdc.app.ui.screens.FeedScreen
 import bd.info.bsdc.app.ui.screens.InboxScreen
 import bd.info.bsdc.app.ui.screens.NotificationsScreen
+import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
+import bd.info.bsdc.app.ui.screens.TechnologyStackScreen
 import bd.info.bsdc.app.ui.theme.BsdcTheme
 import com.google.firebase.messaging.FirebaseMessaging
 import kotlinx.coroutines.tasks.await
@@ -155,6 +158,7 @@ private fun CommunityShell(
         when {
             targetPath?.startsWith("/messages") == true -> nav.navigate("inbox")
             targetPath?.startsWith("/notifications") == true -> nav.navigate("alerts")
+            targetPath?.startsWith("/posts/") == true -> targetPath.substringAfterLast('/').takeIf { it.isNotBlank() }?.let { nav.navigate("post/${Uri.encode(it)}") }
             targetPath?.startsWith("/profile") == true -> nav.navigate("profile")
         }
     }
@@ -202,7 +206,8 @@ private fun CommunityDestinations(
                 onCompose = { nav.navigate("compose") },
                 onOpenProfile = { memberId ->
                     nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
-                }
+                },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") }
             )
         }
         composable("compose") {
@@ -223,8 +228,14 @@ private fun CommunityDestinations(
                 viewModel = vm,
                 onSignOut = onSignOut,
                 onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") },
-                onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") }
+                onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onManageStack = { nav.navigate("tech-stack") }
             )
+        }
+        composable("tech-stack") {
+            val vm: ProfileViewModel = viewModel(key = "tech-stack-$userId", factory = BsdcViewModelFactory { ProfileViewModel(container, userId) })
+            TechnologyStackScreen(vm) { nav.popBackStack() }
         }
         composable("member/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) { entry ->
             val memberId = entry.arguments?.getString("uid").orEmpty()
@@ -234,7 +245,17 @@ private fun CommunityDestinations(
                 onSignOut = onSignOut,
                 onOpenProfile = { nextMemberId -> nav.navigate(if (nextMemberId == userId) "profile" else "member/${Uri.encode(nextMemberId)}") },
                 onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
                 onBack = { nav.popBackStack() }
+            )
+        }
+        composable("post/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            val postId = entry.arguments?.getString("id").orEmpty()
+            val vm: PostDetailViewModel = viewModel(key = "post-$postId", factory = BsdcViewModelFactory { PostDetailViewModel(container, postId) })
+            PostDetailScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") }
             )
         }
         composable("chat/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->

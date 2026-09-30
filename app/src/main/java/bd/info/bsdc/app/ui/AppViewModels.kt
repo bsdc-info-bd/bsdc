@@ -195,6 +195,21 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
         }
     }
 
+    fun updateTechnologySkills(skills: List<String>) = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        val current = state.value ?: return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.profiles.updateMyProfile(
+            displayName = current.displayName,
+            bio = current.bio,
+            skills = skills.distinct().take(20),
+            locationLabel = current.locationLabel
+        )) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Technology stack saved")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
     fun changeUsername(username: String) = viewModelScope.launch {
         if (!isOwnProfile) return@launch
         _action.value = ProfileActionState(busy = true)
@@ -249,6 +264,39 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
     }
 
     fun consumeConversation() { _conversationId.value = null }
+}
+
+data class PostDetailUiState(
+    val post: CommunityPost? = null,
+    val comments: List<bd.info.bsdc.app.model.PostComment> = emptyList(),
+    val sending: Boolean = false,
+    val error: String? = null
+)
+
+class PostDetailViewModel(private val container: AppContainer, private val postId: String) : ViewModel() {
+    private val _state = MutableStateFlow(PostDetailUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.community.observePost(postId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { post -> _state.value = _state.value.copy(post = post) }
+        }
+        viewModelScope.launch {
+            container.community.observeComments(postId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { comments -> _state.value = _state.value.copy(comments = comments) }
+        }
+    }
+
+    fun addComment(body: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(sending = true, error = null)
+        _state.value = when (val result = container.community.addComment(postId, body)) {
+            is RepositoryResult.Success -> _state.value.copy(sending = false)
+            is RepositoryResult.Failure -> _state.value.copy(sending = false, error = result.message)
+        }
+    }
 }
 
 class NotificationsViewModel(private val container: AppContainer) : ViewModel() {

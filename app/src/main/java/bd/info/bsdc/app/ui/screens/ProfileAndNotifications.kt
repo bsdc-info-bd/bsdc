@@ -60,6 +60,8 @@ fun ProfileScreen(
     onSignOut: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenConversation: (String) -> Unit,
+    onOpenPost: (String) -> Unit,
+    onManageStack: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null
 ) {
     val profile by viewModel.state.collectAsStateWithLifecycle()
@@ -113,7 +115,10 @@ fun ProfileScreen(
                 item(key = "actions") {
                     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (viewModel.isOwnProfile) {
-                            Button(onClick = { editing = true }, enabled = !action.busy, modifier = Modifier.fillMaxWidth()) { Text("Edit profile") }
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                Button(onClick = { editing = true }, enabled = !action.busy, modifier = Modifier.weight(1f)) { Text("Edit profile") }
+                                Button(onClick = { onManageStack?.invoke() }, enabled = !action.busy && onManageStack != null, modifier = Modifier.weight(1f)) { Text("Tech stack") }
+                            }
                         } else {
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                                 Button(onClick = viewModel::toggleFollow, enabled = !action.busy, modifier = Modifier.weight(1f)) {
@@ -141,7 +146,7 @@ fun ProfileScreen(
                                 post = post,
                                 onAuthorClick = { onOpenProfile(post.authorId) },
                                 onReact = {},
-                                onComment = {},
+                                onComment = { onOpenPost(post.id) },
                                 onMore = {},
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             )
