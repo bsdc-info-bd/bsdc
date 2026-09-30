@@ -58,12 +58,13 @@ fun AccountLifecycleScreen(viewModel: AccountLifecycleViewModel, onBack: () -> U
             if (state.loading) {
                 CircularProgressIndicator()
             } else {
-                RequestStatusCard(state.request)
+                val request = state.request
+                RequestStatusCard(request)
                 state.message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                if (state.request == null || state.request.state == AccountLifecycleRequestState.CANCELLED.name) {
+                if (request == null || request.state == AccountLifecycleRequestState.CANCELLED.name) {
                     RequestActions(busy = state.busy, onRequest = { requestedType = it })
-                } else if (state.request.state == AccountLifecycleRequestState.PENDING.name) {
+                } else if (request.state == AccountLifecycleRequestState.PENDING.name) {
                     Text(
                         "This request is pending. You can cancel it before BSDC operations acknowledges receipt.",
                         style = MaterialTheme.typography.bodySmall,
