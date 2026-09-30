@@ -39,6 +39,7 @@ fun BookmarksScreen(
     onOpenPost: (String) -> Unit
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val failure = state.error
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -57,7 +58,7 @@ fun BookmarksScreen(
                 CircularProgressIndicator()
                 Text("Loading saved posts", modifier = Modifier.padding(top = 12.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            state.error != null -> BookmarksMessage(padding, "Saved posts are unavailable right now.", state.error)
+            failure != null -> BookmarksMessage(padding, "Saved posts are unavailable right now.", failure)
             state.posts.isEmpty() -> BookmarksMessage(
                 padding,
                 "Nothing saved yet",
