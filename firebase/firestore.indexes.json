@@ -4,72 +4,172 @@
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "authorId", "order": "ASCENDING" },
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "authorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "seriesId", "order": "ASCENDING" },
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "seriesOrder", "order": "ASCENDING" }
+        {
+          "fieldPath": "seriesId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seriesOrder",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organizationId", "order": "ASCENDING" },
-        { "fieldPath": "visibility", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "publishedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "organizationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "visibility",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publishedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "authorId", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "authorId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "posts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "scheduledAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "scheduledAt",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "series",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "ownerId", "order": "ASCENDING" },
-        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "ownerId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "comments",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "reports",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "state",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "posts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updatedAt",
+          "order": "DESCENDING"
+        }
       ]
     }
   ],

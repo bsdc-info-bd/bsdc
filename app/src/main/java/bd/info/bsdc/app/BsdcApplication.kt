@@ -12,6 +12,7 @@ import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.SettingsRepository
 import bd.info.bsdc.app.data.CommunityRepository
 import bd.info.bsdc.app.data.LegalConsentRepository
+import bd.info.bsdc.app.data.ModerationRepository
 import bd.info.bsdc.app.data.OrganizationRepository
 import bd.info.bsdc.app.data.ProfileRepository
 import bd.info.bsdc.app.media.CloudinaryMediaUploader
@@ -62,6 +63,7 @@ class BsdcApplication : Application() {
             settings = settings,
             auth = AuthRepository(gate, legalConsents),
             legalConsents = legalConsents,
+            moderation = ModerationRepository(gate),
             community = CommunityRepository(gate),
             organizations = OrganizationRepository(gate),
             profiles = ProfileRepository(gate),

@@ -32,7 +32,12 @@ import bd.info.bsdc.app.ui.SettingsViewModel
 /** Native, offline-safe product controls. Analytics remains disabled until the member opts in. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLegal: () -> Unit) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenLegal: () -> Unit,
+    onOpenModeration: () -> Unit
+) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -121,6 +126,11 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenLegal
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+            item("moderation") {
+                SettingCard("Trust & safety", "Report posts from their discussion page. The staff workspace is protected by trusted Firebase admin or moderator claims.") {
+                    TextButton(onClick = onOpenModeration) { Text("Open moderation workspace") }
                 }
             }
         }

@@ -4,6 +4,7 @@ import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getDatabase } from "firebase-admin/database";
 import { logger } from "firebase-functions";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -108,6 +109,123 @@ export const grantLegalAccessAfterAcceptance = onDocumentWritten(
     logger.info("Granted current BSDC legal access", { uid, version: CURRENT_LEGAL_VERSION });
   },
 );
+
+type ModerationDecision = "DISMISS" | "HIDE_POST";
+
+function requireStaff(request: { auth?: { uid: string; token: Record<string, unknown> } | null }): string {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in with a BSDC staff account first.");
+  const role = request.auth.token.role;
+  if (role !== "admin" && role !== "moderator") {
+    throw new HttpsError("permission-denied", "A trusted BSDC staff role is required for moderation.");
+  }
+  return request.auth.uid;
+}
+
+function requiredString(value: unknown, field: string, maxLength: number): string {
+  if (typeof value !== "string" || value.trim().length === 0 || value.length > maxLength) {
+    throw new HttpsError("invalid-argument", `${field} must be a non-empty string up to ${maxLength} characters.`);
+  }
+  return value.trim();
+}
+
+function optionalStaffNote(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value !== "string" || value.length > 1000) {
+    throw new HttpsError("invalid-argument", "Staff note must be text up to 1,000 characters.");
+  }
+  return value.trim();
+}
+
+/**
+ * A staff review is an Admin-SDK transaction, not a privileged client-side Firestore update.
+ * It atomically closes the immutable report, optionally removes the post from public reads, and
+ * leaves an append-only staff audit event.
+ */
+export const moderateReport = onCall({ region: REGION }, async (request) => {
+  const reviewerId = requireStaff(request);
+  const payload = request.data as Record<string, unknown>;
+  const reportId = requiredString(payload.reportId, "reportId", 256);
+  const action = payload.action;
+  if (action !== "DISMISS" && action !== "HIDE_POST") {
+    throw new HttpsError("invalid-argument", "Moderation action must be DISMISS or HIDE_POST.");
+  }
+  const note = optionalStaffNote(payload.note);
+  const reportRef = firestore.collection("reports").doc(reportId);
+  const auditRef = firestore.collection("moderationActions").doc();
+
+  await firestore.runTransaction(async (transaction) => {
+    const reportSnapshot = await transaction.get(reportRef);
+    if (!reportSnapshot.exists) throw new HttpsError("not-found", "This report no longer exists.");
+    const report = reportSnapshot.data() ?? {};
+    if (report.state !== "OPEN" || report.targetType !== "post" || typeof report.targetId !== "string") {
+      throw new HttpsError("failed-precondition", "This report is no longer open for moderation.");
+    }
+    const postRef = firestore.collection("posts").doc(report.targetId);
+    const postSnapshot = await transaction.get(postRef);
+    if (!postSnapshot.exists) throw new HttpsError("not-found", "The reported post no longer exists.");
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(reportRef, {
+      state: action === "HIDE_POST" ? "ACTIONED" : "DISMISSED",
+      reviewedAt: now,
+      reviewerId,
+      resolution: action,
+      moderationNote: note,
+    });
+    if (action === "HIDE_POST") {
+      transaction.update(postRef, {
+        status: "moderated",
+        moderatedAt: now,
+        moderatedBy: reviewerId,
+        updatedAt: now,
+      });
+    }
+    transaction.set(auditRef, {
+      kind: "REPORT_REVIEW",
+      reportId,
+      postId: report.targetId,
+      action,
+      reviewerId,
+      note,
+      createdAt: now,
+    });
+  });
+  return { reportId, action: action as ModerationDecision };
+});
+
+/** Restoring a hidden post is separately audited and is restricted by the same trusted claim. */
+export const restoreModeratedPost = onCall({ region: REGION }, async (request) => {
+  const reviewerId = requireStaff(request);
+  const payload = request.data as Record<string, unknown>;
+  const postId = requiredString(payload.postId, "postId", 256);
+  const note = optionalStaffNote(payload.note);
+  const postRef = firestore.collection("posts").doc(postId);
+  const auditRef = firestore.collection("moderationActions").doc();
+
+  await firestore.runTransaction(async (transaction) => {
+    const post = await transaction.get(postRef);
+    if (!post.exists) throw new HttpsError("not-found", "This post no longer exists.");
+    if (post.data()?.status !== "moderated") {
+      throw new HttpsError("failed-precondition", "Only a currently hidden post can be restored.");
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.update(postRef, {
+      status: "published",
+      restoredAt: now,
+      restoredBy: reviewerId,
+      updatedAt: now,
+    });
+    transaction.set(auditRef, {
+      kind: "POST_RESTORATION",
+      postId,
+      action: "RESTORE_POST",
+      reviewerId,
+      note,
+      createdAt: now,
+    });
+  });
+  return { postId, action: "RESTORE_POST" };
+});
 
 export const countPostReactions = onDocumentWritten(
   { document: "posts/{postId}/reactions/{uid}", region: REGION },

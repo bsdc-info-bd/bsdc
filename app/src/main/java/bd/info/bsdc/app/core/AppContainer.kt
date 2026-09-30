@@ -3,6 +3,7 @@ package bd.info.bsdc.app.core
 import bd.info.bsdc.app.auth.AuthRepository
 import bd.info.bsdc.app.data.CommunityRepository
 import bd.info.bsdc.app.data.LegalConsentRepository
+import bd.info.bsdc.app.data.ModerationRepository
 import bd.info.bsdc.app.data.OrganizationRepository
 import bd.info.bsdc.app.data.ProfileRepository
 import bd.info.bsdc.app.media.CloudinaryMediaUploader
@@ -14,6 +15,7 @@ data class AppContainer(
     val settings: SettingsRepository,
     val auth: AuthRepository,
     val legalConsents: LegalConsentRepository,
+    val moderation: ModerationRepository,
     val community: CommunityRepository,
     val organizations: OrganizationRepository,
     val profiles: ProfileRepository,

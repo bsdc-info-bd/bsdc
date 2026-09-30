@@ -62,6 +62,7 @@ import bd.info.bsdc.app.ui.ComposerViewModel
 import bd.info.bsdc.app.ui.FeedViewModel
 import bd.info.bsdc.app.ui.InboxViewModel
 import bd.info.bsdc.app.ui.LegalConsentViewModel
+import bd.info.bsdc.app.ui.ModerationViewModel
 import bd.info.bsdc.app.ui.NotificationsViewModel
 import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
@@ -76,6 +77,7 @@ import bd.info.bsdc.app.ui.screens.FeedScreen
 import bd.info.bsdc.app.ui.screens.InboxScreen
 import bd.info.bsdc.app.ui.screens.LegalConsentGateScreen
 import bd.info.bsdc.app.ui.screens.LegalDocumentsScreen
+import bd.info.bsdc.app.ui.screens.ModerationScreen
 import bd.info.bsdc.app.ui.screens.NotificationsScreen
 import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
@@ -286,11 +288,16 @@ private fun CommunityDestinations(
             SettingsScreen(
                 viewModel = vm,
                 onBack = { nav.popBackStack() },
-                onOpenLegal = { nav.navigate("legal") }
+                onOpenLegal = { nav.navigate("legal") },
+                onOpenModeration = { nav.navigate("moderation") }
             )
         }
         composable("legal") {
             LegalDocumentsScreen { nav.popBackStack() }
+        }
+        composable("moderation") {
+            val vm: ModerationViewModel = viewModel(factory = BsdcViewModelFactory { ModerationViewModel(container) })
+            ModerationScreen(vm) { nav.popBackStack() }
         }
         composable("member/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) { entry ->
             val memberId = entry.arguments?.getString("uid").orEmpty()

@@ -8,6 +8,24 @@ enum class PostVisibility { PUBLIC, FOLLOWERS, ONLY_ME, GROUP }
 enum class MediaKind { IMAGE, AUDIO }
 enum class ReactionType { LIKE, LOVE, CARE, INSIGHTFUL, CELEBRATE }
 enum class NotificationKind { COMMENT, REACTION, FOLLOW, MESSAGE, MENTION, SYSTEM }
+enum class ReportReason { SPAM, HARASSMENT, HATE, SEXUAL_CONTENT, VIOLENCE, SELF_HARM, MISINFORMATION, INTELLECTUAL_PROPERTY, OTHER }
+enum class ReportState { OPEN, DISMISSED, ACTIONED }
+enum class ModerationAction { DISMISS, HIDE_POST, RESTORE_POST }
+
+data class ContentReport(
+    @DocumentId val id: String = "",
+    val targetType: String = "post",
+    val targetId: String = "",
+    val reporterId: String = "",
+    val reason: String = ReportReason.OTHER.name,
+    val details: String = "",
+    val state: String = ReportState.OPEN.name,
+    val createdAt: Timestamp? = null,
+    val reviewedAt: Timestamp? = null,
+    val reviewerId: String? = null,
+    val resolution: String? = null,
+    val moderationNote: String? = null
+)
 
 data class UserProfile(
     @DocumentId val id: String = "",

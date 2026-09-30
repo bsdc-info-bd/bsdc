@@ -48,6 +48,21 @@ service cloud.firestore {
           || (documentId == 'privacy-2026-09-30' && data.documentVersion == '2026-09-30')
         );
     }
+    function validPostReport(data) {
+      return data.keys().hasOnly(['targetType', 'targetId', 'reporterId', 'reason', 'details', 'state', 'createdAt'])
+        && data.targetType == 'post'
+        && data.targetId is string
+        && data.reporterId == request.auth.uid
+        && data.reason in [
+          'SPAM', 'HARASSMENT', 'HATE', 'SEXUAL_CONTENT', 'VIOLENCE', 'SELF_HARM',
+          'MISINFORMATION', 'INTELLECTUAL_PROPERTY', 'OTHER'
+        ]
+        && data.details is string && data.details.size() <= 1000
+        && data.state == 'OPEN'
+        && data.createdAt == request.time
+        && exists(/databases/$(database)/documents/posts/$(data.targetId))
+        && get(/databases/$(database)/documents/posts/$(data.targetId)).data.authorId != request.auth.uid;
+    }
 
     match /handles/{handle} {
       allow get, list: if true;
@@ -172,7 +187,8 @@ service cloud.firestore {
     }
 
     match /posts/{postId} {
-      allow get, list: if (resource.data.visibility == 'PUBLIC' && resource.data.status == 'published')
+      allow get, list: if isStaff()
+        || (resource.data.visibility == 'PUBLIC' && resource.data.status == 'published')
         || (hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid);
       allow create: if hasCurrentLegalAccess() && validPost(request.resource.data);
       // Published posts remain published from the client. The trusted scheduler (Admin SDK)
@@ -208,10 +224,17 @@ service cloud.firestore {
       }
     }
 
+    // Members can create one immutable, bounded report. Review state, staff identity, and content
+    // visibility changes are written only by trusted callable Functions using the Admin SDK.
     match /reports/{reportId} {
-      allow create: if hasCurrentLegalAccess() && request.resource.data.reporterId == request.auth.uid;
-      allow read, update: if isStaff();
-      allow delete: if false;
+      allow create: if hasCurrentLegalAccess() && validPostReport(request.resource.data)
+        && reportId == request.resource.data.targetId + '_' + request.auth.uid;
+      allow read: if isStaff();
+      allow update, delete: if false;
+    }
+    match /moderationActions/{actionId} {
+      allow read: if isStaff();
+      allow write: if false;
     }
 
     match /{document=**} {

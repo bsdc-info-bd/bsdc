@@ -9,6 +9,7 @@ import bd.info.bsdc.app.model.MediaAttachment
 import bd.info.bsdc.app.model.PostComment
 import bd.info.bsdc.app.model.PostVisibility
 import bd.info.bsdc.app.model.ReactionType
+import bd.info.bsdc.app.model.ReportReason
 import bd.info.bsdc.app.model.UserProfile
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
@@ -355,19 +356,27 @@ class CommunityRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not publish comment.", t)
     }
 
-    suspend fun reportPost(postId: String, reason: String, details: String = ""): RepositoryResult<Unit> = try {
+    /** A member may file one immutable report per post. The deterministic ID is a server-rule
+     * friendly anti-spam boundary; staff resolves reports through a trusted callable Function. */
+    suspend fun reportPost(postId: String, reason: ReportReason, details: String = ""): RepositoryResult<Unit> = try {
         gate.requireConfigured()
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to report content.")
-        require(reason.isNotBlank()) { "Select a report reason." }
-        database.collection("reports").document().set(mapOf(
-            "targetType" to "post",
-            "targetId" to postId,
-            "reporterId" to uid,
-            "reason" to reason.take(80),
-            "details" to details.take(1_000),
-            "state" to "open",
-            "createdAt" to FieldValue.serverTimestamp()
-        )).await()
+        require(postId.isNotBlank()) { "This post cannot be reported." }
+        require(details.trim().length <= 1_000) { "Report details must be at most 1,000 characters." }
+        val reportId = "${postId}_${uid}"
+        val report = database.collection("reports").document(reportId)
+        database.runTransaction { transaction ->
+            check(!transaction.get(report).exists()) { "You have already reported this post. BSDC staff can review the existing report." }
+            transaction.set(report, mapOf(
+                "targetType" to "post",
+                "targetId" to postId,
+                "reporterId" to uid,
+                "reason" to reason.name,
+                "details" to details.trim(),
+                "state" to "OPEN",
+                "createdAt" to FieldValue.serverTimestamp()
+            ))
+        }.await()
         RepositoryResult.Success(Unit)
     } catch (t: Throwable) {
         RepositoryResult.Failure(t.message ?: "Could not submit report.", t)

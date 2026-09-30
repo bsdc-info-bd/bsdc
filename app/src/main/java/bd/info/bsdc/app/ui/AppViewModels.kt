@@ -19,13 +19,16 @@ import bd.info.bsdc.app.feed.FeedRankingEngine
 import bd.info.bsdc.app.content.PublishingTools
 import bd.info.bsdc.app.data.PostDraft
 import bd.info.bsdc.app.model.CommunityPost
+import bd.info.bsdc.app.model.ContentReport
 import bd.info.bsdc.app.model.ContentSeries
 import bd.info.bsdc.app.model.OrganizationMembership
 import bd.info.bsdc.app.model.CommunityOrganization
 import bd.info.bsdc.app.model.MediaAttachment
 import bd.info.bsdc.app.model.MediaKind
+import bd.info.bsdc.app.model.ModerationAction
 import bd.info.bsdc.app.model.PostVisibility
 import bd.info.bsdc.app.model.ReactionType
+import bd.info.bsdc.app.model.ReportReason
 import bd.info.bsdc.app.model.UserProfile
 import bd.info.bsdc.app.privacy.ApproximateLocationResolver
 import com.google.firebase.Timestamp
@@ -645,6 +648,8 @@ data class PostDetailUiState(
     val comments: List<bd.info.bsdc.app.model.PostComment> = emptyList(),
     val bookmarked: Boolean = false,
     val sending: Boolean = false,
+    val reporting: Boolean = false,
+    val notice: String? = null,
     val error: String? = null
 )
 
@@ -681,6 +686,14 @@ class PostDetailViewModel(private val container: AppContainer, private val postI
         _state.value = when (val result = container.community.addComment(postId, body)) {
             is RepositoryResult.Success -> _state.value.copy(sending = false)
             is RepositoryResult.Failure -> _state.value.copy(sending = false, error = result.message)
+        }
+    }
+
+    fun report(reason: ReportReason, details: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(reporting = true, error = null, notice = null)
+        _state.value = when (val result = container.community.reportPost(postId, reason, details)) {
+            is RepositoryResult.Success -> _state.value.copy(reporting = false, notice = "Report sent to BSDC moderation staff.")
+            is RepositoryResult.Failure -> _state.value.copy(reporting = false, error = result.message)
         }
     }
 }
@@ -745,6 +758,56 @@ class OrganizationViewModel(private val container: AppContainer, private val org
         _state.value = _state.value.copy(busy = true, error = null, message = null)
         _state.value = when (val result = container.organizations.addEditor(organization, handle)) {
             is RepositoryResult.Success -> _state.value.copy(busy = false, message = "Editor added to ${organization.name}")
+            is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
+        }
+    }
+}
+
+data class ModerationUiState(
+    val loadingAccess: Boolean = true,
+    val authorized: Boolean = false,
+    val reports: List<ContentReport> = emptyList(),
+    val moderatedPosts: List<CommunityPost> = emptyList(),
+    val busy: Boolean = false,
+    val notice: String? = null,
+    val error: String? = null
+)
+
+/** Staff visibility is advisory; Functions and database policy re-check the custom claim. */
+class ModerationViewModel(private val container: AppContainer) : ViewModel() {
+    private val _state = MutableStateFlow(ModerationUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            val authorized = container.moderation.hasStaffRole()
+            _state.value = _state.value.copy(loadingAccess = false, authorized = authorized)
+            if (!authorized) return@launch
+            launch {
+                container.moderation.observeOpenReports().catch { error ->
+                    _state.value = _state.value.copy(error = error.message ?: "Could not load reports.")
+                }.collect { reports -> _state.value = _state.value.copy(reports = reports) }
+            }
+            launch {
+                container.moderation.observeModeratedPosts().catch { error ->
+                    _state.value = _state.value.copy(error = error.message ?: "Could not load moderated posts.")
+                }.collect { posts -> _state.value = _state.value.copy(moderatedPosts = posts) }
+            }
+        }
+    }
+
+    fun resolve(reportId: String, action: ModerationAction, note: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(busy = true, error = null, notice = null)
+        _state.value = when (val result = container.moderation.resolveReport(reportId, action, note)) {
+            is RepositoryResult.Success -> _state.value.copy(busy = false, notice = if (action == ModerationAction.HIDE_POST) "Post hidden and action recorded." else "Report dismissed and action recorded.")
+            is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
+        }
+    }
+
+    fun restore(postId: String, note: String) = viewModelScope.launch {
+        _state.value = _state.value.copy(busy = true, error = null, notice = null)
+        _state.value = when (val result = container.moderation.restorePost(postId, note)) {
+            is RepositoryResult.Success -> _state.value.copy(busy = false, notice = "Post restored and action recorded.")
             is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
         }
     }

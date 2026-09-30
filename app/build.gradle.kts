@@ -111,6 +111,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.firebase.database)
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.functions)
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.appcheck.playintegrity)
     implementation(libs.androidx.credentials)
