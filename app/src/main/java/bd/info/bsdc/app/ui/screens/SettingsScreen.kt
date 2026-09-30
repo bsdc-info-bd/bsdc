@@ -58,8 +58,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                             ThemePreference.DARK to "Dark"
                         ),
                         selected = preferences.theme,
-                        label = { it.second },
-                        onSelect = { viewModel.setTheme(it.first) }
+                        onSelect = viewModel::setTheme
                     )
                     Text("Writing language", style = MaterialTheme.typography.titleSmall)
                     ChoiceRow(
@@ -68,8 +67,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                             LanguagePreference.BANGLA to "বাংলা"
                         ),
                         selected = preferences.language,
-                        label = { it.second },
-                        onSelect = { viewModel.setLanguage(it.first) }
+                        onSelect = viewModel::setLanguage
                     )
                 }
             }
@@ -139,14 +137,13 @@ private fun SettingCard(title: String, description: String, content: @Composable
 
 @Composable
 private fun <T> ChoiceRow(
-    values: List<T>,
+    values: List<Pair<T, String>>,
     selected: T,
-    label: (T) -> String,
     onSelect: (T) -> Unit
 ) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        values.forEach { value ->
-            FilterChip(selected = selected == value, onClick = { onSelect(value) }, label = { Text(label(value)) })
+        values.forEach { (value, text) ->
+            FilterChip(selected = selected == value, onClick = { onSelect(value) }, label = { Text(text) })
         }
     }
 }
