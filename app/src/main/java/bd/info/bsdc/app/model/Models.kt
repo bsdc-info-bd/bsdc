@@ -1,5 +1,6 @@
 package bd.info.bsdc.app.model
 
+import bd.info.bsdc.app.content.PostEmbed
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 
@@ -40,12 +41,27 @@ data class CommunityPost(
     val authorHandle: String = "",
     val authorName: String = "",
     val authorPhotoUrl: String? = null,
+    /** Canonical Markdown source. When present, frontmatter is always its first block. */
     val body: String = "",
+    val format: String = "markdown",
+    val frontmatter: Map<String, String> = emptyMap(),
+    val embeds: List<PostEmbed> = emptyList(),
     val language: String = "en",
     val tags: List<String> = emptyList(),
     val media: List<MediaAttachment> = emptyList(),
     val visibility: String = PostVisibility.PUBLIC.name,
+    /** draft, scheduled, or published. Drafts are private to contributors. */
     val status: String = "published",
+    val scheduledAt: Timestamp? = null,
+    val publishedAt: Timestamp? = null,
+    val seriesId: String? = null,
+    val seriesTitle: String? = null,
+    val seriesOrder: Long? = null,
+    val organizationId: String? = null,
+    val organizationName: String? = null,
+    val organizationHandle: String? = null,
+    val coAuthorIds: List<String> = emptyList(),
+    val coAuthorNames: List<String> = emptyList(),
     val createdAt: Timestamp? = null,
     val updatedAt: Timestamp? = null,
     val reactionCount: Long = 0,
@@ -53,6 +69,40 @@ data class CommunityPost(
     val shareCount: Long = 0,
     val saveCount: Long = 0,
     val ranking: PostRanking = PostRanking()
+)
+
+data class ContentSeries(
+    @DocumentId val id: String = "",
+    val ownerId: String = "",
+    val title: String = "",
+    val description: String = "",
+    val postCount: Long = 0,
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
+)
+
+data class CommunityOrganization(
+    @DocumentId val id: String = "",
+    val handle: String = "",
+    val name: String = "",
+    val description: String = "",
+    val photoUrl: String? = null,
+    val ownerId: String = "",
+    val memberCount: Long = 0,
+    val createdAt: Timestamp? = null,
+    val updatedAt: Timestamp? = null
+)
+
+data class OrganizationMembership(
+    @DocumentId val id: String = "",
+    val organizationId: String = "",
+    val organizationName: String = "",
+    val organizationHandle: String = "",
+    val memberId: String = "",
+    val memberName: String = "",
+    val memberHandle: String = "",
+    val role: String = "editor",
+    val joinedAt: Timestamp? = null
 )
 
 data class PostRanking(

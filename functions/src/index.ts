@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase-admin/app";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { getMessaging } from "firebase-admin/messaging";
 import { getDatabase } from "firebase-admin/database";
 import { logger } from "firebase-functions";
@@ -9,6 +9,7 @@ import {
   onDocumentWritten,
 } from "firebase-functions/v2/firestore";
 import { onValueCreated } from "firebase-functions/v2/database";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 
 initializeApp();
 
@@ -84,6 +85,49 @@ export const countFollowers = onDocumentWritten(
 export const countFollowing = onDocumentWritten(
   { document: "profiles/{uid}/following/{targetUid}", region: REGION },
   async (event) => recomputeCount(`profiles/${event.params.uid}`, `profiles/${event.params.uid}/following`, "followingCount"),
+);
+
+/** Series counters are recomputed so retries and a post moving between series stay correct. */
+export const countSeriesPosts = onDocumentWritten(
+  { document: "posts/{postId}", region: REGION },
+  async (event) => {
+    const beforeSeries = event.data?.before.data()?.seriesId as string | undefined;
+    const afterSeries = event.data?.after.data()?.seriesId as string | undefined;
+    const affected = [...new Set([beforeSeries, afterSeries].filter((id): id is string => Boolean(id)))];
+    await Promise.all(affected.map(async (seriesId) => {
+      const count = await firestore.collection("posts")
+        .where("seriesId", "==", seriesId)
+        .where("status", "==", "published")
+        .count().get();
+      await firestore.doc(`series/${seriesId}`).set({ postCount: count.data().count, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }));
+  },
+);
+
+/**
+ * Scheduled posts are promoted by trusted infrastructure. Clients can request a schedule but
+ * never need a privileged publishing credential. The query is bounded and idempotent.
+ */
+export const publishScheduledPosts = onSchedule(
+  { schedule: "every 5 minutes", region: REGION, timeZone: "Asia/Dhaka" },
+  async () => {
+    const due = await firestore.collection("posts")
+      .where("status", "==", "scheduled")
+      .where("scheduledAt", "<=", Timestamp.now())
+      .limit(100)
+      .get();
+    if (due.empty) return;
+    const batch = firestore.batch();
+    due.docs.forEach((document) => {
+      batch.update(document.ref, {
+        status: "published",
+        publishedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+    logger.info("Published scheduled BSDC posts", { count: due.size });
+  },
 );
 
 export const notifyPostAuthorOfComment = onDocumentCreated(

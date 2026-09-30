@@ -4,23 +4,50 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function isStaff() { return signedIn() && request.auth.token.role in ['admin', 'moderator']; }
+    function isOrgMember(orgId) {
+      return signedIn() && orgId is string
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
+    }
+    function isOrgOwner(orgId) {
+      return signedIn() && orgId is string
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
+    }
     function postIsPublic(postId) {
       return get(/databases/$(database)/documents/posts/$(postId)).data.visibility == 'PUBLIC'
         && get(/databases/$(database)/documents/posts/$(postId)).data.status == 'published';
     }
+    function validPost(data) {
+      return data.authorId == request.auth.uid
+        && data.body is string
+        && data.body.size() <= 10000
+        && data.media is list && data.media.size() <= 10
+        && data.tags is list && data.tags.size() <= 4
+        && data.frontmatter is map && data.frontmatter.size() <= 12
+        && data.embeds is list && data.embeds.size() <= 8
+        && data.coAuthorIds is list && data.coAuthorIds.size() <= 5
+        && data.coAuthorNames is list && data.coAuthorNames.size() == data.coAuthorIds.size()
+        && data.status in ['draft', 'scheduled', 'published']
+        && (data.status != 'scheduled' || data.scheduledAt is timestamp)
+        && (data.organizationId == null || isOrgMember(data.organizationId));
+    }
 
     match /handles/{handle} {
       allow get, list: if true;
-      // The profile/handle pair is created atomically by the registration transaction.
       allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username == handle;
       allow update: if false;
-      // A handle can only be released in the same transaction that points the owner profile
-      // at a different, already-reserved handle.
       allow delete: if signedIn()
         && resource.data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.username != handle;
+    }
+
+    match /organizationHandles/{handle} {
+      allow get, list: if true;
+      allow create: if signedIn()
+        && request.resource.data.organizationId is string
+        && getAfter(/databases/$(database)/documents/organizations/$(request.resource.data.organizationId)).data.ownerId == request.auth.uid;
+      allow update, delete: if false;
     }
 
     match /profiles/{uid} {
@@ -63,22 +90,68 @@ service cloud.firestore {
       match /engagement/{postId} {
         allow read, create, update, delete: if isSelf(uid);
       }
+      // A private index lets a member choose their organizations without querying other members.
+      match /organizationMemberships/{orgId} {
+        allow read: if isSelf(uid);
+        allow create: if signedIn()
+          && request.resource.data.organizationId == orgId
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/members/$(uid)).data.organizationId == orgId
+          && (isSelf(uid) || isOrgOwner(orgId));
+        allow update, delete: if false;
+      }
+    }
+
+    match /organizations/{orgId} {
+      allow get, list: if true;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.name is string && request.resource.data.name.size() >= 3
+        && request.resource.data.handle is string && request.resource.data.handle.size() >= 3;
+      allow update: if isOrgOwner(orgId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'description', 'photoUrl', 'memberCount', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      match /members/{uid} {
+        allow get, list: if signedIn();
+        // Initial owner membership is created atomically with the organization. Later editor
+        // additions can only be made by the organization owner and mirror into the user's index.
+        allow create: if (isOrgOwner(orgId)
+          || (isSelf(uid) && getAfter(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == uid))
+          && request.resource.data.organizationId == orgId
+          && request.resource.data.role in ['owner', 'editor'];
+        allow update, delete: if false;
+      }
+    }
+
+    match /series/{seriesId} {
+      allow get, list: if true;
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 3
+        && request.resource.data.description is string
+        && request.resource.data.description.size() <= 280;
+      allow update: if signedIn() && resource.data.ownerId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title', 'description', 'updatedAt']);
+      allow delete: if signedIn() && resource.data.ownerId == request.auth.uid;
     }
 
     match /posts/{postId} {
-      allow get, list: if resource.data.visibility == 'PUBLIC' && resource.data.status == 'published'
+      allow get, list: if (resource.data.visibility == 'PUBLIC' && resource.data.status == 'published')
         || (signedIn() && resource.data.authorId == request.auth.uid);
-      allow create: if signedIn()
-        && request.resource.data.authorId == request.auth.uid
-        && request.resource.data.body is string
-        && request.resource.data.body.size() <= 10000
-        && request.resource.data.media.size() <= 10
-        && request.resource.data.status == 'published';
-      // Engagement counters and ranking are server-managed. Authors may only edit their own
-      // content fields, never impersonate another author or rewrite metric values.
+      allow create: if signedIn() && validPost(request.resource.data);
+      // Published posts remain published from the client. The trusted scheduler (Admin SDK)
+      // promotes scheduled records; it bypasses rules rather than expanding client authority.
       allow update: if signedIn() && resource.data.authorId == request.auth.uid
+        && validPost(request.resource.data)
+        && (resource.data.status != 'published' || request.resource.data.status == 'published')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'body', 'tags', 'media', 'visibility', 'language', 'updatedAt'
+          'body', 'format', 'frontmatter', 'embeds', 'tags', 'media', 'visibility', 'language',
+          'status', 'scheduledAt', 'publishedAt', 'seriesId', 'seriesTitle', 'seriesOrder',
+          'organizationId', 'organizationName', 'organizationHandle', 'coAuthorIds',
+          'coAuthorNames', 'updatedAt'
         ]);
       allow delete: if signedIn() && resource.data.authorId == request.auth.uid;
 
@@ -108,7 +181,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Administrative collections are exclusively accessed from trusted Functions/Admin SDK.
     match /{document=**} {
       allow read, write: if false;
     }

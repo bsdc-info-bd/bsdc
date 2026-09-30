@@ -9,7 +9,8 @@ This repository deliberately starts with a secure, deployable social-community c
 - Email/password account creation, sign-in, password reset, verification email, Google, GitHub, and configurable Yahoo OAuth flows.
 - Firebase Auth session handling and a configuration-safe startup state.
 - Public real-time Firestore feed, deterministic local ranking, freshness decay, negative-feedback penalty support, 7% stable exploration, and author diversity.
-- Native post composer: text, language, visibility, tags, Cloudinary image upload, and Cloudinary voice-note upload. Video MIME types are rejected on-device.
+- Responsive native publishing studio: safe Rich-write/Markdown toggle, native Markdown preview, YAML-like frontmatter metadata, headings/quotes/lists/code tooling, validated Gist/CodePen/YouTube/X liquid-style external embeds, Cloudinary image/voice attachments, and no video upload or in-app video playback.
+- Firestore-backed private drafts, trusted scheduled publishing, four-tag discovery limit, structured multi-part series, organization profiles/editor membership, and bounded co-author credit lines resolved against real BSDC handles. See [`docs/PUBLISHING_ARCHITECTURE.md`](docs/PUBLISHING_ARCHITECTURE.md).
 - Firestore-backed reactions, comments, reports, post metadata, profiles, handles, follower/following records, notifications, device records, and engagement events.
 - Realtime Database direct and group conversations, live message stream, unread counts, typing indicators with disconnect cleanup, soft message removal, read state, group creation by BSDC handle, and image/audio attachments only.
 - FCM foreground notification service, Android 13 notification permission, device-token registration, notification center, and verified Android App Links for `bsdc.info.bd`.

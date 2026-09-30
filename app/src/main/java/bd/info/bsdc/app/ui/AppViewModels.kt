@@ -13,13 +13,18 @@ import bd.info.bsdc.app.core.AppContainer
 import bd.info.bsdc.app.core.AppPreferences
 import bd.info.bsdc.app.core.RepositoryResult
 import bd.info.bsdc.app.feed.FeedRankingEngine
+import bd.info.bsdc.app.content.PublishingTools
 import bd.info.bsdc.app.data.PostDraft
 import bd.info.bsdc.app.model.CommunityPost
+import bd.info.bsdc.app.model.ContentSeries
+import bd.info.bsdc.app.model.OrganizationMembership
+import bd.info.bsdc.app.model.CommunityOrganization
 import bd.info.bsdc.app.model.MediaAttachment
 import bd.info.bsdc.app.model.MediaKind
 import bd.info.bsdc.app.model.PostVisibility
 import bd.info.bsdc.app.model.ReactionType
 import bd.info.bsdc.app.model.UserProfile
+import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseUser
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -108,26 +113,77 @@ class FeedViewModel(private val container: AppContainer) : ViewModel() {
     }
 }
 
+enum class EditorMode { RICH, MARKDOWN }
+enum class ComposerAction { DRAFT, SCHEDULE, PUBLISH }
+
+data class CoAuthorUi(val id: String, val name: String, val handle: String)
+
 data class ComposerUiState(
     val body: String = "",
+    val metadataText: String = "",
     val tags: String = "",
     val language: String = "en",
     val visibility: PostVisibility = PostVisibility.PUBLIC,
+    val editorMode: EditorMode = EditorMode.RICH,
     val media: List<MediaAttachment> = emptyList(),
+    val series: List<ContentSeries> = emptyList(),
+    val selectedSeriesId: String? = null,
+    val organizations: List<OrganizationMembership> = emptyList(),
+    val selectedOrganizationId: String? = null,
+    val coAuthors: List<CoAuthorUi> = emptyList(),
+    val workingPosts: List<CommunityPost> = emptyList(),
+    val draftId: String? = null,
+    val scheduledAtMillis: Long? = null,
     val uploading: Boolean = false,
     val publishing: Boolean = false,
     val error: String? = null,
+    val notice: String? = null,
     val completed: Boolean = false
 )
 
+/** State holder for a Markdown-first writer. Rich mode is a safe native preview/tooling layer;
+ * HTML and executable embed code are never rendered inside the client. */
 class ComposerViewModel(private val container: AppContainer) : ViewModel() {
     private val _state = MutableStateFlow(ComposerUiState())
     val state = _state.asStateFlow()
 
-    fun updateBody(value: String) { _state.value = _state.value.copy(body = value, error = null) }
-    fun updateTags(value: String) { _state.value = _state.value.copy(tags = value) }
+    init {
+        viewModelScope.launch {
+            container.community.observeMySeries().catch { setError(it.message) }.collect { items ->
+                _state.value = _state.value.copy(series = items)
+            }
+        }
+        viewModelScope.launch {
+            container.organizations.observeMine().catch { setError(it.message) }.collect { items ->
+                _state.value = _state.value.copy(organizations = items)
+            }
+        }
+        viewModelScope.launch {
+            container.community.observeMyWorkingPosts().catch { setError(it.message) }.collect { items ->
+                _state.value = _state.value.copy(workingPosts = items)
+            }
+        }
+    }
+
+    fun updateBody(value: String) { _state.value = _state.value.copy(body = value, error = null, notice = null) }
+    fun updateMetadata(value: String) { _state.value = _state.value.copy(metadataText = value, error = null) }
+    fun updateTags(value: String) { _state.value = _state.value.copy(tags = value.take(160)) }
     fun updateLanguage(value: String) { _state.value = _state.value.copy(language = value) }
     fun updateVisibility(value: PostVisibility) { _state.value = _state.value.copy(visibility = value) }
+    fun updateEditorMode(value: EditorMode) { _state.value = _state.value.copy(editorMode = value) }
+    fun selectSeries(id: String?) { _state.value = _state.value.copy(selectedSeriesId = id) }
+    fun selectOrganization(id: String?) { _state.value = _state.value.copy(selectedOrganizationId = id, coAuthors = emptyList()) }
+    fun updateScheduledAt(value: Long?) { _state.value = _state.value.copy(scheduledAtMillis = value, error = null) }
+
+    fun insertMarkdown(snippet: String) {
+        val body = _state.value.body
+        _state.value = _state.value.copy(body = if (body.isBlank()) snippet else "$body\n$snippet")
+    }
+
+    fun insertEmbed(type: String, url: String) {
+        val tag = PublishingTools.liquidTag(type, url)
+        if (tag == null) setError("Use a supported public URL for this embed.") else insertMarkdown(tag)
+    }
 
     fun attach(uri: Uri) = viewModelScope.launch {
         _state.value = _state.value.copy(uploading = true, error = null)
@@ -146,20 +202,150 @@ class ComposerViewModel(private val container: AppContainer) : ViewModel() {
                     )
                 )
             }
-            is RepositoryResult.Failure -> _state.value = _state.value.copy(uploading = false, error = result.message)
+            is RepositoryResult.Failure -> setError(result.message, uploading = false)
         }
     }
 
     fun removeMedia(url: String) { _state.value = _state.value.copy(media = _state.value.media.filterNot { it.url == url }) }
 
-    fun publish() = viewModelScope.launch {
-        val current = _state.value
-        _state.value = current.copy(publishing = true, error = null, completed = false)
-        val tags = current.tags.split(',', ' ', '\n').map { it.trim().removePrefix("#") }.filter { it.isNotBlank() }.distinct()
-        when (val result = container.community.publish(PostDraft(current.body, current.language, tags, current.visibility, current.media))) {
-            is RepositoryResult.Success -> _state.value = ComposerUiState(completed = true)
-            is RepositoryResult.Failure -> _state.value = current.copy(publishing = false, error = result.message)
+    fun addCoAuthors(handles: String) = viewModelScope.launch {
+        if (_state.value.selectedOrganizationId == null) {
+            setError("Choose an organization before adding organization co-authors.")
+            return@launch
         }
+        val requested = handles.split(',', ' ', '\n').map { it.trim() }.filter { it.isNotBlank() }
+        when (val result = container.community.resolveMemberHandles(requested)) {
+            is RepositoryResult.Success -> {
+                val current = _state.value.coAuthors
+                val combined = (current + result.value.map { CoAuthorUi(it.id, it.displayName, it.username) })
+                    .distinctBy { it.id }
+                    .take(5)
+                _state.value = _state.value.copy(coAuthors = combined, error = null)
+            }
+            is RepositoryResult.Failure -> setError(result.message)
+        }
+    }
+
+    fun removeCoAuthor(id: String) { _state.value = _state.value.copy(coAuthors = _state.value.coAuthors.filterNot { it.id == id }) }
+
+    fun createSeries(title: String, description: String) = viewModelScope.launch {
+        when (val result = container.community.createSeries(title, description)) {
+            is RepositoryResult.Success -> {
+                val current = _state.value
+                _state.value = current.copy(
+                    series = (listOf(ContentSeries(id = result.value, title = title.trim(), description = description.trim())) + current.series).distinctBy { it.id },
+                    selectedSeriesId = result.value,
+                    notice = "Series created. Add this post as its next part."
+                )
+            }
+            is RepositoryResult.Failure -> setError(result.message)
+        }
+    }
+
+    fun createOrganization(name: String, handle: String, description: String) = viewModelScope.launch {
+        when (val result = container.organizations.create(name, handle, description)) {
+            is RepositoryResult.Success -> {
+                val current = _state.value
+                _state.value = current.copy(
+                    organizations = (listOf(OrganizationMembership(
+                        id = result.value,
+                        organizationId = result.value,
+                        organizationName = name.trim(),
+                        organizationHandle = handle.trim().removePrefix("@").lowercase(),
+                        role = "owner"
+                    )) + current.organizations).distinctBy { it.organizationId },
+                    selectedOrganizationId = result.value,
+                    notice = "Organization profile created."
+                )
+            }
+            is RepositoryResult.Failure -> setError(result.message)
+        }
+    }
+
+    fun loadWorkingPost(post: CommunityPost) {
+        val parsed = PublishingTools.splitFrontmatter(post.body)
+        val metadata = if (post.frontmatter.isNotEmpty()) post.frontmatter else parsed.metadata
+        _state.value = _state.value.copy(
+            body = parsed.content,
+            metadataText = PublishingTools.metadataLines(metadata),
+            tags = post.tags.joinToString(", "),
+            language = post.language,
+            visibility = runCatching { PostVisibility.valueOf(post.visibility) }.getOrDefault(PostVisibility.PUBLIC),
+            media = post.media,
+            selectedSeriesId = post.seriesId,
+            selectedOrganizationId = post.organizationId,
+            coAuthors = post.coAuthorIds.zip(post.coAuthorNames).map { CoAuthorUi(it.first, it.second, "") },
+            draftId = post.id,
+            scheduledAtMillis = post.scheduledAt?.toDate()?.time,
+            error = null,
+            notice = if (post.status == "scheduled") "Editing a scheduled post" else "Editing private draft",
+            completed = false
+        )
+    }
+
+    fun newPost() {
+        val current = _state.value
+        _state.value = ComposerUiState(series = current.series, organizations = current.organizations, workingPosts = current.workingPosts)
+    }
+
+    fun submit(action: ComposerAction) = viewModelScope.launch {
+        val current = _state.value
+        val metadata = PublishingTools.parseMetadataLines(current.metadataText)
+        val source = PublishingTools.withFrontmatter(current.body, metadata)
+        val selectedSeries = current.series.firstOrNull { it.id == current.selectedSeriesId }
+        val selectedOrganization = current.organizations.firstOrNull { it.organizationId == current.selectedOrganizationId }
+        val tags = current.tags.split(',', ' ', '\n').map { it.trim().removePrefix("#") }.filter { it.isNotBlank() }.distinct()
+        if (tags.size > 4) {
+            setError("Choose up to 4 tags.")
+            return@launch
+        }
+        val draft = PostDraft(
+            body = source,
+            language = current.language,
+            tags = tags,
+            visibility = current.visibility,
+            media = current.media,
+            format = "markdown",
+            frontmatter = metadata,
+            embeds = PublishingTools.extractEmbeds(source),
+            seriesId = selectedSeries?.id,
+            seriesTitle = selectedSeries?.title,
+            seriesOrder = selectedSeries?.postCount?.plus(1),
+            organizationId = selectedOrganization?.organizationId,
+            organizationName = selectedOrganization?.organizationName,
+            organizationHandle = selectedOrganization?.organizationHandle,
+            coAuthorIds = current.coAuthors.map { it.id },
+            coAuthorNames = current.coAuthors.map { it.name }
+        )
+        _state.value = current.copy(publishing = true, error = null, notice = null, completed = false)
+        val result = when (action) {
+            ComposerAction.DRAFT -> container.community.saveDraft(draft, current.draftId)
+            ComposerAction.PUBLISH -> container.community.publish(draft, current.draftId)
+            ComposerAction.SCHEDULE -> {
+                val whenMillis = current.scheduledAtMillis ?: run {
+                    setError("Choose a date and time before scheduling.")
+                    return@launch
+                }
+                container.community.schedule(draft, Timestamp(java.util.Date(whenMillis)), current.draftId)
+            }
+        }
+        when (result) {
+            is RepositoryResult.Success -> when (action) {
+                ComposerAction.PUBLISH -> _state.value = ComposerUiState(
+                    series = current.series,
+                    organizations = current.organizations,
+                    workingPosts = current.workingPosts,
+                    completed = true
+                )
+                ComposerAction.DRAFT -> _state.value = _state.value.copy(publishing = false, draftId = result.value, notice = "Private draft saved")
+                ComposerAction.SCHEDULE -> _state.value = _state.value.copy(publishing = false, draftId = result.value, notice = "Post scheduled")
+            }
+            is RepositoryResult.Failure -> setError(result.message)
+        }
+    }
+
+    private fun setError(message: String?, uploading: Boolean = false) {
+        _state.value = _state.value.copy(uploading = uploading, publishing = false, error = message ?: "Something went wrong.")
     }
 }
 
@@ -295,6 +481,71 @@ class PostDetailViewModel(private val container: AppContainer, private val postI
         _state.value = when (val result = container.community.addComment(postId, body)) {
             is RepositoryResult.Success -> _state.value.copy(sending = false)
             is RepositoryResult.Failure -> _state.value.copy(sending = false, error = result.message)
+        }
+    }
+}
+
+data class SeriesUiState(
+    val series: ContentSeries? = null,
+    val posts: List<CommunityPost> = emptyList(),
+    val error: String? = null
+)
+
+class SeriesViewModel(private val container: AppContainer, private val seriesId: String) : ViewModel() {
+    private val _state = MutableStateFlow(SeriesUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.community.observeSeries(seriesId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { series -> _state.value = _state.value.copy(series = series) }
+        }
+        viewModelScope.launch {
+            container.community.observeSeriesPosts(seriesId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { posts -> _state.value = _state.value.copy(posts = posts) }
+        }
+    }
+}
+
+data class OrganizationUiState(
+    val organization: CommunityOrganization? = null,
+    val posts: List<CommunityPost> = emptyList(),
+    val members: List<OrganizationMembership> = emptyList(),
+    val busy: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
+)
+
+class OrganizationViewModel(private val container: AppContainer, private val organizationId: String) : ViewModel() {
+    private val _state = MutableStateFlow(OrganizationUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.organizations.observeOrganization(organizationId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { org -> _state.value = _state.value.copy(organization = org) }
+        }
+        viewModelScope.launch {
+            container.organizations.observeMembers(organizationId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { members -> _state.value = _state.value.copy(members = members) }
+        }
+        viewModelScope.launch {
+            container.community.observeOrganizationPosts(organizationId).catch { error ->
+                _state.value = _state.value.copy(error = error.message)
+            }.collect { posts -> _state.value = _state.value.copy(posts = posts) }
+        }
+    }
+
+    fun addEditor(handle: String) = viewModelScope.launch {
+        val organization = _state.value.organization ?: return@launch
+        _state.value = _state.value.copy(busy = true, error = null, message = null)
+        _state.value = when (val result = container.organizations.addEditor(organization, handle)) {
+            is RepositoryResult.Success -> _state.value.copy(busy = false, message = "Editor added to ${organization.name}")
+            is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
         }
     }
 }

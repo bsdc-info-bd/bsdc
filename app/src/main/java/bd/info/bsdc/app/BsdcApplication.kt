@@ -10,6 +10,7 @@ import bd.info.bsdc.app.core.AppContainer
 import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.SettingsRepository
 import bd.info.bsdc.app.data.CommunityRepository
+import bd.info.bsdc.app.data.OrganizationRepository
 import bd.info.bsdc.app.data.ProfileRepository
 import bd.info.bsdc.app.media.CloudinaryMediaUploader
 import bd.info.bsdc.app.messaging.ChatRepository
@@ -42,6 +43,7 @@ class BsdcApplication : Application() {
             settings = SettingsRepository(this),
             auth = AuthRepository(gate),
             community = CommunityRepository(gate),
+            organizations = OrganizationRepository(gate),
             profiles = ProfileRepository(gate),
             chat = ChatRepository(gate),
             notifications = NotificationRepository(gate),

@@ -63,6 +63,8 @@ import bd.info.bsdc.app.ui.InboxViewModel
 import bd.info.bsdc.app.ui.NotificationsViewModel
 import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
+import bd.info.bsdc.app.ui.OrganizationViewModel
+import bd.info.bsdc.app.ui.SeriesViewModel
 import bd.info.bsdc.app.ui.screens.AuthScreen
 import bd.info.bsdc.app.ui.screens.ChatRoomScreen
 import bd.info.bsdc.app.ui.screens.ComposerScreen
@@ -71,6 +73,8 @@ import bd.info.bsdc.app.ui.screens.InboxScreen
 import bd.info.bsdc.app.ui.screens.NotificationsScreen
 import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
+import bd.info.bsdc.app.ui.screens.OrganizationScreen
+import bd.info.bsdc.app.ui.screens.SeriesScreen
 import bd.info.bsdc.app.ui.screens.TechnologyStackScreen
 import bd.info.bsdc.app.ui.theme.BsdcTheme
 import com.google.firebase.messaging.FirebaseMessaging
@@ -207,12 +211,19 @@ private fun CommunityDestinations(
                 onOpenProfile = { memberId ->
                     nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
                 },
-                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") }
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onOpenSeries = { seriesId -> nav.navigate("series/${Uri.encode(seriesId)}") },
+                onOpenOrganization = { organizationId -> nav.navigate("organization/${Uri.encode(organizationId)}") }
             )
         }
         composable("compose") {
             val vm: ComposerViewModel = viewModel(factory = BsdcViewModelFactory { ComposerViewModel(container) })
-            ComposerScreen(vm, onPublished = { nav.navigate("feed") { popUpTo("feed") { inclusive = false } } }, onBack = { nav.popBackStack() })
+            ComposerScreen(
+                vm,
+                onPublished = { nav.navigate("feed") { popUpTo("feed") { inclusive = false } } },
+                onBack = { nav.popBackStack() },
+                onOpenOrganization = { id -> nav.navigate("organization/${Uri.encode(id)}") }
+            )
         }
         composable("inbox") {
             val vm: InboxViewModel = viewModel(factory = BsdcViewModelFactory { InboxViewModel(container) })
@@ -247,6 +258,26 @@ private fun CommunityDestinations(
                 onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") },
                 onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
                 onBack = { nav.popBackStack() }
+            )
+        }
+        composable("series/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            val id = entry.arguments?.getString("id").orEmpty()
+            val vm: SeriesViewModel = viewModel(key = "series-$id", factory = BsdcViewModelFactory { SeriesViewModel(container, id) })
+            SeriesScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") }
+            )
+        }
+        composable("organization/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->
+            val id = entry.arguments?.getString("id").orEmpty()
+            val vm: OrganizationViewModel = viewModel(key = "organization-$id", factory = BsdcViewModelFactory { OrganizationViewModel(container, id) })
+            OrganizationScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") }
             )
         }
         composable("post/{id}", arguments = listOf(navArgument("id") { type = NavType.StringType })) { entry ->

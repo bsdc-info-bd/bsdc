@@ -68,6 +68,7 @@ fun PostDetailScreen(viewModel: PostDetailViewModel, onBack: () -> Unit, onOpenP
                         onReact = {},
                         onComment = {},
                         onMore = {},
+                        expanded = true,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
                 }
