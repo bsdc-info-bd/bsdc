@@ -66,6 +66,7 @@ import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.OrganizationViewModel
 import bd.info.bsdc.app.ui.SeriesViewModel
+import bd.info.bsdc.app.ui.SettingsViewModel
 import bd.info.bsdc.app.ui.screens.AuthScreen
 import bd.info.bsdc.app.ui.screens.BookmarksScreen
 import bd.info.bsdc.app.ui.screens.ChatRoomScreen
@@ -77,6 +78,7 @@ import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
 import bd.info.bsdc.app.ui.screens.OrganizationScreen
 import bd.info.bsdc.app.ui.screens.SeriesScreen
+import bd.info.bsdc.app.ui.screens.SettingsScreen
 import bd.info.bsdc.app.ui.screens.TechnologyStackScreen
 import bd.info.bsdc.app.ui.theme.BsdcTheme
 import com.google.firebase.messaging.FirebaseMessaging
@@ -257,12 +259,17 @@ private fun CommunityDestinations(
                 onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") },
                 onOpenConversation = { conversationId -> nav.navigate("chat/${Uri.encode(conversationId)}") },
                 onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
-                onManageStack = { nav.navigate("tech-stack") }
+                onManageStack = { nav.navigate("tech-stack") },
+                onOpenSettings = { nav.navigate("settings") }
             )
         }
         composable("tech-stack") {
             val vm: ProfileViewModel = viewModel(key = "tech-stack-$userId", factory = BsdcViewModelFactory { ProfileViewModel(container, userId) })
             TechnologyStackScreen(vm) { nav.popBackStack() }
+        }
+        composable("settings") {
+            val vm: SettingsViewModel = viewModel(factory = BsdcViewModelFactory { SettingsViewModel(container) })
+            SettingsScreen(vm) { nav.popBackStack() }
         }
         composable("member/{uid}", arguments = listOf(navArgument("uid") { type = NavType.StringType })) { entry ->
             val memberId = entry.arguments?.getString("uid").orEmpty()

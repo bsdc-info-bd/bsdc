@@ -8,8 +8,11 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import bd.info.bsdc.app.auth.AuthRepository
 import bd.info.bsdc.app.auth.AuthState
+import bd.info.bsdc.app.core.AnalyticsConsent
 import bd.info.bsdc.app.core.AppContainer
 import bd.info.bsdc.app.core.AppPreferences
+import bd.info.bsdc.app.core.LanguagePreference
+import bd.info.bsdc.app.core.ThemePreference
 import bd.info.bsdc.app.core.RepositoryResult
 import bd.info.bsdc.app.feed.FeedRankingEngine
 import bd.info.bsdc.app.content.PublishingTools
@@ -32,6 +35,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -42,6 +46,18 @@ class AppViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppPreferences())
 
     fun signOut() = container.auth.signOut()
+}
+
+/** Preference writes are local, immediate, and remain functional offline. */
+class SettingsViewModel(private val container: AppContainer) : ViewModel() {
+    val preferences = container.settings.preferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), AppPreferences())
+
+    fun setTheme(value: ThemePreference) = viewModelScope.launch { container.settings.setTheme(value) }
+    fun setLanguage(value: LanguagePreference) = viewModelScope.launch { container.settings.setLanguage(value) }
+    fun setReduceMotion(value: Boolean) = viewModelScope.launch { container.settings.setReduceMotion(value) }
+    fun setRankedFeed(value: Boolean) = viewModelScope.launch { container.settings.setRankedFeed(value) }
+    fun setAnalyticsConsent(value: AnalyticsConsent) = viewModelScope.launch { container.settings.setAnalyticsConsent(value) }
 }
 
 data class AuthUiState(
@@ -94,13 +110,15 @@ class FeedViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         viewModelScope.launch {
-            container.community.observePublicFeed().catch { error ->
-                _state.value = _state.value.copy(loading = false, error = error.message)
-            }.collect { candidates ->
+            combine(container.community.observePublicFeed(), container.settings.preferences) { candidates, preferences ->
                 // The query has already been access-controlled by Firestore. This layer only
                 // performs deterministic local ordering; an anonymous key is used until the
                 // protected backend provides per-user candidate retrieval.
-                _state.value = FeedUiState(loading = false, posts = ranking.rank(candidates, "viewer").map { it.post })
+                if (preferences.useRankedFeed) ranking.rank(candidates, "viewer").map { it.post } else candidates
+            }.catch { error ->
+                _state.value = _state.value.copy(loading = false, error = error.message)
+            }.collect { posts ->
+                _state.value = FeedUiState(loading = false, posts = posts)
             }
         }
     }

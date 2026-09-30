@@ -12,6 +12,7 @@ private val Context.dataStore by preferencesDataStore(name = "bsdc_preferences")
 
 enum class ThemePreference { SYSTEM, LIGHT, DARK }
 enum class LanguagePreference { ENGLISH, BANGLA }
+enum class AnalyticsConsent { UNDECIDED, GRANTED, DENIED }
 
 data class AppPreferences(
     val theme: ThemePreference = ThemePreference.SYSTEM,
@@ -22,7 +23,8 @@ data class AppPreferences(
     // never replace Android's runtime permission, and they are all off by default.
     val cameraProfilePhotoConsent: Boolean = false,
     val approximateLocationConsent: Boolean = false,
-    val contactInviteConsent: Boolean = false
+    val contactInviteConsent: Boolean = false,
+    val analyticsConsent: AnalyticsConsent = AnalyticsConsent.UNDECIDED
 )
 
 class SettingsRepository(private val context: Context) {
@@ -36,7 +38,9 @@ class SettingsRepository(private val context: Context) {
             useRankedFeed = values[RANKED_FEED] ?: true,
             cameraProfilePhotoConsent = values[CAMERA_PROFILE_PHOTO_CONSENT] ?: false,
             approximateLocationConsent = values[APPROXIMATE_LOCATION_CONSENT] ?: false,
-            contactInviteConsent = values[CONTACT_INVITE_CONSENT] ?: false
+            contactInviteConsent = values[CONTACT_INVITE_CONSENT] ?: false,
+            analyticsConsent = values[ANALYTICS_CONSENT]?.let { runCatching { AnalyticsConsent.valueOf(it) }.getOrNull() }
+                ?: AnalyticsConsent.UNDECIDED
         )
     }
 
@@ -47,6 +51,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setCameraProfilePhotoConsent(value: Boolean) = context.dataStore.edit { it[CAMERA_PROFILE_PHOTO_CONSENT] = value }
     suspend fun setApproximateLocationConsent(value: Boolean) = context.dataStore.edit { it[APPROXIMATE_LOCATION_CONSENT] = value }
     suspend fun setContactInviteConsent(value: Boolean) = context.dataStore.edit { it[CONTACT_INVITE_CONSENT] = value }
+    suspend fun setAnalyticsConsent(value: AnalyticsConsent) = context.dataStore.edit { it[ANALYTICS_CONSENT] = value.name }
 
     private companion object {
         val THEME = stringPreferencesKey("theme")
@@ -56,5 +61,6 @@ class SettingsRepository(private val context: Context) {
         val CAMERA_PROFILE_PHOTO_CONSENT = booleanPreferencesKey("camera_profile_photo_consent")
         val APPROXIMATE_LOCATION_CONSENT = booleanPreferencesKey("approximate_location_consent")
         val CONTACT_INVITE_CONSENT = booleanPreferencesKey("contact_invite_consent")
+        val ANALYTICS_CONSENT = stringPreferencesKey("analytics_consent")
     }
 }

@@ -73,6 +73,7 @@ fun ProfileScreen(
     onOpenConversation: (String) -> Unit,
     onOpenPost: (String) -> Unit,
     onManageStack: (() -> Unit)? = null,
+    onOpenSettings: (() -> Unit)? = null,
     onBack: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -131,7 +132,10 @@ fun ProfileScreen(
                 title = { Text(if (viewModel.isOwnProfile) "Your profile" else "Developer profile") },
                 navigationIcon = { onBack?.let { TextButton(onClick = it) { Text("Back") } } },
                 actions = {
-                    if (viewModel.isOwnProfile) TextButton(onClick = onSignOut) { Text("Sign out") }
+                    if (viewModel.isOwnProfile) {
+                        onOpenSettings?.let { TextButton(onClick = it) { Text("Settings") } }
+                        TextButton(onClick = onSignOut) { Text("Sign out") }
+                    }
                 }
             )
         }

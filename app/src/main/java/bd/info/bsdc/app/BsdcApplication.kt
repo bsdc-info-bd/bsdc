@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
 import bd.info.bsdc.app.auth.AuthRepository
+import bd.info.bsdc.app.core.AnalyticsConsent
 import bd.info.bsdc.app.core.AppContainer
 import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.SettingsRepository
@@ -19,8 +20,15 @@ import com.cloudinary.android.MediaManager
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.playintegrity.PlayIntegrityAppCheckProviderFactory
+import com.google.firebase.analytics.FirebaseAnalytics
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 class BsdcApplication : Application() {
+    private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     lateinit var container: AppContainer
         private set
 
@@ -39,8 +47,17 @@ class BsdcApplication : Application() {
         createNotificationChannels()
 
         val gate = FirebaseGate(firebaseConfigured)
+        val settings = SettingsRepository(this)
+        if (firebaseConfigured) {
+            // Analytics collection is disabled in the manifest until the member chooses it.
+            // This process-lifetime observer immediately honors both grant and revocation.
+            settings.preferences.onEach { preferences ->
+                FirebaseAnalytics.getInstance(this)
+                    .setAnalyticsCollectionEnabled(preferences.analyticsConsent == AnalyticsConsent.GRANTED)
+            }.launchIn(applicationScope)
+        }
         container = AppContainer(
-            settings = SettingsRepository(this),
+            settings = settings,
             auth = AuthRepository(gate),
             community = CommunityRepository(gate),
             organizations = OrganizationRepository(gate),
