@@ -53,6 +53,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import bd.info.bsdc.app.auth.AuthState
+import bd.info.bsdc.app.ui.AccountLifecycleViewModel
 import bd.info.bsdc.app.ui.AppViewModel
 import bd.info.bsdc.app.ui.AuthViewModel
 import bd.info.bsdc.app.ui.BookmarksViewModel
@@ -69,6 +70,7 @@ import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.OrganizationViewModel
 import bd.info.bsdc.app.ui.SeriesViewModel
 import bd.info.bsdc.app.ui.SettingsViewModel
+import bd.info.bsdc.app.ui.screens.AccountLifecycleScreen
 import bd.info.bsdc.app.ui.screens.AuthScreen
 import bd.info.bsdc.app.ui.screens.BookmarksScreen
 import bd.info.bsdc.app.ui.screens.ChatRoomScreen
@@ -289,11 +291,16 @@ private fun CommunityDestinations(
                 viewModel = vm,
                 onBack = { nav.popBackStack() },
                 onOpenLegal = { nav.navigate("legal") },
+                onOpenAccountLifecycle = { nav.navigate("account-lifecycle") },
                 onOpenModeration = { nav.navigate("moderation") }
             )
         }
         composable("legal") {
             LegalDocumentsScreen { nav.popBackStack() }
+        }
+        composable("account-lifecycle") {
+            val vm: AccountLifecycleViewModel = viewModel(factory = BsdcViewModelFactory { AccountLifecycleViewModel(container) })
+            AccountLifecycleScreen(vm, onBack = { nav.popBackStack() }, onSignOut = onSignOut)
         }
         composable("moderation") {
             val vm: ModerationViewModel = viewModel(factory = BsdcViewModelFactory { ModerationViewModel(container) })

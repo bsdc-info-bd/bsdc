@@ -36,6 +36,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel,
     onBack: () -> Unit,
     onOpenLegal: () -> Unit,
+    onOpenAccountLifecycle: () -> Unit,
     onOpenModeration: () -> Unit
 ) {
     val preferences by viewModel.preferences.collectAsStateWithLifecycle()
@@ -126,6 +127,11 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+            item("account-lifecycle") {
+                SettingCard("Account data & deletion", "Submit a verified request for your BSDC data or account-erasure review. BSDC requires a recent sign-in and does not claim instant deletion.") {
+                    TextButton(onClick = onOpenAccountLifecycle) { Text("Manage data requests") }
                 }
             }
             item("moderation") {

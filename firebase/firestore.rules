@@ -9,6 +9,7 @@ service cloud.firestore {
       return signedIn() && request.auth.token.legalAcceptanceVersion == '2026-09-30';
     }
     function isStaff() { return signedIn() && request.auth.token.role in ['admin', 'moderator']; }
+    function isAdmin() { return signedIn() && request.auth.token.role == 'admin'; }
     function isOrgMember(orgId) {
       return signedIn() && orgId is string
         && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid));
@@ -222,6 +223,14 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['body', 'updatedAt']);
         allow delete: if hasCurrentLegalAccess() && resource.data.authorId == request.auth.uid;
       }
+    }
+
+    // Sensitive lifecycle requests are created/cancelled only by a callable Function after
+    // recent-authentication checks. The requester can read their own state; operations data is
+    // limited to trusted admins, not the broader moderator role.
+    match /accountLifecycleRequests/{uid} {
+      allow read: if (isSelf(uid) && hasCurrentLegalAccess()) || isAdmin();
+      allow write: if false;
     }
 
     // Members can create one immutable, bounded report. Review state, staff identity, and content

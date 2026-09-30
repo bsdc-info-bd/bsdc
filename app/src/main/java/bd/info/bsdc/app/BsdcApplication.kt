@@ -10,6 +10,7 @@ import bd.info.bsdc.app.core.AnalyticsConsent
 import bd.info.bsdc.app.core.AppContainer
 import bd.info.bsdc.app.core.FirebaseGate
 import bd.info.bsdc.app.core.SettingsRepository
+import bd.info.bsdc.app.data.AccountLifecycleRepository
 import bd.info.bsdc.app.data.CommunityRepository
 import bd.info.bsdc.app.data.LegalConsentRepository
 import bd.info.bsdc.app.data.ModerationRepository
@@ -62,6 +63,7 @@ class BsdcApplication : Application() {
         container = AppContainer(
             settings = settings,
             auth = AuthRepository(gate, legalConsents),
+            lifecycle = AccountLifecycleRepository(gate),
             legalConsents = legalConsents,
             moderation = ModerationRepository(gate),
             community = CommunityRepository(gate),

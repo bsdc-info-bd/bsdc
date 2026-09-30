@@ -227,6 +227,74 @@ export const restoreModeratedPost = onCall({ region: REGION }, async (request) =
   return { postId, action: "RESTORE_POST" };
 });
 
+const RECENT_LIFECYCLE_AUTH_WINDOW_SECONDS = 10 * 60;
+
+type LifecycleRequestType = "EXPORT" | "ERASURE";
+
+/** Sensitive lifecycle requests demand a freshly authenticated token in addition to the current
+ * legal-access claim. A stale but valid session is insufficient for this non-reversible action. */
+function requireRecentlyAuthenticatedMember(request: { auth?: { uid: string; token: Record<string, unknown> } | null }): string {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in again before submitting this sensitive request.");
+  if (request.auth.token[LEGAL_ACCEPTANCE_CLAIM] !== CURRENT_LEGAL_VERSION) {
+    throw new HttpsError("permission-denied", "Accept the current BSDC documents before managing account data.");
+  }
+  const authTime = request.auth.token.auth_time;
+  if (typeof authTime !== "number" || !Number.isFinite(authTime) ||
+      authTime > Date.now() / 1000 + 60 || Date.now() / 1000 - authTime > RECENT_LIFECYCLE_AUTH_WINDOW_SECONDS) {
+    throw new HttpsError("failed-precondition", "For your protection, sign out and sign in again before submitting this request.");
+  }
+  return request.auth.uid;
+}
+
+/**
+ * Creates an account-bound, immutable-from-the-client lifecycle request. This intentionally is
+ * not an instant export/delete implementation: completion needs authenticated operations across
+ * Firebase, Cloudinary, retention, report, and safety systems before it may be claimed.
+ */
+export const submitAccountLifecycleRequest = onCall({ region: REGION }, async (request) => {
+  const uid = requireRecentlyAuthenticatedMember(request);
+  const payload = request.data as Record<string, unknown>;
+  const type = payload.type;
+  if (type !== "EXPORT" && type !== "ERASURE") {
+    throw new HttpsError("invalid-argument", "Request type must be EXPORT or ERASURE.");
+  }
+  const requestRef = firestore.collection("accountLifecycleRequests").doc(uid);
+  await firestore.runTransaction(async (transaction) => {
+    const existing = await transaction.get(requestRef);
+    const existingState = existing.data()?.state;
+    if (existingState === "PENDING" || existingState === "ACKNOWLEDGED") {
+      throw new HttpsError("already-exists", "An account data request is already in progress.");
+    }
+    transaction.set(requestRef, {
+      requesterId: uid,
+      requestType: type,
+      state: "PENDING",
+      requestedAt: FieldValue.serverTimestamp(),
+    });
+  });
+  logger.info("Created BSDC account lifecycle request", { uid, type: type as LifecycleRequestType });
+  return { type, state: "PENDING" };
+});
+
+/** A member may withdraw only a request that operations has not yet acknowledged. */
+export const cancelAccountLifecycleRequest = onCall({ region: REGION }, async (request) => {
+  const uid = requireRecentlyAuthenticatedMember(request);
+  const requestRef = firestore.collection("accountLifecycleRequests").doc(uid);
+  await firestore.runTransaction(async (transaction) => {
+    const existing = await transaction.get(requestRef);
+    if (!existing.exists) throw new HttpsError("not-found", "No account data request was found.");
+    if (existing.data()?.state !== "PENDING") {
+      throw new HttpsError("failed-precondition", "Only a pending request can be cancelled.");
+    }
+    transaction.update(requestRef, {
+      state: "CANCELLED",
+      cancelledAt: FieldValue.serverTimestamp(),
+    });
+  });
+  logger.info("Cancelled BSDC account lifecycle request", { uid });
+  return { state: "CANCELLED" };
+});
+
 export const countPostReactions = onDocumentWritten(
   { document: "posts/{postId}/reactions/{uid}", region: REGION },
   async (event) => recomputeCount(`posts/${event.params.postId}`, `posts/${event.params.postId}/reactions`, "reactionCount"),

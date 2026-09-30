@@ -14,7 +14,7 @@ Crash/error diagnostics and operational security logs are deliberately not repre
 
 Before authenticated community access, BSDC requires the current Terms of Use and Privacy Notice to be accepted. Acceptance is stored as immutable, account-bound Firestore records with a document version, Firebase server timestamp, locale, and native-app source. A trusted Firebase Function verifies both current records and issues an Authentication custom claim; Firestore and Realtime Database rules require that claim for community activity. The app does not treat a local checkbox or DataStore value as backend authorization.
 
-See [`LEGAL_CONSENT_ARCHITECTURE.md`](LEGAL_CONSENT_ARCHITECTURE.md) for the exact records, rules boundary, release/version procedure, and the truthful current limitation on self-service export and account erasure.
+See [`LEGAL_CONSENT_ARCHITECTURE.md`](LEGAL_CONSENT_ARCHITECTURE.md) for the exact records, rules boundary, release/version procedure, and the truthful current limitation on self-service export and account erasure. The app now supports recently reauthenticated export/erasure **requests**, but does not claim full export generation or deletion completion; see [`ACCOUNT_LIFECYCLE_REQUESTS.md`](ACCOUNT_LIFECYCLE_REQUESTS.md).
 
 ## Local experience controls
 

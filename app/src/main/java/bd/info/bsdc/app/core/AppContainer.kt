@@ -1,6 +1,7 @@
 package bd.info.bsdc.app.core
 
 import bd.info.bsdc.app.auth.AuthRepository
+import bd.info.bsdc.app.data.AccountLifecycleRepository
 import bd.info.bsdc.app.data.CommunityRepository
 import bd.info.bsdc.app.data.LegalConsentRepository
 import bd.info.bsdc.app.data.ModerationRepository
@@ -14,6 +15,7 @@ import bd.info.bsdc.app.notifications.NotificationRepository
 data class AppContainer(
     val settings: SettingsRepository,
     val auth: AuthRepository,
+    val lifecycle: AccountLifecycleRepository,
     val legalConsents: LegalConsentRepository,
     val moderation: ModerationRepository,
     val community: CommunityRepository,

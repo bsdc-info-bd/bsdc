@@ -18,6 +18,8 @@ import bd.info.bsdc.app.data.LegalConsentState
 import bd.info.bsdc.app.feed.FeedRankingEngine
 import bd.info.bsdc.app.content.PublishingTools
 import bd.info.bsdc.app.data.PostDraft
+import bd.info.bsdc.app.model.AccountLifecycleRequest
+import bd.info.bsdc.app.model.AccountLifecycleRequestType
 import bd.info.bsdc.app.model.CommunityPost
 import bd.info.bsdc.app.model.ContentReport
 import bd.info.bsdc.app.model.ContentSeries
@@ -62,6 +64,45 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setReduceMotion(value: Boolean) = viewModelScope.launch { container.settings.setReduceMotion(value) }
     fun setRankedFeed(value: Boolean) = viewModelScope.launch { container.settings.setRankedFeed(value) }
     fun setAnalyticsConsent(value: AnalyticsConsent) = viewModelScope.launch { container.settings.setAnalyticsConsent(value) }
+}
+
+data class AccountLifecycleUiState(
+    val request: AccountLifecycleRequest? = null,
+    val loading: Boolean = true,
+    val busy: Boolean = false,
+    val message: String? = null,
+    val error: String? = null
+)
+
+class AccountLifecycleViewModel(private val container: AppContainer) : ViewModel() {
+    private val _state = MutableStateFlow(AccountLifecycleUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.lifecycle.observeMine().catch { error ->
+                _state.value = _state.value.copy(loading = false, error = error.message ?: "Could not load your account data request.")
+            }.collect { request ->
+                _state.value = _state.value.copy(loading = false, request = request)
+            }
+        }
+    }
+
+    fun submit(type: AccountLifecycleRequestType) = viewModelScope.launch {
+        _state.value = _state.value.copy(busy = true, error = null, message = null)
+        _state.value = when (val result = container.lifecycle.submit(type)) {
+            is RepositoryResult.Success -> _state.value.copy(busy = false, message = "Request submitted to BSDC operations.")
+            is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
+        }
+    }
+
+    fun cancel() = viewModelScope.launch {
+        _state.value = _state.value.copy(busy = true, error = null, message = null)
+        _state.value = when (val result = container.lifecycle.cancel()) {
+            is RepositoryResult.Success -> _state.value.copy(busy = false, message = "Pending request cancelled.")
+            is RepositoryResult.Failure -> _state.value.copy(busy = false, error = result.message)
+        }
+    }
 }
 
 data class LegalConsentActionState(

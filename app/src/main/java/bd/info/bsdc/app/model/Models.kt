@@ -11,6 +11,20 @@ enum class NotificationKind { COMMENT, REACTION, FOLLOW, MESSAGE, MENTION, SYSTE
 enum class ReportReason { SPAM, HARASSMENT, HATE, SEXUAL_CONTENT, VIOLENCE, SELF_HARM, MISINFORMATION, INTELLECTUAL_PROPERTY, OTHER }
 enum class ReportState { OPEN, DISMISSED, ACTIONED }
 enum class ModerationAction { DISMISS, HIDE_POST, RESTORE_POST }
+enum class AccountLifecycleRequestType { EXPORT, ERASURE }
+enum class AccountLifecycleRequestState { PENDING, CANCELLED, ACKNOWLEDGED }
+
+data class AccountLifecycleRequest(
+    @DocumentId val id: String = "",
+    val requesterId: String = "",
+    val requestType: String = AccountLifecycleRequestType.EXPORT.name,
+    val state: String = AccountLifecycleRequestState.PENDING.name,
+    val requestedAt: Timestamp? = null,
+    val cancelledAt: Timestamp? = null,
+    val acknowledgedAt: Timestamp? = null,
+    val acknowledgedBy: String? = null,
+    val staffNote: String? = null
+)
 
 data class ContentReport(
     @DocumentId val id: String = "",
