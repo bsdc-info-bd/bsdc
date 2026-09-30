@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Forum
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,6 +54,7 @@ fun FeedScreen(
     onCompose: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenSearch: () -> Unit,
     onOpenBookmarks: () -> Unit,
     onOpenSeries: (String) -> Unit = {},
     onOpenOrganization: (String) -> Unit = {}
@@ -68,6 +70,9 @@ fun FeedScreen(
             TopAppBar(
                 title = { BsdcBrand(compact = true) },
                 actions = {
+                    IconButton(onClick = onOpenSearch) {
+                        Icon(Icons.Outlined.Search, contentDescription = "Discover members and topics")
+                    }
                     IconButton(onClick = onOpenBookmarks) {
                         Icon(Icons.Outlined.BookmarkBorder, contentDescription = "Saved posts")
                     }

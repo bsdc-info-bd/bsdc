@@ -179,6 +179,44 @@ class AuthViewModel(private val repository: AuthRepository) : ViewModel() {
     }
 }
 
+enum class SearchMode { MEMBERS, TOPICS }
+
+data class SearchUiState(
+    val query: String = "",
+    val mode: SearchMode = SearchMode.MEMBERS,
+    val searching: Boolean = false,
+    val hasSearched: Boolean = false,
+    val members: List<UserProfile> = emptyList(),
+    val posts: List<CommunityPost> = emptyList(),
+    val error: String? = null
+)
+
+class SearchViewModel(private val container: AppContainer) : ViewModel() {
+    private val _state = MutableStateFlow(SearchUiState())
+    val state = _state.asStateFlow()
+
+    fun updateQuery(value: String) { _state.value = _state.value.copy(query = value.take(32), error = null) }
+    fun selectMode(value: SearchMode) {
+        _state.value = _state.value.copy(mode = value, members = emptyList(), posts = emptyList(), error = null, hasSearched = false)
+    }
+
+    fun search() = viewModelScope.launch {
+        val current = _state.value
+        _state.value = current.copy(searching = true, hasSearched = true, error = null, members = emptyList(), posts = emptyList())
+        if (current.mode == SearchMode.MEMBERS) {
+            _state.value = when (val result = container.search.searchMembers(current.query)) {
+                is RepositoryResult.Success -> current.copy(searching = false, hasSearched = true, members = result.value)
+                is RepositoryResult.Failure -> current.copy(searching = false, hasSearched = true, error = result.message)
+            }
+        } else {
+            _state.value = when (val result = container.search.searchPublicPostsByTag(current.query)) {
+                is RepositoryResult.Success -> current.copy(searching = false, hasSearched = true, posts = result.value)
+                is RepositoryResult.Failure -> current.copy(searching = false, hasSearched = true, error = result.message)
+            }
+        }
+    }
+}
+
 data class FeedUiState(
     val loading: Boolean = true,
     val posts: List<CommunityPost> = emptyList(),

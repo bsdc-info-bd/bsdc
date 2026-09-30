@@ -16,6 +16,7 @@ import bd.info.bsdc.app.data.LegalConsentRepository
 import bd.info.bsdc.app.data.ModerationRepository
 import bd.info.bsdc.app.data.OrganizationRepository
 import bd.info.bsdc.app.data.ProfileRepository
+import bd.info.bsdc.app.data.SearchRepository
 import bd.info.bsdc.app.media.CloudinaryMediaUploader
 import bd.info.bsdc.app.messaging.ChatRepository
 import bd.info.bsdc.app.notifications.NotificationRepository
@@ -69,6 +70,7 @@ class BsdcApplication : Application() {
             community = CommunityRepository(gate),
             organizations = OrganizationRepository(gate),
             profiles = ProfileRepository(gate),
+            search = SearchRepository(gate),
             chat = ChatRepository(gate),
             notifications = NotificationRepository(gate),
             media = CloudinaryMediaUploader(this)

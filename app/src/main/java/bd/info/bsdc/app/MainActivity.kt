@@ -69,6 +69,7 @@ import bd.info.bsdc.app.ui.PostDetailViewModel
 import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.OrganizationViewModel
 import bd.info.bsdc.app.ui.SeriesViewModel
+import bd.info.bsdc.app.ui.SearchViewModel
 import bd.info.bsdc.app.ui.SettingsViewModel
 import bd.info.bsdc.app.ui.screens.AccountLifecycleScreen
 import bd.info.bsdc.app.ui.screens.AuthScreen
@@ -83,6 +84,7 @@ import bd.info.bsdc.app.ui.screens.ModerationScreen
 import bd.info.bsdc.app.ui.screens.NotificationsScreen
 import bd.info.bsdc.app.ui.screens.PostDetailScreen
 import bd.info.bsdc.app.ui.screens.ProfileScreen
+import bd.info.bsdc.app.ui.screens.SearchScreen
 import bd.info.bsdc.app.ui.screens.OrganizationScreen
 import bd.info.bsdc.app.ui.screens.SeriesScreen
 import bd.info.bsdc.app.ui.screens.SettingsScreen
@@ -236,9 +238,19 @@ private fun CommunityDestinations(
                     nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
                 },
                 onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onOpenSearch = { nav.navigate("search") },
                 onOpenBookmarks = { nav.navigate("bookmarks") },
                 onOpenSeries = { seriesId -> nav.navigate("series/${Uri.encode(seriesId)}") },
                 onOpenOrganization = { organizationId -> nav.navigate("organization/${Uri.encode(organizationId)}") }
+            )
+        }
+        composable("search") {
+            val vm: SearchViewModel = viewModel(factory = BsdcViewModelFactory { SearchViewModel(container) })
+            SearchScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenProfile = { memberId -> nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}") },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") }
             )
         }
         composable("bookmarks") {
