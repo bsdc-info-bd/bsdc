@@ -83,6 +83,7 @@ fun ProfileScreen(
     val conversationId by viewModel.conversationId.collectAsStateWithLifecycle()
     val privacyPreferences by viewModel.privacyPreferences.collectAsStateWithLifecycle()
     val locationSuggestion by viewModel.locationSuggestion.collectAsStateWithLifecycle()
+    val emailVerified by viewModel.emailVerified.collectAsStateWithLifecycle()
     var editing by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableIntStateOf(0) }
     val avatarPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(viewModel::uploadAvatar) }
@@ -158,6 +159,22 @@ fun ProfileScreen(
                 item(key = "actions") {
                     Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (viewModel.isOwnProfile) {
+                            if (!emailVerified) {
+                                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer)) {
+                                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        Text("Verify your email", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                                        Text(
+                                            "Verification helps secure account recovery and important BSDC notices.",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onTertiaryContainer
+                                        )
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            TextButton(onClick = viewModel::sendVerificationEmail, enabled = !action.busy) { Text("Send email") }
+                                            TextButton(onClick = viewModel::refreshEmailVerification, enabled = !action.busy) { Text("Check status") }
+                                        }
+                                    }
+                                }
+                            }
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                                 Button(onClick = { editing = true }, enabled = !action.busy, modifier = Modifier.weight(1f)) { Text("Edit profile") }
                                 Button(onClick = { onManageStack?.invoke() }, enabled = !action.busy && onManageStack != null, modifier = Modifier.weight(1f)) { Text("Tech stack") }

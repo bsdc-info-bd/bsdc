@@ -55,6 +55,7 @@ import androidx.navigation.NavType
 import bd.info.bsdc.app.auth.AuthState
 import bd.info.bsdc.app.ui.AppViewModel
 import bd.info.bsdc.app.ui.AuthViewModel
+import bd.info.bsdc.app.ui.BookmarksViewModel
 import bd.info.bsdc.app.ui.BsdcViewModelFactory
 import bd.info.bsdc.app.ui.ChatRoomViewModel
 import bd.info.bsdc.app.ui.ComposerViewModel
@@ -66,6 +67,7 @@ import bd.info.bsdc.app.ui.ProfileViewModel
 import bd.info.bsdc.app.ui.OrganizationViewModel
 import bd.info.bsdc.app.ui.SeriesViewModel
 import bd.info.bsdc.app.ui.screens.AuthScreen
+import bd.info.bsdc.app.ui.screens.BookmarksScreen
 import bd.info.bsdc.app.ui.screens.ChatRoomScreen
 import bd.info.bsdc.app.ui.screens.ComposerScreen
 import bd.info.bsdc.app.ui.screens.FeedScreen
@@ -214,8 +216,20 @@ private fun CommunityDestinations(
                     nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
                 },
                 onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") },
+                onOpenBookmarks = { nav.navigate("bookmarks") },
                 onOpenSeries = { seriesId -> nav.navigate("series/${Uri.encode(seriesId)}") },
                 onOpenOrganization = { organizationId -> nav.navigate("organization/${Uri.encode(organizationId)}") }
+            )
+        }
+        composable("bookmarks") {
+            val vm: BookmarksViewModel = viewModel(factory = BsdcViewModelFactory { BookmarksViewModel(container) })
+            BookmarksScreen(
+                viewModel = vm,
+                onBack = { nav.popBackStack() },
+                onOpenProfile = { memberId ->
+                    nav.navigate(if (memberId == userId) "profile" else "member/${Uri.encode(memberId)}")
+                },
+                onOpenPost = { postId -> nav.navigate("post/${Uri.encode(postId)}") }
             )
         }
         composable("compose") {

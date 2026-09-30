@@ -18,6 +18,10 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.tasks.await
 
 data class PostDraft(
@@ -50,6 +54,52 @@ class CommunityRepository(private val gate: FirebaseGate) {
             .orderBy("publishedAt", Query.Direction.DESCENDING)
             .limit(limit)
     )
+
+    /** Private, real-time save list. The post itself remains subject to public-post Rules. */
+    fun observeBookmarkIds(): Flow<List<String>> = callbackFlow {
+        val uid = FirebaseAuth.getInstance().currentUser?.uid
+        if (!gate.isConfigured || uid == null) {
+            trySend(emptyList())
+            close()
+            return@callbackFlow
+        }
+        val registration = database.collection("profiles").document(uid).collection("bookmarks")
+            .orderBy("savedAt", Query.Direction.DESCENDING)
+            .limit(60)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) close(error)
+                else trySend(snapshot?.documents.orEmpty().map { it.id })
+            }
+        awaitClose(registration::remove)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    fun observeBookmarkedPosts(): Flow<List<CommunityPost>> = observeBookmarkIds().flatMapLatest { ids ->
+        if (ids.isEmpty()) flowOf(emptyList())
+        else combine(ids.map { id -> observePost(id).catch { emit(null) } }) { snapshots ->
+            // A post that is removed or ceases to be public simply leaves the private list.
+            snapshots.filterIsInstance<CommunityPost>()
+        }
+    }
+
+    suspend fun toggleBookmark(postId: String): RepositoryResult<Boolean> = try {
+        gate.requireConfigured()
+        val uid = FirebaseAuth.getInstance().currentUser?.uid ?: error("Sign in to save a post.")
+        require(postId.isNotBlank()) { "This post cannot be saved." }
+        val bookmark = database.collection("profiles").document(uid).collection("bookmarks").document(postId)
+        val saved = database.runTransaction { transaction ->
+            if (transaction.get(bookmark).exists()) {
+                transaction.delete(bookmark)
+                false
+            } else {
+                transaction.set(bookmark, mapOf("postId" to postId, "savedAt" to FieldValue.serverTimestamp()))
+                true
+            }
+        }.await()
+        RepositoryResult.Success(saved)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not update saved posts.", t)
+    }
 
     fun observePost(postId: String): Flow<CommunityPost?> = callbackFlow {
         if (!gate.isConfigured) {

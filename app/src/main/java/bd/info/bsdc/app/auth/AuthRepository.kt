@@ -161,6 +161,17 @@ class AuthRepository(private val gate: FirebaseGate) {
         RepositoryResult.Failure(t.message ?: "Could not send verification email.", t)
     }
 
+    /** Refreshes the Firebase user before reporting verification state; the app never assumes a
+     * browser verification link changed local state until Firebase confirms it. */
+    suspend fun refreshEmailVerification(): RepositoryResult<Boolean> = try {
+        gate.requireConfigured()
+        val user = FirebaseAuth.getInstance().currentUser ?: error("Sign in first.")
+        user.reload().await()
+        RepositoryResult.Success(FirebaseAuth.getInstance().currentUser?.isEmailVerified == true)
+    } catch (t: Throwable) {
+        RepositoryResult.Failure(t.message ?: "Could not refresh verification status.", t)
+    }
+
     fun signOut() {
         if (gate.isConfigured) FirebaseAuth.getInstance().signOut()
     }

@@ -65,6 +65,8 @@ fun PostDetailScreen(viewModel: PostDetailViewModel, onBack: () -> Unit, onOpenP
                     PostCard(
                         post = post,
                         onAuthorClick = { onOpenProfile(post.authorId) },
+                        bookmarked = state.bookmarked,
+                        onToggleBookmark = viewModel::toggleBookmark,
                         expanded = true,
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )

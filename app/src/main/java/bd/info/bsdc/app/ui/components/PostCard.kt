@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Share
@@ -48,6 +50,8 @@ fun PostCard(
     onAuthorClick: () -> Unit,
     onReact: (() -> Unit)? = null,
     onComment: (() -> Unit)? = null,
+    bookmarked: Boolean = false,
+    onToggleBookmark: (() -> Unit)? = null,
     onSeriesClick: ((String) -> Unit)? = null,
     onOrganizationClick: ((String) -> Unit)? = null,
     expanded: Boolean = false,
@@ -190,6 +194,13 @@ fun PostCard(
                         modifier = Modifier.weight(1f)
                     )
                 }
+                onToggleBookmark?.let { action ->
+                    IconAction(
+                        icon = if (bookmarked) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder,
+                        label = if (bookmarked) "Remove from saved" else "Save post",
+                        onClick = action
+                    )
+                }
                 SocialAction(
                     icon = Icons.Outlined.Share,
                     count = post.shareCount.toString(),
@@ -242,6 +253,23 @@ private fun ProfileGlyph(name: String) {
             color = MaterialTheme.colorScheme.onPrimaryContainer,
             fontWeight = FontWeight.ExtraBold
         )
+    }
+}
+
+@Composable
+private fun IconAction(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .clip(MaterialTheme.shapes.small)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icon, contentDescription = label, tint = MaterialTheme.colorScheme.primary)
     }
 }
 

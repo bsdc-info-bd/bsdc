@@ -90,6 +90,16 @@ service cloud.firestore {
       match /engagement/{postId} {
         allow read, create, update, delete: if isSelf(uid);
       }
+      // A member’s saved posts are a private index. No save count is trusted from the client.
+      match /bookmarks/{postId} {
+        allow read: if isSelf(uid);
+        allow create: if isSelf(uid)
+          && request.resource.data.keys().hasOnly(['postId', 'savedAt'])
+          && request.resource.data.postId == postId
+          && postIsPublic(postId);
+        allow delete: if isSelf(uid);
+        allow update: if false;
+      }
       // A private index lets a member choose their organizations without querying other members.
       match /organizationMemberships/{orgId} {
         allow read: if isSelf(uid);

@@ -89,6 +89,8 @@ class FeedViewModel(private val container: AppContainer) : ViewModel() {
     private val ranking = FeedRankingEngine()
     private val _state = MutableStateFlow(FeedUiState())
     val state = _state.asStateFlow()
+    val bookmarkedIds = container.community.observeBookmarkIds().catch { emit(emptyList()) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {
         viewModelScope.launch {
@@ -107,6 +109,41 @@ class FeedViewModel(private val container: AppContainer) : ViewModel() {
         when (val result = container.community.toggleReaction(postId, ReactionType.LIKE)) {
             is RepositoryResult.Success -> _state.value = _state.value.copy(actionMessage = if (result.value) "Reaction added" else "Reaction removed")
             is RepositoryResult.Failure -> _state.value = _state.value.copy(actionMessage = result.message)
+        }
+    }
+
+    fun toggleBookmark(postId: String) = viewModelScope.launch {
+        when (val result = container.community.toggleBookmark(postId)) {
+            is RepositoryResult.Success -> _state.value = _state.value.copy(actionMessage = if (result.value) "Post saved" else "Post removed from saved")
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(actionMessage = result.message)
+        }
+    }
+}
+
+data class BookmarksUiState(
+    val loading: Boolean = true,
+    val posts: List<CommunityPost> = emptyList(),
+    val error: String? = null
+)
+
+class BookmarksViewModel(private val container: AppContainer) : ViewModel() {
+    private val _state = MutableStateFlow(BookmarksUiState())
+    val state = _state.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            container.community.observeBookmarkedPosts().catch { error ->
+                _state.value = _state.value.copy(loading = false, error = error.message ?: "Could not load saved posts.")
+            }.collect { posts ->
+                _state.value = BookmarksUiState(loading = false, posts = posts)
+            }
+        }
+    }
+
+    fun remove(postId: String) = viewModelScope.launch {
+        when (val result = container.community.toggleBookmark(postId)) {
+            is RepositoryResult.Success -> Unit
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(error = result.message)
         }
     }
 }
@@ -370,6 +407,8 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
     val action = _action.asStateFlow()
     private val _conversationId = MutableStateFlow<String?>(null)
     val conversationId = _conversationId.asStateFlow()
+    private val _emailVerified = MutableStateFlow(com.google.firebase.auth.FirebaseAuth.getInstance().currentUser?.isEmailVerified == true)
+    val emailVerified = _emailVerified.asStateFlow()
     private val _locationSuggestion = MutableStateFlow<String?>(null)
     val locationSuggestion = _locationSuggestion.asStateFlow()
 
@@ -408,6 +447,29 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
     }
 
     fun showActionError(message: String) { _action.value = ProfileActionState(error = message) }
+
+    fun sendVerificationEmail() = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        _action.value = when (val result = container.auth.sendVerificationEmail()) {
+            is RepositoryResult.Success -> ProfileActionState(message = "Verification email sent. Open the link, then check status here.")
+            is RepositoryResult.Failure -> ProfileActionState(error = result.message)
+        }
+    }
+
+    fun refreshEmailVerification() = viewModelScope.launch {
+        if (!isOwnProfile) return@launch
+        _action.value = ProfileActionState(busy = true)
+        when (val result = container.auth.refreshEmailVerification()) {
+            is RepositoryResult.Success -> {
+                _emailVerified.value = result.value
+                _action.value = ProfileActionState(
+                    message = if (result.value) "Your email is verified." else "Your email is not verified yet."
+                )
+            }
+            is RepositoryResult.Failure -> _action.value = ProfileActionState(error = result.message)
+        }
+    }
 
     fun setCameraProfilePhotoConsent(value: Boolean) = viewModelScope.launch {
         container.settings.setCameraProfilePhotoConsent(value)
@@ -522,6 +584,7 @@ class ProfileViewModel(private val container: AppContainer, val profileId: Strin
 data class PostDetailUiState(
     val post: CommunityPost? = null,
     val comments: List<bd.info.bsdc.app.model.PostComment> = emptyList(),
+    val bookmarked: Boolean = false,
     val sending: Boolean = false,
     val error: String? = null
 )
@@ -540,6 +603,17 @@ class PostDetailViewModel(private val container: AppContainer, private val postI
             container.community.observeComments(postId).catch { error ->
                 _state.value = _state.value.copy(error = error.message)
             }.collect { comments -> _state.value = _state.value.copy(comments = comments) }
+        }
+        viewModelScope.launch {
+            container.community.observeBookmarkIds().catch { emit(emptyList()) }
+                .collect { ids -> _state.value = _state.value.copy(bookmarked = postId in ids) }
+        }
+    }
+
+    fun toggleBookmark() = viewModelScope.launch {
+        when (val result = container.community.toggleBookmark(postId)) {
+            is RepositoryResult.Success -> Unit
+            is RepositoryResult.Failure -> _state.value = _state.value.copy(error = result.message)
         }
     }
 

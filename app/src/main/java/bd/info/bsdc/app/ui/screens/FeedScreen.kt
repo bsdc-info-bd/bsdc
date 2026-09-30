@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Forum
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -22,6 +23,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -51,10 +53,12 @@ fun FeedScreen(
     onCompose: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenPost: (String) -> Unit,
+    onOpenBookmarks: () -> Unit,
     onOpenSeries: (String) -> Unit = {},
     onOpenOrganization: (String) -> Unit = {}
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val bookmarkedIds = viewModel.bookmarkedIds.collectAsStateWithLifecycle().value.toSet()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(state.actionMessage) { state.actionMessage?.let { snackbar.showSnackbar(it) } }
 
@@ -63,7 +67,12 @@ fun FeedScreen(
         topBar = {
             TopAppBar(
                 title = { BsdcBrand(compact = true) },
-                actions = { TextButton(onClick = onCompose) { Text("Create") } },
+                actions = {
+                    IconButton(onClick = onOpenBookmarks) {
+                        Icon(Icons.Outlined.BookmarkBorder, contentDescription = "Saved posts")
+                    }
+                    TextButton(onClick = onCompose) { Text("Create") }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
@@ -98,6 +107,8 @@ fun FeedScreen(
                                 onAuthorClick = { onOpenProfile(post.authorId) },
                                 onReact = { viewModel.react(post.id) },
                                 onComment = { onOpenPost(post.id) },
+                                bookmarked = post.id in bookmarkedIds,
+                                onToggleBookmark = { viewModel.toggleBookmark(post.id) },
                                 onSeriesClick = onOpenSeries,
                                 onOrganizationClick = onOpenOrganization
                             )
