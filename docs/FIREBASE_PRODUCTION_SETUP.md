@@ -56,7 +56,7 @@ The deployment service account should use least privilege. It needs only the rol
 
 ## 5. Deploy policy and Functions
 
-After committing reviewed code to the Arena branch, run **Deploy Firebase policy and backend** manually from GitHub Actions with the protected service-account secret configured. It builds Functions and deploys:
+A reviewed change to `functions/**`, `firebase/**`, `firebase.json`, or the Firebase deployment workflow on the protected Arena branch automatically runs **Deploy Firebase policy and backend** and deploys the complete backend. This ensures a mobile release cannot be left pointing to an unavailable trusted Function. The same workflow remains manually runnable from GitHub Actions; select the default **Deploy trusted Functions** option unless a deliberate, reviewed policy-only deployment is required. It builds Functions and deploys:
 
 ```text
 firestore:rules

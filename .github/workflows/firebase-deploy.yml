@@ -1,6 +1,16 @@
 name: Deploy Firebase policy and backend
 
+# Synchronize only production backend sources from the protected Arena delivery branch. This
+# repairs a missing trusted function without asking a mobile client to bypass server-side access
+# controls. Manual dispatch remains available for an intentional policy-only deployment.
 on:
+  push:
+    branches: [arena/01a0ed9c-bsdc]
+    paths:
+      - ".github/workflows/firebase-deploy.yml"
+      - "firebase.json"
+      - "firebase/**"
+      - "functions/**"
   workflow_dispatch:
     inputs:
       deploy_functions:
@@ -52,14 +62,16 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
       - name: Deploy Firestore, Realtime Database, and Functions
-        if: ${{ steps.credential.outputs.configured == 'true' && inputs.deploy_functions }}
+        # A qualified backend-source push always deploys Functions. For a manual run, the input
+        # retains an explicit policy-only option.
+        if: ${{ steps.credential.outputs.configured == 'true' && (github.event_name == 'push' || inputs.deploy_functions) }}
         uses: w9jds/firebase-action@v13.28.0
         with:
           args: deploy --only firestore:rules,firestore:indexes,database,functions --project bsdc-bd
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
       - name: Deploy Firestore and Realtime Database policy only
-        if: ${{ steps.credential.outputs.configured == 'true' && !inputs.deploy_functions }}
+        if: ${{ steps.credential.outputs.configured == 'true' && github.event_name == 'workflow_dispatch' && !inputs.deploy_functions }}
         uses: w9jds/firebase-action@v13.28.0
         with:
           args: deploy --only firestore:rules,firestore:indexes,database --project bsdc-bd

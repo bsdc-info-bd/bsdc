@@ -36,7 +36,7 @@ legalAcceptanceVersion: "2026-09-30"
 
 The Android client calls the trusted `refreshCurrentLegalAccess` callable and forces a bounded token refresh before leaving the gate. The callable independently re-reads both immutable records and is also the repair path for members who accepted while Functions was not deployed. Firestore and Realtime Database rules require the claim for community writes and private community reads. This blocks a client from bypassing the Compose gate through direct Firebase SDK calls. The Function preserves existing custom claims, including trusted staff roles.
 
-The Functions are deployed with the normal Firebase backend deployment. Until they are deployed and able to set custom claims, acceptance remains pending rather than granting misleading access.
+The Functions are deployed with the normal Firebase backend deployment. A reviewed backend-source push on the protected Arena branch deploys Rules, indexes, Realtime Database policy, and Functions together; a manual deployment is also available for controlled operations. Until the Functions are deployed and able to set custom claims, acceptance remains pending rather than granting misleading access.
 
 ## Version changes
 
