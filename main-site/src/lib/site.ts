@@ -33,7 +33,18 @@ export const ROUTES = {
   guidelines: '/guidelines',
   contact: '/contact',
   offline: '/offline',
+  login: '/auth/login',
+  signup: '/auth/signup',
+  reset: '/auth/reset',
+  verify: '/auth/verify',
+  onboarding: '/onboarding',
+  settings: '/settings',
 } as const;
+
+/** Profile permalink: /@username (SEO title pattern "bsdc • username"). */
+export function profilePath(username: string): string {
+  return `/@${username}`;
+}
 
 export type RouteKey = keyof typeof ROUTES;
 

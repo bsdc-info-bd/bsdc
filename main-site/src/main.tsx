@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from 'react-error-boundary';
 import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
+import { AuthProvider } from './components/auth/AuthProvider';
 import { AppCrashFallback } from './components/layout/AppCrashFallback';
 import './i18n';
 import './styles/index.css';
@@ -30,7 +31,9 @@ createRoot(container).render(
     <ErrorBoundary FallbackComponent={AppCrashFallback}>
       <HelmetProvider>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <AuthProvider>
+            <App />
+          </AuthProvider>
         </QueryClientProvider>
       </HelmetProvider>
     </ErrorBoundary>

@@ -5,6 +5,7 @@ import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/lib/site';
 import { useUiStore } from '@/store/ui-store';
+import { AccountMenu } from './AccountMenu';
 
 const NAV_ITEMS = [
   { to: ROUTES.home, labelKey: 'nav.home' },
@@ -62,6 +63,7 @@ export function AppBar() {
           />
           <ThemeToggle />
           <LanguageToggle className="hidden sm:inline-flex" />
+          <AccountMenu />
         </div>
       </div>
     </header>
