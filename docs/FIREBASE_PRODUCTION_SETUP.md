@@ -24,7 +24,7 @@ This is an operator runbook for the native package **`bd.info.bsdc.app`**. Compl
 | App Check | Register the Android app with Play Integrity. Test first, then enforce for Auth, Firestore, Realtime Database, Functions, and any product supported by your risk review. |
 | Analytics | Optional. The native app keeps collection disabled unless a member explicitly enables it. |
 
-The project must generally be on a billing-enabled plan for Cloud Functions and related Google Cloud services. Quotas, retention, and regional transfer requirements need an operational review; code cannot make a large social network permanently free.
+The project must generally be on a billing-enabled plan for Cloud Functions and related Google Cloud services. Before the first deployment, a project owner must enable the APIs required by BSDC's 2nd-generation Functions: **Cloud Functions**, **Cloud Build**, **Artifact Registry**, **Cloud Run**, **Eventarc**, **Pub/Sub**, **Cloud Scheduler**, and **Cloud Storage**. Enabling a Google Cloud API is intentionally an owner-level project operation; the CI deployer should not receive the broad `serviceusage.services.enable` permission just to work around incomplete project setup. Quotas, retention, and regional transfer requirements need an operational review; code cannot make a large social network permanently free.
 
 ## 3. Configure local development safely
 
