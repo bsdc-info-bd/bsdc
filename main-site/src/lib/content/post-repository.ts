@@ -55,7 +55,7 @@ export interface Post {
   poll: PollOption[];
 }
 
-interface JoinedPostRow extends PostRow {
+export interface JoinedPostRow extends PostRow {
   profiles?: {
     uid: string;
     username: string | null;
@@ -74,7 +74,7 @@ interface JoinedPostRow extends PostRow {
     | null;
 }
 
-const POST_SELECT = `
+export const POST_SELECT = `
   *,
   profiles:author_uid (uid, username, display_name, avatar_url),
   post_tags (tag_slug),
@@ -82,7 +82,7 @@ const POST_SELECT = `
   post_media (media_id, position, alt_text, media_assets (url, thumb_url))
 `;
 
-function toPost(row: JoinedPostRow): Post {
+export function toPost(row: JoinedPostRow): Post {
   const author = row.profiles
     ? {
         uid: row.profiles.uid,

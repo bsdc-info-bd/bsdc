@@ -239,6 +239,41 @@ export type PostRevisionRow = {
   created_at: string;
 };
 
+export type FeedPreferencesRow = {
+  uid: string;
+  algorithm: 'ranked' | 'following' | 'latest';
+  languages: string[];
+  muted_tags: string[];
+  show_sensitive: boolean;
+  hide_seen: boolean;
+  updated_at: string;
+};
+
+export type FeedSeenRow = { uid: string; post_id: string; seen_at: string };
+
+export type TopicAffinityRow = {
+  uid: string;
+  tag_slug: string;
+  score: number;
+  updated_at: string;
+};
+
+export type FeedCandidateRow = {
+  post_id: string;
+  author_uid: string;
+  published_at: string | null;
+  likes_count: number;
+  comments_count: number;
+  views_count: number;
+  language: string;
+  is_sensitive: boolean;
+  kind: DbPostKind;
+  author_followed: boolean;
+  affinity: number;
+  already_seen: boolean;
+  tags: string[];
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -326,6 +361,24 @@ export type Database = {
         Update: Partial<PostRevisionRow>;
         Relationships: [];
       };
+      feed_preferences: {
+        Row: FeedPreferencesRow;
+        Insert: Pick<FeedPreferencesRow, 'uid'> & Partial<FeedPreferencesRow>;
+        Update: Partial<Omit<FeedPreferencesRow, 'uid'>>;
+        Relationships: [];
+      };
+      feed_seen: {
+        Row: FeedSeenRow;
+        Insert: Pick<FeedSeenRow, 'uid' | 'post_id'>;
+        Update: Partial<FeedSeenRow>;
+        Relationships: [];
+      };
+      topic_affinity: {
+        Row: TopicAffinityRow;
+        Insert: Pick<TopicAffinityRow, 'uid' | 'tag_slug'> & Partial<TopicAffinityRow>;
+        Update: Partial<TopicAffinityRow>;
+        Relationships: [];
+      };
       reports: {
         Row: ReportRow;
         Insert: Pick<ReportRow, 'reporter_uid' | 'subject_type' | 'subject_id' | 'reason'> & {
@@ -340,6 +393,13 @@ export type Database = {
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
+      record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };
+      prune_feed_seen: { Args: { p_days: number }; Returns: number };
+      feed_new_count: { Args: { p_since: string }; Returns: number };
+      feed_candidates: {
+        Args: { p_limit: number; p_before: string | null };
+        Returns: FeedCandidateRow[];
+      };
     };
     Enums: {
       bsdc_role: DbRole;

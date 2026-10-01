@@ -10,16 +10,20 @@ import {
   Button,
   Card,
   PasswordField,
+  SectionHeading,
   SelectField,
   Switch,
   Tabs,
+  TagInput,
   TextField,
   TextareaField,
   type TabItem,
 } from '@/design-system';
+import { useFeedPreferences } from '@/hooks/use-feed';
 import { changeLanguage, type Language } from '@/i18n';
 import { changePassword, logout, updateDisplayName } from '@/lib/auth/auth-service';
 import { authErrorKey } from '@/lib/auth/errors';
+import type { FeedPreferences } from '@/lib/feed/ranking';
 import { formatAbsoluteDate } from '@/lib/format';
 import {
   DEFAULT_NOTIFICATIONS,
@@ -371,6 +375,112 @@ function SecurityPanel() {
   );
 }
 
+function FeedPanel() {
+  const { t } = useTranslation();
+  const { preferences, save, isSaving } = useFeedPreferences();
+  const [draft, setDraft] = useState<FeedPreferences | null>(null);
+  const current = draft ?? preferences;
+
+  function patch(next: Partial<FeedPreferences>) {
+    setDraft({ ...current, ...next });
+  }
+
+  function toggleLanguage(code: string, enabled: boolean) {
+    const languages = enabled
+      ? [...new Set([...current.languages, code])]
+      : current.languages.filter((item) => item !== code);
+    patch({ languages: languages.length === 0 ? [code] : languages });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SectionHeading
+        title={t('feed.preferences.title')}
+        description={t('feed.preferences.description')}
+        level={2}
+      />
+      <Card>
+        <SelectField
+          label={t('feed.preferences.algorithm')}
+          value={current.algorithm}
+          onChange={(event) => {
+            patch({ algorithm: event.target.value as FeedPreferences['algorithm'] });
+          }}
+          options={[
+            { value: 'ranked', label: t('feed.tabs.ranked') },
+            { value: 'following', label: t('feed.tabs.following') },
+            { value: 'latest', label: t('feed.tabs.latest') },
+          ]}
+        />
+
+        <fieldset className="mt-4">
+          <legend className="text-sm font-semibold">{t('feed.preferences.languages')}</legend>
+          <p className="mt-1 text-xs text-muted">{t('feed.preferences.languagesHint')}</p>
+          <div className="mt-2 flex flex-col gap-2">
+            <Switch
+              checked={current.languages.includes('bn')}
+              onCheckedChange={(checked) => {
+                toggleLanguage('bn', checked);
+              }}
+              label={t('language.bangla')}
+            />
+            <Switch
+              checked={current.languages.includes('en')}
+              onCheckedChange={(checked) => {
+                toggleLanguage('en', checked);
+              }}
+              label={t('language.english')}
+            />
+          </div>
+        </fieldset>
+
+        <div className="mt-4">
+          <TagInput
+            label={t('feed.preferences.mutedTags')}
+            hint={t('feed.preferences.mutedTagsHint')}
+            value={current.mutedTags}
+            onChange={(mutedTags) => {
+              patch({ mutedTags });
+            }}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3">
+          <Switch
+            checked={current.showSensitive}
+            onCheckedChange={(checked) => {
+              patch({ showSensitive: checked });
+            }}
+            label={t('feed.preferences.showSensitive')}
+            description={t('feed.preferences.showSensitiveHint')}
+          />
+          <Switch
+            checked={current.hideSeen}
+            onCheckedChange={(checked) => {
+              patch({ hideSeen: checked });
+            }}
+            label={t('feed.preferences.hideSeen')}
+            description={t('feed.preferences.hideSeenHint')}
+          />
+        </div>
+
+        <Button
+          className="mt-5"
+          disabled={isSaving || draft === null}
+          onClick={() => {
+            if (draft === null) return;
+            save(draft);
+            setDraft(null);
+            toast.success(t('feed.preferences.saved'));
+          }}
+        >
+          {t('feed.preferences.save')}
+        </Button>
+      </Card>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const [tab, setTab] = useState('account');
@@ -384,6 +494,7 @@ export default function SettingsPage() {
       label: t('settings.tabs.notifications'),
       content: <NotificationsPanel />,
     },
+    { id: 'feed', label: t('settings.tabs.feed'), content: <FeedPanel /> },
     { id: 'privacy', label: t('settings.tabs.privacy'), content: <PrivacyPanel /> },
     { id: 'security', label: t('settings.tabs.security'), content: <SecurityPanel /> },
   ];

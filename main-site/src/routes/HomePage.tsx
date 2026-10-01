@@ -11,8 +11,10 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
 import { Card, Countdown, ExternalLink, LinkButton, SectionHeading } from '@/design-system';
+import { FeedTabs } from '@/components/feed/FeedTabs';
 import { launchConfig } from '@/lib/launch';
 import { ECOSYSTEM_LINKS, PILLARS, ROUTES, SITE, type Pillar } from '@/lib/site';
+import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 const PILLAR_ICONS: Record<Pillar, ReactNode> = {
   community: <MessagesSquare size={22} />,
@@ -27,6 +29,21 @@ const PILLAR_ICONS: Record<Pillar, ReactNode> = {
 export default function HomePage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'bn' ? 'bn' : 'en';
+  const isSignedIn = useAuthStore(selectIsSignedIn);
+
+  if (isSignedIn) {
+    return (
+      <>
+        <Seo title={t('feed.heading')} description={t('feed.description')} path="/" noindex />
+        <section className="fab-container py-6">
+          <SectionHeading title={t('feed.heading')} description={t('feed.description')} />
+          <div className="mt-4">
+            <FeedTabs />
+          </div>
+        </section>
+      </>
+    );
+  }
 
   return (
     <>

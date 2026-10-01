@@ -9,7 +9,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 2 | Authentication and identity | Done |
 | 3 | Data core: Supabase, RTDB, Firestore, storage | Done |
 | 4 | Universal composer and content engine | Done |
-| 5 | Feed and 4-stage ranking engine | Pending |
+| 5 | Feed and 4-stage ranking engine | Done |
 | 6 | Social graph and interactions | Pending |
 | 7 | BSDC Messenger | Pending |
 | 8 | Communities: groups, channels, pages, events | Pending |
@@ -149,6 +149,36 @@ working, wired-up features — never scaffolding for its own sake.
 - Tag archive `/tag/:slug` and a reusable `PostCard`, now also powering the
   posts tab on `/@username`.
 
+## Response 5 scope (delivered)
+
+- `supabase/migrations/0005_feed.sql`: `feed_preferences` (algorithm,
+  languages, muted tags, sensitivity, hide-seen), `feed_seen` impressions with
+  a `prune_feed_seen()` retention job, and `topic_affinity` maintained by a
+  trigger on `post_tags` (+3 per tag you publish on, +0.5 per impression,
+  capped at 100).
+- `public.feed_candidates(p_limit, p_before)` is a stable, security-invoker
+  function, so row level security still decides visibility. It returns the
+  ranking signals in one round trip: counters, language, sensitivity, whether
+  the author is followed, the viewer's affinity, whether the post was already
+  seen, and the tag list. Block pairs are excluded in both directions.
+- `0006_feed_rls.sql`: preferences, impressions and affinity are owner-only,
+  affinity is read-only to its owner because only the security-definer
+  functions may write it, and the execute grants are explicit per function.
+- `lib/feed/ranking.ts` is the four-stage engine, pure and unit-tested:
+  candidates, filtering (mutes, language, sensitivity, seen state, following),
+  scoring (recency with a six-hour half-life, affinity, log-scaled quality
+  weighted towards conversation, language match, follow boost, seen penalty)
+  and diversity (at most two posts per author and three per tag in the primary
+  run, the rest demoted rather than dropped). Every post carries the reasons
+  it ranked where it did.
+- `hooks/use-feed.ts`: an infinite query cursored on the oldest candidate,
+  cross-page de-duplication, one impression per post recorded only after it
+  has been half on screen, and a polled new-post count.
+- Feed UI: For you / Following / Latest tabs on the home route for signed-in
+  members, the marketing landing untouched for guests, a sticky new-posts
+  pill, an infinite sentinel, and a feed preferences panel in settings.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -184,3 +214,10 @@ F-023, F-024, F-025,
 G-001, G-002, G-003, G-004, G-005, G-006, G-007, G-008, G-009, G-010,
 H-001, H-002, H-003, H-004, H-005, H-006,
 X-011, X-012, X-013, V-014, V-015, U-017.
+
+Response 5 adds:
+I-001, I-002, I-003, I-004, I-005, I-006, I-007, I-008, I-009, I-010, I-011,
+I-012, I-013, I-014, I-015, I-016, I-017, I-018, I-019, I-020,
+J-001, J-002, J-003, J-004, J-005, J-006, J-007, J-008, J-009, J-010,
+K-001, K-002, K-003, K-004, K-005, K-006,
+X-014, X-015, V-016, U-018, Z-006.
