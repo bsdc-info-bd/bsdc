@@ -359,6 +359,63 @@ export type ToggleReactionRow = { reacted: boolean; reaction: DbReaction; total:
 
 export type ToggleCommentReactionRow = { reacted: boolean; total: number };
 
+export type DbConversationKind = 'direct' | 'group';
+export type DbMessageKind = 'text' | 'image' | 'file' | 'snippet' | 'system';
+export type DbMemberRole = 'owner' | 'admin' | 'member';
+
+export type ConversationRow = {
+  id: string;
+  kind: DbConversationKind;
+  title: string;
+  avatar_url: string;
+  created_by: string | null;
+  direct_key: string | null;
+  last_message_at: string | null;
+  last_message_preview: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationMemberRow = {
+  conversation_id: string;
+  uid: string;
+  role: DbMemberRole;
+  joined_at: string;
+  last_read_at: string;
+  muted_until: string | null;
+  left_at: string | null;
+};
+
+export type MessageRow = {
+  id: string;
+  conversation_id: string;
+  sender_uid: string | null;
+  kind: DbMessageKind;
+  body: string;
+  media_url: string;
+  media_name: string;
+  code_language: string;
+  reply_to: string | null;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export type ConversationInboxRow = {
+  id: string;
+  kind: DbConversationKind;
+  title: string;
+  avatar_url: string;
+  last_message_at: string | null;
+  last_message_preview: string;
+  unread_count: number;
+  muted: boolean;
+  other_uid: string | null;
+  other_username: string | null;
+  other_name: string | null;
+  other_avatar: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -464,6 +521,26 @@ export type Database = {
         Update: Partial<TopicAffinityRow>;
         Relationships: [];
       };
+      conversations: {
+        Row: ConversationRow;
+        Insert: Pick<ConversationRow, 'kind'> & Partial<ConversationRow>;
+        Update: Partial<Pick<ConversationRow, 'title' | 'avatar_url'>>;
+        Relationships: [];
+      };
+      conversation_members: {
+        Row: ConversationMemberRow;
+        Insert: Pick<ConversationMemberRow, 'conversation_id' | 'uid'> & {
+          role?: DbMemberRole;
+        };
+        Update: Partial<Pick<ConversationMemberRow, 'last_read_at' | 'muted_until' | 'left_at'>>;
+        Relationships: [];
+      };
+      messages: {
+        Row: MessageRow;
+        Insert: Pick<MessageRow, 'conversation_id' | 'body'> & Partial<MessageRow>;
+        Update: Partial<Pick<MessageRow, 'body' | 'edited_at' | 'deleted_at'>>;
+        Relationships: [];
+      };
       notifications: {
         Row: NotificationRow;
         Insert: Pick<NotificationRow, 'uid' | 'kind'> & Partial<NotificationRow>;
@@ -548,6 +625,27 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      open_direct_conversation: { Args: { p_other_uid: string }; Returns: string };
+      create_group_conversation: {
+        Args: { p_title: string; p_members: string[] };
+        Returns: string;
+      };
+      send_message: {
+        Args: {
+          p_conversation_id: string;
+          p_body: string;
+          p_kind?: DbMessageKind;
+          p_media_url?: string;
+          p_media_name?: string;
+          p_code_language?: string;
+          p_reply_to?: string | null;
+        };
+        Returns: MessageRow;
+      };
+      mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
+      leave_conversation: { Args: { p_conversation_id: string }; Returns: undefined };
+      conversation_inbox: { Args: { p_limit: number }; Returns: ConversationInboxRow[] };
+      unread_message_count: { Args: Record<never, never>; Returns: number };
       post_interaction_state: {
         Args: { p_post_ids: string[] };
         Returns: InteractionStateRow[];
@@ -564,6 +662,9 @@ export type Database = {
       bsdc_visibility: DbVisibility;
       bsdc_reaction: DbReaction;
       bsdc_notification_kind: DbNotificationKind;
+      bsdc_conversation_kind: DbConversationKind;
+      bsdc_message_kind: DbMessageKind;
+      bsdc_member_role: DbMemberRole;
     };
     CompositeTypes: Record<never, never>;
   };

@@ -1,8 +1,9 @@
-import { Bell, PenSquare, Search } from 'lucide-react';
+import { Bell, MessageSquare, PenSquare, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
 import { useUnreadNotificationCount } from '@/hooks/use-interactions';
+import { useUnreadMessageCount } from '@/hooks/use-messaging';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/lib/site';
@@ -66,6 +67,7 @@ export function AppBar() {
               </span>
             </Link>
           ) : null}
+          {signedIn ? <MessagesLink /> : null}
           {signedIn ? <NotificationBell /> : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
@@ -95,6 +97,30 @@ function NotificationBell() {
     >
       <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
         <Bell size={20} aria-hidden="true" />
+      </span>
+      {unread > 0 ? (
+        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+/** Messenger entry point with its own unread badge. */
+function MessagesLink() {
+  const { t } = useTranslation();
+  const unread = useUnreadMessageCount();
+
+  return (
+    <Link
+      to={ROUTES.messages}
+      aria-label={t('messages.open')}
+      title={t('messages.open')}
+      className="relative"
+    >
+      <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
+        <MessageSquare size={20} aria-hidden="true" />
       </span>
       {unread > 0 ? (
         <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">

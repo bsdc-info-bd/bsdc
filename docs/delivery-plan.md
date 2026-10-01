@@ -11,7 +11,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 4 | Universal composer and content engine | Done |
 | 5 | Feed and 4-stage ranking engine | Done |
 | 6 | Social graph and interactions | Done |
-| 7 | BSDC Messenger | Pending |
+| 7 | BSDC Messenger | Done |
 | 8 | Communities: groups, channels, pages, events | Pending |
 | 9 | Jobs, freelance, projects, snippets, playground | Pending |
 | 10 | Search and notifications | Pending |
@@ -213,6 +213,41 @@ working, wired-up features — never scaffolding for its own sake.
   drag the Supabase SDK into the entry chunk.
 
 
+## Response 7 scope (delivered)
+
+- `supabase/migrations/0009_messaging.sql`: `conversations` (direct or group),
+  `conversation_members` with per-member read marker, mute and leave date, and
+  `messages` with text, image, file, snippet and system kinds. A direct pair
+  is deduplicated by a deterministic sorted `direct_key` with a unique index,
+  so opening the same chat twice can never create a second thread.
+- `open_direct_conversation()` refuses self-chats and any pair separated by a
+  block, and restores membership instead of duplicating it when somebody
+  returns after leaving. `create_group_conversation()` caps a group at 256.
+- `send_message()` is the only write path for messages: it checks membership,
+  writes the row, denormalises the preview and timestamp onto the conversation
+  for the sorted inbox, marks the sender as having read their own message, and
+  fans one collapsed inbox line out to every member who has not muted.
+- `conversation_inbox()` returns the whole list in one round trip — the
+  conversation, the other participant for direct chats, the unread count and
+  the mute state — and `unread_message_count()` feeds the app bar badge.
+- `0010_messaging_rls.sql`: a conversation is visible only to its members and
+  a message only to the members of its conversation; direct inserts into
+  `messages` stay closed so the activity trigger and notification fan-out can
+  never be bypassed; a member may update only their own membership row, and
+  only owners and admins may rename a group.
+- Realtime split kept honest: durable messages in Postgres, typing signals in
+  Realtime Database under `typing/$conversationId/$uid`, written with
+  `onDisconnect().remove()` and throttled to one write every three seconds.
+- Pure, tested helpers: `groupMessages()` (five-minute runs per sender,
+  deleted messages keep their slot), `readCount()` (receipts derived from
+  each member's `last_read_at`, one row per member rather than one per
+  message), `conversationName()` and `activeTypers()`.
+- UI: `/messages` with a list-and-thread layout that collapses to two views
+  on narrow screens, read receipts, typing line, Enter to send, tombstoned
+  deletes, older-message paging, an app bar badge, and a Send a message
+  button on every other member's profile.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -263,3 +298,10 @@ M-001, M-002, M-003, M-004, M-005, M-006, M-007, M-008, M-009, M-010, M-011,
 M-012,
 N-001, N-002, N-003, N-004, N-005, N-006, N-007, N-008,
 X-016, X-017, V-017, V-018, U-019, U-020.
+
+Response 7 adds:
+O-001, O-002, O-003, O-004, O-005, O-006, O-007, O-008, O-009, O-010, O-011,
+O-012, O-013, O-014, O-015, O-016, O-017, O-018, O-019, O-020, O-021, O-022,
+O-023, O-024, O-025,
+P-001, P-002, P-003, P-004, P-005, P-006, P-007, P-008,
+X-018, X-019, V-019, U-021, Z-007.

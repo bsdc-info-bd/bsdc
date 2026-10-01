@@ -2,7 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Award, FileText, MessageSquare, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -26,7 +27,8 @@ import {
   type Profile,
 } from '@/lib/profile/profile-service';
 import { isConfigured } from '@/lib/env';
-import { profilePath, ROUTES, SITE } from '@/lib/site';
+import { conversationPath, profilePath, ROUTES, SITE } from '@/lib/site';
+import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
 
 function AboutPanel({ profile }: { profile: Profile }) {
@@ -94,6 +96,23 @@ export default function ProfilePage() {
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const params = useParams();
   const currentUser = useAuthStore((state) => state.user);
+  const navigate = useNavigate();
+  const [openingChat, setOpeningChat] = useState(false);
+
+  /** Opening a chat is idempotent: the same pair always lands on one thread. */
+  async function startConversation() {
+    if (!profile) return;
+    setOpeningChat(true);
+    try {
+      const { openDirectConversation } = await import('@/lib/messaging/message-repository');
+      const id = await openDirectConversation(profile.uid);
+      navigate(conversationPath(id));
+    } catch (error) {
+      toast.error(t(dataErrorKey(error)));
+    } finally {
+      setOpeningChat(false);
+    }
+  }
   const [tab, setTab] = useState('posts');
 
   const handle = (params['handle'] ?? '').replace(/^@/, '').toLowerCase();
@@ -256,6 +275,17 @@ export default function ProfilePage() {
               <Link to={ROUTES.settings} className="shrink-0">
                 <Button variant="secondary">{t('profile.editProfile')}</Button>
               </Link>
+            ) : currentUser ? (
+              <Button
+                variant="secondary"
+                className="shrink-0"
+                disabled={openingChat}
+                onClick={() => {
+                  void startConversation();
+                }}
+              >
+                {t('messages.startConversation')}
+              </Button>
             ) : null}
           </div>
         </Card>

@@ -42,11 +42,17 @@ export const ROUTES = {
   compose: '/compose',
   notifications: '/notifications',
   bookmarks: '/bookmarks',
+  messages: '/messages',
 } as const;
 
 /** Post permalink: /p/slug. */
 export function postPath(slug: string): string {
   return `/p/${slug}`;
+}
+
+/** One conversation: /messages/id. */
+export function conversationPath(conversationId: string): string {
+  return `/messages/${conversationId}`;
 }
 
 /** Tag archive: /tag/slug. */
