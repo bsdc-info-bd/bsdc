@@ -15,23 +15,53 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # A protected service-account secret is required; no Firebase credential is stored in Git.
-    if: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD != '' }}
+    # GitHub does not permit the secrets context in a job-level `if`. Validate the protected
+    # credential in a step instead, then gate all credential-dependent work on its output.
     steps:
       - uses: actions/checkout@v4
+      - name: Validate protected deployment credential
+        id: credential
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_BSDC_BD" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Firebase deploy skipped::Add FIREBASE_SERVICE_ACCOUNT_BSDC_BD as a protected Actions secret, then rerun this manual workflow."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, os
+          credential = json.loads(os.environ["FIREBASE_SERVICE_ACCOUNT_BSDC_BD"])
+          assert credential.get("type") == "service_account", "Credential must be a service-account JSON object"
+          assert credential.get("project_id") == "bsdc-bd", "Credential project_id must be bsdc-bd"
+          assert credential.get("client_email"), "Credential client_email is missing"
+          PY
+          echo "configured=true" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@v4
+        if: ${{ steps.credential.outputs.configured == 'true' }}
         with:
           node-version: '20'
           cache: npm
           cache-dependency-path: functions/package-lock.json
       - name: Build trusted Functions
+        if: ${{ steps.credential.outputs.configured == 'true' }}
         working-directory: functions
         run: |
           npm ci --no-audit --no-fund
           npm run build
       - name: Deploy Firestore, Realtime Database, and Functions
+        if: ${{ steps.credential.outputs.configured == 'true' && inputs.deploy_functions }}
         uses: w9jds/firebase-action@v13.28.0
         with:
-          args: deploy --only firestore:rules,firestore:indexes,database${{ inputs.deploy_functions && ',functions' || '' }} --project bsdc-bd
+          args: deploy --only firestore:rules,firestore:indexes,database,functions --project bsdc-bd
+        env:
+          GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+      - name: Deploy Firestore and Realtime Database policy only
+        if: ${{ steps.credential.outputs.configured == 'true' && !inputs.deploy_functions }}
+        uses: w9jds/firebase-action@v13.28.0
+        with:
+          args: deploy --only firestore:rules,firestore:indexes,database --project bsdc-bd
         env:
           GCP_SA_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}

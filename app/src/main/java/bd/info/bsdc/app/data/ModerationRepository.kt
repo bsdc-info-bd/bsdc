@@ -20,7 +20,7 @@ import kotlinx.coroutines.tasks.await
  */
 class ModerationRepository(private val gate: FirebaseGate) {
     private val database get() = FirebaseFirestore.getInstance()
-    private val functions get() = FirebaseFunctions.getInstance()
+    private val functions get() = FirebaseFunctions.getInstance(FUNCTIONS_REGION)
 
     suspend fun hasStaffRole(): Boolean = runCatching {
         gate.requireConfigured()
@@ -79,6 +79,7 @@ class ModerationRepository(private val gate: FirebaseGate) {
     }
 
     private companion object {
+        const val FUNCTIONS_REGION = "asia-southeast1"
         val STAFF_ROLES = setOf("admin", "moderator")
         const val MAX_STAFF_RESULTS = 100L
     }

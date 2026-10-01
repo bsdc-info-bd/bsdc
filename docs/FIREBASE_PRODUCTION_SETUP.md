@@ -69,7 +69,7 @@ Deploy Rules, indexes, and Functions together. The current app depends on Functi
 
 After deployment, use a non-owner test account to verify:
 
-1. The legal consent gate creates current immutable records and then receives the `legalAcceptanceVersion` claim.
+1. The legal consent gate creates current immutable records and then receives the `legalAcceptanceVersion` claim. `refreshCurrentLegalAccess` repairs users who accepted before Functions was deployed.
 2. A normal member can report a post but cannot read reports or alter moderation state.
 3. A no-role account sees no staff data and callable moderation fails.
 4. A deliberately provisioned moderator can review reports; an admin can use only the administrative operations permitted by your secure workflow.

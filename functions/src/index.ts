@@ -75,40 +75,58 @@ async function notifyUser(uid: string, payload: NotificationPayload): Promise<vo
   }));
 }
 
+async function hasCurrentLegalDocuments(uid: string): Promise<boolean> {
+  const records = await Promise.all(
+    REQUIRED_LEGAL_DOCUMENTS.map(({ id }) => firestore.doc(`profiles/${uid}/legalAcceptances/${id}`).get()),
+  );
+  return records.every((record, index) => {
+    const expected = REQUIRED_LEGAL_DOCUMENTS[index];
+    const data = record.data();
+    return data?.documentId === expected.id
+      && data?.documentVersion === expected.version
+      && data?.source === "android_native"
+      && (data?.locale === "en" || data?.locale === "bn")
+      && data?.acceptedAt != null;
+  });
+}
+
+/** Grants the claim only after independently re-reading both immutable acceptance records. */
+async function grantCurrentLegalAccess(uid: string): Promise<boolean> {
+  if (!await hasCurrentLegalDocuments(uid)) return false;
+  const auth = getAuth();
+  const user = await auth.getUser(uid);
+  if (user.customClaims?.[LEGAL_ACCEPTANCE_CLAIM] === CURRENT_LEGAL_VERSION) return true;
+  await auth.setCustomUserClaims(uid, {
+    ...(user.customClaims ?? {}),
+    [LEGAL_ACCEPTANCE_CLAIM]: CURRENT_LEGAL_VERSION,
+  });
+  logger.info("Granted current BSDC legal access", { uid, version: CURRENT_LEGAL_VERSION });
+  return true;
+}
+
 /**
  * Database rules trust only this Admin-issued claim for community writes. The source Firestore
  * records are immutable and rule-validated, so a mobile client cannot mint its own authorization.
- * Existing custom claims (for example staff role) are preserved when the legal-version claim is set.
  */
 export const grantLegalAccessAfterAcceptance = onDocumentWritten(
   { document: "profiles/{uid}/legalAcceptances/{documentId}", region: REGION },
   async (event) => {
     if (!event.data?.after.exists) return;
-    const uid = event.params.uid;
-    const records = await Promise.all(
-      REQUIRED_LEGAL_DOCUMENTS.map(({ id }) => firestore.doc(`profiles/${uid}/legalAcceptances/${id}`).get()),
-    );
-    const allCurrent = records.every((record, index) => {
-      const expected = REQUIRED_LEGAL_DOCUMENTS[index];
-      const data = record.data();
-      return data?.documentId === expected.id
-        && data?.documentVersion === expected.version
-        && data?.source === "android_native"
-        && (data?.locale === "en" || data?.locale === "bn")
-        && data?.acceptedAt != null;
-    });
-    if (!allCurrent) return;
-
-    const auth = getAuth();
-    const user = await auth.getUser(uid);
-    if (user.customClaims?.[LEGAL_ACCEPTANCE_CLAIM] === CURRENT_LEGAL_VERSION) return;
-    await auth.setCustomUserClaims(uid, {
-      ...(user.customClaims ?? {}),
-      [LEGAL_ACCEPTANCE_CLAIM]: CURRENT_LEGAL_VERSION,
-    });
-    logger.info("Granted current BSDC legal access", { uid, version: CURRENT_LEGAL_VERSION });
+    await grantCurrentLegalAccess(event.params.uid);
   },
 );
+
+/**
+ * Repairs/refreshes legal authorization for records accepted before Functions were deployed or
+ * before a trigger could complete. It verifies server-side records; callers cannot set claims.
+ */
+export const refreshCurrentLegalAccess = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in before refreshing BSDC access.");
+  if (!await grantCurrentLegalAccess(request.auth.uid)) {
+    throw new HttpsError("failed-precondition", "Accept the current BSDC Terms and Privacy Notice first.");
+  }
+  return { legalAcceptanceVersion: CURRENT_LEGAL_VERSION };
+});
 
 type ModerationDecision = "DISMISS" | "HIDE_POST";
 

@@ -19,7 +19,7 @@ import kotlinx.coroutines.tasks.await
  */
 class AccountLifecycleRepository(private val gate: FirebaseGate) {
     private val database get() = FirebaseFirestore.getInstance()
-    private val functions get() = FirebaseFunctions.getInstance()
+    private val functions get() = FirebaseFunctions.getInstance(FUNCTIONS_REGION)
 
     fun observeMine(): Flow<AccountLifecycleRequest?> = callbackFlow {
         if (!gate.isConfigured) {
@@ -51,5 +51,9 @@ class AccountLifecycleRepository(private val gate: FirebaseGate) {
         RepositoryResult.Success(Unit)
     } catch (t: Throwable) {
         RepositoryResult.Failure(t.message ?: "Could not update your account data request.", t)
+    }
+
+    private companion object {
+        const val FUNCTIONS_REGION = "asia-southeast1"
     }
 }

@@ -8,6 +8,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -30,6 +31,7 @@ sealed interface LegalConsentState {
  */
 class LegalConsentRepository(private val gate: FirebaseGate) {
     private val database get() = FirebaseFirestore.getInstance()
+    private val functions get() = FirebaseFunctions.getInstance(FUNCTIONS_REGION)
 
     fun observeCurrentAcceptance(uid: String): Flow<LegalConsentState> = callbackFlow {
         if (!gate.isConfigured || uid.isBlank()) {
@@ -62,7 +64,7 @@ class LegalConsentRepository(private val gate: FirebaseGate) {
             if (terms == true && privacy == true && !checkingAuthorization) {
                 checkingAuthorization = true
                 launch {
-                    authorization = awaitCurrentLegalClaim()
+                    authorization = refreshCurrentAuthorization()
                     publishState()
                 }
             }
@@ -122,13 +124,20 @@ class LegalConsentRepository(private val gate: FirebaseGate) {
                 }
             batch.commit().await()
         }
-        check(awaitCurrentLegalClaim()) {
-            "BSDC recorded your acceptance but secure access is still being finalized. Check your connection and retry."
+        check(refreshCurrentAuthorization()) {
+            "BSDC recorded your acceptance but could not confirm secure access. Check your connection and retry."
         }
         RepositoryResult.Success(Unit)
     } catch (t: Throwable) {
         RepositoryResult.Failure(t.message ?: "Could not record your document acceptance.", t)
     }
+
+    private suspend fun refreshCurrentAuthorization(): Boolean = runCatching {
+        // This callable repairs accounts that accepted records before Functions was deployed. The
+        // server revalidates both immutable documents before issuing/retaining a custom claim.
+        functions.getHttpsCallable("refreshCurrentLegalAccess").call(emptyMap<String, String>()).await()
+        awaitCurrentLegalClaim()
+    }.getOrDefault(false)
 
     private suspend fun awaitCurrentLegalClaim(): Boolean {
         val user = FirebaseAuth.getInstance().currentUser ?: return false
@@ -159,6 +168,7 @@ class LegalConsentRepository(private val gate: FirebaseGate) {
 
     companion object {
         const val CLAIM_NAME = "legalAcceptanceVersion"
+        const val FUNCTIONS_REGION = "asia-southeast1"
         private const val CLAIM_REFRESH_ATTEMPTS = 20
         private const val CLAIM_REFRESH_DELAY_MS = 750L
     }
