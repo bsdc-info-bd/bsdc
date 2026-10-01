@@ -52,7 +52,7 @@ In **GitHub repository → Settings → Secrets and variables → Actions**, add
 | `RELEASE_KEYSTORE_BASE64`, `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD` | Required only for signed release builds. |
 | `PLAY_SERVICE_ACCOUNT_JSON` | Required only for the manual Play publish workflow. |
 
-The deployment service account should use least privilege. It needs only the roles required to deploy Firestore Rules/indexes, Realtime Database Rules, and Functions for the intended project. Keep it separate from owner accounts, rotate it, and remove it immediately on suspected compromise.
+The deployment service account should use least privilege. It needs only the roles required to deploy Firestore Rules/indexes, Realtime Database Rules, and Functions for the intended project. At a minimum, grant the **Firebase Rules Admin** role (`roles/firebaserules.admin`) to the service-account principal: the Firebase CLI validates Firestore rules through `firebaserules.rulesets.test` before publishing them. For Functions deployment, grant **Cloud Functions Admin** (`roles/cloudfunctions.admin`) and **Service Account User** (`roles/iam.serviceAccountUser`) on the configured 2nd-generation runtime service account. The project owner may need to add the narrowly scoped Cloud Run, Eventarc, Artifact Registry, Cloud Build, and Scheduler permissions that the Firebase CLI reports for first-time 2nd-generation functions. Keep the deployer separate from owner accounts, rotate it, and remove it immediately on suspected compromise.
 
 ## 5. Deploy policy and Functions
 

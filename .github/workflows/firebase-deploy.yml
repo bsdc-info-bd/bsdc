@@ -61,9 +61,9 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - name: Deploy Firestore, Realtime Database, and Functions
-        # A qualified backend-source push always deploys Functions. For a manual run, the input
-        # retains an explicit policy-only option.
+      - name: Deploy trusted Functions
+        # Deploy this authorization-critical surface first. A rules/index permission failure must
+        # not strand already-accepted members behind an unavailable claim issuer.
         if: ${{ steps.credential.outputs.configured == 'true' && (github.event_name == 'push' || inputs.deploy_functions) }}
         shell: bash
         env:
@@ -71,19 +71,43 @@ jobs:
         run: |
           set -euo pipefail
           credential="$RUNNER_TEMP/bsdc-firebase-deploy.json"
-          log="$RUNNER_TEMP/bsdc-firebase-deploy.log"
+          log="$RUNNER_TEMP/bsdc-functions-deploy.log"
           trap 'rm -f "$credential"' EXIT
           printf '%s' "$FIREBASE_SERVICE_ACCOUNT_BSDC_BD" > "$credential"
           chmod 600 "$credential"
           export GOOGLE_APPLICATION_CREDENTIALS="$credential"
           if ! npx --yes firebase-tools@13.35.1 deploy --non-interactive \
-            --only firestore:rules,firestore:indexes,database,functions --project bsdc-bd 2>&1 | tee "$log"; then
-            # Keep a concise, credential-free deployment diagnosis in the Checks API as well as
-            # the job log. This remains visible when external Actions log storage is unavailable.
+            --only functions --project bsdc-bd 2>&1 | tee "$log"; then
             summary="$(tail -n 60 "$log" | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
-            echo "::error title=Firebase deployment failed::$summary"
+            echo "::error title=Trusted Functions deployment failed::$summary"
             {
-              echo "## Firebase deployment failure"
+              echo "## Trusted Functions deployment failure"
+              echo
+              echo '```text'
+              tail -n 120 "$log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Deploy Firestore and Realtime Database policy
+        if: ${{ steps.credential.outputs.configured == 'true' && (github.event_name == 'push' || inputs.deploy_functions) }}
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+        run: |
+          set -euo pipefail
+          credential="$RUNNER_TEMP/bsdc-firebase-deploy.json"
+          log="$RUNNER_TEMP/bsdc-policy-deploy.log"
+          trap 'rm -f "$credential"' EXIT
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_BSDC_BD" > "$credential"
+          chmod 600 "$credential"
+          export GOOGLE_APPLICATION_CREDENTIALS="$credential"
+          if ! npx --yes firebase-tools@13.35.1 deploy --non-interactive \
+            --only firestore:rules,firestore:indexes,database --project bsdc-bd 2>&1 | tee "$log"; then
+            summary="$(tail -n 60 "$log" | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
+            echo "::error title=Firebase policy deployment failed::$summary"
+            {
+              echo "## Firebase policy deployment failure"
               echo
               echo '```text'
               tail -n 120 "$log"
