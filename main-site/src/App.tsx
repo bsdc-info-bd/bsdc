@@ -41,6 +41,10 @@ const ProductPage = lazy(() => import('@/routes/ProductPage'));
 const CartPage = lazy(() => import('@/routes/CartPage'));
 const CheckoutPage = lazy(() => import('@/routes/CheckoutPage'));
 const OrdersPage = lazy(() => import('@/routes/OrdersPage'));
+const VendorPage = lazy(() => import('@/routes/VendorPage'));
+const VendorProductsPage = lazy(() => import('@/routes/VendorProductsPage'));
+const VendorOrdersPage = lazy(() => import('@/routes/VendorOrdersPage'));
+const VendorPayoutsPage = lazy(() => import('@/routes/VendorPayoutsPage'));
 const LearnPage = lazy(() => import('@/routes/LearnPage'));
 const CoursePage = lazy(() => import('@/routes/CoursePage'));
 const VerifyCertificatePage = lazy(() => import('@/routes/VerifyCertificatePage'));
@@ -87,6 +91,12 @@ const router = createBrowserRouter([
           { path: ROUTES.bookmarks, element: withSuspense(<BookmarksPage />) },
           { path: ROUTES.messages, element: withSuspense(<MessagesPage />) },
           { path: '/messages/:id', element: withSuspense(<MessagesPage />) },
+
+          // Vendor console. Ownership is enforced again in the database.
+          { path: ROUTES.vendor, element: withSuspense(<VendorPage />) },
+          { path: ROUTES.vendorProducts, element: withSuspense(<VendorProductsPage />) },
+          { path: ROUTES.vendorOrders, element: withSuspense(<VendorOrdersPage />) },
+          { path: ROUTES.vendorPayouts, element: withSuspense(<VendorPayoutsPage />) },
         ],
       },
 

@@ -16,7 +16,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 9 | Jobs, freelance, projects, snippets, playground | Done |
 | 10 | Search, notifications and learning | Done |
 | 11 | Marketplace part 1 (customer) | Done |
-| 12 | Marketplace part 2 (vendor) | Pending |
+| 12 | Marketplace part 2 (vendor) | Done |
 | 13 | Ads system | Pending |
 | 14 | Admin panel core and plugin system | Pending |
 | 15 | Admin analytics and PDF reports | Pending |
@@ -480,6 +480,58 @@ S-001, S-002, S-003, S-004, S-005, S-006, S-007, S-008, S-009, S-010, S-011,
 S-012,
 X-020, X-021, V-020, U-022, Z-008.
 
+## Response 12 scope (delivered)
+
+- `supabase/migrations/0020_vendor.sql` and `0021_vendor_rls.sql`:
+  `payout_accounts`, `shop_ledger` and `payouts`, two new enums, the
+  fulfilment state machine and the dashboard read models.
+- **Order movement is a state machine held in SQL.**
+  `bsdc.order_transition_allowed(from, to)` is the only definition of a legal
+  move: pending to confirmed or cancelled, confirmed to packed or cancelled,
+  packed to shipped or cancelled, shipped to delivered, delivered to
+  refunded. Nothing else, and nothing backwards. `advance_order()` locks the
+  order, checks that the caller owns the shop or is staff, and delegates a
+  cancellation to `public.cancel_order()` so stock returns exactly once.
+  `shop_orders()` returns the permitted next statuses with each row, so the
+  buttons on the screen are generated from the same rule the write re-checks.
+- **Cash is only paid at the door.** Delivering a cash-on-delivery order sets
+  `payment_status = 'paid'` automatically, and `mark_order_paid()` refuses a
+  cash order that has not been delivered — a vendor cannot record money they
+  are not holding.
+- **The ledger is append-only.** `shop_ledger` stores poisha with credits
+  positive and debits negative, a CHECK fixing the direction of each kind,
+  and `unique (order_id, kind)` so an order can only ever settle once.
+  `bsdc.settle_order()` credits `subtotal + shipping` and debits
+  `subtotal * commission_bps / 10000` — **commission is charged on goods and
+  never on the courier's shipping.** There is no insert, update or delete
+  policy on the table for anybody; only the definer functions write to it.
+- **A payout cannot exceed the balance.** `request_payout()` locks the shop
+  row, re-sums the ledger, and writes the payout row and its negative ledger
+  entry in one transaction. A rejection writes a compensating `adjustment`
+  credit rather than editing the original debit, so the history stays true.
+- `shop_payouts()` returns only `right(account_ref, 4)`; a full account
+  number is never sent to a screen, and `payout_accounts` is readable only by
+  the shop's owner.
+- A vendor may set their shipping and their shop's name; `commission_bps`,
+  `status` and `approved_at` are revoked at column level, as are direct
+  writes to `orders.status`, `products.stock` and `products.status`. Opening
+  a shop (`open_shop()`) creates it `pending`, one per owner; `decide_shop()`
+  is staff-only and archives a suspended shop's products.
+- `publish_product()` refuses a product without an active shop, a summary of
+  at least ten characters and at least one image. `restock_product()` is
+  additive — a delta, never a replacement — and flips a product between
+  `out_of_stock` and `active`.
+- Client: `src/lib/vendor/vendor-types.ts` mirrors the transition table and
+  the commission arithmetic with integer truncation that matches Postgres,
+  `vendor-repository.ts` wraps every RPC, `use-vendor.ts` exposes four hooks,
+  and `/vendor`, `/vendor/products`, `/vendor/orders` and `/vendor/payouts`
+  are member-only lazy routes with full bilingual copy.
+- `src/test/vendor.test.ts` adds 25 tests covering the state machine,
+  commission, ledger balances, payout limits and draft validation. The suite
+  is 211 tests over 17 files; initial JS is 195.9 KB gzip against the 250 KB
+  budget.
+
+
 Response 9 adds:
 T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
 T-012, T-013, T-014, T-015, T-016, T-017, T-018, T-019, T-020, T-021, T-022,
@@ -510,3 +562,14 @@ AI-010, AI-011, AI-012, AI-013, AI-014, AI-015,
 AJ-001, AJ-002, AJ-003, AJ-004, AJ-005, AJ-006, AJ-007, AJ-008,
 AK-001, AK-002, AK-003, AK-004, AK-005, AK-006,
 X-026, X-027, V-026, U-025, Z-011.
+
+Response 12 adds:
+AL-001, AL-002, AL-003, AL-004, AL-005, AL-006, AL-007, AL-008, AL-009,
+AL-010, AL-011, AL-012, AL-013, AL-014, AL-015, AL-016, AL-017, AL-018,
+AL-019, AL-020, AL-021, AL-022,
+AM-001, AM-002, AM-003, AM-004, AM-005, AM-006, AM-007, AM-008, AM-009,
+AM-010, AM-011, AM-012, AM-013, AM-014,
+AN-001, AN-002, AN-003, AN-004, AN-005, AN-006, AN-007, AN-008, AN-009,
+AN-010,
+AO-001, AO-002, AO-003, AO-004, AO-005, AO-006,
+X-028, X-029, V-027, U-026, Z-012.

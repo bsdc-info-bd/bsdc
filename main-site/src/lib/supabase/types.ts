@@ -1097,6 +1097,115 @@ export type PlacedOrderRow = {
   total: number;
 };
 
+export type DbLedgerKind = 'sale' | 'commission' | 'refund' | 'payout' | 'adjustment';
+export type DbPayoutStatus = 'requested' | 'approved' | 'paid' | 'rejected';
+
+export type PayoutAccountRow = {
+  id: string;
+  shop_id: string;
+  method: DbPaymentMethod;
+  account_name: string;
+  account_ref: string;
+  bank_name: string;
+  branch: string;
+  is_default: boolean;
+  created_at: string;
+};
+
+export type ShopLedgerRow = {
+  id: string;
+  shop_id: string;
+  order_id: string | null;
+  payout_id: string | null;
+  kind: DbLedgerKind;
+  amount: number;
+  memo: string;
+  created_at: string;
+};
+
+export type PayoutRow = {
+  id: string;
+  shop_id: string;
+  account_id: string;
+  amount: number;
+  status: DbPayoutStatus;
+  reference: string;
+  note: string;
+  requested_at: string;
+  decided_at: string | null;
+  decided_by: string | null;
+};
+
+export type MyShopRow = {
+  id: string;
+  slug: string;
+  name: string;
+  status: DbShopStatus;
+  logo_url: string;
+  commission_bps: number;
+  shipping_flat: number;
+  free_shipping_over: number | null;
+  rating_sum: number;
+  rating_count: number;
+  orders_count: number;
+  product_count: number;
+  open_orders: number;
+  balance: number;
+  lifetime_sales: number;
+  suspension_reason: string;
+};
+
+export type ShopOrderRow = {
+  id: string;
+  code: string;
+  status: DbOrderStatus;
+  payment_status: DbPaymentStatus;
+  payment_method: DbPaymentMethod;
+  total: number;
+  currency: string;
+  item_count: number;
+  recipient: string;
+  phone: string;
+  address_line: string;
+  city: string;
+  placed_at: string;
+  next_statuses: DbOrderStatus[];
+};
+
+export type ShopProductRow = {
+  id: string;
+  slug: string;
+  title: string;
+  status: DbProductStatus;
+  price: number;
+  currency: string;
+  stock: number;
+  is_digital: boolean;
+  sold_count: number;
+  rating_sum: number;
+  rating_count: number;
+  updated_at: string;
+};
+
+export type LedgerEntryRow = {
+  id: string;
+  kind: DbLedgerKind;
+  amount: number;
+  memo: string;
+  created_at: string;
+};
+
+export type ShopPayoutRow = {
+  id: string;
+  amount: number;
+  status: DbPayoutStatus;
+  reference: string;
+  requested_at: string;
+  decided_at: string | null;
+  method: DbPaymentMethod;
+  account_tail: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1371,6 +1480,25 @@ export type Database = {
         Update: Partial<Pick<ProductReviewRow, 'rating' | 'body'>>;
         Relationships: [];
       };
+      payout_accounts: {
+        Row: PayoutAccountRow;
+        Insert: Pick<PayoutAccountRow, 'shop_id' | 'account_name' | 'account_ref'> &
+          Partial<PayoutAccountRow>;
+        Update: Partial<Omit<PayoutAccountRow, 'id' | 'shop_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      shop_ledger: {
+        Row: ShopLedgerRow;
+        Insert: Pick<ShopLedgerRow, 'shop_id' | 'kind' | 'amount'> & Partial<ShopLedgerRow>;
+        Update: Partial<Pick<ShopLedgerRow, 'memo'>>;
+        Relationships: [];
+      };
+      payouts: {
+        Row: PayoutRow;
+        Insert: Pick<PayoutRow, 'shop_id' | 'account_id' | 'amount'> & Partial<PayoutRow>;
+        Update: Partial<Pick<PayoutRow, 'status' | 'reference' | 'decided_at'>>;
+        Relationships: [];
+      };
       search_log: {
         Row: SearchLogRow;
         Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
@@ -1564,6 +1692,35 @@ export type Database = {
       course_outline: { Args: { p_slug: string }; Returns: CourseOutlineRow[] };
       quiz_paper: { Args: { p_quiz_id: string }; Returns: QuizPaperRow[] };
       verify_certificate: { Args: { p_code: string }; Returns: CertificateVerificationRow[] };
+      open_shop: {
+        Args: { p_slug: string; p_name: string; p_tagline?: string; p_city?: string };
+        Returns: string;
+      };
+      decide_shop: {
+        Args: { p_shop_id: string; p_approve: boolean; p_reason?: string };
+        Returns: undefined;
+      };
+      advance_order: {
+        Args: { p_order_id: string; p_status: DbOrderStatus; p_note?: string };
+        Returns: DbOrderStatus;
+      };
+      mark_order_paid: { Args: { p_order_id: string; p_reference?: string }; Returns: undefined };
+      publish_product: {
+        Args: { p_product_id: string; p_publish?: boolean };
+        Returns: DbProductStatus;
+      };
+      restock_product: { Args: { p_product_id: string; p_delta: number }; Returns: number };
+      request_payout: { Args: { p_account_id: string; p_amount: number }; Returns: string };
+      decide_payout: {
+        Args: { p_payout_id: string; p_approve: boolean; p_reference?: string };
+        Returns: undefined;
+      };
+      shop_balance: { Args: { p_shop_id: string }; Returns: number };
+      my_shop: { Args: Record<never, never>; Returns: MyShopRow[] };
+      shop_orders: { Args: { p_limit?: number }; Returns: ShopOrderRow[] };
+      shop_products: { Args: { p_limit?: number }; Returns: ShopProductRow[] };
+      shop_ledger_entries: { Args: { p_limit?: number }; Returns: LedgerEntryRow[] };
+      shop_payouts: { Args: { p_limit?: number }; Returns: ShopPayoutRow[] };
       add_to_cart: { Args: { p_product_id: string; p_quantity?: number }; Returns: number };
       set_cart_quantity: {
         Args: { p_product_id: string; p_quantity: number };
@@ -1698,6 +1855,8 @@ export type Database = {
       bsdc_work_mode: DbWorkMode;
       bsdc_listing_status: DbListingStatus;
       bsdc_application_status: DbApplicationStatus;
+      bsdc_ledger_kind: DbLedgerKind;
+      bsdc_payout_status: DbPayoutStatus;
       bsdc_shop_status: DbShopStatus;
       bsdc_product_status: DbProductStatus;
       bsdc_order_status: DbOrderStatus;
