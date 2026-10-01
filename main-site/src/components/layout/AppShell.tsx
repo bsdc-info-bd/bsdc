@@ -2,6 +2,7 @@ import { Outlet, ScrollRestoration } from 'react-router-dom';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { Toaster } from '@/design-system';
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey';
+import { usePublishPresence } from '@/hooks/use-presence';
 import { useSystemThemeSync } from '@/hooks/use-system-theme-sync';
 import { AppBar } from './AppBar';
 import { BottomNav } from './BottomNav';
@@ -18,6 +19,7 @@ import { SkipLink } from './SkipLink';
  */
 export function AppShell() {
   useCommandPaletteHotkey();
+  usePublishPresence();
   useSystemThemeSync();
 
   return (

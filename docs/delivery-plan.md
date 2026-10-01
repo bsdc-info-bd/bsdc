@@ -7,7 +7,7 @@ working, wired-up features — never scaffolding for its own sake.
 |---|--------|--------|
 | 1 | Foundation and design system | Done |
 | 2 | Authentication and identity | Done |
-| 3 | Data core: Supabase, RTDB, Firestore, storage | Pending |
+| 3 | Data core: Supabase, RTDB, Firestore, storage | Done |
 | 4 | Universal composer and content engine | Pending |
 | 5 | Feed and 4-stage ranking engine | Pending |
 | 6 | Social graph and interactions | Pending |
@@ -82,6 +82,41 @@ working, wired-up features — never scaffolding for its own sake.
 - The Firebase SDK is loaded on demand, so the initial JavaScript budget stays
   far below the 250 KB gzip CI gate.
 
+## Response 3 scope (delivered)
+
+- `supabase/migrations/0001_core_schema.sql`: the `bsdc` helper schema
+  (`current_uid()`, `current_role_name()`, `is_staff()`), enums, and the
+  `profiles`, `reserved_usernames`, `follows`, `blocks`, `media_assets`,
+  `feature_flags`, `reports` and `audit_log` tables with indexes, counter
+  triggers and the `claim_username()` security-definer function.
+- `supabase/migrations/0002_row_level_security.sql`: RLS enabled everywhere,
+  least-privilege policies, and column-level update grants so `role`,
+  `status`, counters and reputation can never be written from a browser.
+- Identity bridge: the browser sends its Firebase ID token to PostgREST, so
+  policies resolve the caller through the JWT `sub` claim. No second password
+  and no Supabase Auth user.
+- `firebase/firestore.rules` and `firebase/database.rules.json`: deny by
+  default, public read for the profile cache and username index, presence and
+  typing limited to the owning member with validated shapes.
+- Typed data layer: `lib/supabase/types.ts` mirrors the SQL exactly,
+  `lib/supabase/client.ts` builds the client lazily with the Firebase token,
+  and `lib/supabase/errors.ts` turns Postgrest failures into `DataError` with
+  bilingual message keys — SQL state codes never reach a member.
+- `profile-service` is now a facade over two interchangeable backends
+  (Supabase first, Firestore cache second) behind the interface Response 2
+  already used, with best-effort cache mirroring that can never fail a write.
+- Realtime: `trackPresence()` with `onDisconnect`, visibility-aware away
+  state, and `usePresence()` for watching another member — live on the
+  profile page avatar.
+- Media pipeline: validation by MIME type and size, Cloudinary for avatars,
+  covers, documents and voice notes, imgbb for ordinary images, XHR progress
+  reporting, Cloudinary delivery transforms and a `media_assets` record for
+  every upload. Wired into settings as a working avatar uploader.
+- Plugin registry: `feature_flags` with audience resolution, built-in
+  defaults when the database is unreachable, and the `useFeatureFlag` hook.
+- Social graph repository (follow, unfollow, block, unblock) ready for
+  Response 6, with counters maintained by a database trigger.
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -102,3 +137,10 @@ B-001, B-002, B-003, B-004, B-005, B-006, B-007, B-008, B-009, B-010, B-011,
 B-012, B-013, B-014, B-015,
 Y-003, Y-005, Y-021, Y-030, W-011, W-012, V-006, V-008, V-010, U-001, U-002,
 Z-001, Z-002, Z-003.
+
+Response 3 adds:
+C-001, C-002, C-003, C-004, C-005, C-006, C-007, C-008, C-009, C-010, C-011,
+C-012, C-013, C-014, C-015, C-016, C-017, C-018, C-019, C-020,
+D-001, D-002, D-003, D-004, D-005, D-006, D-007, D-008, D-009, D-010,
+E-001, E-002, E-003, E-004, E-005, E-006, E-007, E-008,
+Z-004, Z-005, Z-026 (registry storage), U-015, U-016, V-011, V-012.

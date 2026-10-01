@@ -17,15 +17,19 @@ import {
   Tabs,
   type TabItem,
 } from '@/design-system';
+import { usePresence } from '@/hooks/use-presence';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { fetchProfileByUsername, type Profile } from '@/lib/profile/profile-service';
+import {
+  fetchProfileByUsername,
+  fetchProfileStats,
+  type Profile,
+} from '@/lib/profile/profile-service';
 import { isConfigured } from '@/lib/env';
 import { profilePath, ROUTES, SITE } from '@/lib/site';
 import { useAuthStore } from '@/store/auth-store';
 
 function AboutPanel({ profile }: { profile: Profile }) {
-  const { t, i18n } = useTranslation();
-  const language = i18n.language === 'en' ? 'en' : 'bn';
+  const { t } = useTranslation();
   const none = t('profile.about.none');
 
   return (
@@ -80,10 +84,6 @@ function AboutPanel({ profile }: { profile: Profile }) {
         </dt>
         <dd className="mt-1">{profile.language === 'bn' ? 'বাংলা' : 'English'}</dd>
       </div>
-      <div>
-        <dt className="text-xs uppercase tracking-wide text-muted">{t('profile.stats.posts')}</dt>
-        <dd className="mt-1">{formatNumber(0, language)}</dd>
-      </div>
     </dl>
   );
 }
@@ -103,6 +103,16 @@ export default function ProfilePage() {
     enabled: handle.length > 0 && isConfigured.firebase,
     staleTime: 60_000,
   });
+
+  // Counters live in Postgres and are maintained by a database trigger.
+  const { data: stats } = useQuery({
+    queryKey: ['profile-stats', data?.uid ?? ''],
+    queryFn: () => fetchProfileStats(data?.uid ?? ''),
+    enabled: typeof data?.uid === 'string' && data.uid.length > 0,
+    staleTime: 60_000,
+  });
+
+  const presence = usePresence(data?.uid ?? null);
 
   if (!isConfigured.firebase) {
     return (
@@ -209,7 +219,12 @@ export default function ProfilePage() {
       <div className="fab-container py-6 sm:py-10">
         <Card className="overflow-hidden">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <Avatar src={profile.avatarUrl} name={profile.displayName} size="xl" />
+            <Avatar
+              src={profile.avatarUrl}
+              name={profile.displayName}
+              size="xl"
+              online={presence === 'online'}
+            />
             <div className="min-w-0 flex-1">
               <h1 className="fab-truncate text-2xl">{profile.displayName}</h1>
               <p className="text-sm text-muted">@{profile.username}</p>
@@ -228,22 +243,22 @@ export default function ProfilePage() {
           <StatCard
             icon={<FileText size={16} />}
             label={t('profile.stats.posts')}
-            value={formatNumber(0, language)}
+            value={formatNumber(stats?.posts ?? 0, language)}
           />
           <StatCard
             icon={<Users size={16} />}
             label={t('profile.stats.followers')}
-            value={formatNumber(0, language)}
+            value={formatNumber(stats?.followers ?? 0, language)}
           />
           <StatCard
             icon={<Users size={16} />}
             label={t('profile.stats.following')}
-            value={formatNumber(0, language)}
+            value={formatNumber(stats?.following ?? 0, language)}
           />
           <StatCard
             icon={<Award size={16} />}
             label={t('profile.stats.reputation')}
-            value={formatNumber(0, language)}
+            value={formatNumber(stats?.reputation ?? 0, language)}
           />
         </div>
 

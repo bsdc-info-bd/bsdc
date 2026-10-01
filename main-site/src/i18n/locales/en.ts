@@ -473,6 +473,34 @@ export const en = {
       createdAt: 'Account created: {{date}}',
     },
   },
+  data: {
+    errors: {
+      generic: 'The data service could not complete that request.',
+      notConfigured:
+        'The database is not configured for this deployment. The administrator must set the Supabase environment variables.',
+      notFound: 'That record no longer exists.',
+      conflict: 'That value is already in use.',
+      invalid: 'The database rejected that value.',
+      forbidden: 'You do not have permission to do that.',
+      signInRequired: 'Sign in to continue.',
+      offline: 'You appear to be offline. The change was not saved.',
+    },
+  },
+  media: {
+    upload: 'Upload',
+    uploading: 'Uploading',
+    change: 'Change picture',
+    remove: 'Remove picture',
+    uploaded: 'Upload complete.',
+    hint: 'JPG, PNG, WebP or GIF up to 10 MB.',
+    errors: {
+      unsupported: 'That file type is not supported.',
+      tooLarge: 'That file is larger than the limit for its type.',
+      empty: 'That file is empty.',
+      failed: 'The upload failed. Please try again.',
+      notConfigured: 'Uploads are not configured for this deployment.',
+    },
+  },
   pwa: {
     updateTitle: 'A new version of BSDC is available',
     updateAction: 'Refresh',

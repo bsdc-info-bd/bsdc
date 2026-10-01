@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -40,7 +41,22 @@ function AccountPanel() {
   const [displayName, setDisplayName] = useState(profile?.displayName ?? user?.displayName ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [location, setLocation] = useState(profile?.location ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl ?? user?.photoURL ?? '');
   const [saving, setSaving] = useState(false);
+
+  async function onAvatarUploaded(url: string) {
+    if (!user) return;
+    setAvatarUrl(url);
+    try {
+      const { updatePhotoUrl } = await import('@/lib/auth/auth-service');
+      await updatePhotoUrl(url);
+      await updateProfileFields(user.uid, { avatarUrl: url });
+      if (profile) setProfile({ ...profile, avatarUrl: url });
+      toast.success(t('media.uploaded'));
+    } catch (error) {
+      toast.error(t(authErrorKey(error)));
+    }
+  }
 
   async function save() {
     if (!user) return;
@@ -74,7 +90,7 @@ function AccountPanel() {
     <div className="grid gap-4">
       <Card>
         <div className="flex items-center gap-3">
-          <Avatar src={profile?.avatarUrl ?? user?.photoURL ?? ''} name={displayName} size="lg" />
+          <Avatar src={avatarUrl} name={displayName} size="lg" />
           <div className="min-w-0">
             <p className="fab-truncate font-semibold">{user?.email}</p>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
@@ -93,6 +109,14 @@ function AccountPanel() {
 
       <Card>
         <div className="grid gap-4">
+          {user ? (
+            <AvatarUploader
+              uid={user.uid}
+              name={displayName}
+              value={avatarUrl}
+              onUploaded={(url) => void onAvatarUploaded(url)}
+            />
+          ) : null}
           <TextField
             label={t('auth.fields.displayName')}
             value={displayName}
