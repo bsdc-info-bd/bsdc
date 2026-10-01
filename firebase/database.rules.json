@@ -6,7 +6,7 @@
       "$conversationId": {
         ".read": "auth != null && auth.token.legalAcceptanceVersion === '2026-09-30' && data.child('participants').child(auth.uid).val() === true",
         ".write": "auth != null && auth.token.legalAcceptanceVersion === '2026-09-30' && ((!data.exists() && newData.child('participants').child(auth.uid).val() === true && (newData.child('kind').val() === 'direct' || newData.child('kind').val() === 'group')) || (data.child('participants').child(auth.uid).val() === true && newData.child('participants').child(auth.uid).val() === true))",
-        ".validate": "(newData.child('kind').val() === 'direct' || newData.child('kind').val() === 'group') && (newData.child('kind').val() !== 'direct' || newData.child('participants').numChildren() === 2) && (newData.child('kind').val() !== 'group' || (newData.child('participants').numChildren() >= 2 && newData.child('participants').numChildren() <= 50))",
+        ".validate": "(newData.child('kind').val() === 'direct' || newData.child('kind').val() === 'group') && newData.child('participants').hasChildren() && newData.child('memberCount').isNumber() && newData.child('memberCount').val() >= 2 && newData.child('memberCount').val() <= 50",
         "participants": {
           "$uid": {
             ".validate": "(!data.exists() && newData.val() === true) || (data.exists() && newData.val() === data.val())"
