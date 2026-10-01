@@ -124,6 +124,121 @@ export type ReportRow = {
   created_at: string;
 };
 
+export type DbPostKind = 'post' | 'article' | 'question' | 'poll' | 'snippet' | 'media';
+export type DbPostStatus = 'draft' | 'published' | 'archived' | 'removed';
+export type DbVisibility = 'public' | 'followers' | 'private';
+
+export type TagRow = {
+  slug: string;
+  label_en: string;
+  label_bn: string;
+  description: string;
+  posts_count: number;
+  created_at: string;
+};
+
+export type PostRow = {
+  id: string;
+  author_uid: string;
+  kind: DbPostKind;
+  status: DbPostStatus;
+  visibility: DbVisibility;
+  slug: string;
+  title: string;
+  body: string;
+  excerpt: string;
+  cover_url: string;
+  language: string;
+  code: string;
+  code_language: string;
+  reading_time: number;
+  views_count: number;
+  likes_count: number;
+  comments_count: number;
+  is_pinned: boolean;
+  is_sensitive: boolean;
+  allow_comments: boolean;
+  published_at: string | null;
+  edited_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PostInsert = Pick<PostRow, 'author_uid' | 'kind' | 'slug'> &
+  Partial<
+    Pick<
+      PostRow,
+      | 'id'
+      | 'status'
+      | 'visibility'
+      | 'title'
+      | 'body'
+      | 'excerpt'
+      | 'cover_url'
+      | 'language'
+      | 'code'
+      | 'code_language'
+      | 'reading_time'
+      | 'is_sensitive'
+      | 'allow_comments'
+      | 'published_at'
+    >
+  >;
+
+export type PostUpdate = Partial<
+  Pick<
+    PostRow,
+    | 'kind'
+    | 'status'
+    | 'visibility'
+    | 'slug'
+    | 'title'
+    | 'body'
+    | 'excerpt'
+    | 'cover_url'
+    | 'language'
+    | 'code'
+    | 'code_language'
+    | 'reading_time'
+    | 'is_sensitive'
+    | 'allow_comments'
+    | 'published_at'
+  >
+>;
+
+export type PostTagRow = { post_id: string; tag_slug: string };
+export type PostMediaRow = {
+  post_id: string;
+  media_id: string;
+  position: number;
+  alt_text: string;
+};
+export type PostMentionRow = { post_id: string; mentioned_uid: string };
+
+export type PollOptionRow = {
+  id: string;
+  post_id: string;
+  position: number;
+  label: string;
+  votes: number;
+};
+
+export type PollVoteRow = {
+  post_id: string;
+  voter_uid: string;
+  option_id: string;
+  created_at: string;
+};
+
+export type PostRevisionRow = {
+  id: number;
+  post_id: string;
+  editor_uid: string;
+  title: string;
+  body: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -163,6 +278,54 @@ export type Database = {
         Update: Partial<Omit<FeatureFlagRow, 'key'>>;
         Relationships: [];
       };
+      tags: {
+        Row: TagRow;
+        Insert: Pick<TagRow, 'slug' | 'label_en'> & Partial<TagRow>;
+        Update: Partial<Omit<TagRow, 'slug'>>;
+        Relationships: [];
+      };
+      posts: {
+        Row: PostRow;
+        Insert: PostInsert;
+        Update: PostUpdate;
+        Relationships: [];
+      };
+      post_tags: {
+        Row: PostTagRow;
+        Insert: PostTagRow;
+        Update: Partial<PostTagRow>;
+        Relationships: [];
+      };
+      post_media: {
+        Row: PostMediaRow;
+        Insert: Pick<PostMediaRow, 'post_id' | 'media_id'> & Partial<PostMediaRow>;
+        Update: Partial<PostMediaRow>;
+        Relationships: [];
+      };
+      post_mentions: {
+        Row: PostMentionRow;
+        Insert: PostMentionRow;
+        Update: Partial<PostMentionRow>;
+        Relationships: [];
+      };
+      poll_options: {
+        Row: PollOptionRow;
+        Insert: Pick<PollOptionRow, 'post_id' | 'position' | 'label'> & { id?: string };
+        Update: Partial<Pick<PollOptionRow, 'label' | 'position'>>;
+        Relationships: [];
+      };
+      poll_votes: {
+        Row: PollVoteRow;
+        Insert: Pick<PollVoteRow, 'post_id' | 'voter_uid' | 'option_id'>;
+        Update: Partial<PollVoteRow>;
+        Relationships: [];
+      };
+      post_revisions: {
+        Row: PostRevisionRow;
+        Insert: Pick<PostRevisionRow, 'post_id' | 'editor_uid'> & Partial<PostRevisionRow>;
+        Update: Partial<PostRevisionRow>;
+        Relationships: [];
+      };
       reports: {
         Row: ReportRow;
         Insert: Pick<ReportRow, 'reporter_uid' | 'subject_type' | 'subject_id' | 'reason'> & {
@@ -175,6 +338,8 @@ export type Database = {
     Views: Record<never, never>;
     Functions: {
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
+      cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
+      increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
     };
     Enums: {
       bsdc_role: DbRole;
@@ -182,6 +347,9 @@ export type Database = {
       bsdc_media_kind: DbMediaKind;
       bsdc_media_provider: DbMediaProvider;
       bsdc_report_status: DbReportStatus;
+      bsdc_post_kind: DbPostKind;
+      bsdc_post_status: DbPostStatus;
+      bsdc_visibility: DbVisibility;
     };
     CompositeTypes: Record<never, never>;
   };

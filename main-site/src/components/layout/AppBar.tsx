@@ -1,7 +1,8 @@
-import { Search } from 'lucide-react';
+import { PenSquare, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
+import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/lib/site';
 import { useUiStore } from '@/store/ui-store';
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
 export function AppBar() {
   const { t } = useTranslation();
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
+  const signedIn = useAuthStore((state) => state.status === 'authenticated');
 
   return (
     <header className="bsdc-app-bar fab-glass fab-safe-top">
@@ -56,6 +58,13 @@ export function AppBar() {
         </nav>
 
         <div className="ms-auto flex items-center gap-0.5">
+          {signedIn ? (
+            <Link to={ROUTES.compose} aria-label={t('compose.title')} title={t('compose.title')}>
+              <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
+                <PenSquare size={20} aria-hidden="true" />
+              </span>
+            </Link>
+          ) : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
             icon={<Search size={20} />}

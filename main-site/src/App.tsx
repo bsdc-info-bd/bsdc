@@ -22,6 +22,9 @@ const VerifyEmailPage = lazy(() => import('@/routes/auth/VerifyEmailPage'));
 const OnboardingPage = lazy(() => import('@/routes/OnboardingPage'));
 const ProfilePage = lazy(() => import('@/routes/ProfilePage'));
 const SettingsPage = lazy(() => import('@/routes/SettingsPage'));
+const ComposePage = lazy(() => import('@/routes/ComposePage'));
+const PostPage = lazy(() => import('@/routes/PostPage'));
+const TagPage = lazy(() => import('@/routes/TagPage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -60,8 +63,13 @@ const router = createBrowserRouter([
           { path: ROUTES.verify, element: withSuspense(<VerifyEmailPage />) },
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
           { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
+          { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
         ],
       },
+
+      // Public content permalinks.
+      { path: '/p/:slug', element: withSuspense(<PostPage />) },
+      { path: '/tag/:slug', element: withSuspense(<TagPage />) },
 
       // Public member permalink: /@username
       { path: ':handle', element: withSuspense(<ProfilePage />) },

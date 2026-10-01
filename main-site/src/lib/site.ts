@@ -39,7 +39,18 @@ export const ROUTES = {
   verify: '/auth/verify',
   onboarding: '/onboarding',
   settings: '/settings',
+  compose: '/compose',
 } as const;
+
+/** Post permalink: /p/slug. */
+export function postPath(slug: string): string {
+  return `/p/${slug}`;
+}
+
+/** Tag archive: /tag/slug. */
+export function tagPath(slug: string): string {
+  return `/tag/${slug}`;
+}
 
 /** Profile permalink: /@username (SEO title pattern "bsdc • username"). */
 export function profilePath(username: string): string {

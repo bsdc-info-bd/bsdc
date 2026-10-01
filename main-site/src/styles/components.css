@@ -123,3 +123,136 @@
     color: #444444;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Rendered member content.
+   The HTML always comes from lib/content/markdown.ts, which sanitises it.
+   Styling lives here so the renderer stays free of presentation decisions.
+   --------------------------------------------------------------------------- */
+.bsdc-markdown {
+  font-size: theme('fontSize.base');
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-markdown > * + * {
+  margin-top: 0.9em;
+}
+
+.bsdc-markdown h1,
+.bsdc-markdown h2,
+.bsdc-markdown h3,
+.bsdc-markdown h4 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+
+.bsdc-markdown h1 {
+  font-size: 1.6em;
+}
+.bsdc-markdown h2 {
+  font-size: 1.35em;
+}
+.bsdc-markdown h3 {
+  font-size: 1.15em;
+}
+
+.bsdc-markdown a {
+  color: var(--bsdc-green-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bsdc-markdown ul,
+.bsdc-markdown ol {
+  padding-inline-start: 1.5em;
+}
+
+.bsdc-markdown ul {
+  list-style: disc;
+}
+.bsdc-markdown ol {
+  list-style: decimal;
+}
+.bsdc-markdown li + li {
+  margin-top: 0.35em;
+}
+
+.bsdc-markdown blockquote {
+  border-inline-start: 3px solid var(--bsdc-green-500);
+  padding-inline-start: 0.9em;
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-markdown code {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.9em;
+  background: var(--bsdc-surface-2);
+  border-radius: 6px;
+  padding: 0.12em 0.35em;
+}
+
+.bsdc-markdown pre.bsdc-code {
+  background: var(--bsdc-surface-2);
+  border: 1px solid var(--bsdc-border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.bsdc-markdown pre.bsdc-code code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+
+.bsdc-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.bsdc-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.bsdc-markdown th,
+.bsdc-markdown td {
+  border: 1px solid var(--bsdc-border);
+  padding: 0.45rem 0.6rem;
+  text-align: start;
+}
+
+/* highlight.js tokens, mapped onto BSDC tokens so both themes stay readable */
+.bsdc-markdown .hljs-comment,
+.bsdc-markdown .hljs-quote {
+  color: var(--bsdc-text-muted);
+  font-style: italic;
+}
+.bsdc-markdown .hljs-keyword,
+.bsdc-markdown .hljs-selector-tag,
+.bsdc-markdown .hljs-literal {
+  color: var(--bsdc-green-700);
+  font-weight: 600;
+}
+.bsdc-markdown .hljs-string,
+.bsdc-markdown .hljs-attr {
+  color: var(--bsdc-blue);
+}
+.bsdc-markdown .hljs-number,
+.bsdc-markdown .hljs-built_in,
+.bsdc-markdown .hljs-type {
+  color: var(--bsdc-warn);
+}
+.bsdc-markdown .hljs-title,
+.bsdc-markdown .hljs-section,
+.bsdc-markdown .hljs-name {
+  color: var(--bsdc-green-500);
+  font-weight: 600;
+}

@@ -17,6 +17,7 @@ import {
   Tabs,
   type TabItem,
 } from '@/design-system';
+import { PostCard } from '@/components/content/PostCard';
 import { usePresence } from '@/hooks/use-presence';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import {
@@ -114,6 +115,17 @@ export default function ProfilePage() {
 
   const presence = usePresence(data?.uid ?? null);
 
+  // Published posts by this member, loaded once the profile is known.
+  const { data: posts } = useQuery({
+    queryKey: ['author-posts', data?.uid ?? ''],
+    queryFn: async () => {
+      const { fetchPostsByAuthor } = await import('@/lib/content/post-repository');
+      return fetchPostsByAuthor(data?.uid ?? '', { limit: 20 });
+    },
+    enabled: typeof data?.uid === 'string' && data.uid.length > 0 && isConfigured.supabase,
+    staleTime: 60_000,
+  });
+
   if (!isConfigured.firebase) {
     return (
       <div className="fab-container py-10">
@@ -155,13 +167,22 @@ export default function ProfilePage() {
     {
       id: 'posts',
       label: t('profile.tabs.posts'),
-      content: (
-        <EmptyState
-          icon={<FileText size={28} />}
-          title={t('profile.empty.postsTitle')}
-          description={t('profile.empty.postsBody')}
-        />
-      ),
+      content:
+        posts && posts.length > 0 ? (
+          <ul className="grid gap-3">
+            {posts.map((post) => (
+              <li key={post.id}>
+                <PostCard post={post} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={<FileText size={28} />}
+            title={t('profile.empty.postsTitle')}
+            description={t('profile.empty.postsBody')}
+          />
+        ),
     },
     {
       id: 'comments',

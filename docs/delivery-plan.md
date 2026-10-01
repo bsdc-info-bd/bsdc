@@ -8,7 +8,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 1 | Foundation and design system | Done |
 | 2 | Authentication and identity | Done |
 | 3 | Data core: Supabase, RTDB, Firestore, storage | Done |
-| 4 | Universal composer and content engine | Pending |
+| 4 | Universal composer and content engine | Done |
 | 5 | Feed and 4-stage ranking engine | Pending |
 | 6 | Social graph and interactions | Pending |
 | 7 | BSDC Messenger | Pending |
@@ -117,6 +117,38 @@ working, wired-up features — never scaffolding for its own sake.
 - Social graph repository (follow, unfollow, block, unblock) ready for
   Response 6, with counters maintained by a database trigger.
 
+## Response 4 scope (delivered)
+
+- `supabase/migrations/0003_content.sql`: one `posts` table for every kind of
+  contribution (post, article, question, poll, snippet, media) with a stored
+  `tsvector` search column, kind-specific check constraints, author post
+  counters, `post_tags`, `post_media`, `post_mentions`, `poll_options`,
+  `poll_votes`, `post_revisions`, the curated `tags` vocabulary, and the
+  `cast_poll_vote()` and `increment_post_view()` functions.
+- `0004_content_rls.sql`: reading goes through `bsdc.can_read_post()`, so
+  drafts, follower-only posts and removed posts are filtered by the database.
+  Authors write only their own rows; counters and vote totals are revoked
+  from the client key.
+- Sanitised markdown: `lib/content/markdown.ts` is the only module allowed to
+  produce HTML. External links become `nofollow ugc noopener noreferrer`,
+  images get lazy loading, and scripts, styles, iframes, forms and event
+  handlers are stripped. Code blocks are escaped, then highlighted by a
+  lazily loaded highlight.js with fourteen registered languages.
+- Universal composer at `/compose`: kind switcher, markdown editor with a
+  live preview tab, poll builder, snippet editor with language selector,
+  multi-image attachments with alt text, tag input with hashtag suggestions
+  pulled from the body, visibility and language selectors, comment and
+  sensitivity switches.
+- Draft safety: debounced local autosave with an honest status line, an
+  explicit offer to restore an abandoned draft, and server drafts as real
+  rows with status `draft`.
+- Post permalink `/p/:slug` with kind-aware JSON-LD (Article, QAPage,
+  TechArticle, DiscussionForumPosting), author card, media gallery, poll
+  voting with one ballot per member, reading time, view counting, and
+  tag links.
+- Tag archive `/tag/:slug` and a reusable `PostCard`, now also powering the
+  posts tab on `/@username`.
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -144,3 +176,11 @@ C-012, C-013, C-014, C-015, C-016, C-017, C-018, C-019, C-020,
 D-001, D-002, D-003, D-004, D-005, D-006, D-007, D-008, D-009, D-010,
 E-001, E-002, E-003, E-004, E-005, E-006, E-007, E-008,
 Z-004, Z-005, Z-026 (registry storage), U-015, U-016, V-011, V-012.
+
+Response 4 adds:
+F-001, F-002, F-003, F-004, F-005, F-006, F-007, F-008, F-009, F-010, F-011,
+F-012, F-013, F-014, F-015, F-016, F-017, F-018, F-019, F-020, F-021, F-022,
+F-023, F-024, F-025,
+G-001, G-002, G-003, G-004, G-005, G-006, G-007, G-008, G-009, G-010,
+H-001, H-002, H-003, H-004, H-005, H-006,
+X-011, X-012, X-013, V-014, V-015, U-017.
