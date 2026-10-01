@@ -40,6 +40,8 @@ export const ROUTES = {
   onboarding: '/onboarding',
   settings: '/settings',
   compose: '/compose',
+  notifications: '/notifications',
+  bookmarks: '/bookmarks',
 } as const;
 
 /** Post permalink: /p/slug. */

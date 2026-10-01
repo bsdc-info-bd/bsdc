@@ -25,6 +25,8 @@ const SettingsPage = lazy(() => import('@/routes/SettingsPage'));
 const ComposePage = lazy(() => import('@/routes/ComposePage'));
 const PostPage = lazy(() => import('@/routes/PostPage'));
 const TagPage = lazy(() => import('@/routes/TagPage'));
+const NotificationsPage = lazy(() => import('@/routes/NotificationsPage'));
+const BookmarksPage = lazy(() => import('@/routes/BookmarksPage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -64,6 +66,8 @@ const router = createBrowserRouter([
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
           { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
+          { path: ROUTES.notifications, element: withSuspense(<NotificationsPage />) },
+          { path: ROUTES.bookmarks, element: withSuspense(<BookmarksPage />) },
         ],
       },
 

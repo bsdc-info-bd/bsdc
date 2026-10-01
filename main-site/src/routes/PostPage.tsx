@@ -4,6 +4,8 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { MarkdownView } from '@/components/content/MarkdownView';
+import { CommentThread } from '@/components/interactions/CommentThread';
+import { ReactionBar } from '@/components/interactions/ReactionBar';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -281,9 +283,27 @@ export default function PostPage() {
             </ul>
           ) : null}
 
-          <p className="mt-6 text-xs text-muted">
-            {t('post.commentsSoon', { count: post.comments })}
-          </p>
+          <div className="mt-6 border-t border-line pt-4">
+            <ReactionBar
+              postId={post.id}
+              slug={post.slug}
+              title={post.title.length > 0 ? post.title : post.excerpt}
+              likes={post.likes}
+              comments={post.comments}
+              onCommentClick={() => {
+                document.getElementById('comments-heading')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            />
+          </div>
+
+          <div className="mt-8">
+            <CommentThread
+              postId={post.id}
+              postAuthorUid={post.author?.uid ?? ''}
+              isQuestion={post.kind === 'question'}
+              allowComments={post.allowComments}
+            />
+          </div>
         </div>
       </article>
     </>

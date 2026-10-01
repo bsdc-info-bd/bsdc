@@ -1,7 +1,8 @@
-import { PenSquare, Search } from 'lucide-react';
+import { Bell, PenSquare, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
+import { useUnreadNotificationCount } from '@/hooks/use-interactions';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/lib/site';
@@ -65,6 +66,7 @@ export function AppBar() {
               </span>
             </Link>
           ) : null}
+          {signedIn ? <NotificationBell /> : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
             icon={<Search size={20} />}
@@ -76,5 +78,29 @@ export function AppBar() {
         </div>
       </div>
     </header>
+  );
+}
+
+/** Bell with an unread count; the count polls quietly in the background. */
+function NotificationBell() {
+  const { t } = useTranslation();
+  const unread = useUnreadNotificationCount();
+
+  return (
+    <Link
+      to={ROUTES.notifications}
+      aria-label={t('notifications.open')}
+      title={t('notifications.open')}
+      className="relative"
+    >
+      <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
+        <Bell size={20} aria-hidden="true" />
+      </span>
+      {unread > 0 ? (
+        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      ) : null}
+    </Link>
   );
 }

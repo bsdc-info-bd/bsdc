@@ -10,7 +10,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 3 | Data core: Supabase, RTDB, Firestore, storage | Done |
 | 4 | Universal composer and content engine | Done |
 | 5 | Feed and 4-stage ranking engine | Done |
-| 6 | Social graph and interactions | Pending |
+| 6 | Social graph and interactions | Done |
 | 7 | BSDC Messenger | Pending |
 | 8 | Communities: groups, channels, pages, events | Pending |
 | 9 | Jobs, freelance, projects, snippets, playground | Pending |
@@ -179,6 +179,40 @@ working, wired-up features — never scaffolding for its own sake.
   pill, an infinite sentinel, and a feed preferences panel in settings.
 
 
+## Response 6 scope (delivered)
+
+- `supabase/migrations/0007_interactions.sql`: five reaction kinds on one row
+  per member per post, so switching reaction never inflates the count;
+  threaded `comments` with database-decided depth, thread root and a single
+  accepted answer per question; `comment_reactions`; `bookmarks` with optional
+  collections; `post_shares` with a channel vocabulary; and `notifications`.
+- `bsdc.notify()` is the one place notification policy lives: never notify
+  yourself, never notify across a block in either direction, and collapse
+  repeats onto one inbox line through a unique index rather than spamming.
+  Follows, mentions, reactions, comments, replies, shares and accepted answers
+  all route through it from triggers.
+- `toggle_reaction`, `toggle_comment_reaction`, `toggle_bookmark`,
+  `mark_answer`, `record_share`, `unread_notification_count`,
+  `mark_notifications_read` and `post_interaction_state` keep every mutation
+  to one idempotent round trip; `post_interaction_state` returns the state of
+  a whole page of cards at once.
+- `0008_interactions_rls.sql`: comments inherit the visibility of their post
+  and are hidden across a block, bookmarks are private, shares are visible to
+  staff and their author, the inbox belongs to one member, and the counter
+  columns are revoked from the client key.
+- `lib/interactions/`: typed repository plus a pure `buildCommentTree()` that
+  promotes orphans instead of dropping their subtrees and floats an accepted
+  answer to the top.
+- UI: reaction bar with a five-way picker, share menu with copy link and five
+  networks, bookmark toggle, full comment thread with replies, inline edit,
+  moderation delete for the post author, accepted answers for questions, the
+  `/notifications` inbox, `/bookmarks`, and an app bar bell with an unread
+  badge.
+- Bundle discipline held: the interaction repository is reached only through
+  dynamic `import()`, because the app bar renders on first paint and must not
+  drag the Supabase SDK into the entry chunk.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -221,3 +255,11 @@ I-012, I-013, I-014, I-015, I-016, I-017, I-018, I-019, I-020,
 J-001, J-002, J-003, J-004, J-005, J-006, J-007, J-008, J-009, J-010,
 K-001, K-002, K-003, K-004, K-005, K-006,
 X-014, X-015, V-016, U-018, Z-006.
+
+Response 6 adds:
+L-002, L-003, L-004, L-005, L-006, L-007, L-008, L-009, L-010, L-011, L-012,
+L-013, L-014, L-015, L-016, L-017, L-018, L-019, L-020,
+M-001, M-002, M-003, M-004, M-005, M-006, M-007, M-008, M-009, M-010, M-011,
+M-012,
+N-001, N-002, N-003, N-004, N-005, N-006, N-007, N-008,
+X-016, X-017, V-017, V-018, U-019, U-020.

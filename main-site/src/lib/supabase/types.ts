@@ -274,6 +274,91 @@ export type FeedCandidateRow = {
   tags: string[];
 };
 
+export type DbReaction = 'like' | 'insightful' | 'celebrate' | 'support' | 'curious';
+
+export type DbNotificationKind =
+  | 'follow'
+  | 'reaction'
+  | 'comment'
+  | 'reply'
+  | 'mention'
+  | 'bookmark'
+  | 'share'
+  | 'post_published'
+  | 'moderation';
+
+export type NotificationRow = {
+  id: string;
+  uid: string;
+  actor_uid: string | null;
+  kind: DbNotificationKind;
+  post_id: string | null;
+  comment_id: string | null;
+  body: string;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type PostReactionRow = {
+  post_id: string;
+  uid: string;
+  reaction: DbReaction;
+  created_at: string;
+};
+
+export type CommentRow = {
+  id: string;
+  post_id: string;
+  author_uid: string;
+  parent_id: string | null;
+  root_id: string | null;
+  depth: number;
+  body: string;
+  status: DbPostStatus;
+  likes_count: number;
+  replies_count: number;
+  is_answer: boolean;
+  edited_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CommentReactionRow = { comment_id: string; uid: string; created_at: string };
+
+export type BookmarkCollectionRow = {
+  id: string;
+  uid: string;
+  name: string;
+  is_private: boolean;
+  created_at: string;
+};
+
+export type BookmarkRow = {
+  uid: string;
+  post_id: string;
+  collection_id: string | null;
+  note: string;
+  created_at: string;
+};
+
+export type PostShareRow = {
+  id: string;
+  post_id: string;
+  uid: string | null;
+  channel: string;
+  created_at: string;
+};
+
+export type InteractionStateRow = {
+  post_id: string;
+  reaction: DbReaction | null;
+  bookmarked: boolean;
+};
+
+export type ToggleReactionRow = { reacted: boolean; reaction: DbReaction; total: number };
+
+export type ToggleCommentReactionRow = { reacted: boolean; total: number };
+
 export type Database = {
   public: {
     Tables: {
@@ -379,6 +464,53 @@ export type Database = {
         Update: Partial<TopicAffinityRow>;
         Relationships: [];
       };
+      notifications: {
+        Row: NotificationRow;
+        Insert: Pick<NotificationRow, 'uid' | 'kind'> & Partial<NotificationRow>;
+        Update: Partial<Pick<NotificationRow, 'read_at'>>;
+        Relationships: [];
+      };
+      post_reactions: {
+        Row: PostReactionRow;
+        Insert: Pick<PostReactionRow, 'post_id' | 'uid'> & { reaction?: DbReaction };
+        Update: Partial<Pick<PostReactionRow, 'reaction'>>;
+        Relationships: [];
+      };
+      comments: {
+        Row: CommentRow;
+        Insert: Pick<CommentRow, 'post_id' | 'author_uid' | 'body'> & {
+          parent_id?: string | null;
+        };
+        Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at'>>;
+        Relationships: [];
+      };
+      comment_reactions: {
+        Row: CommentReactionRow;
+        Insert: Pick<CommentReactionRow, 'comment_id' | 'uid'>;
+        Update: Partial<CommentReactionRow>;
+        Relationships: [];
+      };
+      bookmark_collections: {
+        Row: BookmarkCollectionRow;
+        Insert: Pick<BookmarkCollectionRow, 'uid' | 'name'> & { is_private?: boolean };
+        Update: Partial<Pick<BookmarkCollectionRow, 'name' | 'is_private'>>;
+        Relationships: [];
+      };
+      bookmarks: {
+        Row: BookmarkRow;
+        Insert: Pick<BookmarkRow, 'uid' | 'post_id'> & {
+          collection_id?: string | null;
+          note?: string;
+        };
+        Update: Partial<Pick<BookmarkRow, 'collection_id' | 'note'>>;
+        Relationships: [];
+      };
+      post_shares: {
+        Row: PostShareRow;
+        Insert: Pick<PostShareRow, 'post_id' | 'channel'> & { uid?: string | null };
+        Update: Partial<PostShareRow>;
+        Relationships: [];
+      };
       reports: {
         Row: ReportRow;
         Insert: Pick<ReportRow, 'reporter_uid' | 'subject_type' | 'subject_id' | 'reason'> & {
@@ -400,6 +532,26 @@ export type Database = {
         Args: { p_limit: number; p_before: string | null };
         Returns: FeedCandidateRow[];
       };
+      toggle_reaction: {
+        Args: { p_post_id: string; p_reaction: DbReaction };
+        Returns: ToggleReactionRow[];
+      };
+      toggle_comment_reaction: {
+        Args: { p_comment_id: string };
+        Returns: ToggleCommentReactionRow[];
+      };
+      mark_answer: { Args: { p_comment_id: string }; Returns: boolean };
+      toggle_bookmark: {
+        Args: { p_post_id: string; p_collection_id?: string | null };
+        Returns: boolean;
+      };
+      record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
+      unread_notification_count: { Args: Record<never, never>; Returns: number };
+      mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      post_interaction_state: {
+        Args: { p_post_ids: string[] };
+        Returns: InteractionStateRow[];
+      };
     };
     Enums: {
       bsdc_role: DbRole;
@@ -410,6 +562,8 @@ export type Database = {
       bsdc_post_kind: DbPostKind;
       bsdc_post_status: DbPostStatus;
       bsdc_visibility: DbVisibility;
+      bsdc_reaction: DbReaction;
+      bsdc_notification_kind: DbNotificationKind;
     };
     CompositeTypes: Record<never, never>;
   };
