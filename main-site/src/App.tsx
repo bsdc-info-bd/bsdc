@@ -28,6 +28,9 @@ const TagPage = lazy(() => import('@/routes/TagPage'));
 const NotificationsPage = lazy(() => import('@/routes/NotificationsPage'));
 const BookmarksPage = lazy(() => import('@/routes/BookmarksPage'));
 const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
+const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
+const GroupPage = lazy(() => import('@/routes/GroupPage'));
+const EventsPage = lazy(() => import('@/routes/EventsPage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -73,6 +76,11 @@ const router = createBrowserRouter([
           { path: '/messages/:id', element: withSuspense(<MessagesPage />) },
         ],
       },
+
+      // Communities are public surfaces; privacy is enforced by the database.
+      { path: ROUTES.groups, element: withSuspense(<GroupsPage />) },
+      { path: '/g/:slug', element: withSuspense(<GroupPage />) },
+      { path: ROUTES.events, element: withSuspense(<EventsPage />) },
 
       // Public content permalinks.
       { path: '/p/:slug', element: withSuspense(<PostPage />) },

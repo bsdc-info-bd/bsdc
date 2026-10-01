@@ -416,6 +416,137 @@ export type ConversationInboxRow = {
   other_avatar: string | null;
 };
 
+export type DbGroupPrivacy = 'public' | 'private' | 'secret';
+export type DbGroupRole = 'owner' | 'admin' | 'moderator' | 'member';
+export type DbJoinStatus = 'pending' | 'approved' | 'rejected';
+export type DbRsvpStatus = 'going' | 'interested' | 'declined';
+export type DbEventMode = 'online' | 'in_person' | 'hybrid';
+
+export type GroupRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  privacy: DbGroupPrivacy;
+  avatar_url: string;
+  cover_url: string;
+  language: string;
+  rules: string;
+  owner_uid: string;
+  members_count: number;
+  posts_count: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GroupMemberRow = {
+  group_id: string;
+  uid: string;
+  role: DbGroupRole;
+  joined_at: string;
+  muted_until: string | null;
+};
+
+export type GroupJoinRequestRow = {
+  group_id: string;
+  uid: string;
+  status: DbJoinStatus;
+  message: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string;
+};
+
+export type ChannelRow = {
+  id: string;
+  group_id: string;
+  slug: string;
+  name: string;
+  topic: string;
+  position: number;
+  is_read_only: boolean;
+  created_at: string;
+};
+
+export type PageRow = {
+  id: string;
+  slug: string;
+  name: string;
+  category: string;
+  about: string;
+  avatar_url: string;
+  cover_url: string;
+  website: string;
+  owner_uid: string;
+  followers_count: number;
+  is_verified: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PageFollowerRow = { page_id: string; uid: string; created_at: string };
+
+export type EventRow = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  mode: DbEventMode;
+  venue: string;
+  city: string;
+  join_url: string;
+  cover_url: string;
+  starts_at: string;
+  ends_at: string;
+  timezone: string;
+  capacity: number | null;
+  host_uid: string;
+  group_id: string | null;
+  page_id: string | null;
+  going_count: number;
+  is_cancelled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventRsvpRow = {
+  event_id: string;
+  uid: string;
+  status: DbRsvpStatus;
+  created_at: string;
+};
+
+export type GroupDirectoryRow = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  privacy: DbGroupPrivacy;
+  avatar_url: string;
+  members_count: number;
+  posts_count: number;
+  my_role: DbGroupRole | null;
+  request_status: DbJoinStatus | null;
+};
+
+export type EventCalendarRow = {
+  id: string;
+  slug: string;
+  title: string;
+  mode: DbEventMode;
+  venue: string;
+  city: string;
+  cover_url: string;
+  starts_at: string;
+  ends_at: string;
+  capacity: number | null;
+  going_count: number;
+  group_id: string | null;
+  page_id: string | null;
+  my_status: DbRsvpStatus | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -519,6 +650,69 @@ export type Database = {
         Row: TopicAffinityRow;
         Insert: Pick<TopicAffinityRow, 'uid' | 'tag_slug'> & Partial<TopicAffinityRow>;
         Update: Partial<TopicAffinityRow>;
+        Relationships: [];
+      };
+      groups: {
+        Row: GroupRow;
+        Insert: Pick<GroupRow, 'slug' | 'name' | 'owner_uid'> & Partial<GroupRow>;
+        Update: Partial<
+          Pick<
+            GroupRow,
+            | 'name'
+            | 'description'
+            | 'privacy'
+            | 'avatar_url'
+            | 'cover_url'
+            | 'rules'
+            | 'language'
+            | 'is_archived'
+          >
+        >;
+        Relationships: [];
+      };
+      group_members: {
+        Row: GroupMemberRow;
+        Insert: Pick<GroupMemberRow, 'group_id' | 'uid'> & { role?: DbGroupRole };
+        Update: Partial<Pick<GroupMemberRow, 'role' | 'muted_until'>>;
+        Relationships: [];
+      };
+      group_join_requests: {
+        Row: GroupJoinRequestRow;
+        Insert: Pick<GroupJoinRequestRow, 'group_id' | 'uid'> & { message?: string };
+        Update: Partial<Pick<GroupJoinRequestRow, 'status' | 'message'>>;
+        Relationships: [];
+      };
+      channels: {
+        Row: ChannelRow;
+        Insert: Pick<ChannelRow, 'group_id' | 'slug' | 'name'> & Partial<ChannelRow>;
+        Update: Partial<Pick<ChannelRow, 'name' | 'topic' | 'position' | 'is_read_only'>>;
+        Relationships: [];
+      };
+      pages: {
+        Row: PageRow;
+        Insert: Pick<PageRow, 'slug' | 'name' | 'owner_uid'> & Partial<PageRow>;
+        Update: Partial<
+          Pick<PageRow, 'name' | 'about' | 'category' | 'avatar_url' | 'cover_url' | 'website'>
+        >;
+        Relationships: [];
+      };
+      page_followers: {
+        Row: PageFollowerRow;
+        Insert: Pick<PageFollowerRow, 'page_id' | 'uid'>;
+        Update: Partial<PageFollowerRow>;
+        Relationships: [];
+      };
+      events: {
+        Row: EventRow;
+        Insert: Pick<EventRow, 'slug' | 'title' | 'starts_at' | 'ends_at' | 'host_uid'> &
+          Partial<EventRow>;
+        Update: Partial<Omit<EventRow, 'id' | 'created_at' | 'going_count'>>;
+        Relationships: [];
+      };
+      event_rsvps: {
+        Row: EventRsvpRow;
+        Insert: Pick<EventRsvpRow, 'event_id' | 'uid'> & { status?: DbRsvpStatus };
+        Update: Partial<Pick<EventRsvpRow, 'status'>>;
         Relationships: [];
       };
       conversations: {
@@ -625,6 +819,30 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      create_group: {
+        Args: {
+          p_slug: string;
+          p_name: string;
+          p_description?: string;
+          p_privacy?: DbGroupPrivacy;
+          p_language?: string;
+        };
+        Returns: string;
+      };
+      join_group: { Args: { p_group_id: string; p_message?: string }; Returns: DbJoinStatus };
+      decide_join_request: {
+        Args: { p_group_id: string; p_uid: string; p_approve: boolean };
+        Returns: undefined;
+      };
+      leave_group: { Args: { p_group_id: string }; Returns: undefined };
+      set_group_role: {
+        Args: { p_group_id: string; p_uid: string; p_role: DbGroupRole };
+        Returns: undefined;
+      };
+      rsvp_event: { Args: { p_event_id: string; p_status: DbRsvpStatus }; Returns: number };
+      toggle_page_follow: { Args: { p_page_id: string }; Returns: boolean };
+      group_directory: { Args: { p_limit: number }; Returns: GroupDirectoryRow[] };
+      event_calendar: { Args: { p_limit: number }; Returns: EventCalendarRow[] };
       open_direct_conversation: { Args: { p_other_uid: string }; Returns: string };
       create_group_conversation: {
         Args: { p_title: string; p_members: string[] };
@@ -665,6 +883,11 @@ export type Database = {
       bsdc_conversation_kind: DbConversationKind;
       bsdc_message_kind: DbMessageKind;
       bsdc_member_role: DbMemberRole;
+      bsdc_group_privacy: DbGroupPrivacy;
+      bsdc_group_role: DbGroupRole;
+      bsdc_join_status: DbJoinStatus;
+      bsdc_rsvp_status: DbRsvpStatus;
+      bsdc_event_mode: DbEventMode;
     };
     CompositeTypes: Record<never, never>;
   };

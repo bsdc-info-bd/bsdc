@@ -1,4 +1,4 @@
-import { Home, Info, Mail, ScrollText } from 'lucide-react';
+import { CalendarDays, Home, Info, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { NavLink } from 'react-router-dom';
 import { ROUTES } from '@/lib/site';
@@ -6,8 +6,8 @@ import { ROUTES } from '@/lib/site';
 const ITEMS = [
   { to: ROUTES.home, labelKey: 'nav.home', Icon: Home },
   { to: ROUTES.about, labelKey: 'nav.about', Icon: Info },
-  { to: ROUTES.guidelines, labelKey: 'nav.guidelines', Icon: ScrollText },
-  { to: ROUTES.contact, labelKey: 'nav.contact', Icon: Mail },
+  { to: ROUTES.groups, labelKey: 'nav.groups', Icon: Users },
+  { to: ROUTES.events, labelKey: 'nav.events', Icon: CalendarDays },
 ] as const;
 
 /** Mobile tab bar: the app-like navigation surface below 768px. */

@@ -13,6 +13,8 @@ import { AccountMenu } from './AccountMenu';
 const NAV_ITEMS = [
   { to: ROUTES.home, labelKey: 'nav.home' },
   { to: ROUTES.about, labelKey: 'nav.about' },
+  { to: ROUTES.groups, labelKey: 'nav.groups' },
+  { to: ROUTES.events, labelKey: 'nav.events' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
 ] as const;

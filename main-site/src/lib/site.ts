@@ -43,6 +43,8 @@ export const ROUTES = {
   notifications: '/notifications',
   bookmarks: '/bookmarks',
   messages: '/messages',
+  groups: '/groups',
+  events: '/events',
 } as const;
 
 /** Post permalink: /p/slug. */
@@ -53,6 +55,11 @@ export function postPath(slug: string): string {
 /** One conversation: /messages/id. */
 export function conversationPath(conversationId: string): string {
   return `/messages/${conversationId}`;
+}
+
+/** Group permalink: /g/slug. */
+export function groupPath(slug: string): string {
+  return `/g/${slug}`;
 }
 
 /** Tag archive: /tag/slug. */

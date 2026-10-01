@@ -12,7 +12,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 5 | Feed and 4-stage ranking engine | Done |
 | 6 | Social graph and interactions | Done |
 | 7 | BSDC Messenger | Done |
-| 8 | Communities: groups, channels, pages, events | Pending |
+| 8 | Communities: groups, channels, pages, events | Done |
 | 9 | Jobs, freelance, projects, snippets, playground | Pending |
 | 10 | Search and notifications | Pending |
 | 11 | Marketplace part 1 (customer) | Pending |
@@ -248,6 +248,37 @@ working, wired-up features — never scaffolding for its own sake.
   button on every other member's profile.
 
 
+## Response 8 scope (delivered)
+
+- `supabase/migrations/0011_communities.sql`: `groups` with three privacy
+  levels, `group_members` with a four-rank role ladder, `group_join_requests`,
+  `channels` (and a nullable `posts.channel_id`, so a post can have a home
+  without disturbing the ordinary feed), `pages` with followers rather than
+  members, `events` and `event_rsvps`.
+- Privacy is a database concept, not a UI one: `bsdc.can_see_group()` makes a
+  secret group invisible to outsiders, a private group visible but closed, and
+  a public group readable. Every policy in `0012_communities_rls.sql` is built
+  on it, plus `bsdc.can_moderate_group()` for the role ladder.
+- `join_group()` encodes the three behaviours — public joins instantly,
+  private queues a request, secret refuses — and `decide_join_request()` both
+  admits the member and notifies them. `leave_group()` refuses to let the last
+  owner walk out and leave a group headless.
+- `rsvp_event()` enforces capacity server-side and only `going` answers count
+  towards `going_count`, so a limit means something. `create_group()` seeds the
+  owner's membership and a general channel, so a new group is never an empty
+  shell.
+- `group_directory()` and `event_calendar()` each return a whole screen in one
+  round trip, including the viewer's own role, pending request or RSVP.
+- Pure, tested client logic: `joinAction()` mirrors the database's join rules
+  so the button can never promise something the server will refuse;
+  `sortMembers()` ranks by role then seniority; `isEventFull()`,
+  `isEventLive()` and `groupEventsByDay()` drive the calendar.
+- UI: `/groups` directory with contextual join controls, `/g/:slug` with
+  channels, members, about and a moderator-only requests queue, and `/events`
+  grouped by day with one-tap RSVP and `Event` JSON-LD. Groups and Events are
+  now first-class destinations in the app bar and the mobile tab bar.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -305,3 +336,11 @@ O-012, O-013, O-014, O-015, O-016, O-017, O-018, O-019, O-020, O-021, O-022,
 O-023, O-024, O-025,
 P-001, P-002, P-003, P-004, P-005, P-006, P-007, P-008,
 X-018, X-019, V-019, U-021, Z-007.
+
+Response 8 adds:
+Q-001, Q-002, Q-003, Q-004, Q-005, Q-006, Q-007, Q-008, Q-009, Q-010, Q-011,
+Q-012, Q-013, Q-014, Q-015, Q-016, Q-017, Q-018, Q-019, Q-020, Q-021, Q-022,
+R-001, R-002, R-003, R-004, R-005, R-006, R-007, R-008, R-009, R-010,
+S-001, S-002, S-003, S-004, S-005, S-006, S-007, S-008, S-009, S-010, S-011,
+S-012,
+X-020, X-021, V-020, U-022, Z-008.
