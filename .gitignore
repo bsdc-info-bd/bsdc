@@ -1,0 +1,48 @@
+# dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# builds
+dist/
+dist-ssr/
+build/
+.output/
+.vite/
+*.tsbuildinfo
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*service-account*.json
+*-private-key.json
+google-services.local.json
+
+# generated brand assets (produced by npm run brand)
+*/public/icons/
+*/public/og/
+*/public/favicon-*.png
+*/public/apple-touch-icon.png
+
+# android
+android-app/android/
+android-app/.gradle/
+*.keystore
+*.jks
+*.apk
+*.aab
+
+# tooling caches
+coverage/
+playwright-report/
+test-results/
+.eslintcache
+.cache/
+.DS_Store
+Thumbs.db
+
+# editors
+.idea/
+.vscode/*
+!.vscode/extensions.json

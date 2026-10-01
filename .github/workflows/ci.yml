@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  discover:
+    name: Discover apps
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.find.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        shell: bash
+        run: |
+          apps=$(find . -maxdepth 2 -name package.json -not -path '*/node_modules/*' \
+            | sed 's|^\./||; s|/package.json$||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "Detected apps: $apps"
+
+  quality:
+    name: Quality (${{ matrix.app }})
+    needs: discover
+    if: needs.discover.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.discover.outputs.apps) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npx prettier --check "src/**/*.{ts,tsx,css}"
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle size budget (250 KB gzip of initial JS)
+        shell: bash
+        run: |
+          total=0
+          for file in dist/assets/index-*.js dist/assets/vendor-*.js; do
+            [ -f "$file" ] || continue
+            size=$(gzip -c "$file" | wc -c)
+            total=$((total + size))
+            echo "$(basename "$file"): $((size / 1024)) KB gzip"
+          done
+          echo "Initial JS total: $((total / 1024)) KB gzip"
+          if [ "$total" -gt 256000 ]; then
+            echo "::error::Initial JavaScript exceeds the 250 KB gzip budget"
+            exit 1
+          fi

@@ -1,0 +1,125 @@
+/* ---------------------------------------------------------------------------
+   BSDC complex component styles that are clearer as real CSS than as utility
+   soup: the app shell chrome, route progress bar, toast surface and print
+   rules. Primitive-level styling stays in the design-system components.
+   --------------------------------------------------------------------------- */
+
+@layer components {
+  .bsdc-app-bar {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 40;
+    inline-size: 100%;
+    border-block-end: 1px solid var(--bsdc-border);
+  }
+
+  .bsdc-bottom-nav {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 40;
+    border-block-start: 1px solid var(--bsdc-border);
+  }
+
+  .bsdc-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1 1 0;
+    min-inline-size: 0;
+    padding-block: 6px;
+    color: var(--bsdc-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .bsdc-nav-item[aria-current='page'] {
+    color: var(--bsdc-green-700);
+  }
+
+  .bsdc-nav-item > span {
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bsdc-route-progress {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    block-size: 2px;
+    z-index: 60;
+    background: linear-gradient(90deg, var(--bsdc-green-500), var(--bsdc-blue));
+    transition: inline-size 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Command palette (cmdk) surface. */
+  .bsdc-cmdk [cmdk-input] {
+    inline-size: 100%;
+    background: transparent;
+    border: 0;
+    outline: none;
+    font-size: 16px;
+    color: var(--bsdc-text);
+    padding-block: 14px;
+  }
+
+  .bsdc-cmdk [cmdk-item] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--bsdc-text);
+  }
+
+  .bsdc-cmdk [cmdk-item][data-selected='true'] {
+    background: var(--bsdc-surface-2);
+  }
+
+  .bsdc-cmdk [cmdk-group-heading] {
+    padding: 10px 12px 4px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bsdc-text-muted);
+  }
+
+  .bsdc-cmdk [cmdk-empty] {
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--bsdc-text-muted);
+    font-size: 14px;
+  }
+}
+
+/* Print: articles, order labels, certificates and notices. */
+@media print {
+  .bsdc-app-bar,
+  .bsdc-bottom-nav,
+  .bsdc-no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 10px;
+    color: #444444;
+  }
+}

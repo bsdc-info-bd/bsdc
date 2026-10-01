@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+coverage/
+.eslintcache
+public/icons/
+public/og/
+public/favicon-*.png
+public/apple-touch-icon.png
+public/favicon.ico
+dev-dist/

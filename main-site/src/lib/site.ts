@@ -1,0 +1,60 @@
+/**
+ * BSDC official fact sheet. These values are the single source of truth for
+ * branding, SEO and footer links across the main site.
+ */
+export const SITE = {
+  name: 'Bangladesh Software Development Community',
+  shortName: 'BSDC',
+  tagline: {
+    en: 'The open developer community of Bangladesh',
+    bn: 'বাংলাদেশের উন্মুক্ত ডেভেলপার কমিউনিটি',
+  },
+  url: 'https://www.bsdc.info.bd',
+  altUrl: 'https://bsdc.pages.dev',
+  repository: 'https://github.com/bsdc-info-bd/bsdc',
+  parentOrganization: 'RRC Development',
+  emails: {
+    primary: 'hello@bsdc.info.bd',
+    secondary: 'bsdc.rrc@gmail.com',
+  },
+  owner: {
+    name: 'Rizwan Rahim Chowdhury',
+    role: { en: 'Founder & CEO', bn: 'প্রতিষ্ঠাতা ও সিইও' },
+    site: 'https://rrc.cloud.bsdc.info.bd',
+  },
+  androidPackage: 'bd.info.bsdc.app',
+  launchYear: 2026,
+} as const;
+
+/** Internal routes that exist today. Extended as modules are delivered. */
+export const ROUTES = {
+  home: '/',
+  about: '/about',
+  guidelines: '/guidelines',
+  contact: '/contact',
+  offline: '/offline',
+} as const;
+
+export type RouteKey = keyof typeof ROUTES;
+
+/** RRC ecosystem properties — link partners, not part of this codebase. */
+export const ECOSYSTEM_LINKS = [
+  { href: 'https://rrc.bsdc.info.bd', labelKey: 'footer.ecosystem.rrc' },
+  { href: 'https://cloud.bsdc.info.bd', labelKey: 'footer.ecosystem.cloud' },
+  { href: 'https://news.bsdc.info.bd', labelKey: 'footer.ecosystem.news' },
+  { href: 'https://wiki.bsdc.info.bd', labelKey: 'footer.ecosystem.wiki' },
+  { href: 'https://docs.bsdc.info.bd', labelKey: 'footer.ecosystem.docs' },
+] as const;
+
+/** The seven product pillars presented on the home page. */
+export const PILLARS = [
+  'community',
+  'knowledge',
+  'opportunity',
+  'commerce',
+  'advertising',
+  'trust',
+  'reach',
+] as const;
+
+export type Pillar = (typeof PILLARS)[number];
