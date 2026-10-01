@@ -25,7 +25,7 @@
         ".read": "auth != null && auth.token.legalAcceptanceVersion === '2026-09-30' && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true",
         "$messageId": {
           ".write": "auth != null && auth.token.legalAcceptanceVersion === '2026-09-30' && root.child('conversations').child($conversationId).child('participants').child(auth.uid).val() === true && ((!data.exists() && newData.child('senderId').val() === auth.uid) || (data.child('senderId').val() === auth.uid && newData.child('senderId').val() === auth.uid))",
-          ".validate": "newData.hasChildren(['senderId', 'kind', 'sentAt']) && newData.child('kind').val() in ['text', 'image', 'audio'] && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 4000))"
+          ".validate": "newData.hasChildren(['senderId', 'kind', 'sentAt']) && (newData.child('kind').val() === 'text' || newData.child('kind').val() === 'image' || newData.child('kind').val() === 'audio') && (!newData.child('body').exists() || (newData.child('body').isString() && newData.child('body').val().length <= 4000))"
         },
         ".indexOn": ["sentAt"]
       }
