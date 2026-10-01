@@ -45,6 +45,10 @@ export const ROUTES = {
   messages: '/messages',
   groups: '/groups',
   events: '/events',
+  jobs: '/jobs',
+  freelance: '/freelance',
+  projects: '/projects',
+  playground: '/playground',
 } as const;
 
 /** Post permalink: /p/slug. */

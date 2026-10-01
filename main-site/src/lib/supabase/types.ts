@@ -547,6 +547,139 @@ export type EventCalendarRow = {
   my_status: DbRsvpStatus | null;
 };
 
+export type DbJobType = 'full_time' | 'part_time' | 'contract' | 'internship';
+export type DbWorkMode = 'onsite' | 'remote' | 'hybrid';
+export type DbListingStatus = 'draft' | 'open' | 'paused' | 'closed';
+export type DbApplicationStatus =
+  | 'submitted'
+  | 'reviewing'
+  | 'shortlisted'
+  | 'rejected'
+  | 'hired'
+  | 'withdrawn';
+export type DbExperienceLevel = 'entry' | 'junior' | 'mid' | 'senior' | 'lead';
+export type DbSketchLanguage = 'javascript' | 'typescript' | 'html' | 'css' | 'sql';
+
+export type JobRow = {
+  id: string;
+  slug: string;
+  title: string;
+  company: string;
+  company_page_id: string | null;
+  description: string;
+  job_type: DbJobType;
+  work_mode: DbWorkMode;
+  level: DbExperienceLevel;
+  city: string;
+  country: string;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  salary_period: string;
+  skills: string[];
+  apply_url: string;
+  status: DbListingStatus;
+  poster_uid: string;
+  applications_count: number;
+  views_count: number;
+  expires_at: string | null;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GigRow = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  budget_min: number | null;
+  budget_max: number | null;
+  currency: string;
+  is_hourly: boolean;
+  duration_days: number | null;
+  skills: string[];
+  status: DbListingStatus;
+  client_uid: string;
+  proposals_count: number;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JobApplicationRow = {
+  id: string;
+  job_id: string;
+  applicant_uid: string;
+  cover_letter: string;
+  resume_url: string;
+  status: DbApplicationStatus;
+  decided_at: string | null;
+  created_at: string;
+};
+
+export type GigProposalRow = {
+  id: string;
+  gig_id: string;
+  freelancer_uid: string;
+  pitch: string;
+  bid_amount: number;
+  delivery_days: number;
+  status: DbApplicationStatus;
+  created_at: string;
+};
+
+export type ProjectRow = {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  description: string;
+  repo_url: string;
+  demo_url: string;
+  cover_url: string;
+  tech: string[];
+  license: string;
+  looking_for_contributors: boolean;
+  owner_uid: string;
+  stars_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProjectStarRow = { project_id: string; uid: string; created_at: string };
+
+export type PlaygroundSketchRow = {
+  id: string;
+  uid: string;
+  title: string;
+  language: DbSketchLanguage;
+  code: string;
+  is_public: boolean;
+  forked_from: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type JobBoardRow = {
+  id: string;
+  slug: string;
+  title: string;
+  company: string;
+  job_type: DbJobType;
+  work_mode: DbWorkMode;
+  level: DbExperienceLevel;
+  city: string;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  salary_period: string;
+  skills: string[];
+  applications_count: number;
+  published_at: string | null;
+  my_status: DbApplicationStatus | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -650,6 +783,51 @@ export type Database = {
         Row: TopicAffinityRow;
         Insert: Pick<TopicAffinityRow, 'uid' | 'tag_slug'> & Partial<TopicAffinityRow>;
         Update: Partial<TopicAffinityRow>;
+        Relationships: [];
+      };
+      jobs: {
+        Row: JobRow;
+        Insert: Pick<JobRow, 'slug' | 'title' | 'company' | 'poster_uid'> & Partial<JobRow>;
+        Update: Partial<Omit<JobRow, 'id' | 'created_at' | 'applications_count' | 'views_count'>>;
+        Relationships: [];
+      };
+      gigs: {
+        Row: GigRow;
+        Insert: Pick<GigRow, 'slug' | 'title' | 'client_uid'> & Partial<GigRow>;
+        Update: Partial<Omit<GigRow, 'id' | 'created_at' | 'proposals_count'>>;
+        Relationships: [];
+      };
+      job_applications: {
+        Row: JobApplicationRow;
+        Insert: Pick<JobApplicationRow, 'job_id' | 'applicant_uid'> & Partial<JobApplicationRow>;
+        Update: Partial<Pick<JobApplicationRow, 'status'>>;
+        Relationships: [];
+      };
+      gig_proposals: {
+        Row: GigProposalRow;
+        Insert: Pick<
+          GigProposalRow,
+          'gig_id' | 'freelancer_uid' | 'pitch' | 'bid_amount' | 'delivery_days'
+        >;
+        Update: Partial<Pick<GigProposalRow, 'status'>>;
+        Relationships: [];
+      };
+      projects: {
+        Row: ProjectRow;
+        Insert: Pick<ProjectRow, 'slug' | 'name' | 'owner_uid'> & Partial<ProjectRow>;
+        Update: Partial<Omit<ProjectRow, 'id' | 'created_at' | 'stars_count'>>;
+        Relationships: [];
+      };
+      project_stars: {
+        Row: ProjectStarRow;
+        Insert: Pick<ProjectStarRow, 'project_id' | 'uid'>;
+        Update: Partial<ProjectStarRow>;
+        Relationships: [];
+      };
+      playground_sketches: {
+        Row: PlaygroundSketchRow;
+        Insert: Pick<PlaygroundSketchRow, 'uid'> & Partial<PlaygroundSketchRow>;
+        Update: Partial<Pick<PlaygroundSketchRow, 'title' | 'language' | 'code' | 'is_public'>>;
         Relationships: [];
       };
       groups: {
@@ -819,6 +997,30 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      apply_to_job: {
+        Args: { p_job_id: string; p_cover_letter: string; p_resume_url?: string };
+        Returns: string;
+      };
+      withdraw_application: { Args: { p_application_id: string }; Returns: undefined };
+      decide_application: {
+        Args: { p_application_id: string; p_status: DbApplicationStatus };
+        Returns: undefined;
+      };
+      submit_proposal: {
+        Args: {
+          p_gig_id: string;
+          p_pitch: string;
+          p_bid_amount: number;
+          p_delivery_days: number;
+        };
+        Returns: string;
+      };
+      toggle_project_star: { Args: { p_project_id: string }; Returns: boolean };
+      job_board: {
+        Args: { p_limit: number; p_work_mode?: DbWorkMode | null; p_skill?: string | null };
+        Returns: JobBoardRow[];
+      };
+      increment_job_view: { Args: { p_job_id: string }; Returns: undefined };
       create_group: {
         Args: {
           p_slug: string;
@@ -888,6 +1090,11 @@ export type Database = {
       bsdc_join_status: DbJoinStatus;
       bsdc_rsvp_status: DbRsvpStatus;
       bsdc_event_mode: DbEventMode;
+      bsdc_job_type: DbJobType;
+      bsdc_work_mode: DbWorkMode;
+      bsdc_listing_status: DbListingStatus;
+      bsdc_application_status: DbApplicationStatus;
+      bsdc_experience_level: DbExperienceLevel;
     };
     CompositeTypes: Record<never, never>;
   };

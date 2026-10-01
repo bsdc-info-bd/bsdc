@@ -13,7 +13,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 6 | Social graph and interactions | Done |
 | 7 | BSDC Messenger | Done |
 | 8 | Communities: groups, channels, pages, events | Done |
-| 9 | Jobs, freelance, projects, snippets, playground | Pending |
+| 9 | Jobs, freelance, projects, snippets, playground | Done |
 | 10 | Search and notifications | Pending |
 | 11 | Marketplace part 1 (customer) | Pending |
 | 12 | Marketplace part 2 (vendor) | Pending |
@@ -279,6 +279,47 @@ working, wired-up features — never scaffolding for its own sake.
   now first-class destinations in the app bar and the mobile tab bar.
 
 
+## Response 9 scope (delivered)
+
+- `supabase/migrations/0013_opportunities.sql`: `jobs`, `gigs`,
+  `job_applications`, `gig_proposals`, `projects`, `project_stars` and
+  `playground_sketches`, with five new enums (`bsdc_job_type`,
+  `bsdc_work_mode`, `bsdc_listing_status`, `bsdc_application_status`,
+  `bsdc_experience_level`).
+- Money rules live in Postgres, not in a form handler:
+  `jobs_salary_range_ordered` and `gigs_budget_ordered` reject an upper bound
+  below the lower one, and `jobs_remote_or_city` requires a city unless the
+  role is remote. A listing can state no figure at all; nothing is invented
+  to fill the gap.
+- An application cannot be duplicated (`unique (job_id, applicant_uid)`,
+  `unique (gig_id, freelancer_uid)`) and cannot be inserted directly: there is
+  no INSERT policy on `job_applications` or `gig_proposals`, so `apply_to_job()`
+  and `submit_proposal()` are the only write paths. Both refuse
+  self-application and closed or expired listings, and notify the counterpart
+  through `bsdc.notify()`.
+- An application row is readable only by the applicant, the owner of the
+  listing and staff — other candidates cannot see who else applied, only how
+  many did.
+- Counter columns (`applications_count`, `proposals_count`, `views_count`,
+  `stars_count`) are trigger-maintained and revoked from `authenticated`, so a
+  client cannot write its own numbers.
+- `job_board(limit, work_mode, skill)` returns a whole screen in one round
+  trip including the viewer's own `my_status`, and is granted to `anon` so the
+  board is indexable. `toggle_project_star()` is idempotent per viewer.
+- Pure, tested client logic: `formatSalaryRange()` (collapses an equal band,
+  omits what was never stated), `canWithdraw()`/`isApplied()`/`isDecided()`,
+  `filterJobs()` and `skillFacets()`.
+- The playground never executes code on a server. `buildSandboxDocument()`
+  builds a document for an iframe sandboxed to `allow-scripts` only: no
+  same-origin, no storage, no session access. TypeScript annotations are not
+  stripped, so a TS sketch reports a genuine syntax error instead of
+  pretending to run.
+- UI: `/jobs` with server-side mode and skill facets plus instant text
+  narrowing and `JobPosting` JSON-LD, `/freelance` with budgets and sealed
+  proposals, `/projects` with optimistic starring, and `/playground` with a
+  sketch library for signed-in members. Jobs and Projects joined the app bar.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -344,3 +385,13 @@ R-001, R-002, R-003, R-004, R-005, R-006, R-007, R-008, R-009, R-010,
 S-001, S-002, S-003, S-004, S-005, S-006, S-007, S-008, S-009, S-010, S-011,
 S-012,
 X-020, X-021, V-020, U-022, Z-008.
+
+Response 9 adds:
+T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
+T-012, T-013, T-014, T-015, T-016, T-017, T-018, T-019, T-020, T-021, T-022,
+T-023, T-024, T-025,
+AA-001, AA-002, AA-003, AA-004, AA-005, AA-006, AA-007, AA-008, AA-009,
+AA-010, AA-011, AA-012,
+AB-001, AB-002, AB-003, AB-004, AB-005, AB-006, AB-007, AB-008,
+AC-001, AC-002, AC-003, AC-004, AC-005, AC-006,
+X-022, X-023, V-023, U-023, Z-009.

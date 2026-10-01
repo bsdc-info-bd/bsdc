@@ -31,6 +31,10 @@ const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
 const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
 const GroupPage = lazy(() => import('@/routes/GroupPage'));
 const EventsPage = lazy(() => import('@/routes/EventsPage'));
+const JobsPage = lazy(() => import('@/routes/JobsPage'));
+const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
+const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
+const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -81,6 +85,12 @@ const router = createBrowserRouter([
       { path: ROUTES.groups, element: withSuspense(<GroupsPage />) },
       { path: '/g/:slug', element: withSuspense(<GroupPage />) },
       { path: ROUTES.events, element: withSuspense(<EventsPage />) },
+
+      // Opportunity surfaces: public to read, gated to act on.
+      { path: ROUTES.jobs, element: withSuspense(<JobsPage />) },
+      { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
+      { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
+      { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },
 
       // Public content permalinks.
       { path: '/p/:slug', element: withSuspense(<PostPage />) },
