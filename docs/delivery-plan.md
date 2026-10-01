@@ -15,7 +15,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 8 | Communities: groups, channels, pages, events | Done |
 | 9 | Jobs, freelance, projects, snippets, playground | Done |
 | 10 | Search, notifications and learning | Done |
-| 11 | Marketplace part 1 (customer) | Pending |
+| 11 | Marketplace part 1 (customer) | Done |
 | 12 | Marketplace part 2 (vendor) | Pending |
 | 13 | Ads system | Pending |
 | 14 | Admin panel core and plugin system | Pending |
@@ -369,6 +369,51 @@ working, wired-up features — never scaffolding for its own sake.
   command palette.
 
 
+## Response 11 scope (delivered)
+
+- `supabase/migrations/0018_marketplace.sql` and `0019_marketplace_rls.sql`:
+  `shops`, `products`, `carts`, `cart_items`, `addresses`, `orders`,
+  `order_items`, `wishlist_items` and `product_reviews`, with five new enums.
+- All money is an integer number of poisha. There is no floating point in the
+  schema and none in the client either; `formatMoney()` is the single place
+  that turns poisha into something a person reads.
+- **A client never sends an amount.** `place_order()` reads prices from the
+  product rows and shipping from the shop row at the moment of checkout; the
+  browser contributes an address, a payment method and quantities. `orders`
+  carries `check (total = subtotal + shipping - discount)` and `order_items`
+  carries `check (line_total = unit_price * quantity)`, so an order that does
+  not add up cannot be stored.
+- **Stock cannot be oversold.** Each product row is taken `for update` inside
+  the same transaction that writes the order, so two buyers racing for the
+  last unit are serialised; the loser gets "only N left of X" rather than a
+  confirmed order that cannot be filled. `cancel_order()` returns the stock
+  to the shelf in the same transaction and reopens an `out_of_stock` product.
+- **Only a delivered purchase can be reviewed.** `product_reviews` has no
+  insert policy; `submit_review()` looks for a delivered order containing
+  that product before it will write anything, and `unique (product_id, uid)`
+  makes it one review per buyer, editable but not repeatable.
+- Prices and titles are *copied* onto an order, not referenced, so a shop
+  changing its catalogue tomorrow cannot rewrite what a customer agreed to
+  today. Rating sums, sold counts and order counts are trigger-maintained and
+  revoked from `authenticated`.
+- A cart lives in Postgres, keyed one per member, and `my_cart()` returns
+  live prices with the quantity measured against current stock — so a cart
+  cannot quietly promise a price the shop has since changed.
+- Addresses are private to the member until checkout copies them onto an
+  order the shop must fulfil; `addresses.phone` is checked against the real
+  Bangladeshi operator range and `isBangladeshiPhone()` mirrors it exactly.
+- Pure, tested client logic: `formatMoney()`, `discountPercent()` (refuses a
+  "discount" that raises the price), `averageRating()` (null, never a fake
+  zero), `purchaseCeiling()`, `cartTotals()` (shipping charged once per shop
+  and waived at the shop's threshold), `canCheckout()`, `groupByShop()`,
+  `canCancelOrder()`, `canReviewOrder()`, `orderStepIndex()`, `isPostcode()`.
+- UI: `/shop` with server-side sorting and category facets plus `ItemList`
+  JSON-LD, `/shop/:slug` with `Product`, `Offer` and `AggregateRating` JSON-LD
+  and verified-purchase reviews, `/cart` grouped by shop, `/checkout` with
+  address book and payment method, `/orders` with a progress track and
+  cancellation. A cart badge joined the app bar.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -455,3 +500,13 @@ AF-001, AF-002, AF-003, AF-004, AF-005, AF-006, AF-007, AF-008, AF-009,
 AF-010, AF-011, AF-012,
 AG-001, AG-002, AG-003, AG-004, AG-005, AG-006,
 X-024, X-025, V-024, V-025, U-024, Z-010.
+
+Response 11 adds:
+AH-001, AH-002, AH-003, AH-004, AH-005, AH-006, AH-007, AH-008, AH-009,
+AH-010, AH-011, AH-012, AH-013, AH-014, AH-015, AH-016, AH-017, AH-018,
+AH-019, AH-020, AH-021, AH-022, AH-023, AH-024, AH-025,
+AI-001, AI-002, AI-003, AI-004, AI-005, AI-006, AI-007, AI-008, AI-009,
+AI-010, AI-011, AI-012, AI-013, AI-014, AI-015,
+AJ-001, AJ-002, AJ-003, AJ-004, AJ-005, AJ-006, AJ-007, AJ-008,
+AK-001, AK-002, AK-003, AK-004, AK-005, AK-006,
+X-026, X-027, V-026, U-025, Z-011.

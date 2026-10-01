@@ -36,6 +36,11 @@ const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 const SearchPage = lazy(() => import('@/routes/SearchPage'));
+const ShopPage = lazy(() => import('@/routes/ShopPage'));
+const ProductPage = lazy(() => import('@/routes/ProductPage'));
+const CartPage = lazy(() => import('@/routes/CartPage'));
+const CheckoutPage = lazy(() => import('@/routes/CheckoutPage'));
+const OrdersPage = lazy(() => import('@/routes/OrdersPage'));
 const LearnPage = lazy(() => import('@/routes/LearnPage'));
 const CoursePage = lazy(() => import('@/routes/CoursePage'));
 const VerifyCertificatePage = lazy(() => import('@/routes/VerifyCertificatePage'));
@@ -97,6 +102,13 @@ const router = createBrowserRouter([
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },
 
       { path: ROUTES.search, element: withSuspense(<SearchPage />) },
+
+      // Marketplace, customer side. The cart and checkout are private.
+      { path: ROUTES.shop, element: withSuspense(<ShopPage />) },
+      { path: '/shop/:slug', element: withSuspense(<ProductPage />) },
+      { path: ROUTES.cart, element: withSuspense(<CartPage />) },
+      { path: ROUTES.checkout, element: withSuspense(<CheckoutPage />) },
+      { path: ROUTES.orders, element: withSuspense(<OrdersPage />) },
 
       // Learning. Certificate verification is public and needs no session.
       { path: ROUTES.learn, element: withSuspense(<LearnPage />) },

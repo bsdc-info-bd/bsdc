@@ -49,6 +49,10 @@ export const ROUTES = {
   freelance: '/freelance',
   projects: '/projects',
   playground: '/playground',
+  shop: '/shop',
+  cart: '/cart',
+  checkout: '/checkout',
+  orders: '/orders',
   search: '/search',
   learn: '/learn',
   verifyCertificate: '/verify',
@@ -67,6 +71,11 @@ export function conversationPath(conversationId: string): string {
 /** Group permalink: /g/slug. */
 export function groupPath(slug: string): string {
   return `/g/${slug}`;
+}
+
+/** Product permalink: /shop/slug. */
+export function productPath(slug: string): string {
+  return `/shop/${slug}`;
 }
 
 /** Course permalink: /learn/slug. */

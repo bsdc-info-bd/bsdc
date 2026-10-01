@@ -1,8 +1,9 @@
-import { Bell, MessageSquare, PenSquare, Search } from 'lucide-react';
+import { Bell, MessageSquare, PenSquare, Search, ShoppingCart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
 import { useUnreadNotificationCount } from '@/hooks/use-interactions';
+import { useCart } from '@/hooks/use-market';
 import { useUnreadMessageCount } from '@/hooks/use-messaging';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: ROUTES.events, labelKey: 'nav.events' },
   { to: ROUTES.learn, labelKey: 'nav.learn' },
   { to: ROUTES.jobs, labelKey: 'nav.jobs' },
+  { to: ROUTES.shop, labelKey: 'nav.shop' },
   { to: ROUTES.projects, labelKey: 'nav.projects' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
@@ -72,6 +74,7 @@ export function AppBar() {
               </span>
             </Link>
           ) : null}
+          {signedIn ? <CartLink /> : null}
           {signedIn ? <MessagesLink /> : null}
           {signedIn ? <NotificationBell /> : null}
           <IconButton
@@ -85,6 +88,31 @@ export function AppBar() {
         </div>
       </div>
     </header>
+  );
+}
+
+/** Cart with the number of items currently reserved in it. */
+function CartLink() {
+  const { t } = useTranslation();
+  const cart = useCart();
+  const count = cart.totals.itemCount;
+
+  return (
+    <Link
+      to={ROUTES.cart}
+      aria-label={t('cart.title')}
+      title={t('cart.title')}
+      className="relative"
+    >
+      <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
+        <ShoppingCart size={20} aria-hidden="true" />
+      </span>
+      {count > 0 ? (
+        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
+          {count > 99 ? '99+' : count}
+        </span>
+      ) : null}
+    </Link>
   );
 }
 

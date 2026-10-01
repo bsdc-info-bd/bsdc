@@ -901,6 +901,202 @@ export type SearchLogRow = {
   searched_at: string;
 };
 
+export type DbShopStatus = 'pending' | 'active' | 'suspended' | 'closed';
+export type DbProductStatus = 'draft' | 'active' | 'out_of_stock' | 'archived';
+export type DbOrderStatus =
+  | 'pending'
+  | 'confirmed'
+  | 'packed'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded';
+export type DbPaymentMethod = 'cash_on_delivery' | 'bkash' | 'nagad' | 'card' | 'bank';
+export type DbPaymentStatus = 'unpaid' | 'pending' | 'paid' | 'refunded' | 'failed';
+
+export type ShopRow = {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  about: string;
+  logo_url: string;
+  owner_uid: string;
+  status: DbShopStatus;
+  city: string;
+  shipping_flat: number;
+  free_shipping_over: number | null;
+  rating_sum: number;
+  rating_count: number;
+  orders_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductRow = {
+  id: string;
+  shop_id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  description: string;
+  images: string[];
+  category: string;
+  tags: string[];
+  price: number;
+  price_original: number | null;
+  currency: string;
+  stock: number;
+  is_digital: boolean;
+  max_per_order: number;
+  status: DbProductStatus;
+  rating_sum: number;
+  rating_count: number;
+  sold_count: number;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CartRow = {
+  id: string;
+  uid: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CartItemRow = {
+  id: string;
+  cart_id: string;
+  product_id: string;
+  quantity: number;
+  added_at: string;
+};
+
+export type AddressRow = {
+  id: string;
+  uid: string;
+  label: string;
+  recipient: string;
+  phone: string;
+  line1: string;
+  line2: string;
+  city: string;
+  district: string;
+  postcode: string;
+  is_default: boolean;
+  created_at: string;
+};
+
+export type OrderRow = {
+  id: string;
+  code: string;
+  uid: string;
+  shop_id: string;
+  status: DbOrderStatus;
+  payment_method: DbPaymentMethod;
+  payment_status: DbPaymentStatus;
+  subtotal: number;
+  shipping: number;
+  discount: number;
+  total: number;
+  currency: string;
+  recipient: string;
+  phone: string;
+  address_line: string;
+  city: string;
+  note: string;
+  placed_at: string;
+  confirmed_at: string | null;
+  delivered_at: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string;
+  updated_at: string;
+};
+
+export type OrderItemRow = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  title: string;
+  unit_price: number;
+  quantity: number;
+  line_total: number;
+};
+
+export type WishlistItemRow = {
+  uid: string;
+  product_id: string;
+  added_at: string;
+};
+
+export type ProductReviewRow = {
+  id: string;
+  product_id: string;
+  uid: string;
+  order_id: string;
+  rating: number;
+  body: string;
+  created_at: string;
+};
+
+export type CartLineRow = {
+  product_id: string;
+  slug: string;
+  title: string;
+  image_url: string;
+  unit_price: number;
+  currency: string;
+  quantity: number;
+  available: number;
+  line_total: number;
+  shop_id: string;
+  shop_name: string;
+  in_stock: boolean;
+};
+
+export type CatalogProductRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  image_url: string;
+  price: number;
+  price_original: number | null;
+  currency: string;
+  stock: number;
+  is_digital: boolean;
+  category: string;
+  rating_sum: number;
+  rating_count: number;
+  sold_count: number;
+  shop_id: string;
+  shop_name: string;
+  shop_slug: string;
+  wishlisted: boolean;
+};
+
+export type MyOrderRow = {
+  id: string;
+  code: string;
+  status: DbOrderStatus;
+  payment_status: DbPaymentStatus;
+  payment_method: DbPaymentMethod;
+  total: number;
+  currency: string;
+  item_count: number;
+  shop_name: string;
+  placed_at: string;
+  can_cancel: boolean;
+  can_review: boolean;
+};
+
+export type PlacedOrderRow = {
+  order_id: string;
+  code: string;
+  total: number;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1112,6 +1308,69 @@ export type Database = {
         Update: Partial<Pick<CertificateRow, 'revoked_at' | 'revoke_reason'>>;
         Relationships: [];
       };
+      shops: {
+        Row: ShopRow;
+        Insert: Pick<ShopRow, 'slug' | 'name' | 'owner_uid'> & Partial<ShopRow>;
+        Update: Partial<
+          Omit<ShopRow, 'id' | 'created_at' | 'rating_sum' | 'rating_count' | 'orders_count'>
+        >;
+        Relationships: [];
+      };
+      products: {
+        Row: ProductRow;
+        Insert: Pick<ProductRow, 'shop_id' | 'slug' | 'title' | 'price'> & Partial<ProductRow>;
+        Update: Partial<
+          Omit<ProductRow, 'id' | 'created_at' | 'rating_sum' | 'rating_count' | 'sold_count'>
+        >;
+        Relationships: [];
+      };
+      carts: {
+        Row: CartRow;
+        Insert: Pick<CartRow, 'uid'> & Partial<CartRow>;
+        Update: Partial<Pick<CartRow, 'updated_at'>>;
+        Relationships: [];
+      };
+      cart_items: {
+        Row: CartItemRow;
+        Insert: Pick<CartItemRow, 'cart_id' | 'product_id' | 'quantity'> & Partial<CartItemRow>;
+        Update: Partial<Pick<CartItemRow, 'quantity'>>;
+        Relationships: [];
+      };
+      addresses: {
+        Row: AddressRow;
+        Insert: Pick<AddressRow, 'uid' | 'recipient' | 'phone' | 'line1' | 'city'> &
+          Partial<AddressRow>;
+        Update: Partial<Omit<AddressRow, 'id' | 'uid' | 'created_at'>>;
+        Relationships: [];
+      };
+      orders: {
+        Row: OrderRow;
+        Insert: Pick<OrderRow, 'code' | 'uid' | 'shop_id' | 'subtotal' | 'total'> &
+          Partial<OrderRow>;
+        Update: Partial<
+          Pick<OrderRow, 'status' | 'payment_status' | 'confirmed_at' | 'delivered_at'>
+        >;
+        Relationships: [];
+      };
+      order_items: {
+        Row: OrderItemRow;
+        Insert: Omit<OrderItemRow, 'id'> & { id?: string };
+        Update: Partial<Pick<OrderItemRow, 'quantity'>>;
+        Relationships: [];
+      };
+      wishlist_items: {
+        Row: WishlistItemRow;
+        Insert: Pick<WishlistItemRow, 'uid' | 'product_id'>;
+        Update: Partial<WishlistItemRow>;
+        Relationships: [];
+      };
+      product_reviews: {
+        Row: ProductReviewRow;
+        Insert: Pick<ProductReviewRow, 'product_id' | 'uid' | 'order_id' | 'rating'> &
+          Partial<ProductReviewRow>;
+        Update: Partial<Pick<ProductReviewRow, 'rating' | 'body'>>;
+        Relationships: [];
+      };
       search_log: {
         Row: SearchLogRow;
         Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
@@ -1305,6 +1564,33 @@ export type Database = {
       course_outline: { Args: { p_slug: string }; Returns: CourseOutlineRow[] };
       quiz_paper: { Args: { p_quiz_id: string }; Returns: QuizPaperRow[] };
       verify_certificate: { Args: { p_code: string }; Returns: CertificateVerificationRow[] };
+      add_to_cart: { Args: { p_product_id: string; p_quantity?: number }; Returns: number };
+      set_cart_quantity: {
+        Args: { p_product_id: string; p_quantity: number };
+        Returns: undefined;
+      };
+      clear_cart: { Args: Record<never, never>; Returns: undefined };
+      my_cart: { Args: Record<never, never>; Returns: CartLineRow[] };
+      place_order: {
+        Args: { p_address_id: string; p_payment_method?: DbPaymentMethod; p_note?: string };
+        Returns: PlacedOrderRow[];
+      };
+      cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: undefined };
+      submit_review: {
+        Args: { p_product_id: string; p_rating: number; p_body?: string };
+        Returns: string;
+      };
+      toggle_wishlist: { Args: { p_product_id: string }; Returns: boolean };
+      my_orders: { Args: { p_limit?: number }; Returns: MyOrderRow[] };
+      product_catalog: {
+        Args: {
+          p_limit?: number;
+          p_category?: string | null;
+          p_search?: string | null;
+          p_sort?: string;
+        };
+        Returns: CatalogProductRow[];
+      };
       global_search: {
         Args: { p_query: string; p_kinds?: string[] | null; p_limit?: number };
         Returns: SearchResultRow[];
@@ -1412,6 +1698,11 @@ export type Database = {
       bsdc_work_mode: DbWorkMode;
       bsdc_listing_status: DbListingStatus;
       bsdc_application_status: DbApplicationStatus;
+      bsdc_shop_status: DbShopStatus;
+      bsdc_product_status: DbProductStatus;
+      bsdc_order_status: DbOrderStatus;
+      bsdc_payment_method: DbPaymentMethod;
+      bsdc_payment_status: DbPaymentStatus;
       bsdc_course_level: DbCourseLevel;
       bsdc_course_status: DbCourseStatus;
       bsdc_lesson_kind: DbLessonKind;
