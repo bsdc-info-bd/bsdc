@@ -35,6 +35,10 @@ const JobsPage = lazy(() => import('@/routes/JobsPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
+const SearchPage = lazy(() => import('@/routes/SearchPage'));
+const LearnPage = lazy(() => import('@/routes/LearnPage'));
+const CoursePage = lazy(() => import('@/routes/CoursePage'));
+const VerifyCertificatePage = lazy(() => import('@/routes/VerifyCertificatePage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -91,6 +95,14 @@ const router = createBrowserRouter([
       { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
       { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },
+
+      { path: ROUTES.search, element: withSuspense(<SearchPage />) },
+
+      // Learning. Certificate verification is public and needs no session.
+      { path: ROUTES.learn, element: withSuspense(<LearnPage />) },
+      { path: '/learn/:slug', element: withSuspense(<CoursePage />) },
+      { path: ROUTES.verifyCertificate, element: withSuspense(<VerifyCertificatePage />) },
+      { path: '/verify/:code', element: withSuspense(<VerifyCertificatePage />) },
 
       // Public content permalinks.
       { path: '/p/:slug', element: withSuspense(<PostPage />) },

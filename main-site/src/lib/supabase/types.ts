@@ -680,6 +680,227 @@ export type JobBoardRow = {
   my_status: DbApplicationStatus | null;
 };
 
+export type DbCourseLevel = 'beginner' | 'intermediate' | 'advanced';
+export type DbCourseStatus = 'draft' | 'published' | 'archived';
+export type DbLessonKind = 'reading' | 'video' | 'exercise' | 'quiz';
+export type DbEnrollmentStatus = 'active' | 'completed' | 'dropped';
+export type DbQuestionKind = 'single' | 'multiple' | 'boolean';
+
+export type CourseRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  description: string;
+  cover_url: string;
+  level: DbCourseLevel;
+  language: string;
+  tags: string[];
+  outcomes: string[];
+  prerequisites: string[];
+  duration_minutes: number;
+  lesson_count: number;
+  enrolled_count: number;
+  pass_mark: number;
+  grants_certificate: boolean;
+  instructor_uid: string;
+  status: DbCourseStatus;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseModuleRow = {
+  id: string;
+  course_id: string;
+  title: string;
+  summary: string;
+  position: number;
+  created_at: string;
+};
+
+export type LessonRow = {
+  id: string;
+  course_id: string;
+  module_id: string | null;
+  slug: string;
+  title: string;
+  kind: DbLessonKind;
+  body: string;
+  video_url: string;
+  duration_minutes: number;
+  position: number;
+  is_preview: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EnrollmentRow = {
+  id: string;
+  course_id: string;
+  uid: string;
+  status: DbEnrollmentStatus;
+  progress: number;
+  last_lesson_id: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LessonProgressRow = {
+  id: string;
+  lesson_id: string;
+  course_id: string;
+  uid: string;
+  seconds_spent: number;
+  completed_at: string;
+};
+
+export type QuizRow = {
+  id: string;
+  course_id: string;
+  lesson_id: string | null;
+  title: string;
+  instructions: string;
+  time_limit_minutes: number | null;
+  max_attempts: number;
+  created_at: string;
+};
+
+export type QuizQuestionRow = {
+  id: string;
+  quiz_id: string;
+  prompt: string;
+  kind: DbQuestionKind;
+  marks: number;
+  explanation: string;
+  position: number;
+};
+
+/** The answer key column is revoked from clients, so it is absent here. */
+export type QuizOptionRow = {
+  id: string;
+  question_id: string;
+  label: string;
+  position: number;
+};
+
+export type QuizAttemptRow = {
+  id: string;
+  quiz_id: string;
+  uid: string;
+  score: number;
+  earned_marks: number;
+  total_marks: number;
+  passed: boolean;
+  answers: Record<string, string[]>;
+  created_at: string;
+};
+
+export type CertificateRow = {
+  id: string;
+  code: string;
+  course_id: string;
+  uid: string;
+  recipient_name: string;
+  course_title: string;
+  score: number;
+  issued_at: string;
+  revoked_at: string | null;
+  revoke_reason: string;
+};
+
+export type CourseCatalogRow = {
+  id: string;
+  slug: string;
+  title: string;
+  summary: string;
+  cover_url: string;
+  level: DbCourseLevel;
+  language: string;
+  tags: string[];
+  duration_minutes: number;
+  lesson_count: number;
+  enrolled_count: number;
+  instructor_uid: string;
+  my_progress: number | null;
+  my_status: DbEnrollmentStatus | null;
+  has_certificate: boolean;
+};
+
+export type CourseOutlineRow = {
+  lesson_id: string;
+  lesson_slug: string;
+  title: string;
+  kind: DbLessonKind;
+  duration_minutes: number;
+  position: number;
+  module_title: string;
+  is_preview: boolean;
+  body: string;
+  completed: boolean;
+};
+
+export type QuizPaperRow = {
+  question_id: string;
+  prompt: string;
+  kind: DbQuestionKind;
+  marks: number;
+  position: number;
+  option_id: string;
+  label: string;
+  option_position: number;
+};
+
+export type GradeResultRow = {
+  score: number;
+  earned_marks: number;
+  total_marks: number;
+  passed: boolean;
+  certificate_code: string | null;
+};
+
+export type CertificateVerificationRow = {
+  code: string;
+  recipient_name: string;
+  course_title: string;
+  course_slug: string;
+  score: number;
+  issued_at: string;
+  revoked: boolean;
+};
+
+export type SearchKind = 'post' | 'person' | 'group' | 'course' | 'job' | 'project';
+
+export type SearchResultRow = {
+  kind: SearchKind;
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  image_url: string;
+  rank: number;
+  created_at: string;
+};
+
+export type SearchSuggestionRow = {
+  kind: SearchKind;
+  slug: string;
+  title: string;
+};
+
+export type TrendingSearchRow = {
+  term: string;
+  uses: number;
+};
+
+export type SearchLogRow = {
+  id: string;
+  term: string;
+  result_count: number;
+  searched_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -822,6 +1043,79 @@ export type Database = {
         Row: ProjectStarRow;
         Insert: Pick<ProjectStarRow, 'project_id' | 'uid'>;
         Update: Partial<ProjectStarRow>;
+        Relationships: [];
+      };
+      courses: {
+        Row: CourseRow;
+        Insert: Pick<CourseRow, 'slug' | 'title' | 'instructor_uid'> & Partial<CourseRow>;
+        Update: Partial<
+          Omit<
+            CourseRow,
+            'id' | 'created_at' | 'lesson_count' | 'duration_minutes' | 'enrolled_count'
+          >
+        >;
+        Relationships: [];
+      };
+      course_modules: {
+        Row: CourseModuleRow;
+        Insert: Pick<CourseModuleRow, 'course_id' | 'title' | 'position'> &
+          Partial<CourseModuleRow>;
+        Update: Partial<Omit<CourseModuleRow, 'id' | 'course_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      lessons: {
+        Row: LessonRow;
+        Insert: Pick<LessonRow, 'course_id' | 'slug' | 'title' | 'position'> & Partial<LessonRow>;
+        Update: Partial<Omit<LessonRow, 'id' | 'course_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      enrollments: {
+        Row: EnrollmentRow;
+        Insert: Pick<EnrollmentRow, 'course_id' | 'uid'> & Partial<EnrollmentRow>;
+        Update: Partial<Pick<EnrollmentRow, 'last_lesson_id'>>;
+        Relationships: [];
+      };
+      lesson_progress: {
+        Row: LessonProgressRow;
+        Insert: Pick<LessonProgressRow, 'lesson_id' | 'course_id' | 'uid'> &
+          Partial<LessonProgressRow>;
+        Update: Partial<Pick<LessonProgressRow, 'seconds_spent'>>;
+        Relationships: [];
+      };
+      quizzes: {
+        Row: QuizRow;
+        Insert: Pick<QuizRow, 'course_id' | 'title'> & Partial<QuizRow>;
+        Update: Partial<Omit<QuizRow, 'id' | 'course_id' | 'created_at'>>;
+        Relationships: [];
+      };
+      quiz_questions: {
+        Row: QuizQuestionRow;
+        Insert: Pick<QuizQuestionRow, 'quiz_id' | 'prompt' | 'position'> & Partial<QuizQuestionRow>;
+        Update: Partial<Omit<QuizQuestionRow, 'id' | 'quiz_id'>>;
+        Relationships: [];
+      };
+      quiz_options: {
+        Row: QuizOptionRow;
+        Insert: Pick<QuizOptionRow, 'question_id' | 'label' | 'position'>;
+        Update: Partial<Pick<QuizOptionRow, 'label' | 'position'>>;
+        Relationships: [];
+      };
+      quiz_attempts: {
+        Row: QuizAttemptRow;
+        Insert: Pick<QuizAttemptRow, 'quiz_id' | 'uid'> & Partial<QuizAttemptRow>;
+        Update: Partial<Pick<QuizAttemptRow, 'score'>>;
+        Relationships: [];
+      };
+      certificates: {
+        Row: CertificateRow;
+        Insert: Pick<CertificateRow, 'code' | 'course_id' | 'uid'> & Partial<CertificateRow>;
+        Update: Partial<Pick<CertificateRow, 'revoked_at' | 'revoke_reason'>>;
+        Relationships: [];
+      };
+      search_log: {
+        Row: SearchLogRow;
+        Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
+        Update: Partial<Pick<SearchLogRow, 'result_count'>>;
         Relationships: [];
       };
       playground_sketches: {
@@ -997,6 +1291,30 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      enroll_in_course: { Args: { p_course_id: string }; Returns: string };
+      complete_lesson: { Args: { p_lesson_id: string; p_seconds?: number }; Returns: number };
+      grade_quiz_attempt: {
+        Args: { p_quiz_id: string; p_answers: Record<string, string[]> };
+        Returns: GradeResultRow[];
+      };
+      revoke_certificate: { Args: { p_code: string; p_reason?: string }; Returns: undefined };
+      course_catalog: {
+        Args: { p_limit: number; p_level?: DbCourseLevel | null; p_tag?: string | null };
+        Returns: CourseCatalogRow[];
+      };
+      course_outline: { Args: { p_slug: string }; Returns: CourseOutlineRow[] };
+      quiz_paper: { Args: { p_quiz_id: string }; Returns: QuizPaperRow[] };
+      verify_certificate: { Args: { p_code: string }; Returns: CertificateVerificationRow[] };
+      global_search: {
+        Args: { p_query: string; p_kinds?: string[] | null; p_limit?: number };
+        Returns: SearchResultRow[];
+      };
+      search_suggestions: {
+        Args: { p_prefix: string; p_limit?: number };
+        Returns: SearchSuggestionRow[];
+      };
+      trending_searches: { Args: { p_limit?: number }; Returns: TrendingSearchRow[] };
+      log_search: { Args: { p_term: string; p_results: number }; Returns: undefined };
       apply_to_job: {
         Args: { p_job_id: string; p_cover_letter: string; p_resume_url?: string };
         Returns: string;
@@ -1094,6 +1412,11 @@ export type Database = {
       bsdc_work_mode: DbWorkMode;
       bsdc_listing_status: DbListingStatus;
       bsdc_application_status: DbApplicationStatus;
+      bsdc_course_level: DbCourseLevel;
+      bsdc_course_status: DbCourseStatus;
+      bsdc_lesson_kind: DbLessonKind;
+      bsdc_enrollment_status: DbEnrollmentStatus;
+      bsdc_question_kind: DbQuestionKind;
       bsdc_experience_level: DbExperienceLevel;
     };
     CompositeTypes: Record<never, never>;

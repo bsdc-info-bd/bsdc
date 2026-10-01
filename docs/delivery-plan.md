@@ -14,7 +14,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 7 | BSDC Messenger | Done |
 | 8 | Communities: groups, channels, pages, events | Done |
 | 9 | Jobs, freelance, projects, snippets, playground | Done |
-| 10 | Search and notifications | Pending |
+| 10 | Search, notifications and learning | Done |
 | 11 | Marketplace part 1 (customer) | Pending |
 | 12 | Marketplace part 2 (vendor) | Pending |
 | 13 | Ads system | Pending |
@@ -320,6 +320,55 @@ working, wired-up features — never scaffolding for its own sake.
   sketch library for signed-in members. Jobs and Projects joined the app bar.
 
 
+## Response 10 scope (delivered)
+
+- `supabase/migrations/0015_learning.sql` and `0016_learning_rls.sql`:
+  `courses`, `course_modules`, `lessons`, `enrollments`, `lesson_progress`,
+  `quizzes`, `quiz_questions`, `quiz_options`, `quiz_attempts` and
+  `certificates`, with five new enums.
+- A learner cannot read the answer key. Row policies cannot hide a column, so
+  `revoke select (is_correct) on public.quiz_options` does it outright and
+  `grade_quiz_attempt()` reads the key as the definer. A question scores only
+  when the chosen set equals the correct set exactly.
+- A learner cannot award themselves anything. `certificates` has no insert,
+  update or delete policy at all; a certificate is minted inside the grader
+  and only when the database itself confirms both a pass and 100% progress.
+  `certificates.code` is a human-readable `BSDC-XXXX-XXXX-XXXX` drawn from an
+  alphabet with no ambiguous I, O, 0 or 1.
+- Progress is counted, not reported: `lesson_progress` rows drive a trigger
+  that recomputes `enrollments.progress`, and `progress`, `status` and
+  `completed_at` are revoked from `authenticated`. `complete_lesson()` is
+  idempotent, so replaying it never inflates a percentage.
+- `course_outline()` withholds a lesson body unless the lesson is a free
+  preview or the member enrolled, and `verify_certificate()` answers a public
+  code lookup with a name, a course and a date — never a uid or an email.
+- `supabase/migrations/0017_search.sql`: generated `tsvector` columns on
+  profiles, groups, courses, jobs and projects (posts already had one), GIN
+  and trigram indexes, and `global_search()` across all six kinds.
+- Search runs as the caller, not as a definer, so the ordinary row policies
+  decide what can be found: a secret group, an unpublished course or a member
+  who turned off discoverability simply are not in the results. The text
+  configuration is `simple` on purpose — English stemming would mangle Bangla.
+- `search_log` has no uid column by design: the platform records the words
+  typed, never who typed them, and `trending_searches()` only surfaces terms
+  used at least twice in the last seven days.
+- `profiles.notifications` has existed since migration 0001 and the settings
+  screen has been writing to it; nothing read it until now.
+  `bsdc.notification_allowed()` maps each kind to its switch and
+  `bsdc.notify()` consults it, so a muted kind is never stored at all.
+  Moderation notices are deliberately unmutable.
+- Pure, tested client logic: `courseProgress()`, `nextLesson()`,
+  `remainingMinutes()`, `formatDuration()`, `groupLessonsByModule()`,
+  `isAnswerSheetComplete()`, `toggleAnswer()`, `isCertificateCode()`,
+  `parseQuery()` (understands `in:jobs` without inventing a query language),
+  `resultPath()`, `groupByKind()` and `highlight()` (segments, never HTML).
+- UI: `/learn` catalogue with `Course` JSON-LD, `/learn/:slug` with outline,
+  lesson reader and server-marked quiz, `/verify/:code` public certificate
+  verification with `EducationalOccupationalCredential` JSON-LD, `/search`
+  with per-kind tabs and shareable `?q=`, and live suggestions inside the
+  command palette.
+
+
 ## Registry coverage so far
 
 Y-001, Y-002, Y-004, Y-006, Y-008, Y-017, Y-018, Y-019, Y-020, Y-022, Y-023,
@@ -395,3 +444,14 @@ AA-010, AA-011, AA-012,
 AB-001, AB-002, AB-003, AB-004, AB-005, AB-006, AB-007, AB-008,
 AC-001, AC-002, AC-003, AC-004, AC-005, AC-006,
 X-022, X-023, V-023, U-023, Z-009.
+
+Response 10 adds:
+AD-001, AD-002, AD-003, AD-004, AD-005, AD-006, AD-007, AD-008, AD-009,
+AD-010, AD-011, AD-012, AD-013, AD-014, AD-015, AD-016, AD-017, AD-018,
+AD-019, AD-020,
+AE-001, AE-002, AE-003, AE-004, AE-005, AE-006, AE-007, AE-008, AE-009,
+AE-010,
+AF-001, AF-002, AF-003, AF-004, AF-005, AF-006, AF-007, AF-008, AF-009,
+AF-010, AF-011, AF-012,
+AG-001, AG-002, AG-003, AG-004, AG-005, AG-006,
+X-024, X-025, V-024, V-025, U-024, Z-010.

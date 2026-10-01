@@ -49,6 +49,9 @@ export const ROUTES = {
   freelance: '/freelance',
   projects: '/projects',
   playground: '/playground',
+  search: '/search',
+  learn: '/learn',
+  verifyCertificate: '/verify',
 } as const;
 
 /** Post permalink: /p/slug. */
@@ -64,6 +67,16 @@ export function conversationPath(conversationId: string): string {
 /** Group permalink: /g/slug. */
 export function groupPath(slug: string): string {
   return `/g/${slug}`;
+}
+
+/** Course permalink: /learn/slug. */
+export function coursePath(slug: string): string {
+  return `/learn/${slug}`;
+}
+
+/** Public certificate verification: /verify/code. */
+export function certificatePath(code: string): string {
+  return `/verify/${code.trim().toUpperCase()}`;
 }
 
 /** Tag archive: /tag/slug. */

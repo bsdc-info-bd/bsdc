@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: ROUTES.about, labelKey: 'nav.about' },
   { to: ROUTES.groups, labelKey: 'nav.groups' },
   { to: ROUTES.events, labelKey: 'nav.events' },
+  { to: ROUTES.learn, labelKey: 'nav.learn' },
   { to: ROUTES.jobs, labelKey: 'nav.jobs' },
   { to: ROUTES.projects, labelKey: 'nav.projects' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },

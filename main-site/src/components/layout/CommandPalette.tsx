@@ -1,13 +1,29 @@
 import { Command } from 'cmdk';
-import { Github, Home, Info, Languages, Mail, Monitor, Moon, ScrollText, Sun } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import {
+  BookOpen,
+  Github,
+  Home,
+  Info,
+  Languages,
+  Mail,
+  Monitor,
+  Moon,
+  ScrollText,
+  Search,
+  Sun,
+  User,
+  Users,
+} from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Kbd } from '@/design-system';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
+import { useSearchSuggestions } from '@/hooks/use-search';
 import { changeLanguage } from '@/i18n';
-import { ROUTES, SITE } from '@/lib/site';
+import { coursePath, groupPath, profilePath, ROUTES, SITE } from '@/lib/site';
+import type { SearchSuggestion } from '@/lib/search/search-types';
 import { useThemeStore } from '@/store/theme-store';
 import { useUiStore } from '@/store/ui-store';
 
@@ -23,6 +39,8 @@ export function CommandPalette() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
+  const [term, setTerm] = useState('');
+  const { suggestions } = useSearchSuggestions(term);
   const open = useUiStore((state) => state.commandPaletteOpen);
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setPreference = useThemeStore((state) => state.setPreference);
@@ -132,7 +150,40 @@ export function CommandPalette() {
     },
   ];
 
+  function suggestionPath(suggestion: SearchSuggestion): string {
+    if (suggestion.kind === 'person') return profilePath(suggestion.slug);
+    if (suggestion.kind === 'group') return groupPath(suggestion.slug);
+    return coursePath(suggestion.slug);
+  }
+
+  function suggestionIcon(kind: SearchSuggestion['kind']): ReactNode {
+    if (kind === 'person') return <User size={16} />;
+    if (kind === 'group') return <Users size={16} />;
+    return <BookOpen size={16} />;
+  }
+
+  // Live suggestions come from the database; the row policies there decide
+  // what may be suggested, so nothing private is ever offered.
+  const found: PaletteAction[] = suggestions.map((suggestion) => ({
+    id: `${suggestion.kind}-${suggestion.slug}`,
+    label: suggestion.title,
+    icon: suggestionIcon(suggestion.kind),
+    run: go(suggestionPath(suggestion)),
+  }));
+
+  if (term.trim().length >= 2) {
+    found.push({
+      id: 'search-all',
+      label: t('palette.actions.searchFor', { term: term.trim() }),
+      icon: <Search size={16} />,
+      run: go(`${ROUTES.search}?q=${encodeURIComponent(term.trim())}`),
+    });
+  }
+
   const groups = [
+    ...(found.length > 0
+      ? [{ key: 'results', heading: t('palette.groups.results'), items: found }]
+      : []),
     { key: 'navigation', heading: t('palette.groups.navigation'), items: navigation },
     { key: 'preferences', heading: t('palette.groups.preferences'), items: preferences },
     { key: 'resources', heading: t('palette.groups.resources'), items: resources },
@@ -152,7 +203,11 @@ export function CommandPalette() {
       >
         <Command label={t('palette.placeholder')} loop>
           <div className="border-b border-border px-3">
-            <Command.Input placeholder={t('palette.placeholder')} />
+            <Command.Input
+              placeholder={t('palette.placeholder')}
+              value={term}
+              onValueChange={setTerm}
+            />
           </div>
           <Command.List className="fab-scroll max-h-[60dvh] overflow-y-auto p-2">
             <Command.Empty>{t('palette.empty')}</Command.Empty>
