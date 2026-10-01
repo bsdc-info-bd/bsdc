@@ -1206,6 +1206,143 @@ export type ShopPayoutRow = {
   account_tail: string;
 };
 
+export type DbAdStatus =
+  | 'draft'
+  | 'pending_review'
+  | 'active'
+  | 'paused'
+  | 'rejected'
+  | 'completed';
+export type DbAdPlacement = 'feed' | 'sidebar' | 'shop' | 'search' | 'article';
+export type DbAdPricing = 'cpm' | 'cpc';
+export type DbAdEventKind = 'impression' | 'click';
+export type DbAdWalletKind = 'topup' | 'spend' | 'refund' | 'adjustment';
+
+export type AdCampaignRow = {
+  id: string;
+  owner_uid: string;
+  name: string;
+  status: DbAdStatus;
+  pricing: DbAdPricing;
+  bid: number;
+  daily_budget: number;
+  total_budget: number;
+  spent: number;
+  starts_at: string;
+  ends_at: string | null;
+  target_cities: string[];
+  target_topics: string[];
+  target_language: string;
+  review_note: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdCreativeRow = {
+  id: string;
+  campaign_id: string;
+  placement: DbAdPlacement;
+  headline: string;
+  body: string;
+  image_url: string;
+  cta_label: string;
+  target_url: string;
+  is_enabled: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdWalletEntryRow = {
+  id: string;
+  owner_uid: string;
+  campaign_id: string | null;
+  kind: DbAdWalletKind;
+  amount: number;
+  memo: string;
+  reference: string;
+  created_at: string;
+};
+
+export type AdEventRow = {
+  id: string;
+  creative_id: string;
+  campaign_id: string;
+  uid: string | null;
+  kind: DbAdEventKind;
+  placement: DbAdPlacement;
+  cost: number;
+  bucket: string;
+  created_at: string;
+};
+
+export type AdDailyStatRow = {
+  campaign_id: string;
+  creative_id: string;
+  day: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+};
+
+export type ServedAdRow = {
+  creative_id: string;
+  campaign_id: string;
+  headline: string;
+  body: string;
+  image_url: string;
+  cta_label: string;
+  target_url: string;
+  placement: DbAdPlacement;
+};
+
+export type MyCampaignRow = {
+  id: string;
+  name: string;
+  status: DbAdStatus;
+  pricing: DbAdPricing;
+  bid: number;
+  total_budget: number;
+  daily_budget: number;
+  spent: number;
+  starts_at: string;
+  ends_at: string | null;
+  review_note: string;
+  creative_count: number;
+  impressions: number;
+  clicks: number;
+  spend_today: number;
+};
+
+export type CampaignCreativeRow = {
+  id: string;
+  placement: DbAdPlacement;
+  headline: string;
+  body: string;
+  image_url: string;
+  cta_label: string;
+  target_url: string;
+  is_enabled: boolean;
+  impressions: number;
+  clicks: number;
+  spend: number;
+};
+
+export type CampaignDayRow = {
+  day: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+};
+
+export type AdWalletHistoryRow = {
+  id: string;
+  kind: DbAdWalletKind;
+  amount: number;
+  memo: string;
+  reference: string;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1499,6 +1636,64 @@ export type Database = {
         Update: Partial<Pick<PayoutRow, 'status' | 'reference' | 'decided_at'>>;
         Relationships: [];
       };
+      ad_campaigns: {
+        Row: AdCampaignRow;
+        Insert: Pick<AdCampaignRow, 'name' | 'bid' | 'total_budget'> & Partial<AdCampaignRow>;
+        Update: Partial<
+          Pick<
+            AdCampaignRow,
+            | 'name'
+            | 'pricing'
+            | 'bid'
+            | 'daily_budget'
+            | 'total_budget'
+            | 'starts_at'
+            | 'ends_at'
+            | 'target_cities'
+            | 'target_topics'
+            | 'target_language'
+          >
+        >;
+        Relationships: [];
+      };
+      ad_creatives: {
+        Row: AdCreativeRow;
+        Insert: Pick<AdCreativeRow, 'campaign_id' | 'headline' | 'target_url'> &
+          Partial<AdCreativeRow>;
+        Update: Partial<
+          Pick<
+            AdCreativeRow,
+            | 'placement'
+            | 'headline'
+            | 'body'
+            | 'image_url'
+            | 'cta_label'
+            | 'target_url'
+            | 'is_enabled'
+          >
+        >;
+        Relationships: [];
+      };
+      ad_wallet_entries: {
+        Row: AdWalletEntryRow;
+        Insert: Pick<AdWalletEntryRow, 'owner_uid' | 'kind' | 'amount'> & Partial<AdWalletEntryRow>;
+        Update: Partial<Pick<AdWalletEntryRow, 'memo'>>;
+        Relationships: [];
+      };
+      ad_events: {
+        Row: AdEventRow;
+        Insert: Pick<AdEventRow, 'creative_id' | 'campaign_id' | 'kind' | 'placement' | 'bucket'> &
+          Partial<AdEventRow>;
+        Update: Partial<Pick<AdEventRow, 'cost'>>;
+        Relationships: [];
+      };
+      ad_daily_stats: {
+        Row: AdDailyStatRow;
+        Insert: Pick<AdDailyStatRow, 'campaign_id' | 'creative_id' | 'day'> &
+          Partial<AdDailyStatRow>;
+        Update: Partial<Pick<AdDailyStatRow, 'impressions' | 'clicks' | 'spend'>>;
+        Relationships: [];
+      };
       search_log: {
         Row: SearchLogRow;
         Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
@@ -1721,6 +1916,62 @@ export type Database = {
       shop_products: { Args: { p_limit?: number }; Returns: ShopProductRow[] };
       shop_ledger_entries: { Args: { p_limit?: number }; Returns: LedgerEntryRow[] };
       shop_payouts: { Args: { p_limit?: number }; Returns: ShopPayoutRow[] };
+      serve_ads: {
+        Args: { p_placement: DbAdPlacement; p_limit?: number };
+        Returns: ServedAdRow[];
+      };
+      record_ad_event: {
+        Args: { p_creative_id: string; p_kind: DbAdEventKind };
+        Returns: boolean;
+      };
+      create_campaign: {
+        Args: {
+          p_name: string;
+          p_pricing: DbAdPricing;
+          p_bid: number;
+          p_total_budget: number;
+          p_daily_budget?: number;
+          p_starts_at?: string;
+          p_ends_at?: string | null;
+          p_cities?: string[];
+          p_topics?: string[];
+          p_language?: string;
+        };
+        Returns: string;
+      };
+      add_creative: {
+        Args: {
+          p_campaign_id: string;
+          p_placement: DbAdPlacement;
+          p_headline: string;
+          p_body: string;
+          p_target_url: string;
+          p_image_url?: string;
+          p_cta_label?: string;
+        };
+        Returns: string;
+      };
+      submit_campaign: { Args: { p_campaign_id: string }; Returns: DbAdStatus };
+      decide_campaign: {
+        Args: { p_campaign_id: string; p_approve: boolean; p_note?: string };
+        Returns: DbAdStatus;
+      };
+      set_campaign_paused: {
+        Args: { p_campaign_id: string; p_paused: boolean };
+        Returns: DbAdStatus;
+      };
+      topup_ad_wallet: {
+        Args: { p_owner_uid: string; p_amount: number; p_reference?: string };
+        Returns: number;
+      };
+      ad_wallet_balance: { Args: Record<never, never>; Returns: number };
+      ad_wallet_history: { Args: { p_limit?: number }; Returns: AdWalletHistoryRow[] };
+      my_campaigns: { Args: { p_limit?: number }; Returns: MyCampaignRow[] };
+      campaign_creatives: { Args: { p_campaign_id: string }; Returns: CampaignCreativeRow[] };
+      campaign_daily: {
+        Args: { p_campaign_id: string; p_days?: number };
+        Returns: CampaignDayRow[];
+      };
       add_to_cart: { Args: { p_product_id: string; p_quantity?: number }; Returns: number };
       set_cart_quantity: {
         Args: { p_product_id: string; p_quantity: number };
@@ -1855,6 +2106,11 @@ export type Database = {
       bsdc_work_mode: DbWorkMode;
       bsdc_listing_status: DbListingStatus;
       bsdc_application_status: DbApplicationStatus;
+      bsdc_ad_event_kind: DbAdEventKind;
+      bsdc_ad_placement: DbAdPlacement;
+      bsdc_ad_pricing: DbAdPricing;
+      bsdc_ad_status: DbAdStatus;
+      bsdc_ad_wallet_kind: DbAdWalletKind;
       bsdc_ledger_kind: DbLedgerKind;
       bsdc_payout_status: DbPayoutStatus;
       bsdc_shop_status: DbShopStatus;

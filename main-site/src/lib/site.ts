@@ -53,6 +53,7 @@ export const ROUTES = {
   cart: '/cart',
   checkout: '/checkout',
   orders: '/orders',
+  ads: '/ads',
   vendor: '/vendor',
   vendorProducts: '/vendor/products',
   vendorOrders: '/vendor/orders',

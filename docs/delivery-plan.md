@@ -17,7 +17,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 10 | Search, notifications and learning | Done |
 | 11 | Marketplace part 1 (customer) | Done |
 | 12 | Marketplace part 2 (vendor) | Done |
-| 13 | Ads system | Pending |
+| 13 | Ads system | Done |
 | 14 | Admin panel core and plugin system | Pending |
 | 15 | Admin analytics and PDF reports | Pending |
 | 16 | Corporate network I | Pending |
@@ -532,6 +532,53 @@ X-020, X-021, V-020, U-022, Z-008.
   budget.
 
 
+## Response 13 scope (delivered)
+
+- `supabase/migrations/0022_ads.sql` and `0023_ads_rls.sql`: `ad_campaigns`,
+  `ad_creatives`, `ad_wallet_entries`, `ad_events` and `ad_daily_stats`, with
+  five new enums.
+- **The advertiser never states a price.** A bid is stored once;
+  `bsdc.ad_event_cost()` derives every charge from it, and `record_ad_event()`
+  counts the event and spends the money in the same transaction. A cpm bid is
+  divided by a thousand with integer truncation that the client mirrors
+  exactly, so the figure on the screen is the figure that will be charged.
+- **An event can only be counted once.** `ad_events` carries a bucket column
+  — the hour for an impression, the day for a click — inside a unique index,
+  so a retry, a double render or a refresh is a no-op rather than a second
+  charge. A click is refused outright unless that same viewer was served an
+  impression of that creative in the previous two hours: a click without a
+  view is not a click, it is someone calling an endpoint.
+- **Money cannot be spent twice.** The wallet is append-only with no write
+  policy for anyone; the campaign row is locked before anything is counted;
+  the final charge is clamped to what is left; and the statement that spends
+  the last poisha is the statement that marks the campaign `completed`. There
+  is no sweep job that could forget to run.
+- **A budget must exist before it is promised.** `submit_campaign()` refuses
+  to send a campaign for review unless the wallet already covers the
+  outstanding budget, and unless at least one creative is enabled. Only staff
+  can credit a wallet (`topup_ad_wallet()`), against a payment finance has
+  actually seen.
+- Review is real: `status`, `spent` and `review_note` are revoked at column
+  level, an owner's update policy only applies to a draft or a rejected
+  campaign, and `add_creative()` sends a live campaign back to
+  `pending_review` — an approved ad is the ad that was approved, not whatever
+  replaced it afterwards.
+- `serve_ads()` runs as the definer but returns no bid, budget or owner. It
+  honours the daily cap at serve time, treats an empty targeting list as
+  everyone rather than nobody, and caps the same creative at eight views per
+  person per day. It is granted to `anon` so a guest sees a working page.
+- Client: `src/lib/ads/ads-types.ts` (pricing, pacing, CTR, eligibility and
+  validation, all pure), `ads-repository.ts`, `use-ads.ts`, and
+  `components/ads/AdSlot.tsx` — an impression is reported only after the
+  creative has been at least half visible for a full second, every ad is
+  labelled Sponsored, and the slot renders nothing when there is no eligible
+  ad. The `/ads` console covers the wallet, campaign creation with a reach
+  forecast, creatives and per-campaign numbers; the shop page carries the
+  first live placement.
+- `src/test/ads.test.ts` adds 29 tests. The suite is 240 tests over 18 files;
+  initial JS is 198.0 KB gzip against the 250 KB budget.
+
+
 Response 9 adds:
 T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
 T-012, T-013, T-014, T-015, T-016, T-017, T-018, T-019, T-020, T-021, T-022,
@@ -573,3 +620,13 @@ AN-001, AN-002, AN-003, AN-004, AN-005, AN-006, AN-007, AN-008, AN-009,
 AN-010,
 AO-001, AO-002, AO-003, AO-004, AO-005, AO-006,
 X-028, X-029, V-027, U-026, Z-012.
+
+Response 13 adds:
+AP-001, AP-002, AP-003, AP-004, AP-005, AP-006, AP-007, AP-008, AP-009,
+AP-010, AP-011, AP-012, AP-013, AP-014, AP-015, AP-016, AP-017, AP-018,
+AP-019, AP-020, AP-021, AP-022, AP-023, AP-024,
+AQ-001, AQ-002, AQ-003, AQ-004, AQ-005, AQ-006, AQ-007, AQ-008, AQ-009,
+AQ-010, AQ-011, AQ-012,
+AR-001, AR-002, AR-003, AR-004, AR-005, AR-006, AR-007, AR-008,
+AS-001, AS-002, AS-003, AS-004, AS-005, AS-006,
+X-030, X-031, V-028, U-027, Z-013.

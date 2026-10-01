@@ -1,6 +1,7 @@
 import { Heart, ShoppingBag, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -109,6 +110,8 @@ export default function ShopPage() {
             />
           </div>
         </Card>
+
+        <AdSlot placement="shop" className="mt-4" />
 
         {catalog.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {catalog.isError ? <Alert tone="danger" title={t('shop.failed')} className="mt-4" /> : null}
