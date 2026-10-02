@@ -167,39 +167,14 @@ jobs:
       # IPv4 address any more, and GitHub's runners have no IPv6. This says
       # so in as many words, without printing anything that identifies the
       # project.
+      # Reaching the database is the step that fails on a first deployment,
+      # and the reason is never in the error. This one resolves the host and
+      # opens a socket before any migration is attempted, and prints nothing
+      # that identifies the project.
       - name: Check the database can be reached at all
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: |
-          if [ -z "${SUPABASE_DB_URL:-}" ]; then
-            echo "::error::SUPABASE_DB_URL is not set on this repository. Add it under Settings, Secrets and variables, Actions."
-            exit 1
-          fi
-          node - <<'JS'
-          const dns = require('node:dns').promises;
-          const url = new URL(process.env.SUPABASE_DB_URL);
-          const shape = url.hostname.includes('pooler')
-            ? 'connection pooler'
-            : url.hostname.startsWith('db.')
-              ? 'direct database host'
-              : 'other host';
-          const safe = async (fn) => { try { return await fn(); } catch { return []; } };
-          const v4 = await safe(() => dns.resolve4(url.hostname));
-          const v6 = await safe(() => dns.resolve6(url.hostname));
-          console.log(
-            `::notice::target is a ${shape} on port ${url.port || '5432'}; ` +
-            `${v4.length} IPv4 and ${v6.length} IPv6 addresses; database ${url.pathname.slice(1) || '(none)'}`
-          );
-          if (v4.length === 0) {
-            console.log(
-              '::error::that host has no IPv4 address and a GitHub runner has no IPv6, ' +
-              'so no connection is possible. Use the Supabase connection pooler URI instead: ' +
-              'Project Settings, Database, Connection string, Transaction pooler — ' +
-              'postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres'
-            );
-            process.exit(1);
-          }
-          JS
+        run: node scripts/db-reachable.mjs
 
       - name: Say what will change before changing it
         env:
