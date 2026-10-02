@@ -9,7 +9,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,
-      includeAssets: ['favicon.svg', 'robots.txt', 'icons/*.png'],
+      includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
         id: '/',
         name: 'Bangladesh Software Development Community',

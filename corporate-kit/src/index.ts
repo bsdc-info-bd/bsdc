@@ -16,6 +16,8 @@ export * from './domain/ip';
 export * from './domain/status';
 export * from './domain/chat';
 export * from './domain/trust';
+export * from './domain/seo';
+export * from './domain/brand';
 export * from './pdf/document';
 export * from './pdf/qr';
 export * from './ui/primitives';

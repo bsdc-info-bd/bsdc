@@ -7,9 +7,10 @@
   "license": "SEE LICENSE IN ../LICENSE.md",
   "scripts": {
     "brand": "node scripts/generate-brand-assets.mjs",
+    "prerender": "node scripts/prerender.mjs",
     "prebuild": "npm run brand",
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/prerender.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit && tsc -p functions/tsconfig.json",
     "lint": "eslint . --max-warnings 0",

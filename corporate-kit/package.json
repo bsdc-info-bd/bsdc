@@ -1,7 +1,7 @@
 {
   "name": "@bsdc/corporate-kit",
   "private": true,
-  "version": "0.17.0",
+  "version": "0.18.0",
   "type": "module",
   "description": "Shared data access, session gate, interface primitives and domain logic for the BSDC corporate consoles.",
   "scripts": {

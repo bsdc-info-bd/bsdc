@@ -15,7 +15,7 @@ while IFS='|' read -r dir appid name port; do
 {
   "name": "$appid",
   "private": true,
-  "version": "0.17.0",
+  "version": "0.18.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -182,4 +182,5 @@ users-moderator-site|bsdc-umod|People operations|5187
 certificate-site|bsdc-cert|Certificate generator|5188
 notice-site|bsdc-notice|Notice builder|5189
 vf-site|bsdc-vf|Verification portal|5190
+admin-site|bsdc-admin|SEO and branding|5191
 LIST

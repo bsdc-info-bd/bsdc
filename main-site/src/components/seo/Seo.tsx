@@ -1,6 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { SITE } from '@/lib/site';
+import { canonicalPath, clipText, isPrivatePath } from '@/lib/seo/engine';
 
 export interface SeoProps {
   title: string;
@@ -34,8 +35,12 @@ export function Seo({
 }: SeoProps) {
   const { i18n } = useTranslation();
   const language = i18n.language === 'bn' ? 'bn' : 'en';
-  const canonical = absoluteUrl(path);
+  // The canonical form, the length limits and the list of pages that are
+  // never indexed all come from the SEO engine, so this component cannot
+  // disagree with the sitemap, the prerender or the edge.
+  const canonical = absoluteUrl(canonicalPath(path));
   const imageUrl = absoluteUrl(image);
+  const withheld = noindex || isPrivatePath(path);
 
   const graph: Record<string, unknown>[] = [
     {
@@ -70,12 +75,12 @@ export function Seo({
   return (
     <Helmet prioritizeSeoTags>
       <html lang={language} />
-      <title>{title}</title>
-      <meta name="description" content={description} />
+      <title>{clipText(title, 70)}</title>
+      <meta name="description" content={clipText(description, 180)} />
       <link rel="canonical" href={canonical} />
       <meta
         name="robots"
-        content={noindex ? 'noindex,nofollow' : 'index,follow,max-image-preview:large'}
+        content={withheld ? 'noindex,nofollow' : 'index,follow,max-image-preview:large'}
       />
 
       <link rel="alternate" hrefLang="bn" href={`${canonical}?lang=bn`} />
@@ -84,7 +89,7 @@ export function Seo({
 
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:type" content={type} />
-      <meta property="og:title" content={title} />
+      <meta property="og:title" content={clipText(title, 70)} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={canonical} />
       <meta property="og:image" content={imageUrl} />

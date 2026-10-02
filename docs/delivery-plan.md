@@ -22,7 +22,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 15  | Admin analytics and PDF reports                 | Done    |
 | 16  | Corporate network I                             | Done    |
 | 17  | Corporate network II (trust empire)             | Done    |
-| 18  | SEO engine and branding studio                  | Pending |
+| 18  | SEO engine and branding studio                  | Done    |
 | 19  | PWA, i18n, Android, performance                 | Pending |
 | 20  | Verification, audit and launch                  | Pending |
 
@@ -612,6 +612,68 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
+## Response 18 scope (delivered)
+
+- `supabase/migrations/0032_seo.sql` and `0033_seo_rls.sql`: per-path
+  metadata overrides, redirects, brand themes, the sitemap functions and the
+  colour arithmetic.
+- **A URL is one string.** `bsdc.normalise_path()` lower-cases, drops the
+  query, the fragment, duplicate slashes and the trailing slash, and the
+  override table stores nothing else — `/About/` and `/about` cannot be given
+  two different titles by two different editors. The client mirrors the same
+  function, so the console can say what will be stored while it is typed.
+- **Metadata is a chain with no empty link.** `seo_for_path()` returns an
+  editor's override if there is one, otherwise what the thing at that path
+  says about itself, otherwise the site default — and it returns which of the
+  three answered, because "where did this title come from?" is the first
+  question anybody asks when a search result looks wrong.
+- **A redirect loop is refused at write time.** `set_redirect()` rejects a
+  destination that is itself redirected, a redirect to itself and a pair that
+  would point at each other, so the edge resolves in one hop and a visitor
+  never pays for two round trips. Hits are counted: a redirect nobody follows
+  can be retired, and a 404 that is hit constantly is a redirect somebody
+  forgot to write.
+- **Nothing is listed that a crawler would be refused.** `sitemap_urls()`
+  applies the same status and visibility conditions the pages themselves use,
+  and skips any URL an override marks `noindex`.
+- **A theme must be readable before it can be live.** WCAG 2.1 relative
+  luminance and contrast are computed in SQL as well as in TypeScript;
+  `save_brand_theme()` refuses a palette whose body text falls below 4.5:1,
+  and a partial unique index — not a convention — keeps exactly one theme
+  active.
+- `corporate-kit` 0.18.0 adds `domain/seo.ts` (path canonicalisation, the
+  editorial checks, SERP preview, redirect rules, sitemap and robots writers)
+  and `domain/brand.ts` (contrast, grades, nine-step shade ramps, token
+  validation, CSS emission and a wordmark drawn from the palette).
+- `admin-site`: the SEO centre and the branding studio — look up any path,
+  see what it is serving and why, override it, move URLs, read the sitemap
+  the edge will serve, and edit a palette with its contrast table, live
+  preview and generated wordmark beside it.
+- `main-site` gains the SEO engine itself (`src/lib/seo/engine.ts`): canonical
+  URLs that strip campaign parameters and sort the ones that remain, the list
+  of paths that may never be indexed, sitemap, sitemap index, robots and RSS
+  writers, and a JSON-LD pruner that drops empty properties rather than
+  emitting them.
+- **The prerender and the application cannot drift.** `scripts/prerender.mjs`
+  writes one real HTML file per public route — its own head, its own JSON-LD
+  and a readable summary with links inside `#root` — and a test asserts,
+  route by route, that the head it writes is byte-identical to what
+  `headTags()` produces, and that the sitemap and robots.txt it writes are
+  identical to the engine's. The template's placeholder head is stripped, not
+  appended to: a page with two canonical links is worse than a page with none.
+- Pages Functions: `_middleware.ts` answers a moved URL with a real 301
+  before the application loads and rewrites title, description, canonical and
+  share image into the shell for any page whose content lives in the database
+  — so a link preview fetcher that runs no scripts still gets the right card;
+  `sitemap.xml`, `sitemaps/<section>-<n>.xml`, `rss.xml` and `brand.css`.
+  Every one of them runs with the anonymous key and is therefore subject to
+  the same row level security a browser is.
+- `robots.txt` is now generated into `dist/` at build time rather than served
+  by a function, because the one file a crawler fetches before anything else
+  should not depend on a database being reachable.
+- 229 tests across the thirteen packages, every app builds, and initial
+  JavaScript is 173 to 204 KB gzip against the 250 KB budget.
+
 ## Response 17 scope (delivered)
 
 - `supabase/migrations/0030_trust.sql` and `0031_trust_rls.sql`: the trust
@@ -850,3 +912,13 @@ BK-001, BK-002, BK-003, BK-004, BK-005, BK-006, BK-007, BK-008, BK-009,
 BK-010,
 BL-001, BL-002, BL-003, BL-004, BL-005, BL-006, BL-007, BL-008,
 X-038, X-039, V-032, U-031, Z-017.
+
+Response 18 adds:
+BM-001, BM-002, BM-003, BM-004, BM-005, BM-006, BM-007, BM-008, BM-009,
+BM-010, BM-011, BM-012,
+BN-001, BN-002, BN-003, BN-004, BN-005, BN-006, BN-007, BN-008, BN-009,
+BN-010,
+BO-001, BO-002, BO-003, BO-004, BO-005, BO-006, BO-007, BO-008, BO-009,
+BO-010, BO-011,
+BP-001, BP-002, BP-003, BP-004, BP-005, BP-006, BP-007, BP-008,
+X-040, X-041, V-033, U-032, Z-018.

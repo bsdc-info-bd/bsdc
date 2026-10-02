@@ -238,6 +238,35 @@ a {
   overflow-wrap: anywhere;
 }
 
+.kit-list {
+  margin: var(--sp-2) 0 0;
+  padding-left: var(--sp-5);
+}
+
+.kit-list > li + li {
+  margin-top: var(--sp-1);
+}
+
+.kit-pre {
+  margin: 0;
+  padding: var(--sp-3);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  max-height: 24rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.kit-swatch {
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line);
+  display: inline-block;
+}
+
 .kit-empty {
   padding: var(--sp-5);
   text-align: center;

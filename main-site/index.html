@@ -24,6 +24,30 @@
       content="BSDC is the open community platform for Bangladeshi and worldwide software developers: a social feed, developer blogs, questions, jobs, freelancing, a marketplace and a verification system. Free and bilingual."
     />
     <link rel="canonical" href="https://www.bsdc.info.bd/" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+
+    <!--
+      Defaults for the social preview. The edge middleware rewrites these in
+      place for a page whose content lives in the database, and React writes
+      them again on hydration, so all three agree.
+    -->
+    <meta property="og:site_name" content="Bangladesh Software Development Community" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="BSDC — the open developer community of Bangladesh" />
+    <meta
+      property="og:description"
+      content="Posts, groups, events, jobs, freelance work, open-source projects, courses and a marketplace, built by and for Bangladeshi software developers."
+    />
+    <meta property="og:url" content="https://www.bsdc.info.bd/" />
+    <meta property="og:image" content="https://www.bsdc.info.bd/og/og-image.png" />
+    <meta property="og:locale" content="bn_BD" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BSDC — the open developer community of Bangladesh" />
+    <meta
+      name="twitter:description"
+      content="The open community platform for Bangladeshi and worldwide software developers."
+    />
+    <meta name="twitter:image" content="https://www.bsdc.info.bd/og/og-image.png" />
 
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
@@ -50,7 +74,7 @@
     <div id="root"></div>
     <noscript>
       <div style="padding: 24px; font-family: Inter, Arial, sans-serif">
-        <h1>Bangladesh Software Development Community</h1>
+        <p><strong>Bangladesh Software Development Community</strong></p>
         <p>
           BSDC needs JavaScript to run the interactive application. The full content of every public
           page is also served as prerendered HTML for search engines.
