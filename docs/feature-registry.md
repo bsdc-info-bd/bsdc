@@ -10,7 +10,7 @@ Nothing is counted twice. A page is not also counted as the component that
 renders it; an RPC is not also counted as the policy that guards it; a test
 is not a feature.
 
-### Core — 925
+### Core — 933
 
 | Counted surface                 | Features |
 | ------------------------------- | -------: |
@@ -24,8 +24,8 @@ is not a feature.
 | Enumerated states               |       55 |
 | Integrity triggers              |       57 |
 | Plugin flags                    |       32 |
-| Android shell rules             |        9 |
-| **Subtotal**                    |  **925** |
+| Android shell rules             |       17 |
+| **Subtotal**                    |  **933** |
 
 ### Administration — 227
 
@@ -48,14 +48,14 @@ is not a feature.
 | Database helper functions     |       61 |
 | **Subtotal**                  |  **361** |
 
-**Total counted features: 1513**
+**Total counted features: 1521**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
 Translated interface strings per language: **1222** (recorded, not counted as features).
 
 ## How to read these numbers
 
-**1,513 counted surfaces** is the implementation: distinct things that exist
+**1,521 counted surfaces** is the implementation: distinct things that exist
 in the tree and can be pointed at. **1,016 registry codes** is the delivery
 record: the identifiers the twenty responses claimed, listed response by
 response in `docs/delivery-plan.md`. They are different units and they are

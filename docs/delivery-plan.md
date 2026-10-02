@@ -612,6 +612,33 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
+## Deployment automation (added after Response 20)
+
+- `.github/workflows/database.yml` — builds the schema from nothing on a
+  throwaway `postgres:16`, applies all thirty-five migrations a second time
+  to prove idempotency, asserts in SQL that every table has row level
+  security and a policy, that no `security definer` function has a mutable
+  search path and that `anon` holds no table-level write, calls the
+  functions the applications call, and only then applies the missing files
+  to production from `main`.
+- `scripts/db-push.mjs` — the migration runner behind it: one transaction
+  per file, a ledger in `supabase_migrations.schema_migrations` (the same
+  table the Supabase CLI reads), `--plan`, `--dry-run`, `--verify` and
+  `--self-test`, and a connection string that is scrubbed out of every
+  message it prints.
+- `.github/workflows/android.yml` — debug APK on every change, signed APK
+  and AAB on an `android-v*` tag, with the generated native project
+  configured by `android-app/scripts/configure-android.mjs`. Its decisions
+  (app-link intent filters, the `bsdc://` scheme, cleartext off, version,
+  signing from the environment, Firebase file) are pure functions in
+  `android-app/src/android-config.ts` with sixteen tests, and a release
+  refuses to build against the placeholder Firebase configuration.
+- `.github/workflows/deploy.yml` — the fourteen applications to Cloudflare
+  Pages, one job each, previews on pull requests, production only from
+  `main`.
+- `docs/deploying.md` — the runbook, the secret inventory and the order to
+  do a first deployment in.
+
 ## Response 20 scope (delivered)
 
 - `scripts/audit.mjs`: the launch audit as a program. **107 checkpoints**

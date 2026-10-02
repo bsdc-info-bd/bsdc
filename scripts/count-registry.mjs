@@ -25,7 +25,8 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
-const sh = (command) => execSync(command, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim();
+const sh = (command) =>
+  execSync(command, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).trim();
 const lines = (command) => {
   const out = sh(`${command} || true`);
   return out === '' ? [] : out.split('\n');
@@ -42,7 +43,9 @@ const walk = (dir, out = []) => {
   return out;
 };
 
-const sqlFiles = lines('ls supabase/migrations/*.sql').map((path) => read(path.replace(/^\.\//, '')));
+const sqlFiles = lines('ls supabase/migrations/*.sql').map((path) =>
+  read(path.replace(/^\.\//, '')),
+);
 const sql = sqlFiles.join('\n');
 
 const unique = (values) => [...new Set(values)];
@@ -60,8 +63,12 @@ const adminPages = memberPages.filter((path) => /routes\/Admin/.test(path));
 const publicPages = memberPages.filter((path) => !/routes\/Admin/.test(path));
 
 /** Database functions, split by who may call them. */
-const rpcNames = unique([...sql.matchAll(/create or replace function public\.(\w+)/g)].map((m) => m[1]));
-const helperNames = unique([...sql.matchAll(/create or replace function bsdc\.(\w+)/g)].map((m) => m[1]));
+const rpcNames = unique(
+  [...sql.matchAll(/create or replace function public\.(\w+)/g)].map((m) => m[1]),
+);
+const helperNames = unique(
+  [...sql.matchAll(/create or replace function bsdc\.(\w+)/g)].map((m) => m[1]),
+);
 
 const bodyOf = (name) => {
   const start = sql.indexOf(`create or replace function public.${name}(`);
@@ -71,7 +78,9 @@ const bodyOf = (name) => {
 };
 
 const permissionOf = (name) => {
-  const match = bodyOf(name).match(/require_permission\('([a-z_.]+)'\)|has_permission\('([a-z_.]+)'\)/);
+  const match = bodyOf(name).match(
+    /require_permission\('([a-z_.]+)'\)|has_permission\('([a-z_.]+)'\)/,
+  );
   return match ? (match[1] ?? match[2]) : '';
 };
 
@@ -81,13 +90,17 @@ const adminRpcs = rpcNames.filter(
     /^(settings|plugins|analytics|audit)\./.test(permissionOf(name)),
 );
 const staffRpcs = rpcNames.filter((name) => !adminRpcs.includes(name) && permissionOf(name) !== '');
-const memberRpcs = rpcNames.filter((name) => !adminRpcs.includes(name) && !staffRpcs.includes(name));
+const memberRpcs = rpcNames.filter(
+  (name) => !adminRpcs.includes(name) && !staffRpcs.includes(name),
+);
 
 /** Access rules: each policy is a decision about who may see or change what. */
 const policies = unique([...sql.matchAll(/create policy (\w+)/g)].map((match) => match[1]));
 
 /** Stored shapes and the integrity rules attached to them. */
-const tables = unique([...sql.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]));
+const tables = unique(
+  [...sql.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]),
+);
 const enums = [...sql.matchAll(/as enum/g)].length;
 const triggers = [...sql.matchAll(/create trigger/g)].length;
 
@@ -128,25 +141,25 @@ const edgeEndpoints = consoleDirs
 const mainRules = walk(join(root, 'main-site/src/lib'))
   .filter((path) => path.endsWith('.ts') && !path.includes('.test.'))
   .flatMap((path) =>
-    [...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm)].map(
-      (match) => `${relative(root, path)}:${match[1]}`,
-    ),
+    [
+      ...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm),
+    ].map((match) => `${relative(root, path)}:${match[1]}`),
   );
 
 const kitRules = walk(join(root, 'corporate-kit/src'))
   .filter((path) => (path.endsWith('.ts') || path.endsWith('.tsx')) && !path.includes('.test.'))
   .flatMap((path) =>
-    [...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm)].map(
-      (match) => `${relative(root, path)}:${match[1]}`,
-    ),
+    [
+      ...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm),
+    ].map((match) => `${relative(root, path)}:${match[1]}`),
   );
 
 const androidRules = walk(join(root, 'android-app/src'))
   .filter((path) => path.endsWith('.ts') && !path.includes('.test.'))
   .flatMap((path) =>
-    [...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm)].map(
-      (match) => `${relative(root, path)}:${match[1]}`,
-    ),
+    [
+      ...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm),
+    ].map((match) => `${relative(root, path)}:${match[1]}`),
   );
 
 /** Reusable interface parts. */
@@ -165,7 +178,8 @@ const hooks = walk(join(root, 'main-site/src/hooks'))
   );
 
 /** Bilingual coverage, recorded but deliberately not counted as features. */
-const messageKeys = (read('main-site/src/i18n/locales/en.ts').match(/^\s+[a-zA-Z0-9_]+: '/gm) ?? []).length;
+const messageKeys = (read('main-site/src/i18n/locales/en.ts').match(/^\s+[a-zA-Z0-9_]+: '/gm) ?? [])
+  .length;
 
 /* --------------------------------------------------------------- *
  * The three books of the registry
@@ -188,12 +202,18 @@ const core = [
 const admin = [
   ['Admin pages', adminPages.length],
   ['Admin and analytics RPCs', adminRpcs.length],
-  ['Admin console screens', consoleTabs.filter((tab) => /^(admin|config|customize|performance)-site/.test(tab)).length],
+  [
+    'Admin console screens',
+    consoleTabs.filter((tab) => /^(admin|config|customize|performance)-site/.test(tab)).length,
+  ],
   ['Access policies', policies.length],
 ];
 
 const staff = [
-  ['Staff console screens', consoleTabs.filter((tab) => !/^(admin|config|customize|performance)-site/.test(tab)).length],
+  [
+    'Staff console screens',
+    consoleTabs.filter((tab) => !/^(admin|config|customize|performance)-site/.test(tab)).length,
+  ],
   ['Staff and moderation RPCs', staffRpcs.length],
   ['Console rules', consoleRules.length],
   ['Shared kit rules and controls', kitRules.length],
@@ -245,10 +265,15 @@ if (process.argv.includes('--json')) {
     ['Staff and corporate', report.staff],
   ]) {
     process.stdout.write(`\n${title}\n`);
-    for (const row of section.rows) process.stdout.write(`  ${String(row[1]).padStart(5)}  ${row[0]}\n`);
+    for (const row of section.rows)
+      process.stdout.write(`  ${String(row[1]).padStart(5)}  ${row[0]}\n`);
     process.stdout.write(`  ${String(section.total).padStart(5)}  subtotal\n`);
   }
   process.stdout.write(`\n  ${String(report.total).padStart(5)}  total counted features\n`);
-  process.stdout.write(`  ${String(report.registryCodes).padStart(5)}  registry codes recorded as delivered\n`);
-  process.stdout.write(`  ${String(report.messageKeys).padStart(5)}  translated strings per language (not counted as features)\n`);
+  process.stdout.write(
+    `  ${String(report.registryCodes).padStart(5)}  registry codes recorded as delivered\n`,
+  );
+  process.stdout.write(
+    `  ${String(report.messageKeys).padStart(5)}  translated strings per language (not counted as features)\n`,
+  );
 }

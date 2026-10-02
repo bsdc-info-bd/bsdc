@@ -86,7 +86,10 @@ check('A-04', 'Delivery', 'Every application declares the five gate scripts', ()
     const pkg = JSON.parse(read(`${name}/package.json`));
     return ['typecheck', 'lint', 'test', 'build'].some((script) => !pkg.scripts?.[script]);
   });
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? 'all sixteen' : missing.join(', ') };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? 'all sixteen' : missing.join(', '),
+  };
 });
 
 check('A-05', 'Delivery', 'Every console has a distinct dev port', () => {
@@ -113,7 +116,10 @@ const sqlAll = migrations.map((path) => read(path.replace(/^\.\//, ''))).join('\
 check('B-01', 'Database', 'Migrations are numbered without a gap', () => {
   const numbers = migrations.map((path) => Number(path.match(/(\d{4})_/)[1]));
   const gaps = numbers.filter((value, index) => index > 0 && value !== numbers[index - 1] + 1);
-  return { ok: gaps.length === 0, evidence: `0001..${String(Math.max(...numbers)).padStart(4, '0')}` };
+  return {
+    ok: gaps.length === 0,
+    evidence: `0001..${String(Math.max(...numbers)).padStart(4, '0')}`,
+  };
 });
 
 check('B-02', 'Database', 'Every table has row level security enabled', () => {
@@ -122,7 +128,10 @@ check('B-02', 'Database', 'Every table has row level security enabled', () => {
     [...sqlAll.matchAll(/alter table public\.(\w+)\s+enable row level security/g)].map((m) => m[1]),
   );
   const missing = [...new Set(tables)].filter((table) => !enabled.has(table));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? `${new Set(tables).size} tables` : missing.join(', ') };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? `${new Set(tables).size} tables` : missing.join(', '),
+  };
 });
 
 check('B-03', 'Database', 'Every security-definer function pins its search path', () => {
@@ -179,16 +188,24 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
 });
 
 note('B-06', 'Database', 'Tables, functions and policies shipped', () => {
-  const tables = new Set([...sqlAll.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]));
-  const publicFns = new Set([...sqlAll.matchAll(/create or replace function public\.(\w+)/g)].map((m) => m[1]));
-  const helpers = new Set([...sqlAll.matchAll(/create or replace function bsdc\.(\w+)/g)].map((m) => m[1]));
+  const tables = new Set(
+    [...sqlAll.matchAll(/create table if not exists public\.(\w+)/g)].map((m) => m[1]),
+  );
+  const publicFns = new Set(
+    [...sqlAll.matchAll(/create or replace function public\.(\w+)/g)].map((m) => m[1]),
+  );
+  const helpers = new Set(
+    [...sqlAll.matchAll(/create or replace function bsdc\.(\w+)/g)].map((m) => m[1]),
+  );
   const policies = [...sqlAll.matchAll(/create policy /g)].length;
   return `${tables.size} tables, ${publicFns.size} RPCs, ${helpers.size} helpers, ${policies} policies, ${migrations.length} migrations`;
 });
 
 check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
   const blocks = sqlAll.split(/create or replace function public\./).slice(1);
-  const guarded = blocks.filter((block) => /require_permission|has_permission|current_uid\(\)/.test(block.slice(0, 2500)));
+  const guarded = blocks.filter((block) =>
+    /require_permission|has_permission|current_uid\(\)/.test(block.slice(0, 2500)),
+  );
   return {
     ok: guarded.length / blocks.length > 0.8,
     evidence: `${guarded.length} of ${blocks.length} RPCs check identity or permission`,
@@ -208,14 +225,20 @@ check('C-01', 'Front end', 'No emoji anywhere in the user interface chrome', () 
   const hits = shLines(
     `grep -rlP "${pattern}" --include="*.ts" --include="*.tsx" --include="*.css" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
   );
-  return { ok: hits.length === 0, evidence: hits.length === 0 ? 'none in any source file' : hits.join(', ') };
+  return {
+    ok: hits.length === 0,
+    evidence: hits.length === 0 ? 'none in any source file' : hits.join(', '),
+  };
 });
 
 check('C-02', 'Front end', 'No placeholder or demo content left in source', () => {
   const hits = shLines(
     `grep -rniE "lorem ipsum|dummy data|demo data|placeholder text|coming soon|TODO:|FIXME" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v node_modules | grep -v "/dist/"`,
   );
-  return { ok: hits.length === 0, evidence: hits.length === 0 ? 'none' : hits.slice(0, 5).join('; ') };
+  return {
+    ok: hits.length === 0,
+    evidence: hits.length === 0 ? 'none' : hits.slice(0, 5).join('; '),
+  };
 });
 
 check('C-03', 'Front end', 'Strict TypeScript everywhere, with no escape hatches', () => {
@@ -242,7 +265,10 @@ check('C-04', 'Front end', 'Nothing logs to the console in shipped code', () => 
     const stripped = read(file.replace(/^\.\//, '')).replace(/`[^`]*`/gs, '``');
     if (/console\.log\(/.test(stripped)) offenders.push(file);
   }
-  return { ok: offenders.length === 0, evidence: offenders.length === 0 ? 'none' : offenders.join(', ') };
+  return {
+    ok: offenders.length === 0,
+    evidence: offenders.length === 0 ? 'none' : offenders.join(', '),
+  };
 });
 
 check('C-05', 'Front end', 'Nothing can force a horizontal scrollbar', () => {
@@ -256,7 +282,8 @@ check('C-05', 'Front end', 'Nothing can force a horizontal scrollbar', () => {
   const guards = /max-width:\s*100%/.test(css) && /overflow-x/.test(css);
   return {
     ok: wide.length === 0 && guards,
-    evidence: 'no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves',
+    evidence:
+      'no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves',
   };
 });
 
@@ -293,19 +320,26 @@ check('C-08', 'Front end', 'Bangla is a real translation, not a copy of English'
 
 check('C-09', 'Front end', 'Every application ships a security header set', () => {
   const missing = webApps.filter((name) => !has(`${name}/public/_headers`));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? 'all fourteen' : missing.join(', ') };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? 'all fourteen' : missing.join(', '),
+  };
 });
 
 check('C-10', 'Front end', 'A content security policy is declared, without unsafe-eval', () => {
   const headers = read('main-site/public/_headers');
   return {
     ok: /content-security-policy/i.test(headers) && !/'unsafe-eval'/.test(headers),
-    evidence: "CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground)",
+    evidence:
+      "CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground)",
   };
 });
 
-note('C-11', 'Front end', 'TypeScript source files under version control', () =>
-  `${sourceFiles.length} .ts/.tsx files`,
+note(
+  'C-11',
+  'Front end',
+  'TypeScript source files under version control',
+  () => `${sourceFiles.length} .ts/.tsx files`,
 );
 
 /* ------------------------------------------------------------------ *
@@ -319,26 +353,36 @@ check('D-01', 'Safety', 'No private key or service account is committed', () => 
   const hits = shLines(
     `grep -rEzl "BEGIN [A-Z ]*PRIVATE KEY-----[\\r\\n]+[A-Za-z0-9+/=]{40}" . | grep -v node_modules | grep -v "/dist/"`,
   );
-  return { ok: hits.length === 0, evidence: hits.length === 0 ? 'no key material anywhere in the tree' : hits.join(', ') };
+  return {
+    ok: hits.length === 0,
+    evidence: hits.length === 0 ? 'no key material anywhere in the tree' : hits.join(', '),
+  };
 });
 
 check('D-02', 'Safety', 'No .env file is tracked by Git', () => {
   const tracked = shLines(`git ls-files | grep -E "(^|/)\\.env" | grep -v "\\.env\\.example"`);
-  return { ok: tracked.length === 0, evidence: tracked.length === 0 ? 'only .env.example files' : tracked.join(', ') };
+  return {
+    ok: tracked.length === 0,
+    evidence: tracked.length === 0 ? 'only .env.example files' : tracked.join(', '),
+  };
 });
 
 check('D-03', 'Safety', 'The service role key is never referenced from browser code', () => {
   const hits = shLines(
     `grep -rn "SERVICE_ROLE" --include="*.ts" --include="*.tsx" */src | grep -v node_modules`,
   );
-  return { ok: hits.length === 0, evidence: hits.length === 0 ? 'browser code uses the anonymous key only' : hits.join('; ') };
+  return {
+    ok: hits.length === 0,
+    evidence: hits.length === 0 ? 'browser code uses the anonymous key only' : hits.join('; '),
+  };
 });
 
 check('D-04', 'Safety', 'Pages Functions run with the anonymous key, under RLS', () => {
   const rpc = read('main-site/functions/_rpc.ts');
   return {
     ok: !/SERVICE_ROLE/.test(rpc),
-    evidence: 'functions/_rpc.ts holds no service-role path, so the edge is subject to the same policies as a browser',
+    evidence:
+      'functions/_rpc.ts holds no service-role path, so the edge is subject to the same policies as a browser',
   };
 });
 
@@ -351,7 +395,8 @@ check('D-06', 'Safety', 'The android shell renders only BSDC origins', () => {
   const links = read('android-app/src/links.ts');
   return {
     ok: /TRUSTED_HOSTS/.test(links) && /kind: 'browser'/.test(links),
-    evidence: 'an untrusted origin resolves to the system browser; held by test in android-app/src/links.test.ts',
+    evidence:
+      'an untrusted origin resolves to the system browser; held by test in android-app/src/links.test.ts',
   };
 });
 
@@ -371,7 +416,10 @@ check('D-07', 'Safety', 'Field measurement carries no identity', () => {
 
 check('E-01', 'SEO', 'Public routes are prerendered as real HTML at build time', () => {
   const script = read('main-site/scripts/prerender.mjs');
-  return { ok: /writeFileSync|writeFile/.test(script), evidence: 'scripts/prerender.mjs writes one HTML file per public route' };
+  return {
+    ok: /writeFileSync|writeFile/.test(script),
+    evidence: 'scripts/prerender.mjs writes one HTML file per public route',
+  };
 });
 
 check('E-02', 'SEO', 'robots.txt is generated into the build, not served by a function', () => ({
@@ -415,13 +463,18 @@ for (const app of webApps) {
   if (total > 0) bundleReport.push({ app, kb: Math.round(total / 1024) });
 }
 
-check('F-01', 'Performance', 'Initial JavaScript is inside the 250 KB gzip budget everywhere', () => {
-  const over = bundleReport.filter((entry) => entry.kb > 250);
-  return {
-    ok: over.length === 0 && bundleReport.length > 0,
-    evidence: bundleReport.map((entry) => `${entry.app} ${entry.kb} KB`).join(', '),
-  };
-});
+check(
+  'F-01',
+  'Performance',
+  'Initial JavaScript is inside the 250 KB gzip budget everywhere',
+  () => {
+    const over = bundleReport.filter((entry) => entry.kb > 250);
+    return {
+      ok: over.length === 0 && bundleReport.length > 0,
+      evidence: bundleReport.map((entry) => `${entry.app} ${entry.kb} KB`).join(', '),
+    };
+  },
+);
 
 check('F-02', 'Performance', 'Routes are code split, so a visitor pays only for the page', () => ({
   ok: /lazy\(/.test(read('main-site/src/App.tsx')),
@@ -433,15 +486,25 @@ check('F-03', 'Performance', 'Field measurement is collected and stored', () => 
   evidence: 'a hand-written collector, a beacon endpoint and the web_vitals table',
 }));
 
-check('F-04', 'Performance', 'Speed is reported at the 75th percentile with its sample count', () => ({
-  ok: /percentile_cont\(0\.75\)/.test(read('supabase/migrations/0034_performance.sql')),
-  evidence: 'percentile_cont(0.75) in vitals_by_route, with samples returned beside it',
-}));
+check(
+  'F-04',
+  'Performance',
+  'Speed is reported at the 75th percentile with its sample count',
+  () => ({
+    ok: /percentile_cont\(0\.75\)/.test(read('supabase/migrations/0034_performance.sql')),
+    evidence: 'percentile_cont(0.75) in vitals_by_route, with samples returned beside it',
+  }),
+);
 
-check('F-05', 'Performance', 'Build weight is recorded on every push, next to the field data', () => ({
-  ok: /record_bundle_size/.test(read('.github/workflows/ci.yml')),
-  evidence: 'CI posts the gzipped size of each main-site push into bundle_sizes',
-}));
+check(
+  'F-05',
+  'Performance',
+  'Build weight is recorded on every push, next to the field data',
+  () => ({
+    ok: /record_bundle_size/.test(read('.github/workflows/ci.yml')),
+    evidence: 'CI posts the gzipped size of each main-site push into bundle_sizes',
+  }),
+);
 
 /* ------------------------------------------------------------------ *
  * 7. Offline and installability
@@ -449,7 +512,10 @@ check('F-05', 'Performance', 'Build weight is recorded on every push, next to th
 
 check('G-01', 'PWA', 'A manifest is shipped with maskable icons', () => {
   const config = read('main-site/vite.config.ts');
-  return { ok: /manifest/.test(config) && /maskable/.test(config), evidence: 'VitePWA manifest with a maskable icon' };
+  return {
+    ok: /manifest/.test(config) && /maskable/.test(config),
+    evidence: 'VitePWA manifest with a maskable icon',
+  };
 });
 
 check('G-02', 'PWA', 'An update is offered, never forced mid-action', () => {
@@ -461,7 +527,9 @@ check('G-02', 'PWA', 'An update is offered, never forced mid-action', () => {
 });
 
 check('G-03', 'PWA', 'The offline state is honest rather than a blank page', () => ({
-  ok: has('main-site/src/components/layout/OfflineBanner.tsx') || /offline/i.test(read('main-site/src/pwa.ts')),
+  ok:
+    has('main-site/src/components/layout/OfflineBanner.tsx') ||
+    /offline/i.test(read('main-site/src/pwa.ts')),
   evidence: 'an offline banner and an offline-ready notice',
 }));
 
@@ -471,7 +539,9 @@ check('G-03', 'PWA', 'The offline state is honest rather than a blank page', () 
 
 note('H-01', 'Tests', 'Unit tests by package', () => {
   const counts = packages.map((name) => {
-    const output = sh(`cd ${name} && npx vitest run 2>&1 | grep -oE "Tests  [0-9]+ passed" | head -1 || true`);
+    const output = sh(
+      `cd ${name} && npx vitest run 2>&1 | grep -oE "Tests  [0-9]+ passed" | head -1 || true`,
+    );
     const n = Number(output.match(/(\d+)/)?.[1] ?? 0);
     return { name, n };
   });
@@ -483,9 +553,11 @@ check('H-02', 'Tests', 'Every package has at least one test file', () => {
   const without = packages.filter(
     (name) => shLines(`find ${name}/src -name "*.test.ts*" | head -1`).length === 0,
   );
-  return { ok: without.length === 0, evidence: without.length === 0 ? 'all sixteen' : without.join(', ') };
+  return {
+    ok: without.length === 0,
+    evidence: without.length === 0 ? 'all sixteen' : without.join(', '),
+  };
 });
-
 
 /* ------------------------------------------------------------------ *
  * 9. Further mechanical checks
@@ -496,25 +568,50 @@ const allIndexHtml = packages
   .map((name) => ({ name, html: read(`${name}/index.html`) }));
 
 check('A-07', 'Delivery', 'Every package is marked private and cannot be published', () => {
-  const published = packages.filter((name) => JSON.parse(read(`${name}/package.json`)).private !== true);
-  return { ok: published.length === 0, evidence: published.length === 0 ? 'all sixteen are private' : published.join(', ') };
+  const published = packages.filter(
+    (name) => JSON.parse(read(`${name}/package.json`)).private !== true,
+  );
+  return {
+    ok: published.length === 0,
+    evidence: published.length === 0 ? 'all sixteen are private' : published.join(', '),
+  };
 });
 
 check('A-08', 'Delivery', 'Every package carries a README that says what it is', () => {
   const missing = packages.filter((name) => !has(`${name}/README.md`));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? 'all sixteen' : missing.join(', ') };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? 'all sixteen' : missing.join(', '),
+  };
 });
 
 check('A-09', 'Delivery', 'The root governance documents are present', () => {
-  const required = ['LICENSE.md', 'SECURITY.md', 'CONTRIBUTING.md', 'README.md', 'docs/delivery-plan.md'];
+  const required = [
+    'LICENSE.md',
+    'SECURITY.md',
+    'CONTRIBUTING.md',
+    'README.md',
+    'docs/delivery-plan.md',
+  ];
   const missing = required.filter((path) => !has(path));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}` };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}`,
+  };
 });
 
 check('A-10', 'Delivery', 'Every delivery row is recorded as done', () => {
   const plan = read('docs/delivery-plan.md');
-  const pending = [...plan.matchAll(/^\| (\d+)\s+\|[^|]+\|\s*(\w+)\s*\|/gm)].filter((row) => row[2] !== 'Done');
-  return { ok: pending.length === 0, evidence: pending.length === 0 ? 'all twenty rows read Done' : `pending: ${pending.map((row) => row[1]).join(', ')}` };
+  const pending = [...plan.matchAll(/^\| (\d+)\s+\|[^|]+\|\s*(\w+)\s*\|/gm)].filter(
+    (row) => row[2] !== 'Done',
+  );
+  return {
+    ok: pending.length === 0,
+    evidence:
+      pending.length === 0
+        ? 'all twenty rows read Done'
+        : `pending: ${pending.map((row) => row[1]).join(', ')}`,
+  };
 });
 
 check('B-08', 'Database', 'Every migration can be re-run without error', () => {
@@ -523,34 +620,67 @@ check('B-08', 'Database', 'Every migration can be re-run without error', () => {
     const creates = [...sql.matchAll(/^create (table|index|unique index|policy|type|trigger) /gm)];
     return creates.some((match) => {
       const line = sql.slice(match.index, sql.indexOf('\n', match.index));
-      return !/if not exists/.test(line) && !/^create policy/.test(line) && !/^create trigger/.test(line);
+      return (
+        !/if not exists/.test(line) && !/^create policy/.test(line) && !/^create trigger/.test(line)
+      );
     });
   });
-  return { ok: risky.length === 0, evidence: risky.length === 0 ? `${migrations.length} migrations are idempotent` : risky.join(', ') };
+  return {
+    ok: risky.length === 0,
+    evidence:
+      risky.length === 0 ? `${migrations.length} migrations are idempotent` : risky.join(', '),
+  };
 });
 
 check('B-09', 'Database', 'Every policy is dropped before it is created', () => {
   const policies = [...sqlAll.matchAll(/create policy (\w+)/g)].map((match) => match[1]);
-  const dropped = new Set([...sqlAll.matchAll(/drop policy if exists (\w+)/g)].map((match) => match[1]));
+  const dropped = new Set(
+    [...sqlAll.matchAll(/drop policy if exists (\w+)/g)].map((match) => match[1]),
+  );
   const undropped = [...new Set(policies)].filter((name) => !dropped.has(name));
-  return { ok: undropped.length === 0, evidence: undropped.length === 0 ? `${new Set(policies).size} policies` : undropped.slice(0, 5).join(', ') };
+  return {
+    ok: undropped.length === 0,
+    evidence:
+      undropped.length === 0
+        ? `${new Set(policies).size} policies`
+        : undropped.slice(0, 5).join(', '),
+  };
 });
 
 check('B-10', 'Database', 'Money is never stored as a floating point number', () => {
-  const floats = shLines(`grep -rniE "(price|amount|total|balance|fee|commission)[a-z_]* +(real|double precision|float)" supabase/migrations/`);
-  return { ok: floats.length === 0, evidence: floats.length === 0 ? 'money columns are integer or numeric, never real' : floats.join('; ') };
+  const floats = shLines(
+    `grep -rniE "(price|amount|total|balance|fee|commission)[a-z_]* +(real|double precision|float)" supabase/migrations/`,
+  );
+  return {
+    ok: floats.length === 0,
+    evidence:
+      floats.length === 0 ? 'money columns are integer or numeric, never real' : floats.join('; '),
+  };
 });
 
 check('B-11', 'Database', 'State lives in enumerated types, not in free text', () => {
-  const types = [...sqlAll.matchAll(/create type (public\.)?(\w+) as enum/g)].map((match) => match[2]);
-  return { ok: types.length >= 10, evidence: `${types.length} enumerated types, including ${types.slice(0, 4).join(', ')}` };
+  const types = [...sqlAll.matchAll(/create type (public\.)?(\w+) as enum/g)].map(
+    (match) => match[2],
+  );
+  return {
+    ok: types.length >= 10,
+    evidence: `${types.length} enumerated types, including ${types.slice(0, 4).join(', ')}`,
+  };
 });
 
-check('B-12', 'Database', 'Row level security is forced, so even a table owner is subject to it', () => {
-  const forced = [...sqlAll.matchAll(/force row level security/g)].length;
-  const enabled = [...sqlAll.matchAll(/enable row level security/g)].length;
-  return { ok: true, evidence: `${enabled} tables enable RLS, ${forced} additionally force it; the application role is never the table owner` };
-});
+check(
+  'B-12',
+  'Database',
+  'Row level security is forced, so even a table owner is subject to it',
+  () => {
+    const forced = [...sqlAll.matchAll(/force row level security/g)].length;
+    const enabled = [...sqlAll.matchAll(/enable row level security/g)].length;
+    return {
+      ok: true,
+      evidence: `${enabled} tables enable RLS, ${forced} additionally force it; the application role is never the table owner`,
+    };
+  },
+);
 
 check('C-12', 'Front end', 'No link opens a new tab without severing the opener', () => {
   const offenders = [];
@@ -563,32 +693,40 @@ check('C-12', 'Front end', 'No link opens a new tab without severing the opener'
   }
   return {
     ok: offenders.length === 0,
-    evidence: offenders.length === 0 ? 'every _blank link carries rel="noopener"' : [...new Set(offenders)].join(', '),
+    evidence:
+      offenders.length === 0
+        ? 'every _blank link carries rel="noopener"'
+        : [...new Set(offenders)].join(', '),
   };
 });
 
-check('C-13', 'Front end', 'Raw HTML is injected only from markup this repository generated', () => {
-  const uses = shLines(
-    `grep -rn "dangerouslySetInnerHTML" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/"`,
-  ).map((line) => line.split(':')[0]);
-  // Three call sites, each fed by a generator in this repository: the
-  // markdown renderer (which escapes first and allows a fixed tag set) and
-  // two QR writers (which emit a path from a matrix of their own making).
-  const allowed = [
-    './main-site/src/components/content/MarkdownView.tsx',
-    './certificate-site/src/App.tsx',
-    './notice-site/src/App.tsx',
-  ];
-  const unexpected = [...new Set(uses)].filter((file) => !allowed.includes(file));
-  const sanitiser = read('main-site/src/lib/content/markdown.ts');
-  return {
-    ok: unexpected.length === 0 && /escape|sanit/i.test(sanitiser),
-    evidence:
-      unexpected.length === 0
-        ? 'three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag'
-        : unexpected.join(', '),
-  };
-});
+check(
+  'C-13',
+  'Front end',
+  'Raw HTML is injected only from markup this repository generated',
+  () => {
+    const uses = shLines(
+      `grep -rn "dangerouslySetInnerHTML" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/"`,
+    ).map((line) => line.split(':')[0]);
+    // Three call sites, each fed by a generator in this repository: the
+    // markdown renderer (which escapes first and allows a fixed tag set) and
+    // two QR writers (which emit a path from a matrix of their own making).
+    const allowed = [
+      './main-site/src/components/content/MarkdownView.tsx',
+      './certificate-site/src/App.tsx',
+      './notice-site/src/App.tsx',
+    ];
+    const unexpected = [...new Set(uses)].filter((file) => !allowed.includes(file));
+    const sanitiser = read('main-site/src/lib/content/markdown.ts');
+    return {
+      ok: unexpected.length === 0 && /escape|sanit/i.test(sanitiser),
+      evidence:
+        unexpected.length === 0
+          ? 'three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag'
+          : unexpected.join(', '),
+    };
+  },
+);
 
 check('C-14', 'Front end', 'Every image carries alternative text', () => {
   const bad = [];
@@ -600,39 +738,73 @@ check('C-14', 'Front end', 'Every image carries alternative text', () => {
   }
   return {
     ok: bad.length === 0,
-    evidence: bad.length === 0 ? 'every <img> declares alt, decorative images with an empty one' : [...new Set(bad)].join(', '),
+    evidence:
+      bad.length === 0
+        ? 'every <img> declares alt, decorative images with an empty one'
+        : [...new Set(bad)].join(', '),
   };
 });
 
 check('C-15', 'Front end', 'A keyboard user can skip the navigation', () => ({
-  ok: /skip/i.test(read('main-site/src/components/layout/AppShell.tsx') ?? '') ||
+  ok:
+    /skip/i.test(read('main-site/src/components/layout/AppShell.tsx') ?? '') ||
     shLines(`grep -rln "skip-link\\|Skip to content" main-site/src`).length > 0,
   evidence: 'a skip link is rendered as the first focusable element of the shell',
 }));
 
 check('C-16', 'Front end', 'Every document declares its language', () => {
   const bad = allIndexHtml.filter((entry) => !/<html lang="/.test(entry.html));
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? `${allIndexHtml.length} documents` : bad.map((entry) => entry.name).join(', ') };
+  return {
+    ok: bad.length === 0,
+    evidence:
+      bad.length === 0
+        ? `${allIndexHtml.length} documents`
+        : bad.map((entry) => entry.name).join(', '),
+  };
 });
 
 check('C-17', 'Front end', 'Nobody is prevented from zooming', () => {
   const bad = allIndexHtml.filter((entry) => /user-scalable=no|maximum-scale=1/.test(entry.html));
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'no document blocks pinch zoom' : bad.map((entry) => entry.name).join(', ') };
+  return {
+    ok: bad.length === 0,
+    evidence:
+      bad.length === 0
+        ? 'no document blocks pinch zoom'
+        : bad.map((entry) => entry.name).join(', '),
+  };
 });
 
 check('C-18', 'Front end', 'Nothing is fetched over plain HTTP', () => {
-  const bad = shLines(`grep -rn "http://" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v node_modules | grep -v "/dist/" | grep -v localhost | grep -v "127.0.0.1" | grep -v "www.w3.org" | grep -v "schema.org" | grep -v "sitemaps.org" | grep -v "\\.test\\." | grep -v "0.0.0.0"`);
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every external address is https' : bad.slice(0, 3).join('; ') };
+  const bad = shLines(
+    `grep -rn "http://" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v node_modules | grep -v "/dist/" | grep -v localhost | grep -v "127.0.0.1" | grep -v "www.w3.org" | grep -v "schema.org" | grep -v "sitemaps.org" | grep -v "\\.test\\." | grep -v "0.0.0.0"`,
+  );
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? 'every external address is https' : bad.slice(0, 3).join('; '),
+  };
 });
 
 check('C-19', 'Front end', 'No API key is hard-coded', () => {
-  const bad = shLines(`grep -rn "eyJhbGciOi\\|AIzaSy" --include="*.ts" --include="*.tsx" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`);
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every key arrives from the environment' : bad.join('; ') };
+  const bad = shLines(
+    `grep -rn "eyJhbGciOi\\|AIzaSy" --include="*.ts" --include="*.tsx" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
+  );
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? 'every key arrives from the environment' : bad.join('; '),
+  };
 });
 
 check('C-20', 'Front end', 'No credential is written to local storage', () => {
-  const bad = shLines(`grep -rnE "localStorage\\.setItem\\([\\"'\\\`][^\\"'\\\`]*(token|secret|password|key)" --include="*.ts" --include="*.tsx" . | grep -v node_modules`);
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'local storage holds preferences only; sessions live in the Firebase SDK' : bad.join('; ') };
+  const bad = shLines(
+    `grep -rnE "localStorage\\.setItem\\([\\"'\\\`][^\\"'\\\`]*(token|secret|password|key)" --include="*.ts" --include="*.tsx" . | grep -v node_modules`,
+  );
+  return {
+    ok: bad.length === 0,
+    evidence:
+      bad.length === 0
+        ? 'local storage holds preferences only; sessions live in the Firebase SDK'
+        : bad.join('; '),
+  };
 });
 
 check('C-21', 'Front end', 'Every staff console states the role it requires', () => {
@@ -647,42 +819,90 @@ check('C-21', 'Front end', 'Every staff console states the role it requires', ()
 });
 
 check('C-22', 'Front end', 'The shared kit is imported, never copied', () => {
-  const copies = shLines(`find . -name "mount.tsx" -not -path "*/node_modules/*" | grep -v corporate-kit`);
-  return { ok: copies.length === 0, evidence: copies.length === 0 ? 'one copy of the kit, used by every console through the @kit alias' : copies.join(', ') };
+  const copies = shLines(
+    `find . -name "mount.tsx" -not -path "*/node_modules/*" | grep -v corporate-kit`,
+  );
+  return {
+    ok: copies.length === 0,
+    evidence:
+      copies.length === 0
+        ? 'one copy of the kit, used by every console through the @kit alias'
+        : copies.join(', '),
+  };
 });
 
 check('D-08', 'Safety', 'The Android shell embeds no remote origin as its own document', () => {
   const config = read('android-app/capacitor.config.ts');
-  return { ok: !/server:\s*{[^}]*url:/s.test(config), evidence: 'capacitor.config.ts declares no server.url, so no remote origin runs as the app itself' };
+  return {
+    ok: !/server:\s*{[^}]*url:/s.test(config),
+    evidence:
+      'capacitor.config.ts declares no server.url, so no remote origin runs as the app itself',
+  };
 });
 
 check('D-09', 'Safety', 'No Firebase service configuration is committed for Android', () => {
   const tracked = shLines(`git ls-files | grep -i "google-services.json\\|keystore"`);
-  return { ok: tracked.length === 0, evidence: tracked.length === 0 ? 'none; both arrive from CI secrets' : tracked.join(', ') };
+  return {
+    ok: tracked.length === 0,
+    evidence: tracked.length === 0 ? 'none; both arrive from CI secrets' : tracked.join(', '),
+  };
 });
 
-check('D-10', 'Safety', 'The ignore rules cover builds, dependencies, environments and the native project', () => {
-  const ignore = read('.gitignore');
-  const required = ['node_modules', 'dist', '.env', 'android-app/android'];
-  const missing = required.filter((entry) => !ignore.includes(entry));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}` };
-});
+check(
+  'D-10',
+  'Safety',
+  'The ignore rules cover builds, dependencies, environments and the native project',
+  () => {
+    const ignore = read('.gitignore');
+    const required = ['node_modules', 'dist', '.env', 'android-app/android'];
+    const missing = required.filter((entry) => !ignore.includes(entry));
+    return {
+      ok: missing.length === 0,
+      evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}`,
+    };
+  },
+);
 
-check('D-11', 'Safety', 'Consoles are told not to be indexed, in a header a crawler cannot ignore', () => {
-  const privateConsoles = consoles.filter((name) => name !== 'vf-site' && name !== 'status-site');
-  const missing = privateConsoles.filter((name) => !/X-Robots-Tag: noindex/.test(read(`${name}/public/_headers`)));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? `${privateConsoles.length} private consoles send X-Robots-Tag: noindex` : missing.join(', ') };
-});
+check(
+  'D-11',
+  'Safety',
+  'Consoles are told not to be indexed, in a header a crawler cannot ignore',
+  () => {
+    const privateConsoles = consoles.filter((name) => name !== 'vf-site' && name !== 'status-site');
+    const missing = privateConsoles.filter(
+      (name) => !/X-Robots-Tag: noindex/.test(read(`${name}/public/_headers`)),
+    );
+    return {
+      ok: missing.length === 0,
+      evidence:
+        missing.length === 0
+          ? `${privateConsoles.length} private consoles send X-Robots-Tag: noindex`
+          : missing.join(', '),
+    };
+  },
+);
 
 check('D-12', 'Safety', 'Consoles refuse to be framed', () => {
   const privateConsoles = consoles.filter((name) => name !== 'vf-site' && name !== 'status-site');
-  const missing = privateConsoles.filter((name) => !/X-Frame-Options: DENY/.test(read(`${name}/public/_headers`)));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? 'frame-ancestors none and X-Frame-Options DENY on every private console' : missing.join(', ') };
+  const missing = privateConsoles.filter(
+    (name) => !/X-Frame-Options: DENY/.test(read(`${name}/public/_headers`)),
+  );
+  return {
+    ok: missing.length === 0,
+    evidence:
+      missing.length === 0
+        ? 'frame-ancestors none and X-Frame-Options DENY on every private console'
+        : missing.join(', '),
+  };
 });
 
 check('E-07', 'SEO', 'The prerendered head and the running application cannot drift', () => {
   const tests = shLines(`grep -rln "prerender" main-site/src/test main-site/scripts 2>/dev/null`);
-  return { ok: tests.length > 0, evidence: 'a test asserts the head written at build time is byte-identical to the one the engine produces' };
+  return {
+    ok: tests.length > 0,
+    evidence:
+      'a test asserts the head written at build time is byte-identical to the one the engine produces',
+  };
 });
 
 check('E-08', 'SEO', 'Structured data is emitted for every kind of public page', () => {
@@ -690,15 +910,23 @@ check('E-08', 'SEO', 'Structured data is emitted for every kind of public page',
     .filter((path) => path.startsWith('./main-site/src'))
     .map((path) => read(path.replace(/^\.\//, '')))
     .join('\n');
-  const types = ['Article', 'Product', 'JobPosting', 'Event', 'Course', 'BreadcrumbList', 'Organization', 'WebSite'].filter(
-    (type) => new RegExp(`'${type}'|"${type}"`).test(source),
-  );
+  const types = [
+    'Article',
+    'Product',
+    'JobPosting',
+    'Event',
+    'Course',
+    'BreadcrumbList',
+    'Organization',
+    'WebSite',
+  ].filter((type) => new RegExp(`'${type}'|"${type}"`).test(source));
   return { ok: types.length >= 6, evidence: types.join(', ') };
 });
 
 check('E-09', 'SEO', 'A page marked noindex never reaches the sitemap', () => ({
   ok: /noindex/.test(read('supabase/migrations/0032_seo.sql')),
-  evidence: 'sitemap_urls() skips any path an override marks noindex, in the same query that lists them',
+  evidence:
+    'sitemap_urls() skips any path an override marks noindex, in the same query that lists them',
 }));
 
 check('E-10', 'SEO', 'The verification portal declares its own canonical address', () => ({
@@ -707,42 +935,70 @@ check('E-10', 'SEO', 'The verification portal declares its own canonical address
 }));
 
 check('F-06', 'Performance', 'Images below the fold are loaded lazily', () => {
-  const lazy = shLines(`grep -rn 'loading="lazy"' --include="*.tsx" . | grep -v node_modules`).length;
+  const lazy = shLines(
+    `grep -rn 'loading="lazy"' --include="*.tsx" . | grep -v node_modules`,
+  ).length;
   return { ok: lazy > 0, evidence: `${lazy} image sites opt into lazy loading` };
 });
 
-check('F-07', 'Performance', 'No render-blocking font or stylesheet is fetched from a third party', () => {
-  const bad = shLines(`grep -rn "fonts.googleapis\\|@import url(" --include="*.css" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`);
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'system font stack; nothing is fetched from a font CDN' : bad.join('; ') };
-});
+check(
+  'F-07',
+  'Performance',
+  'No render-blocking font or stylesheet is fetched from a third party',
+  () => {
+    const bad = shLines(
+      `grep -rn "fonts.googleapis\\|@import url(" --include="*.css" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
+    );
+    return {
+      ok: bad.length === 0,
+      evidence:
+        bad.length === 0 ? 'system font stack; nothing is fetched from a font CDN' : bad.join('; '),
+    };
+  },
+);
 
-check('F-08', 'Performance', 'Query caching is configured rather than left at the defaults', () => ({
-  ok: /staleTime/.test(read('main-site/src/main.tsx')),
-  evidence: 'React Query is given explicit staleTime, gcTime, retry and focus behaviour',
-}));
+check(
+  'F-08',
+  'Performance',
+  'Query caching is configured rather than left at the defaults',
+  () => ({
+    ok: /staleTime/.test(read('main-site/src/main.tsx')),
+    evidence: 'React Query is given explicit staleTime, gcTime, retry and focus behaviour',
+  }),
+);
 
 check('G-04', 'PWA', 'The manifest describes an installable application', () => {
   const config = read('main-site/vite.config.ts');
   const required = ['standalone', 'theme_color', 'background_color', 'start_url'];
   const missing = required.filter((key) => !config.includes(key));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}` };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}`,
+  };
 });
 
 check('G-05', 'PWA', 'Runtime caching is declared per kind of request', () => {
   const config = read('main-site/vite.config.ts');
-  return { ok: /runtimeCaching/.test(config), evidence: 'Workbox runtime caching rules are declared for documents, assets and images' };
+  return {
+    ok: /runtimeCaching/.test(config),
+    evidence: 'Workbox runtime caching rules are declared for documents, assets and images',
+  };
 });
 
 check('I-01', 'CI', 'Continuous integration runs all five gates on every application', () => {
   const ci = read('.github/workflows/ci.yml');
   const steps = ['Typecheck', 'Lint', 'Format check', 'Unit tests', 'Build'];
   const missing = steps.filter((step) => !ci.includes(step));
-  return { ok: missing.length === 0, evidence: missing.length === 0 ? steps.join(', ') : `missing ${missing.join(', ')}` };
+  return {
+    ok: missing.length === 0,
+    evidence: missing.length === 0 ? steps.join(', ') : `missing ${missing.join(', ')}`,
+  };
 });
 
 check('I-02', 'CI', 'New applications are discovered rather than listed by hand', () => ({
   ok: /find \. -maxdepth 2 -name package.json/.test(read('.github/workflows/ci.yml')),
-  evidence: 'the discover job builds the matrix from the tree, so a new app is gated the day it appears',
+  evidence:
+    'the discover job builds the matrix from the tree, so a new app is gated the day it appears',
 }));
 
 check('I-03', 'CI', 'The bundle budget is enforced in CI, not merely documented', () => ({
@@ -757,7 +1013,9 @@ check('I-04', 'CI', 'Bookkeeping cannot break a release', () => ({
 
 check('J-01', 'Docs', 'Every response has a scope record', () => {
   const plan = read('docs/delivery-plan.md');
-  const scopes = [...plan.matchAll(/## Response (\d+) scope \(delivered\)/g)].map((match) => Number(match[1]));
+  const scopes = [...plan.matchAll(/## Response (\d+) scope \(delivered\)/g)].map((match) =>
+    Number(match[1]),
+  );
   return { ok: scopes.length >= 19, evidence: `${scopes.length} scope sections recorded` };
 });
 
@@ -771,7 +1029,6 @@ note('J-03', 'Docs', 'Distinct registry codes recorded', () => {
   const plan = read('docs/delivery-plan.md');
   return `${new Set([...plan.matchAll(/\b[A-Z]{1,2}-\d{3}\b/g)].map((match) => match[0])).size} distinct codes`;
 });
-
 
 /* ------------------------------------------------------------------ *
  * 10. Accessibility, resilience and housekeeping
@@ -791,15 +1048,24 @@ check('A-11', 'Delivery', 'Every console registers under its own application id'
 });
 
 check('A-12', 'Delivery', 'Every migration opens with a comment saying what it does', () => {
-  const silent = migrations.filter((path) => !read(path.replace(/^\.\//, '')).trimStart().startsWith('--'));
-  return { ok: silent.length === 0, evidence: silent.length === 0 ? `${migrations.length} migrations` : silent.join(', ') };
+  const silent = migrations.filter(
+    (path) => !read(path.replace(/^\.\//, '')).trimStart().startsWith('--'),
+  );
+  return {
+    ok: silent.length === 0,
+    evidence: silent.length === 0 ? `${migrations.length} migrations` : silent.join(', '),
+  };
 });
 
 check('B-13', 'Database', 'A record that can change records when it changed', () => {
-  const withUpdatedAt = unique([...sqlAll.matchAll(/create table if not exists public\.(\w+)[\s\S]*?\n\);/g)]
-    .filter((match) => /updated_at/.test(match[0]))
-    .map((match) => match[1]));
-  const triggers = [...sqlAll.matchAll(/create trigger \w+ before update on public\.(\w+)/g)].map((m) => m[1]);
+  const withUpdatedAt = unique(
+    [...sqlAll.matchAll(/create table if not exists public\.(\w+)[\s\S]*?\n\);/g)]
+      .filter((match) => /updated_at/.test(match[0]))
+      .map((match) => match[1]),
+  );
+  const triggers = [...sqlAll.matchAll(/create trigger \w+ before update on public\.(\w+)/g)].map(
+    (m) => m[1],
+  );
   const missing = withUpdatedAt.filter((table) => !triggers.includes(table));
   return {
     ok: missing.length <= 3,
@@ -808,8 +1074,8 @@ check('B-13', 'Database', 'A record that can change records when it changed', ()
 });
 
 check('B-14', 'Database', 'The audit trail cannot be edited or deleted', () => {
-  const logTables = ['audit_log', 'verification_log', 'config_history', 'report_snapshots'].filter((table) =>
-    sqlAll.includes(`public.${table}`),
+  const logTables = ['audit_log', 'verification_log', 'config_history', 'report_snapshots'].filter(
+    (table) => sqlAll.includes(`public.${table}`),
   );
   const editable = logTables.filter((table) =>
     new RegExp(`create policy \\w+ on public\\.${table}\\s+for (update|delete)`).test(sqlAll),
@@ -824,11 +1090,16 @@ check('C-23', 'Front end', 'The any type does not appear in shipped source', () 
   const hits = shLines(
     `grep -rnE ":\\s*any\\b|<any>|as any" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/" | grep -v "\\.test\\." | grep -v "no-unsafe"`,
   );
-  return { ok: hits.length === 0, evidence: hits.length === 0 ? 'none' : hits.slice(0, 3).join('; ') };
+  return {
+    ok: hits.length === 0,
+    evidence: hits.length === 0 ? 'none' : hits.slice(0, 3).join('; '),
+  };
 });
 
 check('C-24', 'Front end', 'Focus is always visible for a keyboard user', () => ({
-  ok: /focus-visible/.test(mainStyles) || shLines(`grep -rl "focus-visible" main-site/src`).length > 0,
+  ok:
+    /focus-visible/.test(mainStyles) ||
+    shLines(`grep -rl "focus-visible" main-site/src`).length > 0,
   evidence: 'focus-visible rings are defined in the design system and used by every control',
 }));
 
@@ -849,7 +1120,10 @@ check('C-27', 'Front end', 'No text on screen is set smaller than 12 pixels', ()
   const small = [...screenStyles.matchAll(/font-size:\s*(\d+)px/g)]
     .map((match) => Number(match[1]))
     .filter((value) => value < 12);
-  return { ok: small.length === 0, evidence: small.length === 0 ? 'the smallest declared size is at least 12px' : small.join(', ') };
+  return {
+    ok: small.length === 0,
+    evidence: small.length === 0 ? 'the smallest declared size is at least 12px' : small.join(', '),
+  };
 });
 
 check('C-28', 'Front end', 'Every console states a minimum width of nothing', () => {
@@ -857,7 +1131,10 @@ check('C-28', 'Front end', 'Every console states a minimum width of nothing', ()
     const css = has(`${name}/src`) ? shLines(`grep -rn "min-width:" ${name}/src 2>/dev/null`) : [];
     return css.some((line) => Number(line.match(/min-width:\s*(\d+)px/)?.[1] ?? 0) > 320);
   });
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'no console demands a wide screen' : bad.join(', ') };
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? 'no console demands a wide screen' : bad.join(', '),
+  };
 });
 
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
@@ -866,14 +1143,18 @@ check('D-13', 'Safety', 'No console policy allows inline script', () => {
     const scriptSrc = headers.match(/script-src ([^;]+);/)?.[1] ?? '';
     return /unsafe-inline/.test(scriptSrc);
   });
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? "script-src is 'self' on every console" : bad.join(', ') };
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? "script-src is 'self' on every console" : bad.join(', '),
+  };
 });
 
 check('E-11', 'SEO', 'The prerendered pages carry their canonical link', () => {
   const file = 'main-site/dist/index.html';
   return {
     ok: has(file) && /rel="canonical"/.test(read(file)),
-    evidence: 'the built home page carries a canonical link, a description and JSON-LD before any script runs',
+    evidence:
+      'the built home page carries a canonical link, a description and JSON-LD before any script runs',
   };
 });
 
@@ -882,36 +1163,63 @@ check('E-12', 'SEO', 'The prerendered pages are readable without JavaScript', ()
   if (!has(file)) return { ok: false, evidence: 'no build present' };
   const html = read(file);
   const root = html.slice(html.indexOf('<div id="root"'), html.indexOf('</body>'));
-  const text = root.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-  return { ok: text.length > 200, evidence: `${text.length} characters of readable text inside #root before hydration` };
+  const text = root
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return {
+    ok: text.length > 200,
+    evidence: `${text.length} characters of readable text inside #root before hydration`,
+  };
 });
 
 check('F-09', 'Performance', 'No source map is shipped to production', () => {
-  const maps = shLines(`find . -path "*/dist/*" -name "*.map" -not -path "*/node_modules/*" | head -5`);
-  return { ok: maps.length === 0, evidence: maps.length === 0 ? 'none in any dist/' : maps.join(', ') };
+  const maps = shLines(
+    `find . -path "*/dist/*" -name "*.map" -not -path "*/node_modules/*" | head -5`,
+  );
+  return {
+    ok: maps.length === 0,
+    evidence: maps.length === 0 ? 'none in any dist/' : maps.join(', '),
+  };
 });
 
 check('F-10', 'Performance', 'Stylesheets stay small enough to inline-parse quickly', () => {
   const sizes = webApps
     .filter((name) => has(`${name}/dist/assets`))
     .map((name) => {
-      const files = readdirSync(join(root, name, 'dist/assets')).filter((file) => file.endsWith('.css'));
-      const bytes = files.reduce((total, file) => total + Number(sh(`gzip -c "${join(root, name, 'dist/assets', file)}" | wc -c`)), 0);
+      const files = readdirSync(join(root, name, 'dist/assets')).filter((file) =>
+        file.endsWith('.css'),
+      );
+      const bytes = files.reduce(
+        (total, file) =>
+          total + Number(sh(`gzip -c "${join(root, name, 'dist/assets', file)}" | wc -c`)),
+        0,
+      );
       return { name, kb: Math.round(bytes / 1024) };
     });
   const over = sizes.filter((entry) => entry.kb > 40);
-  return { ok: over.length === 0, evidence: sizes.map((entry) => `${entry.name} ${entry.kb} KB`).join(', ') };
+  return {
+    ok: over.length === 0,
+    evidence: sizes.map((entry) => `${entry.name} ${entry.kb} KB`).join(', '),
+  };
 });
 
 check('G-06', 'PWA', 'The offline page is part of the precache, not fetched when offline', () => ({
-  ok: /offline/i.test(read('main-site/vite.config.ts')) || has('main-site/src/routes/OfflinePage.tsx'),
+  ok:
+    /offline/i.test(read('main-site/vite.config.ts')) ||
+    has('main-site/src/routes/OfflinePage.tsx'),
   evidence: 'an offline route is built into the shell and precached with it',
 }));
 
-check('I-05', 'CI', 'The Node version is pinned, so a runner upgrade cannot change a build', () => ({
-  ok: /node-version: \d+/.test(read('.github/workflows/ci.yml')),
-  evidence: 'actions/setup-node pins the major version',
-}));
+check(
+  'I-05',
+  'CI',
+  'The Node version is pinned, so a runner upgrade cannot change a build',
+  () => ({
+    ok: /node-version: \d+/.test(read('.github/workflows/ci.yml')),
+    evidence: 'actions/setup-node pins the major version',
+  }),
+);
 
 check('I-06', 'CI', 'Dependency versions cannot drift between a developer and the runner', () => {
   const unpinned = packages.filter((name) => {
@@ -920,13 +1228,15 @@ check('I-06', 'CI', 'Dependency versions cannot drift between a developer and th
   });
   return {
     ok: unpinned.length === 0,
-    evidence: 'the database client is pinned exactly in every package, after a minor release changed its insert typing mid-project',
+    evidence:
+      'the database client is pinned exactly in every package, after a minor release changed its insert typing mid-project',
   };
 });
 
 check('J-04', 'Docs', 'The audit and the registry are reproducible commands, not prose', () => ({
   ok: has('scripts/audit.mjs') && has('scripts/count-registry.mjs'),
-  evidence: 'node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record',
+  evidence:
+    'node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record',
 }));
 
 /* ------------------------------------------------------------------ *
@@ -939,10 +1249,18 @@ if (process.argv.includes('--markdown')) {
   const areas = [...new Set(results.map((entry) => entry.area))];
   const out = [];
   for (const area of areas) {
-    out.push(`### ${area}`, '', '| # | Checkpoint | Result | Evidence |', '| --- | --- | --- | --- |');
+    out.push(
+      `### ${area}`,
+      '',
+      '| # | Checkpoint | Result | Evidence |',
+      '| --- | --- | --- | --- |',
+    );
     for (const entry of results.filter((item) => item.area === area)) {
-      const mark = entry.status === 'pass' ? 'Pass' : entry.status === 'fail' ? '**Fail**' : 'Recorded';
-      out.push(`| ${entry.id} | ${entry.label} | ${mark} | ${entry.evidence.replace(/\|/g, '\\|')} |`);
+      const mark =
+        entry.status === 'pass' ? 'Pass' : entry.status === 'fail' ? '**Fail**' : 'Recorded';
+      out.push(
+        `| ${entry.id} | ${entry.label} | ${mark} | ${entry.evidence.replace(/\|/g, '\\|')} |`,
+      );
     }
     out.push('');
   }

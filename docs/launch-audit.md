@@ -100,7 +100,7 @@ checkpoint so they cannot come back quietly:
 | C-08 | Bangla is a real translation, not a copy of English             | Pass     | 25133 Bangla code points in the Bangla locale                                                                  |
 | C-09 | Every application ships a security header set                   | Pass     | all fourteen                                                                                                   |
 | C-10 | A content security policy is declared, without unsafe-eval      | Pass     | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground)         |
-| C-11 | TypeScript source files under version control                   | Recorded | 347 .ts/.tsx files                                                                                             |
+| C-11 | TypeScript source files under version control                   | Recorded | 349 .ts/.tsx files                                                                                             |
 | C-12 | No link opens a new tab without severing the opener             | Pass     | every _blank link carries rel="noopener"                                                                       |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass     | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text                            | Pass     | every <img> declares alt, decorative images with an empty one                                                  |
@@ -184,7 +184,7 @@ checkpoint so they cannot come back quietly:
 
 | #    | Checkpoint                               | Result   | Evidence                                                                                                                                                                                                                                                                                        |
 | ---- | ---------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H-01 | Unit tests by package                    | Recorded | 627 tests: admin-site 38, android-app 14, certificate-site 31, config-site 16, connect-site 14, corporate-kit 6, customize-site 16, ip-site 18, main-site 337, moderator-site 19, notice-site 25, performance-site 28, status-site 14, users-admin-site 16, users-moderator-site 18, vf-site 17 |
+| H-01 | Unit tests by package                    | Recorded | 643 tests: admin-site 38, android-app 30, certificate-site 31, config-site 16, connect-site 14, corporate-kit 6, customize-site 16, ip-site 18, main-site 337, moderator-site 19, notice-site 25, performance-site 28, status-site 14, users-admin-site 16, users-moderator-site 18, vf-site 17 |
 | H-02 | Every package has at least one test file | Pass     | all sixteen                                                                                                                                                                                                                                                                                     |
 
 ### CI

@@ -113,6 +113,19 @@ The platform is delivered in 20 build responses (see `docs/delivery-plan.md`).
 | 19       | PWA, i18n, Android, performance         |
 | 20       | Verification, audit & launch            |
 
+## Deploying
+
+| Workflow                         | Does                                                                | Runs on                     |
+| -------------------------------- | ------------------------------------------------------------------- | --------------------------- |
+| `.github/workflows/ci.yml`       | Five gates per package plus the size budget                         | Every push                  |
+| `.github/workflows/database.yml` | Builds the schema from nothing, proves it, then migrates production | Changes to `supabase/**`    |
+| `.github/workflows/deploy.yml`   | Ships the fourteen apps to Cloudflare Pages                         | Push to `main`              |
+| `.github/workflows/android.yml`  | Debug APK always, signed APK and AAB on an `android-v*` tag         | Changes to `android-app/**` |
+
+The runbook, the secret inventory and the first-deployment order are in
+[docs/deploying.md](./docs/deploying.md). Migrations can also be applied by
+hand with `node scripts/db-push.mjs --dry-run` and then without the flag.
+
 ## Verifying the build
 
 Two commands reproduce every number anybody is asked to believe about this

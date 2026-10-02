@@ -37,8 +37,15 @@ people to turn notifications off.
 
 ## Building a release
 
-The commands below need the Android SDK and a JDK; they are not run in CI,
-which checks only this package's TypeScript, lint rules and tests.
+**In CI, which is the normal way.** `.github/workflows/android.yml` builds a
+debug APK on every change and a signed APK and AAB on an `android-v*` tag,
+attaching both to a GitHub release and printing the signing certificate's
+SHA-256 fingerprint into the run summary. The native project is generated
+there and configured by `scripts/configure-android.mjs`, whose decisions —
+intent filters, version, signing, Firebase file — are pure functions in
+`src/android-config.ts` with tests beside them. See `docs/deploying.md`.
+
+**By hand.** The commands below need the Android SDK and a JDK.
 
 ```bash
 # 1. Build the web application the shell wraps.
@@ -48,6 +55,7 @@ cd ../main-site && npm ci && npm run build && cd ../android-app
 npm ci
 npx cap add android      # first time only
 npm run sync
+node scripts/configure-android.mjs   # app links, version, signing, Firebase
 
 # 3. Open it in Android Studio, or build from the command line.
 npm run open
