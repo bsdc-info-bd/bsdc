@@ -29,11 +29,21 @@ jobs:
         env:
           GITLEAKS_VERSION: 8.18.4
         run: |
-          set -euo pipefail
-          curl -sSfL \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-            | tar -xz gitleaks
-          ./gitleaks detect --source . --redact --no-banner --exit-code 1
+          set -o pipefail
+          {
+            curl -sSfL \
+              "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+              | tar -xz gitleaks &&
+            ./gitleaks detect --source . --redact --no-banner --exit-code 1
+          } > /tmp/gitleaks.out 2>&1
+          status=$?
+          cat /tmp/gitleaks.out
+          if [ "$status" -ne 0 ]; then
+            # The log of a failed run is not always reachable; put the reason
+            # where an annotation will carry it.
+            echo "::error::gitleaks failed: $(tail -c 1200 /tmp/gitleaks.out | tr '\n' ' ')"
+            exit "$status"
+          fi
 
   discover:
     name: Discover apps

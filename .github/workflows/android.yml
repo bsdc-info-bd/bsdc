@@ -60,16 +60,41 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
-      # The Android SDK is already installed on the GitHub-hosted image, so
-      # there is nothing to set up; only the licences have to be accepted
-      # before Gradle may download a build-tools package it does not have.
-      - name: Accept the Android SDK licences
+      # Depends on nothing the runner image happens to provide: if the SDK
+      # command line tools are already there they are used, and if they are
+      # not they are installed. Either way the licences are accepted and the
+      # three packages Gradle needs are present before it runs.
+      - name: Provide an Android SDK
+        env:
+          CMDLINE_TOOLS_URL: https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
         run: |
-          set -euo pipefail
-          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
-          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
-          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          set -o pipefail
+          {
+            sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+            echo "using $sdk"
+            if [ ! -x "$sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+              echo "no sdkmanager present; installing the command line tools"
+              mkdir -p "$sdk/cmdline-tools"
+              curl -sSfL -o /tmp/cmdline-tools.zip "$CMDLINE_TOOLS_URL"
+              unzip -q /tmp/cmdline-tools.zip -d "$sdk/cmdline-tools"
+              mv "$sdk/cmdline-tools/cmdline-tools" "$sdk/cmdline-tools/latest"
+            fi
+            manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            yes | "$manager" --licenses > /dev/null 2>&1 || true
+            "$manager" --sdk_root="$sdk" \
+              'platform-tools' 'platforms;android-34' 'build-tools;34.0.0' > /dev/null
+            {
+              echo "ANDROID_HOME=$sdk"
+              echo "ANDROID_SDK_ROOT=$sdk"
+            } >> "$GITHUB_ENV"
+            echo "$sdk/platform-tools" >> "$GITHUB_PATH"
+          } > /tmp/sdk.out 2>&1
+          status=$?
+          cat /tmp/sdk.out
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Android SDK setup failed: $(tail -c 1200 /tmp/sdk.out | tr '\n' ' ')"
+            exit "$status"
+          fi
 
       - name: Cache Gradle
         uses: actions/cache@v4
