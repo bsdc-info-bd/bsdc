@@ -3,7 +3,7 @@ import { Browser } from '@capacitor/browser';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { FirebaseMessaging } from '@capacitor-firebase/messaging';
-import { backBehaviour, inAppUrl, notificationText, pushDestination, resolveLink } from './links';
+import { backBehaviour, inAppUrl, notificationText, pushDestination, resolveLink } from './links.js';
 
 /**
  * Native wiring.

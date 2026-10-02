@@ -11,7 +11,7 @@
  * the file exactly as it was after the first run.
  */
 
-import { TRUSTED_HOSTS, APP_SCHEME } from './links';
+import { TRUSTED_HOSTS, APP_SCHEME } from './links.js';
 
 /** Hosts whose https links this app is allowed to claim from the browser. */
 export const APP_LINK_HOSTS = TRUSTED_HOSTS;

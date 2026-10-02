@@ -35,8 +35,8 @@ jobs:
               "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
               | tar -xz gitleaks &&
             ./gitleaks detect --source . --redact --no-banner --exit-code 1
-          } > /tmp/gitleaks.out 2>&1
-          status=$?
+          } > /tmp/gitleaks.out 2>&1 || status=$?
+          status="${status:-0}"
           cat /tmp/gitleaks.out
           if [ "$status" -ne 0 ]; then
             # The log of a failed run is not always reachable; put the reason

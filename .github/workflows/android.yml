@@ -88,8 +88,8 @@ jobs:
               echo "ANDROID_SDK_ROOT=$sdk"
             } >> "$GITHUB_ENV"
             echo "$sdk/platform-tools" >> "$GITHUB_PATH"
-          } > /tmp/sdk.out 2>&1
-          status=$?
+          } > /tmp/sdk.out 2>&1 || status=$?
+          status="${status:-0}"
           cat /tmp/sdk.out
           if [ "$status" -ne 0 ]; then
             echo "::error::Android SDK setup failed: $(tail -c 1200 /tmp/sdk.out | tr '\n' ' ')"
