@@ -487,6 +487,34 @@ Harmless, and now suppressed: the ledger DDL runs with
 `client_min_messages = warning` so that an upgrade path for an older Supabase
 CLI ledger does not print three lines of noise before every real migration.
 
+### CI: the secret scan fails with `leaks found` and nothing else
+
+The scanner is downloaded and run directly rather than through
+`gitleaks/gitleaks-action`, which refuses to run on an organisation-owned
+repository without a paid licence. The step prints the rule, file, line and
+commit of every finding into an error annotation, so the reason is visible
+even when the run log cannot be downloaded.
+
+If a finding is a documented example rather than a credential — this
+repository has two places that write down the shape of a PEM key — allow it
+in `.gitleaks.toml`, narrowly, with a comment saying why. Never delete the
+step, and never allow a whole directory.
+
+### Android: `Cannot find module '…/dist/links'`
+
+TypeScript emits import specifiers verbatim, and Node's ES module loader
+requires the file extension. Source imports inside `android-app/src` are
+written as `./links.js` for that reason: the specifier resolves to the
+TypeScript file during the build and to the emitted JavaScript at run time.
+
+### Android: the SDK step fails before Gradle starts
+
+The workflow no longer depends on the runner image shipping an Android SDK.
+It uses one if it is there and installs the command line tools if it is not,
+then accepts the licences and installs platform-tools, `android-34` and
+`build-tools;34.0.0`. If this step fails, read the error annotation: it
+carries the tail of the step's own output.
+
 ### `psql: command not found` when running the runner locally
 
 `scripts/db-push.mjs` shells out to `psql`. Install the client only:
