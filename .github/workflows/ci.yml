@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secrets-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # The official action refuses to run on an organisation-owned
+      # repository without a paid GITLEAKS_LICENSE. The scanner itself is
+      # open source and has no such condition, so it is downloaded and run
+      # directly: same rules, same exit code, no licence server.
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: 8.18.4
+        run: |
+          set -o pipefail
+          {
+            curl -sSfL \
+              "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+              | tar -xz gitleaks &&
+            ./gitleaks detect --source . --config .gitleaks.toml --redact --no-banner \
+              --report-format json --report-path /tmp/gitleaks.json --exit-code 1
+          } > /tmp/gitleaks.out 2>&1 || status=$?
+          status="${status:-0}"
+          cat /tmp/gitleaks.out
+          if [ "$status" -ne 0 ]; then
+            # The log of a failed run is not always reachable; put the reason
+            # where an annotation will carry it.
+            findings=$(node -e 'try{const f=require("/tmp/gitleaks.json");console.log(f.map(x=>`${x.RuleID} ${x.File}:${x.StartLine} (${x.Commit.slice(0,8)})`).join(" | "))}catch(e){console.log("no report")}')
+            echo "::error::gitleaks failed: ${findings} :: $(tail -c 400 /tmp/gitleaks.out | tr '\n' ' ')"
+            exit "$status"
+          fi
+
+  discover:
+    name: Discover apps
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.find.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: find
+        shell: bash
+        run: |
+          apps=$(find . -maxdepth 2 -name package.json -not -path '*/node_modules/*' \
+            | sed 's|^\./||; s|/package.json$||' | sort | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "Detected apps: $apps"
+
+  quality:
+    name: Quality (${{ matrix.app }})
+    needs: discover
+    if: needs.discover.outputs.apps != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.discover.outputs.apps) }}
+    defaults:
+      run:
+        working-directory: ${{ matrix.app }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # No lockfiles are committed: the applications share one pinned set of
+      # dependency ranges, and a lockfile per application would be eight
+      # copies of the same resolution to keep in step.
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      # The corporate consoles compile the shared kit from source, so its
+      # dependencies have to resolve from the kit's own directory.
+      - name: Install the shared corporate kit
+        if: matrix.app != 'corporate-kit'
+        shell: bash
+        working-directory: .
+        run: |
+          if grep -q '"@kit"' "${{ matrix.app }}/tsconfig.json" 2>/dev/null; then
+            cd corporate-kit && npm install --no-audit --no-fund
+          else
+            echo "${{ matrix.app }} does not use the corporate kit"
+          fi
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npx prettier --check "src/**/*.{ts,tsx,css}"
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Bundle size budget (250 KB gzip of initial JS)
+        shell: bash
+        run: |
+          total=0
+          for file in dist/assets/index-*.js dist/assets/vendor-*.js; do
+            [ -f "$file" ] || continue
+            size=$(gzip -c "$file" | wc -c)
+            total=$((total + size))
+            echo "$(basename "$file"): $((size / 1024)) KB gzip"
+          done
+          echo "Initial JS total: $((total / 1024)) KB gzip"
+          if [ "$total" -gt 256000 ]; then
+            echo "::error::Initial JavaScript exceeds the 250 KB gzip budget"
+            exit 1
+          fi
+
+      # The size of a build is the cause of a field slowdown three weeks
+      # later, so it is recorded next to the field measurements rather than
+      # left in a log that expires. The step is skipped on forks and on any
+      # checkout without the secret, and it never fails the build: a
+      # bookkeeping outage must not block a release.
+      - name: Record the bundle size
+        if: matrix.app == 'main-site' && github.event_name == 'push'
+        continue-on-error: true
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "No Supabase credentials on this checkout; size not recorded."
+            exit 0
+          fi
+          gzipped=0
+          for file in dist/assets/*.js; do
+            [ -f "$file" ] || continue
+            gzipped=$((gzipped + $(gzip -c "$file" | wc -c)))
+          done
+          curl --fail --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/record_bundle_size" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "content-type: application/json" \
+            -d "{\"p_app\":\"main-site\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"

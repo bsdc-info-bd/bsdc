@@ -1,0 +1,247 @@
+name: Android
+
+# Builds the BSDC Android app.
+#
+#   Every push and pull request  -> a debug APK, downloadable from the run.
+#   A tag like `android-v1.4.0`  -> a signed release APK and AAB, attached
+#                                   to a GitHub release.
+#
+# The native project is not committed. It is generated here by
+# `npx cap add android` from `capacitor.config.ts`, then configured by
+# `android-app/scripts/configure-android.mjs`, whose decisions are unit
+# tested in `android-app/src/android-config.test.ts`. That is the whole
+# point of not committing it: the configuration is reviewable code rather
+# than a hundred generated Gradle files nobody reads.
+
+on:
+  push:
+    branches: [main, 'arena/**']
+    tags: ['android-v*']
+    # No `paths` filter here on purpose: a path filter is evaluated against
+    # the pushed commits, so a tag that points at a commit already on the
+    # branch would match nothing and the release would never build. The
+    # filter stays on pull requests, where it behaves.
+  pull_request:
+    paths:
+      - 'android-app/**'
+      - '.github/workflows/android.yml'
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Build a signed release as well as a debug APK'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write # needed only by the release step
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '20'
+
+jobs:
+  build:
+    name: Build the app
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # Depends on nothing the runner image happens to provide: if the SDK
+      # command line tools are already there they are used, and if they are
+      # not they are installed. Either way the licences are accepted and the
+      # three packages Gradle needs are present before it runs.
+      - name: Provide an Android SDK
+        env:
+          CMDLINE_TOOLS_URL: https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+        run: |
+          set -o pipefail
+          {
+            sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/android-sdk}}"
+            echo "using $sdk"
+            if [ ! -x "$sdk/cmdline-tools/latest/bin/sdkmanager" ]; then
+              echo "no sdkmanager present; installing the command line tools"
+              mkdir -p "$sdk/cmdline-tools"
+              curl -sSfL -o /tmp/cmdline-tools.zip "$CMDLINE_TOOLS_URL"
+              unzip -q /tmp/cmdline-tools.zip -d "$sdk/cmdline-tools"
+              mv "$sdk/cmdline-tools/cmdline-tools" "$sdk/cmdline-tools/latest"
+            fi
+            manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+            yes | "$manager" --licenses > /dev/null 2>&1 || true
+            "$manager" --sdk_root="$sdk" \
+              'platform-tools' 'platforms;android-34' 'build-tools;34.0.0' > /dev/null
+            {
+              echo "ANDROID_HOME=$sdk"
+              echo "ANDROID_SDK_ROOT=$sdk"
+            } >> "$GITHUB_ENV"
+            echo "$sdk/platform-tools" >> "$GITHUB_PATH"
+          } > /tmp/sdk.out 2>&1 || status=$?
+          status="${status:-0}"
+          cat /tmp/sdk.out
+          if [ "$status" -ne 0 ]; then
+            echo "::error::Android SDK setup failed: $(tail -c 1200 /tmp/sdk.out | tr '\n' ' ')"
+            exit "$status"
+          fi
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android-app/package.json') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      # The shell wraps the member site, so the web build has to exist and
+      # has to be the real one — the same bundle the website serves, built
+      # with the same configuration.
+      - name: Build the web application
+        working-directory: main-site
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
+          VITE_FB_AUTH_DOMAIN: ${{ secrets.VITE_FB_AUTH_DOMAIN }}
+          VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
+          VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
+          VITE_SITE_URL: https://www.bsdc.info.bd
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Install and check the shell
+        working-directory: android-app
+        run: |
+          npm install --no-audit --no-fund
+          npm run typecheck
+          npm run lint
+          npm run test
+          npm run build
+
+      - name: Generate the native project
+        working-directory: android-app
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Configure the native project
+        working-directory: android-app
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/configure-android.mjs
+
+      # The three assertions worth making about a shell before it ships.
+      - name: Check the manifest says what it should
+        working-directory: android-app
+        run: |
+          manifest=android/app/src/main/AndroidManifest.xml
+          grep -q 'android:host="www.bsdc.info.bd"' "$manifest" || { echo "::error::app links are missing"; exit 1; }
+          grep -q 'android:autoVerify="true"' "$manifest" || { echo "::error::app links are not verified"; exit 1; }
+          grep -q 'android:scheme="bsdc"' "$manifest" || { echo "::error::the bsdc scheme is missing"; exit 1; }
+          if grep -q 'usesCleartextTraffic="true"' "$manifest"; then echo "::error::cleartext traffic is enabled"; exit 1; fi
+          echo "manifest is configured correctly"
+
+      - name: Build the debug APK
+        working-directory: android-app/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Upload the debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsdc-debug-apk
+          path: android-app/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # ---------------------------------------------------------------- #
+      # Release: only for a tag, only with a real keystore and a real
+      # Firebase file. Everything below is skipped otherwise.
+      # ---------------------------------------------------------------- #
+
+      - name: Decode the signing key
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set; a release cannot be signed"
+            exit 1
+          fi
+          echo "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/bsdc-release.keystore"
+          echo "BSDC_KEYSTORE_PATH=$RUNNER_TEMP/bsdc-release.keystore" >> "$GITHUB_ENV"
+
+      - name: Refuse a release built against the placeholder Firebase file
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        working-directory: android-app
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/configure-android.mjs --require-real-firebase
+
+      - name: Build the signed release
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        working-directory: android-app/android
+        env:
+          BSDC_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          BSDC_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          BSDC_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon assembleRelease bundleRelease
+
+      # The fingerprint of the certificate the release was actually signed
+      # with, printed into the run summary. It must match the one published
+      # at /.well-known/assetlinks.json or app links will not verify, and
+      # this is the only place that comparison is easy to make.
+      - name: Report the signing fingerprint
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        run: |
+          apk=$(find android-app/android/app/build/outputs/apk/release -name '*.apk' | head -1)
+          fingerprint=$("$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$apk" | grep -i 'SHA-256 digest' | head -1 | awk '{print $NF}' | tr 'a-z' 'A-Z' | sed 's/../&:/g; s/:$//')
+          {
+            echo '## Release signed'
+            echo
+            echo "- certificate SHA-256: \`$fingerprint\`"
+            echo '- this must equal `ANDROID_CERT_FINGERPRINT` on the Pages project, or app links will not verify'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the release artifacts
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        uses: actions/upload-artifact@v4
+        with:
+          name: bsdc-release
+          path: |
+            android-app/android/app/build/outputs/apk/release/*.apk
+            android-app/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attach the build to the release
+        if: startsWith(github.ref, 'refs/tags/android-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android-app/android/app/build/outputs/apk/release/*.apk
+            android-app/android/app/build/outputs/bundle/release/*.aab
+          body: |
+            BSDC for Android ${{ github.ref_name }}
+
+            The APK is for direct installation. The AAB is what Play Console takes.
+            App links only open in the app once `/.well-known/assetlinks.json`
+            lists this build's signing certificate.

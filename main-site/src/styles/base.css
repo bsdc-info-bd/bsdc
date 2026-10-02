@@ -1,0 +1,149 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------------------------------------------------------------------------
+   BSDC design tokens. Semantic names only — never use raw hex in components.
+   --------------------------------------------------------------------------- */
+:root,
+[data-theme='light'] {
+  --bsdc-bg: #ffffff;
+  --bsdc-surface: #f2f7f5;
+  --bsdc-surface-2: #e8f0ec;
+  --bsdc-border: #d7e3dc;
+  --bsdc-text: #10241b;
+  --bsdc-text-muted: #5c6f66;
+
+  --bsdc-green-900: #081c15;
+  --bsdc-green-800: #1b4332;
+  --bsdc-green-700: #2d6a4f;
+  --bsdc-green-500: #40916c;
+  --bsdc-green-300: #74c69d;
+  --bsdc-green-200: #52b788;
+
+  --bsdc-blue: #1877f2;
+  --bsdc-blue-soft: #e7f0fe;
+  --bsdc-danger: #d9363e;
+  --bsdc-warn: #e5a50a;
+  --bsdc-online: #31a24c;
+
+  --bsdc-ring: var(--bsdc-green-500);
+  --bsdc-app-bar-h: 56px;
+  --bsdc-bottom-nav-h: 60px;
+  --bsdc-content-max: 1180px;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bsdc-bg: #0b1512;
+  --bsdc-surface: #101e19;
+  --bsdc-surface-2: #16281f;
+  --bsdc-border: #1f3a2e;
+  --bsdc-text: #e9f2ed;
+  --bsdc-text-muted: #9db4a9;
+
+  --bsdc-green-900: #d8f3e6;
+  --bsdc-green-800: #b7e4c7;
+  --bsdc-green-700: #74c69d;
+  --bsdc-green-500: #52b788;
+  --bsdc-green-300: #40916c;
+  --bsdc-green-200: #74c69d;
+
+  --bsdc-blue: #4e9bff;
+  --bsdc-blue-soft: #15263c;
+  --bsdc-danger: #ff6b70;
+  --bsdc-warn: #f4c04b;
+  --bsdc-online: #42b72a;
+
+  --bsdc-ring: var(--bsdc-green-200);
+  color-scheme: dark;
+}
+
+@media (min-width: 1440px) {
+  :root {
+    --bsdc-app-bar-h: 64px;
+    --bsdc-content-max: 1320px;
+  }
+}
+
+@media (min-width: 2560px) {
+  :root {
+    --bsdc-content-max: 1680px;
+  }
+}
+
+@media (min-width: 3840px) {
+  :root {
+    --bsdc-content-max: 1880px;
+  }
+}
+
+@layer base {
+  * {
+    min-width: 0;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-bg font-sans text-base text-text antialiased;
+    margin: 0;
+    overscroll-behavior-y: none;
+  }
+
+  /* Bangla script needs a taller line box for its ascenders and matras. */
+  :lang(bn) {
+    @apply font-bangla;
+    line-height: 1.7;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-semibold text-text;
+    text-wrap: balance;
+  }
+
+  p,
+  li {
+    text-wrap: pretty;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--bsdc-ring);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: var(--bsdc-green-200);
+    color: #ffffff;
+  }
+
+  img,
+  svg,
+  video,
+  canvas {
+    max-width: 100%;
+    height: auto;
+  }
+
+  hr {
+    @apply border-border;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}

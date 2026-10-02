@@ -1,0 +1,261 @@
+/* ---------------------------------------------------------------------------
+   BSDC complex component styles that are clearer as real CSS than as utility
+   soup: the app shell chrome, route progress bar, toast surface and print
+   rules. Primitive-level styling stays in the design-system components.
+   --------------------------------------------------------------------------- */
+
+@layer components {
+  .bsdc-app-bar {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 40;
+    inline-size: 100%;
+    border-block-end: 1px solid var(--bsdc-border);
+  }
+
+  .bsdc-bottom-nav {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 40;
+    border-block-start: 1px solid var(--bsdc-border);
+  }
+
+  .bsdc-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    flex: 1 1 0;
+    min-inline-size: 0;
+    padding-block: 6px;
+    color: var(--bsdc-text-muted);
+    /* 12px is the floor for anything a person has to read; a tab label at
+       10px is unreadable on the 250px screens this interface promises to
+       support. The gap and line-height absorb the extra two pixels. */
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .bsdc-nav-item[aria-current='page'] {
+    color: var(--bsdc-green-700);
+  }
+
+  .bsdc-nav-item > span {
+    max-inline-size: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .bsdc-route-progress {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    block-size: 2px;
+    z-index: 60;
+    background: linear-gradient(90deg, var(--bsdc-green-500), var(--bsdc-blue));
+    transition: inline-size 200ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Command palette (cmdk) surface. */
+  .bsdc-cmdk [cmdk-input] {
+    inline-size: 100%;
+    background: transparent;
+    border: 0;
+    outline: none;
+    font-size: 16px;
+    color: var(--bsdc-text);
+    padding-block: 14px;
+  }
+
+  .bsdc-cmdk [cmdk-item] {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    color: var(--bsdc-text);
+  }
+
+  .bsdc-cmdk [cmdk-item][data-selected='true'] {
+    background: var(--bsdc-surface-2);
+  }
+
+  .bsdc-cmdk [cmdk-group-heading] {
+    padding: 10px 12px 4px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--bsdc-text-muted);
+  }
+
+  .bsdc-cmdk [cmdk-empty] {
+    padding: 28px 12px;
+    text-align: center;
+    color: var(--bsdc-text-muted);
+    font-size: 14px;
+  }
+}
+
+/* Print: articles, order labels, certificates and notices. */
+@media print {
+  .bsdc-app-bar,
+  .bsdc-bottom-nav,
+  .bsdc-no-print {
+    display: none !important;
+  }
+
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  main {
+    padding: 0 !important;
+  }
+
+  a[href^='http']::after {
+    content: ' (' attr(href) ')';
+    font-size: 10px;
+    color: #444444;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Rendered member content.
+   The HTML always comes from lib/content/markdown.ts, which sanitises it.
+   Styling lives here so the renderer stays free of presentation decisions.
+   --------------------------------------------------------------------------- */
+.bsdc-markdown {
+  font-size: theme('fontSize.base');
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.bsdc-markdown > * + * {
+  margin-top: 0.9em;
+}
+
+.bsdc-markdown h1,
+.bsdc-markdown h2,
+.bsdc-markdown h3,
+.bsdc-markdown h4 {
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 1.4em;
+}
+
+.bsdc-markdown h1 {
+  font-size: 1.6em;
+}
+.bsdc-markdown h2 {
+  font-size: 1.35em;
+}
+.bsdc-markdown h3 {
+  font-size: 1.15em;
+}
+
+.bsdc-markdown a {
+  color: var(--bsdc-green-700);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.bsdc-markdown ul,
+.bsdc-markdown ol {
+  padding-inline-start: 1.5em;
+}
+
+.bsdc-markdown ul {
+  list-style: disc;
+}
+.bsdc-markdown ol {
+  list-style: decimal;
+}
+.bsdc-markdown li + li {
+  margin-top: 0.35em;
+}
+
+.bsdc-markdown blockquote {
+  border-inline-start: 3px solid var(--bsdc-green-500);
+  padding-inline-start: 0.9em;
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-markdown code {
+  font-family: theme('fontFamily.mono');
+  font-size: 0.9em;
+  background: var(--bsdc-surface-2);
+  border-radius: 6px;
+  padding: 0.12em 0.35em;
+}
+
+.bsdc-markdown pre.bsdc-code {
+  background: var(--bsdc-surface-2);
+  border: 1px solid var(--bsdc-border);
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.bsdc-markdown pre.bsdc-code code {
+  background: transparent;
+  padding: 0;
+  font-size: 0.85em;
+  line-height: 1.6;
+}
+
+.bsdc-markdown img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.bsdc-markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.bsdc-markdown th,
+.bsdc-markdown td {
+  border: 1px solid var(--bsdc-border);
+  padding: 0.45rem 0.6rem;
+  text-align: start;
+}
+
+/* highlight.js tokens, mapped onto BSDC tokens so both themes stay readable */
+.bsdc-markdown .hljs-comment,
+.bsdc-markdown .hljs-quote {
+  color: var(--bsdc-text-muted);
+  font-style: italic;
+}
+.bsdc-markdown .hljs-keyword,
+.bsdc-markdown .hljs-selector-tag,
+.bsdc-markdown .hljs-literal {
+  color: var(--bsdc-green-700);
+  font-weight: 600;
+}
+.bsdc-markdown .hljs-string,
+.bsdc-markdown .hljs-attr {
+  color: var(--bsdc-blue);
+}
+.bsdc-markdown .hljs-number,
+.bsdc-markdown .hljs-built_in,
+.bsdc-markdown .hljs-type {
+  color: var(--bsdc-warn);
+}
+.bsdc-markdown .hljs-title,
+.bsdc-markdown .hljs-section,
+.bsdc-markdown .hljs-name {
+  color: var(--bsdc-green-500);
+  font-weight: 600;
+}

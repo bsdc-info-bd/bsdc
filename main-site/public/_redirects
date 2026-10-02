@@ -1,0 +1,4 @@
+# Cloudflare Pages redirects.
+# The SPA fallback is handled by the generated _routes/sw config; explicit
+# canonical host redirects are declared here.
+https://bsdc.pages.dev/* https://www.bsdc.info.bd/:splat 301

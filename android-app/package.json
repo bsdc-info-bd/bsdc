@@ -1,0 +1,36 @@
+{
+  "name": "bsdc-android",
+  "private": true,
+  "version": "0.19.0",
+  "type": "module",
+  "description": "Capacitor shell around www.bsdc.info.bd: deep links, push delivery and native chrome.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts --max-warnings 0",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json",
+    "sync": "cap sync android",
+    "open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor-firebase/authentication": "^6.1.0",
+    "@capacitor-firebase/messaging": "^6.1.0",
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/browser": "^6.0.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@capacitor/status-bar": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@types/node": "^22.7.4",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4",
+    "vitest": "^2.1.2"
+  }
+}

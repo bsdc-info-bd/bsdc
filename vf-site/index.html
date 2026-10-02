@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- bsdc:hand-written — this head is maintained by hand, not by scripts/scaffold-corporate.sh. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+
+    <title>Verify a BSDC certificate, notice or staff card</title>
+    <meta
+      name="description"
+      content="Check whether a BSDC certificate, notice or staff identity card is genuine. Enter the code printed on the document, or scan its QR code. No account is needed."
+    />
+    <link rel="canonical" href="https://vf.main.bsdc.info.bd/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BSDC" />
+    <meta property="og:title" content="Verify a BSDC certificate, notice or staff card" />
+    <meta
+      property="og:description"
+      content="Enter the code printed on a BSDC document to see whether it is genuine, revoked, expired or unknown."
+    />
+    <meta property="og:url" content="https://vf.main.bsdc.info.bd/" />
+    <meta property="og:image" content="https://www.bsdc.info.bd/og/default.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "BSDC verification portal",
+        "url": "https://vf.main.bsdc.info.bd/",
+        "description": "Public verification of certificates, notices and staff identity cards issued by the Bangladesh Software Development Community.",
+        "inLanguage": "en",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Bangladesh Software Development Community",
+          "url": "https://www.bsdc.info.bd/"
+        },
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": "https://vf.main.bsdc.info.bd/?code={code}",
+          "query-input": "required name=code"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>
+      <main>
+        <h1>Verify a BSDC document</h1>
+        <p>
+          This page checks a code printed on a BSDC certificate, notice or staff identity card.
+          Checking a code requires JavaScript, because the answer is read live from the register
+          rather than stored in this page. If you cannot enable it, write to
+          <a href="mailto:verify@bsdc.info.bd">verify@bsdc.info.bd</a> with the code and we will
+          answer by return.
+        </p>
+      </main>
+    </noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

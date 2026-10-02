@@ -1,0 +1,151 @@
+{
+  "comment": "The pages that exist whether or not anybody has written anything. Read by src/lib/seo at runtime and by scripts/prerender.mjs at build time, so the HTML a crawler receives and the HTML a browser renders cannot describe the page differently.",
+  "routes": [
+    {
+      "path": "/",
+      "title": "BSDC — the open developer community of Bangladesh",
+      "description": "Posts, groups, events, jobs, freelance work, open-source projects, courses and a marketplace, built by and for Bangladeshi software developers.",
+      "changefreq": "hourly",
+      "priority": 1.0,
+      "heading": "Bangladesh Software Development Community",
+      "summary": "A single place for Bangladeshi developers to publish, learn, hire, be hired, sell and build together.",
+      "type": "website"
+    },
+    {
+      "path": "/about",
+      "title": "About BSDC — who we are and who runs it",
+      "description": "BSDC is run by RRC Development and founded by Rizwan Rahim Chowdhury. Read what the community is for, how it is governed and how it is funded.",
+      "changefreq": "monthly",
+      "priority": 0.8,
+      "heading": "About the community",
+      "summary": "What BSDC is for, who is accountable for it, and how decisions about it are made.",
+      "type": "website"
+    },
+    {
+      "path": "/guidelines",
+      "title": "Community guidelines — BSDC",
+      "description": "What is expected of members, what is not allowed, how moderation decisions are made and how to appeal one.",
+      "changefreq": "monthly",
+      "priority": 0.6,
+      "heading": "Community guidelines",
+      "summary": "The rules, the reasons behind them, and the route to appeal a decision.",
+      "type": "website"
+    },
+    {
+      "path": "/contact",
+      "title": "Contact BSDC",
+      "description": "Reach the BSDC team about membership, partnerships, press, security reports or anything the community platform gets wrong.",
+      "changefreq": "yearly",
+      "priority": 0.5,
+      "heading": "Contact",
+      "summary": "How to reach the people who run the community, and what to expect by way of a reply.",
+      "type": "website"
+    },
+    {
+      "path": "/shop",
+      "title": "Marketplace — tools and services by Bangladeshi developers",
+      "description": "Buy templates, components, courses and services from developers and studios in Bangladesh, with verified reviews from people who actually bought them.",
+      "changefreq": "daily",
+      "priority": 0.9,
+      "heading": "Marketplace",
+      "summary": "Digital and physical goods sold by members, with reviews only from verified purchases.",
+      "type": "website"
+    },
+    {
+      "path": "/jobs",
+      "title": "Software jobs in Bangladesh — BSDC",
+      "description": "Engineering roles across Bangladesh and remote, posted by companies and by members, with salary ranges shown wherever they are known.",
+      "changefreq": "daily",
+      "priority": 0.9,
+      "heading": "Jobs",
+      "summary": "Open engineering roles, with the salary shown rather than negotiated in the dark.",
+      "type": "website"
+    },
+    {
+      "path": "/freelance",
+      "title": "Freelance work for developers — BSDC",
+      "description": "Short contracts and project work posted by members, with proposals, milestones and payouts handled inside the community.",
+      "changefreq": "daily",
+      "priority": 0.8,
+      "heading": "Freelance",
+      "summary": "Project work posted by members, from a weekend fix to a long engagement.",
+      "type": "website"
+    },
+    {
+      "path": "/projects",
+      "title": "Open-source projects from Bangladesh — BSDC",
+      "description": "Projects built by community members, the technologies behind them, and the ones currently looking for contributors.",
+      "changefreq": "daily",
+      "priority": 0.8,
+      "heading": "Projects",
+      "summary": "What members are building, and which projects want help.",
+      "type": "website"
+    },
+    {
+      "path": "/learn",
+      "title": "Courses and learning paths — BSDC",
+      "description": "Free and paid courses in Bangla and English, with lessons, quizzes and a verifiable certificate at the end.",
+      "changefreq": "weekly",
+      "priority": 0.9,
+      "heading": "Learning",
+      "summary": "Structured courses in Bangla and English, ending in a certificate anybody can verify.",
+      "type": "website"
+    },
+    {
+      "path": "/groups",
+      "title": "Groups — BSDC",
+      "description": "Communities inside the community: language groups, city groups, study groups and working groups, public and private.",
+      "changefreq": "daily",
+      "priority": 0.7,
+      "heading": "Groups",
+      "summary": "Smaller rooms inside the community, by language, city, stack or purpose.",
+      "type": "website"
+    },
+    {
+      "path": "/events",
+      "title": "Developer events in Bangladesh — BSDC",
+      "description": "Meetups, workshops, conferences and online sessions hosted by the community and by its members.",
+      "changefreq": "daily",
+      "priority": 0.7,
+      "heading": "Events",
+      "summary": "What is happening, where, and whether it is online or in a room.",
+      "type": "website"
+    },
+    {
+      "path": "/playground",
+      "title": "Code playground — BSDC",
+      "description": "Write, run and share small programs in the browser, and publish a sketch to the community without leaving the page.",
+      "changefreq": "weekly",
+      "priority": 0.6,
+      "heading": "Playground",
+      "summary": "A scratchpad that runs in the browser and can be shared as a link.",
+      "type": "website"
+    },
+    {
+      "path": "/verify",
+      "title": "Verify a BSDC document",
+      "description": "Check whether a certificate, notice or staff identity card issued by BSDC is genuine, using the code printed on it.",
+      "changefreq": "yearly",
+      "priority": 0.7,
+      "heading": "Verify a document",
+      "summary": "Enter the code printed under the QR square and the registry answers.",
+      "type": "website"
+    }
+  ],
+  "disallow": [
+    "/messages",
+    "/settings",
+    "/notifications",
+    "/bookmarks",
+    "/history",
+    "/vendor",
+    "/checkout",
+    "/cart",
+    "/orders",
+    "/compose",
+    "/onboarding",
+    "/admin",
+    "/api",
+    "/auth"
+  ]
+}

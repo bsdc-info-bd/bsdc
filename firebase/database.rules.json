@@ -1,0 +1,35 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "presence": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['state', 'changedAt'])",
+        "state": { ".validate": "newData.isString() && (newData.val() === 'online' || newData.val() === 'offline' || newData.val() === 'away')" },
+        "changedAt": { ".validate": "newData.isNumber()" },
+        "device": { ".validate": "newData.isString() && newData.val().length <= 64" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "typing": {
+      "$threadId": {
+        "$uid": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isNumber()"
+        }
+      }
+    },
+
+    "counters": {
+      "$scope": {
+        ".read": true,
+        ".write": false
+      }
+    }
+  }
+}

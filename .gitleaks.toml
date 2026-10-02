@@ -1,0 +1,22 @@
+# gitleaks configuration
+#
+# The default rule set, plus the two places in this repository where the
+# *shape* of a credential is written down on purpose:
+#
+#   - `main-site/functions/api/auth/claims.ts` parses a PEM private key, so
+#     it contains the literal header and footer lines of one;
+#   - `docs/deploying.md` tells an operator what each secret has to look
+#     like, including that a service-account key begins with that header.
+#
+# Neither holds key material. Everything else is scanned normally, and the
+# scan runs over the whole history rather than the working tree.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "PEM headers that are parsed or documented, never key material"
+paths = [
+  '''main-site/functions/api/auth/claims\.ts''',
+  '''docs/deploying\.md''',
+]

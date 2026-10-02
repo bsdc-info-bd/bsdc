@@ -1,0 +1,187 @@
+name: Database
+
+# Two jobs, and the order matters.
+#
+#   verify  — builds the whole schema from nothing on a throwaway Postgres,
+#             then applies it a second time, then asserts the invariants the
+#             platform depends on. Runs on every pull request and every push.
+#   deploy  — applies the missing migrations to the real project. Runs only
+#             on main, only after verify has passed, only one at a time, and
+#             only with a connection string nobody can read out of a log.
+#
+# A migration that has not been proved against an empty database has not been
+# proved at all: the file that works on your machine is working against six
+# months of state that production does not have.
+
+on:
+  push:
+    branches: [main, 'arena/**']
+    paths:
+      - 'supabase/**'
+      - 'scripts/db-push.mjs'
+      - '.github/workflows/database.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'scripts/db-push.mjs'
+      - '.github/workflows/database.yml'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Which database to deploy to'
+        type: choice
+        options: [none, production]
+        default: none
+
+permissions:
+  contents: read
+
+concurrency:
+  # One migration run at a time, and never cancelled half way through.
+  group: database-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Build the schema from nothing
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Local throwaway database: this string is not a secret and is printed
+      # by design, so a failing run can be reproduced exactly.
+      SUPABASE_DB_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the Postgres client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Check the runner's own logic
+        run: node scripts/db-push.mjs --self-test
+
+      - name: Show the plan
+        run: node scripts/db-push.mjs --plan
+
+      # Supabase provides these roles; a bare Postgres does not. They are
+      # created here with no login and no privileges beyond what the
+      # migrations grant them, which is exactly how they behave in the
+      # project: PostgREST switches into them per request.
+      - name: Create the Supabase roles
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          begin
+            if not exists (select 1 from pg_roles where rolname = 'anon') then
+              create role anon nologin noinherit;
+            end if;
+            if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+              create role authenticated nologin noinherit;
+            end if;
+            if not exists (select 1 from pg_roles where rolname = 'service_role') then
+              create role service_role nologin noinherit bypassrls;
+            end if;
+          end
+          $$;
+          grant usage on schema public to anon, authenticated, service_role;
+          SQL
+
+      - name: Apply every migration, twice, then assert the invariants
+        run: node scripts/db-push.mjs --verify
+
+      # A schema that applies is not the same as a schema that works. These
+      # calls exercise the shapes every console depends on; a signature
+      # change breaks this step before it breaks a deployment.
+      - name: Call the functions the applications call
+        run: |
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          -- Reader functions must be callable and must return their declared
+          -- shape even when every table behind them is empty.
+          select bsdc.route_pattern('/p/a-slug-with-an-id/42');
+          select bsdc.card_check_digit('BSDC-CT-ABCD1234');
+          select * from public.sitemap_sections();
+          select * from public.vitals_summary(7, 'main-site') limit 1;
+          select * from public.capacity_forecast(28) limit 1;
+          select * from public.certificate_registry('', 10) limit 1;
+          select * from public.search_suggestions('bsdc', 5) limit 1;
+          select * from public.moderation_queue('open', 10) limit 1;
+          select * from public.service_uptime(7) limit 1;
+          select public.verify_code('BSDC-CT-NOTREAL0');
+          -- The anonymous ingest path must accept a measurement and must
+          -- silently drop an implausible one rather than raising.
+          select public.record_vital('/jobs', 'LCP', 2400, 'mobile', '4g', 'ci', 'main-site');
+          select public.record_vital('/jobs', 'NONSENSE', -5, 'moon', '', 'ci', 'main-site');
+          select count(*) = 1 as one_row_kept from public.web_vitals;
+          SQL
+
+      - name: Report what was built
+        run: |
+          psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 <<'SQL' >> "$GITHUB_STEP_SUMMARY"
+          select '## Schema built from nothing' || E'\n'
+              || '- tables: ' || (select count(*) from pg_tables where schemaname = 'public') || E'\n'
+              || '- policies: ' || (select count(*) from pg_policy) || E'\n'
+              || '- functions: ' || (select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname in ('public','bsdc')) || E'\n'
+              || '- enumerated types: ' || (select count(*) from pg_type where typtype = 'e');
+          SQL
+
+  deploy:
+    name: Apply to production
+    needs: verify
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.target == 'production'
+      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://www.bsdc.info.bd
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the Postgres client
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Say what will change before changing it
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/db-push.mjs --dry-run
+
+      - name: Apply the missing migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/db-push.mjs
+
+      - name: Record what the database now holds
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          {
+            echo '## Production migration ledger'
+            echo
+            echo '| version | name | applied |'
+            echo '| --- | --- | --- |'
+            psql "$SUPABASE_DB_URL" -t -A -F '|' -v ON_ERROR_STOP=1 \
+              -c "select version, name, to_char(applied_at, 'YYYY-MM-DD HH24:MI') from supabase_migrations.schema_migrations order by version desc limit 10" \
+              | sed 's/^/| /; s/$/ |/'
+          } >> "$GITHUB_STEP_SUMMARY"

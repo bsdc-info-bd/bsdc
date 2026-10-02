@@ -1,0 +1,163 @@
+name: Deploy
+
+# Ships the fourteen web applications to Cloudflare Pages.
+#
+# One job per application, so a failure in the notice console never stops
+# the member site from going out. Each job builds with that application's
+# own environment variables and deploys the directory it produced; nothing
+# is uploaded that was not built in the same job from the same commit.
+#
+# Pull requests get a preview deployment with its URL written into the run
+# summary. Only `main` touches production.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: 'Deploy a single application (blank deploys all of them)'
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  deployments: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        include:
+          - { app: main-site, project: bsdc, firebase: main }
+          - { app: admin-site, project: bsdc-admin, firebase: second }
+          - { app: moderator-site, project: bsdc-mod, firebase: second }
+          - { app: performance-site, project: bsdc-perf, firebase: second }
+          - { app: config-site, project: bsdc-config, firebase: second }
+          - { app: users-admin-site, project: bsdc-uadmin, firebase: second }
+          - { app: users-moderator-site, project: bsdc-umod, firebase: second }
+          - { app: customize-site, project: bsdc-custom, firebase: second }
+          - { app: ip-site, project: bsdc-ip, firebase: second }
+          - { app: status-site, project: bsdc-status, firebase: second }
+          - { app: connect-site, project: bsdc-connect, firebase: second }
+          - { app: certificate-site, project: bsdc-cert, firebase: second }
+          - { app: vf-site, project: bsdc-vf, firebase: second }
+          - { app: notice-site, project: bsdc-notice, firebase: second }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # `jobs.<id>.if` cannot read the matrix context, so a single-app
+      # deployment is filtered here instead: out-of-scope jobs start, skip
+      # every step and finish in seconds.
+      - name: Is this application in scope
+        id: scope
+        run: |
+          if [ -z "${{ inputs.app }}" ] || [ "${{ inputs.app }}" = "${{ matrix.app }}" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "${{ matrix.app }} was not requested; skipping."
+          fi
+
+      - name: Install
+        if: steps.scope.outputs.run == 'true'
+        working-directory: ${{ matrix.app }}
+        run: npm install --no-audit --no-fund
+
+      # The consoles compile the shared kit from source, so its own
+      # dependencies have to resolve from its own directory.
+      - name: Install the shared corporate kit
+        if: steps.scope.outputs.run == 'true' && matrix.app != 'main-site'
+        run: cd corporate-kit && npm install --no-audit --no-fund
+
+      - name: Build the member site
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site'
+        working-directory: main-site
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
+          VITE_FB_AUTH_DOMAIN: ${{ secrets.VITE_FB_AUTH_DOMAIN }}
+          VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
+          VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
+          VITE_SITE_URL: https://www.bsdc.info.bd
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: npm run build
+
+      - name: Build the console
+        if: steps.scope.outputs.run == 'true' && matrix.app != 'main-site'
+        working-directory: ${{ matrix.app }}
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          VITE_FB2_API_KEY: ${{ secrets.VITE_FB2_API_KEY }}
+          VITE_FB2_AUTH_DOMAIN: ${{ secrets.VITE_FB2_AUTH_DOMAIN }}
+          VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
+          VITE_FB2_APP_ID: ${{ secrets.VITE_FB2_APP_ID }}
+          VITE_FB2_DATABASE_URL: ${{ secrets.VITE_FB2_DATABASE_URL }}
+          VITE_SITE_URL: https://www.bsdc.info.bd
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: npm run build
+
+      # A build that produced nothing must not be published over a working
+      # deployment. This is the last gate before the upload.
+      - name: Check the build produced something
+        if: steps.scope.outputs.run == 'true'
+        working-directory: ${{ matrix.app }}
+        run: |
+          test -f dist/index.html || { echo "::error::${{ matrix.app }} produced no index.html"; exit 1; }
+          test -d dist/assets || { echo "::error::${{ matrix.app }} produced no assets"; exit 1; }
+          echo "${{ matrix.app }}: $(du -sh dist | cut -f1) in $(find dist -type f | wc -l) files"
+
+      # A first publish has no project to publish into. Creating one is
+      # idempotent in effect: the second run fails because the project is
+      # already there, which is why the failure is ignored rather than
+      # treated as a deployment problem.
+      - name: Make sure the Pages project exists
+        if: steps.scope.outputs.run == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages project create ${{ matrix.project }}
+            --production-branch=main
+
+      - name: Deploy to Cloudflare Pages
+        if: steps.scope.outputs.run == 'true'
+        id: pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy ${{ matrix.app }}/dist
+            --project-name=${{ matrix.project }}
+            --branch=${{ github.head_ref || github.ref_name }}
+            --commit-dirty=true
+
+      - name: Record where it went
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          {
+            echo "### ${{ matrix.app }} → ${{ matrix.project }}"
+            echo
+            echo "- ${{ steps.pages.outputs.deployment-url || 'deployed' }}"
+            echo "- commit ${GITHUB_SHA::7} on branch ${{ github.head_ref || github.ref_name }}"
+          } >> "$GITHUB_STEP_SUMMARY"
