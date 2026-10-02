@@ -3,28 +3,28 @@
 The platform is delivered in 20 build responses. Each response ships complete,
 working, wired-up features — never scaffolding for its own sake.
 
-| # | Module | Status |
-|---|--------|--------|
-| 1 | Foundation and design system | Done |
-| 2 | Authentication and identity | Done |
-| 3 | Data core: Supabase, RTDB, Firestore, storage | Done |
-| 4 | Universal composer and content engine | Done |
-| 5 | Feed and 4-stage ranking engine | Done |
-| 6 | Social graph and interactions | Done |
-| 7 | BSDC Messenger | Done |
-| 8 | Communities: groups, channels, pages, events | Done |
-| 9 | Jobs, freelance, projects, snippets, playground | Done |
-| 10 | Search, notifications and learning | Done |
-| 11 | Marketplace part 1 (customer) | Done |
-| 12 | Marketplace part 2 (vendor) | Done |
-| 13 | Ads system | Done |
-| 14 | Admin panel core and plugin system | Done |
-| 15 | Admin analytics and PDF reports | Done |
-| 16 | Corporate network I | Done |
-| 17 | Corporate network II (trust empire) | Pending |
-| 18 | SEO engine and branding studio | Pending |
-| 19 | PWA, i18n, Android, performance | Pending |
-| 20 | Verification, audit and launch | Pending |
+| #   | Module                                          | Status  |
+| --- | ----------------------------------------------- | ------- |
+| 1   | Foundation and design system                    | Done    |
+| 2   | Authentication and identity                     | Done    |
+| 3   | Data core: Supabase, RTDB, Firestore, storage   | Done    |
+| 4   | Universal composer and content engine           | Done    |
+| 5   | Feed and 4-stage ranking engine                 | Done    |
+| 6   | Social graph and interactions                   | Done    |
+| 7   | BSDC Messenger                                  | Done    |
+| 8   | Communities: groups, channels, pages, events    | Done    |
+| 9   | Jobs, freelance, projects, snippets, playground | Done    |
+| 10  | Search, notifications and learning              | Done    |
+| 11  | Marketplace part 1 (customer)                   | Done    |
+| 12  | Marketplace part 2 (vendor)                     | Done    |
+| 13  | Ads system                                      | Done    |
+| 14  | Admin panel core and plugin system              | Done    |
+| 15  | Admin analytics and PDF reports                 | Done    |
+| 16  | Corporate network I                             | Done    |
+| 17  | Corporate network II (trust empire)             | Done    |
+| 18  | SEO engine and branding studio                  | Pending |
+| 19  | PWA, i18n, Android, performance                 | Pending |
+| 20  | Verification, audit and launch                  | Pending |
 
 ## Response 1 scope (delivered)
 
@@ -178,7 +178,6 @@ working, wired-up features — never scaffolding for its own sake.
   members, the marketing landing untouched for guests, a sticky new-posts
   pill, an infinite sentinel, and a feed preferences panel in settings.
 
-
 ## Response 6 scope (delivered)
 
 - `supabase/migrations/0007_interactions.sql`: five reaction kinds on one row
@@ -211,7 +210,6 @@ working, wired-up features — never scaffolding for its own sake.
 - Bundle discipline held: the interaction repository is reached only through
   dynamic `import()`, because the app bar renders on first paint and must not
   drag the Supabase SDK into the entry chunk.
-
 
 ## Response 7 scope (delivered)
 
@@ -247,7 +245,6 @@ working, wired-up features — never scaffolding for its own sake.
   deletes, older-message paging, an app bar badge, and a Send a message
   button on every other member's profile.
 
-
 ## Response 8 scope (delivered)
 
 - `supabase/migrations/0011_communities.sql`: `groups` with three privacy
@@ -277,7 +274,6 @@ working, wired-up features — never scaffolding for its own sake.
   channels, members, about and a moderator-only requests queue, and `/events`
   grouped by day with one-tap RSVP and `Event` JSON-LD. Groups and Events are
   now first-class destinations in the app bar and the mobile tab bar.
-
 
 ## Response 9 scope (delivered)
 
@@ -318,7 +314,6 @@ working, wired-up features — never scaffolding for its own sake.
   narrowing and `JobPosting` JSON-LD, `/freelance` with budgets and sealed
   proposals, `/projects` with optimistic starring, and `/playground` with a
   sketch library for signed-in members. Jobs and Projects joined the app bar.
-
 
 ## Response 10 scope (delivered)
 
@@ -368,7 +363,6 @@ working, wired-up features — never scaffolding for its own sake.
   with per-kind tabs and shareable `?q=`, and live suggestions inside the
   command palette.
 
-
 ## Response 11 scope (delivered)
 
 - `supabase/migrations/0018_marketplace.sql` and `0019_marketplace_rls.sql`:
@@ -392,7 +386,7 @@ working, wired-up features — never scaffolding for its own sake.
   insert policy; `submit_review()` looks for a delivered order containing
   that product before it will write anything, and `unique (product_id, uid)`
   makes it one review per buyer, editable but not repeatable.
-- Prices and titles are *copied* onto an order, not referenced, so a shop
+- Prices and titles are _copied_ onto an order, not referenced, so a shop
   changing its catalogue tomorrow cannot rewrite what a customer agreed to
   today. Rating sums, sold counts and order counts are trigger-maintained and
   revoked from `authenticated`.
@@ -412,7 +406,6 @@ working, wired-up features — never scaffolding for its own sake.
   and verified-purchase reviews, `/cart` grouped by shop, `/checkout` with
   address book and payment method, `/orders` with a progress track and
   cancellation. A cart badge joined the app bar.
-
 
 ## Registry coverage so far
 
@@ -531,7 +524,6 @@ X-020, X-021, V-020, U-022, Z-008.
   is 211 tests over 17 files; initial JS is 195.9 KB gzip against the 250 KB
   budget.
 
-
 ## Response 13 scope (delivered)
 
 - `supabase/migrations/0022_ads.sql` and `0023_ads_rls.sql`: `ad_campaigns`,
@@ -578,14 +570,13 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/ads.test.ts` adds 29 tests. The suite is 240 tests over 18 files;
   initial JS is 198.0 KB gzip against the 250 KB budget.
 
-
 ## Response 14 scope (delivered)
 
 - `supabase/migrations/0024_admin.sql` and `0025_admin_rls.sql`:
   `role_permissions`, `admin_settings`, `moderation_actions`, plugin metadata
   on `feature_flags`, and assignment plus resolution columns on `reports`.
 - **A permission is a row, not an `if` in a component.** `bsdc.has_permission()`
-  reads `role_permissions` against the role on the caller's *profile* — not a
+  reads `role_permissions` against the role on the caller's _profile_ — not a
   JWT claim that might predate a demotion — and every privileged function
   begins with `bsdc.require_permission()`. `my_permissions()` hands the same
   list to the client so the UI and the database agree about what is possible.
@@ -621,6 +612,61 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
+## Response 17 scope (delivered)
+
+- `supabase/migrations/0030_trust.sql` and `0031_trust_rls.sql`: the trust
+  schema — certificate templates, issued certificates, notices with a
+  publication window and an audience, acknowledgement receipts, and an
+  append-only verification log.
+- **One code shape for everything the community issues.**
+  `BSDC-<KK>-<8 characters>-<check digit>`, where the kind is `CT` for a
+  certificate, `NT` for a notice and `ID` for a staff identity card, all
+  sharing the `bsdc.card_check_digit()` function introduced in Response 16.
+  `O` and `I` are never issued, so a reader who types one gets it repaired to
+  `0` and `1` before the digit is tested, in SQL and in TypeScript alike.
+- **One public door.** `verify_code(text)` is the only route an anonymous
+  visitor has into the trust tables; there is no anonymous select on
+  `public.certificates`, so verification can never degrade into enumeration.
+  The function is volatile rather than stable because every attempt is
+  written to `verification_log` — a sudden run of failures against one code
+  is itself a signal.
+- **An issued document is never edited.** The text is frozen into the row at
+  issue; a mistake is corrected by revoking with a mandatory reason, and that
+  reason becomes part of the public answer rather than disappearing.
+- **A notice goes live by time, not by attention.** `publish_at` may be in
+  the future, and the window plus the audience are applied in `notice_feed()`
+  _and_ in the row-level select policy, so a scheduled notice is invisible to
+  a client that queries the table directly. A published row with no
+  publication time reads as a draft rather than as live.
+- **Acknowledgement is only asked for where it can be given.** A public
+  notice cannot require it, because an anonymous reader has no identity to
+  record; progress is measured against the staff head count and clamped.
+- **The verification answer distinguishes four kinds of "no".** `revoked`,
+  `expired`, `withdrawn` and `unknown` are separate states with separate
+  headlines, separate colours and separate advice, because telling somebody
+  their certificate is "invalid" when it merely lapsed is a different
+  conversation from telling them it was withdrawn.
+- **The printed document is written from scratch** (`corporate-kit/src/pdf/`,
+  no dependency): a PDF 1.4 writer over the base-14 Helvetica family with
+  cross-reference offsets counted in bytes, and a QR encoder that produces
+  one matrix used twice — as vector rectangles in the PDF and as an SVG path
+  on screen, so the square on the paper and the square on the page can never
+  disagree. Printed documents are English-only; unsupported characters
+  degrade to spaces rather than to empty boxes.
+- Three consoles: `certificate-site` (templates, single and batch issue,
+  revocation with reason, registry search, printable certificates),
+  `notice-site` (composer, scheduling, audience, acknowledgement tracking,
+  printable notices) and `vf-site` — the public verification portal, which
+  needs no sign-in, never renders the staff gate, answers a mistyped code
+  without touching the network, accepts `?code=` from a scanned QR, mirrors
+  its state back into the address bar so a result can be shared, and keeps a
+  short recent list in the browser only.
+- `vf-site` is the one indexable console: it ships its own title, description,
+  canonical link, Open Graph tags, `WebSite` JSON-LD, `robots.txt` and
+  sitemap, and `mountConsole()` now leaves that title alone instead of
+  overwriting it with a generated one.
+- 191 tests across the twelve packages, every console builds, and initial
+  JavaScript is 173 to 186 KB gzip against the 250 KB budget.
 
 ## Response 16 scope (delivered)
 
@@ -681,7 +727,7 @@ X-020, X-021, V-020, U-022, Z-008.
   spend as three separate columns, with `platform_total` being only
   commission plus ad spend.
 - **Retention is counted from behaviour, not from logins.** The cohort grid
-  asks how many of the people who joined in a given week were still *writing*
+  asks how many of the people who joined in a given week were still _writing_
   N weeks later, so it cannot be inflated by a background tab.
 - **A report is a stored set of numbers, not a stored file.**
   `create_report_snapshot()` freezes the figures in `jsonb` inside the
@@ -693,7 +739,7 @@ X-020, X-021, V-020, U-022, Z-008.
   return a member's identity alongside their behaviour.
 - **The PDF writer is written from scratch** (`src/lib/reports/pdf.ts`, no
   dependency): a PDF 1.4 document with text wrapping, rules, key/value rows,
-  tables and a bar chart, with cross-reference offsets counted in *bytes*. It
+  tables and a bar chart, with cross-reference offsets counted in _bytes_. It
   is pure — it returns `Uint8Array` and never touches the DOM — so it is
   tested directly, and it is lazily imported only when somebody prints.
   Reports are written in English because the base-14 PDF fonts carry no
@@ -707,7 +753,6 @@ X-020, X-021, V-020, U-022, Z-008.
   generated PDF parses, that its `/Size` matches its xref table, and that a
   snapshot written by an older schema still opens. The suite is 292 tests
   over 20 files; initial JS is 202.1 KB gzip against the 250 KB budget.
-
 
 Response 9 adds:
 T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
@@ -795,3 +840,13 @@ BF-010, BF-011, BF-012,
 BG-001, BG-002, BG-003, BG-004, BG-005, BG-006, BG-007, BG-008,
 BH-001, BH-002, BH-003, BH-004, BH-005, BH-006,
 X-036, X-037, V-031, U-030, Z-016.
+
+Response 17 adds:
+BI-001, BI-002, BI-003, BI-004, BI-005, BI-006, BI-007, BI-008, BI-009,
+BI-010, BI-011, BI-012,
+BJ-001, BJ-002, BJ-003, BJ-004, BJ-005, BJ-006, BJ-007, BJ-008, BJ-009,
+BJ-010, BJ-011,
+BK-001, BK-002, BK-003, BK-004, BK-005, BK-006, BK-007, BK-008, BK-009,
+BK-010,
+BL-001, BL-002, BL-003, BL-004, BL-005, BL-006, BL-007, BL-008,
+X-038, X-039, V-032, U-031, Z-017.

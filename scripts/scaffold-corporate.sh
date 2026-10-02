@@ -15,7 +15,7 @@ while IFS='|' read -r dir appid name port; do
 {
   "name": "$appid",
   "private": true,
-  "version": "0.16.0",
+  "version": "0.17.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -29,6 +29,7 @@ while IFS='|' read -r dir appid name port; do
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
     "firebase": "^10.14.0",
+    "qrcode-generator": "^2.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -178,4 +179,7 @@ ip-site|bsdc-ip|IP intelligence|5184
 status-site|bsdc-status|Service status|5185
 users-admin-site|bsdc-uadmin|Staff records|5186
 users-moderator-site|bsdc-umod|People operations|5187
+certificate-site|bsdc-cert|Certificate generator|5188
+notice-site|bsdc-notice|Notice builder|5189
+vf-site|bsdc-vf|Verification portal|5190
 LIST
