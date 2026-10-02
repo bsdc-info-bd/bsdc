@@ -162,15 +162,73 @@ jobs:
       - name: Install the Postgres client
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
+      # Reaching the database is the step that fails on a first deployment,
+      # and the reason is never in the error: a direct Supabase host has no
+      # IPv4 address any more, and GitHub's runners have no IPv6. This says
+      # so in as many words, without printing anything that identifies the
+      # project.
+      - name: Check the database can be reached at all
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL is not set on this repository. Add it under Settings, Secrets and variables, Actions."
+            exit 1
+          fi
+          node - <<'JS'
+          const dns = require('node:dns').promises;
+          const url = new URL(process.env.SUPABASE_DB_URL);
+          const shape = url.hostname.includes('pooler')
+            ? 'connection pooler'
+            : url.hostname.startsWith('db.')
+              ? 'direct database host'
+              : 'other host';
+          const safe = async (fn) => { try { return await fn(); } catch { return []; } };
+          const v4 = await safe(() => dns.resolve4(url.hostname));
+          const v6 = await safe(() => dns.resolve6(url.hostname));
+          console.log(
+            `::notice::target is a ${shape} on port ${url.port || '5432'}; ` +
+            `${v4.length} IPv4 and ${v6.length} IPv6 addresses; database ${url.pathname.slice(1) || '(none)'}`
+          );
+          if (v4.length === 0) {
+            console.log(
+              '::error::that host has no IPv4 address and a GitHub runner has no IPv6, ' +
+              'so no connection is possible. Use the Supabase connection pooler URI instead: ' +
+              'Project Settings, Database, Connection string, Transaction pooler — ' +
+              'postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres'
+            );
+            process.exit(1);
+          }
+          JS
+
       - name: Say what will change before changing it
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: node scripts/db-push.mjs --dry-run
+        run: |
+          set -o pipefail
+          node scripts/db-push.mjs --dry-run > /tmp/dry.out 2>&1 || status=$?
+          status="${status:-0}"
+          cat /tmp/dry.out
+          if [ "$status" -ne 0 ]; then
+            # The runner scrubs the connection string out of its own output,
+            # so this is safe to put in an annotation — and an annotation is
+            # readable when the run log is not.
+            echo "::error::the dry run failed: $(tail -c 1200 /tmp/dry.out | tr '\n' ' ')"
+            exit "$status"
+          fi
 
       - name: Apply the missing migrations
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-        run: node scripts/db-push.mjs
+        run: |
+          set -o pipefail
+          node scripts/db-push.mjs > /tmp/apply.out 2>&1 || status=$?
+          status="${status:-0}"
+          cat /tmp/apply.out
+          if [ "$status" -ne 0 ]; then
+            echo "::error::applying the migrations failed: $(tail -c 1200 /tmp/apply.out | tr '\n' ' ')"
+            exit "$status"
+          fi
 
       - name: Record what the database now holds
         env:
