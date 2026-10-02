@@ -15,7 +15,7 @@ while IFS='|' read -r dir appid name port; do
 {
   "name": "$appid",
   "private": true,
-  "version": "0.19.0",
+  "version": "0.20.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -27,7 +27,7 @@ while IFS='|' read -r dir appid name port; do
     "test": "vitest run"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.45.4",
+    "@supabase/supabase-js": "2.117.2",
     "firebase": "^10.14.0",
     "qrcode-generator": "^2.0.4",
     "react": "^18.3.1",
@@ -131,6 +131,12 @@ module.exports = {
 };
 EOF
 
+  # A console that has grown its own head — a public portal with real
+  # metadata, say — marks itself and is left alone. Regenerating over a
+  # hand-written head is how a site silently loses its canonical link.
+  if [ -f "$dir/index.html" ] && grep -q "bsdc:hand-written" "$dir/index.html"; then
+    echo "kept the hand-written $dir/index.html"
+  else
   cat > "$dir/index.html" <<EOF
 <!doctype html>
 <html lang="en">
@@ -145,6 +151,35 @@ EOF
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+EOF
+  fi
+
+  # Security headers. A console is a private tool: it is served to staff,
+  # never to a crawler, so it says so in a header rather than relying on a
+  # robots file that an aggregator may ignore. The two public sites
+  # (status and verification) are exempt and set their own.
+  mkdir -p "$dir/public"
+  if [ "$dir" = "vf-site" ] || [ "$dir" = "status-site" ]; then
+    robots_line=""
+  else
+    robots_line="  X-Robots-Tag: noindex, nofollow"
+  fi
+  cat > "$dir/public/_headers" <<EOF
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.firebaseio.com wss://*.firebaseio.com https://*.googleapis.com; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests
+$robots_line
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/index.html
+  Cache-Control: no-cache
 EOF
 
   cat > "$dir/.env.example" <<'EOF'

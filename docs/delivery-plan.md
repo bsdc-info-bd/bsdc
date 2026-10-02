@@ -3,28 +3,28 @@
 The platform is delivered in 20 build responses. Each response ships complete,
 working, wired-up features — never scaffolding for its own sake.
 
-| #   | Module                                          | Status  |
-| --- | ----------------------------------------------- | ------- |
-| 1   | Foundation and design system                    | Done    |
-| 2   | Authentication and identity                     | Done    |
-| 3   | Data core: Supabase, RTDB, Firestore, storage   | Done    |
-| 4   | Universal composer and content engine           | Done    |
-| 5   | Feed and 4-stage ranking engine                 | Done    |
-| 6   | Social graph and interactions                   | Done    |
-| 7   | BSDC Messenger                                  | Done    |
-| 8   | Communities: groups, channels, pages, events    | Done    |
-| 9   | Jobs, freelance, projects, snippets, playground | Done    |
-| 10  | Search, notifications and learning              | Done    |
-| 11  | Marketplace part 1 (customer)                   | Done    |
-| 12  | Marketplace part 2 (vendor)                     | Done    |
-| 13  | Ads system                                      | Done    |
-| 14  | Admin panel core and plugin system              | Done    |
-| 15  | Admin analytics and PDF reports                 | Done    |
-| 16  | Corporate network I                             | Done    |
-| 17  | Corporate network II (trust empire)             | Done    |
-| 18  | SEO engine and branding studio                  | Done    |
-| 19  | PWA, i18n, Android, performance                 | Done    |
-| 20  | Verification, audit and launch                  | Pending |
+| #   | Module                                          | Status |
+| --- | ----------------------------------------------- | ------ |
+| 1   | Foundation and design system                    | Done   |
+| 2   | Authentication and identity                     | Done   |
+| 3   | Data core: Supabase, RTDB, Firestore, storage   | Done   |
+| 4   | Universal composer and content engine           | Done   |
+| 5   | Feed and 4-stage ranking engine                 | Done   |
+| 6   | Social graph and interactions                   | Done   |
+| 7   | BSDC Messenger                                  | Done   |
+| 8   | Communities: groups, channels, pages, events    | Done   |
+| 9   | Jobs, freelance, projects, snippets, playground | Done   |
+| 10  | Search, notifications and learning              | Done   |
+| 11  | Marketplace part 1 (customer)                   | Done   |
+| 12  | Marketplace part 2 (vendor)                     | Done   |
+| 13  | Ads system                                      | Done   |
+| 14  | Admin panel core and plugin system              | Done   |
+| 15  | Admin analytics and PDF reports                 | Done   |
+| 16  | Corporate network I                             | Done   |
+| 17  | Corporate network II (trust empire)             | Done   |
+| 18  | SEO engine and branding studio                  | Done   |
+| 19  | PWA, i18n, Android, performance                 | Done   |
+| 20  | Verification, audit and launch                  | Done   |
 
 ## Response 1 scope (delivered)
 
@@ -612,6 +612,57 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
+## Response 20 scope (delivered)
+
+- `scripts/audit.mjs`: the launch audit as a program. **107 checkpoints**
+  across delivery shape, database, front end, safety, search readiness,
+  performance, offline behaviour, tests, continuous integration and
+  documentation, each one re-runnable on any commit. A number in a launch
+  document is worth exactly what the command that reproduces it is worth.
+- `scripts/count-registry.mjs`: the feature registry counted from the tree
+  rather than from memory — pages, RPCs, policies, console screens, domain
+  rules, plugin flags and edge endpoints, split into core, administration
+  and staff.
+- `docs/launch-audit.md` and `docs/feature-registry.md`: the output of those
+  two commands, with the reasoning that cannot be automated written beside
+  it.
+- **The audit found real faults, which is the only reason to run one.** Four
+  were fixed in this response:
+  1. **The verification portal had lost its head.** Re-running the scaffold
+     in Responses 18 and 19 overwrote `vf-site/index.html`, taking its
+     title, description, canonical link, Open Graph tags and JSON-LD with
+     it — the one indexable console had been silently de-indexed for two
+     responses. The head is restored, and the scaffold now refuses to
+     overwrite any `index.html` marked `bsdc:hand-written`.
+  2. **Thirteen consoles shipped with no security headers at all.** Only
+     `main-site` had `public/_headers`. Every console now sends a content
+     security policy with `script-src 'self'`, `frame-ancestors 'none'`,
+     HSTS and, for the eleven private ones, `X-Robots-Tag: noindex`.
+  3. **A dependency drifted and broke the build.** No lockfiles are
+     committed, so `npm install` resolved `@supabase/supabase-js` 2.117
+     against a range written for 2.45; its stricter insert typing exposed
+     a product insert writing a column that does not exist
+     (`products.image_url`) and a sketch update trying to change its own
+     owner. Both were real faults that older types had hidden. The client
+     is now pinned exactly in all fifteen packages.
+  4. **Three type sizes were below the readable floor.** A 10px tab label
+     is not legible on the 250px screens this interface promises to
+     support; the screen minimum is now 12px, with the print stylesheet
+     explicitly exempt.
+- **What the audit asserts, in one line each.** No emoji in any interface
+  chrome. No placeholder, demo content or suppression comment anywhere. One
+  hundred tables with row level security, 184 policies, every
+  security-definer function with a pinned search path. Twenty-eight
+  functions an anonymous browser may call, seven of which write, every one
+  of them a clamped counter or an append-only log. No key material, no
+  tracked `.env`, no service-role key reachable from a browser or from the
+  edge. Bangla and English at key parity with 25,133 Bangla code points. No
+  horizontal overflow, no blocked zoom, no third-party font, no plain-HTTP
+  fetch, alternative text on every image. Initial JavaScript between 100 and
+  205 KB gzip against a 250 KB budget, on all fourteen applications.
+- 627 tests across the sixteen packages; typecheck, lint, format, test and
+  build clean on every one.
+
 ## Response 19 scope (delivered)
 
 - `supabase/migrations/0034_performance.sql` and `0035_performance_rls.sql`:
@@ -993,3 +1044,14 @@ BS-001, BS-002, BS-003, BS-004, BS-005, BS-006, BS-007, BS-008, BS-009,
 BS-010, BS-011,
 BT-001, BT-002, BT-003, BT-004, BT-005, BT-006, BT-007, BT-008,
 X-042, X-043, V-034, U-033, Z-019.
+
+Response 20 adds:
+BU-001, BU-002, BU-003, BU-004, BU-005, BU-006, BU-007, BU-008, BU-009,
+BU-010,
+BV-001, BV-002, BV-003, BV-004, BV-005, BV-006, BV-007, BV-008,
+BW-001, BW-002, BW-003, BW-004, BW-005, BW-006,
+X-044, X-045, V-035, U-034, Z-020.
+
+The registry is reconciled in `docs/feature-registry.md`, which is generated
+by `node scripts/count-registry.mjs` and therefore tells the truth about the
+commit it was run on rather than about the commit somebody remembers.

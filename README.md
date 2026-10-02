@@ -21,25 +21,25 @@ published package and is never deployed, it exists so that seven staff tools
 cannot drift into seven different answers to the same question. All apps talk
 to the same three databases.
 
-| # | Folder | Pages project | Domain | Access |
-|---|--------|---------------|--------|--------|
-| 1 | `main-site/` | `bsdc` | www.bsdc.info.bd | Public |
-| 2 | `admin-site/` | `bsdc-admin` | admin.corporate.main.bsdc.info.bd | Staff |
-| 3 | `moderator-site/` | `bsdc-mod` | moderator.corporate.bsdc.info.bd | Staff |
-| 4 | `performance-site/` | `bsdc-perf` | performance.site.main.bsdc.info.bd | Staff |
-| 5 | `config-site/` | `bsdc-config` | config.site.main.bsdc.info.bd | Staff |
-| 6 | `users-admin-site/` | `bsdc-uadmin` | users.admin.main.bsdc.info.bd | Staff |
-| 7 | `users-moderator-site/` | `bsdc-umod` | users.moderator.bsdc.info.bd | Staff |
-| 8 | `customize-site/` | `bsdc-custom` | customize.site.main.bsdc.info.bd | Staff |
-| 9 | `ip-site/` | `bsdc-ip` | ip.corporate.main.bsdc.info.bd | Staff |
-| 10 | `status-site/` | `bsdc-status` | status.site.main.bsdc.info.bd | Staff |
-| 11 | `connect-site/` | `bsdc-connect` | connect.live.chat.main.bsdc.info.bd | Staff |
-| 12 | `certificate-site/` | `bsdc-cert` | generate.certificate.main.bsdc.info.bd | Staff |
-| 13 | `vf-site/` | `bsdc-vf` | vf.main.bsdc.info.bd | Public |
-| 14 | `notice-site/` | `bsdc-notice` | notice.site.main.bsdc.info.bd | Staff |
-| 15 | `android-app/` | — | Capacitor shell, package `bd.info.bsdc.app` | Store |
-| 16 | `brand/` | — | Master brand asset library (not deployed) | — |
-| — | `corporate-kit/` | — | Shared source for the seven corporate consoles (not deployed) | — |
+| #   | Folder                  | Pages project  | Domain                                                        | Access |
+| --- | ----------------------- | -------------- | ------------------------------------------------------------- | ------ |
+| 1   | `main-site/`            | `bsdc`         | www.bsdc.info.bd                                              | Public |
+| 2   | `admin-site/`           | `bsdc-admin`   | admin.corporate.main.bsdc.info.bd                             | Staff  |
+| 3   | `moderator-site/`       | `bsdc-mod`     | moderator.corporate.bsdc.info.bd                              | Staff  |
+| 4   | `performance-site/`     | `bsdc-perf`    | performance.site.main.bsdc.info.bd                            | Staff  |
+| 5   | `config-site/`          | `bsdc-config`  | config.site.main.bsdc.info.bd                                 | Staff  |
+| 6   | `users-admin-site/`     | `bsdc-uadmin`  | users.admin.main.bsdc.info.bd                                 | Staff  |
+| 7   | `users-moderator-site/` | `bsdc-umod`    | users.moderator.bsdc.info.bd                                  | Staff  |
+| 8   | `customize-site/`       | `bsdc-custom`  | customize.site.main.bsdc.info.bd                              | Staff  |
+| 9   | `ip-site/`              | `bsdc-ip`      | ip.corporate.main.bsdc.info.bd                                | Staff  |
+| 10  | `status-site/`          | `bsdc-status`  | status.site.main.bsdc.info.bd                                 | Staff  |
+| 11  | `connect-site/`         | `bsdc-connect` | connect.live.chat.main.bsdc.info.bd                           | Staff  |
+| 12  | `certificate-site/`     | `bsdc-cert`    | generate.certificate.main.bsdc.info.bd                        | Staff  |
+| 13  | `vf-site/`              | `bsdc-vf`      | vf.main.bsdc.info.bd                                          | Public |
+| 14  | `notice-site/`          | `bsdc-notice`  | notice.site.main.bsdc.info.bd                                 | Staff  |
+| 15  | `android-app/`          | —              | Capacitor shell, package `bd.info.bsdc.app`                   | Store  |
+| 16  | `brand/`                | —              | Master brand asset library (not deployed)                     | —      |
+| —   | `corporate-kit/`        | —              | Shared source for the seven corporate consoles (not deployed) | —      |
 
 ### Data layer
 
@@ -90,28 +90,44 @@ See [SECURITY.md](./SECURITY.md) for the secret matrix and rotation runbook.
 
 The platform is delivered in 20 build responses (see `docs/delivery-plan.md`).
 
-| Response | Module |
-|---|---|
-| 1 | Foundation & design system |
-| 2 | Authentication & identity |
-| 3 | Data core (Supabase / RTDB / Firestore) |
-| 4 | Universal composer & content engine |
-| 5 | Feed & 4-stage ranking engine |
-| 6 | Social graph & interactions |
-| 7 | BSDC Messenger |
-| 8 | Communities |
-| 9 | Jobs, freelance, projects, playground |
-| 10 | Search & notifications |
-| 11 | Marketplace (customer) |
-| 12 | Marketplace (vendor) |
-| 13 | Ads system |
-| 14 | Admin panel core & plugin system |
-| 15 | Admin analytics & PDF reports |
-| 16 | Corporate network I |
-| 17 | Corporate network II (trust empire) |
-| 18 | SEO engine & branding studio |
-| 19 | PWA, i18n, Android, performance |
-| 20 | Verification, audit & launch |
+| Response | Module                                  |
+| -------- | --------------------------------------- |
+| 1        | Foundation & design system              |
+| 2        | Authentication & identity               |
+| 3        | Data core (Supabase / RTDB / Firestore) |
+| 4        | Universal composer & content engine     |
+| 5        | Feed & 4-stage ranking engine           |
+| 6        | Social graph & interactions             |
+| 7        | BSDC Messenger                          |
+| 8        | Communities                             |
+| 9        | Jobs, freelance, projects, playground   |
+| 10       | Search & notifications                  |
+| 11       | Marketplace (customer)                  |
+| 12       | Marketplace (vendor)                    |
+| 13       | Ads system                              |
+| 14       | Admin panel core & plugin system        |
+| 15       | Admin analytics & PDF reports           |
+| 16       | Corporate network I                     |
+| 17       | Corporate network II (trust empire)     |
+| 18       | SEO engine & branding studio            |
+| 19       | PWA, i18n, Android, performance         |
+| 20       | Verification, audit & launch            |
+
+## Verifying the build
+
+Two commands reproduce every number anybody is asked to believe about this
+repository. Both exit non-zero on a failure, so either can be wired into
+continuous integration.
+
+```bash
+node scripts/audit.mjs            # 107-point launch audit  -> docs/launch-audit.md
+node scripts/count-registry.mjs   # the counted registry    -> docs/feature-registry.md
+```
+
+At the launch commit: 107 checkpoints with no failures, 627 tests across
+sixteen packages, 100 tables under row level security with 184 policies, and
+initial JavaScript between 100 and 205 KB gzip against a 250 KB budget on all
+fourteen applications.
 
 ## Ecosystem link partners (not built here)
 

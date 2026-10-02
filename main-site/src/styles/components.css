@@ -31,7 +31,10 @@
     min-inline-size: 0;
     padding-block: 6px;
     color: var(--bsdc-text-muted);
-    font-size: 10px;
+    /* 12px is the floor for anything a person has to read; a tab label at
+       10px is unreadable on the 250px screens this interface promises to
+       support. The gap and line-height absorb the extra two pixels. */
+    font-size: 12px;
     font-weight: 600;
     line-height: 1.2;
     transition: color 150ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -85,7 +88,7 @@
 
   .bsdc-cmdk [cmdk-group-heading] {
     padding: 10px 12px 4px;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;

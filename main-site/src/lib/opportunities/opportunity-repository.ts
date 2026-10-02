@@ -202,8 +202,9 @@ export async function saveSketch(
   uid: string,
   sketch: { id?: string; title: string; language: SketchLanguage; code: string },
 ): Promise<Sketch> {
-  const payload = {
-    uid,
+  // An insert needs the owner; an update must not carry it, because the
+  // owner of a sketch is not a thing an edit is allowed to change.
+  const fields = {
     title: sketch.title,
     language: sketch.language,
     code: sketch.code,
@@ -211,8 +212,10 @@ export async function saveSketch(
 
   const query =
     sketch.id === undefined
-      ? getSupabase().from('playground_sketches').insert(payload)
-      : getSupabase().from('playground_sketches').update(payload).eq('id', sketch.id);
+      ? getSupabase()
+          .from('playground_sketches')
+          .insert({ uid, ...fields })
+      : getSupabase().from('playground_sketches').update(fields).eq('id', sketch.id);
 
   const { data, error } = await query.select('*').single<PlaygroundSketchRow>();
   if (error) throw toDataError(error);

@@ -204,7 +204,6 @@ export async function createProduct(shopId: string, draft: ProductDraft): Promis
       category: draft.category,
       is_digital: draft.isDigital,
       images: draft.images,
-      image_url: draft.images[0] ?? '',
     })
     .select('id')
     .single();
