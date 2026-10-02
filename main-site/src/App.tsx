@@ -42,6 +42,10 @@ const CartPage = lazy(() => import('@/routes/CartPage'));
 const CheckoutPage = lazy(() => import('@/routes/CheckoutPage'));
 const OrdersPage = lazy(() => import('@/routes/OrdersPage'));
 const AdsPage = lazy(() => import('@/routes/AdsPage'));
+const AdminPage = lazy(() => import('@/routes/AdminPage'));
+const AdminPluginsPage = lazy(() => import('@/routes/AdminPluginsPage'));
+const AdminModerationPage = lazy(() => import('@/routes/AdminModerationPage'));
+const AdminPeoplePage = lazy(() => import('@/routes/AdminPeoplePage'));
 const VendorPage = lazy(() => import('@/routes/VendorPage'));
 const VendorProductsPage = lazy(() => import('@/routes/VendorProductsPage'));
 const VendorOrdersPage = lazy(() => import('@/routes/VendorOrdersPage'));
@@ -95,6 +99,12 @@ const router = createBrowserRouter([
 
           // Vendor console. Ownership is enforced again in the database.
           { path: ROUTES.ads, element: withSuspense(<AdsPage />) },
+
+          // Admin. Every surface re-checks its permission in the database.
+          { path: ROUTES.admin, element: withSuspense(<AdminPage />) },
+          { path: ROUTES.adminPlugins, element: withSuspense(<AdminPluginsPage />) },
+          { path: ROUTES.adminModeration, element: withSuspense(<AdminModerationPage />) },
+          { path: ROUTES.adminPeople, element: withSuspense(<AdminPeoplePage />) },
           { path: ROUTES.vendor, element: withSuspense(<VendorPage />) },
           { path: ROUTES.vendorProducts, element: withSuspense(<VendorProductsPage />) },
           { path: ROUTES.vendorOrders, element: withSuspense(<VendorOrdersPage />) },

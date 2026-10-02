@@ -18,7 +18,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 11 | Marketplace part 1 (customer) | Done |
 | 12 | Marketplace part 2 (vendor) | Done |
 | 13 | Ads system | Done |
-| 14 | Admin panel core and plugin system | Pending |
+| 14 | Admin panel core and plugin system | Done |
 | 15 | Admin analytics and PDF reports | Pending |
 | 16 | Corporate network I | Pending |
 | 17 | Corporate network II (trust empire) | Pending |
@@ -579,6 +579,49 @@ X-020, X-021, V-020, U-022, Z-008.
   initial JS is 198.0 KB gzip against the 250 KB budget.
 
 
+## Response 14 scope (delivered)
+
+- `supabase/migrations/0024_admin.sql` and `0025_admin_rls.sql`:
+  `role_permissions`, `admin_settings`, `moderation_actions`, plugin metadata
+  on `feature_flags`, and assignment plus resolution columns on `reports`.
+- **A permission is a row, not an `if` in a component.** `bsdc.has_permission()`
+  reads `role_permissions` against the role on the caller's *profile* — not a
+  JWT claim that might predate a demotion — and every privileged function
+  begins with `bsdc.require_permission()`. `my_permissions()` hands the same
+  list to the client so the UI and the database agree about what is possible.
+- **Privilege escalation is a constraint, not a review item.**
+  `set_user_role()` refuses to change your own role, refuses to grant a rank
+  at or above your own, refuses to touch anyone who already outranks you, and
+  refuses to demote the last owner. `profiles.role` and `profiles.status` are
+  revoked from `authenticated`, so those functions are the only path.
+- **Every feature is a plugin.** The registry now carries a label, a module,
+  a dependency list, a rollout percentage and an `is_core` flag, and is seeded
+  with 24 plugins across eight modules. A core plugin cannot be switched off.
+  Enabling a plugin whose dependency is off is refused with the names of what
+  to enable first; disabling one walks the dependency graph recursively and
+  switches off everything standing on it **in the same transaction**, so the
+  system is never half on. `plugin_registry()` returns `blocked_by` so the
+  panel can state the real reason a plugin is dark.
+- **Every administrative act writes its own audit row.** `bsdc.audit()` is
+  called inside the transaction that performs the act, and `audit_log` has no
+  insert, update or delete policy for anybody — an owner cannot erase what
+  they did.
+- Moderation is claim-then-close: `claim_report()` gives one moderator
+  ownership, `resolve_report()` refuses a report somebody else holds, refuses
+  one that is already handled, requires `content.hide` for a hide or restore,
+  performs the hide in the same transaction that records the reason, and
+  writes an append-only `moderation_actions` row. A reversal is a new row,
+  never an edit.
+- Client: `src/lib/admin/admin-types.ts` (rank comparison, assignable roles,
+  the dependency cascade, a stable FNV-1a rollout bucket, queue ordering),
+  repository, `use-admin.ts` with five hooks, and four routes — `/admin`,
+  `/admin/plugins`, `/admin/moderation`, `/admin/people` — each of which
+  renders a plain refusal rather than an empty page when the permission is
+  absent.
+- `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
+  files; initial JS is 200.4 KB gzip against the 250 KB budget.
+
+
 Response 9 adds:
 T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
 T-012, T-013, T-014, T-015, T-016, T-017, T-018, T-019, T-020, T-021, T-022,
@@ -630,3 +673,14 @@ AQ-010, AQ-011, AQ-012,
 AR-001, AR-002, AR-003, AR-004, AR-005, AR-006, AR-007, AR-008,
 AS-001, AS-002, AS-003, AS-004, AS-005, AS-006,
 X-030, X-031, V-028, U-027, Z-013.
+
+Response 14 adds:
+AT-001, AT-002, AT-003, AT-004, AT-005, AT-006, AT-007, AT-008, AT-009,
+AT-010, AT-011, AT-012, AT-013, AT-014, AT-015, AT-016, AT-017, AT-018,
+AT-019, AT-020, AT-021, AT-022, AT-023, AT-024, AT-025, AT-026,
+AU-001, AU-002, AU-003, AU-004, AU-005, AU-006, AU-007, AU-008, AU-009,
+AU-010, AU-011, AU-012, AU-013, AU-014,
+AV-001, AV-002, AV-003, AV-004, AV-005, AV-006, AV-007, AV-008, AV-009,
+AV-010,
+AW-001, AW-002, AW-003, AW-004, AW-005, AW-006,
+X-032, X-033, V-029, U-028, Z-014.

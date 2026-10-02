@@ -1343,6 +1343,98 @@ export type AdWalletHistoryRow = {
   created_at: string;
 };
 
+export type DbModerationAction =
+  | 'dismiss'
+  | 'warn'
+  | 'hide_content'
+  | 'restore_content'
+  | 'suspend_account'
+  | 'restore_account'
+  | 'ban_account';
+
+export type PluginRow = {
+  key: string;
+  label: string;
+  description: string;
+  module: string;
+  enabled: boolean;
+  audience: string;
+  is_core: boolean;
+  depends_on: string[];
+  rollout_percent: number;
+  blocked_by: string[];
+  updated_at: string;
+};
+
+export type RolePermissionRow = {
+  role: DbRole;
+  permission: string;
+};
+
+export type AdminSettingRow = {
+  key: string;
+  value: unknown;
+  label: string;
+  visibility: 'public' | 'staff';
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export type ModerationActionRow = {
+  id: string;
+  actor_uid: string;
+  report_id: string | null;
+  subject_type: string;
+  subject_id: string;
+  action: DbModerationAction;
+  reason: string;
+  created_at: string;
+};
+
+export type ModerationQueueRow = {
+  id: string;
+  subject_type: string;
+  subject_id: string;
+  reason: string;
+  details: string;
+  status: DbReportStatus;
+  reporter_uid: string;
+  assigned_to: string | null;
+  resolution: string;
+  report_count: number;
+  created_at: string;
+};
+
+export type AdminOverviewRow = {
+  members_total: number;
+  members_today: number;
+  posts_total: number;
+  posts_today: number;
+  open_reports: number;
+  shops_pending: number;
+  campaigns_pending: number;
+  plugins_enabled: number;
+  plugins_total: number;
+};
+
+export type AdminPersonRow = {
+  uid: string;
+  username: string | null;
+  display_name: string;
+  role: DbRole;
+  status: DbAccountStatus;
+  created_at: string;
+};
+
+export type AuditEntryRow = {
+  id: number;
+  actor_uid: string | null;
+  action: string;
+  subject: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1694,6 +1786,25 @@ export type Database = {
         Update: Partial<Pick<AdDailyStatRow, 'impressions' | 'clicks' | 'spend'>>;
         Relationships: [];
       };
+      role_permissions: {
+        Row: RolePermissionRow;
+        Insert: RolePermissionRow;
+        Update: Partial<RolePermissionRow>;
+        Relationships: [];
+      };
+      admin_settings: {
+        Row: AdminSettingRow;
+        Insert: Pick<AdminSettingRow, 'key'> & Partial<AdminSettingRow>;
+        Update: Partial<Pick<AdminSettingRow, 'value' | 'label' | 'visibility'>>;
+        Relationships: [];
+      };
+      moderation_actions: {
+        Row: ModerationActionRow;
+        Insert: Pick<ModerationActionRow, 'actor_uid' | 'subject_type' | 'subject_id' | 'action'> &
+          Partial<ModerationActionRow>;
+        Update: Partial<Pick<ModerationActionRow, 'reason'>>;
+        Relationships: [];
+      };
       search_log: {
         Row: SearchLogRow;
         Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
@@ -1972,6 +2083,31 @@ export type Database = {
         Args: { p_campaign_id: string; p_days?: number };
         Returns: CampaignDayRow[];
       };
+      plugin_registry: { Args: Record<never, never>; Returns: PluginRow[] };
+      set_plugin_enabled: { Args: { p_key: string; p_enabled: boolean }; Returns: boolean };
+      set_plugin_rollout: {
+        Args: { p_key: string; p_percent: number; p_audience?: string | null };
+        Returns: number;
+      };
+      set_user_role: { Args: { p_uid: string; p_role: DbRole }; Returns: DbRole };
+      set_account_status: {
+        Args: { p_uid: string; p_status: DbAccountStatus; p_reason?: string };
+        Returns: DbAccountStatus;
+      };
+      moderation_queue: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: ModerationQueueRow[];
+      };
+      claim_report: { Args: { p_report_id: string }; Returns: string };
+      resolve_report: {
+        Args: { p_report_id: string; p_action: string; p_reason?: string };
+        Returns: DbReportStatus;
+      };
+      admin_overview: { Args: Record<never, never>; Returns: AdminOverviewRow[] };
+      admin_people: { Args: { p_search?: string; p_limit?: number }; Returns: AdminPersonRow[] };
+      admin_audit: { Args: { p_limit?: number }; Returns: AuditEntryRow[] };
+      my_permissions: { Args: Record<never, never>; Returns: string[] };
+      set_admin_setting: { Args: { p_key: string; p_value: unknown }; Returns: unknown };
       add_to_cart: { Args: { p_product_id: string; p_quantity?: number }; Returns: number };
       set_cart_quantity: {
         Args: { p_product_id: string; p_quantity: number };
