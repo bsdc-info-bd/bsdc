@@ -23,7 +23,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 16  | Corporate network I                             | Done    |
 | 17  | Corporate network II (trust empire)             | Done    |
 | 18  | SEO engine and branding studio                  | Done    |
-| 19  | PWA, i18n, Android, performance                 | Pending |
+| 19  | PWA, i18n, Android, performance                 | Done    |
 | 20  | Verification, audit and launch                  | Pending |
 
 ## Response 1 scope (delivered)
@@ -612,6 +612,67 @@ X-020, X-021, V-020, U-022, Z-008.
 - `src/test/admin.test.ts` adds 25 tests. The suite is 265 tests over 19
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
+## Response 19 scope (delivered)
+
+- `supabase/migrations/0034_performance.sql` and `0035_performance_rls.sql`:
+  the measurement schema — `web_vitals`, `client_errors`, `bundle_sizes` and
+  the capacity series, with their ingest functions and reader functions.
+- **A measurement is attached to a route, never to a person.** There is no
+  user column and no session column on `web_vitals`, by design, so the
+  performance console cannot quietly become a surveillance console. The
+  browser collector carries no identifier either: a test asserts the beacon
+  body contains the two keys it is allowed to contain and nothing else.
+- **A URL with an identifier in it is not a route.** `bsdc.route_pattern()`
+  collapses `/@someone`, UUIDs, slugs and numeric segments, and
+  `src/lib/perf/vitals.ts` performs the same reduction _before_ the beacon
+  leaves the device, so a private draft's slug never reaches a server log.
+  The SQL copy is the second line of defence, not the first.
+- **Speed is reported at the 75th percentile, never as an average**, with the
+  sample count printed beside it, and a route with fewer than twenty samples
+  is labelled as not yet worth believing instead of being ranked.
+- **Ingestion is the one door an anonymous browser may write through**, and
+  it clamps on the way in: an unknown metric or device is dropped, a CLS over
+  10 or a duration over ten minutes is discarded, strings are truncated, and
+  the endpoint answers 204 whatever happens — a beacon has nobody to tell,
+  and an endpoint that returns errors teaches pages to retry.
+- **Errors are grouped by fingerprint**, computed from the message with URLs,
+  identifiers and line numbers stripped out, so the same bug in two builds is
+  one row rather than two, and a fault that recurs after being closed reopens
+  itself.
+- **Capacity is a regression, honestly labelled.** `capacity_forecast()`
+  reports "not enough days to say anything", "the trend is noisy" or "there
+  is no trend, only noise" rather than dressing a weak correlation up as a
+  prediction.
+- `performance-site` (port 5192): Experience, Edge, Errors and Weight —
+  field measurements per route and device with their verdicts in sentences,
+  cache behaviour at the edge, the error board ordered by who it affects, and
+  bundle weight against budget, with CSV export of anything on screen.
+- `moderator-site` (port 5193): the queue in the order the work should be
+  done — severity first, overdue second, corroboration third, age last — with
+  the decision and its reason taken together, because the reason is published
+  to the member and a decision without one is indistinguishable from malice.
+  The decisions offered are exactly the four `resolve_report()` accepts.
+- `corporate-kit` 0.19.0 adds `domain/perf.ts` (thresholds mirrored from SQL,
+  trustworthiness, verdict sentences, sparklines that break on missing days,
+  budget arithmetic) and `domain/moderation.ts` (severity table, response
+  targets of 1, 4, 24 and 48 hours, queue ordering, queue health and the
+  rules a published reason must satisfy).
+- `android-app` is now a real package rather than a note: `capacitor.config.ts`,
+  the routing rules in `src/links.ts` with the native wiring isolated in
+  `src/shell.ts`, and fourteen tests. **A link opens inside the app only if it
+  belongs to BSDC** — everything else goes to the system browser where the
+  address bar is visible, with look-alike hosts such as
+  `bsdc.info.bd.attacker.test` held out by test. A notification with no
+  destination says so rather than opening the home page and wasting the tap.
+  The native project is generated, not committed; `/.well-known/assetlinks.json`
+  is served from an environment variable and serves an empty statement list
+  until a release key exists, which is the honest answer.
+- Continuous integration now records the gzipped size of each `main-site`
+  push into `bundle_sizes`, beside the field measurements, and never fails
+  the build if that bookkeeping call cannot be made.
+- 369 tests across the sixteen packages, every application builds, and
+  `main-site` initial JavaScript is 205 KB gzip against the 250 KB budget.
+
 ## Response 18 scope (delivered)
 
 - `supabase/migrations/0032_seo.sql` and `0033_seo_rls.sql`: per-path
@@ -922,3 +983,13 @@ BO-001, BO-002, BO-003, BO-004, BO-005, BO-006, BO-007, BO-008, BO-009,
 BO-010, BO-011,
 BP-001, BP-002, BP-003, BP-004, BP-005, BP-006, BP-007, BP-008,
 X-040, X-041, V-033, U-032, Z-018.
+
+Response 19 adds:
+BQ-001, BQ-002, BQ-003, BQ-004, BQ-005, BQ-006, BQ-007, BQ-008, BQ-009,
+BQ-010, BQ-011, BQ-012,
+BR-001, BR-002, BR-003, BR-004, BR-005, BR-006, BR-007, BR-008, BR-009,
+BR-010,
+BS-001, BS-002, BS-003, BS-004, BS-005, BS-006, BS-007, BS-008, BS-009,
+BS-010, BS-011,
+BT-001, BT-002, BT-003, BT-004, BT-005, BT-006, BT-007, BT-008,
+X-042, X-043, V-034, U-033, Z-019.

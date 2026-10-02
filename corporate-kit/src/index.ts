@@ -18,6 +18,8 @@ export * from './domain/chat';
 export * from './domain/trust';
 export * from './domain/seo';
 export * from './domain/brand';
+export * from './domain/perf';
+export * from './domain/moderation';
 export * from './pdf/document';
 export * from './pdf/qr';
 export * from './ui/primitives';

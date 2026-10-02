@@ -8,6 +8,7 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { AppCrashFallback } from './components/layout/AppCrashFallback';
 import './i18n';
 import './styles/index.css';
+import { startPerformanceReporting } from './lib/perf/collect';
 import { registerServiceWorker } from './pwa';
 
 const queryClient = new QueryClient({
@@ -41,3 +42,8 @@ createRoot(container).render(
 );
 
 registerServiceWorker();
+
+// Field measurement. It reports on pages, never on people, and it is sent
+// once per page view on the browser's own "going away" signal.
+const buildSha: unknown = import.meta.env['VITE_BUILD_SHA'];
+startPerformanceReporting(typeof buildSha === 'string' ? buildSha : '');

@@ -109,3 +109,32 @@ jobs:
             echo "::error::Initial JavaScript exceeds the 250 KB gzip budget"
             exit 1
           fi
+
+      # The size of a build is the cause of a field slowdown three weeks
+      # later, so it is recorded next to the field measurements rather than
+      # left in a log that expires. The step is skipped on forks and on any
+      # checkout without the secret, and it never fails the build: a
+      # bookkeeping outage must not block a release.
+      - name: Record the bundle size
+        if: matrix.app == 'main-site' && github.event_name == 'push'
+        continue-on-error: true
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "No Supabase credentials on this checkout; size not recorded."
+            exit 0
+          fi
+          gzipped=0
+          for file in dist/assets/*.js; do
+            [ -f "$file" ] || continue
+            gzipped=$((gzipped + $(gzip -c "$file" | wc -c)))
+          done
+          curl --fail --silent --show-error \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/record_bundle_size" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "content-type: application/json" \
+            -d "{\"p_app\":\"main-site\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
