@@ -60,7 +60,16 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: android-actions/setup-android@v3
+      # The Android SDK is already installed on the GitHub-hosted image, so
+      # there is nothing to set up; only the licences have to be accepted
+      # before Gradle may download a build-tools package it does not have.
+      - name: Accept the Android SDK licences
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "ANDROID_HOME=$sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$sdk" >> "$GITHUB_ENV"
+          yes | "$sdk/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
 
       - name: Cache Gradle
         uses: actions/cache@v4

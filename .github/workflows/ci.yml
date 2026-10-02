@@ -21,10 +21,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      # The official action refuses to run on an organisation-owned
+      # repository without a paid GITLEAKS_LICENSE. The scanner itself is
+      # open source and has no such condition, so it is downloaded and run
+      # directly: same rules, same exit code, no licence server.
       - name: gitleaks
-        uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_VERSION: 8.18.4
+        run: |
+          set -euo pipefail
+          curl -sSfL \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks detect --source . --redact --no-banner --exit-code 1
 
   discover:
     name: Discover apps
