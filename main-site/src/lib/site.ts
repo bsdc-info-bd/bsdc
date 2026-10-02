@@ -54,6 +54,8 @@ export const ROUTES = {
   checkout: '/checkout',
   orders: '/orders',
   admin: '/admin',
+  adminAnalytics: '/admin/analytics',
+  adminReports: '/admin/reports',
   adminPlugins: '/admin/plugins',
   adminModeration: '/admin/moderation',
   adminPeople: '/admin/people',

@@ -44,6 +44,8 @@ const OrdersPage = lazy(() => import('@/routes/OrdersPage'));
 const AdsPage = lazy(() => import('@/routes/AdsPage'));
 const AdminPage = lazy(() => import('@/routes/AdminPage'));
 const AdminPluginsPage = lazy(() => import('@/routes/AdminPluginsPage'));
+const AdminAnalyticsPage = lazy(() => import('@/routes/AdminAnalyticsPage'));
+const AdminReportsPage = lazy(() => import('@/routes/AdminReportsPage'));
 const AdminModerationPage = lazy(() => import('@/routes/AdminModerationPage'));
 const AdminPeoplePage = lazy(() => import('@/routes/AdminPeoplePage'));
 const VendorPage = lazy(() => import('@/routes/VendorPage'));
@@ -103,6 +105,8 @@ const router = createBrowserRouter([
           // Admin. Every surface re-checks its permission in the database.
           { path: ROUTES.admin, element: withSuspense(<AdminPage />) },
           { path: ROUTES.adminPlugins, element: withSuspense(<AdminPluginsPage />) },
+          { path: ROUTES.adminAnalytics, element: withSuspense(<AdminAnalyticsPage />) },
+          { path: ROUTES.adminReports, element: withSuspense(<AdminReportsPage />) },
           { path: ROUTES.adminModeration, element: withSuspense(<AdminModerationPage />) },
           { path: ROUTES.adminPeople, element: withSuspense(<AdminPeoplePage />) },
           { path: ROUTES.vendor, element: withSuspense(<VendorPage />) },

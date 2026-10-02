@@ -1435,6 +1435,58 @@ export type AuditEntryRow = {
   created_at: string;
 };
 
+export type DbReportKind = 'overview' | 'growth' | 'revenue' | 'moderation' | 'ads';
+
+export type GrowthRow = {
+  day: string;
+  new_members: number;
+  new_posts: number;
+  active_members: number;
+};
+
+export type RevenueRow = {
+  day: string;
+  orders_count: number;
+  gross_sales: number;
+  commission: number;
+  ad_spend: number;
+  platform_total: number;
+};
+
+export type ModerationStatRow = {
+  day: string;
+  reports_opened: number;
+  reports_resolved: number;
+  actions_taken: number;
+  median_hours: number;
+};
+
+export type RetentionRow = {
+  cohort_week: string;
+  cohort_size: number;
+  week_offset: number;
+  retained: number;
+};
+
+export type TopContentRow = {
+  post_id: string;
+  slug: string;
+  title: string;
+  likes_count: number;
+  comments_count: number;
+  created_at: string;
+};
+
+export type ReportSnapshotRow = {
+  id: string;
+  kind: DbReportKind;
+  title: string;
+  period_from: string;
+  period_to: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1805,6 +1857,14 @@ export type Database = {
         Update: Partial<Pick<ModerationActionRow, 'reason'>>;
         Relationships: [];
       };
+      report_snapshots: {
+        Row: ReportSnapshotRow & { payload: Json };
+        Insert: Pick<ReportSnapshotRow, 'kind' | 'title' | 'period_from' | 'period_to'> & {
+          payload: Json;
+        };
+        Update: Partial<Pick<ReportSnapshotRow, 'title'>>;
+        Relationships: [];
+      };
       search_log: {
         Row: SearchLogRow;
         Insert: Pick<SearchLogRow, 'term'> & Partial<SearchLogRow>;
@@ -2108,6 +2168,20 @@ export type Database = {
       admin_audit: { Args: { p_limit?: number }; Returns: AuditEntryRow[] };
       my_permissions: { Args: Record<never, never>; Returns: string[] };
       set_admin_setting: { Args: { p_key: string; p_value: unknown }; Returns: unknown };
+      analytics_growth: { Args: { p_days?: number }; Returns: GrowthRow[] };
+      analytics_revenue: { Args: { p_days?: number }; Returns: RevenueRow[] };
+      analytics_moderation: { Args: { p_days?: number }; Returns: ModerationStatRow[] };
+      analytics_retention: { Args: { p_weeks?: number }; Returns: RetentionRow[] };
+      analytics_top_content: {
+        Args: { p_days?: number; p_limit?: number };
+        Returns: TopContentRow[];
+      };
+      create_report_snapshot: {
+        Args: { p_kind: DbReportKind; p_title: string; p_days?: number };
+        Returns: string;
+      };
+      report_snapshots_list: { Args: { p_limit?: number }; Returns: ReportSnapshotRow[] };
+      report_snapshot: { Args: { p_id: string }; Returns: Json };
       add_to_cart: { Args: { p_product_id: string; p_quantity?: number }; Returns: number };
       set_cart_quantity: {
         Args: { p_product_id: string; p_quantity: number };
@@ -2242,6 +2316,7 @@ export type Database = {
       bsdc_work_mode: DbWorkMode;
       bsdc_listing_status: DbListingStatus;
       bsdc_application_status: DbApplicationStatus;
+      bsdc_report_kind: DbReportKind;
       bsdc_ad_event_kind: DbAdEventKind;
       bsdc_ad_placement: DbAdPlacement;
       bsdc_ad_pricing: DbAdPricing;

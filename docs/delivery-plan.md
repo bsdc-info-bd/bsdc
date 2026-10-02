@@ -19,7 +19,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 12 | Marketplace part 2 (vendor) | Done |
 | 13 | Ads system | Done |
 | 14 | Admin panel core and plugin system | Done |
-| 15 | Admin analytics and PDF reports | Pending |
+| 15 | Admin analytics and PDF reports | Done |
 | 16 | Corporate network I | Pending |
 | 17 | Corporate network II (trust empire) | Pending |
 | 18 | SEO engine and branding studio | Pending |
@@ -622,6 +622,47 @@ X-020, X-021, V-020, U-022, Z-008.
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
 
+## Response 15 scope (delivered)
+
+- `supabase/migrations/0026_analytics.sql` and `0027_analytics_rls.sql`:
+  `report_snapshots`, a gapless day series, and five analytics functions.
+- **A quiet day shows as a quiet day.** `bsdc.day_series()` generates the
+  calendar and every series left-joins onto it, so a day with no activity is
+  a zero rather than a hole — a chart with missing days tells a comforting
+  lie.
+- **Turnover is never passed off as revenue.** `analytics_revenue()` reports
+  marketplace turnover, the commission the platform actually earned, and ad
+  spend as three separate columns, with `platform_total` being only
+  commission plus ad spend.
+- **Retention is counted from behaviour, not from logins.** The cohort grid
+  asks how many of the people who joined in a given week were still *writing*
+  N weeks later, so it cannot be inflated by a background tab.
+- **A report is a stored set of numbers, not a stored file.**
+  `create_report_snapshot()` freezes the figures in `jsonb` inside the
+  database, and `report_snapshots` has no insert, update or delete policy —
+  re-running a report writes a new row, so the figures reported in March
+  still read as they did in March. The PDF is only ever a rendering of a
+  snapshot, which is why printing an old report reproduces old numbers.
+- Every analytics function opens with a permission check and none of them
+  return a member's identity alongside their behaviour.
+- **The PDF writer is written from scratch** (`src/lib/reports/pdf.ts`, no
+  dependency): a PDF 1.4 document with text wrapping, rules, key/value rows,
+  tables and a bar chart, with cross-reference offsets counted in *bytes*. It
+  is pure — it returns `Uint8Array` and never touches the DOM — so it is
+  tested directly, and it is lazily imported only when somebody prints.
+  Reports are written in English because the base-14 PDF fonts carry no
+  Bangla glyphs; the UI states that plainly rather than printing empty boxes.
+- Client: `analytics-types.ts` (sums, half-period trend that returns `null`
+  rather than infinity for growth from zero, moving average, SVG sparkline
+  path, cohort grid, RFC 4180 CSV, defensive snapshot parsing),
+  `analytics-repository.ts`, `use-analytics.ts`, and the routes
+  `/admin/analytics` and `/admin/reports`.
+- `src/test/analytics.test.ts` adds 27 tests, including assertions that the
+  generated PDF parses, that its `/Size` matches its xref table, and that a
+  snapshot written by an older schema still opens. The suite is 292 tests
+  over 20 files; initial JS is 202.1 KB gzip against the 250 KB budget.
+
+
 Response 9 adds:
 T-001, T-002, T-003, T-004, T-005, T-006, T-007, T-008, T-009, T-010, T-011,
 T-012, T-013, T-014, T-015, T-016, T-017, T-018, T-019, T-020, T-021, T-022,
@@ -684,3 +725,13 @@ AV-001, AV-002, AV-003, AV-004, AV-005, AV-006, AV-007, AV-008, AV-009,
 AV-010,
 AW-001, AW-002, AW-003, AW-004, AW-005, AW-006,
 X-032, X-033, V-029, U-028, Z-014.
+
+Response 15 adds:
+AX-001, AX-002, AX-003, AX-004, AX-005, AX-006, AX-007, AX-008, AX-009,
+AX-010, AX-011, AX-012, AX-013, AX-014, AX-015, AX-016, AX-017, AX-018,
+AY-001, AY-002, AY-003, AY-004, AY-005, AY-006, AY-007, AY-008, AY-009,
+AY-010, AY-011, AY-012, AY-013, AY-014,
+AZ-001, AZ-002, AZ-003, AZ-004, AZ-005, AZ-006, AZ-007, AZ-008, AZ-009,
+AZ-010,
+BA-001, BA-002, BA-003, BA-004, BA-005, BA-006,
+X-034, X-035, V-030, U-029, Z-015.
