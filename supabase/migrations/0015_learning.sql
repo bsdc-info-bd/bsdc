@@ -73,13 +73,13 @@ create table if not exists public.course_modules (
   course_id  uuid not null references public.courses (id) on delete cascade,
   title      text not null check (char_length(btrim(title)) between 2 and 140),
   summary    text not null default '' check (char_length(summary) <= 500),
-  position   integer not null check (position >= 0),
+  "position" integer not null check ("position" >= 0),
   created_at timestamptz not null default now(),
-  unique (course_id, position)
+  unique (course_id, "position")
 );
 
 create index if not exists course_modules_course_idx
-  on public.course_modules (course_id, position);
+  on public.course_modules (course_id, "position");
 
 -- ------------------------------- lessons -----------------------------------
 create table if not exists public.lessons (
@@ -92,16 +92,16 @@ create table if not exists public.lessons (
   body        text not null default '' check (char_length(body) <= 60000),
   video_url   text not null default '',
   duration_minutes integer not null default 5 check (duration_minutes between 0 and 600),
-  position    integer not null check (position >= 0),
+  "position"  integer not null check ("position" >= 0),
   -- A free preview lesson is readable without enrolling.
   is_preview  boolean not null default false,
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now(),
   unique (course_id, slug),
-  unique (course_id, position)
+  unique (course_id, "position")
 );
 
-create index if not exists lessons_course_idx on public.lessons (course_id, position);
+create index if not exists lessons_course_idx on public.lessons (course_id, "position");
 
 drop trigger if exists lessons_touch on public.lessons;
 create trigger lessons_touch before update on public.lessons
@@ -246,11 +246,11 @@ create table if not exists public.quiz_questions (
   kind       bsdc_question_kind not null default 'single',
   marks      integer not null default 1 check (marks between 1 and 100),
   explanation text not null default '' check (char_length(explanation) <= 2000),
-  position   integer not null check (position >= 0),
-  unique (quiz_id, position)
+  "position" integer not null check ("position" >= 0),
+  unique (quiz_id, "position")
 );
 
-create index if not exists quiz_questions_quiz_idx on public.quiz_questions (quiz_id, position);
+create index if not exists quiz_questions_quiz_idx on public.quiz_questions (quiz_id, "position");
 
 create table if not exists public.quiz_options (
   id          uuid primary key default gen_random_uuid(),
@@ -258,11 +258,11 @@ create table if not exists public.quiz_options (
   label       text not null check (char_length(btrim(label)) between 1 and 500),
   -- Never readable by a learner: see the column grants in 0016.
   is_correct  boolean not null default false,
-  position    integer not null check (position >= 0),
-  unique (question_id, position)
+  "position"  integer not null check ("position" >= 0),
+  unique (question_id, "position")
 );
 
-create index if not exists quiz_options_question_idx on public.quiz_options (question_id, position);
+create index if not exists quiz_options_question_idx on public.quiz_options (question_id, "position");
 
 create table if not exists public.quiz_attempts (
   id          uuid primary key default gen_random_uuid(),
@@ -563,7 +563,7 @@ returns table (
   title            text,
   kind             bsdc_lesson_kind,
   duration_minutes integer,
-  position         integer,
+  "position"       integer,
   module_title     text,
   is_preview       boolean,
   body             text,
@@ -603,7 +603,7 @@ returns table (
   prompt      text,
   kind        bsdc_question_kind,
   marks       integer,
-  position    integer,
+  "position"  integer,
   option_id   uuid,
   label       text,
   option_position integer

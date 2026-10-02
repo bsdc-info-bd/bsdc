@@ -636,8 +636,45 @@ X-020, X-021, V-020, U-022, Z-008.
 - `.github/workflows/deploy.yml` — the fourteen applications to Cloudflare
   Pages, one job each, previews on pull requests, production only from
   `main`.
-- `docs/deploying.md` — the runbook, the secret inventory and the order to
-  do a first deployment in.
+- `docs/deploying.md` — the runbook: what each workflow does, every variable
+  with what it is and where to obtain it and what it must look like, how to
+  add one through the GitHub interface, `gh`, the Cloudflare dashboard or
+  `wrangler`, the order to do a first deployment in, and a troubleshooting
+  section written from real failures rather than imagined ones.
+
+### What building the schema from nothing found
+
+The first real run of `database.yml` failed, which is the entire reason to
+have it. Supabase had been hiding seven faults, every one of which would
+have made a rebuild of this database impossible:
+
+1. `citext` columns in `0001_core_schema.sql` were declared before the
+   extension was created. Supabase pre-installs it; a bare Postgres does
+   not. All four extensions are now created at the top of the first file.
+2. `position` is a keyword with its own call syntax, so
+   `check (position >= 0)` parsed as a function call and failed. The column
+   keeps its name and is quoted wherever it appears in an expression.
+3. A stored generated column used `array_to_string`, which is `STABLE`
+   rather than `IMMUTABLE`. The narrow case the search vectors need is now
+   `bsdc.join_text(text[])`, declared immutable because for text it is.
+4. `search_suggestions()` returned three columns and selected four.
+5. Two migrations both defined `public.certificates`, for two unrelated
+   things. `create table if not exists` does not complain about that: it
+   quietly keeps the first table and lets the second file fail on an index.
+   The trust document registry is now `public.issued_certificates`, and its
+   `revoke_certificate` is `revoke_issued_certificate` for the same reason.
+6. `0030_trust.sql` created a function that read `verification_log` two
+   hundred lines before the table existed. Postgres resolves that at
+   creation time, not at call time.
+7. `capacity_forecast()` extracted an epoch from `date - date`, which is an
+   integer, and rounded a `double precision` with the `numeric` form of
+   `round`.
+
+The schema now builds from an empty database, twice, with all four
+invariants holding and every function the applications call answering. The
+search log additionally carries an explicit deny-all policy, so a table that
+may only be read through an aggregate reads as a decision rather than an
+oversight.
 
 ## Response 20 scope (delivered)
 
@@ -678,7 +715,7 @@ X-020, X-021, V-020, U-022, Z-008.
      explicitly exempt.
 - **What the audit asserts, in one line each.** No emoji in any interface
   chrome. No placeholder, demo content or suppression comment anywhere. One
-  hundred tables with row level security, 184 policies, every
+  hundred and one tables with row level security, 185 policies, every
   security-definer function with a pinned search path. Twenty-eight
   functions an anonymous browser may call, seven of which write, every one
   of them a clamped counter or an append-only log. No key material, no

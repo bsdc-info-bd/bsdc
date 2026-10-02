@@ -134,7 +134,7 @@ create policy poll_options_write_author on public.poll_options
   );
 
 revoke update on public.poll_options from anon, authenticated;
-grant update (label, position) on public.poll_options to authenticated;
+grant update (label, "position") on public.poll_options to authenticated;
 
 -- ----------------------------- poll_votes -----------------------------------
 drop policy if exists poll_votes_read_all on public.poll_votes;

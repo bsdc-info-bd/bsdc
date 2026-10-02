@@ -8,7 +8,7 @@
 -- ---------------------------------------------------------------------------
 
 alter table public.certificate_templates enable row level security;
-alter table public.certificates          enable row level security;
+alter table public.issued_certificates          enable row level security;
 alter table public.notices               enable row level security;
 alter table public.notice_receipts       enable row level security;
 alter table public.verification_log      enable row level security;
@@ -25,8 +25,8 @@ create policy certificate_templates_write on public.certificate_templates
 
 -- A holder may read their own certificate; staff who may issue may read the
 -- registry. Everybody else uses the desk, one code at a time.
-drop policy if exists certificates_read on public.certificates;
-create policy certificates_read on public.certificates
+drop policy if exists issued_certificates_read on public.issued_certificates;
+create policy issued_certificates_read on public.issued_certificates
   for select using (
     recipient_uid = bsdc.current_uid() or bsdc.has_permission('certificates.issue')
   );
@@ -34,7 +34,7 @@ create policy certificates_read on public.certificates
 -- No insert, update or delete policy. Certificates are issued and revoked by
 -- their functions, which allocate the code, freeze the text and write the
 -- audit row in one transaction.
-revoke insert, update, delete on public.certificates from anon, authenticated;
+revoke insert, update, delete on public.issued_certificates from anon, authenticated;
 
 -- ------------------------------- notices -----------------------------------
 -- A published notice inside its window is readable by its audience. A draft
@@ -91,7 +91,7 @@ revoke insert, update, delete on public.verification_log from anon, authenticate
 -- ------------------------------- grants ------------------------------------
 grant select on public.notices to anon, authenticated;
 grant insert, update on public.notices to authenticated;
-grant select on public.certificate_templates, public.certificates,
+grant select on public.certificate_templates, public.issued_certificates,
                 public.notice_receipts, public.verification_log to authenticated;
 grant update, delete on public.certificate_templates to authenticated;
 
@@ -101,7 +101,7 @@ grant execute on function public.notice_feed(integer) to anon, authenticated;
 
 grant execute on function public.issue_certificate(text, text, text, text, date, date, text)
   to authenticated;
-grant execute on function public.revoke_certificate(text, text) to authenticated;
+grant execute on function public.revoke_issued_certificate(text, text) to authenticated;
 grant execute on function public.certificate_registry(text, integer) to authenticated;
 grant execute on function public.publish_notice(uuid, timestamptz) to authenticated;
 grant execute on function public.archive_notice(uuid) to authenticated;

@@ -11,13 +11,30 @@
 -- carry the fuzzy work instead.
 -- ---------------------------------------------------------------------------
 
+-- --------------------------- immutable helpers ------------------------------
+-- `array_to_string()` is declared STABLE, not IMMUTABLE, because in general it
+-- depends on a type's output function. A stored generated column may only use
+-- immutable expressions, so Postgres refuses the whole statement with
+-- "generation expression is not immutable". Joining an array of text is in
+-- fact deterministic, and this wrapper says so — narrowed to text[] rather
+-- than anyarray, which is the part that makes the claim true.
+create or replace function bsdc.join_text(p_values text[], p_separator text default ' ')
+returns text
+language sql
+immutable
+parallel safe
+set search_path = pg_catalog
+as $$
+  select coalesce(array_to_string(coalesce(p_values, '{}'::text[]), p_separator), '')
+$$;
+
 -- --------------------------- searchable columns -----------------------------
 alter table public.profiles
   add column if not exists search_vector tsvector generated always as (
     setweight(to_tsvector('simple', coalesce(display_name, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(username::text, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(bio, '')), 'C') ||
-    setweight(to_tsvector('simple', array_to_string(coalesce(skills, '{}'), ' ')), 'B')
+    setweight(to_tsvector('simple', bsdc.join_text(skills)), 'B')
   ) stored;
 
 alter table public.groups
@@ -30,7 +47,7 @@ alter table public.courses
   add column if not exists search_vector tsvector generated always as (
     setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(summary, '')), 'B') ||
-    setweight(to_tsvector('simple', array_to_string(coalesce(tags, '{}'), ' ')), 'B')
+    setweight(to_tsvector('simple', bsdc.join_text(tags)), 'B')
   ) stored;
 
 alter table public.jobs
@@ -38,14 +55,14 @@ alter table public.jobs
     setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(company, '')), 'B') ||
     setweight(to_tsvector('simple', coalesce(city, '')), 'C') ||
-    setweight(to_tsvector('simple', array_to_string(coalesce(skills, '{}'), ' ')), 'B')
+    setweight(to_tsvector('simple', bsdc.join_text(skills)), 'B')
   ) stored;
 
 alter table public.projects
   add column if not exists search_vector tsvector generated always as (
     setweight(to_tsvector('simple', coalesce(name, '')), 'A') ||
     setweight(to_tsvector('simple', coalesce(tagline, '')), 'B') ||
-    setweight(to_tsvector('simple', array_to_string(coalesce(tech, '{}'), ' ')), 'B')
+    setweight(to_tsvector('simple', bsdc.join_text(tech)), 'B')
   ) stored;
 
 create index if not exists profiles_search_idx on public.profiles using gin (search_vector);
@@ -244,7 +261,9 @@ stable
 set search_path = public, bsdc, pg_temp
 as $$
   with term as (select lower(btrim(coalesce(p_prefix, ''))) as value)
-  select * from (
+  -- The ranking column is computed in the subquery and dropped here: the
+  -- function promises three columns, and `select *` would hand back four.
+  select matches.kind, matches.slug, matches.title from (
     select 'person' as kind, coalesce(pr.username::text, '') as slug, pr.display_name as title,
            similarity(pr.display_name, (select value from term)) as score
     from public.profiles pr
@@ -266,7 +285,7 @@ as $$
       and c.status = 'published'
       and c.title ilike '%' || (select value from term) || '%'
   ) as matches
-  order by score desc, title
+  order by matches.score desc, matches.title
   limit greatest(1, least(p_limit, 20));
 $$;
 
@@ -344,6 +363,15 @@ alter table public.search_log enable row level security;
 
 -- Nobody reads the raw log directly; trending_searches() aggregates it as the
 -- definer, so an individual search is never attributable or even listable.
+-- The refusal is written down as a policy rather than left implicit: a table
+-- with row level security and no policy denies everything already, but then
+-- the denial looks like an omission, and the next person to read the file
+-- cannot tell whether a policy was forgotten. This one says it out loud, and
+-- it is what the schema invariant "every table carries a policy" checks.
+drop policy if exists search_log_no_direct_reads on public.search_log;
+create policy search_log_no_direct_reads on public.search_log
+  for select using (false);
+
 revoke all on public.search_log from anon, authenticated;
 
 grant execute on function public.global_search(text, text[], integer) to anon, authenticated;

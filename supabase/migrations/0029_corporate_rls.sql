@@ -69,7 +69,7 @@ create policy page_sections_delete on public.page_sections
   for delete using (bsdc.has_permission('settings.write'));
 
 revoke insert on public.page_sections from anon, authenticated;
-revoke update (position) on public.page_sections from authenticated;
+revoke update ("position") on public.page_sections from authenticated;
 
 -- --------------------------- staff records ---------------------------------
 -- A staff member may read their own record; the rest needs people.read. The

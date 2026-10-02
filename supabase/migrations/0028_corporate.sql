@@ -239,14 +239,14 @@ create table if not exists public.page_sections (
   id         uuid primary key default gen_random_uuid(),
   page_id    uuid not null references public.custom_pages (id) on delete cascade,
   kind       bsdc_section_kind not null,
-  position   integer not null check (position >= 0),
+  "position" integer not null check ("position" >= 0),
   payload    jsonb not null default '{}'::jsonb,
   is_visible boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
-create index if not exists page_sections_page_idx on public.page_sections (page_id, position);
+create index if not exists page_sections_page_idx on public.page_sections (page_id, "position");
 
 drop trigger if exists page_sections_touch on public.page_sections;
 create trigger page_sections_touch before update on public.page_sections
@@ -268,7 +268,7 @@ declare
 begin
   perform bsdc.require_permission('settings.write');
 
-  select page_id, position into v_page, v_from
+  select page_id, "position" into v_page, v_from
   from public.page_sections where id = p_section_id;
   if v_page is null then
     raise exception 'No such section' using errcode = 'P0002';
@@ -284,19 +284,19 @@ begin
   end if;
 
   -- Park the row outside the range, shift the block, then land it.
-  update public.page_sections set position = -1 where id = p_section_id;
+  update public.page_sections set "position" = -1 where id = p_section_id;
 
   if v_to < v_from then
     update public.page_sections
-    set position = position + 1
-    where page_id = v_page and position >= v_to and position < v_from;
+    set "position" = "position" + 1
+    where page_id = v_page and "position" >= v_to and "position" < v_from;
   else
     update public.page_sections
-    set position = position - 1
-    where page_id = v_page and position > v_from and position <= v_to;
+    set "position" = "position" - 1
+    where page_id = v_page and "position" > v_from and "position" <= v_to;
   end if;
 
-  update public.page_sections set position = v_to where id = p_section_id;
+  update public.page_sections set "position" = v_to where id = p_section_id;
 
   perform bsdc.audit('page.move_section', p_section_id::text,
     jsonb_build_object('from', v_from, 'to', v_to));
@@ -322,10 +322,10 @@ begin
   perform bsdc.require_permission('settings.write');
 
   perform 1 from public.custom_pages where id = p_page_id for update;
-  select coalesce(max(position) + 1, 0) into v_next
+  select coalesce(max("position") + 1, 0) into v_next
   from public.page_sections where page_id = p_page_id;
 
-  insert into public.page_sections (page_id, kind, position, payload)
+  insert into public.page_sections (page_id, kind, "position", payload)
   values (p_page_id, p_kind, v_next, coalesce(p_payload, '{}'::jsonb))
   returning id into v_id;
 

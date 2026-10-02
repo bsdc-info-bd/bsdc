@@ -522,7 +522,7 @@ function Revoke({ code, onRevoked }: { code: string; onRevoked: () => void }): R
           variant="danger"
           disabled={reason.trim() === ''}
           onClick={() => {
-            callRpc(env, 'revoke_certificate', { p_code: code, p_reason: reason.trim() })
+            callRpc(env, 'revoke_issued_certificate', { p_code: code, p_reason: reason.trim() })
               .then(() => {
                 setOpen(false);
                 onRevoked();

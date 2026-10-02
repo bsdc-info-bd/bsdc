@@ -154,13 +154,13 @@ create table if not exists public.channels (
   slug          citext not null check (slug ~ '^[a-z0-9][a-z0-9-]{1,39}$'),
   name          text not null check (char_length(btrim(name)) between 1 and 60),
   topic         text not null default '' check (char_length(topic) <= 300),
-  position      integer not null default 0,
+  "position"    integer not null default 0,
   is_read_only  boolean not null default false,
   created_at    timestamptz not null default now(),
   unique (group_id, slug)
 );
 
-create index if not exists channels_group_idx on public.channels (group_id, position);
+create index if not exists channels_group_idx on public.channels (group_id, "position");
 
 -- A post may live in a channel; the column is nullable so the feed is
 -- unaffected for ordinary posts.
@@ -492,7 +492,7 @@ begin
     returning id into v_id;
 
   insert into public.group_members (group_id, uid, role) values (v_id, v_uid, 'owner');
-  insert into public.channels (group_id, slug, name, position)
+  insert into public.channels (group_id, slug, name, "position")
     values (v_id, 'general', 'general', 0);
 
   return v_id;

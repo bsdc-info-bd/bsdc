@@ -95,6 +95,11 @@ export function describeTarget(url) {
  * ------------------------------------------------------------------ */
 
 const LEDGER = `
+-- The two ALTERs below are for a ledger created by an older Supabase CLI,
+-- which had neither column. On every run after the first they are no-ops and
+-- Postgres says so with a NOTICE; the log reads better without three lines of
+-- "column already exists, skipping" in front of real work.
+set client_min_messages = warning;
 create schema if not exists supabase_migrations;
 create table if not exists supabase_migrations.schema_migrations (
   version    text primary key,

@@ -147,7 +147,7 @@ create trigger post_tags_sync_counts after insert or delete on public.post_tags
 create table if not exists public.post_media (
   post_id    uuid    not null references public.posts (id) on delete cascade,
   media_id   uuid    not null references public.media_assets (id) on delete cascade,
-  position   integer not null default 0 check (position >= 0),
+  "position" integer not null default 0 check ("position" >= 0),
   alt_text   text    not null default '' check (char_length(alt_text) <= 280),
   primary key (post_id, media_id)
 );
@@ -166,10 +166,10 @@ create index if not exists post_mentions_uid_idx on public.post_mentions (mentio
 create table if not exists public.poll_options (
   id       uuid primary key default gen_random_uuid(),
   post_id  uuid    not null references public.posts (id) on delete cascade,
-  position integer not null check (position between 0 and 9),
+  "position" integer not null check ("position" between 0 and 9),
   label    text    not null check (char_length(label) between 1 and 80),
   votes    integer not null default 0 check (votes >= 0),
-  unique (post_id, position)
+  unique (post_id, "position")
 );
 
 create table if not exists public.poll_votes (

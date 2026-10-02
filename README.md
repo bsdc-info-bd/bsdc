@@ -138,7 +138,7 @@ node scripts/count-registry.mjs   # the counted registry    -> docs/feature-regi
 ```
 
 At the launch commit: 107 checkpoints with no failures, 627 tests across
-sixteen packages, 100 tables under row level security with 184 policies, and
+sixteen packages, 101 tables under row level security with 185 policies, and
 initial JavaScript between 100 and 205 KB gzip against a 250 KB budget on all
 fourteen applications.
 

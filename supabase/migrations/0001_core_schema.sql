@@ -9,9 +9,15 @@
 -- Apply with:  supabase db push      (or psql -f against the project database)
 -- ---------------------------------------------------------------------------
 
+-- Extensions come first, all of them, before any type they provide is used.
+-- Supabase pre-installs these; a bare Postgres does not, and a column typed
+-- `citext` declared before the extension exists fails with "type citext does
+-- not exist" — which is exactly how this file used to fail when it was first
+-- applied to an empty database rather than to a Supabase project.
 create extension if not exists "pgcrypto";
 create extension if not exists "pg_trgm";
 create extension if not exists "unaccent";
+create extension if not exists "citext";
 
 -- ---------------------------------------------------------------------------
 -- Helpers
@@ -114,9 +120,6 @@ create table if not exists public.profiles (
   created_at          timestamptz not null default now(),
   updated_at          timestamptz not null default now()
 );
-
--- citext needs the extension; fall back gracefully when it is unavailable.
-create extension if not exists "citext";
 
 do $$
 begin

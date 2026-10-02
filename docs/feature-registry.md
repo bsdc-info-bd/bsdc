@@ -10,7 +10,7 @@ Nothing is counted twice. A page is not also counted as the component that
 renders it; an RPC is not also counted as the policy that guards it; a test
 is not a feature.
 
-### Core — 933
+### Core — 934
 
 | Counted surface                 | Features |
 | ------------------------------- | -------: |
@@ -20,35 +20,35 @@ is not a feature.
 | Hooks, stores and selectors     |       65 |
 | Domain rules in the member site |      425 |
 | Edge endpoints                  |        9 |
-| Stored shapes                   |      100 |
+| Stored shapes                   |      101 |
 | Enumerated states               |       55 |
 | Integrity triggers              |       57 |
 | Plugin flags                    |       32 |
 | Android shell rules             |       17 |
-| **Subtotal**                    |  **933** |
+| **Subtotal**                    |  **934** |
 
-### Administration — 227
+### Administration — 228
 
 | Counted surface          | Features |
 | ------------------------ | -------: |
 | Admin pages              |        6 |
 | Admin and analytics RPCs |       26 |
 | Admin console screens    |       11 |
-| Access policies          |      184 |
-| **Subtotal**             |  **227** |
+| Access policies          |      185 |
+| **Subtotal**             |  **228** |
 
-### Staff and corporate — 361
+### Staff and corporate — 363
 
 | Counted surface               | Features |
 | ----------------------------- | -------: |
 | Staff console screens         |       12 |
-| Staff and moderation RPCs     |       30 |
+| Staff and moderation RPCs     |       31 |
 | Console rules                 |      102 |
 | Shared kit rules and controls |      156 |
-| Database helper functions     |       61 |
-| **Subtotal**                  |  **361** |
+| Database helper functions     |       62 |
+| **Subtotal**                  |  **363** |
 
-**Total counted features: 1521**
+**Total counted features: 1525**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
 Translated interface strings per language: **1222** (recorded, not counted as features).

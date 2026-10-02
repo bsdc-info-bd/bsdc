@@ -494,7 +494,9 @@ set search_path = public, bsdc, pg_temp
 as $$
   with daily as (
     select d.day,
-           extract(epoch from (d.day - (current_date - greatest(1, least(coalesce(p_days, 28), 180))))) / 86400 as x,
+           -- date minus date is already an integer count of days in Postgres,
+           -- so there is no interval here for extract(epoch from ...) to read.
+           (d.day - (current_date - greatest(1, least(coalesce(p_days, 28), 180))))::numeric as x,
            coalesce(count(v.id), 0)::numeric as y
     from bsdc.day_series(greatest(1, least(coalesce(p_days, 28), 180))) d
     left join public.web_vitals v on v.recorded_at::date = d.day
@@ -512,10 +514,10 @@ as $$
   )
   select
     f.n,
-    round(f.intercept + f.slope * f.last_x, 1),
-    round(greatest(0, f.intercept + f.slope * (f.last_x + 30)), 1),
-    round(f.slope, 3),
-    round(f.r, 3),
+    round((f.intercept + f.slope * f.last_x)::numeric, 1),
+    round(greatest(0, f.intercept + f.slope * (f.last_x + 30))::numeric, 1),
+    round(f.slope::numeric, 3),
+    round(f.r::numeric, 3),
     case
       when f.n < 14 then 'not enough days to say anything'
       when abs(f.r) >= 0.7 then 'the trend is consistent'

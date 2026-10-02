@@ -117,7 +117,10 @@ jobs:
           select bsdc.route_pattern('/p/a-slug-with-an-id/42');
           select bsdc.card_check_digit('BSDC-CT-ABCD1234');
           select * from public.sitemap_sections();
-          select * from public.vitals_by_route('main-site', 7) limit 1;
+          select * from public.vitals_summary(7, 'main-site') limit 1;
+          select * from public.capacity_forecast(28) limit 1;
+          select * from public.certificate_registry('', 10) limit 1;
+          select * from public.search_suggestions('bsdc', 5) limit 1;
           select * from public.moderation_queue('open', 10) limit 1;
           select * from public.service_uptime(7) limit 1;
           select public.verify_code('BSDC-CT-NOTREAL0');

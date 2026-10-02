@@ -34,6 +34,24 @@ end;
 $$;
 
 -- ===========================================================================
+-- 0. Codes and the verification log
+-- ===========================================================================
+-- The log is declared here, ahead of everything that reads it: the
+-- certificate registry in section 1 counts verifications per document, and
+-- the desk in section 3 writes the rows. Postgres resolves table references
+-- when a function is created, so the table has to exist first.
+create table if not exists public.verification_log (
+  id         bigserial primary key,
+  code       text not null,
+  kind       text not null,
+  found      boolean not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists verification_log_code_idx on public.verification_log (code, created_at desc);
+create index if not exists verification_log_time_idx on public.verification_log (created_at desc);
+
+-- ===========================================================================
 -- 0. Codes
 -- ===========================================================================
 -- Every verifiable document carries BSDC-<KIND>-<8>-<digit>. The kind is two
@@ -95,7 +113,11 @@ values
    'portrait', 'Chief Executive Officer', 'Bangladesh Software Development Community', 30)
 on conflict (key) do nothing;
 
-create table if not exists public.certificates (
+-- Named `issued_certificates`, not `certificates`: migration 0015 already owns
+-- `public.certificates` for course completions. These are the documents the
+-- trust console issues by hand from a template, a different thing with a
+-- different code format, and two tables may not share one name.
+create table if not exists public.issued_certificates (
   id            uuid primary key default gen_random_uuid(),
   code          text not null unique check (code ~ '^BSDC-CT-[0-9A-Z]{8}-[0-9]$'),
   template_key  text not null references public.certificate_templates (key),
@@ -110,14 +132,14 @@ create table if not exists public.certificates (
   revoke_reason text not null default '' check (char_length(revoke_reason) <= 300),
   issued_by     text,
   created_at    timestamptz not null default now(),
-  constraint certificates_period check (expires_on is null or expires_on >= issued_on),
-  constraint certificates_revocation check (
+  constraint issued_certificates_period check (expires_on is null or expires_on >= issued_on),
+  constraint issued_certificates_revocation check (
     (status = 'issued' and revoked_at is null) or (status = 'revoked' and revoked_at is not null)
   )
 );
 
-create index if not exists certificates_recipient_idx on public.certificates (recipient_uid);
-create index if not exists certificates_issued_idx on public.certificates (issued_on desc);
+create index if not exists issued_certificates_recipient_idx on public.issued_certificates (recipient_uid);
+create index if not exists issued_certificates_issued_idx on public.issued_certificates (issued_on desc);
 
 -- An issued certificate is never edited: the text is frozen at issue, so the
 -- copy in somebody's hand and the copy the portal describes are the same
@@ -160,13 +182,13 @@ begin
   loop
     v_try := v_try + 1;
     v_code := bsdc.issue_doc_code('CT');
-    exit when not exists (select 1 from public.certificates where code = v_code);
+    exit when not exists (select 1 from public.issued_certificates where code = v_code);
     if v_try > 10 then
       raise exception 'Could not allocate a certificate code' using errcode = '55000';
     end if;
   end loop;
 
-  insert into public.certificates
+  insert into public.issued_certificates
     (code, template_key, recipient_uid, recipient_name, subject, body,
      issued_on, expires_on, issued_by)
   values
@@ -179,7 +201,11 @@ begin
 end;
 $$;
 
-create or replace function public.revoke_certificate(p_code text, p_reason text)
+-- Named `revoke_issued_certificate` for the same reason the table is named
+-- `issued_certificates`: migration 0015 already owns
+-- `public.revoke_certificate(text, text)` for course completions, and two
+-- functions may not share one name and one argument list.
+create or replace function public.revoke_issued_certificate(p_code text, p_reason text)
 returns void
 language plpgsql
 security definer
@@ -192,7 +218,7 @@ begin
     raise exception 'A revocation needs a reason' using errcode = '22023';
   end if;
 
-  update public.certificates
+  update public.issued_certificates
   set status = 'revoked', revoked_at = now(), revoke_reason = btrim(p_reason)
   where code = p_code and status = 'issued';
 
@@ -229,7 +255,7 @@ as $$
     c.status, c.revoke_reason,
     (select count(*)::integer from public.verification_log v
       where v.code = c.code and v.found)
-  from public.certificates c
+  from public.issued_certificates c
   where bsdc.has_permission('certificates.issue')
     and (
       coalesce(btrim(p_search), '') = ''
@@ -451,17 +477,6 @@ $$;
 -- ===========================================================================
 -- 3. The verification desk (vf-site)
 -- ===========================================================================
-create table if not exists public.verification_log (
-  id         bigserial primary key,
-  code       text not null,
-  kind       text not null,
-  found      boolean not null,
-  created_at timestamptz not null default now()
-);
-
-create index if not exists verification_log_code_idx on public.verification_log (code, created_at desc);
-create index if not exists verification_log_time_idx on public.verification_log (created_at desc);
-
 -- One desk for the whole ecosystem.
 --
 -- The answer describes the document: what it is, whether it is valid today,
@@ -537,7 +552,7 @@ begin
       c.subject as detail,
       c.issued_on, c.expires_on, c.revoke_reason
     into v_result
-    from public.certificates c where c.code = v_code;
+    from public.issued_certificates c where c.code = v_code;
 
   elsif v_kind = 'NT' then
     select

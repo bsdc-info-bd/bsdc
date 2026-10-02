@@ -262,7 +262,7 @@ revoke insert (is_correct), update (is_correct) on public.quiz_options from anon
 
 grant select on public.courses, public.course_modules, public.lessons to anon, authenticated;
 grant select on public.quizzes, public.quiz_questions to anon, authenticated;
-grant select (id, question_id, label, position) on public.quiz_options to anon, authenticated;
+grant select (id, question_id, label, "position") on public.quiz_options to anon, authenticated;
 grant select on public.enrollments, public.lesson_progress, public.quiz_attempts,
   public.certificates to authenticated;
 
