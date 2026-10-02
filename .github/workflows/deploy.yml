@@ -124,6 +124,21 @@ jobs:
           test -d dist/assets || { echo "::error::${{ matrix.app }} produced no assets"; exit 1; }
           echo "${{ matrix.app }}: $(du -sh dist | cut -f1) in $(find dist -type f | wc -l) files"
 
+      # A first publish has no project to publish into. Creating one is
+      # idempotent in effect: the second run fails because the project is
+      # already there, which is why the failure is ignored rather than
+      # treated as a deployment problem.
+      - name: Make sure the Pages project exists
+        if: steps.scope.outputs.run == 'true'
+        continue-on-error: true
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages project create ${{ matrix.project }}
+            --production-branch=main
+
       - name: Deploy to Cloudflare Pages
         if: steps.scope.outputs.run == 'true'
         id: pages

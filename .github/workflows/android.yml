@@ -17,10 +17,10 @@ on:
   push:
     branches: [main, 'arena/**']
     tags: ['android-v*']
-    paths:
-      - 'android-app/**'
-      - 'main-site/**'
-      - '.github/workflows/android.yml'
+    # No `paths` filter here on purpose: a path filter is evaluated against
+    # the pushed commits, so a tag that points at a commit already on the
+    # branch would match nothing and the release would never build. The
+    # filter stays on pull requests, where it behaves.
   pull_request:
     paths:
       - 'android-app/**'
