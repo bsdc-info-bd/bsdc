@@ -670,7 +670,7 @@ X-020, X-021, V-020, U-022, Z-008.
 - Continuous integration now records the gzipped size of each `main-site`
   push into `bundle_sizes`, beside the field measurements, and never fails
   the build if that bookkeeping call cannot be made.
-- 369 tests across the sixteen packages, every application builds, and
+- 627 tests across the sixteen packages, every application builds, and
   `main-site` initial JavaScript is 205 KB gzip against the 250 KB budget.
 
 ## Response 18 scope (delivered)
