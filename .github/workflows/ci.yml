@@ -59,11 +59,25 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: ${{ matrix.app }}/package-lock.json
 
+      # No lockfiles are committed: the applications share one pinned set of
+      # dependency ranges, and a lockfile per application would be eight
+      # copies of the same resolution to keep in step.
       - name: Install
-        run: npm ci
+        run: npm install --no-audit --no-fund
+
+      # The corporate consoles compile the shared kit from source, so its
+      # dependencies have to resolve from the kit's own directory.
+      - name: Install the shared corporate kit
+        if: matrix.app != 'corporate-kit'
+        shell: bash
+        working-directory: .
+        run: |
+          if grep -q '"@kit"' "${{ matrix.app }}/tsconfig.json" 2>/dev/null; then
+            cd corporate-kit && npm install --no-audit --no-fund
+          else
+            echo "${{ matrix.app }} does not use the corporate kit"
+          fi
 
       - name: Typecheck
         run: npm run typecheck

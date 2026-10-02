@@ -14,9 +14,12 @@ A platform of **RRC Development** — Rizwan Rahim Chowdhury, CEO.
 ## Architecture
 
 One repository, one folder per deployable application. **Every app is a
-standalone Vite + React 18 + TypeScript project with its own dependency stack —
-no workspaces, no shared packages** — because every app is deployed as its own
-Cloudflare Pages project. All apps talk to the same three databases.
+standalone Vite + React 18 + TypeScript project with its own dependency stack
+and its own Cloudflare Pages project.** The seven corporate consoles compile
+one shared source folder, `corporate-kit/`, through a path alias: it is not a
+published package and is never deployed, it exists so that seven staff tools
+cannot drift into seven different answers to the same question. All apps talk
+to the same three databases.
 
 | # | Folder | Pages project | Domain | Access |
 |---|--------|---------------|--------|--------|
@@ -36,6 +39,7 @@ Cloudflare Pages project. All apps talk to the same three databases.
 | 14 | `notice-site/` | `bsdc-notice` | notice.site.main.bsdc.info.bd | Staff |
 | 15 | `android-app/` | — | Capacitor shell, package `bd.info.bsdc.app` | Store |
 | 16 | `brand/` | — | Master brand asset library (not deployed) | — |
+| — | `corporate-kit/` | — | Shared source for the seven corporate consoles (not deployed) | — |
 
 ### Data layer
 

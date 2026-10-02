@@ -46,3 +46,9 @@ Thumbs.db
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Lockfiles are not committed: the applications share one pinned set of
+# dependency ranges, and a lockfile per application would be eight copies of
+# the same resolution to keep in step. Continuous integration installs with
+# `npm install`.
+package-lock.json

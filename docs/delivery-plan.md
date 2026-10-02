@@ -20,7 +20,7 @@ working, wired-up features — never scaffolding for its own sake.
 | 13 | Ads system | Done |
 | 14 | Admin panel core and plugin system | Done |
 | 15 | Admin analytics and PDF reports | Done |
-| 16 | Corporate network I | Pending |
+| 16 | Corporate network I | Done |
 | 17 | Corporate network II (trust empire) | Pending |
 | 18 | SEO engine and branding studio | Pending |
 | 19 | PWA, i18n, Android, performance | Pending |
@@ -622,6 +622,52 @@ X-020, X-021, V-020, U-022, Z-008.
   files; initial JS is 200.4 KB gzip against the 250 KB budget.
 
 
+## Response 16 scope (delivered)
+
+- `supabase/migrations/0028_corporate.sql` and `0029_corporate_rls.sql`: the
+  corporate schema — typed configuration with history, custom pages and
+  sections, staff records and identity cards, IP rules and events, services,
+  checks and incidents, and the corporate chat directory.
+- **Configuration is typed and versioned.** Every key declares its type and
+  its bounds; `set_site_config()` refuses a value of the wrong type instead
+  of coercing it, writes the previous value to an append-only history, and
+  `revert_site_config()` is a forward change rather than a deletion of the
+  record that explains it.
+- **An ordered list is ordered by the database.** `move_page_section()` locks
+  the page, parks the moving row outside the range, shifts the block and
+  lands it, so positions stay 0..n-1 however many editors are open.
+- **A card code carries a check digit.** `bsdc.card_check_digit()` and the
+  kit's `cardCheckDigit()` compute the same digit, so a mistyped code is
+  refused before the database is asked — this is what the Response 17 public
+  verification portal will check.
+- **One function answers every IP question.** `ip_decision()` takes the most
+  specific unexpired rule, lets an allow beat a block at equal specificity,
+  and turns the absence of a rule into a refusal under allowlist mode.
+- **Uptime is derived, never typed.** `service_uptime()` computes from
+  recorded checks; a day with no check is shown as a gap rather than as a
+  success.
+- `corporate-kit/`: shared source compiled by every console through the
+  `@kit` alias — environment and clients, the session provider that reads the
+  role from Postgres rather than from a token claim, error translation,
+  realtime chat transport, one hand-written stylesheet, the control set, and
+  the pure domain logic. It is not published as a package and not deployed;
+  it carries a `package.json` only so continuous integration applies the same
+  gates to it.
+- Seven consoles, each lean and each owning the kit module it exercises:
+  `config-site` (typed editor and history with revert), `customize-site`
+  (page composer with database-ordered sections), `connect-site` (staff chat
+  over the `bsdc-second` realtime database with membership in Postgres),
+  `ip-site` (rules, blast-radius warning, a simulator that answers with the
+  same logic the database uses, and recent activity), `status-site` (public,
+  no sign-in required, 90-day timelines and an operations panel that appears
+  for staff), `users-admin-site` (staff records, card issue and verification)
+  and `users-moderator-site` (read-only directory, roster and tenure).
+- Continuous integration now installs with `npm install` rather than
+  `npm ci`, because no lockfiles are committed, and installs the kit's
+  dependencies for any application that imports it.
+- 118 tests across the eight packages, every console builds, and initial
+  JavaScript is 172 to 178 KB gzip against the 250 KB budget.
+
 ## Response 15 scope (delivered)
 
 - `supabase/migrations/0026_analytics.sql` and `0027_analytics_rls.sql`:
@@ -735,3 +781,17 @@ AZ-001, AZ-002, AZ-003, AZ-004, AZ-005, AZ-006, AZ-007, AZ-008, AZ-009,
 AZ-010,
 BA-001, BA-002, BA-003, BA-004, BA-005, BA-006,
 X-034, X-035, V-030, U-029, Z-015.
+
+Response 16 adds:
+BB-001, BB-002, BB-003, BB-004, BB-005, BB-006, BB-007, BB-008, BB-009,
+BB-010, BB-011, BB-012,
+BC-001, BC-002, BC-003, BC-004, BC-005, BC-006, BC-007, BC-008, BC-009,
+BC-010,
+BD-001, BD-002, BD-003, BD-004, BD-005, BD-006, BD-007, BD-008,
+BE-001, BE-002, BE-003, BE-004, BE-005, BE-006, BE-007, BE-008, BE-009,
+BE-010,
+BF-001, BF-002, BF-003, BF-004, BF-005, BF-006, BF-007, BF-008, BF-009,
+BF-010, BF-011, BF-012,
+BG-001, BG-002, BG-003, BG-004, BG-005, BG-006, BG-007, BG-008,
+BH-001, BH-002, BH-003, BH-004, BH-005, BH-006,
+X-036, X-037, V-031, U-030, Z-016.

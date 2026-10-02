@@ -10,10 +10,13 @@ Live status of the main site, all corporate apps and every dependency (Supabase,
 
 ## Stack
 
-Standalone Vite 5 + React 18 + TypeScript 5 (strict) application with its own
-`package.json`, Tailwind config, `functions/` directory for Cloudflare Pages
-Functions and its own `.env.example`. No code is shared with other apps — each
-app is deployed independently.
+Vite 5 + React 18 + TypeScript 5 (strict) with its own `package.json`,
+`.env.example` and Cloudflare Pages project. Shared code lives in
+`../corporate-kit`, which is compiled from source through the `@kit` alias
+rather than published as a package, so a change to a shared rule is
+type-checked by every console that uses it in the same commit. Styling is one
+hand-written stylesheet in the kit: a console should not need a CSS toolchain
+to change a colour.
 
 ## Databases
 
