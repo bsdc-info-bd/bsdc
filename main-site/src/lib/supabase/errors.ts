@@ -10,12 +10,18 @@ const MESSAGE_MAP: Record<string, string> = {
   'profile/username-invalid': 'auth.validation.usernameInvalid',
   'profile/username-reserved': 'auth.validation.usernameReserved',
   'profile/not-found': 'data.errors.notFound',
+  'profile/missing': 'data.errors.profileMissing',
   'auth/required': 'data.errors.signInRequired',
 };
 
 const CODE_MAP: Record<string, string> = {
+  // 23505 unique_violation: a value that must be unique is already taken.
   '23505': 'data.errors.conflict',
-  '23503': 'data.errors.conflict',
+  // 23503 foreign_key_violation: the row being pointed at does not exist —
+  // the honest reading is "that record no longer exists", never "already in
+  // use". Mapping it to conflict is what told a member their missing profile
+  // was a duplicate.
+  '23503': 'data.errors.notFound',
   '23514': 'data.errors.invalid',
   '22023': 'data.errors.invalid',
   '28000': 'data.errors.signInRequired',

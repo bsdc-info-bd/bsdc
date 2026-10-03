@@ -121,6 +121,26 @@ describe('dataErrorKey', () => {
     );
     expect(dataErrorKey(new Error('kaboom'))).toBe('data.errors.generic');
   });
+
+  it('treats a foreign key violation as a missing record, not a duplicate', () => {
+    // 23503 means the referenced row is gone: the honest message is
+    // "no longer exists", not "already in use". This is the exact code a
+    // post insert returns when the author has no profile row.
+    expect(
+      dataErrorKey({
+        message: 'insert or update on table "posts" violates foreign key constraint',
+        code: '23503',
+      }),
+    ).toBe('data.errors.notFound');
+    // 23505 stays a genuine uniqueness conflict.
+    expect(dataErrorKey({ message: 'duplicate key value', code: '23505' })).toBe(
+      'data.errors.conflict',
+    );
+  });
+
+  it('maps the missing-profile signal onto the onboarding prompt', () => {
+    expect(dataErrorKey(new Error('profile/missing'))).toBe('data.errors.profileMissing');
+  });
 });
 
 describe('isFlagEnabled', () => {
