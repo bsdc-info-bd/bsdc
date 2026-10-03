@@ -11,6 +11,7 @@ import {
   MediaError,
 } from '@/lib/storage/upload';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { bootstrapDisplayName } from '@/lib/profile/profile-service';
 import type { ProfileRow } from '@/lib/supabase/types';
 
 const row: ProfileRow = {
@@ -140,6 +141,31 @@ describe('dataErrorKey', () => {
 
   it('maps the missing-profile signal onto the onboarding prompt', () => {
     expect(dataErrorKey(new Error('profile/missing'))).toBe('data.errors.profileMissing');
+  });
+});
+
+describe('bootstrapDisplayName', () => {
+  it('prefers the sign-up display name', () => {
+    expect(bootstrapDisplayName({ displayName: 'Rafi Ahmed', email: 'x@y.bd' })).toBe('Rafi Ahmed');
+  });
+
+  it('falls back to the email local part, then to a neutral word', () => {
+    expect(bootstrapDisplayName({ displayName: '  ', email: 'rafi.dev@example.com' })).toBe(
+      'rafi.dev',
+    );
+    expect(bootstrapDisplayName({ displayName: null, email: null })).toBe('Member');
+    expect(bootstrapDisplayName({})).toBe('Member');
+  });
+
+  it('always satisfies the database display_name check (1–60 chars)', () => {
+    const long = bootstrapDisplayName({ displayName: 'a'.repeat(120) });
+    expect(long.length).toBeLessThanOrEqual(60);
+    expect(long.length).toBeGreaterThanOrEqual(1);
+    for (const seed of [{}, { displayName: '' }, { email: 'a@b.c' }, { displayName: 'Rafi' }]) {
+      const name = bootstrapDisplayName(seed);
+      expect(name.trim().length).toBeGreaterThanOrEqual(1);
+      expect(name.length).toBeLessThanOrEqual(60);
+    }
   });
 });
 

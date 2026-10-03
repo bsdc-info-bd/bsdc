@@ -5,6 +5,7 @@ import {
   type ProfileBackend,
   type ProfileDraft,
   type ProfileFields,
+  type ProfileSeed,
   type ProfileStats,
 } from './types';
 
@@ -79,4 +80,31 @@ export async function updateProfileFields(uid: string, fields: ProfileFields): P
 export async function fetchProfileStats(uid: string): Promise<ProfileStats> {
   const active = await backend();
   return active.fetchStats ? active.fetchStats(uid) : EMPTY_STATS;
+}
+
+/**
+ * The display name a bootstrap row can carry on a member's behalf: their
+ * sign-up name if they gave one, otherwise the part of their email before the
+ * @, otherwise a neutral word. Always 1–60 characters so the row satisfies
+ * the database check.
+ */
+export function bootstrapDisplayName(user: {
+  displayName?: string | null;
+  email?: string | null;
+}): string {
+  const fromName = (user.displayName ?? '').trim();
+  if (fromName.length > 0) return fromName.slice(0, 60);
+  const local = (user.email ?? '').split('@')[0]?.trim() ?? '';
+  if (local.length > 0) return local.slice(0, 60);
+  return 'Member';
+}
+
+/**
+ * First-sign-in bootstrap: makes sure the member has a row, so the database
+ * always has the foreign-key target every write points at. A no-op when the
+ * active backend has no bootstrap of its own or the row already exists.
+ */
+export async function ensureProfile(uid: string, seed: ProfileSeed): Promise<void> {
+  const active = await backend();
+  if (active.ensureProfile) await active.ensureProfile(uid, seed);
 }

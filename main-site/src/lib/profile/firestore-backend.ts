@@ -15,6 +15,7 @@ import {
   type ProfileBackend,
   type ProfileDraft,
   type ProfileFields,
+  type ProfileSeed,
 } from './types';
 
 /**
@@ -127,6 +128,22 @@ async function updateProfileFields(uid: string, fields: ProfileFields): Promise<
   );
 }
 
+/** The cache-only bootstrap: writes the doc once and never overwrites it. */
+async function ensureProfile(uid: string, seed: ProfileSeed): Promise<void> {
+  const db = getDb();
+  const ref = doc(db, 'users', uid);
+  const snapshot = await getDoc(ref);
+  if (snapshot.exists()) return;
+  const displayName = seed.displayName.trim().slice(0, 60) || 'Member';
+  await setDoc(ref, {
+    uid,
+    displayName,
+    onboardingComplete: false,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export const firestoreProfileBackend: ProfileBackend = {
   name: 'firestore',
   fetchProfile,
@@ -134,4 +151,5 @@ export const firestoreProfileBackend: ProfileBackend = {
   isUsernameAvailable,
   saveProfile,
   updateProfileFields,
+  ensureProfile,
 };

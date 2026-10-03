@@ -1,11 +1,25 @@
 import { getRedirectResult, onAuthStateChanged, onIdTokenChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
-import { fetchProfile } from '@/lib/profile/profile-service';
+import { bootstrapDisplayName, ensureProfile, fetchProfile } from '@/lib/profile/profile-service';
 import { readClaims } from '@/lib/auth/session-claims';
 import { DEFAULT_CLAIMS, type SessionClaims } from '@/store/auth-store';
 import type { Profile } from '@/lib/profile/profile-service';
 
 export const AUTH_CHANNEL = 'bsdc.auth';
+
+/**
+ * Reads the member's profile, and on the very first sign-in — when no usable
+ * row exists yet — writes the bare bootstrap row first. A row without a
+ * username does not read back as a profile, so the answer stays null and the
+ * member still lands on onboarding, but the database now has the foreign-key
+ * target their first post or comment points at.
+ */
+async function loadOrBootstrapProfile(user: User): Promise<Profile | null> {
+  const existing = await fetchProfile(user.uid);
+  if (existing) return existing;
+  await ensureProfile(user.uid, { displayName: bootstrapDisplayName(user) }).catch(() => undefined);
+  return null;
+}
 
 export interface SessionHandlers {
   onSession: (user: User | null, claims: SessionClaims) => void;
@@ -47,7 +61,7 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
         if (active) handlers.onSession(user, DEFAULT_CLAIMS);
       });
 
-    void fetchProfile(user.uid)
+    void loadOrBootstrapProfile(user)
       .then((profile) => {
         if (!active) return;
         handlers.onProfile(profile);
