@@ -173,9 +173,29 @@ fourteen Pages projects:
 | `notice-site`          | `bsdc-notice`  | `bsdc-second`    |
 
 Pages projects are created once, by hand in the dashboard or with
-`wrangler pages project create bsdc-<name>`, and are listed in the matrix at
-the top of the workflow next to their folder. Adding an application means
-adding one line there.
+`wrangler pages project create bsdc-<name>` (what the workflow itself does),
+and are listed in the matrix at the top of the workflow next to their
+folder. Adding an application means adding one line there.
+
+### One publisher, and it is the workflow
+
+A Cloudflare Pages project can be filled two ways: **connected to Git**,
+where Cloudflare builds and deploys itself on every push, or **direct
+upload**, where something runs `wrangler pages deploy`. These projects use
+direct upload only, and deliberately — never connect them to Git:
+
+- A connected build has none of this repository's GitHub secrets, so it
+  compiles with the `VITE_*` variables absent and ships an unconfigured
+  application that still looks deployed. Everything about it succeeds; only
+  the members notice. (`scripts/check-deploy-env.mjs` makes even the correct
+  publisher fail loudly in that state; nothing makes the wrong one do so.)
+- Two publishers race the same production deployment. Whichever builds last
+  wins, and "last" is not decided by anybody.
+
+If a project was connected by mistake: Pages project → **Settings → Builds →
+Disconnect from Git**. The check afterwards is one look at the project's
+deployments: every production deployment should be a direct upload credited
+to wrangler, and the Builds view should show nothing running on its own.
 
 Every application ships a `public/_headers` file, so the security headers are
 part of the build rather than a setting somebody has to remember in a

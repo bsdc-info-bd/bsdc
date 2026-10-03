@@ -12,6 +12,7 @@ import {
   type ProfileBackend,
   type ProfileDraft,
   type ProfileFields,
+  type ProfileSeed,
   type ProfileStats,
 } from './types';
 
@@ -173,6 +174,22 @@ async function updateProfileFields(uid: string, fields: ProfileFields): Promise<
   if (error) throw toDataError(error);
 }
 
+/**
+ * The first-sign-in bootstrap. Inserts the member's row only when it is
+ * absent; `username` stays null because a handle is the member's to choose.
+ * ignoreDuplicates makes this a no-op on every later sign-in.
+ */
+async function ensureProfile(uid: string, seed: ProfileSeed): Promise<void> {
+  const displayName = seed.displayName.trim().slice(0, 60) || 'Member';
+  const { error } = await getSupabase()
+    .from('profiles')
+    .upsert(
+      { uid, username: null, display_name: displayName },
+      { onConflict: 'uid', ignoreDuplicates: true },
+    );
+  if (error) throw toDataError(error);
+}
+
 async function fetchStats(uid: string): Promise<ProfileStats> {
   const { data, error } = await getSupabase()
     .from('profiles')
@@ -195,5 +212,6 @@ export const supabaseProfileBackend: ProfileBackend = {
   isUsernameAvailable,
   saveProfile,
   updateProfileFields,
+  ensureProfile,
   fetchStats,
 };

@@ -1,22 +1,32 @@
 # gitleaks configuration
 #
-# The default rule set, plus the two places in this repository where the
+# The default rule set, plus the three places in this repository where the
 # *shape* of a credential is written down on purpose:
 #
 #   - `main-site/functions/api/auth/claims.ts` parses a PEM private key, so
 #     it contains the literal header and footer lines of one;
+#   - `main-site/functions/api/auth/claims-core.ts` assembles service-account
+#     credentials *from environment variables* — the generic-api-key rule
+#     reads the env-var names FB_PRIVATE_KEY / FB2_PRIVATE_KEY on the
+#     referencing line as if they were literal keys. The file holds no key
+#     material and must never be given any;
 #   - `docs/deploying.md` tells an operator what each secret has to look
 #     like, including that a service-account key begins with that header.
 #
-# Neither holds key material. Everything else is scanned normally, and the
+# None holds key material. Everything else is scanned normally, and the
 # scan runs over the whole history rather than the working tree.
+#
+# Note: `paths` entries are regular expressions inside TOML literal strings,
+# so a literal dot is written `\.` — a double backslash would compile to a
+# pattern matching a real backslash and would silently suppress nothing.
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "PEM headers that are parsed or documented, never key material"
+description = "PEM headers parsed or documented, and env-var names read as keys — never key material"
 paths = [
   '''main-site/functions/api/auth/claims\.ts''',
+  '''main-site/functions/api/auth/claims-core\.ts''',
   '''docs/deploying\.md''',
 ]

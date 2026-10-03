@@ -14,9 +14,9 @@ it to be.
 
 ## What the audit found, and what was fixed because of it
 
-An audit that finds nothing has not been run properly. This one found four
-real faults, all of them fixed in Response 20 and all of them now held by a
-checkpoint so they cannot come back quietly:
+An audit that finds nothing has not been run properly. The first pass found
+four real faults, all of them fixed in Response 20 and all of them now held
+by a checkpoint so they cannot come back quietly:
 
 1. **The verification portal had silently lost its head.** Re-running the
    corporate scaffold in Responses 18 and 19 overwrote `vf-site/index.html`
@@ -48,6 +48,71 @@ checkpoint so they cannot come back quietly:
    screen minimum is now 12px, with the print stylesheet explicitly exempt
    because an href footnote on paper is not screen text (checkpoint C-27).
 
+A second pass then went over the member publish path and the database's own
+access control, driving the schema against a real database as `anon` and
+`authenticated` rather than reading policy text. It produced five more
+faults, each reproduced before it was fixed and each now held by a test or a
+workflow:
+
+5. **The PostgREST role channel and the application role travelled on one
+   claim.** A console token must carry `role: 'authenticated'` or PostgREST
+   refuses to map the call onto a database role at all; the same `role`
+   claim was also being read as the member-facing application role. One
+   value cannot safely mean both. The application role now travels on its
+   own `bsdc_role` claim (migration 0036 plus the console claims reader),
+   and `scripts/rls-proof.sql` asserts both channels resolve correctly for a
+   member and for staff.
+
+6. **Compose could report a loss as a save, and a missing profile as a
+   crash.** A post whose write failed could be acknowledged as if it had
+   been stored, and the database's response to a missing profile row reached
+   the member as a raw error rather than a route to onboarding. The write
+   path now fails honestly — an unsaved post is an error with the draft
+   kept, and a missing profile redirects to onboarding — and the unit tests
+   for both fail against the old behaviour.
+
+7. **The member row existed only if onboarding had already finished.** Every
+   post, comment and follow carries an author foreign key onto
+   `public.profiles`, and onboarding was the only code path that ever
+   created one, so a member who had not completed it could not persist
+   anything. First sign-in now bootstraps the bare row — `uid` and a display
+   name, every other column left to the database defaults, a true no-op on
+   every later sign-in — proved against a live database as `authenticated`,
+   and the insert's type was aligned with the columns the database itself
+   defaults so a client cannot be type-checked into writing its own tuned
+   values. The same pass closed out what gating onboarding means: an
+   exported-but-unused `selectNeedsOnboarding` selector implied a client-side
+   rule that no code upheld and the database never did, so it was removed
+   rather than wired in — the gate is the sign-in redirect and the honest
+   compose error, with the foreign key underneath both.
+
+8. **A member could mint themselves a database role on their own profile
+   row.** `public.profiles` was given a table-level INSERT grant, and in
+   Postgres a table-level grant covers every column — including `role`.
+   Because corporate authorization is deliberately database-driven, a
+   brand-new member could insert their own row with `role = 'admin'` and
+   have `bsdc.actor_role()` return `admin` and `has_permission('moderation.read')`
+   return true, proved end to end on a live database as `authenticated`.
+   Migration 0037 revokes the blanket grant and re-grants INSERT on exactly
+   the self-service columns; `scripts/rls-proof.sql` fails the pre-0037
+   schema on exactly this line and the Database workflow runs it on every
+   schema change. One adjacent finding was recorded rather than changed:
+   `public.reports` denies SELECT at the grant layer even though a select
+   policy exists, so reads can only ever travel through the security-definer
+   `moderation_queue()` — the secure default, left as it was found.
+
+9. **Two publishers could race production, and the secret-scan allowlist
+   silenced nothing by accident.** `deploy.yml` and Cloudflare's own Git
+   builds were both able to publish, and a connected Cloudflare build has
+   none of the GitHub secrets, so it could ship an unconfigured site that
+   still looked like a success; `scripts/check-deploy-env.mjs` now fails the
+   workflow build early, naming every missing `VITE_*`, and `deploying.md`
+   records that the workflow is the single publisher and connected builds
+   must be disconnected. And the `.gitleaks.toml` allowlist had escaped its
+   path regexes twice inside TOML literal strings, so it had never matched a
+   file — the escaping is fixed and the config now says why the entries
+   exist.
+
 ## Checkpoints
 
 ### Delivery
@@ -65,20 +130,20 @@ checkpoint so they cannot come back quietly:
 | A-09 | The root governance documents are present                | Pass   | LICENSE.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md                                                                                                                                                               |
 | A-10 | Every delivery row is recorded as done                   | Pass   | all twenty rows read Done                                                                                                                                                                                                                |
 | A-11 | Every console registers under its own application id     | Pass   | bsdc-admin, bsdc-cert, bsdc-config, bsdc-connect, bsdc-custom, bsdc-ip, bsdc-mod, bsdc-notice, bsdc-perf, bsdc-status, bsdc-uadmin, bsdc-umod, bsdc-vf                                                                                   |
-| A-12 | Every migration opens with a comment saying what it does | Pass   | 35 migrations                                                                                                                                                                                                                            |
+| A-12 | Every migration opens with a comment saying what it does | Pass   | 37 migrations                                                                                                                                                                                                                            |
 
 ### Database
 
 | #    | Checkpoint                                                           | Result   | Evidence                                                                                                                                                                                                                         |
 | ---- | -------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| B-01 | Migrations are numbered without a gap                                | Pass     | 0001..0035                                                                                                                                                                                                                       |
+| B-01 | Migrations are numbered without a gap                                | Pass     | 0001..0037                                                                                                                                                                                                                       |
 | B-02 | Every table has row level security enabled                           | Pass     | 101 tables                                                                                                                                                                                                                       |
 | B-03 | Every security-definer function pins its search path                 | Pass     | all of them                                                                                                                                                                                                                      |
 | B-04 | No migration grants a blanket write to anon                          | Pass     | none found                                                                                                                                                                                                                       |
 | B-05 | Every anonymous write path is a counted exception                    | Pass     | 28 functions are executable by anon; 7 of them write (follow_redirect, increment_job_view, increment_post_view, log_search, record_ad_event, record_share, verify_code) and every one is a clamped counter or an append-only log |
-| B-06 | Tables, functions and policies shipped                               | Recorded | 101 tables, 161 RPCs, 62 helpers, 185 policies, 35 migrations                                                                                                                                                                    |
+| B-06 | Tables, functions and policies shipped                               | Recorded | 101 tables, 161 RPCs, 62 helpers, 185 policies, 37 migrations                                                                                                                                                                    |
 | B-07 | Permission checks guard the privileged RPCs                          | Pass     | 137 of 161 RPCs check identity or permission                                                                                                                                                                                     |
-| B-08 | Every migration can be re-run without error                          | Pass     | 35 migrations are idempotent                                                                                                                                                                                                     |
+| B-08 | Every migration can be re-run without error                          | Pass     | 37 migrations are idempotent                                                                                                                                                                                                     |
 | B-09 | Every policy is dropped before it is created                         | Pass     | 185 policies                                                                                                                                                                                                                     |
 | B-10 | Money is never stored as a floating point number                     | Pass     | money columns are integer or numeric, never real                                                                                                                                                                                 |
 | B-11 | State lives in enumerated types, not in free text                    | Pass     | 55 enumerated types, including bsdc_role, bsdc_account_status, bsdc_media_kind, bsdc_media_provider                                                                                                                              |
@@ -97,10 +162,10 @@ checkpoint so they cannot come back quietly:
 | C-05 | Nothing can force a horizontal scrollbar                        | Pass     | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves   |
 | C-06 | The layout is fluid from 250px upward                           | Pass     | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px                                |
 | C-07 | Both languages carry the same keys                              | Pass     | 45 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts                                  |
-| C-08 | Bangla is a real translation, not a copy of English             | Pass     | 25133 Bangla code points in the Bangla locale                                                                  |
+| C-08 | Bangla is a real translation, not a copy of English             | Pass     | 25185 Bangla code points in the Bangla locale                                                                  |
 | C-09 | Every application ships a security header set                   | Pass     | all fourteen                                                                                                   |
 | C-10 | A content security policy is declared, without unsafe-eval      | Pass     | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground)         |
-| C-11 | TypeScript source files under version control                   | Recorded | 349 .ts/.tsx files                                                                                             |
+| C-11 | TypeScript source files under version control                   | Recorded | 354 .ts/.tsx files                                                                                             |
 | C-12 | No link opens a new tab without severing the opener             | Pass     | every \_blank link carries rel="noopener"                                                                      |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass     | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text                            | Pass     | every <img> declares alt, decorative images with an empty one                                                  |
@@ -156,18 +221,18 @@ checkpoint so they cannot come back quietly:
 
 ### Performance
 
-| #    | Checkpoint                                                          | Result | Evidence                                                                                                                                                                                                                                                                                                   |
-| ---- | ------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere      | Pass   | admin-site 179 KB, certificate-site 185 KB, config-site 174 KB, connect-site 179 KB, customize-site 174 KB, ip-site 174 KB, main-site 205 KB, moderator-site 175 KB, notice-site 184 KB, performance-site 177 KB, status-site 173 KB, users-admin-site 174 KB, users-moderator-site 173 KB, vf-site 173 KB |
-| F-02 | Routes are code split, so a visitor pays only for the page          | Pass   | React.lazy per route in main-site/src/App.tsx                                                                                                                                                                                                                                                              |
-| F-03 | Field measurement is collected and stored                           | Pass   | a hand-written collector, a beacon endpoint and the web_vitals table                                                                                                                                                                                                                                       |
-| F-04 | Speed is reported at the 75th percentile with its sample count      | Pass   | percentile_cont(0.75) in vitals_by_route, with samples returned beside it                                                                                                                                                                                                                                  |
-| F-05 | Build weight is recorded on every push, next to the field data      | Pass   | CI posts the gzipped size of each main-site push into bundle_sizes                                                                                                                                                                                                                                         |
-| F-06 | Images below the fold are loaded lazily                             | Pass   | 6 image sites opt into lazy loading                                                                                                                                                                                                                                                                        |
-| F-07 | No render-blocking font or stylesheet is fetched from a third party | Pass   | system font stack; nothing is fetched from a font CDN                                                                                                                                                                                                                                                      |
-| F-08 | Query caching is configured rather than left at the defaults        | Pass   | React Query is given explicit staleTime, gcTime, retry and focus behaviour                                                                                                                                                                                                                                 |
-| F-09 | No source map is shipped to production                              | Pass   | none in any dist/                                                                                                                                                                                                                                                                                          |
-| F-10 | Stylesheets stay small enough to inline-parse quickly               | Pass   | admin-site 2 KB, certificate-site 2 KB, config-site 2 KB, connect-site 2 KB, customize-site 2 KB, ip-site 2 KB, main-site 7 KB, moderator-site 2 KB, notice-site 2 KB, performance-site 2 KB, status-site 2 KB, users-admin-site 2 KB, users-moderator-site 2 KB, vf-site 2 KB                             |
+| #    | Checkpoint                                                          | Result | Evidence                                                                   |
+| ---- | ------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------- |
+| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere      | Pass   | main-site 205 KB                                                           |
+| F-02 | Routes are code split, so a visitor pays only for the page          | Pass   | React.lazy per route in main-site/src/App.tsx                              |
+| F-03 | Field measurement is collected and stored                           | Pass   | a hand-written collector, a beacon endpoint and the web_vitals table       |
+| F-04 | Speed is reported at the 75th percentile with its sample count      | Pass   | percentile_cont(0.75) in vitals_by_route, with samples returned beside it  |
+| F-05 | Build weight is recorded on every push, next to the field data      | Pass   | CI posts the gzipped size of each main-site push into bundle_sizes         |
+| F-06 | Images below the fold are loaded lazily                             | Pass   | 6 image sites opt into lazy loading                                        |
+| F-07 | No render-blocking font or stylesheet is fetched from a third party | Pass   | system font stack; nothing is fetched from a font CDN                      |
+| F-08 | Query caching is configured rather than left at the defaults        | Pass   | React Query is given explicit staleTime, gcTime, retry and focus behaviour |
+| F-09 | No source map is shipped to production                              | Pass   | none in any dist/                                                          |
+| F-10 | Stylesheets stay small enough to inline-parse quickly               | Pass   | main-site 7 KB                                                             |
 
 ### PWA
 
@@ -184,7 +249,7 @@ checkpoint so they cannot come back quietly:
 
 | #    | Checkpoint                               | Result   | Evidence                                                                                                                                                                                                                                                                                        |
 | ---- | ---------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| H-01 | Unit tests by package                    | Recorded | 643 tests: admin-site 38, android-app 30, certificate-site 31, config-site 16, connect-site 14, corporate-kit 6, customize-site 16, ip-site 18, main-site 337, moderator-site 19, notice-site 25, performance-site 28, status-site 14, users-admin-site 16, users-moderator-site 18, vf-site 17 |
+| H-01 | Unit tests by package                    | Recorded | 668 tests: admin-site 38, android-app 30, certificate-site 31, config-site 16, connect-site 14, corporate-kit 6, customize-site 16, ip-site 18, main-site 362, moderator-site 19, notice-site 25, performance-site 28, status-site 14, users-admin-site 16, users-moderator-site 18, vf-site 17 |
 | H-02 | Every package has at least one test file | Pass     | all sixteen                                                                                                                                                                                                                                                                                     |
 
 ### CI

@@ -35,10 +35,10 @@ import {
   type Visibility,
 } from '@/lib/content/content-types';
 import { clearLocalDraft, loadLocalDraft } from '@/lib/content/draft-storage';
+import { classifyComposeSaveError } from '@/lib/content/compose-errors';
 import { extractHashtags, normalizeTag } from '@/lib/content/text';
 import { isConfigured } from '@/lib/env';
 import { ROUTES } from '@/lib/site';
-import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
 
 const TAG_SUGGESTIONS = [
@@ -72,6 +72,7 @@ export default function ComposePage() {
   const [tab, setTab] = useState('write');
   const [busy, setBusy] = useState(false);
   const [errorKeys, setErrorKeys] = useState<string[]>([]);
+  const [saveErrorKey, setSaveErrorKey] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const autosave = useDraftAutosave(draft);
 
@@ -132,10 +133,12 @@ export default function ComposePage() {
     if (!user) return;
     const issues = status === 'published' ? validateDraft(draft) : [];
     if (issues.length > 0) {
+      setSaveErrorKey(null);
       setErrorKeys(issues.map((issue) => issue.messageKey));
       return;
     }
     setErrorKeys([]);
+    setSaveErrorKey(null);
     setBusy(true);
     try {
       const { savePost } = await import('@/lib/content/post-repository');
@@ -144,7 +147,15 @@ export default function ComposePage() {
       toast.success(status === 'published' ? t('compose.published') : t('compose.savedDraft'));
       navigate(status === 'published' ? `/p/${saved.slug}` : ROUTES.home);
     } catch (error) {
-      setErrorKeys([dataErrorKey(error)]);
+      // A save failure is a data problem, not a draft problem: it belongs to
+      // its own alert, and a missing profile sends the member to onboarding.
+      const classified = classifyComposeSaveError(error);
+      if (classified.kind === 'onboarding') {
+        toast.error(t(classified.messageKey));
+        navigate(ROUTES.onboarding);
+      } else {
+        setSaveErrorKey(classified.messageKey);
+      }
     } finally {
       setBusy(false);
     }
@@ -155,6 +166,7 @@ export default function ComposePage() {
     setDraft({ ...EMPTY_DRAFT, language: i18n.language === 'en' ? 'en' : 'bn' });
     setRestored(false);
     setErrorKeys([]);
+    setSaveErrorKey(null);
   }
 
   const suggestedTags = extractHashtags(draft.body).filter(
@@ -399,6 +411,12 @@ export default function ComposePage() {
                   <li key={key}>{t(key)}</li>
                 ))}
               </ul>
+            </Alert>
+          ) : null}
+
+          {saveErrorKey !== null ? (
+            <Alert tone="danger" title={t('compose.saveFailed')} className="mt-4">
+              {t(saveErrorKey)}
             </Alert>
           ) : null}
 

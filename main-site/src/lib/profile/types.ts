@@ -107,6 +107,15 @@ export interface ProfileStats {
 
 export const EMPTY_STATS: ProfileStats = { followers: 0, following: 0, posts: 0, reputation: 0 };
 
+/**
+ * The least a row needs to exist. The display name is the only field a
+ * bootstrap can honestly fill on a member's behalf; their handle stays unset
+ * until they choose one in onboarding.
+ */
+export interface ProfileSeed {
+  displayName: string;
+}
+
 export interface ProfileBackend {
   readonly name: 'supabase' | 'firestore';
   fetchProfile(uid: string): Promise<Profile | null>;
@@ -114,6 +123,14 @@ export interface ProfileBackend {
   isUsernameAvailable(username: string): Promise<boolean>;
   saveProfile(uid: string, draft: ProfileDraft): Promise<Profile>;
   updateProfileFields(uid: string, fields: ProfileFields): Promise<void>;
+  /**
+   * Creates the member's row if it is not there yet, and changes nothing if
+   * it is. Idempotent by construction. `username` stays null, so the result
+   * does not parse into a client `Profile` — by design the member still has
+   * to finish onboarding, but the database now has the foreign-key target
+   * every write points at.
+   */
+  ensureProfile?(uid: string, seed: ProfileSeed): Promise<void>;
   fetchStats?(uid: string): Promise<ProfileStats>;
 }
 

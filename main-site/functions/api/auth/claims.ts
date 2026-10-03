@@ -1,27 +1,36 @@
 /**
  * Cloudflare Pages Function — POST /api/auth/claims
  *
- * Mints Firebase custom claims (role, vendor, staff) for a member. The Pages
- * runtime cannot use firebase-admin, so this verifies the caller's ID token
- * against Google's public certificates with Web Crypto and then calls the
- * Identity Toolkit REST API authenticated by a service-account JWT that is
+ * Mints Firebase custom claims for one user in one project. The claims the
+ * whole platform depends on are laid out in claims-core.ts: `role` is always
+ * "authenticated" so PostgREST can switch roles, the application role travels
+ * in `bsdc_role`, and `staff`/`vendor` follow from it.
+ *
+ * The Pages runtime cannot use firebase-admin, so this verifies the caller's
+ * ID token against Google's public certificates with Web Crypto and then calls
+ * the Identity Toolkit REST API authenticated by a service-account JWT that is
  * signed here with RS256.
  *
+ * Two projects are served by the one endpoint. The caller's own token chooses
+ * which one: its audience names the project, and it must be an *owner* token
+ * of that same project. A member-project owner cannot mint console claims and
+ * vice versa.
+ *
  * Secrets (Cloudflare Pages encrypted environment variables):
- *   FB_PROJECT_ID            bsdc-bd
- *   FB_CLIENT_EMAIL          service account address
- *   FB_PRIVATE_KEY           PEM private key (literal \n escapes allowed)
- *   BSDC_OWNER_UIDS          comma separated uid allowlist that may call this
+ *   FB_PROJECT_ID / FB_CLIENT_EMAIL / FB_PRIVATE_KEY     the member project, bsdc-bd
+ *   FB2_PROJECT_ID / FB2_CLIENT_EMAIL / FB2_PRIVATE_KEY  the console project, bsdc-second
+ *   BSDC_OWNER_UIDS    comma separated bsdc-bd uids allowed to mint member claims
+ *   BSDC2_OWNER_UIDS   comma separated bsdc-second uids allowed to mint console claims
  */
-interface Env {
-  FB_PROJECT_ID?: string;
-  FB_CLIENT_EMAIL?: string;
-  FB_PRIVATE_KEY?: string;
-  BSDC_OWNER_UIDS?: string;
-}
-
-const ROLES = ['member', 'creator', 'vendor', 'moderator', 'manager', 'admin', 'owner'] as const;
-type Role = (typeof ROLES)[number];
+import {
+  buildClaims,
+  credentialsFor,
+  ownersFor,
+  targetFromAudience,
+  toClaimsRequest,
+  type ClaimsEnv,
+  type ProjectCredentials,
+} from './claims-core';
 
 /** JWK form of Google's secure-token keys — directly importable by Web Crypto. */
 const JWKS_URL =
@@ -62,6 +71,22 @@ function pemToPkcs8(pem: string): ArrayBuffer {
     .replace(/-----END PRIVATE KEY-----/, '')
     .replace(/\s+/g, '');
   return base64UrlToBytes(body.replace(/\+/g, '-').replace(/\//g, '_')).buffer as ArrayBuffer;
+}
+
+/**
+ * Reads the audience out of a token without trusting it. Verification happens
+ * later, against the project this audience selects; this exists only so the
+ * right service account and owner list can be chosen first.
+ */
+function peekAudience(token: string): string {
+  const parts = token.split('.');
+  if (parts.length !== 3) return '';
+  try {
+    const payload = decodeSegment(parts[1] as string);
+    return typeof payload['aud'] === 'string' ? payload['aud'] : '';
+  } catch {
+    return '';
+  }
 }
 
 /** Verifies a Firebase ID token: signature, issuer, audience and expiry. */
@@ -106,7 +131,7 @@ async function verifyIdToken(token: string, projectId: string): Promise<Record<s
 }
 
 /** Exchanges a self-signed service-account JWT for an access token. */
-async function getAccessToken(env: Env): Promise<string> {
+async function getAccessToken(credentials: ProjectCredentials): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const header = bytesToBase64Url(
     new TextEncoder().encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).buffer as ArrayBuffer,
@@ -114,7 +139,7 @@ async function getAccessToken(env: Env): Promise<string> {
   const claim = bytesToBase64Url(
     new TextEncoder().encode(
       JSON.stringify({
-        iss: env.FB_CLIENT_EMAIL,
+        iss: credentials.clientEmail,
         scope: 'https://www.googleapis.com/auth/identitytoolkit',
         aud: TOKEN_URL,
         iat: now,
@@ -125,7 +150,7 @@ async function getAccessToken(env: Env): Promise<string> {
 
   const key = await crypto.subtle.importKey(
     'pkcs8',
-    pemToPkcs8(env.FB_PRIVATE_KEY ?? ''),
+    pemToPkcs8(credentials.privateKey),
     { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
     false,
     ['sign'],
@@ -151,61 +176,58 @@ async function getAccessToken(env: Env): Promise<string> {
   return body.access_token;
 }
 
-export const onRequestPost: PagesFunction<Env> = async (context) => {
+export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
   const { env, request } = context;
-  if (!env.FB_PROJECT_ID || !env.FB_CLIENT_EMAIL || !env.FB_PRIVATE_KEY) {
-    return json({ error: 'not-configured' }, 503);
-  }
 
   const authorization = request.headers.get('authorization') ?? '';
   const idToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
   if (idToken.length === 0) return json({ error: 'unauthorized' }, 401);
 
+  // The caller's token names the project it belongs to. That decides which
+  // service account signs the update and which owner list guards it.
+  const target = targetFromAudience(env, peekAudience(idToken));
+  if (target === null) return json({ error: 'not-configured' }, 503);
+  const credentials = credentialsFor(env, target);
+  if (credentials === null) return json({ error: 'not-configured' }, 503);
+
   let callerUid: string;
   try {
-    const payload = await verifyIdToken(idToken, env.FB_PROJECT_ID);
+    const payload = await verifyIdToken(idToken, credentials.projectId);
     callerUid = payload['sub'] as string;
   } catch {
     return json({ error: 'unauthorized' }, 401);
   }
 
-  const owners = (env.BSDC_OWNER_UIDS ?? '')
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => value.length > 0);
-  if (!owners.includes(callerUid)) return json({ error: 'forbidden' }, 403);
+  if (!ownersFor(env, target).includes(callerUid)) return json({ error: 'forbidden' }, 403);
 
-  let body: { uid?: unknown; role?: unknown; vendor?: unknown; staff?: unknown };
+  let body: unknown;
   try {
-    body = (await request.json()) as typeof body;
+    body = await request.json();
   } catch {
     return json({ error: 'bad-request' }, 400);
   }
+  const input = toClaimsRequest(body);
+  if (input === null) return json({ error: 'bad-request' }, 400);
 
-  const uid = typeof body.uid === 'string' ? body.uid : '';
-  const role = ROLES.includes(body.role as Role) ? (body.role as Role) : null;
-  if (uid.length === 0 || role === null) return json({ error: 'bad-request' }, 400);
-
-  const claims = {
-    role,
-    vendor: body.vendor === true || role === 'vendor',
-    staff: body.staff === true || ['moderator', 'manager', 'admin', 'owner'].includes(role),
-  };
+  const claims = buildClaims(input.role, input.vendor, input.staff);
 
   try {
-    const accessToken = await getAccessToken(env);
-    const response = await fetch(`${IDENTITY_URL}/projects/${env.FB_PROJECT_ID}/accounts:update`, {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${accessToken}`,
-        'content-type': 'application/json',
+    const accessToken = await getAccessToken(credentials);
+    const response = await fetch(
+      `${IDENTITY_URL}/projects/${credentials.projectId}/accounts:update`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ localId: input.uid, customAttributes: JSON.stringify(claims) }),
       },
-      body: JSON.stringify({ localId: uid, customAttributes: JSON.stringify(claims) }),
-    });
+    );
     if (!response.ok) return json({ error: 'update-failed' }, 502);
   } catch {
     return json({ error: 'update-failed' }, 502);
   }
 
-  return json({ uid, claims }, 200);
+  return json({ uid: input.uid, project: credentials.projectId, claims }, 200);
 };

@@ -131,6 +131,14 @@ jobs:
           select count(*) = 1 as one_row_kept from public.web_vitals;
           SQL
 
+      # Policies are proved, not read. Behave like PostgREST — set the role and
+      # inject the claims, then attempt each access and assert what actually
+      # happens. Among other things this refuses the profile self-insert
+      # escalation that migration 0037 closes: the proof fails if a member can
+      # mint themselves a database role on their own row.
+      - name: Prove the row-level security by exercising it
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f scripts/rls-proof.sql
+
       - name: Report what was built
         run: |
           psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 <<'SQL' >> "$GITHUB_STEP_SUMMARY"

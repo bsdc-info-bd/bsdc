@@ -84,25 +84,39 @@ jobs:
         if: steps.scope.outputs.run == 'true' && matrix.app != 'main-site'
         run: cd corporate-kit && npm install --no-audit --no-fund
 
+      # A build that is missing a VITE_* value still compiles — Vite writes
+      # `undefined` in and the failure only surfaces in the visitor's browser.
+      # The check runs first and stops the deploy, naming every missing value,
+      # so a forgotten secret is a red build here and never a broken site.
       - name: Build the member site
         if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site'
         working-directory: main-site
         env:
+          BSDC_REQUIRED_ENV: >-
+            VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
+            VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
           VITE_FB_AUTH_DOMAIN: ${{ secrets.VITE_FB_AUTH_DOMAIN }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          VITE_FB_STORAGE_BUCKET: ${{ secrets.VITE_FB_STORAGE_BUCKET }}
+          VITE_FB_MSG_SENDER_ID: ${{ secrets.VITE_FB_MSG_SENDER_ID }}
           VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
           VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
           VITE_SITE_URL: https://www.bsdc.info.bd
           VITE_BUILD_SHA: ${{ github.sha }}
-        run: npm run build
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/check-deploy-env.mjs"
+          npm run build
 
       - name: Build the console
         if: steps.scope.outputs.run == 'true' && matrix.app != 'main-site'
         working-directory: ${{ matrix.app }}
         env:
+          BSDC_REQUIRED_ENV: >-
+            VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
+            VITE_FB2_API_KEY,VITE_FB2_AUTH_DOMAIN,VITE_FB2_PROJECT_ID,VITE_FB2_APP_ID,VITE_FB2_DATABASE_URL
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_FB2_API_KEY: ${{ secrets.VITE_FB2_API_KEY }}
@@ -112,7 +126,9 @@ jobs:
           VITE_FB2_DATABASE_URL: ${{ secrets.VITE_FB2_DATABASE_URL }}
           VITE_SITE_URL: https://www.bsdc.info.bd
           VITE_BUILD_SHA: ${{ github.sha }}
-        run: npm run build
+        run: |
+          node "$GITHUB_WORKSPACE/scripts/check-deploy-env.mjs"
+          npm run build
 
       # A build that produced nothing must not be published over a working
       # deployment. This is the last gate before the upload.

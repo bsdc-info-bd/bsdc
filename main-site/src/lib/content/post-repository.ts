@@ -293,6 +293,12 @@ export interface SaveResult {
 }
 
 /**
+ * Thrown from savePost when the author has no `profiles` row to publish
+ * against. The composer's answer is onboarding, not a storage error.
+ */
+export const PROFILE_MISSING_MESSAGE = 'profile/missing';
+
+/**
  * Creates or updates a post and all of its side tables. Publishing sets
  * `published_at`, which the database requires for any published row.
  */
@@ -338,12 +344,19 @@ export async function savePost(
     if (!data) throw toDataError(new Error('profile/not-found'));
     postSlug = data.slug;
   } else {
+    // The database checks the author's profile exists through the
+    // posts_author_uid_fkey constraint, which is the only foreign key on this
+    // table. Reading its answer keeps this free — no extra round trip — and
+    // cannot race with a profile deleted mid-save the way a pre-check could.
     const { data, error } = await supabase
       .from('posts')
       .insert({ ...payload, author_uid: authorUid, slug })
       .select('id, slug')
       .maybeSingle();
-    if (error) throw toDataError(error);
+    if (error) {
+      if (error.code === '23503') throw toDataError(new Error(PROFILE_MISSING_MESSAGE));
+      throw toDataError(error);
+    }
     if (!data) throw toDataError(new Error('data/insert-failed'));
     postId = data.id;
     postSlug = data.slug;

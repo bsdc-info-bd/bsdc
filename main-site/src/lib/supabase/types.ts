@@ -40,18 +40,27 @@ export type ProfileRow = {
   updated_at: string;
 };
 
-export type ProfileInsert = Omit<
-  ProfileRow,
-  | 'role'
-  | 'status'
-  | 'followers_count'
-  | 'following_count'
-  | 'posts_count'
-  | 'reputation'
-  | 'created_at'
-  | 'updated_at'
-> &
-  Partial<Pick<ProfileRow, 'created_at' | 'updated_at'>>;
+/**
+ * Only `uid` and `display_name` are genuinely required: every other column a
+ * client may write either has a database default or is nullable. The server
+ * owns `role`, `status` and the counters, so they are not writable here at
+ * all. (The SQL is the source of truth; this type used to demand columns the
+ * database would happily default, which is what blocked a minimal insert.)
+ */
+export type ProfileInsert = Pick<ProfileRow, 'uid' | 'display_name'> &
+  Partial<
+    Omit<
+      ProfileRow,
+      | 'uid'
+      | 'display_name'
+      | 'role'
+      | 'status'
+      | 'followers_count'
+      | 'following_count'
+      | 'posts_count'
+      | 'reputation'
+    >
+  >;
 
 export type ProfileUpdate = Partial<
   Pick<

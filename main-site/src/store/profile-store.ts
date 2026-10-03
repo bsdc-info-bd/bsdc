@@ -18,7 +18,3 @@ export const useProfileStore = create<ProfileState>((set) => ({
   setLoading: (loading) => set({ loading }),
   setError: (error) => set({ error, loading: false }),
 }));
-
-/** A member must finish onboarding before they can publish anything. */
-export const selectNeedsOnboarding = (state: ProfileState): boolean =>
-  state.profile === null || !state.profile.onboardingComplete;
