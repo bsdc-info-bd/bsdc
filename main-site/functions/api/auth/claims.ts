@@ -12,9 +12,10 @@
  * signed here with RS256.
  *
  * Two projects are served by the one endpoint. The caller's own token chooses
- * which one: its audience names the project, and it must be an *owner* token
- * of that same project. A member-project owner cannot mint console claims and
- * vice versa.
+ * which one: its audience names the project. Owners may assign claims for
+ * their own project; an ordinary member may only bootstrap the least-
+ * privileged claim for their own signed-in account. A member-project owner
+ * cannot mint console claims and vice versa.
  *
  * Secrets (Cloudflare Pages encrypted environment variables):
  *   FB_PROJECT_ID / FB_CLIENT_EMAIL / FB_PRIVATE_KEY     the member project, bsdc-bd
@@ -26,6 +27,7 @@ import {
   buildClaims,
   credentialsFor,
   ownersFor,
+  selfBootstrapRole,
   targetFromAudience,
   toClaimsRequest,
   type ClaimsEnv,
@@ -191,14 +193,13 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
   if (credentials === null) return json({ error: 'not-configured' }, 503);
 
   let callerUid: string;
+  let tokenClaims: Record<string, unknown>;
   try {
-    const payload = await verifyIdToken(idToken, credentials.projectId);
-    callerUid = payload['sub'] as string;
+    tokenClaims = await verifyIdToken(idToken, credentials.projectId);
+    callerUid = tokenClaims['sub'] as string;
   } catch {
     return json({ error: 'unauthorized' }, 401);
   }
-
-  if (!ownersFor(env, target).includes(callerUid)) return json({ error: 'forbidden' }, 403);
 
   let body: unknown;
   try {
@@ -209,7 +210,19 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
   const input = toClaimsRequest(body);
   if (input === null) return json({ error: 'bad-request' }, 400);
 
-  const claims = buildClaims(input.role, input.vendor, input.staff);
+  const isOwner = ownersFor(env, target).includes(callerUid);
+  const selfRole = selfBootstrapRole(callerUid, tokenClaims, input);
+  let claims: ReturnType<typeof buildClaims>;
+  if (isOwner) {
+    // Owners may assign the requested application role.
+    claims = buildClaims(input.role, input.vendor, input.staff);
+  } else {
+    // Everybody else reaches only the self-bootstrap branch, which derives
+    // the exact same role from their Firebase-signed token and discards
+    // requested privilege flags.
+    if (selfRole === null) return json({ error: 'forbidden' }, 403);
+    claims = buildClaims(selfRole);
+  }
 
   try {
     const accessToken = await getAccessToken(credentials);

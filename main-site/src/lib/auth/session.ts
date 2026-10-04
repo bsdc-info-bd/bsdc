@@ -1,6 +1,7 @@
 import { getRedirectResult, onAuthStateChanged, onIdTokenChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
 import { bootstrapDisplayName, ensureProfile, fetchProfile } from '@/lib/profile/profile-service';
+import { ensureDataAccess } from '@/lib/auth/data-access';
 import { readClaims } from '@/lib/auth/session-claims';
 import { DEFAULT_CLAIMS, type SessionClaims } from '@/store/auth-store';
 import type { Profile } from '@/lib/profile/profile-service';
@@ -52,16 +53,15 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
       return;
     }
 
-    void user
-      .getIdTokenResult()
-      .then((token) => {
+    // Firebase tokens begin without the custom PostgREST role. Mint the
+    // least-privileged claim and force-refresh the token before any profile
+    // read/write; otherwise Supabase evaluates the member as `anon` and RLS
+    // correctly refuses profile setup with a permission error.
+    void ensureDataAccess(user)
+      .then(async (token) => {
         if (active) handlers.onSession(user, readClaims(token.claims));
+        return loadOrBootstrapProfile(user);
       })
-      .catch(() => {
-        if (active) handlers.onSession(user, DEFAULT_CLAIMS);
-      });
-
-    void loadOrBootstrapProfile(user)
       .then((profile) => {
         if (!active) return;
         handlers.onProfile(profile);
@@ -69,7 +69,8 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
       })
       .catch(() => {
         if (!active) return;
-        handlers.onProfileError('profile/load-failed');
+        handlers.onSession(user, DEFAULT_CLAIMS);
+        handlers.onProfileError('profile/access-failed');
         handlers.onProfileSettled();
       });
   });
