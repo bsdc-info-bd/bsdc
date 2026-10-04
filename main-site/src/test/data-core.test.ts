@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FLAGS, isFlagEnabled, type FeatureFlag } from '@/lib/data/feature-flags';
-import { fieldsToUpdate, rowToProfile } from '@/lib/profile/supabase-backend';
+import { fieldsToUpdate, onboardingInsert, rowToProfile } from '@/lib/profile/supabase-backend';
 import {
   assertUploadable,
   chooseProvider,
@@ -11,6 +11,7 @@ import {
   MediaError,
 } from '@/lib/storage/upload';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { profileErrorKey } from '@/lib/profile/profile-errors';
 import { bootstrapDisplayName } from '@/lib/profile/profile-service';
 import type { ProfileRow } from '@/lib/supabase/types';
 
@@ -67,7 +68,7 @@ describe('rowToProfile', () => {
   });
 });
 
-describe('fieldsToUpdate', () => {
+describe('profile write payloads', () => {
   it('only sends the columns that actually changed', () => {
     expect(fieldsToUpdate({ bio: 'new bio' })).toEqual({ bio: 'new bio' });
     expect(fieldsToUpdate({})).toEqual({});
@@ -76,6 +77,41 @@ describe('fieldsToUpdate', () => {
   it('never maps read-only columns', () => {
     const update = fieldsToUpdate({ displayName: 'A', skills: ['go'] });
     expect(Object.keys(update).sort()).toEqual(['display_name', 'skills']);
+  });
+
+  it('keeps the onboarding insert within the member INSERT grant', () => {
+    const insert = onboardingInsert('uid-1', {
+      username: 'rafi_dev',
+      displayName: 'Rafi Ahmed',
+      bio: 'Builds things in Sylhet.',
+      avatarUrl: 'https://images.example/avatar.png',
+      location: 'Sylhet',
+      website: 'https://rafi.example',
+      skills: ['typescript'],
+      interests: ['open-source'],
+      language: 'bn',
+      onboardingComplete: true,
+    });
+
+    expect(Object.keys(insert).sort()).toEqual([
+      'avatar_url',
+      'bio',
+      'display_name',
+      'interests',
+      'language',
+      'location',
+      'notifications',
+      'onboarding_complete',
+      'privacy',
+      'skills',
+      'uid',
+      'username',
+      'website',
+    ]);
+    expect(insert).not.toHaveProperty('email_verified');
+    expect(insert).not.toHaveProperty('last_seen_at');
+    expect(insert).not.toHaveProperty('role');
+    expect(insert).not.toHaveProperty('status');
   });
 });
 
@@ -141,6 +177,15 @@ describe('dataErrorKey', () => {
 
   it('maps the missing-profile signal onto the onboarding prompt', () => {
     expect(dataErrorKey(new Error('profile/missing'))).toBe('data.errors.profileMissing');
+  });
+});
+
+describe('profileErrorKey', () => {
+  it('preserves a database error instead of showing the generic auth fallback', () => {
+    expect(profileErrorKey({ message: 'permission denied', code: '42501' })).toBe(
+      'data.errors.forbidden',
+    );
+    expect(profileErrorKey(new TypeError('network failed'))).toBe('data.errors.offline');
   });
 });
 

@@ -151,26 +151,62 @@ select pg_temp.expect_rows(
      and not bsdc.is_staff()', 1, 1);
 
 -- ---------------------------------------------------------------------------
--- Bootstrapping and the escalation hole this boots out.
--- A first-sign-in bootstrap inserts the minimal own row — and nothing more.
+-- Profile bootstrap and onboarding, plus the escalation hole this closes.
+-- A first sign-in inserts only a bare own row. Onboarding then writes the
+-- exact member-owned payload used by the browser and claims the chosen handle.
 -- ---------------------------------------------------------------------------
 select set_config('request.jwt.claims',
   '{"sub":"newbie","role":"authenticated","bsdc_role":"member"}', true);
 select pg_temp.expect_affected(
-  'insert into public.profiles (uid, username, display_name) values (''newbie'', ''newbie'', ''Newbie'')',
+  'insert into public.profiles (uid, username, display_name) values (''newbie'', null, ''Newbie'')',
   1);
 select pg_temp.expect_rows(
-  'select uid from public.profiles where uid = ''newbie''', 1, 1);
+  'select uid from public.profiles where uid = ''newbie'' and username is null', 1, 1);
 
--- Regression for the self-insert escalation (see migration 0037): supplying
--- `role` on the own-row insert MUST be denied with insufficient_privilege,
--- otherwise a member mints themselves corporate admin in the database.
+-- This is the source payload in onboardingInsert(): all editable columns are
+-- accepted, while database-owned verification/activity columns are absent.
+select set_config('request.jwt.claims',
+  '{"sub":"onboarding","role":"authenticated","bsdc_role":"member"}', true);
+select pg_temp.expect_affected(
+  'insert into public.profiles (
+     uid, username, display_name, bio, avatar_url, location, website,
+     skills, interests, language, onboarding_complete, notifications, privacy
+   ) values (
+     ''onboarding'', null, ''Onboarding Member'', ''A short bio'',
+     ''https://images.example/avatar.png'', ''Dhaka'', ''https://member.example'',
+     array[''typescript''], array[''open-source''], ''en'', true,
+     ''{"followers":true,"comments":true,"mentions":true,"messages":true,"digest":true}''::jsonb,
+     ''{"discoverable":true,"showActivity":true,"showEmail":false}''::jsonb
+   )',
+  1);
+select pg_temp.expect_affected(
+  'update public.profiles
+     set display_name = ''Onboarding Member Updated'', bio = ''Updated bio''
+   where uid = ''onboarding''',
+  1);
+select pg_temp.expect_rows(
+  'select uid from public.claim_username(''onboarding'')
+   where uid = ''onboarding'' and username = ''onboarding''',
+  1, 1);
+
+-- Regression for the self-insert escalation (see migrations 0037/0038):
+-- state-owned profile columns MUST remain unavailable to a member, otherwise a
+-- member can mint authority or falsify verification/activity on their own row.
 select set_config('request.jwt.claims',
   '{"sub":"mallory","role":"authenticated","bsdc_role":"member"}', true);
 select pg_temp.expect_fail(
   'insert into public.profiles (uid, username, display_name, role) values (''mallory'', ''mallory'', ''Mallory'', ''admin'')',
   '42501');
--- And with the row blocked, corporate authorization must stay 'member'.
+select pg_temp.expect_fail(
+  'insert into public.profiles (uid, username, display_name, email_verified) values (''mallory'', ''mallory'', ''Mallory'', true)',
+  '42501');
+select pg_temp.expect_affected(
+  'insert into public.profiles (uid, username, display_name) values (''mallory'', ''mallory'', ''Mallory'')',
+  1);
+select pg_temp.expect_fail(
+  'update public.profiles set last_seen_at = now() where uid = ''mallory''',
+  '42501');
+-- And with the privileged insert blocked, corporate authorization stays member.
 select pg_temp.expect_rows(
   'select 1 where bsdc.actor_role() = ''member'' and not bsdc.has_permission(''people.read'')',
   1, 1);

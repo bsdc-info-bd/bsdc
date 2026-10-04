@@ -8,6 +8,8 @@ import {
   ownersFor,
   parseOwners,
   PG_AUTHENTICATED_ROLE,
+  signedAppRole,
+  selfBootstrapRole,
   targetFromAudience,
   toClaimsRequest,
   type ClaimsEnv,
@@ -85,6 +87,57 @@ describe('readClaims', () => {
       staff: false,
     });
     expect(readClaims({})).toEqual({ role: 'member', vendor: false, staff: false });
+  });
+});
+
+describe('signedAppRole', () => {
+  it('uses the current claim, repairs a legacy claim, and defaults new users to member', () => {
+    expect(signedAppRole({ role: 'authenticated', bsdc_role: 'vendor' })).toBe('vendor');
+    expect(signedAppRole({ role: 'moderator' })).toBe('moderator');
+    expect(signedAppRole({ role: 'authenticated' })).toBe('member');
+    expect(signedAppRole({})).toBe('member');
+  });
+});
+
+describe('selfBootstrapRole', () => {
+  it('allows only an own-account claim repair matching the signed application role', () => {
+    expect(
+      selfBootstrapRole(
+        'u1',
+        { role: 'authenticated' },
+        {
+          uid: 'u1',
+          role: 'member',
+          vendor: false,
+          staff: false,
+        },
+      ),
+    ).toBe('member');
+    expect(
+      selfBootstrapRole(
+        'u1',
+        { role: 'admin' },
+        {
+          uid: 'u1',
+          role: 'admin',
+          vendor: false,
+          staff: false,
+        },
+      ),
+    ).toBe('admin');
+  });
+
+  it('refuses a different account, a requested privilege, or an attempted escalation', () => {
+    const claims = { role: 'authenticated' };
+    expect(
+      selfBootstrapRole('u1', claims, { uid: 'u2', role: 'member', vendor: false, staff: false }),
+    ).toBeNull();
+    expect(
+      selfBootstrapRole('u1', claims, { uid: 'u1', role: 'admin', vendor: false, staff: false }),
+    ).toBeNull();
+    expect(
+      selfBootstrapRole('u1', claims, { uid: 'u1', role: 'member', vendor: true, staff: false }),
+    ).toBeNull();
   });
 });
 

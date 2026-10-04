@@ -15,13 +15,13 @@ import {
   TextareaField,
 } from '@/design-system';
 import type { Language } from '@/i18n';
-import { authErrorKey } from '@/lib/auth/errors';
 import {
   isUsernameAvailable,
   saveProfile,
   usernameSchema,
   type ProfileDraft,
 } from '@/lib/profile/profile-service';
+import { profileErrorKey } from '@/lib/profile/profile-errors';
 import { profilePath, ROUTES } from '@/lib/site';
 import { useAuthStore } from '@/store/auth-store';
 import { useProfileStore } from '@/store/profile-store';
@@ -158,7 +158,7 @@ export default function OnboardingPage() {
         setErrorKey('auth.errors.usernameTaken');
         setStep(0);
       } else {
-        setErrorKey(authErrorKey(error));
+        setErrorKey(profileErrorKey(error));
       }
     } finally {
       setSaving(false);

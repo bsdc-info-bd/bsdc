@@ -15,8 +15,9 @@
  *
  * Two Firebase projects mint claims here: `bsdc-bd` (members and the Android
  * app) and `bsdc-second` (the thirteen consoles). They stay separate on
- * purpose, so each has its own service account and its own owner allowlist —
- * an owner in one project cannot mint claims in the other.
+ * purpose, so each has its own service account and owner allowlist — an owner
+ * in one project cannot mint claims in the other. A signed-in member may only
+ * repair the least-privileged claim on their own account.
  */
 
 export const APP_ROLES = [
@@ -62,6 +63,18 @@ export interface ClaimsEnv {
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === 'string' && (APP_ROLES as readonly string[]).includes(value);
+}
+
+/**
+ * Reads the application role from a Firebase-signed token during the safe
+ * self-bootstrap path. `bsdc_role` is the current location; a legacy token
+ * may still carry the application role in `role`. A normal Firebase token has
+ * neither and is an ordinary member.
+ */
+export function signedAppRole(claims: Record<string, unknown>): AppRole {
+  if (isAppRole(claims['bsdc_role'])) return claims['bsdc_role'];
+  if (isAppRole(claims['role'])) return claims['role'];
+  return 'member';
 }
 
 /** Roles above a plain member make the caller staff in the database. */
@@ -122,6 +135,22 @@ export interface ClaimsRequest {
   role: AppRole;
   vendor: boolean;
   staff: boolean;
+}
+
+/**
+ * An ordinary member can repair/bootstrap only their own database-access
+ * claim. The chosen application role must exactly match the one already in
+ * their Firebase-signed token (or the normal member default), and browser
+ * privilege flags are never accepted on this path.
+ */
+export function selfBootstrapRole(
+  callerUid: string,
+  tokenClaims: Record<string, unknown>,
+  input: ClaimsRequest,
+): AppRole | null {
+  if (input.uid !== callerUid || input.vendor || input.staff) return null;
+  const role = signedAppRole(tokenClaims);
+  return input.role === role ? role : null;
 }
 
 /** Validates a parsed JSON body into a claims request, or null when invalid. */

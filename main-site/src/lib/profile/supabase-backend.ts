@@ -1,6 +1,6 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
-import type { ProfileRow, ProfileUpdate } from '@/lib/supabase/types';
+import type { ProfileInsert, ProfileRow, ProfileUpdate } from '@/lib/supabase/types';
 import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_PRIVACY,
@@ -61,6 +61,31 @@ export function fieldsToUpdate(fields: ProfileFields): ProfileUpdate {
   return update;
 }
 
+/**
+ * The first half of the onboarding write. This object is deliberately limited
+ * to the columns granted to an authenticated member by migration 0037. In
+ * particular, verification and activity fields are database-owned: including
+ * either in an otherwise harmless upsert makes PostgREST reject the whole
+ * profile setup with a 42501 permission error.
+ */
+export function onboardingInsert(uid: string, draft: ProfileDraft): ProfileInsert {
+  return {
+    uid,
+    username: null,
+    display_name: draft.displayName,
+    bio: draft.bio,
+    avatar_url: draft.avatarUrl,
+    location: draft.location,
+    website: draft.website,
+    skills: [...draft.skills],
+    interests: [...draft.interests],
+    language: draft.language,
+    onboarding_complete: draft.onboardingComplete,
+    notifications: { ...DEFAULT_NOTIFICATIONS },
+    privacy: { ...DEFAULT_PRIVACY },
+  };
+}
+
 function unwrap<T>(data: T | null, error: { message: string; code: string } | null): T | null {
   if (error) {
     // PGRST116 is "no rows" for a single() read, which is not a failure here.
@@ -118,27 +143,9 @@ async function saveProfile(uid: string, draft: ProfileDraft): Promise<Profile> {
   const username = usernameSchema.parse(draft.username);
   const supabase = getSupabase();
 
-  const { error: upsertError } = await supabase.from('profiles').upsert(
-    {
-      uid,
-      username: null,
-      display_name: draft.displayName,
-      bio: draft.bio,
-      avatar_url: draft.avatarUrl,
-      cover_url: '',
-      location: draft.location,
-      website: draft.website,
-      skills: [...draft.skills],
-      interests: [...draft.interests],
-      language: draft.language,
-      onboarding_complete: draft.onboardingComplete,
-      email_verified: false,
-      notifications: { ...DEFAULT_NOTIFICATIONS },
-      privacy: { ...DEFAULT_PRIVACY },
-      last_seen_at: null,
-    },
-    { onConflict: 'uid', ignoreDuplicates: true },
-  );
+  const { error: upsertError } = await supabase
+    .from('profiles')
+    .upsert(onboardingInsert(uid, draft), { onConflict: 'uid', ignoreDuplicates: true });
   if (upsertError) throw toDataError(upsertError);
 
   const { error: updateError } = await supabase

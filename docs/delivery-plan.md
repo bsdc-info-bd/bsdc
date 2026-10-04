@@ -76,9 +76,10 @@ working, wired-up features — never scaffolding for its own sake.
 - App bar account menu, unverified-email reminder banner and safe `next=`
   redirect handling that rejects absolute and protocol-relative targets.
 - `POST /api/auth/claims`: a Pages Function that verifies the caller's ID
-  token against Google's JWKS with Web Crypto, enforces an owner allowlist,
-  and mints custom claims through the Identity Toolkit REST API — no
-  firebase-admin dependency in the Workers runtime.
+  token against Google's JWKS with Web Crypto, lets a signed-in member safely
+  bootstrap only their own database-access claim, keeps role assignment behind
+  the owner allowlist, and mints custom claims through the Identity Toolkit
+  REST API — no firebase-admin dependency in the Workers runtime.
 - The Firebase SDK is loaded on demand, so the initial JavaScript budget stays
   far below the 250 KB gzip CI gate.
 
