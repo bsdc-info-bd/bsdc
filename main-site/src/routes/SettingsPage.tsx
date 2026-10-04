@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { Seo } from '@/components/seo/Seo';
@@ -10,6 +11,7 @@ import {
   Button,
   Card,
   PasswordField,
+  PageSkeleton,
   SectionHeading,
   SelectField,
   Switch,
@@ -24,6 +26,7 @@ import { changeLanguage, type Language } from '@/i18n';
 import { changePassword, logout, updateDisplayName } from '@/lib/auth/auth-service';
 import { authErrorKey } from '@/lib/auth/errors';
 import type { FeedPreferences } from '@/lib/feed/ranking';
+import { profileErrorKey } from '@/lib/profile/profile-errors';
 import { formatAbsoluteDate } from '@/lib/format';
 import {
   DEFAULT_NOTIFICATIONS,
@@ -58,7 +61,7 @@ function AccountPanel() {
       if (profile) setProfile({ ...profile, avatarUrl: url });
       toast.success(t('media.uploaded'));
     } catch (error) {
-      toast.error(t(authErrorKey(error)));
+      toast.error(t(profileErrorKey(error)));
     }
   }
 
@@ -82,7 +85,7 @@ function AccountPanel() {
       }
       toast.success(t('settings.saved'));
     } catch (error) {
-      toast.error(t(authErrorKey(error)));
+      toast.error(t(profileErrorKey(error)));
     } finally {
       setSaving(false);
     }
@@ -483,7 +486,16 @@ function FeedPanel() {
 
 export default function SettingsPage() {
   const { t } = useTranslation();
+  const profileLoaded = useAuthStore((state) => state.profileLoaded);
+  const profile = useProfileStore((state) => state.profile);
   const [tab, setTab] = useState('account');
+
+  // The account panels write partial profile fields. Let the sign-in bootstrap
+  // settle first and send a new member to the one place that can create their
+  // complete profile, rather than attempting a partial write that the data
+  // layer must reject.
+  if (!profileLoaded) return <PageSkeleton label={t('common.loading')} />;
+  if (!profile) return <Navigate to={ROUTES.onboarding} replace />;
 
   const items: TabItem[] = [
     { id: 'account', label: t('settings.tabs.account'), content: <AccountPanel /> },

@@ -1,0 +1,79 @@
+name: Deploy Firebase rules
+
+# Firestore is the profile cache and Realtime Database carries presence/typing.
+# Their policies must be deployed with the application code that relies on
+# them; otherwise a source fix can look green while production still rejects a
+# member write under yesterday's rules.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firebase.json'
+      - 'firebase/**'
+      - '.github/workflows/firebase-rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firebase-rules-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Firestore and Realtime Database rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # Keep the deploy identity in the runner's temporary directory. The
+      # Firebase CLI discovers application-default credentials from this path;
+      # no credential is ever written into the checkout or an artifact.
+      - name: Prepare Firebase deployment credential
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_BSDC_BD" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT_BSDC_BD is required to deploy production Firebase rules."
+            exit 1
+          fi
+          credential="$RUNNER_TEMP/bsdc-firebase-rules.json"
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT_BSDC_BD" > "$credential"
+          chmod 600 "$credential"
+          python3 - "$credential" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], encoding="utf-8") as source:
+              credential = json.load(source)
+          assert credential.get("type") == "service_account", "Credential must be a service-account JSON object"
+          assert credential.get("project_id") == "bsdc-bd", "Credential project_id must be bsdc-bd"
+          assert credential.get("client_email"), "Credential client_email is missing"
+          PY
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$credential" >> "$GITHUB_ENV"
+
+      - name: Deploy Firebase rules
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/bsdc-firebase-rules-deploy.log"
+          trap 'rm -f "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+          if ! npx --yes firebase-tools@13.35.1 deploy --non-interactive \
+            --only firestore:rules,database --project bsdc-bd 2>&1 | tee "$log"; then
+            summary="$(tail -n 60 "$log" | tr '\n' ' ' | sed 's/  */ /g' | cut -c1-6000)"
+            echo "::error title=Firebase rules deployment failed::$summary"
+            {
+              echo "## Firebase rules deployment failure"
+              echo
+              echo '```text'
+              tail -n 120 "$log"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

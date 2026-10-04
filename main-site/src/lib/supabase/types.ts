@@ -41,11 +41,12 @@ export type ProfileRow = {
 };
 
 /**
- * Only `uid` and `display_name` are genuinely required: every other column a
- * client may write either has a database default or is nullable. The server
- * owns `role`, `status` and the counters, so they are not writable here at
- * all. (The SQL is the source of truth; this type used to demand columns the
- * database would happily default, which is what blocked a minimal insert.)
+ * Only `uid` and `display_name` are genuinely required: every other member-
+ * editable column has a database default or is nullable. The server owns
+ * role, moderation, counters, verification and activity fields, and migration
+ * 0037 intentionally withholds INSERT grants for them. Keeping this type to
+ * the client grant surface prevents a new write payload from turning a valid
+ * profile save into a production permission error.
  */
 export type ProfileInsert = Pick<ProfileRow, 'uid' | 'display_name'> &
   Partial<
@@ -55,10 +56,14 @@ export type ProfileInsert = Pick<ProfileRow, 'uid' | 'display_name'> &
       | 'display_name'
       | 'role'
       | 'status'
+      | 'email_verified'
       | 'followers_count'
       | 'following_count'
       | 'posts_count'
       | 'reputation'
+      | 'last_seen_at'
+      | 'created_at'
+      | 'updated_at'
     >
   >;
 
@@ -78,7 +83,6 @@ export type ProfileUpdate = Partial<
     | 'onboarding_complete'
     | 'notifications'
     | 'privacy'
-    | 'last_seen_at'
   >
 >;
 
