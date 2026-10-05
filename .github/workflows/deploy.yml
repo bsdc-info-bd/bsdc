@@ -155,6 +155,12 @@ jobs:
             pages project create ${{ matrix.project }}
             --production-branch=main
 
+      # IMPORTANT: Cloudflare discovers Pages Functions relative to Wrangler's
+      # working directory. Deploying `main-site/dist` from the monorepo root
+      # omitted `main-site/functions`, leaving /api/auth/claims unavailable.
+      #
+      # Running from each package root uploads main-site/functions alongside
+      # main-site/dist, while keeping all consoles deployed normally.
       - name: Deploy to Cloudflare Pages
         if: steps.scope.outputs.run == 'true'
         id: pages
@@ -162,8 +168,9 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: ${{ matrix.app }}
           command: >-
-            pages deploy ${{ matrix.app }}/dist
+            pages deploy dist
             --project-name=${{ matrix.project }}
             --branch=${{ github.head_ref || github.ref_name }}
             --commit-dirty=true
