@@ -48,6 +48,8 @@ export interface Post {
   allowComments: boolean;
   publishedAt: string | null;
   editedAt: string | null;
+  /** Set while the post sits in its author's deleted items. */
+  deletedAt: string | null;
   createdAt: string;
   author: PostAuthor | null;
   tags: string[];
@@ -113,6 +115,7 @@ export function toPost(row: JoinedPostRow): Post {
     allowComments: row.allow_comments,
     publishedAt: row.published_at,
     editedAt: row.edited_at,
+    deletedAt: row.deleted_at,
     createdAt: row.created_at,
     author,
     tags: (row.post_tags ?? []).map((tag) => tag.tag_slug),
@@ -141,6 +144,16 @@ export async function fetchPostBySlug(slug: string): Promise<Post | null> {
     .from('posts')
     .select(POST_SELECT)
     .eq('slug', slug.toLowerCase())
+    .maybeSingle<JoinedPostRow>();
+  if (error && error.code !== 'PGRST116') throw toDataError(error);
+  return data ? toPost(data) : null;
+}
+
+export async function fetchPostById(id: string): Promise<Post | null> {
+  const { data, error } = await getSupabase()
+    .from('posts')
+    .select(POST_SELECT)
+    .eq('id', id)
     .maybeSingle<JoinedPostRow>();
   if (error && error.code !== 'PGRST116') throw toDataError(error);
   return data ? toPost(data) : null;
@@ -370,7 +383,29 @@ export async function savePost(
   return { id: postId, slug: postSlug };
 }
 
+/**
+ * Deletes a post into the trash: the row leaves every reader's view and stays
+ * recoverable for thirty days, which is what the delete button promises.
+ */
 export async function deletePost(postId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('posts')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', postId);
+  if (error) throw toDataError(error);
+}
+
+/** Puts a post back before its thirty days are up. */
+export async function restorePost(postId: string): Promise<void> {
+  const { error } = await getSupabase().from('posts').update({ deleted_at: null }).eq('id', postId);
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Removes the post and everything under it for good, now. The author may
+ * always do this; waiting out the thirty days is a choice, not a requirement.
+ */
+export async function deletePostForever(postId: string): Promise<void> {
   const { error } = await getSupabase().from('posts').delete().eq('id', postId);
   if (error) throw toDataError(error);
 }

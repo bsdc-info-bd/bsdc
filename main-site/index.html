@@ -71,7 +71,12 @@
     />
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      The home feed is written in here by the Pages Function that serves this
+      page, and replaced by React as soon as it runs. Without JavaScript the
+      articles below are the whole page.
+    -->
+    <div id="root"><div data-prerender-feed="home"></div></div>
     <noscript>
       <div style="padding: 24px; font-family: Inter, Arial, sans-serif">
         <p><strong>Bangladesh Software Development Community</strong></p>

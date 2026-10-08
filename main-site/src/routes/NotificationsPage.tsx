@@ -6,7 +6,7 @@ import { Alert, Avatar, Button, EmptyState, PageSkeleton, SectionHeading } from 
 import { useNotifications } from '@/hooks/use-interactions';
 import { cn } from '@/lib/cn';
 import { formatRelativeTime } from '@/lib/format';
-import { profilePath, ROUTES } from '@/lib/site';
+import { conversationPath, profilePath, ROUTES } from '@/lib/site';
 
 /** The inbox: everything the community did that concerns this member. */
 export default function NotificationsPage() {
@@ -49,14 +49,18 @@ export default function NotificationsPage() {
         <ul className="mt-4 flex flex-col gap-2">
           {notifications.map((item) => {
             const actorName = item.actor?.displayName ?? t('notifications.someone');
-            return (
-              <li
-                key={item.id}
-                className={cn(
-                  'flex items-start gap-3 rounded-xl border border-line bg-surface p-3',
-                  item.readAt === null && 'border-green-500',
-                )}
-              >
+            // A message notification opens the thread it is about; everything
+            // else keeps the plain row it has always been.
+            const thread =
+              item.kind === 'message' && item.conversationId !== null
+                ? conversationPath(item.conversationId)
+                : null;
+            const rowClass = cn(
+              'flex items-start gap-3 rounded-xl border border-line bg-surface p-3',
+              item.readAt === null && 'border-green-500',
+            );
+            const content = (
+              <>
                 {item.actor ? (
                   <Link to={profilePath(item.actor.username)} className="shrink-0">
                     <Avatar src={item.actor.avatarUrl} name={actorName} size="sm" />
@@ -75,6 +79,17 @@ export default function NotificationsPage() {
                     {formatRelativeTime(new Date(item.createdAt), language)}
                   </p>
                 </div>
+              </>
+            );
+            return (
+              <li key={item.id}>
+                {thread === null ? (
+                  <div className={rowClass}>{content}</div>
+                ) : (
+                  <Link to={thread} className={cn(rowClass, 'transition hover:border-green-600')}>
+                    {content}
+                  </Link>
+                )}
               </li>
             );
           })}

@@ -78,6 +78,19 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="fab-container pb-8" aria-labelledby="public-feed">
+        <SectionHeading title={t('home.feedTitle')} description={t('home.feedBody')} />
+        <h2 id="public-feed" className="fab-sr-only">
+          {t('home.feedTitle')}
+        </h2>
+        <div className="mt-4">
+          <FeedTabs signedIn={false} />
+        </div>
+        <div className="mt-4">
+          <LinkButton to={ROUTES.signup}>{t('home.feedJoin')}</LinkButton>
+        </div>
+      </section>
+
       {launchConfig.launched ? null : (
         <section className="fab-container pb-8" aria-labelledby="launch-countdown">
           <Card>

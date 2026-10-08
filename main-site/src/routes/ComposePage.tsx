@@ -1,7 +1,7 @@
 import { Eye, ImagePlus, Plus, Send, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { Seo } from '@/components/seo/Seo';
@@ -9,6 +9,7 @@ import {
   Alert,
   Button,
   Card,
+  PageSkeleton,
   Chip,
   IconButton,
   SelectField,
@@ -27,6 +28,7 @@ import {
   POST_KINDS,
   TAGS_MAX,
   TITLE_MAX,
+  draftFromPost,
   validateDraft,
   VISIBILITIES,
   type CodeLanguage,
@@ -62,7 +64,11 @@ const TAG_SUGGESTIONS = [
 export default function ComposePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const params = useParams<{ postId?: string }>();
   const user = useAuthStore((state) => state.user);
+  // `/compose/<post id>` edits that post; `/compose` writes a new one.
+  const editingId = params.postId !== undefined && params.postId.length > 0 ? params.postId : null;
+  const isEditing = editingId !== null;
 
   const [draft, setDraft] = useState<PostDraft>(() => ({
     ...EMPTY_DRAFT,
@@ -73,18 +79,54 @@ export default function ComposePage() {
   const [busy, setBusy] = useState(false);
   const [errorKeys, setErrorKeys] = useState<string[]>([]);
   const [saveErrorKey, setSaveErrorKey] = useState<string | null>(null);
+  const [existing, setExisting] = useState<'loading' | 'ready' | 'missing' | 'forbidden'>(
+    isEditing ? 'loading' : 'ready',
+  );
   const fileRef = useRef<HTMLInputElement>(null);
-  const autosave = useDraftAutosave(draft);
+  // Editing a saved post never touches the browser copy: that copy belongs to
+  // the post being written from scratch.
+  const autosave = useDraftAutosave(draft, 1200, !isEditing);
 
   // A draft left behind by an earlier session is offered back, never applied
   // silently over something the member is already writing.
   useEffect(() => {
+    if (isEditing) return;
     const stored = loadLocalDraft();
     if (stored) {
       setDraft(stored);
       setRestored(true);
     }
-  }, []);
+  }, [isEditing]);
+
+  // The post being edited is loaded once, and only the author may open it.
+  // The database enforces the same rule on save; this stops the editor from
+  // presenting somebody else's post as editable in the first place.
+  useEffect(() => {
+    if (editingId === null) return;
+    let cancelled = false;
+    setExisting('loading');
+    void import('@/lib/content/post-repository')
+      .then((module) => module.fetchPostById(editingId))
+      .then((post) => {
+        if (cancelled) return;
+        if (post === null) {
+          setExisting('missing');
+          return;
+        }
+        if (post.author === null || post.author.uid !== user?.uid) {
+          setExisting('forbidden');
+          return;
+        }
+        setDraft(draftFromPost(post));
+        setExisting('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setExisting('missing');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId, user?.uid]);
 
   const update = useCallback(<K extends keyof PostDraft>(key: K, value: PostDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -147,6 +189,11 @@ export default function ComposePage() {
     try {
       const { savePost } = await import('@/lib/content/post-repository');
       const saved = await savePost(user.uid, draft, status);
+      if (isEditing) {
+        toast.success(t('compose.updated'));
+        navigate(`/p/${saved.slug}`);
+        return;
+      }
       clearLocalDraft();
       toast.success(status === 'published' ? t('compose.published') : t('compose.savedDraft'));
       navigate(status === 'published' ? `/p/${saved.slug}` : ROUTES.home);
@@ -379,7 +426,7 @@ export default function ComposePage() {
   return (
     <>
       <Seo
-        title={t('compose.metaTitle')}
+        title={isEditing ? t('compose.editMetaTitle') : t('compose.metaTitle')}
         description={t('compose.metaDescription')}
         path="/compose"
         noindex
@@ -387,7 +434,9 @@ export default function ComposePage() {
       <div className="fab-container py-6 sm:py-10">
         <div className="mx-auto w-full max-w-3xl">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-2xl sm:text-3xl">{t('compose.title')}</h1>
+            <h1 className="text-2xl sm:text-3xl">
+              {isEditing ? t('compose.editTitle') : t('compose.title')}
+            </h1>
             <p aria-live="polite" className="text-xs text-muted">
               {autosave === 'saving' ? t('compose.autosaving') : null}
               {autosave === 'saved' ? t('compose.autosaved') : null}
@@ -396,6 +445,16 @@ export default function ComposePage() {
 
           {!isConfigured.supabase ? (
             <Alert tone="danger" title={t('data.errors.notConfigured')} className="mt-4" />
+          ) : null}
+
+          {existing === 'loading' ? <PageSkeleton label={t('common.loading')} /> : null}
+
+          {existing === 'missing' ? (
+            <Alert tone="danger" title={t('compose.editMissing')} className="mt-4" />
+          ) : null}
+
+          {existing === 'forbidden' ? (
+            <Alert tone="danger" title={t('compose.editForbidden')} className="mt-4" />
           ) : null}
 
           {restored ? (
@@ -424,76 +483,90 @@ export default function ComposePage() {
             </Alert>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {POST_KINDS.map((kind) => (
-              <Chip key={kind} selected={draft.kind === kind} onClick={() => update('kind', kind)}>
-                {kindLabels[kind]}
-              </Chip>
-            ))}
-          </div>
+          {existing !== 'ready' ? null : (
+            <>
+              {!isEditing ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {POST_KINDS.map((kind) => (
+                    <Chip
+                      key={kind}
+                      selected={draft.kind === kind}
+                      onClick={() => update('kind', kind)}
+                    >
+                      {kindLabels[kind]}
+                    </Chip>
+                  ))}
+                </div>
+              ) : null}
 
-          <Card className="mt-4">
-            <Tabs items={tabs} activeId={tab} onChange={setTab} label={t('compose.title')} />
-          </Card>
+              <Card className="mt-4">
+                <Tabs items={tabs} activeId={tab} onChange={setTab} label={t('compose.title')} />
+              </Card>
 
-          <Card className="mt-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SelectField
-                label={t('compose.fields.visibility')}
-                value={draft.visibility}
-                onChange={(event) => update('visibility', event.target.value as Visibility)}
-                options={VISIBILITIES.map((visibility) => ({
-                  value: visibility,
-                  label: t(`compose.visibility.${visibility}`),
-                }))}
-              />
-              <SelectField
-                label={t('compose.fields.language')}
-                value={draft.language}
-                onChange={(event) => update('language', event.target.value === 'en' ? 'en' : 'bn')}
-                options={[
-                  { value: 'bn', label: t('language.bangla') },
-                  { value: 'en', label: t('language.english') },
-                ]}
-              />
-              <Switch
-                checked={draft.allowComments}
-                onCheckedChange={(value) => update('allowComments', value)}
-                label={t('compose.allowComments')}
-              />
-              <Switch
-                checked={draft.isSensitive}
-                onCheckedChange={(value) => update('isSensitive', value)}
-                label={t('compose.sensitive')}
-                description={t('compose.sensitiveHint')}
-              />
-            </div>
-          </Card>
+              <Card className="mt-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectField
+                    label={t('compose.fields.visibility')}
+                    value={draft.visibility}
+                    onChange={(event) => update('visibility', event.target.value as Visibility)}
+                    options={VISIBILITIES.map((visibility) => ({
+                      value: visibility,
+                      label: t(`compose.visibility.${visibility}`),
+                    }))}
+                  />
+                  <SelectField
+                    label={t('compose.fields.language')}
+                    value={draft.language}
+                    onChange={(event) =>
+                      update('language', event.target.value === 'en' ? 'en' : 'bn')
+                    }
+                    options={[
+                      { value: 'bn', label: t('language.bangla') },
+                      { value: 'en', label: t('language.english') },
+                    ]}
+                  />
+                  <Switch
+                    checked={draft.allowComments}
+                    onCheckedChange={(value) => update('allowComments', value)}
+                    label={t('compose.allowComments')}
+                  />
+                  <Switch
+                    checked={draft.isSensitive}
+                    onCheckedChange={(value) => update('isSensitive', value)}
+                    label={t('compose.sensitive')}
+                    description={t('compose.sensitiveHint')}
+                  />
+                </div>
+              </Card>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button
-              iconStart={<Send size={16} />}
-              loading={busy}
-              disabled={!isConfigured.supabase}
-              onClick={() => void submit('published')}
-            >
-              {t('compose.publish')}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy || !isConfigured.supabase}
-              onClick={() => void submit('draft')}
-            >
-              {t('compose.saveDraft')}
-            </Button>
-            <Button
-              variant="ghost"
-              iconStart={<Eye size={16} />}
-              onClick={() => setTab(tab === 'preview' ? 'write' : 'preview')}
-            >
-              {tab === 'preview' ? t('compose.tabs.write') : t('compose.tabs.preview')}
-            </Button>
-          </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button
+                  iconStart={<Send size={16} />}
+                  loading={busy}
+                  disabled={!isConfigured.supabase || existing !== 'ready'}
+                  onClick={() => void submit('published')}
+                >
+                  {isEditing ? t('compose.saveChanges') : t('compose.publish')}
+                </Button>
+                {!isEditing ? (
+                  <Button
+                    variant="secondary"
+                    disabled={busy || !isConfigured.supabase}
+                    onClick={() => void submit('draft')}
+                  >
+                    {t('compose.saveDraft')}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  iconStart={<Eye size={16} />}
+                  onClick={() => setTab(tab === 'preview' ? 'write' : 'preview')}
+                >
+                  {tab === 'preview' ? t('compose.tabs.write') : t('compose.tabs.preview')}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </>

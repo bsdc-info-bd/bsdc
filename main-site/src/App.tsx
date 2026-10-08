@@ -26,6 +26,7 @@ const ComposePage = lazy(() => import('@/routes/ComposePage'));
 const PostPage = lazy(() => import('@/routes/PostPage'));
 const TagPage = lazy(() => import('@/routes/TagPage'));
 const NotificationsPage = lazy(() => import('@/routes/NotificationsPage'));
+const TrashPage = lazy(() => import('./routes/TrashPage'));
 const BookmarksPage = lazy(() => import('@/routes/BookmarksPage'));
 const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
 const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
@@ -94,8 +95,13 @@ const router = createBrowserRouter([
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
           { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
+          // The same composer, opened on an existing post. The page loads the
+          // post and refuses to show it to anybody but its author, and the
+          // database refuses the write besides.
+          { path: `${ROUTES.compose}/:postId`, element: withSuspense(<ComposePage />) },
           { path: ROUTES.notifications, element: withSuspense(<NotificationsPage />) },
           { path: ROUTES.bookmarks, element: withSuspense(<BookmarksPage />) },
+          { path: ROUTES.trash, element: withSuspense(<TrashPage />) },
           { path: ROUTES.messages, element: withSuspense(<MessagesPage />) },
           { path: '/messages/:id', element: withSuspense(<MessagesPage />) },
 

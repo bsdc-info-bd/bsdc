@@ -42,6 +42,7 @@ export const ROUTES = {
   compose: '/compose',
   notifications: '/notifications',
   bookmarks: '/bookmarks',
+  trash: '/trash',
   messages: '/messages',
   groups: '/groups',
   events: '/events',

@@ -109,7 +109,9 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
   async function remove() {
     try {
       await thread.remove(node.id);
-      toast.success(t('interactions.commentDeleted'));
+      toast.success(t('interactions.commentDeleted'), {
+        description: t('interactions.commentDeletedBody'),
+      });
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
     }

@@ -57,6 +57,8 @@ export interface AppNotification {
   body: string;
   postId: string | null;
   commentId: string | null;
+  /** Set on a `message` notification: the thread it opens. */
+  conversationId: string | null;
   readAt: string | null;
   createdAt: string;
   actor: CommentAuthor | null;

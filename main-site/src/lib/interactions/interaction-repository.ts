@@ -171,7 +171,26 @@ export async function updateComment(commentId: string, body: string): Promise<vo
   if (error) throw toDataError(error);
 }
 
+/** Moves a comment (or a reply) to the trash, where it stays thirty days. */
 export async function deleteComment(commentId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('comments')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', commentId);
+  if (error) throw toDataError(error);
+}
+
+/** Puts a comment back before its thirty days are up. */
+export async function restoreComment(commentId: string): Promise<void> {
+  const { error } = await getSupabase()
+    .from('comments')
+    .update({ deleted_at: null })
+    .eq('id', commentId);
+  if (error) throw toDataError(error);
+}
+
+/** Removes a comment and its replies for good, now. */
+export async function deleteCommentForever(commentId: string): Promise<void> {
   const { error } = await getSupabase().from('comments').delete().eq('id', commentId);
   if (error) throw toDataError(error);
 }
@@ -200,7 +219,7 @@ export async function fetchNotifications(limit = 40): Promise<AppNotification[]>
   const { data, error } = await getSupabase()
     .from('notifications')
     .select(
-      'id, kind, body, post_id, comment_id, read_at, created_at, actor:actor_uid (uid, username, display_name, avatar_url)',
+      'id, kind, body, post_id, comment_id, conversation_id, read_at, created_at, actor:actor_uid (uid, username, display_name, avatar_url)',
     )
     .order('created_at', { ascending: false })
     .limit(limit)
@@ -213,6 +232,7 @@ export async function fetchNotifications(limit = 40): Promise<AppNotification[]>
     body: row.body,
     postId: row.post_id,
     commentId: row.comment_id,
+    conversationId: row.conversation_id,
     readAt: row.read_at,
     createdAt: row.created_at,
     actor: toAuthor(row.actor),

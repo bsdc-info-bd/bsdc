@@ -19,6 +19,7 @@ import {
   type TabItem,
 } from '@/design-system';
 import { PostCard } from '@/components/content/PostCard';
+import { FollowButton } from '@/components/social/FollowButton';
 import { usePresence } from '@/hooks/use-presence';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import {
@@ -276,16 +277,18 @@ export default function ProfilePage() {
                 <Button variant="secondary">{t('profile.editProfile')}</Button>
               </Link>
             ) : currentUser ? (
-              <Button
-                variant="secondary"
-                className="shrink-0"
-                disabled={openingChat}
-                onClick={() => {
-                  void startConversation();
-                }}
-              >
-                {t('messages.startConversation')}
-              </Button>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <FollowButton uid={profile.uid} displayName={profile.displayName} />
+                <Button
+                  variant="secondary"
+                  disabled={openingChat}
+                  onClick={() => {
+                    void startConversation();
+                  }}
+                >
+                  {t('messages.startConversation')}
+                </Button>
+              </div>
             ) : null}
           </div>
         </Card>

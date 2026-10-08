@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Eye, MessageSquare, Pencil } from 'lucide-react';
-import { useEffect } from 'react';
+import { Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { CommentThread } from '@/components/interactions/CommentThread';
 import { ReactionBar } from '@/components/interactions/ReactionBar';
@@ -15,13 +15,15 @@ import {
   Card,
   Chip,
   EmptyState,
+  Modal,
   PageSkeleton,
   ProgressBar,
 } from '@/design-system';
 import { isConfigured } from '@/lib/env';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { profilePath, SITE } from '@/lib/site';
+import { profilePath, ROUTES, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth-store';
 
 const JSON_LD_TYPE: Record<string, string> = {
@@ -40,6 +42,8 @@ export default function PostPage() {
   const slug = (params['slug'] ?? '').toLowerCase();
   const user = useAuthStore((state) => state.user);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['post', slug],
@@ -52,6 +56,54 @@ export default function PostPage() {
   });
 
   const postId = data?.id ?? '';
+
+  const trashPost = useMutation({
+    mutationFn: async () => {
+      const { deletePost } = await import('@/lib/content/post-repository');
+      return deletePost(postId);
+    },
+    onSuccess: () => {
+      setConfirmingDelete(false);
+      toast.success(t('post.movedToTrash'));
+      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      navigate(ROUTES.trash);
+    },
+    onError: (error) => {
+      toast.error(t(dataErrorKey(error)));
+    },
+  });
+
+  const erasePost = useMutation({
+    mutationFn: async () => {
+      const { deletePostForever } = await import('@/lib/content/post-repository');
+      return deletePostForever(postId);
+    },
+    onSuccess: () => {
+      setConfirmingDelete(false);
+      toast.success(t('post.deletedForever'));
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      navigate(ROUTES.home);
+    },
+    onError: (error) => {
+      toast.error(t(dataErrorKey(error)));
+    },
+  });
+
+  const restoreThisPost = useMutation({
+    mutationFn: async () => {
+      const { restorePost } = await import('@/lib/content/post-repository');
+      return restorePost(postId);
+    },
+    onSuccess: () => {
+      toast.success(t('trash.restored'));
+      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+    onError: (error) => {
+      toast.error(t(dataErrorKey(error)));
+    },
+  });
 
   const { data: myVote } = useQuery({
     queryKey: ['poll-vote', postId, user?.uid ?? ''],
@@ -118,6 +170,7 @@ export default function PostPage() {
 
   const post = data;
   const isAuthor = user?.uid === post.author?.uid;
+
   const published = post.publishedAt ?? post.createdAt;
   const totalVotes = post.poll.reduce((sum, option) => sum + option.votes, 0);
 
@@ -159,6 +212,24 @@ export default function PostPage() {
             <Alert tone="warning" title={t('post.draftNotice')} className="mb-4" />
           ) : null}
 
+          {post.deletedAt !== null ? (
+            <Alert tone="warning" title={t('post.inTrashTitle')} className="mb-4">
+              <p className="mt-1 text-sm">{t('post.inTrashBody')}</p>
+              <div className="mt-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={restoreThisPost.isPending}
+                  onClick={() => {
+                    restoreThisPost.mutate();
+                  }}
+                >
+                  {t('trash.restore')}
+                </Button>
+              </div>
+            </Alert>
+          ) : null}
+
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone="green">{t(`compose.kinds.${post.kind}`)}</Badge>
             {post.isSensitive ? <Badge tone="warn">{t('post.sensitive')}</Badge> : null}
@@ -192,11 +263,23 @@ export default function PostPage() {
                 </p>
               </div>
               {isAuthor ? (
-                <Link to="/compose" className="ms-auto shrink-0">
-                  <Button variant="secondary" size="sm" iconStart={<Pencil size={16} />}>
-                    {t('post.edit')}
+                <div className="ms-auto flex shrink-0 flex-wrap items-center gap-2">
+                  <Link to={`/compose/${post.id}`}>
+                    <Button variant="secondary" size="sm" iconStart={<Pencil size={16} />}>
+                      {t('post.edit')}
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    iconStart={<Trash2 size={16} />}
+                    onClick={() => {
+                      setConfirmingDelete(true);
+                    }}
+                  >
+                    {t('post.delete')}
                   </Button>
-                </Link>
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -306,6 +389,47 @@ export default function PostPage() {
           </div>
         </div>
       </article>
+
+      <Modal
+        open={confirmingDelete}
+        onClose={() => {
+          setConfirmingDelete(false);
+        }}
+        title={t('post.deleteTitle')}
+        closeLabel={t('common.close')}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setConfirmingDelete(false);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="secondary"
+              loading={trashPost.isPending}
+              onClick={() => {
+                trashPost.mutate();
+              }}
+            >
+              {t('post.deleteToTrash')}
+            </Button>
+            <Button
+              variant="danger"
+              loading={erasePost.isPending}
+              onClick={() => {
+                erasePost.mutate();
+              }}
+            >
+              {t('post.deleteForever')}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm">{t('post.deleteBody')}</p>
+      </Modal>
     </>
   );
 }

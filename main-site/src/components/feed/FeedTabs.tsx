@@ -7,11 +7,20 @@ import { FeedList } from './FeedList';
 
 const ALGORITHMS: FeedAlgorithm[] = ['ranked', 'following', 'latest'];
 
+export interface FeedTabsProps {
+  /**
+   * A visitor who is not signed in has nobody to follow, so "Following" is
+   * left out rather than shown as an empty room.
+   */
+  signedIn?: boolean;
+}
+
 /** For you / Following / Latest. One query at a time: the active tab's. */
-export function FeedTabs() {
+export function FeedTabs({ signedIn = true }: FeedTabsProps) {
   const { t } = useTranslation();
   const [active, setActive] = useState<FeedAlgorithm>('ranked');
   const feed = useFeed(active);
+  const algorithms = signedIn ? ALGORITHMS : ALGORITHMS.filter((item) => item !== 'following');
 
   const list = (
     <FeedList
@@ -21,7 +30,7 @@ export function FeedTabs() {
     />
   );
 
-  const items: TabItem[] = ALGORITHMS.map((algorithm) => ({
+  const items: TabItem[] = algorithms.map((algorithm) => ({
     id: algorithm,
     label: t(`feed.tabs.${algorithm}`),
     content: list,

@@ -66,6 +66,54 @@ export interface PostDraft {
   updatedAt: string;
 }
 
+/**
+ * The draft that opens the editor on an existing post.
+ *
+ * `updatedAt` is not taken from the post: it is the local autosave clock, and
+ * carrying the row's timestamp would make the composer claim an unsaved
+ * restore the moment it opens.
+ */
+export function draftFromPost(post: {
+  id: string;
+  kind: PostKind;
+  title: string;
+  body: string;
+  code: string;
+  codeLanguage: string;
+  tags: string[];
+  media: { mediaId: string; url: string; thumbUrl: string; altText: string }[];
+  poll: { label: string }[];
+  visibility: Visibility;
+  language: 'bn' | 'en';
+  allowComments: boolean;
+  isSensitive: boolean;
+  coverUrl: string;
+}): PostDraft {
+  const codeLanguage = CODE_LANGUAGES.find((value) => value === post.codeLanguage);
+  return {
+    id: post.id,
+    kind: post.kind,
+    title: post.title,
+    body: post.body,
+    code: post.code,
+    codeLanguage: codeLanguage ?? 'typescript',
+    tags: post.tags,
+    media: post.media.map((item) => ({
+      mediaId: item.mediaId,
+      url: item.url,
+      thumbUrl: item.thumbUrl,
+      altText: item.altText,
+    })),
+    pollOptions: post.poll.length > 0 ? post.poll.map((option) => option.label) : ['', ''],
+    visibility: post.visibility,
+    language: post.language,
+    allowComments: post.allowComments,
+    isSensitive: post.isSensitive,
+    coverUrl: post.coverUrl,
+    updatedAt: new Date(0).toISOString(),
+  };
+}
+
 export const EMPTY_DRAFT: PostDraft = {
   id: null,
   kind: 'post',

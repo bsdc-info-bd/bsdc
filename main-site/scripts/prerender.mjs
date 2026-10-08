@@ -125,8 +125,12 @@ export function renderShell(route, routes) {
     .filter((other) => other.path !== route.path)
     .map((other) => `<li><a href="${other.path}">${escapeHtml(other.heading)}</a></li>`)
     .join('');
+  // The home page keeps the marker the edge function fills with the live
+  // feed; every other route is complete as it stands.
+  const feedMarker = route.path === '/' ? '<div data-prerender-feed="home"></div>' : '';
   return [
     '<div data-prerender="true">',
+    feedMarker,
     `<h1>${escapeHtml(route.heading)}</h1>`,
     `<p>${escapeHtml(route.summary)}</p>`,
     `<nav aria-label="Sections"><ul>${links}</ul></nav>`,

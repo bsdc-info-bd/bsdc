@@ -173,6 +173,7 @@ export type PostRow = {
   allow_comments: boolean;
   published_at: string | null;
   edited_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -216,6 +217,7 @@ export type PostUpdate = Partial<
     | 'is_sensitive'
     | 'allow_comments'
     | 'published_at'
+    | 'deleted_at'
   >
 >;
 
@@ -298,6 +300,7 @@ export type DbNotificationKind =
   | 'bookmark'
   | 'share'
   | 'post_published'
+  | 'message'
   | 'moderation';
 
 export type NotificationRow = {
@@ -307,6 +310,7 @@ export type NotificationRow = {
   kind: DbNotificationKind;
   post_id: string | null;
   comment_id: string | null;
+  conversation_id: string | null;
   body: string;
   read_at: string | null;
   created_at: string;
@@ -332,6 +336,7 @@ export type CommentRow = {
   replies_count: number;
   is_answer: boolean;
   edited_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1990,7 +1995,7 @@ export type Database = {
         Insert: Pick<CommentRow, 'post_id' | 'author_uid' | 'body'> & {
           parent_id?: string | null;
         };
-        Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at'>>;
+        Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at' | 'deleted_at'>>;
         Relationships: [];
       };
       comment_reactions: {
@@ -2057,6 +2062,19 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      my_deleted_content: {
+        Args: { p_limit?: number };
+        Returns: {
+          kind: string;
+          id: string;
+          post_id: string;
+          title: string;
+          preview: string;
+          deleted_at: string;
+          expires_at: string;
+          restorable: boolean;
+        }[];
+      };
       enroll_in_course: { Args: { p_course_id: string }; Returns: string };
       complete_lesson: { Args: { p_lesson_id: string; p_seconds?: number }; Returns: number };
       grade_quiz_attempt: {
