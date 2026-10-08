@@ -1,6 +1,7 @@
 import { Github } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/design-system';
 import { authErrorKey } from '@/lib/auth/errors';
 import { signInWithProvider, type OAuthProviderId } from '@/lib/auth/auth-service';
@@ -48,6 +49,8 @@ export function OAuthButtons({ remember, disabled = false, onError }: OAuthButto
   const [pending, setPending] = useState<OAuthProviderId | null>(null);
 
   async function start(id: OAuthProviderId) {
+    if (pending) return;
+    useAuthStore.getState().setRedirectError(null);
     setPending(id);
     try {
       await signInWithProvider(id, remember);

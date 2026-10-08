@@ -33,6 +33,7 @@ jobs:
   deploy:
     name: ${{ matrix.app }}
     runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -155,6 +156,29 @@ jobs:
             pages project create ${{ matrix.project }}
             --production-branch=main
 
+      # The rules secret is not automatically a Pages runtime binding. Profile
+      # bootstrap needs these three server-only values to mint database access.
+      # Never sync production credentials from pull requests/preview branches.
+      - name: Prepare member authentication bindings
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+          VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+        run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
+
+      - name: Configure production profile authentication
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '3.114.17'
+          command: pages secret bulk ${{ runner.temp }}/bsdc-auth-bindings.json --project-name=bsdc
+
+      - name: Remove temporary authentication bindings
+        if: always() && matrix.app == 'main-site'
+        run: rm -f "$RUNNER_TEMP/bsdc-auth-bindings.json"
+
       # IMPORTANT: Cloudflare discovers Pages Functions relative to Wrangler's
       # working directory. Deploying `main-site/dist` from the monorepo root
       # omitted `main-site/functions`, leaving /api/auth/claims unavailable.
@@ -174,6 +198,21 @@ jobs:
             --project-name=${{ matrix.project }}
             --branch=${{ github.head_ref || github.ref_name }}
             --commit-dirty=true
+
+      - name: Verify production profile bootstrap is configured
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          DEPLOYMENT_URL: ${{ steps.pages.outputs.deployment-url }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_URL"
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 20 \
+            "$DEPLOYMENT_URL/api/auth/claims" | node -e '
+              let data = "";
+              process.stdin.on("data", chunk => data += chunk);
+              process.stdin.on("end", () => {
+                if (JSON.parse(data).ready !== true) process.exit(1);
+              });'
 
       - name: Record where it went
         if: steps.scope.outputs.run == 'true'

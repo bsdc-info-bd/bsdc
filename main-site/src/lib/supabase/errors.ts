@@ -76,6 +76,7 @@ export function dataErrorKey(error: unknown): string {
   if (error instanceof Error) {
     const mapped = MESSAGE_MAP[error.message];
     if (mapped) return mapped;
+    if (error.name === 'DataAccessBootstrapError') return 'data.errors.accessUnavailable';
     if (error.name === 'SupabaseNotConfiguredError') return 'data.errors.notConfigured';
     if (error.name === 'TypeError') return 'data.errors.offline';
   }

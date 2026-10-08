@@ -84,6 +84,10 @@ jobs:
       # No lockfiles are committed: the applications share one pinned set of
       # dependency ranges, and a lockfile per application would be eight
       # copies of the same resolution to keep in step.
+      - name: Check Firebase runtime binding preparation
+        if: matrix.app == 'main-site'
+        run: node ../scripts/prepare-firebase-bindings.mjs --self-test
+
       - name: Install
         run: npm install --no-audit --no-fund
 

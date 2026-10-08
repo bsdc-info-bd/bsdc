@@ -13,6 +13,7 @@ import { signUpWithEmail } from '@/lib/auth/auth-service';
 import { authErrorKey } from '@/lib/auth/errors';
 import { sanitizeRedirect } from '@/lib/auth/redirect';
 import { isConfigured } from '@/lib/env';
+import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/lib/site';
 
 const schema = z
@@ -36,6 +37,7 @@ type FormValues = z.infer<typeof schema>;
 export default function SignupPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
+  const redirectError = useAuthStore((state) => state.redirectError);
   const [remember, setRemember] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
 
@@ -100,7 +102,9 @@ export default function SignupPage() {
         {!isConfigured.firebase ? (
           <Alert tone="danger" title={t('auth.errors.notConfigured')} className="mb-4" />
         ) : null}
-        {errorKey ? <Alert tone="danger" title={t(errorKey)} className="mb-4" /> : null}
+        {errorKey || redirectError ? (
+          <Alert tone="danger" title={t(errorKey ?? redirectError!)} className="mb-4" />
+        ) : null}
 
         <form
           noValidate

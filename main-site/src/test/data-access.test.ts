@@ -65,3 +65,40 @@ describe('ensureDataAccess', () => {
     expect(getIdTokenResult).toHaveBeenNthCalledWith(2, true);
   });
 });
+
+describe('database access recovery', () => {
+  it('coalesces concurrent bootstrap calls for the same account', async () => {
+    const getIdTokenResult = vi
+      .fn()
+      .mockResolvedValueOnce(token({}))
+      .mockResolvedValueOnce(token({ role: 'authenticated' }));
+    const user = memberUser(getIdTokenResult);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await Promise.all([ensureDataAccess(user), ensureDataAccess(user), ensureDataAccess(user)]);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(getIdTokenResult).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails closed on a failed claims endpoint and allows a later retry', async () => {
+    const getIdTokenResult = vi.fn().mockResolvedValue(token({}));
+    const user = memberUser(getIdTokenResult);
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(ensureDataAccess(user)).rejects.toMatchObject({ status: 503 });
+    getIdTokenResult
+      .mockResolvedValueOnce(token({}))
+      .mockResolvedValueOnce(token({ role: 'authenticated' }));
+    fetchMock.mockResolvedValue({ ok: true });
+    await expect(ensureDataAccess(user)).resolves.toMatchObject({
+      claims: { role: 'authenticated' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('refuses a refreshed token that still lacks the required database role', async () => {
+    const user = memberUser(vi.fn().mockResolvedValue(token({})));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    await expect(ensureDataAccess(user)).rejects.toMatchObject({ status: 502 });
+  });
+});

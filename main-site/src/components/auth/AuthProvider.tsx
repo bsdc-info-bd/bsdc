@@ -11,6 +11,7 @@ import { useProfileStore } from '@/store/profile-store';
 export function AuthProvider({ children }: { children: ReactNode }) {
   const setSession = useAuthStore((state) => state.setSession);
   const setUnavailable = useAuthStore((state) => state.setUnavailable);
+  const setRedirectError = useAuthStore((state) => state.setRedirectError);
   const setProfileLoaded = useAuthStore((state) => state.setProfileLoaded);
   const setProfile = useProfileStore((state) => state.setProfile);
   const setProfileError = useProfileStore((state) => state.setError);
@@ -29,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         stop = startAuthListener({
           onSession: setSession,
+          onRedirectError: setRedirectError,
           onProfile: setProfile,
           onProfileError: setProfileError,
           onProfileSettled: () => setProfileLoaded(true),
@@ -42,7 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       stop?.();
     };
-  }, [setSession, setUnavailable, setProfile, setProfileError, setProfileLoaded]);
+  }, [setSession, setRedirectError, setUnavailable, setProfile, setProfileError, setProfileLoaded]);
 
   return <>{children}</>;
 }

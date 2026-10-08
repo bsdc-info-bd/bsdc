@@ -27,6 +27,8 @@ interface AuthState {
   claims: SessionClaims;
   /** True once the Firestore profile document has been loaded at least once. */
   profileLoaded: boolean;
+  redirectError: string | null;
+  setRedirectError: (error: string | null) => void;
   setSession: (user: User | null, claims: SessionClaims) => void;
   setUnavailable: () => void;
   setProfileLoaded: (loaded: boolean) => void;
@@ -38,16 +40,26 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   claims: DEFAULT_CLAIMS,
   profileLoaded: false,
+  redirectError: null,
+  setRedirectError: (redirectError) => set({ redirectError }),
   setSession: (user, claims) =>
-    set({
+    set((state) => ({
       user,
       claims,
       status: user ? 'authenticated' : 'guest',
-      profileLoaded: user ? false : true,
-    }),
+      redirectError: user ? null : state.redirectError,
+      profileLoaded: user ? state.user?.uid === user.uid && state.profileLoaded : true,
+    })),
   setUnavailable: () => set({ status: 'unavailable', user: null, claims: DEFAULT_CLAIMS }),
   setProfileLoaded: (profileLoaded) => set({ profileLoaded }),
-  reset: () => set({ status: 'guest', user: null, claims: DEFAULT_CLAIMS, profileLoaded: true }),
+  reset: () =>
+    set({
+      status: 'guest',
+      user: null,
+      claims: DEFAULT_CLAIMS,
+      profileLoaded: true,
+      redirectError: null,
+    }),
 }));
 
 export const selectIsSignedIn = (state: AuthState): boolean => state.status === 'authenticated';

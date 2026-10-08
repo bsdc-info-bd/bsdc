@@ -35,6 +35,7 @@ function providerFor(id: OAuthProviderId): AuthProvider {
     case 'github': {
       const provider = new GithubAuthProvider();
       provider.addScope('read:user');
+      provider.addScope('user:email');
       return provider;
     }
     case 'yahoo':
@@ -75,7 +76,7 @@ export async function signInWithEmail(input: {
 /**
  * OAuth sign-in. Popups are used where possible; when a browser blocks them
  * the flow transparently falls back to a redirect (handled on return by
- * `consumeRedirectResult`).
+ * `startAuthListener`).
  */
 export async function signInWithProvider(
   id: OAuthProviderId,

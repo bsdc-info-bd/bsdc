@@ -2,6 +2,7 @@ import { getRedirectResult, onAuthStateChanged, onIdTokenChanged, type User } fr
 import { getFirebaseAuth } from '@/lib/firebase';
 import { bootstrapDisplayName, ensureProfile, fetchProfile } from '@/lib/profile/profile-service';
 import { ensureDataAccess } from '@/lib/auth/data-access';
+import { authErrorKey } from '@/lib/auth/errors';
 import { readClaims } from '@/lib/auth/session-claims';
 import { DEFAULT_CLAIMS, type SessionClaims } from '@/store/auth-store';
 import type { Profile } from '@/lib/profile/profile-service';
@@ -27,6 +28,7 @@ export interface SessionHandlers {
   onProfile: (profile: Profile | null) => void;
   onProfileError: (message: string) => void;
   onProfileSettled: () => void;
+  onRedirectError: (messageKey: string) => void;
 }
 
 /**
@@ -36,15 +38,22 @@ export interface SessionHandlers {
 export function startAuthListener(handlers: SessionHandlers): () => void {
   const auth = getFirebaseAuth();
   let active = true;
+  let generation = 0;
+  let readyUser: User | null = null;
 
   // Completes an OAuth redirect started because a popup was blocked.
-  void getRedirectResult(auth).catch(() => undefined);
+  void getRedirectResult(auth).catch((error: unknown) => {
+    if (active) handlers.onRedirectError(authErrorKey(error));
+  });
 
   const channel =
     typeof BroadcastChannel === 'function' ? new BroadcastChannel(AUTH_CHANNEL) : null;
 
   const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
     if (!active) return;
+    const currentGeneration = ++generation;
+    readyUser = null;
+    const isCurrent = () => active && generation === currentGeneration && auth.currentUser === user;
     channel?.postMessage({ type: 'session', uid: user?.uid ?? null });
 
     if (!user) {
@@ -59,16 +68,18 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
     // correctly refuses profile setup with a permission error.
     void ensureDataAccess(user)
       .then(async (token) => {
-        if (active) handlers.onSession(user, readClaims(token.claims));
+        if (!isCurrent()) return null;
+        readyUser = user;
+        handlers.onSession(user, readClaims(token.claims));
         return loadOrBootstrapProfile(user);
       })
       .then((profile) => {
-        if (!active) return;
+        if (!isCurrent()) return;
         handlers.onProfile(profile);
         handlers.onProfileSettled();
       })
       .catch(() => {
-        if (!active) return;
+        if (!isCurrent()) return;
         handlers.onSession(user, DEFAULT_CLAIMS);
         handlers.onProfileError('profile/access-failed');
         handlers.onProfileSettled();
@@ -77,10 +88,19 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
 
   // Keeps claims fresh after a role change without a full page reload.
   const unsubscribeToken = onIdTokenChanged(auth, (user) => {
-    if (!active || !user) return;
-    void user.getIdTokenResult().then((token) => {
-      if (active) handlers.onSession(user, readClaims(token.claims));
-    });
+    if (!active || !user || readyUser !== user) return;
+    const currentGeneration = generation;
+    void ensureDataAccess(user)
+      .then((token) => {
+        if (active && generation === currentGeneration && auth.currentUser === user) {
+          handlers.onSession(user, readClaims(token.claims));
+        }
+      })
+      .catch(() => {
+        if (active && generation === currentGeneration && auth.currentUser === user) {
+          handlers.onProfileError('profile/access-failed');
+        }
+      });
   });
 
   if (channel) {
