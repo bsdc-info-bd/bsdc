@@ -25,6 +25,7 @@ const FILES = [
   '0051_the_messenger_is_live.sql',
   '0052_a_moderator_is_not_a_stranger.sql',
   '0053_the_new_endpoints_stop_answering_strangers.sql',
+  '0054_an_endpoint_that_demands_a_member_is_not_for_visitors.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 
