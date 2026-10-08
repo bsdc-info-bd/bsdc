@@ -1,0 +1,35 @@
+-- ---------------------------------------------------------------------------
+-- Two consoles could edit a row but never create one.
+--
+-- 0029 and 0031 gave `custom_pages` and `certificate_templates` a write policy
+-- that says staff may do anything with them:
+--
+--   * custom_pages_write          for all using/with check
+--                                 (bsdc.has_permission('settings.write'))
+--   * certificate_templates_write for all using/with check
+--                                 (bsdc.has_permission('certificates.manage'))
+--
+-- and then granted only `update, delete` on both tables. A policy decides
+-- *which rows* a statement may touch; it cannot supply a privilege the role
+-- was never given, so INSERT was refused one step earlier with
+--
+--   42501 permission denied for table custom_pages
+--
+-- which the console shows as "Your role does not allow this action."
+-- `customize-site` has a create-page form that inserts exactly that row
+-- (`{ title, slug, status: 'draft' }`), so "New page" could never work, while
+-- renaming and deleting an existing page did. `certificate-site` lists
+-- certificate templates and may edit and delete them; creation was the one
+-- verb the grant list omitted.
+--
+-- INSERT is granted to `authenticated`, which is the role the consoles'
+-- Firebase tokens map to; the policies above still decide who may use it, so a
+-- member or an anonymous caller is refused with a row level security
+-- violation. Nothing else changes: UPDATE and DELETE already existed, and
+-- SELECT was granted in 0029/0031.
+--
+-- Granting a privilege that already exists is a no-op, so this file is safe to
+-- re-run.
+-- ---------------------------------------------------------------------------
+
+grant insert on public.custom_pages, public.certificate_templates to authenticated;

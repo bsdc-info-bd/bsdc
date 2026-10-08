@@ -435,4 +435,24 @@ select pg_temp.expect_rows(
      and bsdc.has_permission(''moderation.read'')
      and bsdc.has_permission(''people.read'')', 1, 1);
 
+-- Staff may create the two things those screens can already edit: the
+-- policies on `custom_pages` and `certificate_templates` have always allowed
+-- it, but the grant list stopped at update and delete, so "new page" was
+-- refused with 42501 before the policy was ever consulted (0044).
+select pg_temp.expect_affected(
+  'insert into public.custom_pages (slug, title, status)
+   values (''about-us'', ''About us'', ''draft'')', 1);
+select pg_temp.expect_affected(
+  'insert into public.certificate_templates (key, name)
+   values (''workshop'', ''Workshop certificate'')', 1);
+-- The same grant does not extend to members: the policy is what refuses them.
+select set_config('request.jwt.claims',
+  '{"sub":"alice","role":"authenticated","bsdc_role":"member"}', true);
+select pg_temp.expect_fail(
+  'insert into public.custom_pages (slug, title, status)
+   values (''members-page'', ''Members page'', ''draft'')', '42501');
+select pg_temp.expect_fail(
+  'insert into public.certificate_templates (key, name)
+   values (''members-template'', ''Members template'')', '42501');
+
 rollback;
