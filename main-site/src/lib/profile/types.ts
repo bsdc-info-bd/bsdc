@@ -72,14 +72,29 @@ export type PrivacyPrefs = z.infer<typeof privacyPrefsSchema>;
 export const DEFAULT_NOTIFICATIONS: NotificationPrefs = notificationPrefsSchema.parse({});
 export const DEFAULT_PRIVACY: PrivacyPrefs = privacyPrefsSchema.parse({});
 
+/**
+ * A profile as it is read.
+ *
+ * `username` is allowed to be empty: a member's row is created at first
+ * sign-in with `username = null` — the handle is theirs to choose during
+ * onboarding — and that row is a perfectly readable profile. Demanding a
+ * handle here is what used to turn a member's own row into `null` and lose
+ * their avatar on the next sign-in, while the picture sat safely in the
+ * database. `usernameSchema` is the guard for what a member may *choose*; it
+ * is not a guard for what a row may contain.
+ *
+ * `avatarUrl` and `website` are plain strings for the same reason: the columns
+ * accept any text, and one oddly-shaped value must degrade one field, never
+ * the whole row.
+ */
 export const profileSchema = z.object({
   uid: z.string().min(1),
-  username: z.string().min(USERNAME_MIN),
+  username: z.string().default(''),
   displayName: z.string().min(1).max(60),
   bio: z.string().max(280).default(''),
-  avatarUrl: z.string().url().or(z.literal('')).default(''),
+  avatarUrl: z.string().default(''),
   location: z.string().max(80).default(''),
-  website: z.string().url().or(z.literal('')).default(''),
+  website: z.string().default(''),
   skills: z.array(z.string().min(1).max(32)).max(20).default([]),
   interests: z.array(z.string().min(1).max(32)).max(20).default([]),
   language: z.enum(['bn', 'en']).default('bn'),
@@ -91,6 +106,15 @@ export const profileSchema = z.object({
 });
 
 export type Profile = z.infer<typeof profileSchema>;
+
+/**
+ * Whether a member has chosen their handle yet. A profile without one is
+ * real — it belongs to a member who has not finished onboarding — so the
+ * answer is a check, never a filter.
+ */
+export function hasClaimedHandle(profile: Pick<Profile, 'username'>): boolean {
+  return profile.username.trim().length > 0;
+}
 
 export type ProfileDraft = Pick<
   Profile,

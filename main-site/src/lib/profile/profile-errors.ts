@@ -9,6 +9,10 @@ import { dataErrorKey } from '@/lib/supabase/errors';
  * data-layer error.
  */
 export function profileErrorKey(error: unknown): string {
+  // A save that matched no row: the member's profile is missing or unreadable.
+  if (error instanceof Error && error.message === 'profile/not-found') {
+    return 'profile.errors.notFound';
+  }
   const dataKey = dataErrorKey(error);
   return dataKey === 'data.errors.generic' ? authErrorKey(error) : dataKey;
 }

@@ -20,7 +20,8 @@ import {
 export function rowToProfile(row: ProfileRow): Profile | null {
   const parsed = profileSchema.safeParse({
     uid: row.uid,
-    username: row.username ?? '',
+    // The handle is null until the member claims one; the row is still theirs.
+    username: (row.username ?? '').trim().toLowerCase(),
     displayName: row.display_name,
     bio: row.bio,
     avatarUrl: row.avatar_url,
@@ -174,11 +175,25 @@ async function saveProfile(uid: string, draft: ProfileDraft): Promise<Profile> {
   return profile;
 }
 
+/**
+ * Writes the editable columns and checks that a row was actually written.
+ *
+ * An UPDATE that matches no row is not an error in Postgres — it is zero rows
+ * and a success — so without this check a save against a missing or
+ * unreadable profile would report success, show the member their new picture,
+ * and lose it at the next sign-in. `select('uid')` asks PostgREST for the
+ * rows it changed, which is what makes the difference visible.
+ */
 async function updateProfileFields(uid: string, fields: ProfileFields): Promise<void> {
   const update = fieldsToUpdate(fields);
   if (Object.keys(update).length === 0) return;
-  const { error } = await getSupabase().from('profiles').update(update).eq('uid', uid);
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .update(update)
+    .eq('uid', uid)
+    .select('uid');
   if (error) throw toDataError(error);
+  if ((data ?? []).length === 0) throw new Error('profile/not-found');
 }
 
 /**

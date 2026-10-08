@@ -10,17 +10,20 @@ import type { Profile } from '@/lib/profile/profile-service';
 export const AUTH_CHANNEL = 'bsdc.auth';
 
 /**
- * Reads the member's profile, and on the very first sign-in — when no usable
- * row exists yet — writes the bare bootstrap row first. A row without a
- * username does not read back as a profile, so the answer stays null and the
- * member still lands on onboarding, but the database now has the foreign-key
+ * Reads the member's profile, and on the very first sign-in — when no row
+ * exists at all — writes the bare bootstrap row first and then reads it back.
+ * A bootstrap row has no handle yet, which is a valid profile: onboarding is
+ * decided by `onboarding_complete`, not by whether the row can be read, so
+ * the member still lands on onboarding and the database has the foreign-key
  * target their first post or comment points at.
  */
 async function loadOrBootstrapProfile(user: User): Promise<Profile | null> {
   const existing = await fetchProfile(user.uid);
   if (existing) return existing;
   await ensureProfile(user.uid, { displayName: bootstrapDisplayName(user) }).catch(() => undefined);
-  return null;
+  // Read it straight back: the row now exists, and returning it means the
+  // member's avatar and preferences are on screen from the first render.
+  return fetchProfile(user.uid).catch(() => null);
 }
 
 export interface SessionHandlers {

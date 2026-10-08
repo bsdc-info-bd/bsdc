@@ -403,6 +403,10 @@ export const en = {
     notFoundBody: 'The handle may have changed, or the account may have been removed.',
     joined: 'Joined {{date}}',
     editProfile: 'Edit profile',
+    errors: {
+      notFound:
+        'Your profile row could not be found, so nothing was saved. Please sign out and in again, then retry.',
+    },
     tabs: {
       posts: 'Posts',
       comments: 'Comments',

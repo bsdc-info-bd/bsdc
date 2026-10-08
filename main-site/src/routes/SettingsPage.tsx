@@ -53,14 +53,18 @@ function AccountPanel() {
 
   async function onAvatarUploaded(url: string) {
     if (!user) return;
-    setAvatarUrl(url);
     try {
-      const { updatePhotoUrl } = await import('@/lib/auth/auth-service');
-      await updatePhotoUrl(url);
+      // The profile row is the source of truth, so it is written first. The
+      // Firebase user's photoURL is only a cache for the first sign-in: if
+      // that mirror fails, the member still has their picture.
       await updateProfileFields(user.uid, { avatarUrl: url });
-      if (profile) setProfile({ ...profile, avatarUrl: url });
+      const { updatePhotoUrl } = await import('@/lib/auth/auth-service');
+      await updatePhotoUrl(url).catch(() => undefined);
+      setAvatarUrl(url);
+      if (profile !== null) setProfile({ ...profile, avatarUrl: url });
       toast.success(t('media.uploaded'));
     } catch (error) {
+      // Nothing was saved, so the picture already on screen stays there.
       toast.error(t(profileErrorKey(error)));
     }
   }
@@ -69,12 +73,14 @@ function AccountPanel() {
     if (!user) return;
     setSaving(true);
     try {
-      await updateDisplayName(displayName.trim());
       await updateProfileFields(user.uid, {
         displayName: displayName.trim(),
         bio: bio.trim(),
         location: location.trim(),
       });
+      // The database holds the name that matters; Firebase's copy is the
+      // cache the very first sign-in reads from.
+      await updateDisplayName(displayName.trim()).catch(() => undefined);
       if (profile) {
         setProfile({
           ...profile,

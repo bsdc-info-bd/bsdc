@@ -13,8 +13,10 @@ import {
   MediaError,
 } from '@/lib/storage/upload';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { hasClaimedHandle } from '@/lib/profile/types';
 import { profileErrorKey } from '@/lib/profile/profile-errors';
 import { bootstrapDisplayName } from '@/lib/profile/profile-service';
+import { profilePath, ROUTES } from '@/lib/site';
 import type { ProfileRow } from '@/lib/supabase/types';
 
 const row: ProfileRow = {
@@ -67,6 +69,44 @@ describe('rowToProfile', () => {
 
   it('rejects a row that cannot satisfy the schema', () => {
     expect(rowToProfile({ ...row, display_name: '' })).toBeNull();
+  });
+
+  it('reads a bootstrap row whose handle has not been claimed yet', () => {
+    const profile = rowToProfile({
+      ...row,
+      username: null,
+      avatar_url: 'https://cdn.example.com/a.jpg',
+    });
+    expect(profile).not.toBeNull();
+    expect(profile?.username).toBe('');
+    expect(profile?.avatarUrl).toBe('https://cdn.example.com/a.jpg');
+    expect(profile && hasClaimedHandle(profile)).toBe(false);
+  });
+
+  it('keeps an oddly shaped avatar URL instead of losing the whole profile', () => {
+    const profile = rowToProfile({ ...row, avatar_url: 'not-a-url' });
+    expect(profile).not.toBeNull();
+    expect(profile?.avatarUrl).toBe('not-a-url');
+  });
+
+  it('knows when a member has claimed their handle', () => {
+    expect(hasClaimedHandle({ username: 'rafi_dev' })).toBe(true);
+    expect(hasClaimedHandle({ username: '   ' })).toBe(false);
+  });
+});
+
+describe('profile paths', () => {
+  it('builds a permalink for a claimed handle', () => {
+    expect(profilePath('rafi_dev')).toBe('/@rafi_dev');
+  });
+
+  it('sends a member without a handle home rather than to /@', () => {
+    expect(profilePath('')).toBe(ROUTES.home);
+    expect(profilePath('   ')).toBe(ROUTES.home);
+  });
+
+  it('names the failure when a profile write lands nowhere', () => {
+    expect(profileErrorKey(new Error('profile/not-found'))).toBe('profile.errors.notFound');
   });
 });
 
