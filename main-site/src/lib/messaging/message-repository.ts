@@ -1,12 +1,26 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
-import type { ConversationInboxRow, ConversationMemberRow, MessageRow } from '@/lib/supabase/types';
 import type {
+  SavedMessageRow,
+  ConversationInboxRow,
+  ConversationMemberRow,
+  ConversationMessageRow,
+  ConversationPinRow,
+  ConversationStateRow,
+  MessageRow,
+  MessageSearchRow,
+  ToggleMessageReactionRow,
+} from '@/lib/supabase/types';
+import type {
+  SavedMessage,
   ConversationMember,
+  ConversationPin,
+  ConversationState,
   ConversationSummary,
   Message,
   MessageAuthor,
   MessageKind,
+  MessageSearchHit,
 } from './message-types';
 
 interface ProfileJoin {
@@ -81,11 +95,249 @@ function toMessage(row: JoinedMessageRow): Message {
     mediaName: row.media_name,
     codeLanguage: row.code_language,
     replyTo: row.reply_to,
+    replyBody: null,
+    replySender: null,
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
     author: toAuthor(row.profiles),
+    reactions: {},
+    myReactions: [],
+    readBy: [],
+    starred: false,
+    pinned: false,
   };
+}
+
+/** One line as `conversation_messages` returns it, plus its author. */
+export function toConversationMessage(
+  row: ConversationMessageRow,
+  author: MessageAuthor | null,
+): Message {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderUid: row.sender_uid,
+    kind: row.kind,
+    body: row.body,
+    mediaUrl: row.media_url,
+    mediaName: row.media_name,
+    codeLanguage: row.code_language,
+    replyTo: row.reply_to,
+    replyBody: row.reply_body,
+    replySender: row.reply_sender,
+    editedAt: row.edited_at,
+    deletedAt: row.deleted_at,
+    createdAt: row.created_at,
+    author,
+    reactions: row.reactions ?? {},
+    myReactions: row.my_reactions ?? [],
+    readBy: row.read_by ?? [],
+    starred: row.starred,
+    pinned: row.pinned,
+  };
+}
+
+/** The authors of the lines in one page, in a single profile read. */
+async function authorsFor(uids: readonly string[]): Promise<Map<string, MessageAuthor>> {
+  const wanted = [...new Set(uids.filter((uid) => uid.length > 0))];
+  if (wanted.length === 0) return new Map();
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('uid, username, display_name, avatar_url')
+    .in('uid', wanted)
+    .returns<ProfileJoin[]>();
+  if (error) throw toDataError(error);
+  const authors = new Map<string, MessageAuthor>();
+  for (const row of data ?? []) {
+    const author = toAuthor(row);
+    if (author !== null) authors.set(author.uid, author);
+  }
+  return authors;
+}
+
+/**
+ * One page of a conversation with everything the thread renders: reactions,
+ * the reader's own reactions, receipts, stars, pins and the quoted line. The
+ * heavy lifting is done in Postgres so the whole thread is one round trip.
+ */
+export async function fetchConversationMessages(
+  conversationId: string,
+  before: string | null = null,
+  limit = 60,
+): Promise<Message[]> {
+  const { data, error } = await getSupabase()
+    .rpc('conversation_messages', {
+      p_conversation_id: conversationId,
+      p_before: before,
+      p_limit: limit,
+    })
+    .returns<ConversationMessageRow[]>();
+  if (error) throw toDataError(error);
+  const rows = data ?? [];
+  const authors = await authorsFor(rows.map((row) => row.sender_uid ?? ''));
+  return rows
+    .map((row) => toConversationMessage(row, authors.get(row.sender_uid ?? '') ?? null))
+    .reverse();
+}
+
+/** The viewer's settings and read marker for one conversation. */
+export async function fetchConversationState(
+  conversationId: string,
+): Promise<ConversationState | null> {
+  const { data, error } = await getSupabase()
+    .rpc('conversation_state', { p_conversation_id: conversationId })
+    .returns<ConversationStateRow[]>();
+  if (error) throw toDataError(error);
+  const row = data?.[0];
+  if (row === undefined) return null;
+  return {
+    muted: row.muted,
+    isPinned: row.is_pinned,
+    isArchived: row.is_archived,
+    draftBody: row.draft_body,
+    lastReadAt: row.last_read_at,
+  };
+}
+
+/**
+ * The viewer's own member rows: pinned, archived and muted, keyed by
+ * conversation. One read, so the inbox can sort and filter without touching
+ * anybody else's row.
+ */
+export async function fetchMyConversationSettings(): Promise<
+  Map<string, { pinned: boolean; archived: boolean; muted: boolean }>
+> {
+  const { data, error } = await getSupabase()
+    .from('conversation_members')
+    .select('conversation_id, is_pinned, is_archived, muted_until')
+    .returns<
+      Pick<ConversationMemberRow, 'conversation_id' | 'is_pinned' | 'is_archived' | 'muted_until'>[]
+    >();
+  if (error) throw toDataError(error);
+  const map = new Map<string, { pinned: boolean; archived: boolean; muted: boolean }>();
+  for (const row of data ?? []) {
+    map.set(row.conversation_id, {
+      pinned: row.is_pinned,
+      archived: row.is_archived,
+      muted: row.muted_until !== null && Date.parse(row.muted_until) > Date.now(),
+    });
+  }
+  return map;
+}
+
+/** The conversation's pinned lines, most recent pin first. */
+export async function fetchPinnedMessages(conversationId: string): Promise<ConversationPin[]> {
+  const { data, error } = await getSupabase()
+    .rpc('conversation_pins', { p_conversation_id: conversationId })
+    .returns<ConversationPinRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map((row) => ({
+    messageId: row.message_id,
+    body: row.body,
+    senderUid: row.sender_uid,
+    mediaName: row.media_name,
+    kind: row.kind,
+    pinnedAt: row.pinned_at,
+    pinnedBy: row.pinned_by,
+  }));
+}
+
+export async function searchMessages(
+  query: string,
+  conversationId: string | null = null,
+  limit = 40,
+): Promise<MessageSearchHit[]> {
+  const { data, error } = await getSupabase()
+    .rpc('search_messages', {
+      p_query: query,
+      p_conversation_id: conversationId,
+      p_limit: limit,
+    })
+    .returns<MessageSearchRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map((row) => ({
+    messageId: row.message_id,
+    conversationId: row.conversation_id,
+    senderUid: row.sender_uid,
+    body: row.body,
+    createdAt: row.created_at,
+  }));
+}
+
+/** Everything the viewer has saved, newest save first. */
+export async function fetchSavedMessages(limit = 50): Promise<SavedMessage[]> {
+  const { data, error } = await getSupabase()
+    .rpc('saved_messages', { p_limit: limit })
+    .returns<SavedMessageRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map((row) => ({
+    messageId: row.message_id,
+    conversationId: row.conversation_id,
+    body: row.body,
+    mediaName: row.media_name,
+    kind: row.kind,
+    createdAt: row.created_at,
+  }));
+}
+
+export interface ReactionResult {
+  reacted: boolean;
+  reaction: string;
+  total: number;
+}
+
+/** Adds the reaction if it is absent, removes it if it is there. */
+export async function toggleMessageReaction(
+  messageId: string,
+  reaction: string,
+): Promise<ReactionResult> {
+  const { data, error } = await getSupabase()
+    .rpc('toggle_message_reaction', { p_message_id: messageId, p_reaction: reaction })
+    .returns<ToggleMessageReactionRow[]>();
+  if (error) throw toDataError(error);
+  const row = data?.[0];
+  return {
+    reacted: row?.reacted ?? false,
+    reaction: row?.reaction ?? reaction,
+    total: row?.total ?? 0,
+  };
+}
+
+/** Marks one line read, which also moves the conversation's read marker. */
+export async function markMessageRead(messageId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('mark_message_read', { p_message_id: messageId });
+  if (error) throw toDataError(error);
+}
+
+export async function toggleMessagePin(messageId: string): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc('toggle_message_pin', {
+    p_message_id: messageId,
+  });
+  if (error) throw toDataError(error);
+  return data === true;
+}
+
+export async function toggleMessageStar(messageId: string): Promise<boolean> {
+  const { data, error } = await getSupabase().rpc('toggle_message_star', {
+    p_message_id: messageId,
+  });
+  if (error) throw toDataError(error);
+  return data === true;
+}
+
+/** Pin, archive and the shared draft live on the member's own row. */
+export async function updateConversationSettings(
+  conversationId: string,
+  uid: string,
+  patch: Partial<Pick<ConversationMemberRow, 'is_pinned' | 'is_archived' | 'draft_body'>>,
+): Promise<void> {
+  const { error } = await getSupabase()
+    .from('conversation_members')
+    .update(patch)
+    .eq('conversation_id', conversationId)
+    .eq('uid', uid);
+  if (error) throw toDataError(error);
 }
 
 /** Newest first from the database, returned oldest first for rendering. */
@@ -171,6 +423,25 @@ export async function openDirectConversation(otherUid: string): Promise<string> 
   });
   if (error) throw toDataError(error);
   return typeof data === 'string' ? data : '';
+}
+
+/**
+ * Turns a username (with or without the @) or a raw uid into the member's
+ * uid, so the start-a-conversation form can accept whatever people paste.
+ */
+export async function resolveMemberUid(handle: string): Promise<string> {
+  const value = handle.trim().replace(/^@/, '');
+  if (value.length === 0) throw new Error('member not found');
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .select('uid')
+    .or(`username.eq.${value},uid.eq.${value}`)
+    .limit(1)
+    .returns<Array<Pick<ProfileJoin, 'uid'>>>();
+  if (error) throw toDataError(error);
+  const uid = data?.[0]?.uid;
+  if (uid === undefined) throw new Error('member not found');
+  return uid;
 }
 
 export async function createGroupConversation(

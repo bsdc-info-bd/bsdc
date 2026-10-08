@@ -402,6 +402,105 @@ export type ConversationMemberRow = {
   last_read_at: string;
   muted_until: string | null;
   left_at: string | null;
+  is_pinned: boolean;
+  is_archived: boolean;
+  draft_body: string;
+};
+
+/** One emoji a member left on one message. */
+export type MessageReactionRow = {
+  message_id: string;
+  uid: string;
+  reaction: string;
+  created_at: string;
+};
+
+/** The delivery and read marks a member gives one message. */
+export type MessageReceiptRow = {
+  message_id: string;
+  uid: string;
+  delivered_at: string;
+  read_at: string | null;
+};
+
+export type MessagePinRow = {
+  conversation_id: string;
+  message_id: string;
+  pinned_by: string;
+  pinned_at: string;
+};
+
+/** A private bookmark: only its owner can see it. */
+export type MessageStarRow = {
+  uid: string;
+  message_id: string;
+  created_at: string;
+};
+
+/** A message as `conversation_messages` returns it: with its reactions, my
+ * reactions, my receipt, my star, the pin state and the line it answers. */
+export type ConversationMessageRow = {
+  id: string;
+  conversation_id: string;
+  sender_uid: string | null;
+  kind: DbMessageKind;
+  body: string;
+  media_url: string;
+  media_name: string;
+  code_language: string;
+  reply_to: string | null;
+  reply_body: string | null;
+  reply_sender: string | null;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  reactions: Record<string, number>;
+  my_reactions: string[];
+  read_by: string[];
+  starred: boolean;
+  pinned: boolean;
+};
+
+export type ConversationStateRow = {
+  is_member: boolean;
+  muted: boolean;
+  is_pinned: boolean;
+  is_archived: boolean;
+  draft_body: string;
+  last_read_at: string;
+};
+
+export type ConversationPinRow = {
+  message_id: string;
+  body: string;
+  sender_uid: string | null;
+  media_name: string;
+  kind: DbMessageKind;
+  pinned_at: string;
+  pinned_by: string;
+};
+
+export type SavedMessageRow = {
+  message_id: string;
+  conversation_id: string;
+  body: string;
+  media_name: string;
+  kind: DbMessageKind;
+  created_at: string;
+};
+
+export type MessageSearchRow = {
+  message_id: string;
+  conversation_id: string;
+  sender_uid: string | null;
+  body: string;
+  created_at: string;
+};
+
+export type ToggleMessageReactionRow = {
+  reacted: boolean;
+  reaction: string;
+  total: number;
 };
 
 export type MessageRow = {
@@ -1969,13 +2068,42 @@ export type Database = {
         Insert: Pick<ConversationMemberRow, 'conversation_id' | 'uid'> & {
           role?: DbMemberRole;
         };
-        Update: Partial<Pick<ConversationMemberRow, 'last_read_at' | 'muted_until' | 'left_at'>>;
+        Update: Partial<
+          Pick<
+            ConversationMemberRow,
+            'last_read_at' | 'muted_until' | 'left_at' | 'is_pinned' | 'is_archived' | 'draft_body'
+          >
+        >;
         Relationships: [];
       };
       messages: {
         Row: MessageRow;
         Insert: Pick<MessageRow, 'conversation_id' | 'body'> & Partial<MessageRow>;
         Update: Partial<Pick<MessageRow, 'body' | 'edited_at' | 'deleted_at'>>;
+        Relationships: [];
+      };
+      message_reactions: {
+        Row: MessageReactionRow;
+        Insert: Pick<MessageReactionRow, 'message_id' | 'uid'> & { reaction?: string };
+        Update: Partial<Pick<MessageReactionRow, 'reaction'>>;
+        Relationships: [];
+      };
+      message_receipts: {
+        Row: MessageReceiptRow;
+        Insert: Pick<MessageReceiptRow, 'message_id' | 'uid'> & { read_at?: string | null };
+        Update: Partial<Pick<MessageReceiptRow, 'read_at'>>;
+        Relationships: [];
+      };
+      message_pins: {
+        Row: MessagePinRow;
+        Insert: Pick<MessagePinRow, 'conversation_id' | 'message_id' | 'pinned_by'>;
+        Update: Partial<MessagePinRow>;
+        Relationships: [];
+      };
+      message_stars: {
+        Row: MessageStarRow;
+        Insert: Pick<MessageStarRow, 'uid' | 'message_id'>;
+        Update: Partial<MessageStarRow>;
         Relationships: [];
       };
       notifications: {
@@ -2319,6 +2447,27 @@ export type Database = {
       leave_conversation: { Args: { p_conversation_id: string }; Returns: undefined };
       conversation_inbox: { Args: { p_limit: number }; Returns: ConversationInboxRow[] };
       unread_message_count: { Args: Record<never, never>; Returns: number };
+      toggle_message_reaction: {
+        Args: { p_message_id: string; p_reaction: string };
+        Returns: ToggleMessageReactionRow[];
+      };
+      mark_message_read: { Args: { p_message_id: string }; Returns: undefined };
+      toggle_message_pin: { Args: { p_message_id: string }; Returns: boolean };
+      toggle_message_star: { Args: { p_message_id: string }; Returns: boolean };
+      saved_messages: { Args: { p_limit?: number }; Returns: SavedMessageRow[] };
+      search_messages: {
+        Args: { p_query: string; p_conversation_id?: string | null; p_limit?: number };
+        Returns: MessageSearchRow[];
+      };
+      conversation_pins: { Args: { p_conversation_id: string }; Returns: ConversationPinRow[] };
+      conversation_state: {
+        Args: { p_conversation_id: string };
+        Returns: ConversationStateRow[];
+      };
+      conversation_messages: {
+        Args: { p_conversation_id: string; p_before?: string | null; p_limit?: number };
+        Returns: ConversationMessageRow[];
+      };
       post_interaction_state: {
         Args: { p_post_ids: string[] };
         Returns: InteractionStateRow[];

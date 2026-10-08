@@ -48,6 +48,27 @@ export function getSupabase(): BsdcSupabaseClient {
   return client;
 }
 
+/**
+ * Hands the Realtime socket a current Firebase ID token.
+ *
+ * supabase-js sets Realtime's token once, from the `accessToken` callback, and
+ * never refreshes it — but a Firebase ID token expires after an hour and a
+ * socket that is open all day outlives several of them. Postgres evaluates row
+ * level security for every change event it publishes, so an expired token
+ * silently stops delivering the member's own rows. Re-authenticating is cheap
+ * and idempotent.
+ */
+export async function ensureRealtimeAuth(): Promise<void> {
+  if (!isConfigured.supabase) return;
+  const supabase = getSupabase();
+  try {
+    const token = await currentAccessToken();
+    if (token.length > 0) void supabase.realtime.setAuth(token);
+  } catch {
+    // A signed-out or offline member keeps the socket; the next call retries.
+  }
+}
+
 /** Test and sign-out helper: forces the next call to build a fresh client. */
 export function resetSupabase(): void {
   client = null;
