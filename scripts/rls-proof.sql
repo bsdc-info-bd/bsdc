@@ -153,6 +153,15 @@ select pg_temp.expect_rows(
     where post_id = (select id from public.posts where slug = ''alice-pub'')',
   1, null);
 
+-- The feed's candidate stage is granted to anonymous readers as well, and it
+-- runs as the caller, so the signals it reads must be readable too (0043).
+-- Everything it may return still passes through row level security on posts.
+select pg_temp.expect_rows('select post_id from public.feed_candidates(20)', 0, null);
+-- The signals themselves stay private: both tables are self-only, and an
+-- anonymous caller is nobody.
+select pg_temp.expect_rows('select uid from public.topic_affinity', 0, 0);
+select pg_temp.expect_rows('select uid from public.feed_seen', 0, 0);
+
 -- ===========================================================================
 -- a member on their own data versus someone else's
 -- ===========================================================================
