@@ -646,6 +646,7 @@ export const bn: Translation = {
     deletedAt: 'মুছে ফেলা হয়েছে {{time}}',
     recoverableUntil: '{{date}} পর্যন্ত ফিরিয়ে আনা যাবে',
     windowClosed: '৩০ দিন শেষ; আর ফিরিয়ে আনা যাবে না।',
+    moderated: 'আপনার পোস্ট থেকে আপনি লুকিয়েছেন',
     restore: 'ফিরিয়ে আনুন',
     restored: 'ফিরিয়ে আনা হয়েছে।',
     deleteForever: 'স্থায়ীভাবে মুছুন',

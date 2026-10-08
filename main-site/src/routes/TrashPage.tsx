@@ -103,6 +103,7 @@ export default function TrashPage() {
                 <div className="min-w-0">
                   <p className="text-2xs uppercase tracking-wide text-muted">
                     {t(`trash.kinds.${item.kind}`)}
+                    {item.moderated ? ` · ${t('trash.moderated')}` : ''}
                   </p>
                   <p className="fab-truncate font-medium">{item.title}</p>
                   {item.preview.length > 0 ? (

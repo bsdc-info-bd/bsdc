@@ -646,6 +646,7 @@ export const en = {
     deletedAt: 'Deleted {{time}}',
     recoverableUntil: 'Recoverable until {{date}}',
     windowClosed: 'The 30 days are over; it can no longer be restored.',
+    moderated: 'hidden by you on your post',
     restore: 'Restore',
     restored: 'Restored.',
     deleteForever: 'Delete permanently',

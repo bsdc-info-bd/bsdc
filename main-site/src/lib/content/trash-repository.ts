@@ -4,9 +4,10 @@ import { toDataError } from '@/lib/supabase/errors';
 /**
  * The trash, as the database sees it.
  *
- * `my_deleted_content()` returns the author's own deleted posts and comments
- * with the moment each one stops being recoverable — the thirty day rule lives
- * in the database, and this module does not restate it. Deleting and restoring
+ * `my_deleted_content()` returns the rows the member deleted, plus the
+ * comments they took down from their own posts, with the moment each one stops
+ * being recoverable — the thirty day rule lives in the database, and this
+ * module does not restate it. Deleting and restoring
  * are plain writes on `deleted_at`: the policy lets a member touch only their
  * own rows, and the trigger refuses a restore once the window has closed.
  */
@@ -19,6 +20,12 @@ export interface TrashItem {
   deletedAt: string;
   expiresAt: string;
   restorable: boolean;
+  /**
+   * True when the row is somebody else's and it is in this trash because the
+   * member owns the post it hung on — a comment they moderated, not one they
+   * wrote. The thirty day window covers it the same way.
+   */
+  moderated: boolean;
 }
 
 export async function fetchTrash(limit = 50): Promise<TrashItem[]> {
@@ -32,6 +39,7 @@ export async function fetchTrash(limit = 50): Promise<TrashItem[]> {
       deleted_at: string;
       expires_at: string;
       restorable: boolean;
+      moderated: boolean;
     }[]
   >();
   if (error) throw toDataError(error);
@@ -45,6 +53,7 @@ export async function fetchTrash(limit = 50): Promise<TrashItem[]> {
     deletedAt: row.deleted_at,
     expiresAt: row.expires_at,
     restorable: row.restorable,
+    moderated: row.moderated === true,
   }));
 }
 
