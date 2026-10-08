@@ -495,6 +495,8 @@ export const en = {
         'The database is not configured for this deployment. The administrator must set the Supabase environment variables.',
       notFound: 'That record no longer exists.',
       conflict: 'That value is already in use.',
+      alreadyApplied: 'You have already applied to this posting.',
+      alreadyProposed: 'You have already sent a proposal for this gig.',
       invalid: 'The database rejected that value.',
       accessUnavailable:
         'Your account’s database connection is not ready. Please try again. If this continues, contact support.',

@@ -23,7 +23,7 @@
 \set ON_ERROR_STOP on
 
 -- --- tiny assertion helpers, session-local so nothing pollutes the schema ---
-create or replace function pg_temp.expect_fail(p_sql text, p_sqlstate text)
+create or replace function pg_temp.expect_fail(p_sql text, p_sqlstate text, p_message text default null)
 returns void
 language plpgsql
 as $$
@@ -38,6 +38,11 @@ exception
     if p_sqlstate is not null and sqlstate <> p_sqlstate then
       raise exception 'expected sqlstate %, got % (%) for: %',
         p_sqlstate, sqlstate, sqlerrm, p_sql;
+    end if;
+    -- A named failure must say what it is: a member who submits twice should
+    -- read "you already applied", not a constraint name.
+    if p_message is not null and position(p_message in sqlerrm) = 0 then
+      raise exception 'expected the message to contain %, got: %', p_message, sqlerrm;
     end if;
 end
 $$;
@@ -326,6 +331,129 @@ select pg_temp.expect_affected(
 select pg_temp.expect_rows('select path from public.seo_overrides', 0, 0);
 select pg_temp.expect_rows('select from_path from public.redirects', 0, 0);
 select pg_temp.expect_rows('select key from public.brand_themes', 0, 0);
+
+-- ---------------------------------------------------------------------------
+-- A double click is not an error. Each toggle below is called twice in a row;
+-- before 0045 the second call raced the first into a duplicate-key failure
+-- (`23505` on the primary key) whenever the two requests overlapped, which is
+-- what a tapped like button produces. The second call must now simply answer
+-- the opposite state.
+-- ---------------------------------------------------------------------------
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_bookmark(
+     (select id from public.posts where slug = ''alice-pub'')) = true', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_bookmark(
+     (select id from public.posts where slug = ''alice-pub'')) = false', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_page_follow(
+     (select id from public.pages where slug = ''alice-page'')) = true', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_page_follow(
+     (select id from public.pages where slug = ''alice-page'')) = false', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_project_star(
+     (select id from public.projects where slug = ''alice-project'')) = true', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_project_star(
+     (select id from public.projects where slug = ''alice-project'')) = false', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_wishlist(
+     (select id from public.products where slug = ''alice-widget'')) = true', 1, 1);
+select pg_temp.expect_rows(
+  'select 1 where public.toggle_wishlist(
+     (select id from public.products where slug = ''alice-widget'')) = false', 1, 1);
+select pg_temp.expect_rows(
+  'select reacted from public.toggle_reaction(
+     (select id from public.posts where slug = ''alice-pub''), ''like'')', 1, 1);
+select pg_temp.expect_rows(
+  'select reacted from public.toggle_reaction(
+     (select id from public.posts where slug = ''alice-pub''), ''like'')
+   where reacted = false', 1, 1);
+select pg_temp.expect_rows(
+  'select reacted from public.toggle_comment_reaction(
+     (select id from public.comments where post_id =
+        (select id from public.posts where slug = ''alice-pub'') limit 1))', 1, 1);
+select pg_temp.expect_rows(
+  'select reacted from public.toggle_comment_reaction(
+     (select id from public.comments where post_id =
+        (select id from public.posts where slug = ''alice-pub'') limit 1))
+   where reacted = false', 1, 1);
+
+-- The two submissions name the duplicate instead of leaking the constraint.
+select set_config('request.jwt.claims',
+  '{"sub":"bob","role":"authenticated","bsdc_role":"member"}', true);
+select pg_temp.expect_rows(
+  'select public.apply_to_job(
+     (select id from public.jobs where slug = ''alice-job''), ''please hire me'')', 1, 1);
+select pg_temp.expect_fail(
+  'select public.apply_to_job(
+     (select id from public.jobs where slug = ''alice-job''), ''please hire me'')',
+  '23505', 'job/already-applied');
+select pg_temp.expect_rows(
+  'select public.submit_proposal(
+     (select id from public.gigs where slug = ''alice-gig''),
+     ''I can absolutely do this work'', 1500, 10)', 1, 1);
+select pg_temp.expect_fail(
+  'select public.submit_proposal(
+     (select id from public.gigs where slug = ''alice-gig''),
+     ''I can absolutely do this work'', 1500, 10)',
+  '23505', 'gig/already-proposed');
+
+-- The statement the *loser* of a toggle race executes is now the clause below:
+-- it reaches the database while the winner's row is already committed, so a
+-- plain INSERT would fail with 23505. Put a row in place with the toggle
+-- itself, then run the loser's clause against it.
+-- (The harness — like the CI database — is a single connection, so the race
+-- window itself cannot be held open here; this is the statement the second
+-- request runs at that moment.)
+select set_config('request.jwt.claims',
+  '{"sub":"alice","role":"authenticated","bsdc_role":"member"}', true);
+select public.toggle_reaction((select id from public.posts where slug = 'alice-pub'), 'like');
+select public.toggle_comment_reaction(
+  (select id from public.comments where post_id =
+     (select id from public.posts where slug = 'alice-pub') limit 1));
+select public.toggle_bookmark((select id from public.posts where slug = 'alice-pub'));
+select public.toggle_page_follow((select id from public.pages where slug = 'alice-page'));
+select public.toggle_project_star((select id from public.projects where slug = 'alice-project'));
+select public.toggle_wishlist((select id from public.products where slug = 'alice-widget'));
+
+-- The reaction's clause updates in place, so it affects the row it collided
+-- with — and the counter must not move, because the trigger only counts
+-- INSERT and DELETE.
+select pg_temp.expect_affected(
+  'insert into public.post_reactions (post_id, uid, reaction)
+   select id, ''alice'', ''insightful'' from public.posts where slug = ''alice-pub''
+   on conflict (post_id, uid) do update set reaction = excluded.reaction', 1);
+select pg_temp.expect_rows(
+  'select 1 from public.posts where slug = ''alice-pub'' and likes_count = 1', 1, 1);
+select pg_temp.expect_affected(
+  'insert into public.comment_reactions (comment_id, uid)
+   select c.id, ''alice'' from public.comments c
+     join public.posts p on p.id = c.post_id where p.slug = ''alice-pub'' limit 1
+   on conflict (comment_id, uid) do nothing', 0);
+select pg_temp.expect_affected(
+  'insert into public.bookmarks (uid, post_id)
+   select ''alice'', id from public.posts where slug = ''alice-pub''
+   on conflict (uid, post_id) do nothing', 0);
+select pg_temp.expect_affected(
+  'insert into public.page_followers (page_id, uid)
+   select id, ''alice'' from public.pages where slug = ''alice-page''
+   on conflict (page_id, uid) do nothing', 0);
+select pg_temp.expect_affected(
+  'insert into public.project_stars (project_id, uid)
+   select id, ''alice'' from public.projects where slug = ''alice-project''
+   on conflict (project_id, uid) do nothing', 0);
+select pg_temp.expect_affected(
+  'insert into public.wishlist_items (uid, product_id)
+   select ''alice'', id from public.products where slug = ''alice-widget''
+   on conflict (uid, product_id) do nothing', 0);
+-- And it is still the caller's own row: the clause cannot plant one on
+-- somebody else's behalf, because the insert policy checks the owner.
+select pg_temp.expect_fail(
+  'insert into public.bookmarks (uid, post_id)
+   select ''bob'', id from public.posts where slug = ''alice-pub''
+   on conflict (uid, post_id) do nothing', '42501');
 
 -- ---------------------------------------------------------------------------
 -- Profile bootstrap and onboarding, plus the escalation hole this closes.

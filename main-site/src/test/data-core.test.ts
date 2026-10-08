@@ -187,6 +187,23 @@ describe('dataErrorKey', () => {
   it('maps the missing-profile signal onto the onboarding prompt', () => {
     expect(dataErrorKey(new Error('profile/missing'))).toBe('data.errors.profileMissing');
   });
+
+  it('names a repeated application instead of calling it a conflict', () => {
+    // apply_to_job/submit_proposal raise these with 23505 once the unique key
+    // resolves the second request (0045). Without the message in MESSAGE_MAP
+    // the member would read "That value is already in use." on a form they
+    // have simply submitted twice.
+    expect(dataErrorKey({ message: 'job/already-applied', code: '23505' })).toBe(
+      'data.errors.alreadyApplied',
+    );
+    expect(dataErrorKey({ message: 'gig/already-proposed', code: '23505' })).toBe(
+      'data.errors.alreadyProposed',
+    );
+    // The generic duplicate message still falls through to the conflict key.
+    expect(dataErrorKey({ message: 'duplicate key value', code: '23505' })).toBe(
+      'data.errors.conflict',
+    );
+  });
 });
 
 describe('profileErrorKey', () => {
