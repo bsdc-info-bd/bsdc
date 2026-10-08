@@ -107,11 +107,15 @@ export default function ComposePage() {
     for (const file of Array.from(files).slice(0, 10 - draft.media.length)) {
       try {
         const result = await uploadMedia(file, { purpose: 'post-image' });
-        let mediaId = '';
-        if (isConfigured.supabase) {
-          const record = await recordMediaAsset(user.uid, result).catch(() => null);
-          mediaId = record?.id ?? '';
+        // `post_media` references `media_assets`, so an upload the platform
+        // has no record of can never be attached to the post. Swallowing that
+        // failure would leave the picture in the composer and silently drop it
+        // from the published post, which is why it is reported instead.
+        const record = isConfigured.supabase ? await recordMediaAsset(user.uid, result) : null;
+        if (isConfigured.supabase && !record) {
+          throw new Error('media.errors.recordFailed');
         }
+        const mediaId = record?.id ?? '';
         setDraft((current) => ({
           ...current,
           media: [

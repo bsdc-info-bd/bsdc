@@ -516,6 +516,8 @@ export const en = {
       tooLarge: 'That file is larger than the limit for its type.',
       empty: 'That file is empty.',
       failed: 'The upload failed. Please try again.',
+      recordFailed:
+        'The image was uploaded but could not be attached to your post. Please try again.',
       notConfigured: 'Uploads are not configured for this deployment.',
     },
   },
