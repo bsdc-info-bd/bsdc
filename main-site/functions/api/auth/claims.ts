@@ -244,3 +244,9 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
 
   return json({ uid: input.uid, project: credentials.projectId, claims }, 200);
 };
+
+/** Deployment readiness only: never returns credentials or accepts role changes. */
+export const onRequestGet: PagesFunction<ClaimsEnv> = ({ env }) => {
+  const ready = credentialsFor(env, 'main') !== null;
+  return json({ ready }, ready ? 200 : 503);
+};

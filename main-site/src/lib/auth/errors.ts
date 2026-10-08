@@ -23,6 +23,13 @@ const CODE_MAP: Record<string, string> = {
   'auth/cancelled-popup-request': 'auth.errors.popupClosed',
   'auth/popup-blocked': 'auth.errors.popupBlocked',
   'auth/operation-not-allowed': 'auth.errors.providerDisabled',
+  'auth/invalid-oauth-client-id': 'auth.errors.providerMisconfigured',
+  'auth/invalid-oauth-provider': 'auth.errors.providerMisconfigured',
+  'auth/unauthorized-continue-uri': 'auth.errors.unauthorizedDomain',
+  'auth/invalid-api-key': 'auth.errors.notConfigured',
+  'auth/app-not-authorized': 'auth.errors.unauthorizedDomain',
+  'auth/redirect-cancelled-by-user': 'auth.errors.popupClosed',
+  'auth/missing-or-invalid-nonce': 'auth.errors.providerMisconfigured',
   'auth/unauthorized-domain': 'auth.errors.unauthorizedDomain',
   'auth/account-exists-with-different-credential': 'auth.errors.accountExists',
   'auth/credential-already-in-use': 'auth.errors.credentialInUse',
@@ -53,7 +60,6 @@ export function shouldFallbackToRedirect(error: unknown): boolean {
   return (
     error instanceof FirebaseError &&
     (error.code === 'auth/popup-blocked' ||
-      error.code === 'auth/operation-not-supported-in-this-environment' ||
-      error.code === 'auth/web-storage-unsupported')
+      error.code === 'auth/operation-not-supported-in-this-environment')
   );
 }

@@ -27,7 +27,11 @@ async function currentAccessToken(): Promise<string> {
   const { getFirebaseAuth } = await import('@/lib/firebase');
   const user = getFirebaseAuth().currentUser;
   if (!user) return '';
-  return user.getIdToken();
+  const { ensureDataAccess } = await import('@/lib/auth/data-access');
+  const token = await ensureDataAccess(user);
+  // Never send a previous account's token after a sign-out/account switch.
+  if (getFirebaseAuth().currentUser !== user) throw new Error('auth/required');
+  return token.token;
 }
 
 export function getSupabase(): BsdcSupabaseClient {

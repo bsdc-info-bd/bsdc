@@ -62,3 +62,12 @@ describe('sanitizeRedirect', () => {
     },
   );
 });
+
+describe('post-login redirect safety', () => {
+  it.each(['/x/../auth/login', '/AUTH/login', '/%09/evil.example', '/%0d/evil.example', '/auth'])(
+    'rejects %s',
+    (next) => {
+      expect(sanitizeRedirect(next)).toBe('/');
+    },
+  );
+});

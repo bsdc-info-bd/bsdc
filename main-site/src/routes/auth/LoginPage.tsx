@@ -17,6 +17,7 @@ import {
   registerFailedAttempt,
 } from '@/lib/auth/rate-limit';
 import { isConfigured } from '@/lib/env';
+import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/lib/site';
 
 const schema = z.object({
@@ -29,6 +30,7 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginPage() {
   const { t } = useTranslation();
   const [params] = useSearchParams();
+  const redirectError = useAuthStore((state) => state.redirectError);
   const [remember, setRemember] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
   const [lockedFor, setLockedFor] = useState(() => lockoutSecondsRemaining('login'));
@@ -88,7 +90,9 @@ export default function LoginPage() {
         {!isConfigured.firebase ? (
           <Alert tone="danger" title={t('auth.errors.notConfigured')} className="mb-4" />
         ) : null}
-        {errorKey ? <Alert tone="danger" title={t(errorKey)} className="mb-4" /> : null}
+        {errorKey || redirectError ? (
+          <Alert tone="danger" title={t(errorKey ?? redirectError!)} className="mb-4" />
+        ) : null}
         {lockedFor > 0 ? (
           <Alert
             tone="warning"

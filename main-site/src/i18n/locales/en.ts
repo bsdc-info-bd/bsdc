@@ -342,6 +342,8 @@ export const en = {
       network: 'Network problem. Check your connection and try again.',
       popupClosed: 'The sign-in window was closed before finishing.',
       popupBlocked: 'Your browser blocked the sign-in window, so we are redirecting instead.',
+      providerMisconfigured:
+        'This sign-in provider is not configured correctly. Please use another sign-in method and contact support.',
       providerDisabled: 'This sign-in method is currently unavailable.',
       unauthorizedDomain: 'This domain is not authorised for sign-in.',
       accountExists:
@@ -494,6 +496,8 @@ export const en = {
       notFound: 'That record no longer exists.',
       conflict: 'That value is already in use.',
       invalid: 'The database rejected that value.',
+      accessUnavailable:
+        'Your account’s database connection is not ready. Please try again. If this continues, contact support.',
       forbidden: 'You do not have permission to do that.',
       signInRequired: 'Sign in to continue.',
       profileMissing: 'Finish setting up your profile before you publish.',

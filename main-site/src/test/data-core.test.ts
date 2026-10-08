@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DataAccessBootstrapError } from '@/lib/auth/data-access';
 import { DEFAULT_FLAGS, isFlagEnabled, type FeatureFlag } from '@/lib/data/feature-flags';
 import { fieldsToUpdate, onboardingInsert, rowToProfile } from '@/lib/profile/supabase-backend';
 import {
@@ -233,5 +234,11 @@ describe('isFlagEnabled', () => {
   it('falls back to the built-in default for unknown keys', () => {
     expect(isFlagEnabled([], 'realtime.presence', member)).toBe(DEFAULT_FLAGS['realtime.presence']);
     expect(isFlagEnabled([], 'does.not.exist', member)).toBe(false);
+  });
+});
+
+describe('profile access bootstrap errors', () => {
+  it('explains a service bootstrap failure without blaming member permissions', () => {
+    expect(profileErrorKey(new DataAccessBootstrapError(503))).toBe('data.errors.accessUnavailable');
   });
 });

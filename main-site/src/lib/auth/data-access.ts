@@ -34,7 +34,7 @@ export function bootstrapRole(claims: Record<string, unknown>) {
  * endpoint permits only a caller's own least-privileged bootstrap/repair and
  * refreshes the Firebase token before the caller continues to the data layer.
  */
-export async function ensureDataAccess(user: User): Promise<IdTokenResult> {
+async function bootstrapDataAccess(user: User): Promise<IdTokenResult> {
   const current = await user.getIdTokenResult();
   if (hasDataRole(current)) return current;
 
@@ -56,4 +56,16 @@ export async function ensureDataAccess(user: User): Promise<IdTokenResult> {
   const refreshed = await user.getIdTokenResult(true);
   if (!hasDataRole(refreshed)) throw new DataAccessBootstrapError(502);
   return refreshed;
+}
+
+// Token refresh emits another auth event and many queries can start together.
+// Share only in-flight work, not a resolved token (which can expire/change).
+const pending = new WeakMap<User, Promise<IdTokenResult>>();
+
+export function ensureDataAccess(user: User): Promise<IdTokenResult> {
+  const existing = pending.get(user);
+  if (existing) return existing;
+  const request = bootstrapDataAccess(user).finally(() => pending.delete(user));
+  pending.set(user, request);
+  return request;
 }

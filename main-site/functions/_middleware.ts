@@ -71,6 +71,9 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
   const url = new URL(context.request.url);
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : '/';
 
+  // Never run SEO/database redirects in front of auth callbacks or assets.
+  if (/^\/(?:api|__|assets|icons)\//.test(pathname)) return context.next();
+
   // 1. Has this URL moved?
   if (context.request.method === 'GET' && pathname !== '/') {
     const moved = await rpc<RedirectRow[]>(context.env, 'follow_redirect', { p_path: pathname });
