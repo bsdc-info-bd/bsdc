@@ -292,6 +292,11 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `VITE_FB_APP_ID`                | Firebase web app id.                                                                                                  | Same panel.                                                                                                                                                               | `1:123456789012:web:0123456789abcdef012345`                                                                                                                                                                                                                                                                                  | same                                    |
 | `VITE_FB_DATABASE_URL`          | Realtime Database URL for `bsdc-bd`.                                                                                  | Firebase console → Realtime Database → the URL above the data tree.                                                                                                       | `https://bsdc-bd-default-rtdb.asia-southeast1.firebasedatabase.app` — region subdomain included, no trailing slash.                                                                                                                                                                                                          | same                                    |
 | `VITE_FB2_API_KEY` …            | The same five values for the **second** Firebase project, `bsdc-second`, which backs the thirteen corporate consoles. | Firebase console, `bsdc-second` project, same panels.                                                                                                                     | Same formats, `bsdc-second` everywhere `bsdc-bd` appears.                                                                                                                                                                                                                                                                    | `deploy.yml` (consoles)                 |
+| `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud the browser uploads avatars, covers, chat documents and voice notes to.                              | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
+| `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary **unsigned** upload preset the browser uses.                                                            | Cloudinary dashboard → Settings → Upload → Upload presets → Add preset → Signing mode **Unsigned**.                                                                       | The preset's name, e.g. `bsdc_unsigned`. It is public by design; the preset itself must cap size and formats.                                                                                                                                                                                                                 | `deploy.yml` (main-site)                |
+| `VITE_IMGBB_API_KEY`            | imgbb key for every ordinary member-uploaded image (post and comment images).                                          | api.imgbb.com → **Get API key**.                                                                                                                                          | 32-character alphanumeric key.                                                                                                                                                                                                                                                                                               | `deploy.yml` (main-site)                |
+| `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key. Optional: without it the browser never offers push.                                    | Firebase console → Project settings → Cloud Messaging → Web configuration → Web Push certificates.                                                                       | The key pair's public key, one line.                                                                                                                                                                                                                                                                                         | `deploy.yml` (main-site)                |
+| `VITE_ONESIGNAL_APP_ID`         | OneSignal app id, used only for manual admin broadcasts. Optional.                                                     | OneSignal dashboard → Settings → Keys & IDs.                                                                                                                              | UUID.                                                                                                                                                                                                                                                                                                                        | `deploy.yml` (main-site)                |
 | `ANDROID_GOOGLE_SERVICES_JSON`  | Firebase Android config. Required for push notifications and for any release build.                                   | Firebase console → Project settings → Your apps → Android app → download `google-services.json`.                                                                          | Either the file's text verbatim, or `base64 -w0 google-services.json`. The workflow accepts both.                                                                                                                                                                                                                            | `android.yml`                           |
 | `ANDROID_KEYSTORE_BASE64`       | The upload keystore.                                                                                                  | `base64 -w0 release.keystore`                                                                                                                                             | One line of base64, no wrapping.                                                                                                                                                                                                                                                                                             | `android.yml` (release)                 |
 | `ANDROID_KEYSTORE_PASSWORD`     | Password of the keystore file.                                                                                        | Whatever you typed at `keytool` time.                                                                                                                                     | Plain text, no quotes.                                                                                                                                                                                                                                                                                                       | `android.yml` (release)                 |
@@ -299,6 +304,14 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `ANDROID_KEY_PASSWORD`          | Password of that key.                                                                                                 | From `keytool`. Often the same as the keystore password.                                                                                                                  | Plain text.                                                                                                                                                                                                                                                                                                                  | `android.yml` (release)                 |
 
 `GITHUB_TOKEN` is provided by Actions itself. It is never set by hand.
+
+> The five variables above the Android row are **build-time** values. The
+> member site is compiled in `deploy.yml` and uploaded as static files, so a
+> value that exists only in Cloudflare's dashboard (or only in a local
+> `.env`) never reaches the browser bundle. The three upload ones are in
+> `BSDC_REQUIRED_ENV`: if they are missing the deploy fails by name instead of
+> publishing a site whose avatar and image uploads answer "Uploads are not
+> configured for this deployment".
 
 ### 5.2 Cloudflare Pages environment variables — `bsdc` project only
 
@@ -569,15 +582,54 @@ a zone token. Issue a new one from the **Edit Cloudflare Workers** template.
 ### The site deploys but every data call returns 401
 
 `VITE_SUPABASE_PUBLISHABLE_KEY` is missing, truncated or belongs to another
-project. A missing build-time variable does not fail the build: Vite compiles
-`undefined` in and the first request fails at runtime. Check the key in the
-secret, then redeploy — editing a secret does not rebuild anything by itself.
+project. Vite compiles a missing value in as `undefined` and the first request
+fails at runtime, so the member site's build guards the values it cannot run
+without: `scripts/check-deploy-env.mjs` runs before `npm run build` and stops
+the deployment, naming every variable from `BSDC_REQUIRED_ENV` that is unset.
+If the deploy is failing with `refusing to deploy: … required build
+variable(s) are missing`, set the named secrets and re-run; if it published and
+still fails at runtime, the value is present but wrong (a key for another
+project, or a truncated paste). Editing a secret does not rebuild anything by
+itself — redeploy.
+
+### Uploads answer "Uploads are not configured for this deployment"
+
+`VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UNSIGNED_PRESET` or
+`VITE_IMGBB_API_KEY` is absent from the **build**. Cloudinary's pair must both
+be set: an unsigned upload without its preset is rejected by the API. Check the
+three secrets in §5.1, re-run **Deploy**, and hard-reload the site — the values
+are compiled into the JavaScript bundle, so the browser keeps serving the old
+build until the new one is published. Setting them as Cloudflare Pages
+variables does not help: the site is built in `deploy.yml` and uploaded as
+static files, so only the build environment's values reach the bundle.
 
 ### A Pages Function reads an empty variable
 
 Environment variables apply to the **next** deployment. Set the variable,
 then redeploy. Confirm you set it for the environment you are testing —
 Preview and Production are separate lists.
+
+### A member action answers "You do not have permission to do that"
+
+That string is the client's translation of PostgREST's **42501**, and it is
+almost never about the caller's role. It means a statement the browser issued
+was refused by a *privilege* somewhere in the transaction — most often an
+AFTER trigger that maintains a counters column the caller may not write
+(migration 0039 made those triggers run as the table owner) or a row level
+security policy that reads a table the caller has no `SELECT` on (0040 granted
+`SELECT` on `public.blocks`, which the follow and comment policies consult).
+The proof script asserts these paths statement by statement:
+
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f scripts/rls-proof.sql
+```
+
+If the failing action is a console read — the SEO editor, the redirect table
+or the branding studio — check that the caller is staff and that the migration
+that grants `SELECT` on those tables is applied (0041). A missing
+column-privilege write grant shows up the same way: 0042 re-issues the column
+revokes that earlier migrations wrote *after* a table-wide `GRANT UPDATE`, where
+they silently did nothing.
 
 ### App links still open in the browser
 

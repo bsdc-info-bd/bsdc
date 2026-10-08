@@ -92,9 +92,38 @@ insert into public.posts (author_uid, slug, kind, status, visibility, title, exc
 insert into public.feature_flags (key, enabled, audience, description)
   values ('p.flag', true, 'all', 'proof flag');
 
+-- One row of every shape that carries a denormalised counter, each owned by
+-- alice, so the assertions about those counters below are about the privilege
+-- and not about a row the policy hides.
+insert into public.pages (owner_uid, slug, name)
+  values ('alice', 'alice-page', 'Alice Page');
+insert into public.events (slug, title, mode, join_url, starts_at, ends_at, host_uid)
+  values ('alice-meetup', 'Alice Meetup', 'online', 'https://meet.example/x',
+          now() + interval '1 day', now() + interval '1 day 1 hour', 'alice');
+insert into public.jobs (slug, title, company, city, poster_uid)
+  values ('alice-job', 'Developer', 'BSD', 'Dhaka', 'alice');
+insert into public.gigs (slug, title, description, client_uid)
+  values ('alice-gig', 'Logo', 'Design a logo', 'alice');
+insert into public.projects (slug, name, owner_uid)
+  values ('alice-project', 'Project', 'alice');
+insert into public.courses (slug, title, instructor_uid)
+  values ('alice-course', 'Course', 'alice');
+insert into public.shops (slug, name, owner_uid)
+  values ('alice-shop', 'Alice Shop', 'alice');
+insert into public.products (shop_id, slug, title, price)
+  select id, 'alice-widget', 'Widget', 1000 from public.shops where slug = 'alice-shop';
+insert into public.notices (code, title, body)
+  values ('BSDC-NT-ABCD1234-5', 'Notice', 'body');
+
 -- bob reports alice's post so the moderation path has something to show staff.
 insert into public.reports (reporter_uid, subject_type, subject_id, reason)
   values ('bob', 'post', 'alice-pub', 'spam');
+
+-- A comment on alice's published post. Reading it back is what exercises the
+-- read policy that consults public.blocks, and writing it exercises the
+-- counter trigger that maintains posts.comments_count.
+insert into public.comments (post_id, author_uid, body)
+  values ((select id from public.posts where slug = 'alice-pub'), 'bob', 'Nice one');
 
 -- ===========================================================================
 -- anonymous traffic
@@ -115,6 +144,14 @@ select pg_temp.expect_fail(
   '42501');
 -- and the search log is deny-by-grant (reads happen through definer aggregators).
 select pg_temp.expect_fail('select count(*) from public.search_log', '42501');
+-- An anonymous reader sees comments on a public post. The read policy consults
+-- the block list, so this only returns rows when `anon` may evaluate it — a
+-- policy that reads a table the caller cannot SELECT fails the whole query
+-- with 42501 rather than filtering anything.
+select pg_temp.expect_rows(
+  'select id from public.comments
+    where post_id = (select id from public.posts where slug = ''alice-pub'')',
+  1, null);
 
 -- ===========================================================================
 -- a member on their own data versus someone else's
@@ -149,6 +186,137 @@ select pg_temp.expect_rows(
   'select 1 where bsdc.current_uid() = ''alice''
      and bsdc.current_role_name() = ''member''
      and not bsdc.is_staff()', 1, 1);
+
+-- ---------------------------------------------------------------------------
+-- The member write path, end to end. Every one of these statements was
+-- reachable in the browser and every one of them failed at some point against
+-- a schema whose policy text read correctly — which is the whole argument for
+-- asserting behaviour instead of reading grants.
+-- ---------------------------------------------------------------------------
+
+-- She may publish her own post. The row passes the insert policy; the counter
+-- trigger then has to reach `profiles.posts_count` as the owner, because
+-- `authenticated` holds no UPDATE grant on that column (0002/0038). Without
+-- SECURITY DEFINER on the trigger this insert fails with 42501 and the member
+-- is told they do not have permission to publish.
+select pg_temp.expect_affected(
+  'insert into public.posts (author_uid, slug, kind, status, visibility, excerpt, published_at)
+   values (''alice'', ''alice-new'', ''post'', ''published'', ''public'', ''x'', now())',
+  1);
+select pg_temp.expect_rows(
+  'select slug from public.posts where slug = ''alice-new''', 1, 1);
+-- The fixture's one published post plus this one: the counter moved with it.
+select pg_temp.expect_rows(
+  'select 1 from public.profiles where uid = ''alice'' and posts_count = 2', 1, 1);
+
+-- She may attach a curated tag to her own post, and `tags.posts_count` follows
+-- the same way — the tag vocabulary is staff-owned, the counter is trigger-owned.
+select pg_temp.expect_affected(
+  'insert into public.post_tags (post_id, tag_slug)
+   select id, ''javascript'' from public.posts where slug = ''alice-new''', 1);
+select pg_temp.expect_rows(
+  'select 1 from public.tags where slug = ''javascript'' and posts_count = 1', 1, 1);
+
+-- She may read the comments on a post she can see: the read policy consults the
+-- block list, so a missing SELECT grant on public.blocks fails the query with
+-- 42501 and no comment thread loads anywhere on the site.
+select pg_temp.expect_rows(
+  'select id from public.comments
+    where post_id = (select id from public.posts where slug = ''alice-pub'')',
+  1, null);
+
+-- She may follow somebody (the same policy reads the block list), and unfollow.
+select pg_temp.expect_affected(
+  'insert into public.follows (follower_uid, followee_uid) values (''alice'', ''moda'')', 1);
+select pg_temp.expect_rows(
+  'select 1 from public.profiles where uid = ''moda'' and followers_count = 1', 1, 1);
+select pg_temp.expect_affected('delete from public.follows where follower_uid = ''alice''', 1);
+
+-- She may block, list and unblock: all three statements need SELECT on
+-- public.blocks, and the policy still limits every read to her own rows.
+select pg_temp.expect_affected(
+  'insert into public.blocks (blocker_uid, blocked_uid, reason)
+   values (''alice'', ''bob'', ''proof'')', 1);
+select pg_temp.expect_rows(
+  'select blocked_uid from public.blocks where blocker_uid = ''alice''', 1, 1);
+select pg_temp.expect_affected('delete from public.blocks where blocked_uid = ''bob''', 1);
+-- and it still hides everybody else's blocks from her.
+select pg_temp.expect_rows(
+  'select blocker_uid from public.blocks where blocker_uid <> ''alice''', 0, 0);
+
+-- The feed runs as the caller — not as a definer — and reads the block list
+-- while ranking, so a broken grant here empties the home page.
+select pg_temp.expect_rows('select post_id from public.feed_candidates(20)', 0, null);
+
+-- And the counters stay server-owned throughout: the browser cannot write one
+-- even on its own row, which is exactly why the triggers above must run as the
+-- owner.
+select pg_temp.expect_fail(
+  'update public.profiles set posts_count = 100 where uid = ''alice''', '42501');
+select pg_temp.expect_fail(
+  'update public.posts set likes_count = 100 where slug = ''alice-pub''', '42501');
+
+-- The same is true of every derived column, and until 0042 it was not: 0008,
+-- 0012, 0014, 0016, 0019, 0021, 0023, 0029 and 0031 each revoked a column
+-- *after* granting UPDATE on the whole table, and a table-level grant covers
+-- every column, so the revoke never applied. Each statement below was a
+-- one-request forgery from the browser — a member could set their own page's
+-- follower count, sell a product that was never sold, take a discount on an
+-- order they had already placed, or publish their own notice.
+select pg_temp.expect_fail(
+  'update public.pages set followers_count = 100 where slug = ''alice-page''', '42501');
+select pg_temp.expect_fail(
+  'update public.pages set is_verified = true where slug = ''alice-page''', '42501');
+select pg_temp.expect_fail(
+  'update public.events set going_count = 100 where slug = ''alice-meetup''', '42501');
+select pg_temp.expect_fail(
+  'update public.jobs set applications_count = 100 where slug = ''alice-job''', '42501');
+select pg_temp.expect_fail(
+  'update public.jobs set views_count = 100 where slug = ''alice-job''', '42501');
+select pg_temp.expect_fail(
+  'update public.gigs set proposals_count = 100 where slug = ''alice-gig''', '42501');
+select pg_temp.expect_fail(
+  'update public.projects set stars_count = 100 where slug = ''alice-project''', '42501');
+select pg_temp.expect_fail(
+  'update public.courses set enrolled_count = 100 where slug = ''alice-course''', '42501');
+select pg_temp.expect_fail(
+  'update public.products set sold_count = 100 where slug = ''alice-widget''', '42501');
+select pg_temp.expect_fail(
+  'update public.products set stock = 100 where slug = ''alice-widget''', '42501');
+select pg_temp.expect_fail(
+  'update public.shops set orders_count = 100 where slug = ''alice-shop''', '42501');
+select pg_temp.expect_fail(
+  'update public.shops set status = ''active'' where slug = ''alice-shop''', '42501');
+select pg_temp.expect_fail(
+  'update public.shops set commission_bps = 0 where slug = ''alice-shop''', '42501');
+select pg_temp.expect_fail(
+  'update public.notices set status = ''published'' where code = ''BSDC-NT-ABCD1234-5''', '42501');
+-- Closing the counters must not close the row: the columns the owner is
+-- entitled to write are still writable, which is what 0042's grant-back list
+-- is for.
+select pg_temp.expect_affected(
+  'update public.pages set about = ''updated'' where slug = ''alice-page''', 1);
+select pg_temp.expect_affected(
+  'update public.events set title = ''Alice Meetup II'' where slug = ''alice-meetup''', 1);
+select pg_temp.expect_affected(
+  'update public.jobs set title = ''Developer II'' where slug = ''alice-job''', 1);
+select pg_temp.expect_affected(
+  'update public.gigs set title = ''Logo II'' where slug = ''alice-gig''', 1);
+select pg_temp.expect_affected(
+  'update public.projects set tagline = ''tag'' where slug = ''alice-project''', 1);
+select pg_temp.expect_affected(
+  'update public.courses set title = ''Course II'' where slug = ''alice-course''', 1);
+select pg_temp.expect_affected(
+  'update public.shops set about = ''shop about'' where slug = ''alice-shop''', 1);
+select pg_temp.expect_affected(
+  'update public.products set price = 2000 where slug = ''alice-widget''', 1);
+-- The SEO tables are grant-by-role, not deny-by-grant: a member may ask, and
+-- the policy answers with zero rows instead of 42501 — otherwise every read of
+-- `seo_overrides`, `redirects` or `brand_themes` fails for the consoles that
+-- show them (0041).
+select pg_temp.expect_rows('select path from public.seo_overrides', 0, 0);
+select pg_temp.expect_rows('select from_path from public.redirects', 0, 0);
+select pg_temp.expect_rows('select key from public.brand_themes', 0, 0);
 
 -- ---------------------------------------------------------------------------
 -- Profile bootstrap and onboarding, plus the escalation hole this closes.
@@ -243,6 +411,12 @@ select set_config('request.jwt.claims',
 select pg_temp.expect_rows('select id from public.moderation_queue(''open'', 10)', 1, null);
 -- staff can read the audit log without an error,
 select pg_temp.expect_rows('select id from public.audit_log', 0, null);
+-- and the SEO tables the admin console reads directly: the policies gate them
+-- on `seo.manage`/`brand.manage`, so a staff read must return rows rather than
+-- "permission denied for table seo_overrides" (0041).
+select pg_temp.expect_rows('select path from public.seo_overrides', 0, null);
+select pg_temp.expect_rows('select from_path from public.redirects', 0, null);
+select pg_temp.expect_rows('select key from public.brand_themes', 0, null);
 -- the claim channel says staff/admin,
 select pg_temp.expect_rows(
   'select 1 where bsdc.current_role_name() = ''admin'' and bsdc.is_staff()', 1, 1);

@@ -1,0 +1,39 @@
+-- ---------------------------------------------------------------------------
+-- The staff consoles read the SEO tables directly, and the grant was missing.
+--
+-- 0032 created `seo_overrides`, `redirects` and `brand_themes`, and 0033 gave
+-- each one a row level security policy that shows the rows to staff who hold
+-- the matching permission:
+--
+--   * seo_overrides_read  using (bsdc.has_permission('seo.manage'))
+--   * redirects_read      using (bsdc.has_permission('seo.manage'))
+--   * brand_themes_read   using (bsdc.has_permission('brand.manage'))
+--
+-- 0033 then revoked INSERT/UPDATE/DELETE so every write goes through the
+-- security-definer functions, and granted EXECUTE on those functions — but it
+-- never granted SELECT on the three tables themselves. A policy can only
+-- filter rows the caller was already allowed to ask for, so every read failed
+-- one step earlier with
+--
+--   42501 permission denied for table seo_overrides
+--
+-- which the admin console reports as "Your role does not allow this action."
+-- The affected screens read the tables directly (`getDb(env).from('…')`):
+--
+--   * admin-site  loadOverrides()  — the metadata editor's list
+--   * admin-site  loadRedirects()  — the redirect table
+--   * admin-site  loadThemes()     — the branding studio's palettes
+--
+-- Granting SELECT exposes nothing: the policies above still decide who sees a
+-- row, and the console's Firebase token carries `bsdc_role`, so a member or an
+-- anonymous visitor reads zero rows rather than an error. Crowd-facing reads
+-- keep going through the security-definer functions 0033 granted
+-- (`seo_for_path`, `sitemap_urls`, `brand_theme_css`, `follow_redirect`),
+-- which clip what they return to what a crawler is entitled to.
+--
+-- Granting a privilege that already exists is a no-op, so this file is safe to
+-- re-run.
+-- ---------------------------------------------------------------------------
+
+grant select on public.seo_overrides, public.redirects, public.brand_themes
+  to authenticated;

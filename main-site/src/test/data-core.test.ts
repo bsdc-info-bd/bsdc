@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DataAccessBootstrapError } from '@/lib/auth/data-access';
+import { cloudinaryConfigured } from '@/lib/env';
 import { DEFAULT_FLAGS, isFlagEnabled, type FeatureFlag } from '@/lib/data/feature-flags';
 import { fieldsToUpdate, onboardingInsert, rowToProfile } from '@/lib/profile/supabase-backend';
 import {
@@ -139,6 +140,13 @@ describe('media routing', () => {
     expect(assertUploadable(file('image/png', 1024))).toBe('image');
   });
 
+  it('needs both halves of the Cloudinary configuration', () => {
+    expect(cloudinaryConfigured('bsdc', 'bsdc_unsigned')).toBe(true);
+    expect(cloudinaryConfigured('bsdc', '')).toBe(false);
+    expect(cloudinaryConfigured('', 'bsdc_unsigned')).toBe(false);
+    expect(cloudinaryConfigured('', '')).toBe(false);
+  });
+
   it('builds Cloudinary delivery transforms', () => {
     const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/bsdc/avatar/a.png';
     expect(cloudinaryThumb(url)).toContain('c_fill,g_auto:face,w_256,h_256,f_auto,q_auto');
@@ -239,6 +247,8 @@ describe('isFlagEnabled', () => {
 
 describe('profile access bootstrap errors', () => {
   it('explains a service bootstrap failure without blaming member permissions', () => {
-    expect(profileErrorKey(new DataAccessBootstrapError(503))).toBe('data.errors.accessUnavailable');
+    expect(profileErrorKey(new DataAccessBootstrapError(503))).toBe(
+      'data.errors.accessUnavailable',
+    );
   });
 });

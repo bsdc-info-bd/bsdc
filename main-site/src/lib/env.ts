@@ -59,12 +59,21 @@ const raw: PublicEnv = {
 
 export const env: PublicEnv = envSchema.parse(raw);
 
+/**
+ * Both halves of the Cloudinary pair are needed: an unsigned upload without
+ * its preset is rejected by the API, so a deployment that has only the cloud
+ * name reports "not configured" instead of a generic upload failure.
+ */
+export function cloudinaryConfigured(cloudName: string, preset: string): boolean {
+  return cloudName.length > 0 && preset.length > 0;
+}
+
 /** Service clients are only constructed when their configuration is present. */
 export const isConfigured = {
   firebase: raw.firebase.apiKey.length > 0 && raw.firebase.projectId.length > 0,
   supabase: raw.supabase.url.length > 0 && raw.supabase.publishableKey.length > 0,
   push: raw.push.vapidPublicKey.length > 0,
   oneSignal: raw.oneSignalAppId.length > 0,
-  cloudinary: raw.cloudinary.cloudName.length > 0,
+  cloudinary: cloudinaryConfigured(raw.cloudinary.cloudName, raw.cloudinary.unsignedPreset),
   imgbb: raw.imgbbApiKey.length > 0,
 } as const;
