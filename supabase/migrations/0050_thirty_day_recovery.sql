@@ -23,9 +23,13 @@
 --     anything deleted less than a week ago.
 --
 -- Everything here is additive and re-runnable: the columns are guarded, the
--- functions are `create or replace`, the triggers are dropped before they are
--- created, the policies are dropped before they are created, and the grants
--- are idempotent.
+-- tables are created only if they are missing, the triggers are dropped before
+-- they are created, the policies are dropped before they are created, and the
+-- grants are idempotent. The functions are `create or replace` — with one
+-- exception that is dropped first, `my_deleted_content`, because it returns a
+-- table and a later migration widens that table's shape: `create or replace`
+-- cannot change what a function returns, so a second pass over this file would
+-- stop on it.
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
@@ -664,7 +668,13 @@ create trigger posts_stamp_edited before update on public.posts
 -- One list for both kinds: the trash screen shows a post and a comment the
 -- same way, and the only number it needs from the database is whether the
 -- thirty days are still open.
-create or replace function public.my_deleted_content(p_limit integer default 50)
+--
+-- Dropped rather than replaced, because a table function's result shape is
+-- part of its identity: 0052 adds the `moderated` column, and replacing this
+-- definition afterwards would be an error rather than a no-op.
+drop function if exists public.my_deleted_content(integer);
+
+create function public.my_deleted_content(p_limit integer default 50)
 returns table (
   kind        text,
   id          uuid,
