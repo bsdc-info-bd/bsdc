@@ -116,6 +116,16 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # The migrations are the database. This replays every one of them, in
+      # order, into an in-process Postgres and then asks that database the
+      # questions the proofs in `scripts/db-prove` ask — as an anonymous
+      # caller, as a member, as staff, as the owner. No service, no secret and
+      # no network: the schema is built from the files in this repository, so a
+      # claim about production is checked before it is deployed.
+      - name: Database proofs
+        if: matrix.app == 'main-site'
+        run: npm run db:prove
+
       - name: Build
         run: npm run build
 
