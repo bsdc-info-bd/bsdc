@@ -149,6 +149,11 @@ select pg_temp.expect_fail(
   '42501');
 -- and the search log is deny-by-grant (reads happen through definer aggregators).
 select pg_temp.expect_fail('select count(*) from public.search_log', '42501');
+-- The feed's prune routine is maintenance for the whole table, and every
+-- function Postgres creates carries EXECUTE for PUBLIC unless it is taken
+-- away — so this used to be callable, and unbounded, from a logged-out
+-- request. It is now closed to clients (0046).
+select pg_temp.expect_fail('select public.prune_feed_seen() from public.feed_seen', '42501');
 -- An anonymous reader sees comments on a public post. The read policy consults
 -- the block list, so this only returns rows when `anon` may evaluate it — a
 -- policy that reads a table the caller cannot SELECT fails the whole query
@@ -448,6 +453,16 @@ select pg_temp.expect_affected(
   'insert into public.wishlist_items (uid, product_id)
    select ''alice'', id from public.products where slug = ''alice-widget''
    on conflict (uid, product_id) do nothing', 0);
+-- A signed-in member is refused as well: pruning is a maintenance action,
+-- not a member action, and it is bounded even for the role that may run it.
+select pg_temp.expect_fail('select public.prune_feed_seen(0)', '42501');
+-- The clamp is the second half of the fix: a zero-day prune never returns a
+-- wipe, because the routine's shortest window is a week. Run as the owner,
+-- who keeps the privilege, a fresh impression must survive it.
+reset role;
+select pg_temp.expect_rows('select public.prune_feed_seen(0) as deleted where public.prune_feed_seen(0) = 0', 1, 1);
+set local role authenticated;
+
 -- And it is still the caller's own row: the clause cannot plant one on
 -- somebody else's behalf, because the insert policy checks the owner.
 select pg_temp.expect_fail(
