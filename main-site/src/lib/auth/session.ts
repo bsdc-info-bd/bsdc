@@ -17,14 +17,38 @@ export const AUTH_CHANNEL = 'bsdc.auth';
  * decided by `onboarding_complete`, not by whether the row can be read, so
  * the member still lands on onboarding and the database has the foreign-key
  * target their first post or comment points at.
+ *
+ * Three answers, because two of them look identical from the outside and are
+ * not the same event. `none` is a member with no row: the screen should be
+ * empty. `failed` is a read that did not complete — a token still being
+ * minted, a moment offline, a database that hiccuped — and the profile already
+ * on screen is more true than nothing, so it is left alone. Collapsing the two
+ * into one `null` is what made a picture appear at sign-in and vanish a moment
+ * later while the database still held it.
  */
-async function loadOrBootstrapProfile(user: User): Promise<Profile | null> {
-  const existing = await fetchProfile(user.uid);
-  if (existing) return existing;
-  await ensureProfile(user.uid, { displayName: bootstrapDisplayName(user) }).catch(() => undefined);
-  // Read it straight back: the row now exists, and returning it means the
-  // member's avatar and preferences are on screen from the first render.
-  return fetchProfile(user.uid).catch(() => null);
+export type ProfileOutcome =
+  | { kind: 'profile'; profile: Profile }
+  | { kind: 'none' }
+  | { kind: 'failed' };
+
+async function loadOrBootstrapProfile(user: User): Promise<ProfileOutcome> {
+  let existing: Profile | null;
+  try {
+    existing = await fetchProfile(user.uid);
+  } catch {
+    return { kind: 'failed' };
+  }
+  if (existing) return { kind: 'profile', profile: existing };
+
+  try {
+    await ensureProfile(user.uid, { displayName: bootstrapDisplayName(user) });
+    // Read it straight back: the row now exists, and returning it means the
+    // member's avatar and preferences are on screen from the first render.
+    const created = await fetchProfile(user.uid);
+    return created ? { kind: 'profile', profile: created } : { kind: 'none' };
+  } catch {
+    return { kind: 'failed' };
+  }
 }
 
 export interface SessionHandlers {
@@ -44,6 +68,9 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
   let active = true;
   let generation = 0;
   let readyUser: User | null = null;
+  // Whose profile is on screen. A failed read may keep it, but never for a
+  // different member: switching accounts clears it first.
+  let publishedUid: string | null = null;
 
   // Completes an OAuth redirect started because a popup was blocked.
   void getRedirectResult(auth).catch((error: unknown) => {
@@ -63,7 +90,14 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
     if (!user) {
       handlers.onSession(null, DEFAULT_CLAIMS);
       handlers.onProfile(null);
+      publishedUid = null;
       return;
+    }
+
+    if (publishedUid !== null && publishedUid !== user.uid) {
+      // Somebody else's face comes off the screen before theirs is fetched.
+      handlers.onProfile(null);
+      publishedUid = null;
     }
 
     // Firebase tokens begin without the custom PostgREST role. Mint the
@@ -76,19 +110,28 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
         readyUser = user;
         const tokenClaims = readClaims(token.claims);
         handlers.onSession(user, tokenClaims);
-        const profile = await loadOrBootstrapProfile(user);
-        if (!isCurrent()) return { profile, claims: tokenClaims };
+        const outcome = await loadOrBootstrapProfile(user);
+        if (!isCurrent()) return { outcome, claims: tokenClaims };
         // The database is the authority on rank: it is what the server
         // enforces, and a token can predate a promotion — or, for the first
         // administrator of a deployment, name a rank the token was never
         // minted with. Adopt its answer and repair both sides.
         const claims = await syncRoleWithDatabase(user, tokenClaims);
         if (isCurrent() && claims !== tokenClaims) handlers.onSession(user, claims);
-        return { profile, claims };
+        return { outcome, claims };
       })
       .then((result) => {
         if (!isCurrent() || result === null) return;
-        handlers.onProfile(result.profile);
+        if (result.outcome.kind === 'profile') {
+          handlers.onProfile(result.outcome.profile);
+          publishedUid = user.uid;
+        } else if (result.outcome.kind === 'none') {
+          handlers.onProfile(null);
+          publishedUid = user.uid;
+        } else {
+          // The read did not complete. Say so, and keep what is on screen.
+          handlers.onProfileError('profile/access-failed');
+        }
         handlers.onProfileSettled();
       })
       .catch(() => {

@@ -88,29 +88,100 @@ export function affinityScore(candidate: FeedCandidate): number {
   return Math.min(1, candidate.affinity / 30);
 }
 
+/** Why stage two removed a candidate. One reason per post: the first that fits. */
+export type FeedFilterReason = 'seen' | 'sensitive' | 'muted' | 'language' | 'following';
+
+export interface FilterReport {
+  kept: FeedCandidate[];
+  removed: Record<FeedFilterReason, number>;
+  /** How many candidates arrived at all. */
+  considered: number;
+}
+
+export function emptyFilterReport(): Record<FeedFilterReason, number> {
+  return { seen: 0, sensitive: 0, muted: 0, language: 0, following: 0 };
+}
+
+/**
+ * Stage 2 — filtering, with a count of what each rule removed.
+ *
+ * The counts are the difference between an empty feed and an explained one. A
+ * member who has read everything and a member whose language preference hides
+ * the whole community both see no posts, and only the database and these
+ * numbers know which of the two happened.
+ */
+export function explainFiltering(
+  candidates: readonly FeedCandidate[],
+  preferences: FeedPreferences,
+  viewerUid: string | null,
+): FilterReport {
+  const muted = new Set(preferences.mutedTags.map((tag) => tag.toLowerCase()));
+  const removed = emptyFilterReport();
+  const kept: FeedCandidate[] = [];
+
+  for (const candidate of candidates) {
+    // Your own post is always yours to see, whatever you muted or read.
+    if (candidate.authorUid === viewerUid) {
+      kept.push(candidate);
+      continue;
+    }
+    if (!preferences.showSensitive && candidate.isSensitive) {
+      removed.sensitive += 1;
+      continue;
+    }
+    if (candidate.tags.some((tag) => muted.has(tag.toLowerCase()))) {
+      removed.muted += 1;
+      continue;
+    }
+    if (preferences.languages.length > 0 && !preferences.languages.includes(candidate.language)) {
+      removed.language += 1;
+      continue;
+    }
+    if (preferences.algorithm === 'following' && !candidate.authorFollowed) {
+      removed.following += 1;
+      continue;
+    }
+    // Seen posts are hidden unless that leaves nothing to read, which the
+    // caller handles by retrying with hideSeen disabled.
+    if (preferences.hideSeen && preferences.algorithm !== 'latest' && candidate.alreadySeen) {
+      removed.seen += 1;
+      continue;
+    }
+    kept.push(candidate);
+  }
+
+  return { kept, removed, considered: candidates.length };
+}
+
 /** Stage 2 — filtering. */
 export function filterCandidates(
   candidates: readonly FeedCandidate[],
   preferences: FeedPreferences,
   viewerUid: string | null,
 ): FeedCandidate[] {
-  const muted = new Set(preferences.mutedTags.map((tag) => tag.toLowerCase()));
+  return explainFiltering(candidates, preferences, viewerUid).kept;
+}
 
-  return candidates.filter((candidate) => {
-    if (candidate.authorUid === viewerUid) return true;
-    if (!preferences.showSensitive && candidate.isSensitive) return false;
-    if (candidate.tags.some((tag) => muted.has(tag.toLowerCase()))) return false;
-    if (preferences.languages.length > 0 && !preferences.languages.includes(candidate.language)) {
-      return false;
-    }
-    if (preferences.algorithm === 'following' && !candidate.authorFollowed) return false;
-    // Seen posts are hidden unless that leaves nothing to read, which the
-    // caller handles by retrying with hideSeen disabled.
-    if (preferences.hideSeen && preferences.algorithm !== 'latest' && candidate.alreadySeen) {
-      return false;
-    }
-    return true;
-  });
+/**
+ * Why a feed came back empty, which decides what the member is told.
+ *
+ *   nothing      no candidates arrived at all — there really is nothing to read
+ *   all-seen     everything was hidden for being already read, so the honest
+ *                answer is "you are caught up", offered with the posts back
+ *   preferences  the member's own rules — language, muted tags, sensitivity,
+ *                following — removed every candidate
+ *   none         the feed is not empty
+ */
+export type FeedEmptyReason = 'none' | 'nothing' | 'all-seen' | 'preferences';
+
+export function emptyReason(report: FilterReport, kept: number): FeedEmptyReason {
+  if (kept > 0) return 'none';
+  if (report.considered === 0) return 'nothing';
+  const removed = report.removed;
+  const total =
+    removed.seen + removed.sensitive + removed.muted + removed.language + removed.following;
+  if (total === removed.seen) return 'all-seen';
+  return 'preferences';
 }
 
 /** Stage 3 — scoring. */
@@ -195,16 +266,34 @@ export function rankFeed(
   viewerUid: string | null,
   now: number = Date.now(),
 ): ScoredCandidate[] {
-  const filtered = filterCandidates(candidates, preferences, viewerUid);
+  return rankFeedWithReport(candidates, preferences, viewerUid, now).ranked;
+}
+
+export interface RankedFeed {
+  ranked: ScoredCandidate[];
+  report: FilterReport;
+}
+
+/** The same ranking, plus stage two's counts, so an empty feed can explain itself. */
+export function rankFeedWithReport(
+  candidates: readonly FeedCandidate[],
+  preferences: FeedPreferences,
+  viewerUid: string | null,
+  now: number = Date.now(),
+): RankedFeed {
+  const report = explainFiltering(candidates, preferences, viewerUid);
 
   if (preferences.algorithm === 'latest') {
-    return filtered
-      .map((candidate) => ({ ...candidate, score: 0, reasons: ['fresh' as FeedReason] }))
-      .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    return {
+      report,
+      ranked: report.kept
+        .map((candidate) => ({ ...candidate, score: 0, reasons: ['fresh' as FeedReason] }))
+        .sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()),
+    };
   }
 
-  const scored = filtered.map((candidate) => scoreCandidate(candidate, preferences, now));
-  return diversify(scored);
+  const scored = report.kept.map((candidate) => scoreCandidate(candidate, preferences, now));
+  return { report, ranked: diversify(scored) };
 }
 
 /** De-duplicates across pages: the cursor can overlap at a page boundary. */

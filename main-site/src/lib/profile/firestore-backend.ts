@@ -8,8 +8,8 @@ import {
   type DocumentData,
 } from 'firebase/firestore';
 import { getDb } from '@/lib/firebase';
+import { coerceProfile } from './coerce';
 import {
-  profileSchema,
   usernameSchema,
   type Profile,
   type ProfileBackend,
@@ -30,13 +30,14 @@ function toIso(value: unknown): string {
 }
 
 function fromDocument(uid: string, data: DocumentData): Profile | null {
-  const parsed = profileSchema.safeParse({
+  // The cache is coerced exactly like the row it mirrors, so a document that
+  // predates a field, or holds one odd value, still describes a member.
+  return coerceProfile({
     ...data,
     uid,
     createdAt: toIso(data['createdAt']),
     updatedAt: toIso(data['updatedAt']),
   });
-  return parsed.success ? parsed.data : null;
 }
 
 async function fetchProfile(uid: string): Promise<Profile | null> {
@@ -99,6 +100,7 @@ async function saveProfile(uid: string, draft: ProfileDraft): Promise<Profile> {
         displayName: draft.displayName,
         bio: draft.bio,
         avatarUrl: draft.avatarUrl,
+        coverUrl: draft.coverUrl,
         location: draft.location,
         website: draft.website,
         skills: draft.skills,

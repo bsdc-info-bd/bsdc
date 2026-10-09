@@ -83,9 +83,10 @@ export const DEFAULT_PRIVACY: PrivacyPrefs = privacyPrefsSchema.parse({});
  * database. `usernameSchema` is the guard for what a member may *choose*; it
  * is not a guard for what a row may contain.
  *
- * `avatarUrl` and `website` are plain strings for the same reason: the columns
- * accept any text, and one oddly-shaped value must degrade one field, never
- * the whole row.
+ * `avatarUrl`, `coverUrl` and `website` are plain strings for the same reason:
+ * the columns accept any text, and one oddly-shaped value must degrade one
+ * field, never the whole row. The mapping that honours this is `coerceProfile`
+ * in ./coerce.ts, which both backends go through.
  */
 export const profileSchema = z.object({
   uid: z.string().min(1),
@@ -93,6 +94,7 @@ export const profileSchema = z.object({
   displayName: z.string().min(1).max(60),
   bio: z.string().max(280).default(''),
   avatarUrl: z.string().default(''),
+  coverUrl: z.string().default(''),
   location: z.string().max(80).default(''),
   website: z.string().default(''),
   skills: z.array(z.string().min(1).max(32)).max(20).default([]),
@@ -118,7 +120,15 @@ export function hasClaimedHandle(profile: Pick<Profile, 'username'>): boolean {
 
 export type ProfileDraft = Pick<
   Profile,
-  'username' | 'displayName' | 'bio' | 'avatarUrl' | 'location' | 'website' | 'skills' | 'interests'
+  | 'username'
+  | 'displayName'
+  | 'bio'
+  | 'avatarUrl'
+  | 'coverUrl'
+  | 'location'
+  | 'website'
+  | 'skills'
+  | 'interests'
 > & { language: Language; onboardingComplete: boolean };
 
 /** Counters are owned by the database and are read-only in the client. */

@@ -131,6 +131,9 @@ export default function OnboardingPage() {
         ? bio.length <= 280 && websiteValid && avatarValid
         : true;
 
+  // A cover already on the row is carried through, never overwritten with ''.
+  const coverUrl = profile?.coverUrl ?? '';
+
   const finish = useCallback(async () => {
     if (!user) return;
     setSaving(true);
@@ -140,6 +143,9 @@ export default function OnboardingPage() {
       displayName: displayName.trim(),
       bio: bio.trim(),
       avatarUrl,
+      // Onboarding edits a profile, it does not replace one: a cover the
+      // member already has survives the walk through these steps.
+      coverUrl,
       location: location.trim(),
       website,
       skills,
@@ -166,6 +172,7 @@ export default function OnboardingPage() {
   }, [
     avatarUrl,
     bio,
+    coverUrl,
     displayName,
     interests,
     language,

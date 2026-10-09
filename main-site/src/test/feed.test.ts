@@ -3,10 +3,13 @@ import {
   DEFAULT_FEED_PREFERENCES,
   affinityScore,
   diversify,
+  emptyReason,
+  explainFiltering,
   filterCandidates,
   mergePages,
   qualityScore,
   rankFeed,
+  rankFeedWithReport,
   recencyScore,
   scoreCandidate,
   type FeedCandidate,
@@ -209,5 +212,110 @@ describe('rankFeed', () => {
   it('de-duplicates overlapping pages', () => {
     const page = rankFeed([candidate()], prefs, 'viewer', NOW);
     expect(mergePages([page, page])).toHaveLength(1);
+  });
+});
+
+describe('an empty feed explains itself', () => {
+  const seen = [
+    candidate({ postId: 'p1', alreadySeen: true }),
+    candidate({ postId: 'p2', alreadySeen: true }),
+  ];
+
+  it('counts what each rule removed, and keeps the rest', () => {
+    const report = explainFiltering(
+      [
+        candidate({ postId: 'kept' }),
+        candidate({ postId: 's1', alreadySeen: true }),
+        candidate({ postId: 's2', isSensitive: true }),
+        candidate({ postId: 's3', language: 'hi' }),
+        candidate({ postId: 's4', tags: ['muted-tag'] }),
+      ],
+      { ...prefs, mutedTags: ['muted-tag'] },
+      null,
+    );
+    expect(report.considered).toBe(5);
+    expect(report.kept.map((item) => item.postId)).toEqual(['kept']);
+    expect(report.removed).toEqual({ seen: 1, sensitive: 1, muted: 1, language: 1, following: 0 });
+  });
+
+  it('says "caught up" when reading everything is the only reason', () => {
+    const { ranked, report } = rankFeedWithReport(seen, prefs, null, NOW);
+    expect(ranked).toHaveLength(0);
+    expect(emptyReason(report, ranked.length)).toBe('all-seen');
+  });
+
+  it('says "nothing" when no candidate arrived at all', () => {
+    const { ranked, report } = rankFeedWithReport([], prefs, null, NOW);
+    expect(emptyReason(report, ranked.length)).toBe('nothing');
+  });
+
+  it('says "preferences" when a language or a mute emptied the feed', () => {
+    const language = rankFeedWithReport(
+      [candidate({ postId: 'p1', language: 'hi' })],
+      prefs,
+      null,
+      NOW,
+    );
+    expect(emptyReason(language.report, language.ranked.length)).toBe('preferences');
+
+    const mixed = rankFeedWithReport(
+      [candidate({ postId: 'p1', alreadySeen: true }), candidate({ postId: 'p2', language: 'hi' })],
+      prefs,
+      null,
+      NOW,
+    );
+    expect(emptyReason(mixed.report, mixed.ranked.length)).toBe('preferences');
+  });
+
+  it('is not empty when something survived, whatever else was removed', () => {
+    const { ranked, report } = rankFeedWithReport(
+      [...seen, candidate({ postId: 'fresh' })],
+      prefs,
+      null,
+      NOW,
+    );
+    expect(ranked.map((item) => item.postId)).toEqual(['fresh']);
+    expect(emptyReason(report, ranked.length)).toBe('none');
+  });
+
+  it('brings the read posts back when hideSeen is turned off', () => {
+    const { ranked } = rankFeedWithReport(seen, { ...prefs, hideSeen: false }, null, NOW);
+    expect(ranked).toHaveLength(2);
+    // They still sink below anything unread: the seen penalty is in the score.
+    const mixed = rankFeedWithReport(
+      [...seen, candidate({ postId: 'fresh', publishedAt: hoursAgo(48) })],
+      { ...prefs, hideSeen: false },
+      null,
+      NOW,
+    );
+    expect(mixed.ranked[0]?.postId).toBe('p1');
+    expect(mixed.ranked.map((item) => item.postId)).toContain('fresh');
+  });
+
+  it('keeps your own post even when you have read it and muted its tag', () => {
+    const report = explainFiltering(
+      [candidate({ postId: 'mine', authorUid: 'me', alreadySeen: true, tags: ['muted-tag'] })],
+      { ...prefs, mutedTags: ['muted-tag'] },
+      'me',
+    );
+    expect(report.kept).toHaveLength(1);
+  });
+
+  it('filterCandidates still returns exactly what explainFiltering kept', () => {
+    const mixed = [candidate({ postId: 'a' }), candidate({ postId: 'b', alreadySeen: true })];
+    expect(filterCandidates(mixed, prefs, null).map((item) => item.postId)).toEqual(
+      explainFiltering(mixed, prefs, null).kept.map((item) => item.postId),
+    );
+  });
+
+  it('rankFeed and rankFeedWithReport agree on the ordering', () => {
+    const mixed = [
+      candidate({ postId: 'a' }),
+      candidate({ postId: 'b', likes: 40 }),
+      candidate({ postId: 'c', publishedAt: hoursAgo(30) }),
+    ];
+    expect(rankFeed(mixed, prefs, null, NOW).map((item) => item.postId)).toEqual(
+      rankFeedWithReport(mixed, prefs, null, NOW).ranked.map((item) => item.postId),
+    );
   });
 });

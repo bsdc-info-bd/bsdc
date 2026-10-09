@@ -67,8 +67,23 @@ describe('rowToProfile', () => {
     expect(profile?.privacy.discoverable).toBe(true);
   });
 
-  it('rejects a row that cannot satisfy the schema', () => {
-    expect(rowToProfile({ ...row, display_name: '' })).toBeNull();
+  it('degrades one bad field rather than throwing the whole row away', () => {
+    // A row that exists is a profile that exists. Rejecting this one is what
+    // made a member's picture vanish at sign-in while the database still had
+    // it, and the public post page — which reads the column directly — kept
+    // showing it.
+    const nameless = rowToProfile({ ...row, display_name: '' });
+    expect(nameless).not.toBeNull();
+    expect(nameless?.displayName).toBe('Member');
+    expect(nameless?.avatarUrl).toBe(row.avatar_url);
+
+    const long = rowToProfile({ ...row, bio: 'b'.repeat(400) });
+    expect(long).not.toBeNull();
+    expect(long?.bio).toHaveLength(280);
+  });
+
+  it('is null only when the row has no member in it', () => {
+    expect(rowToProfile({ ...row, uid: '' })).toBeNull();
   });
 
   it('reads a bootstrap row whose handle has not been claimed yet', () => {
@@ -127,6 +142,7 @@ describe('profile write payloads', () => {
       displayName: 'Rafi Ahmed',
       bio: 'Builds things in Sylhet.',
       avatarUrl: 'https://images.example/avatar.png',
+      coverUrl: 'https://images.example/cover.png',
       location: 'Sylhet',
       website: 'https://rafi.example',
       skills: ['typescript'],
@@ -138,6 +154,7 @@ describe('profile write payloads', () => {
     expect(Object.keys(insert).sort()).toEqual([
       'avatar_url',
       'bio',
+      'cover_url',
       'display_name',
       'interests',
       'language',

@@ -688,6 +688,18 @@ export const en = {
         title: 'No posts published yet',
         description: 'Be the first to publish on BSDC.',
       },
+      caughtUp: {
+        title: 'You are all caught up',
+        description:
+          'Every post the feed could offer is one you have already read. Nothing new has been published since.',
+        action: 'Show posts I have read',
+      },
+      filtered: {
+        title: 'Your feed settings hide everything',
+        description:
+          'Posts exist, but your languages, muted tags or sensitivity setting removed every one of them.',
+        action: 'Open feed settings',
+      },
     },
     preferences: {
       title: 'Feed preferences',

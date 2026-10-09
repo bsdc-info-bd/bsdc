@@ -1,10 +1,11 @@
-import { Compass, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Compass, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PostCard } from '@/components/content/PostCard';
-import { Alert, Button, EmptyState, PageSkeleton } from '@/design-system';
+import { Alert, Button, EmptyState, LinkButton, PageSkeleton } from '@/design-system';
 import type { UseFeedResult } from '@/hooks/use-feed';
 import { formatNumber } from '@/lib/format';
+import { ROUTES } from '@/lib/site';
 
 export interface FeedListProps {
   feed: UseFeedResult;
@@ -46,6 +47,39 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
           {t('feed.retry')}
         </Button>
       </Alert>
+    );
+  }
+
+  // An empty feed is a claim about the community, so it is only made when it
+  // is true. These two states are the ones where posts exist and the member's
+  // own settings removed them — each says so, and each offers the way back.
+  if (feed.posts.length === 0 && feed.emptyReason === 'all-seen') {
+    return (
+      <EmptyState
+        icon={<CheckCircle2 size={22} />}
+        title={t('feed.empty.caughtUp.title')}
+        description={t('feed.empty.caughtUp.description')}
+        action={
+          <Button variant="secondary" size="sm" onClick={feed.showSeen}>
+            {t('feed.empty.caughtUp.action')}
+          </Button>
+        }
+      />
+    );
+  }
+
+  if (feed.posts.length === 0 && feed.emptyReason === 'preferences') {
+    return (
+      <EmptyState
+        icon={<SlidersHorizontal size={22} />}
+        title={t('feed.empty.filtered.title')}
+        description={t('feed.empty.filtered.description')}
+        action={
+          <LinkButton to={ROUTES.settings} variant="secondary" size="sm">
+            {t('feed.empty.filtered.action')}
+          </LinkButton>
+        }
+      />
     );
   }
 
