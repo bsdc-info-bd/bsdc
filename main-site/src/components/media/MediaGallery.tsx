@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { cn } from '@/lib/cn';
 import { arrangeMedia, type SizedMedia } from '@/lib/media/arrangement';
 import { Lightbox } from './Lightbox';
+import { MediaImage } from './MediaImage';
 
 /**
  * The priority hint, spelled the way the DOM wants it.
@@ -108,8 +109,9 @@ export function MediaGallery({
                 gridRow: cell.rowSpan > 1 ? `span ${cell.rowSpan}` : undefined,
               }}
             >
-              <img
+              <MediaImage
                 src={item.thumbUrl.length > 0 ? item.thumbUrl : item.url}
+                fallbackSrc={item.url}
                 alt={item.altText}
                 width={item.width ?? undefined}
                 height={item.height ?? undefined}

@@ -1,19 +1,14 @@
 /**
- * Proof for 0056: the platform has a first-party place to put a byte, and the
- * folder a member writes into is the folder they own.
+ * Proof for 0056: legacy Supabase Storage remains locked to the owner of each
+ * object, while the current upload client routes new bytes only to ImgBB or
+ * Cloudinary. The bucket and policies remain useful for old rows created before
+ * the external-host rule; they are not an upload destination anymore.
  *
- * The uploads that used to fail were not failing in the composer. They were
- * failing because every route the media pipeline knew led to a third party
- * whose key has to be compiled into the public bundle, and a deployment
- * without one answers "Uploads are not configured" — which on a phone looks
- * like nothing happening at all. Storage is the same project the database
- * lives in, so it is configured wherever the database is.
- *
- * These checks are about the two promises that make it safe: anybody may read
- * what is in the bucket, and only the member whose uid opens the path may
- * write, move or delete inside it. The path convention is
- * `<uid>/<purpose>/<yyyymm>/<id>.<ext>`, and the first segment is not a filing
- * choice — it is what the policy compares against `bsdc.current_uid()`.
+ * These database checks prove that any object already in that bucket stays
+ * protected: the first path segment is the member uid, which the RLS policy
+ * compares against `bsdc.current_uid()`. Separate client-source checks prove
+ * new uploads do not call the Storage REST endpoint and ordinary images use
+ * ImgBB's required base64 body.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -122,15 +117,16 @@ check(written.length === 1, 'and there is exactly one write policy to get wrong'
 
 const source = readFileSync(UPLOAD_MODULE, 'utf8');
 check(
-  /export function mediaObjectPath\(/.test(source) &&
-    /return `\$\{uid\}\/\$\{purpose\}\/\$\{month\}\/\$\{id\}\.\$\{extensionFor\(mimeType\)\}`/.test(
-      source,
-    ),
-  'the client builds that path with the uid first',
+  !/storage\/v1\/object\/media\//.test(source) && !/uploadToSupabase/.test(source),
+  'new client uploads never send image bytes to Supabase Storage',
 );
 check(
-  /storage\/v1\/object\/media\//.test(source) && /resolveProvider\(/.test(source),
-  'and posts the bytes at the bucket it just created',
+  source.includes("body.append('image', base64)") && source.includes('api.imgbb.com/1/upload?key='),
+  'ordinary images reach ImgBB as base64 with the key in the URL',
+);
+check(
+  source.includes("'project-cover'") && source.includes('api.cloudinary.com/v1_1/'),
+  'important covers have a Cloudinary-only route',
 );
 
 // ------------------------------------------------------------ whose folder ---
@@ -261,14 +257,12 @@ await db.exec('reset role;');
 const asset = await as(
   'me-1',
   `insert into public.media_assets (owner_uid, provider, kind, url, bytes, mime_type)
-   values ('me-1', 'supabase', 'image',
-           'https://project.supabase.co/storage/v1/object/public/media/me-1/a.jpg',
-           20480, 'image/jpeg')
+   values ('me-1', 'imgbb', 'image', 'https://i.ibb.co/example/post-image.jpg', 20480, 'image/jpeg')
    returning provider::text as provider, url`,
 );
 check(
-  asset.ok && asset.rows?.[0]?.provider === 'supabase',
-  'and the upload can be recorded as a supabase asset',
+  asset.ok && asset.rows?.[0]?.provider === 'imgbb',
+  'and the external upload is recorded as an ImgBB media-asset row, not a Storage object',
   asset.message ?? '',
 );
 

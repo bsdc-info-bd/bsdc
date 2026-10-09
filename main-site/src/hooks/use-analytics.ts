@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { reportFilename } from '@/lib/analytics/analytics-types';
 import type {
   GrowthPoint,
   ModerationPoint,
@@ -120,10 +121,7 @@ export function useReports(enabled: boolean): ReportsResult {
         const payload = await data.fetchSnapshotPayload(snapshot.id);
         if (payload === null) return;
         // The PDF writer is only loaded when somebody actually prints.
-        const [{ buildReportPdf, downloadPdf }, { reportFilename }] = await Promise.all([
-          import('@/lib/reports/report-builder'),
-          import('@/lib/analytics/analytics-types'),
-        ]);
+        const { buildReportPdf, downloadPdf } = await import('@/lib/reports/report-builder');
         downloadPdf(
           buildReportPdf(snapshot, payload),
           reportFilename(snapshot.kind, snapshot.periodFrom, snapshot.periodTo),

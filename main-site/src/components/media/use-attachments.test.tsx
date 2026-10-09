@@ -94,7 +94,7 @@ function result(url: string): UploadResult {
   return {
     url,
     thumbUrl: `${url}?thumb`,
-    provider: 'supabase',
+    provider: 'imgbb',
     kind: 'image',
     bytes: 4096,
     mimeType: 'image/png',
@@ -204,16 +204,22 @@ describe('attaching a picture', () => {
 
     expect(recordMediaAsset).toHaveBeenCalledTimes(1);
     expect(recordMediaAsset.mock.calls[0]?.[0]).toBe('me');
-    expect(uploadMedia.mock.calls[0]?.[1]).toMatchObject({ purpose: 'post-image', uid: 'me' });
+    expect(uploadMedia.mock.calls[0]?.[1]).toMatchObject({ purpose: 'post-image' });
   });
 
-  it('says so when the upload went through but the record did not', async () => {
+  it('retries a failed metadata write without uploading the same image twice', async () => {
     uploadMedia.mockResolvedValue(result('https://cdn.example/one.png'));
-    recordMediaAsset.mockResolvedValue(null);
+    recordMediaAsset.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: 'asset-1' });
     render(<Harness files={[picture()]} />);
     await userEvent.click(screen.getByRole('button', { name: 'add' }));
     await waitFor(() => expect(status()).toBe('failed'));
     expect(screen.getByText('media.errors.recordFailed')).toBeInTheDocument();
+
+    act(() => controller().retry(controller().attachments[0]!.id));
+    await waitFor(() => expect(status()).toBe('attached'));
+    expect(uploadMedia).toHaveBeenCalledTimes(1);
+    expect(recordMediaAsset).toHaveBeenCalledTimes(2);
+    expect(ready()).toBe('asset-1:');
   });
 
   it('uploads one at a time, and every one of them arrives', async () => {

@@ -86,6 +86,11 @@ export function groupPath(slug: string): string {
   return `/g/${slug}`;
 }
 
+/** Project permalink: /projects/slug. */
+export function projectPath(slug: string): string {
+  return `${ROUTES.projects}/${encodeURIComponent(slug.trim())}`;
+}
+
 /** Product permalink: /shop/slug. */
 export function productPath(slug: string): string {
   return `/shop/${slug}`;

@@ -6,6 +6,8 @@ import type {
   Gig,
   JobListing,
   Project,
+  ProjectDetail,
+  ProjectSort,
   Sketch,
   SketchLanguage,
   WorkMode,
@@ -124,20 +126,55 @@ export async function submitProposal(
 
 // ------------------------------- projects ------------------------------------
 
-export async function fetchProjects(viewerUid: string | null, limit = 40): Promise<Project[]> {
-  const { data, error } = await getSupabase()
-    .from('projects')
-    .select('*')
-    .order('stars_count', { ascending: false })
-    .limit(limit)
-    .returns<ProjectRow[]>();
+function safeExternalUrl(value: string): string {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.toString() : '';
+  } catch {
+    return '';
+  }
+}
+
+function toProject(row: ProjectRow, starred: boolean): Project {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    tagline: row.tagline,
+    description: row.description,
+    repoUrl: safeExternalUrl(row.repo_url),
+    demoUrl: safeExternalUrl(row.demo_url),
+    coverUrl: safeExternalUrl(row.cover_url),
+    tech: row.tech,
+    license: row.license,
+    lookingForContributors: row.looking_for_contributors,
+    ownerUid: row.owner_uid,
+    stars: row.stars_count,
+    starred,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export async function fetchProjects(
+  viewerUid: string | null,
+  limit = 40,
+  sort: ProjectSort = 'popular',
+): Promise<Project[]> {
+  let query = getSupabase().from('projects').select('*');
+  query =
+    sort === 'recent'
+      ? query.order('created_at', { ascending: false })
+      : query.order('stars_count', { ascending: false }).order('created_at', { ascending: false });
+
+  const { data, error } = await query.limit(limit).returns<ProjectRow[]>();
   if (error) throw toDataError(error);
 
   const rows = data ?? [];
   let starred = new Set<string>();
 
   if (viewerUid !== null && rows.length > 0) {
-    const { data: stars } = await getSupabase()
+    const { data: stars, error: starError } = await getSupabase()
       .from('project_stars')
       .select('project_id')
       .eq('uid', viewerUid)
@@ -145,24 +182,54 @@ export async function fetchProjects(viewerUid: string | null, limit = 40): Promi
         'project_id',
         rows.map((row) => row.id),
       );
+    if (starError) throw toDataError(starError);
     starred = new Set((stars ?? []).map((row) => row.project_id));
   }
 
-  return rows.map((row) => ({
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    tagline: row.tagline,
-    repoUrl: row.repo_url,
-    demoUrl: row.demo_url,
-    coverUrl: row.cover_url,
-    tech: row.tech,
-    license: row.license,
-    lookingForContributors: row.looking_for_contributors,
-    ownerUid: row.owner_uid,
-    stars: row.stars_count,
-    starred: starred.has(row.id),
-  }));
+  return rows.map((row) => toProject(row, starred.has(row.id)));
+}
+
+export async function fetchProjectBySlug(
+  slug: string,
+  viewerUid: string | null,
+): Promise<ProjectDetail | null> {
+  const { data: row, error } = await getSupabase()
+    .from('projects')
+    .select('*')
+    .eq('slug', slug.trim().toLowerCase())
+    .maybeSingle<ProjectRow>();
+  if (error) throw toDataError(error);
+  if (!row) return null;
+
+  const [ownerResult, starResult] = await Promise.all([
+    getSupabase()
+      .from('profiles')
+      .select('uid, username, display_name, avatar_url')
+      .eq('uid', row.owner_uid)
+      .maybeSingle(),
+    viewerUid === null
+      ? Promise.resolve({ data: null, error: null })
+      : getSupabase()
+          .from('project_stars')
+          .select('project_id')
+          .eq('project_id', row.id)
+          .eq('uid', viewerUid)
+          .maybeSingle(),
+  ]);
+  if (ownerResult.error) throw toDataError(ownerResult.error);
+  if (starResult.error) throw toDataError(starResult.error);
+
+  return {
+    ...toProject(row, starResult.data !== null),
+    owner: ownerResult.data
+      ? {
+          uid: ownerResult.data.uid,
+          username: ownerResult.data.username,
+          displayName: ownerResult.data.display_name,
+          avatarUrl: ownerResult.data.avatar_url,
+        }
+      : null,
+  };
 }
 
 export async function toggleProjectStar(projectId: string): Promise<boolean> {

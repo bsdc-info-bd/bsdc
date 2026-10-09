@@ -10,34 +10,34 @@ Nothing is counted twice. A page is not also counted as the component that
 renders it; an RPC is not also counted as the policy that guards it; a test
 is not a feature.
 
-### Core — 1203
+### Core — 1210
 
 | Counted surface | Features |
 | --- | ---: |
-| Member-facing pages | 43 |
+| Member-facing pages | 44 |
 | Member and public RPCs | 126 |
-| Interface components | 40 |
-| Hooks, stores and selectors | 74 |
-| Domain rules in the member site | 634 |
+| Interface components | 42 |
+| Hooks, stores and selectors | 75 |
+| Domain rules in the member site | 637 |
 | Edge endpoints | 15 |
 | Stored shapes | 106 |
 | Enumerated states | 55 |
 | Integrity triggers | 61 |
 | Plugin flags | 32 |
 | Android shell rules | 17 |
-| **Subtotal** | **1203** |
+| **Subtotal** | **1210** |
 
-### Administration — 236
+### Administration — 237
 
 | Counted surface | Features |
 | --- | ---: |
 | Admin pages | 6 |
 | Admin and analytics RPCs | 26 |
 | Admin console screens | 11 |
-| Access policies | 193 |
-| **Subtotal** | **236** |
+| Access policies | 194 |
+| **Subtotal** | **237** |
 
-### Staff and corporate — 368
+### Staff and corporate — 370
 
 | Counted surface | Features |
 | --- | ---: |
@@ -45,44 +45,10 @@ is not a feature.
 | Staff and moderation RPCs | 31 |
 | Console rules | 102 |
 | Shared kit rules and controls | 156 |
-| Database helper functions | 67 |
-| **Subtotal** | **368** |
+| Database helper functions | 69 |
+| **Subtotal** | **370** |
 
-**Total counted features: 1807**
+**Total counted features: 1817**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
-Translated interface strings per language: **1603** (recorded, not counted as features).
-
-## How to read these numbers
-
-**1,807 counted surfaces** is the implementation: distinct things that exist
-in the tree and can be pointed at. **1,016 registry codes** is the delivery
-record: the identifiers the twenty responses claimed, listed response by
-response in `docs/delivery-plan.md`. They are different units and they are
-deliberately reported separately — one surface frequently serves several
-registry lines (one `resolve_report` RPC answers the moderation queue, the
-audit trail and the member notification), and a few registry lines are
-served by several surfaces at once.
-
-**The translated strings are recorded, not counted.** 1,603 keys in each
-language is 3,206 pieces of written interface, and they matter — but a
-string is not a feature, and inflating a feature count with them would be
-exactly the kind of flattering arithmetic this platform refuses to do
-elsewhere.
-
-## Every feature is a plugin
-
-The registry is not a document; it is a table. `public.feature_flags` carries
-a label, a module, a dependency list and an audience for each entry, and
-`plugin_registry()` returns `blocked_by` so a console can explain why a
-switch is disabled rather than simply refusing to move. Turning a feature
-off turns off everything that depends on it, in one transaction, so the
-system is never half on.
-
-## Reproducing this
-
-```bash
-node scripts/count-registry.mjs              # the table above
-node scripts/count-registry.mjs --json       # the same, for a script
-node scripts/audit.mjs                       # the 107-point launch audit
-```
+Translated interface strings per language: **1643** (recorded, not counted as features).

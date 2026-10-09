@@ -14,7 +14,7 @@
  */
 import type { ExperienceLevel, JobType, WorkMode } from '@/lib/opportunities/opportunity-types';
 import type { EventMode, GroupPrivacy } from '@/lib/communities/community-types';
-import { groupPath, ROUTES } from '@/lib/site';
+import { groupPath, projectPath, ROUTES } from '@/lib/site';
 
 export type CreateKind = 'event' | 'job' | 'gig' | 'project' | 'group';
 
@@ -106,6 +106,8 @@ export interface GroupDraftInput {
   privacy: GroupPrivacy;
   language: 'bn' | 'en';
 }
+
+export type ProjectStep = 0 | 1 | 2 | 3;
 
 export interface CreateIssue {
   field: string;
@@ -354,6 +356,20 @@ export function validateProjectDraft(draft: ProjectDraftInput): CreateIssue[] {
   return issues;
 }
 
+/** Validate only the visible project step; step 3 checks the complete draft. */
+export function validateProjectDraftStep(
+  draft: ProjectDraftInput,
+  step: ProjectStep,
+): CreateIssue[] {
+  if (step === 3) return validateProjectDraft(draft);
+  const fields: Record<Exclude<ProjectStep, 3>, readonly string[]> = {
+    0: ['name', 'tagline', 'description'],
+    1: ['repoUrl', 'demoUrl', 'tech'],
+    2: [],
+  };
+  return validateProjectDraft(draft).filter((issue) => fields[step].includes(issue.field));
+}
+
 export function validateGroupDraft(draft: GroupDraftInput): CreateIssue[] {
   const issues: CreateIssue[] = [];
   const name = draft.name.trim();
@@ -394,9 +410,8 @@ export function validateCreateDraft(
 /**
  * Where a member lands after creating one.
  *
- * A group has a page of its own, so the handle takes them there. The other four
- * are listed, not published as pages: the member goes back to the list, where
- * what they just wrote is now the first thing anybody sees.
+ * Groups and projects have public permalinks, so those creators land on the
+ * page they just published. The other three go back to their directory.
  */
 export function createdPath(kind: CreateKind, slugOrId: string): string {
   switch (kind) {
@@ -409,6 +424,6 @@ export function createdPath(kind: CreateKind, slugOrId: string): string {
     case 'gig':
       return ROUTES.freelance;
     case 'project':
-      return ROUTES.projects;
+      return projectPath(slugOrId);
   }
 }

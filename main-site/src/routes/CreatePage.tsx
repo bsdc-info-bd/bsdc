@@ -1,4 +1,12 @@
-import { CalendarPlus, Briefcase, Hammer, FolderGit2, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarPlus,
+  Briefcase,
+  Hammer,
+  FolderGit2,
+  Users,
+} from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -6,6 +14,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { Seo } from '@/components/seo/Seo';
+import { ProjectWizard } from '@/components/projects/ProjectWizard';
 import {
   Alert,
   Button,
@@ -29,6 +38,8 @@ import {
   EMPTY_PROJECT,
   createdPath,
   validateCreateDraft,
+  validateProjectDraftStep,
+  type ProjectStep,
   type CreateIssue,
   type CreateKind,
   type EventDraftInput,
@@ -40,7 +51,15 @@ import {
 import { createListing } from '@/lib/create/create-repository';
 import { slugify } from '@/lib/content/text';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { assertUploadable, MediaError } from '@/lib/storage/upload';
+import type { UploadResult } from '@/lib/storage/upload';
 import { useAuthStore } from '@/store/auth-store';
+
+interface PreparedProjectCover {
+  file: File;
+  result: UploadResult;
+  mediaRecorded: boolean;
+}
 
 function isKind(value: string | null): value is CreateKind {
   return value !== null && (CREATE_KINDS as readonly string[]).includes(value);
@@ -71,8 +90,25 @@ export default function CreatePage() {
     ...EMPTY_GROUP,
     language: i18n.language === 'bn' ? 'bn' : 'en',
   });
+  const [projectStep, setProjectStep] = useState<ProjectStep>(0);
+  const [projectCoverFile, setProjectCoverFile] = useState<File | null>(null);
+  const [projectCoverPreviewUrl, setProjectCoverPreviewUrl] = useState('');
+  const [projectCoverProgress, setProjectCoverProgress] = useState<number | null>(null);
+  const [preparedProjectCover, setPreparedProjectCover] = useState<PreparedProjectCover | null>(
+    null,
+  );
   const [slugTouched, setSlugTouched] = useState(false);
   const [issues, setIssues] = useState<CreateIssue[]>([]);
+
+  useEffect(() => {
+    if (projectCoverFile === null) {
+      setProjectCoverPreviewUrl('');
+      return;
+    }
+    const previewUrl = URL.createObjectURL(projectCoverFile);
+    setProjectCoverPreviewUrl(previewUrl);
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [projectCoverFile]);
 
   const draft = useMemo(() => {
     switch (kind) {
@@ -105,16 +141,90 @@ export default function CreatePage() {
     setParams(search, { replace: true });
   }
 
+  function chooseProjectCover(file: File | null) {
+    if (file === null) {
+      setProjectCoverFile(null);
+      setPreparedProjectCover(null);
+      setProject((current) => ({ ...current, coverUrl: '' }));
+      return;
+    }
+
+    try {
+      const kind = assertUploadable(file);
+      if (kind !== 'image') throw new MediaError('media.errors.unsupported');
+      setProjectCoverFile(file);
+      setPreparedProjectCover(null);
+      setProject((current) => ({ ...current, coverUrl: '' }));
+    } catch (error) {
+      const key =
+        error instanceof Error && error.message.startsWith('media.')
+          ? error.message
+          : 'media.errors.failed';
+      toast.error(t(key));
+    }
+  }
+
+  function nextProjectStep() {
+    const found = validateProjectDraftStep(project, projectStep);
+    setIssues(found);
+    if (found.length > 0) {
+      toast.error(t(found[0]!.messageKey));
+      return;
+    }
+    setProjectStep((current) => Math.min(current + 1, 3) as ProjectStep);
+  }
+
   const mutation = useMutation({
     mutationKey: ['create-listing', kind, user?.uid ?? ''],
-    mutationFn: () => createListing(kind, user?.uid ?? '', draft),
+    mutationFn: async () => {
+      const ownerUid = user?.uid ?? '';
+      if (kind !== 'project' || projectCoverFile === null) {
+        return createListing(kind, ownerUid, draft);
+      }
+
+      // Upload once and retain the completed result if recording or the project
+      // insert needs retrying. A slow phone must not upload the same cover again
+      // just because the database briefly refused the row.
+      let prepared = preparedProjectCover?.file === projectCoverFile ? preparedProjectCover : null;
+      if (prepared === null) {
+        const { uploadMedia } = await import('@/lib/storage/upload');
+        const result = await uploadMedia(projectCoverFile, {
+          purpose: 'project-cover',
+          onProgress: setProjectCoverProgress,
+        });
+        prepared = { file: projectCoverFile, result, mediaRecorded: false };
+        setPreparedProjectCover(prepared);
+      }
+
+      if (!prepared.mediaRecorded) {
+        const { recordMediaAsset } = await import('@/lib/data/media-repository');
+        const row = await recordMediaAsset(ownerUid, prepared.result);
+        if (row === null) throw new Error('media.errors.recordFailed');
+        prepared = { ...prepared, mediaRecorded: true };
+        setPreparedProjectCover(prepared);
+      }
+
+      return createListing('project', ownerUid, {
+        ...project,
+        coverUrl: prepared.result.url,
+      });
+    },
     onSuccess: (slug) => {
       toast.success(t('create.created'));
+      setProjectCoverProgress(null);
+      setPreparedProjectCover(null);
+      setProjectCoverFile(null);
       if (slug.length > 0) navigate(createdPath(kind, slug));
     },
     onError: (error: unknown) => {
-      toast.error(t(dataErrorKey(error)));
+      setProjectCoverProgress(null);
+      const messageKey =
+        error instanceof Error && error.message.startsWith('media.')
+          ? error.message
+          : dataErrorKey(error);
+      toast.error(t(messageKey));
     },
+    onSettled: () => setProjectCoverProgress(null),
   });
 
   function submit() {
@@ -152,7 +262,18 @@ export default function CreatePage() {
     {
       id: 'project',
       label: t('create.tab.project'),
-      content: <ProjectForm value={project} onChange={setProject} errorFor={errorFor} />,
+      content: (
+        <ProjectWizard
+          value={project}
+          onChange={setProject}
+          step={projectStep}
+          coverFile={projectCoverFile}
+          coverPreviewUrl={projectCoverPreviewUrl}
+          coverUploadProgress={projectCoverProgress}
+          onCoverFileChange={(file) => void chooseProjectCover(file)}
+          errorFor={errorFor}
+        />
+      ),
     },
     {
       id: 'group',
@@ -204,15 +325,39 @@ export default function CreatePage() {
             <Icon aria-hidden className="size-4" />
             {t(`create.footnote.${kind}`)}
           </p>
-          <Button
-            type="button"
-            onClick={submit}
-            loading={mutation.isPending}
-            disabled={user === null}
-            iconStart={<Icon aria-hidden className="size-4" />}
-          >
-            {t(`create.submit.${kind}`)}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2 sm:ms-auto">
+            {kind === 'project' && projectStep > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={mutation.isPending}
+                iconStart={<ArrowLeft size={16} />}
+                onClick={() => setProjectStep((current) => Math.max(current - 1, 0) as ProjectStep)}
+              >
+                {t('create.projectSteps.previous')}
+              </Button>
+            ) : null}
+            {kind === 'project' && projectStep < 3 ? (
+              <Button
+                type="button"
+                onClick={nextProjectStep}
+                disabled={user === null || mutation.isPending}
+                iconEnd={<ArrowRight size={16} />}
+              >
+                {t('create.projectSteps.next')}
+              </Button>
+            ) : (
+              <Button
+                type="button"
+                onClick={submit}
+                loading={mutation.isPending}
+                disabled={user === null}
+                iconStart={<Icon aria-hidden className="size-4" />}
+              >
+                {t(`create.submit.${kind}`)}
+              </Button>
+            )}
+          </div>
         </div>
       </Card>
     </div>
@@ -525,83 +670,6 @@ function GigForm({ value, onChange, errorFor }: FormProps<GigDraftInput>) {
           value={value.skills}
           max={CREATE_LIMITS.skillsMax}
           onChange={(skills) => set({ skills })}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ProjectForm({ value, onChange, errorFor }: FormProps<ProjectDraftInput>) {
-  const { t } = useTranslation();
-  const set = (patch: Partial<ProjectDraftInput>) => onChange({ ...value, ...patch });
-
-  return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <TextField
-        label={t('create.fields.name')}
-        value={value.name}
-        maxLength={CREATE_LIMITS.projectNameMax}
-        error={errorFor('name')}
-        onChange={(event) => set({ name: event.target.value })}
-      />
-      <TextField
-        label={t('create.fields.tagline')}
-        value={value.tagline}
-        maxLength={CREATE_LIMITS.taglineMax}
-        error={errorFor('tagline')}
-        onChange={(event) => set({ tagline: event.target.value })}
-      />
-      <TextareaField
-        label={t('create.fields.description')}
-        value={value.description}
-        rows={6}
-        counterMax={CREATE_LIMITS.descriptionMax}
-        error={errorFor('description')}
-        onChange={(event) => set({ description: event.target.value })}
-        className="sm:col-span-2"
-      />
-      <TextField
-        label={t('create.fields.repoUrl')}
-        type="url"
-        value={value.repoUrl}
-        error={errorFor('repoUrl')}
-        onChange={(event) => set({ repoUrl: event.target.value })}
-      />
-      <TextField
-        label={t('create.fields.demoUrl')}
-        type="url"
-        value={value.demoUrl}
-        error={errorFor('demoUrl')}
-        onChange={(event) => set({ demoUrl: event.target.value })}
-      />
-      <TextField
-        label={t('create.fields.coverUrl')}
-        type="url"
-        value={value.coverUrl}
-        error={errorFor('coverUrl')}
-        onChange={(event) => set({ coverUrl: event.target.value })}
-      />
-      <TextField
-        label={t('create.fields.license')}
-        value={value.license}
-        hint={t('create.hints.license')}
-        onChange={(event) => set({ license: event.target.value })}
-      />
-      <div className="sm:col-span-2">
-        <TagInput
-          label={t('create.fields.tech')}
-          hint={t('create.hints.skills')}
-          value={value.tech}
-          max={CREATE_LIMITS.skillsMax}
-          onChange={(tech) => set({ tech })}
-        />
-      </div>
-      <div className="sm:col-span-2">
-        <Switch
-          checked={value.lookingForContributors}
-          onCheckedChange={(lookingForContributors) => set({ lookingForContributors })}
-          label={t('create.fields.lookingForContributors')}
-          description={t('create.hints.lookingForContributors')}
         />
       </div>
     </div>

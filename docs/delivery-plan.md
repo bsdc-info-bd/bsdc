@@ -109,10 +109,11 @@ working, wired-up features — never scaffolding for its own sake.
 - Realtime: `trackPresence()` with `onDisconnect`, visibility-aware away
   state, and `usePresence()` for watching another member — live on the
   profile page avatar.
-- Media pipeline: validation by MIME type and size, Cloudinary for avatars,
-  covers, documents and voice notes, imgbb for ordinary images, XHR progress
-  reporting, Cloudinary delivery transforms and a `media_assets` record for
-  every upload. Wired into settings as a working avatar uploader.
+- Media pipeline: validation by MIME type and size, ImgBB for ordinary post,
+  comment, chat and other non-cover images (base64 request body), Cloudinary for
+  avatars, profile/project covers, product images, documents and voice notes,
+  XHR progress, Cloudinary transforms and a `media_assets` metadata row for
+  every upload. Supabase Storage is not used for new bytes.
 - Plugin registry: `feature_flags` with audience resolution, built-in
   defaults when the database is unreachable, and the `useFeatureFlag` hook.
 - Social graph repository (follow, unfollow, block, unblock) ready for
@@ -616,7 +617,7 @@ X-020, X-021, V-020, U-022, Z-008.
 ## Deployment automation (added after Response 20)
 
 - `.github/workflows/database.yml` — builds the schema from nothing on a
-  throwaway `postgres:16`, applies all thirty-five migrations a second time
+  throwaway `postgres:16`, applies all sixty-three migrations a second time
   to prove idempotency, asserts in SQL that every table has row level
   security and a policy, that no `security definer` function has a mutable
   search path and that `anon` holds no table-level write, calls the

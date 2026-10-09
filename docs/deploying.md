@@ -72,7 +72,7 @@ nothing should.
 
 **`verify`** starts an empty `postgres:16` service container, creates the
 three roles Supabase provides and a bare Postgres does not (`anon`,
-`authenticated`, `service_role`), and applies all thirty-five migrations
+`authenticated`, `service_role`), and applies all sixty-three migrations
 **from nothing**. Then it applies them a second time, which is how the claim
 that they are idempotent stops being a claim. Then it asserts, against the
 live schema rather than against the text of the files:
@@ -293,9 +293,9 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `VITE_FB_APP_ID`                | Firebase web app id.                                                                                                  | Same panel.                                                                                                                                                               | `1:123456789012:web:0123456789abcdef012345`                                                                                                                                                                                                                                                                                  | same                                    |
 | `VITE_FB_DATABASE_URL`          | Realtime Database URL for `bsdc-bd`.                                                                                  | Firebase console → Realtime Database → the URL above the data tree.                                                                                                       | `https://bsdc-bd-default-rtdb.asia-southeast1.firebasedatabase.app` — region subdomain included, no trailing slash.                                                                                                                                                                                                          | same                                    |
 | `VITE_FB2_API_KEY` …            | The same five values for the **second** Firebase project, `bsdc-second`, which backs the thirteen corporate consoles. | Firebase console, `bsdc-second` project, same panels.                                                                                                                     | Same formats, `bsdc-second` everywhere `bsdc-bd` appears.                                                                                                                                                                                                                                                                    | `deploy.yml` (consoles)                 |
-| `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud the browser uploads avatars, covers, chat documents and voice notes to.                              | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
+| `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud for avatars, profile/project covers, product images, documents and voice notes. Supabase Storage is not on the upload path. | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
 | `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary **unsigned** upload preset the browser uses.                                                            | Cloudinary dashboard → Settings → Upload → Upload presets → Add preset → Signing mode **Unsigned**.                                                                       | The preset's name, e.g. `bsdc_unsigned`. It is public by design; the preset itself must cap size and formats.                                                                                                                                                                                                                 | `deploy.yml` (main-site)                |
-| `VITE_IMGBB_API_KEY`            | imgbb key for every ordinary member-uploaded image (post and comment images).                                          | api.imgbb.com → **Get API key**.                                                                                                                                          | 32-character alphanumeric key.                                                                                                                                                                                                                                                                                               | `deploy.yml` (main-site)                |
+| `VITE_IMGBB_API_KEY`            | ImgBB key for ordinary member images (posts, comments, chat and other non-cover images). **Public by design**: it is sent in the browser request URL, not an authorization secret. | api.imgbb.com → **Get API key**.                                                                                                                                          | 32-character alphanumeric key.                                                                                                                                                                                                                                                                                               | `deploy.yml` (main-site)                |
 | `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key. Optional: without it the browser never offers push.                                    | Firebase console → Project settings → Cloud Messaging → Web configuration → Web Push certificates.                                                                       | The key pair's public key, one line.                                                                                                                                                                                                                                                                                         | `deploy.yml` (main-site)                |
 | `VITE_ONESIGNAL_APP_ID`         | OneSignal app id, used only for manual admin broadcasts. Optional.                                                     | OneSignal dashboard → Settings → Keys & IDs.                                                                                                                              | UUID.                                                                                                                                                                                                                                                                                                                        | `deploy.yml` (main-site)                |
 | `ANDROID_GOOGLE_SERVICES_JSON`  | Firebase Android config. Required for push notifications and for any release build.                                   | Firebase console → Project settings → Your apps → Android app → download `google-services.json`.                                                                          | Either the file's text verbatim, or `base64 -w0 google-services.json`. The workflow accepts both.                                                                                                                                                                                                                            | `android.yml`                           |
@@ -434,7 +434,7 @@ reviewable in the pull request.
    provider so PostgREST accepts tokens from
    `https://securetoken.google.com/bsdc-bd`.
 2. **Migrations.** Set `SUPABASE_DB_URL`, then **Actions → Database → Run
-   workflow → production**. Thirty-five migrations, about a minute. Read the
+   workflow → production**. Sixty-three migrations, about a minute. Read the
    run summary: it prints the number of tables, policies, functions and
    enumerated types that now exist.
 3. **Pages projects.** Create the fourteen projects named in the table in
@@ -515,6 +515,24 @@ The production workflow ends by printing them where an operator actually looks:
 the run's step summary carries the ledger table and then a **What this database
 still owes** section — one bullet per open note, or "Nothing. Every migration did
 all of its work."
+
+#### Image uploads no longer use Supabase Storage
+
+The uploader now uses Supabase only for each upload's metadata row
+in `public.media_assets`; image and document bytes go to their intended external
+hosts. Post, comment, chat and other ordinary images go to ImgBB as base64 in the
+`image` form field. Avatars, profile/project covers and product images go to
+Cloudinary; documents and voice notes also go there. Routing is strict: if the
+required host is not configured, upload fails visibly instead of silently
+sending a cover to ImgBB or an ordinary post image to Cloudinary. Video uploads
+are intentionally rejected; previously stored video messages can still be read.
+Required build-time settings remain in §5.1.
+
+The storage notes and dashboard steps below are for older media rows whose
+`provider` is `supabase`. The new uploader never writes bytes there. If an old
+object is still present, completing the bucket/policy setup can make its old URL
+readable; if the object was never stored or is gone, the original file must be
+selected and attached again. SQL cannot recreate bytes that no longer exist.
 
 What a note means in practice:
 

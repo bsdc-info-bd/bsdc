@@ -1,7 +1,7 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type { PollOptionRow, PostRow, TagRow } from '@/lib/supabase/types';
-import type { PostDraft, PostKind, PostStatus, Visibility } from './content-types';
+import type { DraftMedia, PostDraft, PostKind, PostStatus, Visibility } from './content-types';
 import { extractMentions, normalizeTag, readingTimeMinutes, toExcerpt, uniqueSlug } from './text';
 
 /** A post joined with everything a page needs to render it in one round trip. */
@@ -96,6 +96,12 @@ export const POST_SELECT = `
   post_media (media_id, position, alt_text, media_assets (url, thumb_url, width, height))
 `;
 
+export function assertPostMediaLinked(media: readonly DraftMedia[]): void {
+  if (media.some((item) => item.url.trim().length === 0 || item.mediaId.trim().length === 0)) {
+    throw new Error('media.errors.recordFailed');
+  }
+}
+
 export function toPost(row: JoinedPostRow): Post {
   const author = row.profiles
     ? {
@@ -141,6 +147,9 @@ export function toPost(row: JoinedPostRow): Post {
         width: item.media_assets?.width ?? null,
         height: item.media_assets?.height ?? null,
       }))
+      // A deleted/unreadable metadata row must not become an empty src="" image
+      // (which makes the browser request the post page as if it were a photo).
+      .filter((item) => item.url.trim().length > 0)
       .sort((a, b) => a.position - b.position),
     poll: (row.poll_options ?? [])
       .map((option) => ({
@@ -334,6 +343,9 @@ export async function savePost(
   draft: PostDraft,
   status: Extract<PostStatus, 'draft' | 'published'>,
 ): Promise<SaveResult> {
+  // Fail before creating or updating the post. A UI preview is not an attached
+  // image until both its hosted URL and its media_assets foreign key exist.
+  assertPostMediaLinked(draft.media);
   const supabase = getSupabase();
   const body = draft.body.trim();
   const title = draft.title.trim();

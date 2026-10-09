@@ -9,8 +9,9 @@
  * *looks* idempotent — a policy created without dropping it first, a function
  * whose result shape changed, a publication member added twice — errors here.
  *
- * The files under test are the ones not yet in production: 0046, 0047, 0048,
- * 0049, 0050, 0051 and 0052, applied a second and a third time.
+ * The recent migration set, 0046 through 0063, is applied a second and a
+ * third time. Re-running the SEO replacements must keep their signatures and
+ * grants intact just as surely as the older content and policy migrations.
  */
 import { readFileSync } from 'node:fs';
 import { makeDb } from './lib.mjs';
@@ -34,6 +35,7 @@ const FILES = [
   '0060_push_reaches_a_closed_browser.sql',
   '0061_the_people_worth_following_next.sql',
   '0062_changing_a_handle_is_not_claiming_one.sql',
+  '0063_projects_have_a_home_to_be_found.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

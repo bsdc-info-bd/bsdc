@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isConfigured } from '@/lib/env';
 import { decodeImage, type EditState } from '@/lib/media/edit';
-import { assertUploadable, MediaError, type MediaPurpose } from '@/lib/storage/upload';
+import {
+  assertUploadable,
+  MediaError,
+  type MediaPurpose,
+  type UploadResult,
+} from '@/lib/storage/upload';
 
 export type AttachmentStatus = 'queued' | 'uploading' | 'attached' | 'failed';
 
@@ -25,6 +30,8 @@ export interface Attachment {
   height: number | null;
   /** Present once the upload is recorded — this is what `post_media` references. */
   mediaId: string;
+  /** A successful external upload reused if the metadata write is retried. */
+  uploadResult: UploadResult | null;
   url: string;
   thumbUrl: string;
 }
@@ -102,14 +109,21 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
     async (id: string) => {
       const item = listRef.current.find((entry) => entry.id === id);
       if (!item || item.file === null) return;
-      // Claimed before the first await, so the effect that picks the next
-      // upload cannot pick this one a second time.
-      running.current = true;
       if (uid === null) {
         patch(id, { status: 'failed', errorKey: 'media.errors.signInRequired', progress: 0 });
         return;
       }
+      // Post images must have a media_assets row before post_media can refer to
+      // them. Refuse before uploading bytes when the database is unavailable;
+      // an upload that cannot be linked must never look attached.
+      if (!isConfigured.supabase) {
+        patch(id, { status: 'failed', errorKey: 'media.errors.recordFailed', progress: 0 });
+        return;
+      }
 
+      // Claimed before the first await, so the effect that picks the next
+      // upload cannot pick this one a second time.
+      running.current = true;
       const controller = new AbortController();
       controllers.current.set(id, controller);
       patch(id, { status: 'uploading', progress: 0, errorKey: null });
@@ -120,25 +134,35 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
           import('@/lib/data/media-repository'),
         ]);
 
-        const result = await uploadMedia(item.file, {
-          purpose,
-          uid,
-          signal: controller.signal,
-          onProgress: (percent) => patch(id, { progress: Math.round(percent) }),
-        });
+        let result = item.uploadResult;
+        if (result === null) {
+          result = await uploadMedia(item.file, {
+            purpose,
+            signal: controller.signal,
+            onProgress: (percent) => patch(id, { progress: Math.round(percent) }),
+          });
+          // Keep the hosted object so a database hiccup retries only the row
+          // insert; retrying the whole operation would upload duplicate images.
+          patch(id, {
+            uploadResult: result,
+            url: result.url,
+            thumbUrl: result.thumbUrl.length > 0 ? result.thumbUrl : result.url,
+            width: result.width ?? item.width,
+            height: result.height ?? item.height,
+          });
+        }
 
         // `post_media` points at `media_assets`, so an upload that was never
         // recorded cannot be attached to anything — the row comes first.
-        const record = isConfigured.supabase ? await recordMediaAsset(uid, result) : null;
-        if (isConfigured.supabase && record === null) {
-          throw new MediaError('media.errors.recordFailed');
-        }
+        const record = await recordMediaAsset(uid, result);
+        if (record === null) throw new MediaError('media.errors.recordFailed');
 
         patch(id, {
           status: 'attached',
           progress: 100,
           errorKey: null,
-          mediaId: record?.id ?? '',
+          mediaId: record.id,
+          uploadResult: result,
           url: result.url,
           thumbUrl: result.thumbUrl.length > 0 ? result.thumbUrl : result.url,
           width: result.width ?? item.width,
@@ -205,6 +229,7 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
           width: null,
           height: null,
           mediaId: '',
+          uploadResult: null,
           url: '',
           thumbUrl: '',
         });
@@ -244,6 +269,7 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
           width: item.width ?? null,
           height: item.height ?? null,
           mediaId: item.mediaId,
+          uploadResult: null,
           url: item.url,
           thumbUrl: item.thumbUrl.length > 0 ? item.thumbUrl : item.url,
         }));
@@ -344,6 +370,7 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
             progress: 0,
             errorKey: null,
             mediaId: wasAttached ? entry.mediaId : '',
+            uploadResult: null,
             width: null,
             height: null,
           };

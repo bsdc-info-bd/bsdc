@@ -17,6 +17,7 @@ import {
   validateGroupDraft,
   validateJobDraft,
   validateProjectDraft,
+  validateProjectDraftStep,
 } from './create-types';
 
 const GOOD_EVENT = {
@@ -170,6 +171,14 @@ describe('a project', () => {
     // An empty link is fine: it means there is not one yet.
     expect(validateProjectDraft({ ...good, demoUrl: '' })).toEqual([]);
   });
+
+  it('validates only the visible step, but the final review checks everything', () => {
+    const invalidLinks = { ...good, name: 'P', demoUrl: 'not a URL' };
+    expect(fields(validateProjectDraftStep(invalidLinks, 0))).toEqual(['name']);
+    expect(fields(validateProjectDraftStep(invalidLinks, 1))).toEqual(['demoUrl']);
+    expect(validateProjectDraftStep(invalidLinks, 2)).toEqual([]);
+    expect(fields(validateProjectDraftStep(invalidLinks, 3))).toEqual(['name', 'demoUrl']);
+  });
 });
 
 describe('a group', () => {
@@ -207,7 +216,7 @@ describe('the shared helpers', () => {
     expect(createdPath('event', 'meetup')).toBe('/events');
     expect(createdPath('job', 'senior')).toBe('/jobs');
     expect(createdPath('gig', 'illustrate')).toBe('/freelance');
-    expect(createdPath('project', 'padma')).toBe('/projects');
+    expect(createdPath('project', 'padma')).toBe('/projects/padma');
   });
 
   it('reads a link the way the columns will', () => {

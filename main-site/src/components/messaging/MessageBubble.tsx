@@ -6,6 +6,7 @@ import {
   Pencil,
   Pin,
   Reply,
+  Smile,
   Star,
   Trash2,
 } from 'lucide-react';
@@ -206,7 +207,7 @@ export function MessageBubble({
                   setMenu(false);
                 }}
               >
-                <span aria-hidden="true">☺</span>
+                <Smile size={16} aria-hidden="true" />
               </Button>
               {picker ? (
                 <div className="absolute bottom-full z-20 mb-1 flex gap-1 rounded-full border border-line bg-surface p-1 shadow-lg">

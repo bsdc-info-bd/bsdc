@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/cn';
+import { MediaImage } from './MediaImage';
 import type { GalleryItem } from './MediaGallery';
 
 export interface LightboxProps {
@@ -158,8 +159,9 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
               className="absolute h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white"
             />
           ) : null}
-          <img
+          <MediaImage
             src={current.url}
+            fallbackSrc={current.thumbUrl}
             // The picture is the content here, so it is never left unnamed: an
             // empty alt would hide the only thing the dialog is showing.
             alt={

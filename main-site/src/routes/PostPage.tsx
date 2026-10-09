@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
+import { Check, Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -325,13 +325,16 @@ export default function PostPage() {
                       <button
                         type="button"
                         disabled={!user || vote.isPending}
+                        aria-pressed={chosen}
                         onClick={() => vote.mutate(option.id)}
                         className="fab-tap w-full rounded-xl border border-border px-3 py-2 text-start text-sm hover:bg-surface-2 disabled:opacity-70"
                       >
                         <span className="flex items-center justify-between gap-2">
                           <span className="fab-truncate">
                             {option.label}
-                            {chosen ? ' ✓' : ''}
+                            {chosen ? (
+                              <Check className="ms-1 inline-block" size={14} aria-hidden="true" />
+                            ) : null}
                           </span>
                           <span className="shrink-0 text-xs text-muted">
                             {formatNumber(share, language)}%

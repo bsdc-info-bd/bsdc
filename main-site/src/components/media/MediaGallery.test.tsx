@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MediaGallery, type GalleryItem } from './MediaGallery';
@@ -106,6 +106,17 @@ describe('the arrangement a card shows', () => {
     // The button carries the name, so the picture inside it is decorative to a
     // screen reader rather than an unlabelled thing it has to guess at.
     expect(screen.getByRole('button', { name: 'Pictures 1' })).toBeInTheDocument();
+  });
+
+  it('retries the original when a thumbnail fails, then names a final failure', () => {
+    render(<MediaGallery items={[item(0, 1000, 1000)]} label="Pictures" />);
+    const thumbnail = screen.getByRole('img');
+    fireEvent.error(thumbnail);
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn.example/0.jpg');
+
+    fireEvent.error(screen.getByRole('img'));
+    expect(screen.getByRole('img', { name: 'The first picture' }).tagName).toBe('SPAN');
+    expect(screen.getByText('media.gallery.imageUnavailable')).toBeInTheDocument();
   });
 
   it('renders nothing at all for a post with no pictures', () => {
