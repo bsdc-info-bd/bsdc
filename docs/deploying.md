@@ -330,11 +330,24 @@ again, which is the point.
 | `FB_CLIENT_EMAIL`          | the claims function                                | Service-account address used to call Identity Toolkit.                                       | `firebase-adminsdk-xxxxx@bsdc-bd.iam.gserviceaccount.com`, from the service-account JSON you generate in Firebase console → Project settings → Service accounts → Generate new private key.                             | no         |
 | `FB_PRIVATE_KEY`           | the claims function                                | RSA private key of that service account. Mints custom claims; treat it like a root password. | The `private_key` field of that JSON, including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`. Literal `\n` escapes are accepted and unescaped by the function, so pasting the JSON string as-is works. | yes        |
 | `BSDC_OWNER_UIDS`          | the claims function                                | Allowlist of uids permitted to change anybody's role.                                        | Comma-separated Firebase uids, no spaces: `abc123…,def456…`                                                                                                                                                             | no         |
+| `VITE_PUSH_VAPID_PUBLIC_KEY` | the build, and the service worker                | This site's own VAPID public key. Compiled into the bundle at build time, so it must be set **before** a deploy for push to be offered at all. | 87 characters of base64url, from `npm run push:keys`. Public by design: it is handed to every browser that subscribes. | no |
+| `PUSH_VAPID_PUBLIC_KEY`    | `functions/api/push/flush.ts`                      | The same key, as the `k=` half of the authorization header.                                  | Identical to the `VITE_` one.                                                                                                                                                                                           | no         |
+| `PUSH_VAPID_PRIVATE_KEY`   | the flush function                                 | Signs the VAPID token for every delivery. Never leaves Cloudflare.                           | 184 characters of base64url: a PKCS#8 DER P-256 private key, from `npm run push:keys`.                                                                                                                                  | yes        |
+| `PUSH_FLUSH_SECRET`        | the flush function, and whatever schedules it      | The bearer token that makes `/api/push/flush` a delivery run rather than a public endpoint. The database checks the same string. | 43 characters of base64url, from `npm run push:keys`. Also stored with the `INSERT` the script prints, into `bsdc.push_settings`.                                                                                        | yes        |
+| `PUSH_VAPID_SUBJECT`       | the flush function                                 | Contact address a push service can complain to.                                              | `mailto:rrc@bsdc.info.bd`. Optional; defaults to `mailto:admin@bsdc.info.bd`.                                                                                                                                            | no         |
 | `ANDROID_APP_ID`           | `/.well-known/assetlinks.json`                     | Android application id the site vouches for.                                                 | `bd.info.bsdc.app`                                                                                                                                                                                                      | no         |
 | `ANDROID_CERT_FINGERPRINT` | `/.well-known/assetlinks.json`                     | SHA-256 fingerprint of the signing certificate.                                              | Uppercase hex pairs separated by colons: `AB:CD:EF:…` (32 pairs). Copy it out of the Android release run summary.                                                                                                       | no         |
 
 `CF_PAGES_BRANCH` and `CF_PAGES_COMMIT_SHA` are injected by Cloudflare; the
 status endpoint reads them to report what is deployed. Do not set them.
+
+The five push variables come from one command — `cd main-site && npm run
+push:keys` — which prints them, the SQL that stores the secret where the database
+can check it, and the cron worker that has to be deployed for anything to be
+delivered. The whole path, and what each symptom means when it is not working, is
+in [push-runbook.md](./push-runbook.md). Push is the only feature here that
+degrades to nothing at all when its variables are missing: the site works, the
+settings card explains why there is no switch, and the flush answers `503`.
 
 ### 5.3 Local development
 

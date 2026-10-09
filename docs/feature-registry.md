@@ -10,52 +10,52 @@ Nothing is counted twice. A page is not also counted as the component that
 renders it; an RPC is not also counted as the policy that guards it; a test
 is not a feature.
 
-### Core — 939
+### Core — 1203
 
-| Counted surface                 | Features |
-| ------------------------------- | -------: |
-| Member-facing pages             |       41 |
-| Member and public RPCs          |      104 |
-| Interface components            |       28 |
-| Hooks, stores and selectors     |       64 |
-| Domain rules in the member site |      430 |
-| Edge endpoints                  |       10 |
-| Stored shapes                   |      101 |
-| Enumerated states               |       55 |
-| Integrity triggers              |       57 |
-| Plugin flags                    |       32 |
-| Android shell rules             |       17 |
-| **Subtotal**                    |  **939** |
+| Counted surface | Features |
+| --- | ---: |
+| Member-facing pages | 43 |
+| Member and public RPCs | 126 |
+| Interface components | 40 |
+| Hooks, stores and selectors | 74 |
+| Domain rules in the member site | 634 |
+| Edge endpoints | 15 |
+| Stored shapes | 106 |
+| Enumerated states | 55 |
+| Integrity triggers | 61 |
+| Plugin flags | 32 |
+| Android shell rules | 17 |
+| **Subtotal** | **1203** |
 
-### Administration — 228
+### Administration — 236
 
-| Counted surface          | Features |
-| ------------------------ | -------: |
-| Admin pages              |        6 |
-| Admin and analytics RPCs |       26 |
-| Admin console screens    |       11 |
-| Access policies          |      185 |
-| **Subtotal**             |  **228** |
+| Counted surface | Features |
+| --- | ---: |
+| Admin pages | 6 |
+| Admin and analytics RPCs | 26 |
+| Admin console screens | 11 |
+| Access policies | 193 |
+| **Subtotal** | **236** |
 
-### Staff and corporate — 363
+### Staff and corporate — 368
 
-| Counted surface               | Features |
-| ----------------------------- | -------: |
-| Staff console screens         |       12 |
-| Staff and moderation RPCs     |       31 |
-| Console rules                 |      102 |
-| Shared kit rules and controls |      156 |
-| Database helper functions     |       62 |
-| **Subtotal**                  |  **363** |
+| Counted surface | Features |
+| --- | ---: |
+| Staff console screens | 12 |
+| Staff and moderation RPCs | 31 |
+| Console rules | 102 |
+| Shared kit rules and controls | 156 |
+| Database helper functions | 67 |
+| **Subtotal** | **368** |
 
-**Total counted features: 1530**
+**Total counted features: 1807**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
-Translated interface strings per language: **1224** (recorded, not counted as features).
+Translated interface strings per language: **1603** (recorded, not counted as features).
 
 ## How to read these numbers
 
-**1,530 counted surfaces** is the implementation: distinct things that exist
+**1,807 counted surfaces** is the implementation: distinct things that exist
 in the tree and can be pointed at. **1,016 registry codes** is the delivery
 record: the identifiers the twenty responses claimed, listed response by
 response in `docs/delivery-plan.md`. They are different units and they are
@@ -64,8 +64,8 @@ registry lines (one `resolve_report` RPC answers the moderation queue, the
 audit trail and the member notification), and a few registry lines are
 served by several surfaces at once.
 
-**The translated strings are recorded, not counted.** 1,224 keys in each
-language is 2,448 pieces of written interface, and they matter — but a
+**The translated strings are recorded, not counted.** 1,603 keys in each
+language is 3,206 pieces of written interface, and they matter — but a
 string is not a feature, and inflating a feature count with them would be
 exactly the kind of flattering arithmetic this platform refuses to do
 elsewhere.
