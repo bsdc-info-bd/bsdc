@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { PushCard } from '@/components/notifications/PushCard';
+import { HandleCard } from '@/components/profile/HandleCard';
 import { LocationField } from '@/components/profile/LocationField';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -153,6 +154,8 @@ function AccountPanel() {
           </div>
         </div>
       </Card>
+
+      <HandleCard />
     </div>
   );
 }

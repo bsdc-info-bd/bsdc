@@ -9,6 +9,7 @@ const MESSAGE_MAP: Record<string, string> = {
   'profile/username-taken': 'auth.errors.usernameTaken',
   'profile/username-invalid': 'auth.validation.usernameInvalid',
   'profile/username-reserved': 'auth.validation.usernameReserved',
+  'profile/username-cooldown': 'handle.errors.cooldown',
   'profile/not-found': 'data.errors.notFound',
   'profile/missing': 'data.errors.profileMissing',
   'auth/required': 'data.errors.signInRequired',

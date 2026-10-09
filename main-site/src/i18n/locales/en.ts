@@ -621,6 +621,35 @@ export const en = {
         'The browser could not read it. Attach it as it is, or choose a different picture.',
     },
   },
+  handle: {
+    title: 'Your handle',
+    body: 'This is the address of your page: bsdc.info.bd/@yourhandle. Changing it leaves a permanent redirect behind, so every link, mention and bookmark you have already shared keeps working.',
+    current: 'Your handle is',
+    newLabel: 'New handle',
+    firstLabel: 'Choose a handle',
+    hint: 'Between 3 and 24 characters: letters, numbers and underscores. No underscore at either end.',
+    change: 'Change handle',
+    claim: 'Claim this handle',
+    changed: 'Your handle is now @{{handle}}.',
+    waitUntil: 'You can change your handle again on {{date}}',
+    waitBody:
+      'A handle is an address other people hold, so changing one waits {{days}} days. The old address keeps working in the meantime, and the handle you let go of becomes free for somebody else.',
+    none: {
+      title: 'You have no handle yet',
+      body: 'Claim one and your page gets an address other people can share.',
+    },
+    issues: {
+      empty: 'Type the handle you want.',
+      tooShort: 'A handle is at least 3 characters.',
+      tooLong: 'A handle is at most 24 characters.',
+      characters: 'Letters, numbers and underscores only.',
+      underscore: 'A handle cannot start or end with an underscore.',
+      same: 'That is the handle you already have.',
+    },
+    errors: {
+      cooldown: 'A handle can be changed once every thirty days. The date is written above.',
+    },
+  },
   location: {
     title: 'Where you are',
     hint: 'A city is enough. Press the pin to fill it in from this device: only about a kilometre of precision is ever sent, no coordinate is stored, and you can edit or clear what lands here.',

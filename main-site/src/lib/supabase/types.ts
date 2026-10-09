@@ -2202,6 +2202,7 @@ export type Database = {
       unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
+      next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };

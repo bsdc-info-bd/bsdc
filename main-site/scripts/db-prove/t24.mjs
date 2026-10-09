@@ -33,6 +33,7 @@ const FILES = [
   '0059_a_group_created_behind_the_rpc_is_a_group_nobody_owns.sql',
   '0060_push_reaches_a_closed_browser.sql',
   '0061_the_people_worth_following_next.sql',
+  '0062_changing_a_handle_is_not_claiming_one.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 
