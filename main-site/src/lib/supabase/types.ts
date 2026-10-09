@@ -604,6 +604,20 @@ export type PageRow = {
 
 export type PageFollowerRow = { page_id: string; uid: string; created_at: string };
 
+/** One row of `follow_suggestions()`: who to follow next, and why. */
+export type FollowSuggestionRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  followers_count: number;
+  mutual_count: number;
+  shared_skills: string[];
+  reason: 'mutual' | 'skills' | 'city' | 'active';
+};
+
 /** One row of `my_push_subscriptions()`: a device that asked to be woken. */
 export type PushSubscriptionRow = {
   endpoint: string;
@@ -2187,6 +2201,7 @@ export type Database = {
       };
       unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
+      follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };

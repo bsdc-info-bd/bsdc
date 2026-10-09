@@ -52,6 +52,9 @@ export function FollowButton({ uid, displayName, size = 'md' }: FollowButtonProp
       void queryClient.invalidateQueries({ queryKey: ['profile-stats', uid] });
       // A new follow changes the feed's ranking signal for this author.
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      // And it changes who is worth suggesting next: a friend of a friend is a
+      // different list once the friend is there.
+      void queryClient.invalidateQueries({ queryKey: ['follow-suggestions'] });
     },
     onError: (error) => {
       toast.error(t(dataErrorKey(error)));

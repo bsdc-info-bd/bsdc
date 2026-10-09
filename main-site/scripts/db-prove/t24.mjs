@@ -32,6 +32,7 @@ const FILES = [
   '0058_a_voice_note_is_not_a_document.sql',
   '0059_a_group_created_behind_the_rpc_is_a_group_nobody_owns.sql',
   '0060_push_reaches_a_closed_browser.sql',
+  '0061_the_people_worth_following_next.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

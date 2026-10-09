@@ -621,6 +621,17 @@ export const en = {
         'The browser could not read it. Attach it as it is, or choose a different picture.',
     },
   },
+  suggestions: {
+    title: 'Who to follow next',
+    body: 'Suggested from the graph you already have: friends of friends, a shared skill, the same city.',
+    dismiss: 'Not interested',
+    reasons: {
+      mutual: '{{people}} of the members you follow, follow them too',
+      skills: 'You both list {{skills}}',
+      city: 'Also in {{city}}',
+      active: 'Followed by {{people}} members here',
+    },
+  },
   push: {
     title: 'Push notifications',
     body: 'Wake this device when something happens, even with the browser closed.',

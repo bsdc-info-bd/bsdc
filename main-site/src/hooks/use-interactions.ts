@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 // The repository pulls in the Supabase client, so it is imported lazily:
 // the app bar renders on first paint and must not drag the SDK with it.
 const repository = () => import('@/lib/interactions/interaction-repository');
+const social = () => import('@/lib/data/follow-repository');
+import type { FollowSuggestion } from '@/lib/data/follow-repository';
 import {
   EMPTY_INTERACTION,
   type AppNotification,
@@ -186,4 +188,43 @@ export function useNotifications(): NotificationsResult {
       mutation.mutate();
     },
   };
+}
+
+export interface FollowSuggestionsResult {
+  suggestions: FollowSuggestion[];
+  isLoading: boolean;
+  isError: boolean;
+  /** Not interested. The suggestion goes away and does not come back. */
+  dismiss: (uid: string) => void;
+  dismissed: readonly string[];
+}
+
+/**
+ * Who to follow next.
+ *
+ * A few more are fetched than are shown so that dismissing one does not leave a
+ * hole, and the dismissal is local: the database does not keep a list of members
+ * somebody was not interested in, because that is a preference about a page, not
+ * a fact about anybody.
+ */
+export function useFollowSuggestions(limit = 6): FollowSuggestionsResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['follow-suggestions', uid, limit],
+    queryFn: async () => (await social()).fetchFollowSuggestions(limit + 6),
+    enabled: uid !== null,
+    staleTime: 5 * 60_000,
+  });
+
+  const dismiss = useCallback((target: string) => {
+    setDismissed((current) => (current.includes(target) ? current : [...current, target]));
+  }, []);
+
+  const suggestions = (data ?? [])
+    .filter((suggestion) => !dismissed.includes(suggestion.uid))
+    .slice(0, limit);
+
+  return { suggestions, isLoading, isError, dismiss, dismissed };
 }

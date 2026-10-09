@@ -27,7 +27,7 @@ const HARNESSES = [
   ['t21.mjs', 'the messenger: publication, replica identity, reactions, receipts, privacy'],
   ['t22.mjs', 'a profile row without a handle, and a picture that survives a sign-in'],
   ['t23.mjs', 'the post author as moderator, and the row they can read again'],
-  ['t24.mjs', '0046–0060 applied three times over: nothing doubles, nothing breaks'],
+  ['t24.mjs', '0046–0061 applied three times over: nothing doubles, nothing breaks'],
   ['t25.mjs', 'the new endpoints refuse anonymous callers and serve members'],
   ['t26.mjs', 'anonymous callers lose the routines that demand a member, and nobody else does'],
   ['t27.mjs', 'the first owner has a door, and nobody else walks through it'],
@@ -38,6 +38,7 @@ const HARNESSES = [
     'every directory has a door: a member can create an event, a job, a gig, a project, a group',
   ],
   ['t31.mjs', 'push reaches a closed browser, and only the people it should'],
+  ['t32.mjs', 'who to follow next, why, and who is never suggested'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
