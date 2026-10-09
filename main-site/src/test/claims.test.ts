@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   APP_ROLES,
+  bootstrapOwnerEmails,
+  bootstrapOwnerRole,
   buildClaims,
+  BOOTSTRAP_OWNER_EMAILS,
   credentialsFor,
   isAppRole,
   isStaffRole,
@@ -12,6 +15,7 @@ import {
   selfBootstrapRole,
   targetFromAudience,
   toClaimsRequest,
+  verifiedEmail,
   type ClaimsEnv,
 } from '../../functions/api/auth/claims-core';
 import { readClaims } from '@/lib/auth/session-claims';
@@ -214,5 +218,72 @@ describe('toClaimsRequest', () => {
     expect(toClaimsRequest({ uid: 'u1', role: 'superadmin' })).toBeNull();
     expect(toClaimsRequest('not-an-object')).toBeNull();
     expect(toClaimsRequest(null)).toBeNull();
+  });
+});
+
+describe('the first administrator, by verified address', () => {
+  const request = { uid: 'rrc-uid', role: 'owner' as const, vendor: false, staff: false };
+
+  it("names the platform's main administrator by default", () => {
+    expect(BOOTSTRAP_OWNER_EMAILS).toContain('rrc@bsdc.info.bd');
+    expect(bootstrapOwnerEmails(env)).toEqual([...BOOTSTRAP_OWNER_EMAILS]);
+  });
+
+  it('lets a configured list replace the built-in one', () => {
+    const configured = bootstrapOwnerEmails({
+      ...env,
+      BSDC_BOOTSTRAP_OWNER_EMAILS: ' Boss@Example.com ,second@bsdc.info.bd',
+    });
+    expect(configured).toEqual(['boss@example.com', 'second@bsdc.info.bd']);
+  });
+
+  it("mints owner for the caller's own uid when the token proves the address", () => {
+    const token = { sub: 'rrc-uid', email: 'rrc@bsdc.info.bd', email_verified: true };
+    expect(bootstrapOwnerRole(env, 'rrc-uid', token, request)).toBe('owner');
+  });
+
+  it('accepts a federated sign-in, whose token may not carry email_verified', () => {
+    const token = {
+      sub: 'rrc-uid',
+      email: 'RRC@bsdc.info.bd',
+      firebase: { sign_in_provider: 'google.com' },
+    };
+    expect(bootstrapOwnerRole(env, 'rrc-uid', token, request)).toBe('owner');
+  });
+
+  it('refuses an address nobody proved: signing up is not receiving mail', () => {
+    const token = {
+      sub: 'impostor',
+      email: 'rrc@bsdc.info.bd',
+      email_verified: false,
+      firebase: { sign_in_provider: 'password' },
+    };
+    expect(verifiedEmail(token)).toBeNull();
+    expect(bootstrapOwnerRole(env, 'impostor', token, request)).toBeNull();
+  });
+
+  it('refuses to elevate somebody else, whatever the address', () => {
+    const token = { sub: 'rrc-uid', email: 'rrc@bsdc.info.bd', email_verified: true };
+    expect(
+      bootstrapOwnerRole(env, 'rrc-uid', token, { ...request, uid: 'somebody-else' }),
+    ).toBeNull();
+  });
+
+  it('refuses an address that is not on the list', () => {
+    const token = { sub: 'member', email: 'member@bsdc.info.bd', email_verified: true };
+    expect(bootstrapOwnerRole(env, 'member', token, { ...request, uid: 'member' })).toBeNull();
+  });
+
+  it('grants admin as well as owner, and nothing below either', () => {
+    const token = { sub: 'rrc-uid', email: 'rrc@bsdc.info.bd', email_verified: true };
+    expect(bootstrapOwnerRole(env, 'rrc-uid', token, { ...request, role: 'admin' })).toBe('admin');
+    expect(bootstrapOwnerRole(env, 'rrc-uid', token, { ...request, role: 'moderator' })).toBeNull();
+  });
+
+  it('carries staff, because buildClaims derives it from the rank', () => {
+    const token = { sub: 'rrc-uid', email: 'rrc@bsdc.info.bd', email_verified: true };
+    const role = bootstrapOwnerRole(env, 'rrc-uid', token, request);
+    expect(role).not.toBeNull();
+    expect(buildClaims(role ?? 'member').staff).toBe(true);
   });
 });

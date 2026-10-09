@@ -26,6 +26,7 @@ const FILES = [
   '0052_a_moderator_is_not_a_stranger.sql',
   '0053_the_new_endpoints_stop_answering_strangers.sql',
   '0054_an_endpoint_that_demands_a_member_is_not_for_visitors.sql',
+  '0055_the_first_owner_has_nobody_to_ask.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

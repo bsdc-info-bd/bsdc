@@ -2309,6 +2309,12 @@ export type Database = {
         Returns: number;
       };
       set_user_role: { Args: { p_uid: string; p_role: DbRole }; Returns: DbRole };
+      /** Migration 0055: what the database decided about the caller. */
+      my_role: {
+        Args: Record<never, never>;
+        Returns: { role: DbRole; staff: boolean; bootstrap: boolean }[];
+      };
+      claim_bootstrap_role: { Args: Record<never, never>; Returns: DbRole };
       set_account_status: {
         Args: { p_uid: string; p_status: DbAccountStatus; p_reason?: string };
         Returns: DbAccountStatus;

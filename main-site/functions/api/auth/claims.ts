@@ -22,8 +22,12 @@
  *   FB2_PROJECT_ID / FB2_CLIENT_EMAIL / FB2_PRIVATE_KEY  the console project, bsdc-second
  *   BSDC_OWNER_UIDS    comma separated bsdc-bd uids allowed to mint member claims
  *   BSDC2_OWNER_UIDS   comma separated bsdc-second uids allowed to mint console claims
+ *   BSDC_BOOTSTRAP_OWNER_EMAILS  optional; replaces the built-in list of
+ *                      addresses that may mint an elevated claim for their own
+ *                      account, which is how the first owner gets in
  */
 import {
+  bootstrapOwnerRole,
   buildClaims,
   credentialsFor,
   ownersFor,
@@ -212,10 +216,16 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
 
   const isOwner = ownersFor(env, target).includes(callerUid);
   const selfRole = selfBootstrapRole(callerUid, tokenClaims, input);
+  const birthRole = bootstrapOwnerRole(env, callerUid, tokenClaims, input);
   let claims: ReturnType<typeof buildClaims>;
   if (isOwner) {
     // Owners may assign the requested application role.
     claims = buildClaims(input.role, input.vendor, input.staff);
+  } else if (birthRole !== null) {
+    // An administrator named by their verified address, for their own account
+    // only. This is the branch that opens a fresh deployment, where no uid
+    // list could have been arranged yet; privilege flags still follow the role.
+    claims = buildClaims(birthRole);
   } else {
     // Everybody else reaches only the self-bootstrap branch, which derives
     // the exact same role from their Firebase-signed token and discards

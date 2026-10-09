@@ -13,6 +13,11 @@
  *   staff     — true for moderator and above; read by `bsdc.is_staff()`.
  *   vendor    — true for marketplace vendors; read where selling is allowed.
  *
+ * A third path exists for the first administrator of a deployment, whose
+ * address is verified by Firebase and listed in `BOOTSTRAP_OWNER_EMAILS`: they
+ * may mint an elevated claim for their own account, because on a fresh
+ * deployment there is no owner uid to list them by.
+ *
  * Two Firebase projects mint claims here: `bsdc-bd` (members and the Android
  * app) and `bsdc-second` (the thirteen consoles). They stay separate on
  * purpose, so each has its own service account and owner allowlist — an owner
@@ -59,7 +64,31 @@ export interface ClaimsEnv {
   FB2_PRIVATE_KEY?: string;
   BSDC_OWNER_UIDS?: string;
   BSDC2_OWNER_UIDS?: string;
+  /** Comma separated addresses; replaces the built-in bootstrap list. */
+  BSDC_BOOTSTRAP_OWNER_EMAILS?: string;
 }
+
+/**
+ * The platform's first administrators, by the address Firebase has verified.
+ *
+ * `BSDC_OWNER_UIDS` names uids, and a uid is only knowable after the account
+ * exists — so on a fresh deployment there is nobody who can mint an elevated
+ * claim for anybody, and the consoles have no door. These addresses break that
+ * loop: they are checked against the *signed* token, never against a request
+ * body, and the database carries the same list in `bsdc.bootstrap_admins`
+ * (migration 0055) so the two agree.
+ */
+export const BOOTSTRAP_OWNER_EMAILS: readonly string[] = ['rrc@bsdc.info.bd'];
+
+/** Providers that verify the address themselves, so the token may not say so. */
+const FEDERATED_PROVIDERS: readonly string[] = [
+  'google.com',
+  'github.com',
+  'yahoo.com',
+  'apple.com',
+  'twitter.com',
+  'facebook.com',
+];
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === 'string' && (APP_ROLES as readonly string[]).includes(value);
@@ -151,6 +180,61 @@ export function selfBootstrapRole(
   if (input.uid !== callerUid || input.vendor || input.staff) return null;
   const role = signedAppRole(tokenClaims);
   return input.role === role ? role : null;
+}
+
+/** The bootstrap list in force: configured addresses, else the built-in ones. */
+export function bootstrapOwnerEmails(env: ClaimsEnv): string[] {
+  const configured = (env.BSDC_BOOTSTRAP_OWNER_EMAILS ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+  return configured.length > 0 ? configured : [...BOOTSTRAP_OWNER_EMAILS];
+}
+
+/**
+ * The address this token proves, or null when it proves none.
+ *
+ * `email` and `email_verified` are Firebase-signed claims, so a browser cannot
+ * pick them. A federated sign-in verifies the address at the provider instead,
+ * and those tokens do not always carry `email_verified`; refusing them would
+ * lock out an administrator who signed in with Google.
+ */
+export function verifiedEmail(tokenClaims: Record<string, unknown>): string | null {
+  const raw = tokenClaims['email'];
+  const email = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+  if (email.length === 0) return null;
+
+  const flag = tokenClaims['email_verified'];
+  if (flag === true || flag === 'true') return email;
+
+  const firebase = tokenClaims['firebase'];
+  const provider =
+    typeof firebase === 'object' && firebase !== null
+      ? (firebase as { sign_in_provider?: unknown })['sign_in_provider']
+      : undefined;
+  return typeof provider === 'string' && FEDERATED_PROVIDERS.includes(provider) ? email : null;
+}
+
+/**
+ * The rank an administrator-by-birth may mint for their own account.
+ *
+ * Nothing but the caller's own uid is accepted, the address must be one the
+ * token proves, and the requested role must be an elevated one from the list —
+ * a browser cannot ask this path for a uid it does not own, cannot widen the
+ * role past what the list grants, and cannot smuggle `vendor`/`staff` flags
+ * through it (both follow the role inside `buildClaims`).
+ */
+export function bootstrapOwnerRole(
+  env: ClaimsEnv,
+  callerUid: string,
+  tokenClaims: Record<string, unknown>,
+  input: ClaimsRequest,
+): AppRole | null {
+  if (input.uid !== callerUid || callerUid.length === 0) return null;
+  const email = verifiedEmail(tokenClaims);
+  if (email === null) return null;
+  if (!bootstrapOwnerEmails(env).includes(email)) return null;
+  return input.role === 'owner' || input.role === 'admin' ? input.role : null;
 }
 
 /** Validates a parsed JSON body into a claims request, or null when invalid. */

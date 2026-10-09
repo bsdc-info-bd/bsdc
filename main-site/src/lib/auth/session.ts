@@ -2,6 +2,7 @@ import { getRedirectResult, onAuthStateChanged, onIdTokenChanged, type User } fr
 import { getFirebaseAuth } from '@/lib/firebase';
 import { bootstrapDisplayName, ensureProfile, fetchProfile } from '@/lib/profile/profile-service';
 import { ensureDataAccess } from '@/lib/auth/data-access';
+import { syncRoleWithDatabase } from '@/lib/auth/db-role';
 import { authErrorKey } from '@/lib/auth/errors';
 import { readClaims } from '@/lib/auth/session-claims';
 import { DEFAULT_CLAIMS, type SessionClaims } from '@/store/auth-store';
@@ -73,12 +74,21 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
       .then(async (token) => {
         if (!isCurrent()) return null;
         readyUser = user;
-        handlers.onSession(user, readClaims(token.claims));
-        return loadOrBootstrapProfile(user);
+        const tokenClaims = readClaims(token.claims);
+        handlers.onSession(user, tokenClaims);
+        const profile = await loadOrBootstrapProfile(user);
+        if (!isCurrent()) return { profile, claims: tokenClaims };
+        // The database is the authority on rank: it is what the server
+        // enforces, and a token can predate a promotion — or, for the first
+        // administrator of a deployment, name a rank the token was never
+        // minted with. Adopt its answer and repair both sides.
+        const claims = await syncRoleWithDatabase(user, tokenClaims);
+        if (isCurrent() && claims !== tokenClaims) handlers.onSession(user, claims);
+        return { profile, claims };
       })
-      .then((profile) => {
-        if (!isCurrent()) return;
-        handlers.onProfile(profile);
+      .then((result) => {
+        if (!isCurrent() || result === null) return;
+        handlers.onProfile(result.profile);
         handlers.onProfileSettled();
       })
       .catch(() => {
