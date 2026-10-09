@@ -1,7 +1,7 @@
 # gitleaks configuration
 #
-# The default rule set, plus the three places in this repository where the
-# *shape* of a credential is written down on purpose:
+# The default rule set, plus the places in this repository where the *shape*
+# of a credential is written down on purpose:
 #
 #   - `main-site/functions/api/auth/claims.ts` parses a PEM private key, so
 #     it contains the literal header and footer lines of one;
@@ -11,10 +11,14 @@
 #     referencing line as if they were literal keys. The file holds no key
 #     material and must never be given any;
 #   - `docs/deploying.md` tells an operator what each secret has to look
-#     like, including that a service-account key begins with that header.
+#     like, including that a service-account key begins with that header;
+#   - `main-site/src/lib/push/support.test.ts` contains a synthetic public
+#     VAPID value for a parser test (no private key or live subscription);
+#   - `main-site/scripts/db-prove/t31.mjs` uses a local-only sentinel flush
+#     secret in an in-process database proof, never for a real delivery.
 #
-# None holds key material. Everything else is scanned normally, and the
-# scan runs over the whole history rather than the working tree.
+# None holds production key material. Everything else is scanned normally, and
+# the scan runs over the whole history rather than the working tree.
 #
 # Note: `paths` entries are regular expressions inside TOML literal strings,
 # so a literal dot is written `\.` — a double backslash would compile to a
@@ -24,9 +28,11 @@
 useDefault = true
 
 [allowlist]
-description = "PEM headers parsed or documented, and env-var names read as keys — never key material"
+description = "PEM headers and env-var names documented in code, plus synthetic push-test fixtures; never production key material"
 paths = [
   '''main-site/functions/api/auth/claims\.ts''',
   '''main-site/functions/api/auth/claims-core\.ts''',
   '''docs/deploying\.md''',
+  '''main-site/src/lib/push/support\.test\.ts''',
+  '''main-site/scripts/db-prove/t31\.mjs''',
 ]
