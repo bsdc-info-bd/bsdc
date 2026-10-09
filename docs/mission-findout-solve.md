@@ -335,6 +335,8 @@ Recorded so that the next round does not mistake an absence for an oversight.
 | `7a1c721` | 4.0 — who to follow next (`0061`) |
 | `fa4cc82` | 3.5 — where you are, asked for once and kept as words |
 | `2e7f123` | 3.5 — changing a handle (`0062`) |
+| `ce01960` | the record of the round — this document, the registry, the push variables |
+| `9ae98ae` | 6 — a migration that meets a schema it does not own (`0056`, `--check`, `t34`) |
 
 Earlier in the same pull request, and already described in their own documents:
 `docs/messenger.md` for the messenger's hundred counted features,
@@ -342,3 +344,98 @@ Earlier in the same pull request, and already described in their own documents:
 deployment, and `docs/feature-registry.md` for the count — **1,807 counted
 surfaces** at the end of this round, regenerated with
 `node scripts/count-registry.mjs --markdown`.
+
+---
+
+## 6. The round after: "Database apply to production failed, I have manually did it."
+
+The report, in full:
+
+```
+ERROR:  permission denied for schema storage
+LINE 1: create table if not exists storage.buckets (
+```
+
+from `scripts/db-push.mjs`, at line 73 of
+`supabase/migrations/0056_a_picture_needs_somewhere_to_live.sql`, in the
+`database.yml` workflow.
+
+### What it actually was
+
+Not a bug in the SQL, and not a bug in the runner. A wrong assumption about
+**who is applying it**.
+
+`storage` is the only schema in this project that this platform does not own. It
+belongs to `supabase_storage_admin`; `postgres` — the role the workflow connects
+as, over the transaction pooler — has `USAGE` on it and no `CREATE`. Postgres
+checks the right to create in a namespace *before* it honours `IF NOT EXISTS`, so
+`create table if not exists storage.buckets` fails on a production project even
+though the table has been there since the project was created. The same is true
+of the grants, of `alter table … enable row level security`, and of all five
+`create policy` statements: every one of them wants ownership of a table this
+role does not own.
+
+The runner applies one file in one transaction, which is why the failure was at
+least honest: `0056` rolled back whole, nothing was left half-built, and the
+ledger recorded nothing. The cost was that **every migration after it — `0057`
+through `0062`, six of them — never ran**, and the operator had to apply
+seventeen files by hand.
+
+### What changed
+
+`9ae98ae`, and it is a change of policy rather than a patch:
+
+* **`0056` attempts its storage work instead of asserting it.** The schema and
+  tables are created where the role has the right (pglite under `db:prove`, a
+  local `supabase start`) and left alone where Storage already owns them
+  (production). The bucket insert and each of the five policies are tried one at
+  a time, so a role refused on the first is not refused on all five.
+* **What it was refused is written down, twice.** As a `WARNING` in the deploy
+  log at the moment it happens, and as a row in `bsdc.deployment_notes` — one row
+  per debt, in the database, where it outlives the log. A note resolves itself
+  the first run that manages the work, so the table says what is owed *now*.
+* **The runner reads it back.** `scripts/db-push.mjs` prints every open note at
+  the end of a run, and `--check` answers the harder question — a database that
+  was changed by hand writes nothing down, so `--check` reads the catalog
+  directly: which migrations are unapplied, whether the bucket named `media`
+  exists and is public, whether all five policies are on `storage.objects`,
+  whether row level security is on. It changes nothing. The storage questions
+  live in `scripts/db-health.mjs`, so production is asked them through `psql` and
+  pglite is asked the very same ones by the harness.
+* **`t34` proves it against production's shape, not against a friendly one.** It
+  builds a database where `storage` is owned by another role, its tables already
+  exist, row level security is already on, and the applying role has rights over
+  everything this platform created and none over Storage. The file applies. The
+  enum value it came to add is added. The five policies and the bucket are
+  refused, and both refusals are in `bsdc.deployment_notes`. Nothing is written
+  into a schema the role does not own. Then the same file runs again under a role
+  that has the rights: all five policies appear, the bucket appears, and every
+  note resolves. 20 checks.
+* **`docs/deploying.md` §8 carries the remedy** — what each note means, where
+  each missing piece goes in the dashboard, the five policies as the SQL editor
+  will take them (the editor runs as a role that owns the table, which is why it
+  works there and not in the workflow), and a four-row query that reports the
+  whole storage setup in one paste.
+
+### The rule this leaves behind
+
+> **Never emit bare DDL against a schema this platform does not own.**
+> `public` and `bsdc` are ours. `storage`, `auth`, `extensions`, `realtime`,
+> `graphql` are not. Anything aimed at them goes in a `do` block, gated on
+> `to_regclass(...)` and `has_schema_privilege(current_user, …, 'CREATE')`, with
+> an `exception` arm that records the refusal instead of failing the run.
+> `grep -rn "storage\." supabase/migrations/*.sql` should return only `0056`,
+> and only inside such a block.
+
+### What the operator does now
+
+1. Re-run the `database.yml` workflow. Every migration is idempotent — `t24`
+   applies `0046`–`0062` three times over — so files already applied by hand are
+   simply applied again, and the ledger catches up.
+2. Read the end of the log. If it prints open `deployment_notes`, each line says
+   what is missing and `docs/deploying.md` says where to put it. If it prints
+   nothing, nothing is owed.
+3. If the migrations were applied by hand and there is therefore no note to read,
+   run `node scripts/db-push.mjs --check`, or paste the four-row query from
+   `docs/deploying.md` into the SQL editor. Four `ok` rows and a `5 of 5`, and
+   uploads have somewhere to live.
