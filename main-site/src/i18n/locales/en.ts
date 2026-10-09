@@ -621,6 +621,49 @@ export const en = {
         'The browser could not read it. Attach it as it is, or choose a different picture.',
     },
   },
+  push: {
+    title: 'Push notifications',
+    body: 'Wake this device when something happens, even with the browser closed.',
+    ready: 'This browser can be woken.',
+    turnedOn: 'Push is on. A notification will reach this device.',
+    turnedOff: 'Push is off on every device you are signed in on.',
+    deviceRemoved: 'That device will not be woken again.',
+    switch: {
+      label: 'Wake this device',
+      on: 'On',
+      off: 'Off — nothing is sent to any device',
+    },
+    prompt: {
+      title: 'Get it even when the site is closed',
+      body: 'A reply, a message, somebody following you: it can reach this phone or laptop without you opening the site first.',
+      accept: 'Turn on push',
+      decline: 'Not now',
+    },
+    blocked: {
+      body: 'This is not a setting anybody can change here. The reason is written above.',
+      insecure:
+        'Push needs a secure connection. Open the site over https:// and the switch will work.',
+      noWorker: 'This browser has no service worker, so it cannot be woken from the outside.',
+      noPush:
+        'This browser has no push manager. Chrome, Edge, Firefox and Safari on a recent system all do.',
+      noNotification: 'This browser cannot show notifications at all.',
+      unconfigured:
+        'This deployment has no push key yet. Run `npm run push:keys`, set VITE_PUSH_VAPID_PUBLIC_KEY, and redeploy.',
+    },
+    denied: {
+      body: 'The permission was refused in the browser, and only the browser can take that back: open the site settings for bsdc.info.bd, allow notifications, and come back.',
+    },
+    devices: {
+      title: 'Devices that will be woken',
+      unknown: 'A device this browser did not name',
+      remove: 'Stop waking this device',
+    },
+    errors: {
+      permissionDenied: 'The browser refused the permission, so there is nothing to send to.',
+      failed:
+        'This device could not be registered. Try again, or check the browser blocked nothing.',
+    },
+  },
   create: {
     title: 'Create something',
     subtitle:

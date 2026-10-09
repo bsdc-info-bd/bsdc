@@ -56,7 +56,11 @@ async function as(sub, sql) {
 
 /** Refused, and refused for the reason the form says it would be. */
 function refused(result, code, label) {
-  check(!result.ok && result.code === code, label, `${result.code ?? 'accepted'} ${result.message ?? ''}`);
+  check(
+    !result.ok && result.code === code,
+    label,
+    `${result.code ?? 'accepted'} ${result.message ?? ''}`,
+  );
 }
 
 // ------------------------------------------------------------- the calendar ---
@@ -72,7 +76,11 @@ const event = await as(
       '2027-03-04T18:00:00+06', '2027-03-04T21:00:00+06', 'Asia/Dhaka', null, '${ada}')
    returning id, slug, going_count`,
 );
-check(event.ok && typeof event.rows?.[0]?.id === 'string', 'a member puts an event on the calendar', event.code ?? event.message ?? '');
+check(
+  event.ok && typeof event.rows?.[0]?.id === 'string',
+  'a member puts an event on the calendar',
+  event.code ?? event.message ?? '',
+);
 const eventId = event.rows?.[0]?.id ?? '';
 check(event.rows?.[0]?.going_count === 0, 'and it starts with nobody counted as going yet');
 
@@ -140,7 +148,11 @@ const posted = await as(
       array['postgres','typescript'], '', 'open', '${ada}', null, now())
    returning id, applications_count`,
 );
-check(posted.ok && typeof posted.rows?.[0]?.id === 'string', 'a member posts a job', posted.code ?? posted.message ?? '');
+check(
+  posted.ok && typeof posted.rows?.[0]?.id === 'string',
+  'a member posts a job',
+  posted.code ?? posted.message ?? '',
+);
 const jobId = posted.rows?.[0]?.id ?? '';
 check(posted.rows?.[0]?.applications_count === 0, 'with nobody applied to it yet');
 
@@ -206,7 +218,11 @@ const gig = await as(
       40000, 60000, 'BDT', false, 45, array['illustration'], 'open', '${ada}', now())
    returning id, proposals_count`,
 );
-check(gig.ok && typeof gig.rows?.[0]?.id === 'string', 'a member posts a gig', gig.code ?? gig.message ?? '');
+check(
+  gig.ok && typeof gig.rows?.[0]?.id === 'string',
+  'a member posts a gig',
+  gig.code ?? gig.message ?? '',
+);
 const gigId = gig.rows?.[0]?.id ?? '';
 
 refused(
@@ -237,7 +253,9 @@ const proposal = await as(
 );
 check(
   proposal.ok && typeof proposal.rows?.[0]?.status === 'string',
-  'somebody can propose against it', proposal.code ?? proposal.message ?? '');
+  'somebody can propose against it',
+  proposal.code ?? proposal.message ?? '',
+);
 const proposals = await db.query(`select proposals_count from public.gigs where id = '${gigId}'`);
 check(proposals.rows[0]?.proposals_count === 1, 'and the gig counts the proposal');
 
@@ -255,7 +273,11 @@ const project = await as(
       'Apache-2.0', true, '${ada}')
    returning id, stars_count`,
 );
-check(project.ok && typeof project.rows?.[0]?.id === 'string', 'a member publishes a project', project.code ?? project.message ?? '');
+check(
+  project.ok && typeof project.rows?.[0]?.id === 'string',
+  'a member publishes a project',
+  project.code ?? project.message ?? '',
+);
 const projectId = project.rows?.[0]?.id ?? '';
 
 refused(
@@ -277,7 +299,9 @@ refused(
   'and so is an address the pattern will not take',
 );
 
-const starsBefore = await db.query(`select stars_count from public.projects where id = '${projectId}'`);
+const starsBefore = await db.query(
+  `select stars_count from public.projects where id = '${projectId}'`,
+);
 check(starsBefore.rows[0]?.stars_count === 0, 'a new project starts unstarred');
 
 // ------------------------------------------------------------------- groups ---
@@ -285,16 +309,29 @@ const created = await as(
   ada,
   `select public.create_group('sylhet-devs', 'Sylhet Devs', 'The group the meetup came out of.', 'public', 'en') as id`,
 );
-check(created.ok && typeof created.rows?.[0]?.id === 'string', 'a member creates a group through its only door', created.code ?? created.message ?? '');
+check(
+  created.ok && typeof created.rows?.[0]?.id === 'string',
+  'a member creates a group through its only door',
+  created.code ?? created.message ?? '',
+);
 const groupId = created.rows?.[0]?.id ?? '';
 
 const membership = await db.query(
   `select role from public.group_members where group_id = '${groupId}' and uid = '${ada}'`,
 );
-check(membership.rows[0]?.role === 'owner', 'and the RPC makes them its owner, which the table alone would not');
+check(
+  membership.rows[0]?.role === 'owner',
+  'and the RPC makes them its owner, which the table alone would not',
+);
 
-const directory = await as(rahim, `select count(*)::int as n from public.group_directory(p_limit := 40)`);
-check(directory.ok && directory.rows?.[0]?.n >= 1, 'the new group is in the directory other members read');
+const directory = await as(
+  rahim,
+  `select count(*)::int as n from public.group_directory(p_limit := 40)`,
+);
+check(
+  directory.ok && directory.rows?.[0]?.n >= 1,
+  'the new group is in the directory other members read',
+);
 
 // 0059 takes the grant away. A bare group row is a group with no owner and no
 // channel, and the routine that writes all three is a definer, so it did not
@@ -308,7 +345,12 @@ refused(
   'while a member cannot insert a group behind the RPC\u2019s back',
 );
 check(
-  (await as(ada, `select count(*)::int as n from public.group_members where group_id = '${groupId}'`)).rows?.[0]?.n === 1,
+  (
+    await as(
+      ada,
+      `select count(*)::int as n from public.group_members where group_id = '${groupId}'`,
+    )
+  ).rows?.[0]?.n === 1,
   'and the group the RPC made still has exactly one member: its owner',
 );
 
@@ -319,7 +361,11 @@ const channel = await as(
   `insert into public.channels (group_id, slug, name, "position")
      values ('${groupId}', 'announcements', 'announcements', 1) returning slug`,
 );
-check(channel.ok, 'and its owner can still add a channel to it', channel.code ?? channel.message ?? '');
+check(
+  channel.ok,
+  'and its owner can still add a channel to it',
+  channel.code ?? channel.message ?? '',
+);
 
 // ------------------------------------------------------- a group's own event ---
 const groupEvent = await as(
@@ -329,7 +375,11 @@ const groupEvent = await as(
       '2027-04-04T18:00:00+06', '2027-04-04T20:00:00+06', 'Asia/Dhaka', null, '${ada}', '${groupId}')
    returning id`,
 );
-check(groupEvent.ok, 'an event can belong to the group that came out of it', groupEvent.code ?? groupEvent.message ?? '');
+check(
+  groupEvent.ok,
+  'an event can belong to the group that came out of it',
+  groupEvent.code ?? groupEvent.message ?? '',
+);
 refused(
   await as(
     rahim,

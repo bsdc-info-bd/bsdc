@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
+import { PushCard } from '@/components/notifications/PushCard';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -233,19 +234,25 @@ function NotificationsPanel() {
   ];
 
   return (
-    <Card>
-      <p className="mb-3 text-sm text-muted">{t('settings.notifications.description')}</p>
-      <div className="grid gap-3">
-        {rows.map((row) => (
-          <Switch
-            key={row.key}
-            label={row.label}
-            checked={prefs[row.key]}
-            onCheckedChange={(value) => void update(row.key, value)}
-          />
-        ))}
-      </div>
-    </Card>
+    <div className="grid gap-4">
+      {/* What the switches below decide is which notifications are written at
+          all. What this decides is whether a closed device is woken by them. */}
+      <PushCard />
+
+      <Card>
+        <p className="mb-3 text-sm text-muted">{t('settings.notifications.description')}</p>
+        <div className="grid gap-3">
+          {rows.map((row) => (
+            <Switch
+              key={row.key}
+              label={row.label}
+              checked={prefs[row.key]}
+              onCheckedChange={(value) => void update(row.key, value)}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
   );
 }
 

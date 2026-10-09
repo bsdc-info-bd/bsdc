@@ -12,18 +12,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeDb, MIGRATIONS_DIR } from './lib.mjs';
 
-const MIGRATION = join(
-  MIGRATIONS_DIR,
-  '0060_push_reaches_a_closed_browser.sql',
-);
+const MIGRATION = join(MIGRATIONS_DIR, '0060_push_reaches_a_closed_browser.sql');
 
 const ada = 'aaaaaaaa-1111-4111-8111-000000000001';
 const rahim = 'bbbbbbbb-2222-4222-8222-000000000002';
 
 const endpoint =
   'https://fcm.googleapis.com/fcm/send/eGfK3-0AdaDeviceTokenThatIsLongEnoughToBeReal';
-const rahimEndpoint =
-  'https://updates.push.services.mozilla.com/wpush/v2/gAAAAABrahimDevice';
+const rahimEndpoint = 'https://updates.push.services.mozilla.com/wpush/v2/gAAAAABrahimDevice';
 const secret = 'flush-secret-0123456789abcdefghijklmnopqrstuvwxyz';
 
 let pass = 0;
@@ -46,9 +42,8 @@ await db.exec(`
   insert into public.posts (author_uid, kind, slug, title, body, status, published_at, visibility)
     values ('${rahim}', 'post', 'a-river-level', 'A river level', 'b', 'published', now(), 'public');
 `);
-const postId = (
-  await db.query(`select id from public.posts where slug = 'a-river-level'`)
-).rows[0].id;
+const postId = (await db.query(`select id from public.posts where slug = 'a-river-level'`)).rows[0]
+  .id;
 
 async function as(sub, sql) {
   const payload =
@@ -100,9 +95,7 @@ refused(
 );
 
 // A secret that is too short to be a secret is treated as no secret at all.
-await db.exec(
-  `insert into bsdc.push_settings (name, value) values ('flush_secret', 'ten-chars')`,
-);
+await db.exec(`insert into bsdc.push_settings (name, value) values ('flush_secret', 'ten-chars')`);
 refused(
   await as(null, `select count(*)::int as n from public.push_pending('ten-chars', 50)`),
   '42501',
@@ -153,8 +146,11 @@ check(
   unregistered.code ?? unregistered.message ?? '',
 );
 check(
-  (await db.query(`select count(*)::int as n from public.push_subscriptions where endpoint = '${rahimEndpoint}'`))
-    .rows[0]?.n === 1,
+  (
+    await db.query(
+      `select count(*)::int as n from public.push_subscriptions where endpoint = '${rahimEndpoint}'`,
+    )
+  ).rows[0]?.n === 1,
   'and the other member\u2019s device is still there',
 );
 
@@ -193,7 +189,10 @@ check(
   'each row carrying the notification it is about',
 );
 
-const wrongSecret = await as(null, `select count(*)::int as n from public.push_pending('not-the-secret', 50)`);
+const wrongSecret = await as(
+  null,
+  `select count(*)::int as n from public.push_pending('not-the-secret', 50)`,
+);
 refused(wrongSecret, '42501', 'a caller with the wrong secret is refused outright');
 
 // ----------------------------------------------------------- the waking side ---
@@ -218,7 +217,10 @@ check(
   String(follow?.url),
 );
 
-const again = await as(null, `select count(*)::int as n from public.push_content('${endpoint}', 5)`);
+const again = await as(
+  null,
+  `select count(*)::int as n from public.push_content('${endpoint}', 5)`,
+);
 check(
   again.ok && again.rows?.[0]?.n === 0,
   'asking twice does not tell the same device the same thing twice',
@@ -247,12 +249,15 @@ check(
 const ids = pendingRows.map((row) => `'${row.notification_id}'`).join(',');
 const marked = await as(null, `select public.push_mark('${secret}', array[${ids}]::uuid[])`);
 check(
-    marked.ok && marked.rows?.[0]?.push_mark === pendingRows.length,
-    'the flush marks what it handed over',
-    JSON.stringify(marked.rows ?? marked.message),
-  );
+  marked.ok && marked.rows?.[0]?.push_mark === pendingRows.length,
+  'the flush marks what it handed over',
+  JSON.stringify(marked.rows ?? marked.message),
+);
 
-const afterMark = await as(null, `select count(*)::int as n from public.push_pending('${secret}', 50)`);
+const afterMark = await as(
+  null,
+  `select count(*)::int as n from public.push_pending('${secret}', 50)`,
+);
 check(
   afterMark.ok && afterMark.rows?.[0]?.n === 0,
   'and nothing waiting is handed over a second time',
@@ -260,11 +265,16 @@ check(
 );
 
 // --------------------------------------------------------------- a dead one ---
-await db.exec(`select bsdc.notify('${ada}', '${rahim}', 'mention', '${postId}', null, 'You were mentioned')`);
+await db.exec(
+  `select bsdc.notify('${ada}', '${rahim}', 'mention', '${postId}', null, 'You were mentioned')`,
+);
 const killed = await as(null, `select public.push_kill('${secret}', '${endpoint}')`);
 check(killed.ok, 'a device the push service no longer recognises is retired', killed.message ?? '');
 
-const afterKill = await as(null, `select count(*)::int as n from public.push_pending('${secret}', 50)`);
+const afterKill = await as(
+  null,
+  `select count(*)::int as n from public.push_pending('${secret}', 50)`,
+);
 check(
   afterKill.ok && afterKill.rows?.[0]?.n === 0,
   'and it is never woken again',
@@ -279,8 +289,11 @@ const revived = await as(
 );
 check(
   revived.ok &&
-    (await db.query(`select dead_at is null as live from public.push_subscriptions where endpoint = '${endpoint}'`))
-      .rows[0]?.live === true,
+    (
+      await db.query(
+        `select dead_at is null as live from public.push_subscriptions where endpoint = '${endpoint}'`,
+      )
+    ).rows[0]?.live === true,
   'and the same browser asking again comes back to life',
   revived.message ?? '',
 );
@@ -299,10 +312,7 @@ const memberRegister = await db.query(
   `select has_function_privilege('anon', 'public.register_push_subscription(text,text,text,text,text)', 'EXECUTE') as anon_exec,
           has_function_privilege('authenticated', 'public.push_pending(text,integer)', 'EXECUTE') as member_flush`,
 );
-check(
-  memberRegister.rows[0]?.anon_exec === false,
-  'a visitor cannot register a device',
-);
+check(memberRegister.rows[0]?.anon_exec === false, 'a visitor cannot register a device');
 check(
   memberRegister.rows[0]?.member_flush === true,
   'while the flush stays callable with the anonymous key the edge holds',

@@ -33,7 +33,10 @@ const HARNESSES = [
   ['t27.mjs', 'the first owner has a door, and nobody else walks through it'],
   ['t28.mjs', 'the storage bucket: whose folder it is, and who may take a picture down'],
   ['t29.mjs', 'a voice note has a kind, and an archive is a write a member can make'],
-  ['t30.mjs', 'every directory has a door: a member can create an event, a job, a gig, a project, a group'],
+  [
+    't30.mjs',
+    'every directory has a door: a member can create an event, a job, a gig, a project, a group',
+  ],
   ['t31.mjs', 'push reaches a closed browser, and only the people it should'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];

@@ -1,6 +1,7 @@
 import { BellOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { PushCard } from '@/components/notifications/PushCard';
 import { Seo } from '@/components/seo/Seo';
 import { Alert, Avatar, Button, EmptyState, PageSkeleton, SectionHeading } from '@/design-system';
 import { useNotifications } from '@/hooks/use-interactions';
@@ -34,6 +35,10 @@ export default function NotificationsPage() {
             ) : undefined
           }
         />
+
+        <div className="mt-4">
+          <PushCard variant="prompt" />
+        </div>
 
         {isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {isError ? <Alert tone="danger" title={t('notifications.failed')} /> : null}

@@ -604,6 +604,14 @@ export type PageRow = {
 
 export type PageFollowerRow = { page_id: string; uid: string; created_at: string };
 
+/** One row of `my_push_subscriptions()`: a device that asked to be woken. */
+export type PushSubscriptionRow = {
+  endpoint: string;
+  user_agent: string;
+  language: string;
+  created_at: string;
+};
+
 export type EventRow = {
   id: string;
   slug: string;
@@ -2165,6 +2173,20 @@ export type Database = {
     Views: Record<never, never>;
     Functions: {
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
+      // Web push (0060). The flush and the content endpoint are called from the
+      // edge, where the client is a plain fetch, so they are not listed here.
+      register_push_subscription: {
+        Args: {
+          p_endpoint: string;
+          p_p256dh?: string;
+          p_auth?: string;
+          p_user_agent?: string;
+          p_language?: string;
+        };
+        Returns: undefined;
+      };
+      unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
+      my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };

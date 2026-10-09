@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck:functions": "tsc -p functions/tsconfig.json",
-    "db:prove": "node scripts/db-prove/run.mjs"
+    "db:prove": "node scripts/db-prove/run.mjs",
+    "push:keys": "node scripts/vapid-keys.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -74,7 +75,12 @@
     "typescript": "5.6.2",
     "vite": "5.4.8",
     "vite-plugin-pwa": "0.20.5",
-    "vitest": "2.1.1"
+    "vitest": "2.1.1",
+    "workbox-core": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   },
   "engines": {
     "node": ">=20"
