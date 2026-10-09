@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { CommentThread } from '@/components/interactions/CommentThread';
+import { MediaGallery } from '@/components/media/MediaGallery';
+import { toGalleryItems } from '@/lib/media/gallery-items';
 import { ReactionBar } from '@/components/interactions/ReactionBar';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -303,18 +305,12 @@ export default function PostPage() {
           ) : null}
 
           {post.media.length > 0 ? (
-            <ul className="mt-5 grid gap-3 sm:grid-cols-2">
-              {post.media.map((item) => (
-                <li key={item.mediaId.length > 0 ? item.mediaId : item.url}>
-                  <img
-                    src={item.url}
-                    alt={item.altText}
-                    loading="lazy"
-                    className="w-full rounded-card object-cover"
-                  />
-                </li>
-              ))}
-            </ul>
+            <MediaGallery
+              items={toGalleryItems(post.media)}
+              label={t('media.gallery.postImages')}
+              priority
+              className="mt-5"
+            />
           ) : null}
 
           {post.poll.length > 0 ? (

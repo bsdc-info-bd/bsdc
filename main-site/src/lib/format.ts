@@ -25,6 +25,28 @@ export function formatTaka(value: number, language: Language): string {
   return amount;
 }
 
+/**
+ * A file size a member can act on.
+ *
+ * Upload limits are the one place a number of bytes has to be read quickly —
+ * "10 MB" answers whether the picture will go, "10485760" does not. Units are
+ * spelled out in Bangla as well, because a limit written in a language the
+ * member is not reading is not a limit.
+ */
+export function formatBytes(bytes: number, language: Language): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return language === 'bn' ? '০ বাইট' : '0 B';
+  }
+  const units =
+    language === 'bn' ? ['বাইট', 'কেবি', 'এমবি', 'জিবি', 'টিবি'] : ['B', 'KB', 'MB', 'GB', 'TB'];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exponent;
+  const formatted = new Intl.NumberFormat(language === 'bn' ? 'bn-BD' : 'en-US', {
+    maximumFractionDigits: exponent === 0 ? 0 : 1,
+  }).format(value);
+  return `${formatted} ${units[exponent]}`;
+}
+
 export function formatAbsoluteDate(date: Date, language: Language): string {
   return formatDate(date, 'd MMMM yyyy', { locale: language === 'bn' ? bnLocale : enUS });
 }

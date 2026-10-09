@@ -25,6 +25,13 @@ export interface PostMediaItem {
   thumbUrl: string;
   altText: string;
   position: number;
+  /**
+   * The size the upload measured, in pixels. Null when a picture came from a
+   * provider that was never asked. The feed layout is decided from these, so a
+   * post can be arranged before any of its pictures have downloaded.
+   */
+  width: number | null;
+  height: number | null;
 }
 
 export interface Post {
@@ -71,7 +78,12 @@ export interface JoinedPostRow extends PostRow {
         media_id: string;
         position: number;
         alt_text: string;
-        media_assets: { url: string; thumb_url: string } | null;
+        media_assets: {
+          url: string;
+          thumb_url: string;
+          width: number | null;
+          height: number | null;
+        } | null;
       }[]
     | null;
 }
@@ -81,7 +93,7 @@ export const POST_SELECT = `
   profiles:author_uid (uid, username, display_name, avatar_url),
   post_tags (tag_slug),
   poll_options (id, post_id, position, label, votes),
-  post_media (media_id, position, alt_text, media_assets (url, thumb_url))
+  post_media (media_id, position, alt_text, media_assets (url, thumb_url, width, height))
 `;
 
 export function toPost(row: JoinedPostRow): Post {
@@ -126,6 +138,8 @@ export function toPost(row: JoinedPostRow): Post {
         thumbUrl: item.media_assets?.thumb_url ?? '',
         altText: item.alt_text,
         position: item.position,
+        width: item.media_assets?.width ?? null,
+        height: item.media_assets?.height ?? null,
       }))
       .sort((a, b) => a.position - b.position),
     poll: (row.poll_options ?? [])

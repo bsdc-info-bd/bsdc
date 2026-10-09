@@ -12,7 +12,18 @@ export function loadLocalDraft(): PostDraft | null {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = storedDraftSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? { ...EMPTY_DRAFT, ...parsed.data } : null;
+    if (!parsed.success) return null;
+    const merged = { ...EMPTY_DRAFT, ...parsed.data };
+    // A draft saved before picture sizes were kept still opens; the layout
+    // falls back to a default shape rather than losing the member's writing.
+    return {
+      ...merged,
+      media: merged.media.map((item) => ({
+        ...item,
+        width: item.width ?? null,
+        height: item.height ?? null,
+      })),
+    } satisfies PostDraft;
   } catch {
     return null;
   }

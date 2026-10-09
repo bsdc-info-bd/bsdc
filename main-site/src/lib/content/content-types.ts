@@ -46,6 +46,9 @@ export interface DraftMedia {
   thumbUrl: string;
   mediaId: string;
   altText: string;
+  /** Measured pixels, so the composer can show the arrangement it will publish. */
+  width: number | null;
+  height: number | null;
 }
 
 export interface PostDraft {
@@ -81,7 +84,14 @@ export function draftFromPost(post: {
   code: string;
   codeLanguage: string;
   tags: string[];
-  media: { mediaId: string; url: string; thumbUrl: string; altText: string }[];
+  media: {
+    mediaId: string;
+    url: string;
+    thumbUrl: string;
+    altText: string;
+    width?: number | null;
+    height?: number | null;
+  }[];
   poll: { label: string }[];
   visibility: Visibility;
   language: 'bn' | 'en';
@@ -103,6 +113,8 @@ export function draftFromPost(post: {
       url: item.url,
       thumbUrl: item.thumbUrl,
       altText: item.altText,
+      width: item.width ?? null,
+      height: item.height ?? null,
     })),
     pollOptions: post.poll.length > 0 ? post.poll.map((option) => option.label) : ['', ''],
     visibility: post.visibility,
@@ -137,6 +149,10 @@ const mediaSchema = z.object({
   thumbUrl: z.string(),
   mediaId: z.string(),
   altText: z.string().max(280),
+  // Optional: a draft stored on this device before sizes were kept still has
+  // to open. A missing size costs a default shape, not the member's writing.
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
 });
 
 /** Shape check used when a locally stored draft is restored. */
