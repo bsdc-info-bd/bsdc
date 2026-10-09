@@ -511,6 +511,11 @@ security already on, and an applying role with no `CREATE` there — and proves 
 migration applies, does the work it is allowed, records the work it is not, and
 finishes the job on a later run by a role that may.
 
+The production workflow ends by printing them where an operator actually looks:
+the run's step summary carries the ledger table and then a **What this database
+still owes** section — one bullet per open note, or "Nothing. Every migration did
+all of its work."
+
 What a note means in practice:
 
 | Note | What is missing | Where to put it |
