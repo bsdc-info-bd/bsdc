@@ -31,6 +31,7 @@ const FILES = [
   '0057_a_promotion_in_the_panel_is_a_promotion_everywhere.sql',
   '0058_a_voice_note_is_not_a_document.sql',
   '0059_a_group_created_behind_the_rpc_is_a_group_nobody_owns.sql',
+  '0060_push_reaches_a_closed_browser.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 
