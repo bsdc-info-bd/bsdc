@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ConversationView } from '@/components/messaging/ConversationView';
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -58,6 +59,9 @@ interface InboxRowProps {
 function InboxRow({ conversation, name, active, language, state, onRead }: InboxRowProps) {
   const { t } = useTranslation();
   const settings = useConversationSettings(conversation.id);
+  // A refused pin, mute or archive has to be heard: the row is still on screen
+  // either way, and a toggle that snaps back says nothing about why.
+  useErrorToast(settings.errorKey, settings.dismissError);
   const muted = settings.state?.muted ?? state.muted;
   const pinned = settings.state?.isPinned ?? state.pinned;
   const archived = settings.state?.isArchived ?? state.archived;
@@ -193,6 +197,11 @@ export default function MessagesPage() {
     }
   }
 
+  // A thread open on a phone is the whole screen: the site's own header,
+  // search and filters belong to the inbox, and keeping them would push the
+  // composer below the fold where a keyboard then covers it.
+  const threadOpen = activeId !== null && !showSaved;
+
   return (
     <>
       <Seo
@@ -201,124 +210,135 @@ export default function MessagesPage() {
         path={ROUTES.messages}
         noindex
       />
-      <div className="fab-container py-6">
-        <SectionHeading
-          title={t('messages.title')}
-          description={t('messages.description')}
-          action={
-            <Button onClick={() => setNewChat(true)}>
-              <Plus size={16} aria-hidden="true" />
-              {t('chat.newChat')}
-            </Button>
-          }
-        />
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <label className="relative flex-1 md:max-w-xs">
-            <span className="fab-sr-only">{t('chat.searchInbox')}</span>
-            <Search
-              size={14}
-              aria-hidden="true"
-              className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted"
-            />
-            <input
-              className="fab-input w-full ps-8"
-              value={inbox.query}
-              placeholder={t('chat.searchInbox')}
-              onChange={(event) => inbox.setQuery(event.target.value)}
-            />
-          </label>
-          <IconButton
-            label={t('chat.searchAll')}
-            icon={<Search size={15} />}
-            aria-expanded={searchAll}
-            onClick={() => setSearchAll((open) => !open)}
+      <div
+        className={cn(
+          threadOpen ? 'flex h-[100dvh] flex-col overflow-hidden' : 'fab-container py-6',
+        )}
+      >
+        <div className={cn(threadOpen && 'hidden md:block md:px-6 md:pt-6')}>
+          <SectionHeading
+            title={t('messages.title')}
+            description={t('messages.description')}
+            action={
+              <Button onClick={() => setNewChat(true)}>
+                <Plus size={16} aria-hidden="true" />
+                {t('chat.newChat')}
+              </Button>
+            }
           />
-          {inbox.status === 'live' ? (
-            <Badge tone="green">{t('chat.live')}</Badge>
-          ) : (
-            <Badge tone="neutral">{t('chat.reconnecting')}</Badge>
-          )}
-          {inbox.unreadTotal > 0 ? (
-            <Badge tone="green">{formatNumber(inbox.unreadTotal, language)}</Badge>
-          ) : null}
-        </div>
 
-        <div className="mt-2 flex flex-wrap gap-1">
-          {FILTERS.map((filter) => (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <label className="relative flex-1 md:max-w-xs">
+              <span className="fab-sr-only">{t('chat.searchInbox')}</span>
+              <Search
+                size={14}
+                aria-hidden="true"
+                className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted"
+              />
+              <input
+                className="fab-input w-full ps-8"
+                value={inbox.query}
+                placeholder={t('chat.searchInbox')}
+                onChange={(event) => inbox.setQuery(event.target.value)}
+              />
+            </label>
+            <IconButton
+              label={t('chat.searchAll')}
+              icon={<Search size={15} />}
+              aria-expanded={searchAll}
+              onClick={() => setSearchAll((open) => !open)}
+            />
+            {inbox.status === 'live' ? (
+              <Badge tone="green">{t('chat.live')}</Badge>
+            ) : (
+              <Badge tone="neutral">{t('chat.reconnecting')}</Badge>
+            )}
+            {inbox.unreadTotal > 0 ? (
+              <Badge tone="green">{formatNumber(inbox.unreadTotal, language)}</Badge>
+            ) : null}
+          </div>
+
+          <div className="mt-2 flex flex-wrap gap-1">
+            {FILTERS.map((filter) => (
+              <button
+                key={filter}
+                type="button"
+                aria-pressed={inbox.filter === filter && !showSaved}
+                className={cn(
+                  'fab-tap rounded-full border px-3 py-1 text-xs',
+                  inbox.filter === filter && !showSaved
+                    ? 'border-green-700 bg-green-700/10 font-semibold'
+                    : 'border-line bg-surface',
+                )}
+                onClick={() => {
+                  setShowSaved(false);
+                  inbox.setFilter(filter);
+                }}
+              >
+                {t(`chat.filters.${filter}`)}
+              </button>
+            ))}
             <button
-              key={filter}
               type="button"
-              aria-pressed={inbox.filter === filter && !showSaved}
+              aria-pressed={showSaved}
               className={cn(
-                'fab-tap rounded-full border px-3 py-1 text-xs',
-                inbox.filter === filter && !showSaved
+                'fab-tap flex items-center gap-1 rounded-full border px-3 py-1 text-xs',
+                showSaved
                   ? 'border-green-700 bg-green-700/10 font-semibold'
                   : 'border-line bg-surface',
               )}
-              onClick={() => {
-                setShowSaved(false);
-                inbox.setFilter(filter);
-              }}
+              onClick={() => setShowSaved((open) => !open)}
             >
-              {t(`chat.filters.${filter}`)}
+              <Bookmark size={12} aria-hidden="true" />
+              {t('chat.savedMessages')}
             </button>
-          ))}
-          <button
-            type="button"
-            aria-pressed={showSaved}
-            className={cn(
-              'fab-tap flex items-center gap-1 rounded-full border px-3 py-1 text-xs',
-              showSaved
-                ? 'border-green-700 bg-green-700/10 font-semibold'
-                : 'border-line bg-surface',
-            )}
-            onClick={() => setShowSaved((open) => !open)}
-          >
-            <Bookmark size={12} aria-hidden="true" />
-            {t('chat.savedMessages')}
-          </button>
+          </div>
+
+          {searchAll ? (
+            <div className="mt-3 rounded-card border border-line bg-surface p-3">
+              <label className="relative block">
+                <span className="fab-sr-only">{t('chat.searchAll')}</span>
+                <input
+                  className="fab-input w-full"
+                  value={crossSearch}
+                  placeholder={t('chat.searchAll')}
+                  onChange={(event) => setCrossSearch(event.target.value)}
+                />
+              </label>
+              {across.isLoading ? (
+                <p className="mt-2 text-xs text-muted">{t('common.loading')}</p>
+              ) : null}
+              {!across.isLoading && crossSearch.trim().length >= 2 && across.hits.length === 0 ? (
+                <p className="mt-2 text-xs text-muted">{t('chat.noResults')}</p>
+              ) : null}
+              <ul className="mt-2">
+                {across.hits.map((hit) => (
+                  <li key={hit.messageId}>
+                    <Link
+                      to={conversationPath(hit.conversationId)}
+                      className="fab-tap block rounded-lg px-2 py-1 text-xs hover:bg-surface-2"
+                    >
+                      <span className="fab-truncate block">{hit.body}</span>
+                      <span className="text-2xs text-muted">
+                        {formatRelativeTime(new Date(hit.createdAt), language)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
 
-        {searchAll ? (
-          <div className="mt-3 rounded-card border border-line bg-surface p-3">
-            <label className="relative block">
-              <span className="fab-sr-only">{t('chat.searchAll')}</span>
-              <input
-                className="fab-input w-full"
-                value={crossSearch}
-                placeholder={t('chat.searchAll')}
-                onChange={(event) => setCrossSearch(event.target.value)}
-              />
-            </label>
-            {across.isLoading ? (
-              <p className="mt-2 text-xs text-muted">{t('common.loading')}</p>
-            ) : null}
-            {!across.isLoading && crossSearch.trim().length >= 2 && across.hits.length === 0 ? (
-              <p className="mt-2 text-xs text-muted">{t('chat.noResults')}</p>
-            ) : null}
-            <ul className="mt-2">
-              {across.hits.map((hit) => (
-                <li key={hit.messageId}>
-                  <Link
-                    to={conversationPath(hit.conversationId)}
-                    className="fab-tap block rounded-lg px-2 py-1 text-xs hover:bg-surface-2"
-                  >
-                    <span className="fab-truncate block">{hit.body}</span>
-                    <span className="text-2xs text-muted">
-                      {formatRelativeTime(new Date(hit.createdAt), language)}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="mt-4 grid gap-4 md:grid-cols-[320px_1fr]">
+        <div
+          className={cn(
+            'grid gap-4 md:grid-cols-[320px_1fr]',
+            threadOpen ? 'min-h-0 flex-1 md:px-6 md:pb-4' : 'mt-4',
+          )}
+        >
           <aside
             aria-label={t('messages.conversations')}
-            className={cn('min-w-0', activeId !== null && !showSaved && 'hidden md:block')}
+            className={cn('min-w-0', threadOpen && 'hidden md:block md:min-h-0 md:overflow-y-auto')}
           >
             {inbox.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
             {inbox.isError ? <Alert tone="danger" title={t('messages.inboxFailed')} /> : null}
@@ -386,7 +406,7 @@ export default function MessagesPage() {
 
           <section
             aria-label={t('messages.thread')}
-            className={cn('min-w-0', (activeId === null || showSaved) && 'hidden md:block')}
+            className={cn('min-w-0', !threadOpen && 'hidden md:block', threadOpen && 'min-h-0')}
           >
             {activeId === null || showSaved ? (
               <EmptyState

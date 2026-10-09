@@ -29,6 +29,7 @@ const FILES = [
   '0055_the_first_owner_has_nobody_to_ask.sql',
   '0056_a_picture_needs_somewhere_to_live.sql',
   '0057_a_promotion_in_the_panel_is_a_promotion_everywhere.sql',
+  '0058_a_voice_note_is_not_a_document.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

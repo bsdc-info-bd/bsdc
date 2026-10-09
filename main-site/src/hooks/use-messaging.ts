@@ -18,6 +18,7 @@ import {
   sortConversations,
   upsertMessage,
 } from '@/lib/messaging/message-types';
+import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
 
 // Both modules reach a network SDK, so they are only ever loaded on demand —
@@ -742,15 +743,43 @@ export function useMessageSearch(
   return { hits: result.data ?? [], isLoading: result.isLoading };
 }
 
-/** One conversation's member settings, writable from the inbox or the thread. */
+/** The settings a member has not told us about yet. */
+const UNLOADED_STATE: ConversationState = {
+  muted: false,
+  isPinned: false,
+  isArchived: false,
+  draftBody: '',
+  lastReadAt: '',
+};
+
+/**
+ * One conversation's member settings, writable from the inbox or the thread.
+ *
+ * Pin, archive and mute all live on the member's own `conversation_members`
+ * row, which is a write the caller cannot see the result of: nothing on screen
+ * changes except what the client changes. Two things follow from that.
+ *
+ * The optimistic patch has to work before the settings query has resolved —
+ * a member who opens a conversation and archives it immediately would
+ * otherwise have the patch thrown away and the toggle snap back, which reads
+ * as a button that does nothing.
+ *
+ * And a failure has to be reported. Archiving can be refused (a deployment
+ * whose grant does not yet cover the column, a lost connection), and a refused
+ * write that quietly reverts is indistinguishable from a broken one.
+ */
 export function useConversationSettings(conversationId: string): {
   state: ConversationState | null;
+  /** An i18n key, when the last pin, archive or mute was refused. */
+  errorKey: string | null;
+  dismissError: () => void;
   setPinned: (pinned: boolean) => void;
   setArchived: (archived: boolean) => void;
   setMuted: (muted: boolean) => void;
 } {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const queryClient = useQueryClient();
+  const [errorKey, setErrorKey] = useState<string | null>(null);
   const key = useMemo(() => ['conversation-state', conversationId], [conversationId]);
   const query = useQuery({
     queryKey: key,
@@ -761,14 +790,30 @@ export function useConversationSettings(conversationId: string): {
 
   const patch = useCallback(
     (next: Partial<ConversationState>) => {
-      queryClient.setQueryData<ConversationState | null>(key, (current) =>
-        current === null || current === undefined ? current : { ...current, ...next },
-      );
+      queryClient.setQueryData<ConversationState | null>(key, (current) => ({
+        ...(current ?? UNLOADED_STATE),
+        ...next,
+      }));
       void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
       void queryClient.invalidateQueries({ queryKey: ['inbox-settings', uid] });
     },
     [key, queryClient, uid],
   );
+
+  const failed = useCallback(
+    (error: unknown) => {
+      // Read the cache back from the database: the optimistic value is now a
+      // claim the server refused, and leaving it up would be a lie.
+      void queryClient.invalidateQueries({ queryKey: key });
+      setErrorKey(dataErrorKey(error));
+    },
+    [key, queryClient],
+  );
+
+  const settle = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: key });
+    void queryClient.invalidateQueries({ queryKey: ['inbox-settings', uid] });
+  }, [key, queryClient, uid]);
 
   const pinMutation = useMutation({
     mutationFn: async (pinned: boolean) => {
@@ -777,7 +822,12 @@ export function useConversationSettings(conversationId: string): {
         await repository()
       ).updateConversationSettings(conversationId, uid, { is_pinned: pinned });
     },
-    onMutate: (pinned) => patch({ isPinned: pinned }),
+    onMutate: (pinned) => {
+      setErrorKey(null);
+      patch({ isPinned: pinned });
+    },
+    onError: failed,
+    onSettled: settle,
   });
 
   const archiveMutation = useMutation({
@@ -787,7 +837,12 @@ export function useConversationSettings(conversationId: string): {
         await repository()
       ).updateConversationSettings(conversationId, uid, { is_archived: archived });
     },
-    onMutate: (archived) => patch({ isArchived: archived }),
+    onMutate: (archived) => {
+      setErrorKey(null);
+      patch({ isArchived: archived });
+    },
+    onError: failed,
+    onSettled: settle,
   });
 
   const muteMutation = useMutation({
@@ -795,11 +850,18 @@ export function useConversationSettings(conversationId: string): {
       if (uid === null) return;
       await (await repository()).setConversationMuted(conversationId, uid, muted);
     },
-    onMutate: (muted) => patch({ muted }),
+    onMutate: (muted) => {
+      setErrorKey(null);
+      patch({ muted });
+    },
+    onError: failed,
+    onSettled: settle,
   });
 
   return {
     state: query.data ?? null,
+    errorKey,
+    dismissError: () => setErrorKey(null),
     setPinned: (pinned) => pinMutation.mutate(pinned),
     setArchived: (archived) => archiveMutation.mutate(archived),
     setMuted: (muted) => muteMutation.mutate(muted),

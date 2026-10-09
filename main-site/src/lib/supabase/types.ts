@@ -378,7 +378,7 @@ export type ToggleReactionRow = { reacted: boolean; reaction: DbReaction; total:
 export type ToggleCommentReactionRow = { reacted: boolean; total: number };
 
 export type DbConversationKind = 'direct' | 'group';
-export type DbMessageKind = 'text' | 'image' | 'file' | 'snippet' | 'system';
+export type DbMessageKind = 'text' | 'image' | 'audio' | 'video' | 'file' | 'snippet' | 'system';
 export type DbMemberRole = 'owner' | 'admin' | 'member';
 
 export type ConversationRow = {

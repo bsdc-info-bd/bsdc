@@ -27,6 +27,7 @@ import {
 } from '@/design-system';
 import { cn } from '@/lib/cn';
 import type { Language } from '@/i18n';
+import { useErrorToast } from '@/hooks/use-error-toast';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import { dayKey } from '@/lib/messaging/message-text';
 import {
@@ -68,6 +69,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
   const viewerUid = useAuthStore((state) => state.user?.uid ?? '');
   const conversation = useConversation(conversationId);
   const settings = useConversationSettings(conversationId);
+  useErrorToast(settings.errorKey, settings.dismissError);
   const leave = useLeaveConversation();
 
   const [draft, setDraft] = useState('');
@@ -168,9 +170,12 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
           : t('chat.connecting');
 
   return (
-    <div className="flex h-[75vh] min-h-96 flex-col rounded-card border border-line bg-surface">
+    // Fills whatever height the page gives it: a thread route is the whole
+    // viewport, and the fixed 75vh card this used to be left the composer
+    // under the fold on a phone.
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border-line bg-surface md:rounded-card md:border">
       <header className="flex items-center gap-2 border-b border-line p-3">
-        <Link to={ROUTES.messages} className="md:hidden" aria-label={t('common.backHome')}>
+        <Link to={ROUTES.messages} aria-label={t('chat.backToInbox')}>
           <ArrowLeft size={18} aria-hidden="true" />
         </Link>
         <Avatar
@@ -313,7 +318,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
       <div
         ref={scroller}
-        className="flex-1 overflow-y-auto p-3"
+        className="fab-scroll flex-1 overscroll-contain p-3"
         onScroll={(event) => {
           const element = event.currentTarget;
           setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 80);

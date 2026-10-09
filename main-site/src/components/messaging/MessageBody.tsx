@@ -1,6 +1,8 @@
 import { FileText, Film, Image as ImageIcon, Mail, Music, Package, Paperclip } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { Lightbox } from '@/components/media/Lightbox';
 import { cn } from '@/lib/cn';
 import { attachmentKind, highlightMatches, parseMessageBody } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
@@ -53,37 +55,85 @@ function Marked({ text, query }: { text: string; query: string }) {
  */
 export function MessageBody({ message, highlight = '', mine = false }: MessageBodyProps) {
   const { t } = useTranslation();
+  const [enlarged, setEnlarged] = useState(false);
 
   if (message.deletedAt !== null) {
     return <span className="italic opacity-80">{t('messages.deleted')}</span>;
   }
 
   const hasMedia = message.mediaUrl.length > 0;
-  const kind = hasMedia ? attachmentKind(message.mediaName, message.mediaUrl) : 'file';
+  // The row says what it is when it can: a voice note is stored as `audio`,
+  // which is more to be trusted than a filename a provider may have rewritten.
+  // Everything else is still read from the attachment itself.
+  const kind = !hasMedia
+    ? 'file'
+    : message.kind === 'audio' || message.kind === 'video'
+      ? message.kind
+      : attachmentKind(message.mediaName, message.mediaUrl);
   const Icon = iconFor(kind);
 
   return (
     <span className="flex flex-col gap-2">
       {hasMedia && kind === 'image' ? (
-        <a
-          href={message.mediaUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          className="block overflow-hidden rounded-xl"
-        >
-          <img
-            src={message.mediaUrl}
-            alt={message.mediaName.length > 0 ? message.mediaName : t('chat.image')}
-            loading="lazy"
-            className="max-h-72 w-full max-w-sm object-cover"
-          />
-        </a>
+        <>
+          {/* A picture in a thread opens here, full size. It used to open in a
+              new tab, which on a phone means leaving the conversation, losing
+              the scroll position, and coming back to find it moved. */}
+          <button
+            type="button"
+            onClick={() => setEnlarged(true)}
+            className="fab-tap block overflow-hidden rounded-xl"
+            aria-label={t('chat.enlarge', {
+              name: message.mediaName.length > 0 ? message.mediaName : t('chat.image'),
+            })}
+          >
+            <img
+              src={message.mediaUrl}
+              alt={message.mediaName.length > 0 ? message.mediaName : t('chat.image')}
+              loading="lazy"
+              decoding="async"
+              className="max-h-72 w-full max-w-sm object-cover transition-transform duration-200 ease-app hover:scale-[1.01]"
+            />
+          </button>
+          {enlarged ? (
+            <Lightbox
+              items={[
+                {
+                  id: message.id,
+                  url: message.mediaUrl,
+                  thumbUrl: message.mediaUrl,
+                  altText: message.mediaName,
+                  width: null,
+                  height: null,
+                },
+              ]}
+              index={0}
+              label={t('chat.image')}
+              onChange={() => undefined}
+              onClose={() => setEnlarged(false)}
+            />
+          ) : null}
+        </>
       ) : null}
 
       {hasMedia && kind === 'audio' ? (
-        <audio controls src={message.mediaUrl} className="max-w-xs">
-          <track kind="captions" />
-        </audio>
+        <span
+          className={cn(
+            'flex max-w-xs flex-col gap-1 rounded-xl border px-2.5 py-2',
+            mine ? 'border-white/30 bg-white/10' : 'border-line bg-surface',
+          )}
+        >
+          <span className="flex items-center gap-1.5 text-2xs opacity-85">
+            <Music size={12} aria-hidden="true" />
+            <span className="fab-truncate">
+              {message.mediaName.length > 0 ? message.mediaName : t('chat.voiceNote')}
+            </span>
+          </span>
+          {/* Metadata only: a thread of voice notes must not download itself. */}
+          <audio controls preload="metadata" src={message.mediaUrl} className="h-9 w-full">
+            <track kind="captions" />
+          </audio>
+        </span>
       ) : null}
 
       {hasMedia && kind !== 'image' && kind !== 'audio' ? (
