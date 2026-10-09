@@ -348,6 +348,7 @@ Recorded so that the next round does not mistake an absence for an oversight.
 | `ce01960` | the record of the round — this document, the registry, the push variables |
 | `9ae98ae` | 6 — a migration that meets a schema it does not own (`0056`, `--check`, `t34`) |
 | `57b0b10` | 7 — strict external media routing, linked post images, project publisher/detail pages and `0063` |
+| `d87d5c2` | allowlist two confirmed synthetic test fixtures that the whole-history secret scan misidentified; no production secret was added |
 
 Earlier in the same pull request, and already described in their own documents:
 `docs/messenger.md` for the messenger's hundred counted features,
@@ -491,6 +492,24 @@ Existing post rows still point at the URLs they were saved with. If an old Supab
 3. Publish a small test project through all four steps, open its `/projects/<slug>` page in a logged-out browser, then publish a post image. Its `media_assets.provider` should read `imgbb`; the project cover should read `cloudinary`; neither new row should say `supabase`.
 4. For old broken pictures, restore access only if their bytes still exist in Storage; otherwise reattach the original in the post editor. The reader now sees a clear failure state rather than a browser's broken-image icon.
 5. Rotate the high-risk credentials pasted into the conversation (database password, Cloudinary API secret and OneSignal REST key) before production use. They were not added to code or used for live uploads.
+
+### Secret scan and CI follow-up
+
+The first post-push GitHub scan found `generic-api-key` matches in two historical
+files: `main-site/src/lib/push/support.test.ts` contains a synthetic public VAPID
+value used only by a parser test, and `main-site/scripts/db-prove/t31.mjs`
+contains a local-only sentinel used by the in-process database proof. Neither
+fixture is used to send a real push or contains production key material. The
+scanner examines history, so changing the old commits was unnecessary; commit
+`d87d5c2` added exact file-path exceptions for these two fixtures to the existing
+Gitleaks config, with the reasons recorded next to the configuration. The
+configuration parses as TOML and its patterns match only those paths; GitHub's
+whole-history secret scan now passes.
+
+After the fix, all visible PR checks passed: app build, schema-from-nothing,
+Cloudflare Pages, discovery, every app-quality job and Secret scan. The
+production-apply job was skipped by design. No production migration, provider
+upload or deployment was performed.
 
 Final local verification on the code commit: `db:prove` **19/19**, Vitest **54 files / 706 tests**, lint/typecheck/Prettier clean, production build clean (**200** precache entries, **13** prerendered routes), and launch audit **103 passed / 0 failed / 4 recorded**. These are repository-level proofs; live provider credentials and production migration/deployment remain the owner's actions.
 
