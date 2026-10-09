@@ -621,6 +621,24 @@ export const en = {
         'The browser could not read it. Attach it as it is, or choose a different picture.',
     },
   },
+  location: {
+    title: 'Where you are',
+    hint: 'A city is enough. Press the pin to fill it in from this device: only about a kilometre of precision is ever sent, no coordinate is stored, and you can edit or clear what lands here.',
+    use: 'Use my current location',
+    found: 'Filled in as {{place}}',
+    ready: 'This device can say where it is.',
+    errors: {
+      unsupported: 'This browser cannot tell where it is.',
+      insecure:
+        'Location needs a secure connection. Open the site over https:// and the pin will work.',
+      denied:
+        'The browser refused the permission. It can be given back in the site settings for bsdc.info.bd, or the city can simply be typed.',
+      unavailable: 'This device could not get a position. Nothing to do but type the city.',
+      timeout: 'Getting a position took too long. Try again, or type the city.',
+      nothingFound: 'Nothing is named within a kilometre of that position. Type the city instead.',
+      failed: 'The place could not be looked up. The field still takes whatever you type.',
+    },
+  },
   suggestions: {
     title: 'Who to follow next',
     body: 'Suggested from the graph you already have: friends of friends, a shared skill, the same city.',

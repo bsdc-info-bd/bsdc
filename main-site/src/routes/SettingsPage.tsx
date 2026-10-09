@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { PushCard } from '@/components/notifications/PushCard';
+import { LocationField } from '@/components/profile/LocationField';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -144,12 +145,7 @@ function AccountPanel() {
             maxLength={280}
             onChange={(event) => setBio(event.target.value)}
           />
-          <TextField
-            label={t('onboarding.locationLabel')}
-            value={location}
-            autoComplete="address-level2"
-            onChange={(event) => setLocation(event.target.value)}
-          />
+          <LocationField value={location} onChange={setLocation} />
           <div>
             <Button loading={saving} onClick={() => void save()}>
               {t('settings.save')}
