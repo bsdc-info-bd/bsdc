@@ -137,18 +137,22 @@ function psql(url, sql, { file = false } = {}) {
   }
 }
 
-function readLedger(url) {
-  psql(url, LEDGER);
-  const rows = psql(
-    url,
-    "select version || '\\t' || coalesce(checksum, '') from supabase_migrations.schema_migrations order by version",
-  );
+/** One row per applied migration, version and checksum, tab separated. */
+const LEDGER_ROWS =
+  "select version || '\\t' || coalesce(checksum, '') from supabase_migrations.schema_migrations order by version";
+
+function parseLedger(rows) {
   const applied = new Map();
   for (const line of rows.split('\n').filter((line) => line.trim() !== '')) {
     const [version, sum] = line.split('\t');
     applied.set(version, { checksum: sum ?? '' });
   }
   return applied;
+}
+
+function readLedger(url) {
+  psql(url, LEDGER);
+  return parseLedger(psql(url, LEDGER_ROWS));
 }
 
 /**
@@ -276,7 +280,9 @@ async function check(url) {
   if (ledger === '') {
     line(false, 'no migration ledger: this database has not been through db-push');
   } else {
-    const applied = readLedger(url);
+    // Read straight from the table. `readLedger` also creates it if it is
+    // missing, and `--check` has promised to change nothing.
+    const applied = parseLedger(ask(LEDGER_ROWS));
     const pending = plan(listMigrations(), applied).filter((entry) => entry.action === 'apply');
     line(
       pending.length === 0,
