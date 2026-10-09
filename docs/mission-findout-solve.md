@@ -1,8 +1,8 @@
-# Mission find-out-and-solve — the round of 8–9 October 2026
+# Mission find-out-and-solve — the rounds of 8–10 October 2026
 
-This is the record of one working round: what was reported, what each report
-turned out to be, what was changed, and what has to be done by hand before any of
-it is live. It is written to be read cold, by somebody who was not in the room,
+This is the record of the work across 8–10 October 2026: what was reported,
+what each report turned out to be, what was changed, and what has to be done by
+hand before any of it is live. It is written to be read cold, by somebody who was not in the room,
 including by whoever picks this repository up next.
 
 The standing contract for the round was: the owner reports what is broken, the
@@ -18,6 +18,8 @@ harness.
 3. [How to verify all of it](#3-how-to-verify-all-of-it)
 4. [What this round deliberately did not do](#4-what-this-round-deliberately-did-not-do)
 5. [The commits, in order](#5-the-commits-in-order)
+6. [The production migration failure](#6-the-round-after-database-apply-to-production-failed-i-have-manually-did-it)
+7. [Images and the project system](#7-the-round-after-post-images-are-broken-and-projects-have-no-page)
 
 ---
 
@@ -206,14 +208,18 @@ group path.
 
 ## 2. What has to be applied by hand
 
-Production is still `origin/main` at `f9066d5` and the pull request is open, so
-**none of this is live until it is merged and deployed**. Two things need hands on
-a console.
+PR #9 is open from `arena/73abbe9e-bsdc`; the code is not live until the owner
+merges and deploys it. This agent has not applied production migrations, deployed
+the app, or tested live ImgBB/Cloudinary uploads. Check the production migration
+ledger rather than assuming state: earlier files may have been applied manually.
+After merge, the normal database workflow must apply any missing migrations,
+including the new `0063`.
 
 ### Migrations
 
-Every migration from `0046` to `0062` is written but unapplied in production
-(`0039`–`0045` were applied earlier). In order:
+`0063` is newly added in this round. Check the production ledger for `0046`–`0062`
+because some may have been applied manually; do not infer production state from
+the branch. In order, the migrations in this set are:
 
 ```
 0046_maintenance_is_not_a_public_endpoint.sql
@@ -233,14 +239,15 @@ Every migration from `0046` to `0062` is written but unapplied in production
 0060_push_reaches_a_closed_browser.sql
 0061_the_people_worth_following_next.sql
 0062_changing_a_handle_is_not_claiming_one.sql
+0063_projects_have_a_home_to_be_found.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
-`0046`–`0062` three times over against a real database built from the migrations
-directory, and `t21` builds one **without** `0051` to prove `0058` survives a
-deployment that is behind. Two of them change behaviour in a way worth knowing
-before applying: `0059` removes a grant (nothing in the codebase used it), and
-`0062` makes a second handle change wait thirty days.
+`0046`–`0063` three times over against PGlite, and `t21` builds one **without**
+`0051` to prove `0058` survives a deployment that is behind. `0063` replaces
+project SEO and sitemap functions; it does not move or restore stored image bytes.
+Two earlier migrations change behaviour worth knowing before applying: `0059`
+removes an unused grant, and `0062` makes a second handle change wait thirty days.
 
 ### Push
 
@@ -266,11 +273,15 @@ flush answers `503`. Nothing else about the site depends on it.
 ```bash
 cd main-site
 npm install
-npm run db:prove     # 17 of 17 harnesses, against pglite and the real migrations
-npm test             # 50 files, 698 tests
+npm run db:prove     # 19 of 19 PGlite/database harnesses, including 0063 and RLS proof
+npm test             # 54 files, 706 tests
 npm run lint         # eslint, zero warnings allowed
-npm run typecheck    # the app and the edge functions, separately
-npm run build        # tsc, vite, the written service worker, 13 prerendered routes
+npm run typecheck    # app and Pages Functions
+npx prettier --check 'src/**/*.{ts,tsx,css}' 'functions/**/*.ts' 'scripts/db-prove/*.mjs' '../scripts/audit.mjs'
+npm run build        # tsc, Vite, service worker; 200 precache entries and 13 prerendered routes
+cd ..
+node scripts/audit.mjs         # 107 checkpoints: 103 passed, 0 failed, 4 recorded
+node scripts/count-registry.mjs # 1,817 counted surfaces (derived, not a promise of live acceptance)
 ```
 
 `npm run db:prove` is the one that matters most, because it is the only place the
@@ -299,12 +310,11 @@ Recorded so that the next round does not mistake an absence for an oversight.
 - **No accent colour or per-member theme.** Settings has light, dark and system.
   A member-chosen accent needs a column, a CSS-variable plumbing point and a
   picker, and it was left out of a round that already had ten reports in it.
-- **No detail pages for events, jobs, gigs or projects.** Of the five directories,
-  only groups have one (`/g/:slug`), and shops (`/shop/:slug`), courses
-  (`/learn/:slug`), posts (`/p/:slug`) and tags (`/tag/:slug`) have theirs. So the
-  create hub links to the list after creating, and a member's new event is visible
-  in the calendar but has no page of its own to share. This is the largest
-  remaining gap in the marketplace work and the obvious next step.
+- **Before round 7, none of the event, job, gig or project directories had detail
+  pages.** Projects now have `/projects/:slug`; events, jobs and gigs remain list-only
+  and still have no page of their own to share. Shops
+  (`/shop/:slug`), courses (`/learn/:slug`), groups (`/g/:slug`), posts (`/p/:slug`)
+  and tags (`/tag/:slug`) have their own pages.
 - **No payload encryption in push.** Argued in
   [`docs/push-runbook.md`](./push-runbook.md#1-why-it-is-built-this-way): the cost
   is one request when a device wakes, the benefit is that nothing in the delivery
@@ -337,13 +347,14 @@ Recorded so that the next round does not mistake an absence for an oversight.
 | `2e7f123` | 3.5 — changing a handle (`0062`) |
 | `ce01960` | the record of the round — this document, the registry, the push variables |
 | `9ae98ae` | 6 — a migration that meets a schema it does not own (`0056`, `--check`, `t34`) |
+| `57b0b10` | 7 — strict external media routing, linked post images, project publisher/detail pages and `0063` |
 
 Earlier in the same pull request, and already described in their own documents:
 `docs/messenger.md` for the messenger's hundred counted features,
 `docs/auth-production-runbook.md` for the auth path, `docs/deploying.md` for the
-deployment, and `docs/feature-registry.md` for the count — **1,807 counted
-surfaces** at the end of this round, regenerated with
-`node scripts/count-registry.mjs --markdown`.
+deployment, and `docs/feature-registry.md` for the count. The earlier round ended
+at **1,807** counted surfaces; after this project/media round the generated count
+is **1,817**, regenerated with `node scripts/count-registry.mjs --markdown`.
 
 ---
 
@@ -430,12 +441,57 @@ seventeen files by hand.
 ### What the operator does now
 
 1. Re-run the `database.yml` workflow. Every migration is idempotent — `t24`
-   applies `0046`–`0062` three times over — so files already applied by hand are
-   simply applied again, and the ledger catches up.
+   applies `0046`–`0063` three times over — so files already applied by hand are
+   simply applied again, and the ledger catches up. This only restores legacy
+   Supabase object access; new image bytes no longer depend on that bucket.
 2. Read the end of the log. If it prints open `deployment_notes`, each line says
    what is missing and `docs/deploying.md` says where to put it. If it prints
    nothing, nothing is owed.
 3. If the migrations were applied by hand and there is therefore no note to read,
    run `node scripts/db-push.mjs --check`, or paste the four-row query from
-   `docs/deploying.md` into the SQL editor. Four `ok` rows and a `5 of 5`, and
-   uploads have somewhere to live.
+   `docs/deploying.md` into the SQL editor. Four `ok` rows and a `5 of 5` confirm
+   the legacy bucket setup; new uploads use ImgBB or Cloudinary instead.
+
+---
+
+## 7. The round after: "Post images are broken and projects have no page"
+
+The two reports arrived together:
+
+1. Post photos were uploaded to Supabase Storage but did not show on the post page. New post, comment, chat and other ordinary images must go to ImgBB; important images must go to Cloudinary; **no new image bytes to Supabase Storage**.
+2. The project directory was not a useful publishing system: no separate project page, no real cover upload and no multi-step post flow.
+
+### 1 — Why images went to the wrong host, and why a saved post could lose them
+
+`resolveProvider()` returned `supabase` as soon as `VITE_SUPABASE_URL` and its public key were present — before it even asked what kind of image was being uploaded. Supabase is always configured on the main site, so the old advertised ImgBB/Cloudinary routing was dead code. An ordinary `post-image` went to `storage/v1/object/public/media/<uid>/…`; it was then only as readable as the `media` bucket and its Storage policies. That is precisely the production setup the previous round found the workflow could not create with its applying role.
+
+There was a second silent failure path: if the media row could not be written to `media_assets`, the tray could still mark the image attached with an empty `mediaId`; `savePost()` filtered that row out of `post_media` and published the text anyway. On read, a missing `media_assets` join became `url: ''`, which the browser treated as an image URL instead of telling the reader what failed.
+
+### 2 — Why projects never became shareable pages
+
+The database already stored a description, owner, cover URL, tech stack and star count, and the insert form already wrote those fields. The flow then sent the author straight back to `/projects`; the directory only rendered name/tagline/links/stars, and there was no route to retrieve one project by slug. `cover_url` was a hand-typed URL field, not an upload control. The SEO middleware and live sitemap likewise had no project detail path.
+
+### What changed
+
+- **A strict two-host media router.** The byte-upload code for Supabase Storage is removed from `upload.ts`; `resolveProvider()` now returns exactly the provider the purpose requires, or fails visibly when it is not configured. It never falls back across hosts. Post, comment, chat and other ordinary images go to ImgBB as a base64 `image` form field, with the API key in the URL. Avatars, profile covers, project covers and product images go to Cloudinary. Documents and voice notes also go to Cloudinary. Supabase holds the `media_assets` metadata row and SQL relationships only — no upload bytes.
+- **No more "looks attached" without a database reference.** The attachment queue refuses to upload if the metadata database is unavailable, requires a real `media_assets` row, and `savePost()` rejects any draft image missing its durable asset id before it writes the post. `toPost()` drops a missing join rather than creating an empty image source. `MediaImage` tries the provider thumbnail, then the original, then a named accessible failure state, in both the feed and the lightbox.
+- **A four-step project publisher** at `/create?kind=project`: basics → repository/technology/contributor settings → local cover preview and file selection → review and publish. Covers accept the supported image formats and limits, go to Cloudinary only on publish, and are recorded in `media_assets`. A successfully uploaded cover is held across a database retry instead of uploaded twice.
+- **A public project permalink** at `/projects/:slug`: real database fetch by slug (not a 40-row list lookup), project cover, full description, owner/profile link, technology, licence, live star state, repository/demo links, contributor callout, canonical metadata and `SoftwareSourceCode` JSON-LD. The directory now shows covers and descriptions and supports search, popularity/recent sorting and a contributor filter. Search results and successful creation link to the project page.
+- **SEO is present before JavaScript.** Migration `0063_projects_have_a_home_to_be_found.sql` adds project detail metadata to `seo_for_path()` and canonical project URLs to `sitemap_urls()` / `sitemap_sections()`. The Pages middleware injects the metadata for `/projects/:slug`; the sitemap worker accepts the projects section. `t35.mjs` proves all of this as an anonymous visitor. `t24.mjs` now reapplies `0063` as part of the idempotency proof.
+- **The storage documentation now tells the truth.** `docs/deploying.md` separates the old `provider='supabase'` objects from the current external-host upload pipeline and names the exact build-time variables. The storage bucket is not a dependency for new uploads.
+
+### Existing broken pictures: what code can and cannot repair
+
+Existing post rows still point at the URLs they were saved with. If an old Supabase object still exists, the previous round's bucket/policy setup can make that legacy URL readable. If the object never made it to Storage, has been deleted, or is inaccessible to the owner, SQL cannot reconstruct the missing bytes; it has to be selected from the original and attached again. The new pipeline prevents the next picture from entering that state. It does **not** claim to magically recover a file whose bytes are gone.
+
+### What the operator does now
+
+1. After this branch is merged, run the normal database workflow so `0063` updates project SEO and sitemap functions; no new Storage bucket or policy is required for new media uploads.
+2. Confirm the production **build-time** values in §5.1 of `docs/deploying.md`: `VITE_IMGBB_API_KEY`, `VITE_CLOUDINARY_CLOUD_NAME`, and `VITE_CLOUDINARY_UNSIGNED_PRESET`. Changing a Pages variable without rebuilding does not change the shipped JavaScript.
+3. Publish a small test project through all four steps, open its `/projects/<slug>` page in a logged-out browser, then publish a post image. Its `media_assets.provider` should read `imgbb`; the project cover should read `cloudinary`; neither new row should say `supabase`.
+4. For old broken pictures, restore access only if their bytes still exist in Storage; otherwise reattach the original in the post editor. The reader now sees a clear failure state rather than a browser's broken-image icon.
+5. Rotate the high-risk credentials pasted into the conversation (database password, Cloudinary API secret and OneSignal REST key) before production use. They were not added to code or used for live uploads.
+
+Final local verification on the code commit: `db:prove` **19/19**, Vitest **54 files / 706 tests**, lint/typecheck/Prettier clean, production build clean (**200** precache entries, **13** prerendered routes), and launch audit **103 passed / 0 failed / 4 recorded**. These are repository-level proofs; live provider credentials and production migration/deployment remain the owner's actions.
+
+The code commit for this round is `57b0b1048afc9452fce8dd2dd17c045f1751d377`. The migration queue's next number is **`0064`**. The three directories still without detail pages are events, jobs and gigs; project pages are no longer on that list.
