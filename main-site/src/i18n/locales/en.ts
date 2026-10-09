@@ -359,6 +359,12 @@ export const en = {
       invalidActionCode: 'This link is not valid. Request a new one.',
       expiredActionCode: 'This link has expired. Request a new one.',
       storageUnsupported: 'Your browser blocks the storage needed to sign in.',
+      storageBlocked:
+        'This browser is blocking storage, so the session cannot be kept. Turn off private browsing for this site, or open it in your own browser instead of another app.',
+      browserUnsupported:
+        'This browser cannot open the sign-in window. We are taking you to the provider instead — if nothing happens, open the site in your own browser rather than inside another app.',
+      verificationNotSent:
+        'Your account was created, but the verification email did not go out. You can send it again from the banner at the top of any screen.',
       usernameTaken: 'That username is already taken.',
       profileSave: 'Your profile could not be saved. Please try again.',
     },
