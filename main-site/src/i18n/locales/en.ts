@@ -535,6 +535,7 @@ export const en = {
       recordFailed:
         'The image was uploaded but could not be attached to your post. Please try again.',
       notConfigured: 'Uploads are not configured for this deployment.',
+      signInRequired: 'Sign in to upload. Your session has expired; reload the page and try again.',
     },
   },
   compose: {

@@ -27,6 +27,8 @@ const FILES = [
   '0053_the_new_endpoints_stop_answering_strangers.sql',
   '0054_an_endpoint_that_demands_a_member_is_not_for_visitors.sql',
   '0055_the_first_owner_has_nobody_to_ask.sql',
+  '0056_a_picture_needs_somewhere_to_live.sql',
+  '0057_a_promotion_in_the_panel_is_a_promotion_everywhere.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

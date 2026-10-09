@@ -34,6 +34,18 @@ async function currentAccessToken(): Promise<string> {
   return token.token;
 }
 
+/**
+ * The token every request to this project carries.
+ *
+ * Exported for the media pipeline, which posts bytes straight at Supabase
+ * Storage with an XHR because that is the only way to be told how much of an
+ * upload has arrived — and an XHR is not a supabase-js call, so it has to ask
+ * for the same token the client would have used.
+ */
+export function supabaseAccessToken(): Promise<string> {
+  return currentAccessToken();
+}
+
 export function getSupabase(): BsdcSupabaseClient {
   if (!isConfigured.supabase) throw new SupabaseNotConfiguredError();
   if (client) return client;

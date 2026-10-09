@@ -10,7 +10,7 @@ export type DbRole = 'member' | 'creator' | 'vendor' | 'moderator' | 'manager' |
 
 export type DbAccountStatus = 'active' | 'suspended' | 'deactivated' | 'deleted';
 export type DbMediaKind = 'image' | 'document' | 'audio' | 'video';
-export type DbMediaProvider = 'cloudinary' | 'imgbb' | 'external';
+export type DbMediaProvider = 'cloudinary' | 'imgbb' | 'external' | 'supabase';
 export type DbReportStatus = 'open' | 'reviewing' | 'actioned' | 'dismissed';
 
 export type ProfileRow = {
