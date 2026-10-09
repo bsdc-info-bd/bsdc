@@ -105,7 +105,11 @@ async function as(sub, sql) {
 
 // ------------------------------------------------------------- who is told ---
 const suggestions = await as(ada, `select * from public.follow_suggestions(20)`);
-check(suggestions.ok, 'a member asks who to follow next', suggestions.code ?? suggestions.message ?? '');
+check(
+  suggestions.ok,
+  'a member asks who to follow next',
+  suggestions.code ?? suggestions.message ?? '',
+);
 const rows = suggestions.rows ?? [];
 const byUid = new Map(rows.map((row) => [row.uid, row]));
 
@@ -125,7 +129,10 @@ check(
   'and the count says how many of them',
   String(byUid.get(sultana)?.mutual_count),
 );
-check(byUid.get(karim)?.reason === 'skills', 'a member who lists the same skill is suggested for it');
+check(
+  byUid.get(karim)?.reason === 'skills',
+  'a member who lists the same skill is suggested for it',
+);
 check(
   (byUid.get(karim)?.shared_skills ?? []).includes('postgres'),
   'naming the skill they have in common',
@@ -209,7 +216,10 @@ check(
   'a member with no follows and nothing filled in is still given somebody',
   String(empty.rows?.[0]?.n),
 );
-const freshRows = await as(fresh, `select reason, count(*)::int as n from public.follow_suggestions(20) group by 1`);
+const freshRows = await as(
+  fresh,
+  `select reason, count(*)::int as n from public.follow_suggestions(20) group by 1`,
+);
 check(
   (freshRows.rows ?? []).every((row) => row.reason === 'active'),
   'and is told the truth about why: none of them are mutual, shared or nearby',
@@ -243,7 +253,10 @@ check(
     stillThere(popular, 'active'),
   'with every reason it gave before',
 );
-check(afterRows.some((row) => row.uid === fresh), 'including the newcomer');
+check(
+  afterRows.some((row) => row.uid === fresh),
+  'including the newcomer',
+);
 
 await db.close();
 console.log('');

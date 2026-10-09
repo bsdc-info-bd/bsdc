@@ -83,7 +83,10 @@ const stamped = await db.query(
 check(stamped.rows[0]?.stamped === true, 'the moment is recorded, so the next change waits');
 
 const noRedirect = await db.query(`select count(*)::int as n from public.redirects`);
-check(noRedirect.rows[0]?.n === 0, 'and a first claim redirects nothing, because nothing pointed at it');
+check(
+  noRedirect.rows[0]?.n === 0,
+  'and a first claim redirects nothing, because nothing pointed at it',
+);
 
 const claimAudit = await db.query(
   `select action, metadata->>'from' as from_handle, metadata->>'to' as to_handle
@@ -157,7 +160,9 @@ check(
 
 // ------------------------------------------------------------- the change ---
 // Thirty-one days later.
-await db.exec(`update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${ada}'`);
+await db.exec(
+  `update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${ada}'`,
+);
 check(
   (await as(ada, `select public.next_username_change() as next`)).rows?.[0]?.next === null,
   'once the wait is over, the member is told there is nothing to wait for',
@@ -208,7 +213,9 @@ check(
 );
 
 // --------------------------------------------------- a handle that is freed ---
-await db.exec(`update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${rahim}'`);
+await db.exec(
+  `update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${rahim}'`,
+);
 const tookOld = await as(rahim, `select username from public.claim_username('adafirst')`);
 check(
   tookOld.ok && tookOld.rows?.[0]?.username === 'adafirst',
@@ -232,16 +239,26 @@ check(
 
 // A member who changes back and forth does not leave two redirects pointing at
 // each other: the deletion happens before the insertion.
-await db.exec(`update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${ada}'`);
-await db.exec(`update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${rahim}'`);
+await db.exec(
+  `update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${ada}'`,
+);
+await db.exec(
+  `update public.profiles set username_changed_at = now() - interval '31 days' where uid = '${rahim}'`,
+);
 await as(rahim, `select public.claim_username('rahimsecond')`);
 const back = await as(ada, `select username from public.claim_username('adafirst')`);
-check(back.ok, 'and a member can take back a handle that has been let go', back.code ?? messageOf(back));
+check(
+  back.ok,
+  'and a member can take back a handle that has been let go',
+  back.code ?? messageOf(back),
+);
 const chain = await db.query(`select from_path, to_path from public.redirects order by from_path`);
 check(
   chain.rows.every((row) => row.from_path !== row.to_path) &&
-    !chain.rows.some(
-      (row) => chain.rows.some((other) => other.from_path === row.to_path && other.to_path === row.from_path),
+    !chain.rows.some((row) =>
+      chain.rows.some(
+        (other) => other.from_path === row.to_path && other.to_path === row.from_path,
+      ),
     ),
   'without leaving two redirects pointing at each other',
   JSON.stringify(chain.rows),
@@ -273,10 +290,11 @@ for (let round = 1; round <= 2; round += 1) {
     check(false, `0062 re-applied (round ${round})`, String(error.message).split('\n')[0]);
   }
 }
-const stillThere = await db.query(
-  `select username from public.profiles where uid = '${ada}'`,
+const stillThere = await db.query(`select username from public.profiles where uid = '${ada}'`);
+check(
+  stillThere.rows[0]?.username === 'adafirst',
+  'and the handle that was taken back is still held',
 );
-check(stillThere.rows[0]?.username === 'adafirst', 'and the handle that was taken back is still held');
 
 await db.close();
 console.log('');

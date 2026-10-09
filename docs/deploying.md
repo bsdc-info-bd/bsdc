@@ -118,6 +118,7 @@ node scripts/db-push.mjs --plan       # list the files; no database needed
 node scripts/db-push.mjs --dry-run    # connect, say what would change, change nothing
 node scripts/db-push.mjs              # apply what is missing
 node scripts/db-push.mjs --verify     # apply, apply again, then assert the invariants
+node scripts/db-push.mjs --check      # change nothing: report what the database still owes
 node scripts/db-push.mjs --self-test  # check the runner's own logic, offline
 ```
 
@@ -482,6 +483,104 @@ workflow checks this before it tries: the step _Check the database can be
 reached at all_ resolves the host and says exactly this when there is no A
 record. It reports the shape of the target (pooler or direct, port, how many
 addresses of each kind) and never the project reference or the password.
+
+### `permission denied for schema storage`
+
+```
+ERROR:  permission denied for schema storage
+LINE 1: create table if not exists storage.buckets (
+```
+
+`storage` is the only schema in this project that this platform does not own: it
+belongs to `supabase_storage_admin`, and the role the workflow connects as —
+`postgres`, over the transaction pooler — has no `CREATE` on it. Postgres checks
+that right **before** it honours `IF NOT EXISTS`, so a bare `create table if not
+exists storage.buckets` fails in production even though the table is already
+there, and because the runner applies one file in one transaction, the failure
+took every migration after it down with it.
+
+This is fixed, not worked around. Migration `0056` now attempts each storage
+statement instead of asserting it: it creates the schema and tables where the
+role has the right (the proof databases, a local `supabase start`), leaves them
+alone where Storage already owns them (production), and writes whatever it was
+refused into `bsdc.deployment_notes`. The runner prints those notes at the end of
+every run, and `--check` reads the catalog and says what is missing without
+changing anything. `main-site/scripts/db-prove/t34.mjs` builds production's exact
+privilege shape — the schema owned by another role, its tables present, row level
+security already on, and an applying role with no `CREATE` there — and proves the
+migration applies, does the work it is allowed, records the work it is not, and
+finishes the job on a later run by a role that may.
+
+What a note means in practice:
+
+| Note | What is missing | Where to put it |
+| --- | --- | --- |
+| `storage.schema`, `storage.tables` | Storage is not enabled on the project | Dashboard → Storage → set up, then re-run the migrations |
+| `storage.bucket` | the public bucket named `media` | Dashboard → Storage → New bucket: name `media`, public, 20 MB, or `POST /storage/v1/bucket` with the service key |
+| `storage.policies` | the five policies on `storage.objects` | Dashboard → Storage → Policies → New policy → *For full customization*, one at a time |
+| `storage.rls` | row level security on `storage.objects` | Dashboard → Storage → Policies (it is on by default; if it is off, the project has been changed by hand) |
+
+The policies, as the dashboard's SQL editor will take them — it runs as a role
+that owns the table, which is why this works there and not in the workflow:
+
+```sql
+create policy "bsdc media is readable by anybody" on storage.objects
+  for select using (bucket_id = 'media');
+
+create policy "bsdc media is written in your own folder" on storage.objects
+  for insert with check (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is moved in your own folder" on storage.objects
+  for update using (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  ) with check (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is deleted by its owner" on storage.objects
+  for delete using (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is reachable by staff" on storage.objects
+  for all using (bsdc.is_staff()) with check (bsdc.is_staff());
+```
+
+Then check the whole of it in one paste, from the same editor:
+
+```sql
+select 'bucket exists' as what,
+       case when exists (select 1 from storage.buckets where id = 'media')
+            then 'ok' else 'MISSING' end as state
+union all
+select 'bucket is public',
+       case when exists (select 1 from storage.buckets where id = 'media' and "public")
+            then 'ok' else 'MISSING' end
+union all
+select 'media policies',
+       count(*)::text || ' of 5'
+  from pg_policies
+ where schemaname = 'storage' and tablename = 'objects' and policyname like 'bsdc media%'
+union all
+select 'row level security',
+       case when (select c.relrowsecurity from pg_class c
+                    join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'storage' and c.relname = 'objects')
+            then 'ok' else 'MISSING' end;
+```
+
+Four `ok` rows and a `5 of 5`, and uploads have somewhere to live. Anything else,
+and the row that is not `ok` is the thing to create.
 
 ### `relation "public.<something>" does not exist` on a later migration
 

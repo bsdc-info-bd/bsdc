@@ -27,6 +27,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+import { storageHealth, DEPLOYMENT_NOTES_SQL } from './db-health.mjs';
+
 const migrationsDir = join(root, 'supabase', 'migrations');
 
 const flags = new Set(process.argv.slice(2));
@@ -212,6 +214,106 @@ const ASSERTIONS = [
   },
 ];
 
+/**
+ * What the migrations could not do.
+ *
+ * A migration that meets an object it has no rights over — `storage` is owned by
+ * `supabase_storage_admin`, not by the role applying here — records the refusal in
+ * `bsdc.deployment_notes` instead of failing the whole run. That is only useful if
+ * somebody reads it, so the run ends by printing every note that is still open. A
+ * note clears itself the first time a run manages the work it describes.
+ */
+function reportDeploymentNotes(url) {
+  let output = '';
+  try {
+    output = psql(url, DEPLOYMENT_NOTES_SQL);
+  } catch {
+    // A database from before the table existed owes nothing this run can name.
+    return 0;
+  }
+  const notes = output
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+  if (notes.length === 0) return 0;
+
+  process.stdout.write(
+    `\n${notes.length} thing(s) the migrations could not do with the rights they were given:\n`,
+  );
+  for (const note of notes) {
+    const [topic, detail] = note.split(' :: ');
+    process.stdout.write(`  ! ${topic}\n`);
+    if (detail) process.stdout.write(`    ${detail}\n`);
+  }
+  process.stdout.write('    The exact SQL and the dashboard path are in docs/deploying.md.\n');
+  return notes.length;
+}
+
+/* ------------------------------------------------------------------ *
+ * --check: read-only. What does this database still owe?
+ * ------------------------------------------------------------------ */
+
+/**
+ * A migration that could not do its work writes it down; a database that was
+ * changed by hand writes nothing down at all. `--check` reads the catalog and
+ * answers the second case: which migrations are unapplied, and whether the one
+ * part of this schema that belongs to somebody else — Storage — is actually set
+ * up. Nothing here writes.
+ */
+
+async function check(url) {
+  const ask = (sql) => psql(url, sql).trim();
+  const problems = [];
+  const line = (ok, label, detail = '') => {
+    process.stdout.write(`${ok ? 'ok  ' : 'MISS'}  ${label}${detail ? `  (${detail})` : ''}\n`);
+    if (!ok) problems.push(label);
+  };
+
+  process.stdout.write(`Checking ${describeTarget(url)}, changing nothing.\n\n`);
+
+  // -- the ledger ---------------------------------------------------------
+  const ledger = ask(`select to_regclass('supabase_migrations.schema_migrations')::text`);
+  if (ledger === '') {
+    line(false, 'no migration ledger: this database has not been through db-push');
+  } else {
+    const applied = readLedger(url);
+    const pending = plan(listMigrations(), applied).filter((entry) => entry.action === 'apply');
+    line(
+      pending.length === 0,
+      'every migration in the repository is applied',
+      pending.length === 0
+        ? `${applied.size} recorded`
+        : `${pending.length} pending: ${pending.map((entry) => entry.version).join(', ')}`,
+    );
+  }
+
+  // -- storage, the one schema this platform does not own -----------------
+  const storage = await storageHealth(ask);
+  for (const line of storage.lines) {
+    process.stdout.write(
+      `${line.ok ? 'ok  ' : 'MISS'}  ${line.label}${line.detail ? `  (${line.detail})` : ''}\n`,
+    );
+  }
+  problems.push(...storage.problems);
+
+  // -- what the migrations themselves wrote down --------------------------
+  const notesTable = ask(`select to_regclass('bsdc.deployment_notes')::text`);
+  if (notesTable !== '') {
+    const notes = reportDeploymentNotes(url);
+    if (notes > 0) problems.push(`${notes} unresolved deployment note(s)`);
+  }
+
+  if (problems.length > 0) {
+    process.stdout.write(
+      `\n${problems.length} thing(s) still owed. The remedy for each is in docs/deploying.md;\n` +
+        'the storage ones need a role that owns the table, which is the dashboard or a superuser.\n',
+    );
+    return 1;
+  }
+  process.stdout.write('\nNothing is owed.\n');
+  return 0;
+}
+
 function runAssertions(url) {
   let failures = 0;
   for (const assertion of ASSERTIONS) {
@@ -271,7 +373,7 @@ function selfTest() {
   return failed === 0 ? 0 : 1;
 }
 
-function main() {
+async function main() {
   if (want('--self-test')) return selfTest();
 
   const migrations = listMigrations();
@@ -298,6 +400,8 @@ function main() {
     return 2;
   }
 
+  if (want('--check')) return await check(url);
+
   process.stdout.write(`Target: ${describeTarget(url)}\n`);
 
   const applied = readLedger(url);
@@ -323,6 +427,7 @@ function main() {
     process.stdout.write('done\n');
   }
   process.stdout.write(`\n${todo.length} applied, ${work.length - todo.length} already present.\n`);
+  reportDeploymentNotes(url);
 
   if (want('--verify')) {
     // Running the whole set a second time proves the claim the audit makes
@@ -338,9 +443,10 @@ function main() {
       return 1;
     }
     process.stdout.write('\nevery assertion held.\n');
+    reportDeploymentNotes(url);
   }
 
   return 0;
 }
 
-process.exit(main());
+process.exit(await main());

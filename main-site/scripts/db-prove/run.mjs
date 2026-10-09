@@ -40,6 +40,7 @@ const HARNESSES = [
   ['t31.mjs', 'push reaches a closed browser, and only the people it should'],
   ['t32.mjs', 'who to follow next, why, and who is never suggested'],
   ['t33.mjs', 'changing a handle leaves the old address working and the new one free'],
+  ['t34.mjs', 'a migration that meets a schema it does not own — production\u2019s storage'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
