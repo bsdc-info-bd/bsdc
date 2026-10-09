@@ -9,6 +9,7 @@ import {
   Chip,
   EmptyState,
   ExternalLink,
+  LinkButton,
   PageSkeleton,
   SectionHeading,
 } from '@/design-system';
@@ -34,7 +35,20 @@ export default function ProjectsPage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading title={t('projects.title')} description={t('projects.description')} />
+        <SectionHeading
+          title={t('projects.title')}
+          description={t('projects.description')}
+          action={
+            <LinkButton
+              to={`${ROUTES.create}?kind=project`}
+              variant="outline"
+              size="sm"
+              iconStart={<Rocket size={14} />}
+            >
+              {t('create.submit.project')}
+            </LinkButton>
+          }
+        />
 
         {showcase.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {showcase.isError ? (
@@ -47,6 +61,11 @@ export default function ProjectsPage() {
               icon={<Rocket size={22} />}
               title={t('projects.emptyTitle')}
               description={t('projects.emptyBody')}
+              action={
+                <LinkButton to={`${ROUTES.create}?kind=project`} variant="primary" size="sm">
+                  {t('create.submit.project')}
+                </LinkButton>
+              }
             />
           </div>
         ) : null}

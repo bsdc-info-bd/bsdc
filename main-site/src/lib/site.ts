@@ -40,6 +40,7 @@ export const ROUTES = {
   onboarding: '/onboarding',
   settings: '/settings',
   compose: '/compose',
+  create: '/create',
   notifications: '/notifications',
   bookmarks: '/bookmarks',
   trash: '/trash',

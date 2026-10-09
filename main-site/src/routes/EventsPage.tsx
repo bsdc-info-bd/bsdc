@@ -7,6 +7,7 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   PageSkeleton,
   SectionHeading,
 } from '@/design-system';
@@ -57,7 +58,20 @@ export default function EventsPage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading title={t('events.title')} description={t('events.description')} />
+        <SectionHeading
+          title={t('events.title')}
+          description={t('events.description')}
+          action={
+            <LinkButton
+              to={`${ROUTES.create}?kind=event`}
+              variant="outline"
+              size="sm"
+              iconStart={<CalendarDays size={14} />}
+            >
+              {t('create.submit.event')}
+            </LinkButton>
+          }
+        />
 
         {calendar.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {calendar.isError ? <Alert tone="danger" title={t('events.failed')} /> : null}
@@ -67,6 +81,11 @@ export default function EventsPage() {
             icon={<CalendarDays size={22} />}
             title={t('events.emptyTitle')}
             description={t('events.emptyBody')}
+            action={
+              <LinkButton to={`${ROUTES.create}?kind=event`} variant="primary" size="sm">
+                {t('create.submit.event')}
+              </LinkButton>
+            }
           />
         ) : null}
 

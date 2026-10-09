@@ -30,6 +30,7 @@ const TrashPage = lazy(() => import('./routes/TrashPage'));
 const BookmarksPage = lazy(() => import('@/routes/BookmarksPage'));
 const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
 const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
+const CreatePage = lazy(() => import('@/routes/CreatePage'));
 const GroupPage = lazy(() => import('@/routes/GroupPage'));
 const EventsPage = lazy(() => import('@/routes/EventsPage'));
 const JobsPage = lazy(() => import('@/routes/JobsPage'));
@@ -95,6 +96,10 @@ const router = createBrowserRouter([
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
           { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
+          // The one door for adding to a directory: an event, a job, a gig, a
+          // project, a group. Each table already had a policy for its author;
+          // what was missing was the form.
+          { path: ROUTES.create, element: withSuspense(<CreatePage />) },
           // The same composer, opened on an existing post. The page loads the
           // post and refuses to show it to anybody but its author, and the
           // database refuses the write besides.
