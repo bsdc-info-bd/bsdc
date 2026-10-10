@@ -1,5 +1,5 @@
-import { Github, ImagePlus, Rocket, Upload, X } from 'lucide-react';
-import { useId, useRef } from 'react';
+import { Github, ImagePlus, Images, Rocket, Upload, X } from 'lucide-react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Badge,
@@ -12,8 +12,17 @@ import {
   TextField,
   TextareaField,
 } from '@/design-system';
-import { CREATE_LIMITS, type ProjectDraftInput, type ProjectStep } from '@/lib/create/create-types';
+import {
+  CREATE_LIMITS,
+  PROJECT_SCREENSHOT_MAX,
+  type ProjectDraftInput,
+  type ProjectStep,
+} from '@/lib/create/create-types';
 import { MediaImage } from '@/components/media/MediaImage';
+import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
+import { MediaTray } from '@/components/media/MediaTray';
+import { MediaGallery } from '@/components/media/MediaGallery';
+import type { Attachment, AttachmentsController } from '@/components/media/use-attachments';
 
 export interface ProjectWizardProps {
   value: ProjectDraftInput;
@@ -24,9 +33,17 @@ export interface ProjectWizardProps {
   coverUploadProgress: number | null;
   onCoverFileChange: (file: File | null) => void;
   errorFor: (field: string) => string | undefined;
+  /**
+   * The gallery queue. It is owned by the page, not by this component, because
+   * the uploads have to survive a step change: a member who adds eight pictures
+   * and then steps back to fix the tagline must not find the queue empty when
+   * they return, and the publish handler has to read the finished list from the
+   * same controller the queue was filling.
+   */
+  screenshots: AttachmentsController;
 }
 
-/** The project composer is a four-step, reviewable publishing flow. */
+/** The project composer is a five-step, reviewable publishing flow. */
 export function ProjectWizard({
   value,
   onChange,
@@ -36,17 +53,30 @@ export function ProjectWizard({
   coverUploadProgress,
   onCoverFileChange,
   errorFor,
+  screenshots,
 }: ProjectWizardProps) {
   const { t } = useTranslation();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const shotsInputRef = useRef<HTMLInputElement>(null);
+  const [editingShot, setEditingShot] = useState<Attachment | null>(null);
   const set = (patch: Partial<ProjectDraftInput>) => onChange({ ...value, ...patch });
   const steps = [
     t('create.projectSteps.basics'),
     t('create.projectSteps.build'),
     t('create.projectSteps.cover'),
+    t('create.projectSteps.screenshots'),
     t('create.projectSteps.review'),
   ];
+
+  const shotItems = screenshots.ready.map((shot) => ({
+    id: shot.id,
+    url: shot.url,
+    thumbUrl: shot.thumbUrl.length > 0 ? shot.thumbUrl : shot.url,
+    altText: shot.altText,
+    width: shot.width,
+    height: shot.height,
+  }));
 
   return (
     <div className="grid gap-5">
@@ -212,6 +242,64 @@ export function ProjectWizard({
       ) : null}
 
       {step === 3 ? (
+        <section aria-labelledby="project-step-screenshots" className="grid gap-4">
+          <div>
+            <h2 id="project-step-screenshots" className="text-base font-semibold">
+              {t('create.projectSteps.screenshots')}
+            </h2>
+            <p className="mt-1 text-sm text-muted">{t('create.projectSteps.screenshotsHint')}</p>
+          </div>
+
+          <input
+            ref={shotsInputRef}
+            type="file"
+            multiple
+            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+            aria-label={t('create.projectSteps.addScreenshots')}
+            className="fab-sr-only"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              event.target.value = '';
+              if (files.length > 0) screenshots.add(files);
+            }}
+          />
+
+          {screenshots.attachments.length > 0 ? (
+            <MediaTray
+              controller={screenshots}
+              onEdit={setEditingShot}
+              noun={t('create.projectSteps.screenshots')}
+            />
+          ) : null}
+
+          {screenshots.canAdd ? (
+            <button
+              type="button"
+              onClick={() => shotsInputRef.current?.click()}
+              className="fab-tap flex min-h-32 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-border bg-surface-2/40 px-4 text-center hover:bg-surface-2"
+            >
+              <Images size={26} aria-hidden="true" className="text-green-700" />
+              <span className="font-semibold">{t('create.projectSteps.addScreenshots')}</span>
+              <span className="text-xs text-muted">{t('create.projectSteps.screenshotsHint')}</span>
+            </button>
+          ) : null}
+
+          {screenshots.busy ? (
+            <p className="text-xs text-muted" aria-live="polite">
+              {t('create.projectSteps.screenshotsUploading')}
+            </p>
+          ) : null}
+
+          {/* The limit is said out loud rather than discovered by a refusal. */}
+          <p className="text-xs text-muted">
+            {t('create.projectSteps.screenshotsRemaining', {
+              count: Math.max(0, PROJECT_SCREENSHOT_MAX - screenshots.attachments.length),
+            })}
+          </p>
+        </section>
+      ) : null}
+
+      {step === 4 ? (
         <section aria-labelledby="project-step-review" className="grid gap-4">
           <div>
             <h2 id="project-step-review" className="text-lg font-semibold">
@@ -284,8 +372,31 @@ export function ProjectWizard({
               </div>
             </div>
           </article>
+
+          {/* The gallery as the reader will see it, not as a list of files. */}
+          {shotItems.length > 0 ? (
+            <div className="grid gap-2">
+              <h3 className="text-sm font-semibold text-muted">
+                {t('projects.screenshotsHeading')}
+              </h3>
+              <MediaGallery items={shotItems} label={t('create.projectSteps.screenshotsPreview')} />
+            </div>
+          ) : (
+            <p className="text-xs text-muted">{t('create.projectSteps.noScreenshots')}</p>
+          )}
         </section>
       ) : null}
+
+      <ImageEditorDialog
+        open={editingShot !== null}
+        file={editingShot?.file ?? null}
+        initial={editingShot?.edit ?? undefined}
+        onClose={() => setEditingShot(null)}
+        onApply={(edited, edit) => {
+          if (editingShot !== null) screenshots.applyEdit(editingShot.id, edited, edit);
+          setEditingShot(null);
+        }}
+      />
     </div>
   );
 }

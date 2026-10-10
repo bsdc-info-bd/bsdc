@@ -91,6 +91,18 @@ export function projectPath(slug: string): string {
   return `${ROUTES.projects}/${encodeURIComponent(slug.trim())}`;
 }
 
+/**
+ * The owner's editor for one project: /projects/slug/edit.
+ *
+ * A child of the permalink rather than a separate top-level route, so the thing
+ * being edited reads as part of the thing it is — and so a member who is not the
+ * owner, arriving here from a shared link, is standing on a path whose parent
+ * they can already see.
+ */
+export function projectEditPath(slug: string): string {
+  return `${projectPath(slug)}/edit`;
+}
+
 /** Product permalink: /shop/slug. */
 export function productPath(slug: string): string {
   return `/shop/${slug}`;

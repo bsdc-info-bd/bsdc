@@ -8,6 +8,7 @@ import {
   EMPTY_JOB,
   EMPTY_PROJECT,
   GROUP_SLUG_PATTERN,
+  PROJECT_LAST_STEP,
   SLUG_PATTERN,
   createdPath,
   isHttpUrl,
@@ -176,8 +177,24 @@ describe('a project', () => {
     const invalidLinks = { ...good, name: 'P', demoUrl: 'not a URL' };
     expect(fields(validateProjectDraftStep(invalidLinks, 0))).toEqual(['name']);
     expect(fields(validateProjectDraftStep(invalidLinks, 1))).toEqual(['demoUrl']);
+    // The cover and screenshot steps hold pictures, not text: there is nothing
+    // on either screen for a member to get wrong, so neither blocks the way.
     expect(validateProjectDraftStep(invalidLinks, 2)).toEqual([]);
-    expect(fields(validateProjectDraftStep(invalidLinks, 3))).toEqual(['name', 'demoUrl']);
+    expect(validateProjectDraftStep(invalidLinks, 3)).toEqual([]);
+    expect(fields(validateProjectDraftStep(invalidLinks, PROJECT_LAST_STEP))).toEqual([
+      'name',
+      'demoUrl',
+    ]);
+  });
+
+  it('keeps the review step last, so nothing publishes unreviewed', () => {
+    // The wizard renders its review at PROJECT_LAST_STEP. Were that number ever
+    // to drift from the validator's idea of "the final step", a member could
+    // reach Publish with a draft the validator never fully checked.
+    expect(PROJECT_LAST_STEP).toBe(4);
+    expect(fields(validateProjectDraftStep({ ...good, name: 'P' }, PROJECT_LAST_STEP))).toEqual([
+      'name',
+    ]);
   });
 });
 

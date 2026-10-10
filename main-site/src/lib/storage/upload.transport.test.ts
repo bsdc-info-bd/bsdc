@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadMedia } from './upload';
+import { setUploadCapabilities, uploadMedia } from './upload';
 
 vi.mock('@/lib/env', () => ({
   env: {
@@ -69,6 +69,16 @@ class FakeXMLHttpRequest {
 beforeEach(() => {
   requests.length = 0;
   vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest as unknown as typeof XMLHttpRequest);
+  // Pin the transport. These two cases are about the *direct* path, so the edge
+  // endpoint is declared absent rather than left to a probe that would fail for
+  // an unrelated reason and pass the test by accident.
+  setUploadCapabilities({
+    proxy: false,
+    proxyImgbb: false,
+    proxyCloudinary: false,
+    localImgbb: true,
+    localCloudinary: true,
+  });
 });
 
 describe('provider transport', () => {

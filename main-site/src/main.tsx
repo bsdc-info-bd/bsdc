@@ -43,6 +43,23 @@ createRoot(container).render(
 
 registerServiceWorker();
 
+// Ask the deployment what it can upload through, once, while the browser is
+// idle. The first member to attach a picture should not pay for that question
+// with a visible delay, and a deployment whose Functions are not live learns it
+// here rather than at the moment somebody presses publish.
+const warmUploadCapabilities = () => {
+  void import('./lib/storage/upload')
+    .then(({ probeUploadCapabilities, setUploadCapabilities }) =>
+      probeUploadCapabilities().then((capabilities) => setUploadCapabilities(capabilities)),
+    )
+    .catch(() => undefined);
+};
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(warmUploadCapabilities, { timeout: 5_000 });
+} else {
+  setTimeout(warmUploadCapabilities, 1_500);
+}
+
 // Field measurement. It reports on pages, never on people, and it is sent
 // once per page view on the browser's own "going away" signal.
 const buildSha: unknown = import.meta.env['VITE_BUILD_SHA'];

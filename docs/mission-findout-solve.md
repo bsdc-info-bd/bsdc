@@ -21,6 +21,7 @@ harness.
 6. [The production migration failure](#6-the-round-after-database-apply-to-production-failed-i-have-manually-did-it)
 7. [Images and the project system](#7-the-round-after-post-images-are-broken-and-projects-have-no-page)
 8. [Post-image upload completes but the post has no image](#8-the-post-image-upload-completes-but-the-published-post-has-no-image)
+9. [The same two reports, against a build that already had the fix](#9-the-same-two-reports-against-a-build-that-already-had-the-fix)
 
 ---
 
@@ -554,3 +555,144 @@ passed, changed files pass Prettier, and the production build passed (**200**
 precache entries, **13** prerendered routes). GitHub's build, schema-from-nothing,
 Cloudflare Pages, app-quality, and Secret scan checks also passed; production apply
 was skipped by design. PR #9 remains open for owner review and merge.
+
+---
+
+## 9. The same two reports, against a build that already had the fix
+
+The two reports arrived again, in the same words: post images going to Supabase
+Storage and not showing on the post page; projects with no page of their own, no
+cover upload and no multi-step flow. Both had been the subject of §7 and §8, and
+both fixes were merged into `main` at `e20f2da`.
+
+### What the review actually found
+
+The first thing checked was whether the merged code did what §7 claimed. It did.
+`resolveProvider()` routes an ordinary image to ImgBB and an important one to
+Cloudinary and returns null rather than crossing hosts; there is no Supabase
+Storage byte-upload path left anywhere in the repository; `POST_SELECT` carries
+`post_media` into every read that renders a post, so the feed, the permalink,
+bookmarks and a tag archive all receive the same gallery; `toPost()` drops a row
+whose join came back empty instead of emitting `src=""`; `PostCard` and
+`PostPage` both render it; and `/projects/:slug` was a real route with a real
+cover, a real fetch by slug and `SoftwareSourceCode` JSON-LD.
+
+So the code was not the problem, and saying "already fixed" would have been both
+true and useless. What the review found instead were three things that were
+genuinely still wrong, and that between them explain a production site behaving
+as though nothing had been done.
+
+**1. The upload still depended on a build nobody had rebuilt.** Both hosts' keys
+were read from `import.meta.env`, so they were compiled into the JavaScript.
+§7's own operator list ends with "changing a Pages variable without rebuilding
+does not change the shipped JavaScript" — which means that on the deployed site,
+where those variables were set in the dashboard and no rebuild followed, every
+upload still answered `media.errors.notConfigured`. On a phone that is a toast
+you miss, and what is left on screen is a composer that appears not to work.
+
+**2. The ImgBB key was published.** `VITE_IMGBB_API_KEY` is a secret, not a
+publishable key like the Cloudinary pair. Shipping it in the bundle hands
+anybody the ability to spend that account's quota and fill it with whatever they
+like. The repository had documented this as "public by design", which is true of
+Cloudinary's unsigned preset and not true of an ImgBB API key.
+
+**3. Projects were write-once.** `public.projects` has carried an owner-update
+and an owner-delete policy since migration 0014, with the table grants to match.
+Nothing in the application ever offered either. A published project could not be
+corrected, could not be taken down, and held exactly one picture: a cover and no
+gallery, so a member could show a card and never the product.
+
+### What changed
+
+- **Uploads go through the site's own edge.** `POST /api/media/upload` verifies
+  the caller's Firebase ID token with Web Crypto against Google's published
+  secure-token certificates, validates the file, and uploads it to the host its
+  purpose requires — reading `IMGBB_API_KEY`, `CLOUDINARY_CLOUD_NAME` and
+  `CLOUDINARY_UNSIGNED_PRESET` from `context.env` at *request* time. Setting one
+  in the dashboard now takes effect on the next upload, with no rebuild. The key
+  never reaches a browser. `GET /api/media/providers` answers with three
+  booleans and no secret, so the client can plan instead of guess.
+- **One routing table, two readers.** `src/lib/storage/media-contract.ts` holds
+  the kinds, the limits, the purposes and `chooseProvider()`, and has no imports
+  at all, so both the browser and the edge read the same answer. A router
+  duplicated across a network boundary is a router that eventually disagrees
+  with itself, and that disagreement looks exactly like a picture uploaded
+  somewhere the reader cannot see it. `t28` now asserts the edge imports the
+  contract rather than restating it.
+- **The direct transport survives as a fallback, and only as one.**
+  `planUpload()` is pure and decides the route before a byte moves. A refusal
+  *from the host* surfaces its own reason and is never retried through the other
+  transport, because that would upload the same picture twice; only a missing
+  endpoint — 404, or a 200 whose body is the application shell, which is what a
+  static host answers — falls back. The capability probe is warmed while the
+  browser is idle, so the first attach does not pay for it.
+- **Projects became manageable.** `/projects/:slug/edit` opens the same
+  five-step flow on what is already published, seeded from the row, with the
+  gallery seeded as attached so saving keeps the pictures that are already
+  there. The owner gets Edit and Delete on the project page, behind a
+  confirmation. `updateProject()` deliberately does not write the slug: it is
+  the permalink the sitemap and every shared link point at. `deleteProject()`
+  reads the deleted row count, because row level security makes a stranger's
+  delete succeed against zero rows — reporting that as a save would have sent
+  the author back to a page showing the old values with a "saved" toast.
+- **A project has a gallery.** Migration `0064` adds `project_media`, the same
+  join onto `media_assets` that `post_media` is, with the same rule that the
+  bytes live at the external host and only the reference lives here. Its update
+  privilege follows the shape 0042 established and exists to be followed:
+  granted per column, `("position", alt_text)`, never at table level. Granting
+  the table and revoking the two foreign keys afterwards — the obvious reading,
+  and the one this migration was first written with — protects nothing at all,
+  because a table-level grant covers every column and a column-level revoke
+  cannot subtract from it. `t36` caught that on its first run, which is the
+  argument for proving a migration against a real engine before deploying it.
+- **The publishing race is closed at the source.** The gallery travels as a
+  mutation variable captured in the click handler, not read from a trailing
+  effect, and Publish is held while an upload is still in flight. A picture on
+  its way up is a picture that save would drop, and on an edit dropping one
+  deletes a screenshot the project already had.
+
+### Verification
+
+Local, on this commit: Vitest **56 files / 735 tests**; `db:prove` **20/20**
+harnesses, including the new `t36` (14 checks) and `t28` grown from 39 to 43;
+typecheck clean for both the app and `functions/`; ESLint clean at
+`--max-warnings 0`; Prettier clean; production build clean (**203** precache
+entries, **13** prerendered routes); launch audit **103 passed / 0 failed / 4
+recorded**; counted features **1851**.
+
+Two of those numbers moved because a check was wrong rather than because code
+was. `t28` asserted on the text of `upload.ts` that it contained
+`'project-cover'`; the routing table had moved to the contract module, so the
+assertion was reading the wrong file, and it now reads both. The launch audit's
+`any`-type rule matched the substring inside two of this round's own comments
+("as anybody", "if it has any"); the comments were reworded rather than the rule
+weakened.
+
+### What the operator does now
+
+1. Apply `0064` with the normal database workflow. It creates one table, its
+   index, two policies and four grants, and is idempotent — `t24` applies it
+   three times over.
+2. Set the three media variables in Cloudflare Pages → Settings → Environment
+   variables, as **request-time** secrets this time: `IMGBB_API_KEY`
+   (encrypted), `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_UNSIGNED_PRESET`. Confirm
+   `FB_PROJECT_ID` is set, or the endpoint cannot verify who is uploading and
+   answers 401. No rebuild is needed for these to take effect.
+3. Check what the deployment believes: `curl -s
+   https://www.bsdc.info.bd/api/media/providers` should answer
+   `{"proxy":true,"imgbb":true,"cloudinary":true}`. An HTML page instead of JSON
+   means the Functions are not deployed and only the bundle fallback exists.
+4. Deploy this build. Then attach a picture to a post and publish one project
+   through all five steps. `media_assets.provider` should read `imgbb` for the
+   post image and `cloudinary` for the cover and the screenshots; no new row
+   should say `supabase`.
+5. Once the proxy is confirmed working, **remove the three `VITE_` media
+   variables and rotate the ImgBB key.** That key has been in a public bundle,
+   and rotating it is the only thing that un-publishes it.
+6. For projects published before this round: they were never editable, so any
+   that need correcting can now be corrected from `/projects/<slug>/edit`. None
+   are backfilled with a gallery automatically; the owner adds screenshots.
+
+Still the owner's to do, and unchanged from §7: the high-risk credentials pasted
+into the conversation (database password, Cloudinary API secret, OneSignal REST
+key) should be rotated before production use. None were added to code.

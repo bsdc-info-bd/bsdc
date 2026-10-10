@@ -37,6 +37,8 @@ import {
   EMPTY_JOB,
   EMPTY_PROJECT,
   createdPath,
+  PROJECT_LAST_STEP,
+  PROJECT_SCREENSHOT_MAX,
   validateCreateDraft,
   validateProjectDraftStep,
   type ProjectStep,
@@ -48,7 +50,9 @@ import {
   type JobDraftInput,
   type ProjectDraftInput,
 } from '@/lib/create/create-types';
-import { createListing } from '@/lib/create/create-repository';
+import { createListing, createProjectWithId } from '@/lib/create/create-repository';
+import type { ProjectScreenshotDraft } from '@/lib/opportunities/opportunity-repository';
+import { useAttachments } from '@/components/media/use-attachments';
 import { slugify } from '@/lib/content/text';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { assertUploadable, MediaError } from '@/lib/storage/upload';
@@ -99,6 +103,21 @@ export default function CreatePage() {
   );
   const [slugTouched, setSlugTouched] = useState(false);
   const [issues, setIssues] = useState<CreateIssue[]>([]);
+
+  /**
+   * The project's gallery.
+   *
+   * The same queue the post composer uses, so a screenshot gets the same local
+   * preview, the same percentage, the same retry, the same reordering and — the
+   * part that matters — the same refusal to look attached before the database
+   * has a `media_assets` row for it. A second, simpler uploader here would be a
+   * second place for the bug that made post images disappear to live.
+   */
+  const screenshots = useAttachments({
+    purpose: 'project-image',
+    uid: user?.uid ?? null,
+    max: PROJECT_SCREENSHOT_MAX,
+  });
 
   useEffect(() => {
     if (projectCoverFile === null) {
@@ -171,49 +190,81 @@ export default function CreatePage() {
       toast.error(t(found[0]!.messageKey));
       return;
     }
-    setProjectStep((current) => Math.min(current + 1, 3) as ProjectStep);
+    setProjectStep((current) => Math.min(current + 1, PROJECT_LAST_STEP) as ProjectStep);
   }
 
   const mutation = useMutation({
     mutationKey: ['create-listing', kind, user?.uid ?? ''],
-    mutationFn: async () => {
+    /**
+     * The gallery travels as a mutation variable rather than being read from
+     * the controller inside the mutation.
+     *
+     * `ready` is published by a passive effect, so on the render where the last
+     * upload finished, a fast press of Publish can still see the previous list —
+     * which is precisely how a post was once published with its text and without
+     * its picture. Capturing the list in the click handler that is already
+     * reading the current state removes the gap instead of racing it.
+     */
+    mutationFn: async (gallery: readonly ProjectScreenshotDraft[]) => {
       const ownerUid = user?.uid ?? '';
-      if (kind !== 'project' || projectCoverFile === null) {
+      if (kind !== 'project') {
         return createListing(kind, ownerUid, draft);
       }
 
-      // Upload once and retain the completed result if recording or the project
-      // insert needs retrying. A slow phone must not upload the same cover again
-      // just because the database briefly refused the row.
-      let prepared = preparedProjectCover?.file === projectCoverFile ? preparedProjectCover : null;
-      if (prepared === null) {
-        const { uploadMedia } = await import('@/lib/storage/upload');
-        const result = await uploadMedia(projectCoverFile, {
-          purpose: 'project-cover',
-          onProgress: setProjectCoverProgress,
-        });
-        prepared = { file: projectCoverFile, result, mediaRecorded: false };
-        setPreparedProjectCover(prepared);
+      // The cover is optional; the project is not. Upload it once and retain the
+      // completed result if recording or the insert needs retrying, so a slow
+      // phone does not send the same picture again because the database briefly
+      // refused a row.
+      let coverUrl = project.coverUrl;
+      if (projectCoverFile !== null) {
+        let prepared =
+          preparedProjectCover?.file === projectCoverFile ? preparedProjectCover : null;
+        if (prepared === null) {
+          const { uploadMedia } = await import('@/lib/storage/upload');
+          const result = await uploadMedia(projectCoverFile, {
+            purpose: 'project-cover',
+            onProgress: setProjectCoverProgress,
+          });
+          prepared = { file: projectCoverFile, result, mediaRecorded: false };
+          setPreparedProjectCover(prepared);
+        }
+
+        if (!prepared.mediaRecorded) {
+          const { recordMediaAsset } = await import('@/lib/data/media-repository');
+          const row = await recordMediaAsset(ownerUid, prepared.result);
+          if (row === null) throw new Error('media.errors.recordFailed');
+          prepared = { ...prepared, mediaRecorded: true };
+          setPreparedProjectCover(prepared);
+        }
+
+        coverUrl = prepared.result.url;
       }
 
-      if (!prepared.mediaRecorded) {
-        const { recordMediaAsset } = await import('@/lib/data/media-repository');
-        const row = await recordMediaAsset(ownerUid, prepared.result);
-        if (row === null) throw new Error('media.errors.recordFailed');
-        prepared = { ...prepared, mediaRecorded: true };
-        setPreparedProjectCover(prepared);
+      const created = await createProjectWithId(ownerUid, { ...project, coverUrl });
+
+      // Written after the project exists, because `project_media` points at it.
+      // A gallery that fails to save must not take the project down with it: the
+      // project is published, and the author can add its pictures from the edit
+      // page, which is why this is the one write here that is not fatal.
+      if (gallery.length > 0 && created.id.length > 0) {
+        try {
+          const { replaceProjectScreenshots } = await import(
+            '@/lib/opportunities/opportunity-repository'
+          );
+          await replaceProjectScreenshots(created.id, gallery);
+        } catch {
+          toast.error(t('create.projectSteps.screenshotsNotSaved'));
+        }
       }
 
-      return createListing('project', ownerUid, {
-        ...project,
-        coverUrl: prepared.result.url,
-      });
+      return created.slug;
     },
     onSuccess: (slug) => {
       toast.success(t('create.created'));
       setProjectCoverProgress(null);
       setPreparedProjectCover(null);
       setProjectCoverFile(null);
+      screenshots.clear();
       if (slug.length > 0) navigate(createdPath(kind, slug));
     },
     onError: (error: unknown) => {
@@ -235,7 +286,14 @@ export default function CreatePage() {
       return;
     }
     if (user === null) return;
-    mutation.mutate();
+    // Only pictures the database already has a row for may be attached: an
+    // upload with no `media_assets` id has nothing to point at, and inserting
+    // one would fail the batch and lose the rest of the gallery.
+    const gallery = screenshots.ready.map((shot) => ({
+      mediaId: shot.mediaId,
+      altText: shot.altText,
+    }));
+    mutation.mutate(gallery);
   }
 
   function errorFor(field: string): string | undefined {
@@ -272,6 +330,7 @@ export default function CreatePage() {
           coverUploadProgress={projectCoverProgress}
           onCoverFileChange={(file) => void chooseProjectCover(file)}
           errorFor={errorFor}
+          screenshots={screenshots}
         />
       ),
     },
@@ -337,11 +396,11 @@ export default function CreatePage() {
                 {t('create.projectSteps.previous')}
               </Button>
             ) : null}
-            {kind === 'project' && projectStep < 3 ? (
+            {kind === 'project' && projectStep < PROJECT_LAST_STEP ? (
               <Button
                 type="button"
                 onClick={nextProjectStep}
-                disabled={user === null || mutation.isPending}
+                disabled={user === null || mutation.isPending || screenshots.busy}
                 iconEnd={<ArrowRight size={16} />}
               >
                 {t('create.projectSteps.next')}
@@ -351,7 +410,12 @@ export default function CreatePage() {
                 type="button"
                 onClick={submit}
                 loading={mutation.isPending}
-                disabled={user === null}
+                // A picture still on its way up is a picture this publish would
+                // drop. Holding the button is the honest answer; the member can
+                // see the percentage beside it and knows what they are waiting
+                // for. Publishing anyway is how a post ends up live with an
+                // image that was never attached to it.
+                disabled={user === null || (kind === 'project' && screenshots.busy)}
                 iconStart={<Icon aria-hidden className="size-4" />}
               >
                 {t(`create.submit.${kind}`)}

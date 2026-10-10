@@ -14,6 +14,12 @@ import {
   type SketchLanguage,
 } from '@/lib/opportunities/opportunity-types';
 import { useAuthStore } from '@/store/auth-store';
+// Types only: the repository itself is loaded on demand by `repository()`, and a
+// type import is erased from the bundle, so this does not pull the module in.
+import type {
+  ProjectScreenshotDraft,
+  ProjectUpdate,
+} from '@/lib/opportunities/opportunity-repository';
 
 const repository = () => import('@/lib/opportunities/opportunity-repository');
 
@@ -169,6 +175,8 @@ export interface ProjectDetailResult {
   isError: boolean;
   star: () => void;
   isStarring: boolean;
+  /** Re-reads the project. Used after a write the database refused. */
+  refetch: () => void;
 }
 
 /** Loads a project directly by slug; details do not depend on the list's 40-row window. */
@@ -218,6 +226,111 @@ export function useProject(slug: string): ProjectDetailResult {
       if (query.data) mutation.mutate(query.data.id);
     },
     isStarring: mutation.isPending,
+    refetch: () => {
+      void query.refetch();
+    },
+  };
+}
+
+export interface MyProjectsResult {
+  projects: Project[];
+  isLoading: boolean;
+  isError: boolean;
+}
+
+/**
+ * The projects one member owns.
+ *
+ * Separate from the directory query on purpose: the directory is sorted by
+ * stars, capped at forty rows and shared with every visitor, so an author with a
+ * modest project would not find their own work there. This one is keyed by uid
+ * and reads only their rows.
+ */
+export function useMyProjects(): MyProjectsResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryKey = ['my-projects', uid];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => (await repository()).fetchMyProjects(uid ?? ''),
+    enabled: uid !== null && uid.length > 0,
+    staleTime: 30_000,
+  });
+
+  return {
+    projects: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+export interface ProjectOwnerActions {
+  /** Corrects the project and writes its gallery. Resolves with the slug. */
+  save: (
+    projectId: string,
+    draft: ProjectUpdate,
+    screenshots: readonly ProjectScreenshotDraft[],
+  ) => Promise<string>;
+  /** Takes the project down. The gallery and the stars cascade with it. */
+  remove: (projectId: string) => Promise<void>;
+  isSaving: boolean;
+  isRemoving: boolean;
+}
+
+/**
+ * What an owner can do to a project after publishing it.
+ *
+ * Both writes invalidate every cache that could hold the old values — the
+ * project itself, the directory, the owner's own list and search — because a
+ * corrected project that still reads wrong on the page it was corrected from is
+ * indistinguishable, to the author, from a save that failed.
+ */
+export function useProjectOwnerActions(): ProjectOwnerActions {
+  const queryClient = useQueryClient();
+
+  const invalidateAll = () => {
+    void queryClient.invalidateQueries({ queryKey: ['project'] });
+    void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-projects'] });
+    void queryClient.invalidateQueries({ queryKey: ['search'] });
+  };
+
+  const save = useMutation({
+    mutationFn: async ({
+      projectId,
+      draft,
+      screenshots,
+    }: {
+      projectId: string;
+      draft: ProjectUpdate;
+      screenshots: readonly ProjectScreenshotDraft[];
+    }) => {
+      const { updateProject, replaceProjectScreenshots } = await repository();
+      // The row first, then the gallery: a gallery written against a project
+      // whose correction failed would leave the two disagreeing, and the
+      // correction is the part the author pressed save for.
+      const slug = await updateProject(projectId, draft);
+      await replaceProjectScreenshots(projectId, screenshots);
+      return slug;
+    },
+    onSuccess: invalidateAll,
+    onError: invalidateAll,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (projectId: string) => {
+      const { deleteProject } = await repository();
+      await deleteProject(projectId);
+    },
+    onSuccess: invalidateAll,
+    onError: invalidateAll,
+  });
+
+  return {
+    save: (projectId, draft, screenshots) => save.mutateAsync({ projectId, draft, screenshots }),
+    remove: (projectId) => remove.mutateAsync(projectId),
+    isSaving: save.isPending,
+    isRemoving: remove.isPending,
   };
 }
 
