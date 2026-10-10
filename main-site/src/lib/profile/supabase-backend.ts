@@ -1,12 +1,10 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type { ProfileInsert, ProfileRow, ProfileUpdate } from '@/lib/supabase/types';
+import { coerceProfile } from './coerce';
 import {
   DEFAULT_NOTIFICATIONS,
   DEFAULT_PRIVACY,
-  notificationPrefsSchema,
-  privacyPrefsSchema,
-  profileSchema,
   usernameSchema,
   type Profile,
   type ProfileBackend,
@@ -16,30 +14,34 @@ import {
   type ProfileStats,
 } from './types';
 
-/** Maps a Postgres row onto the shared profile shape. */
+/**
+ * Maps a Postgres row onto the shared profile shape.
+ *
+ * Null means "there is no row", never "the row was surprising": a member whose
+ * skills array held one over-long string used to lose their whole profile —
+ * picture, name and handle — at the next sign-in, while the public post page
+ * kept showing the picture it reads straight from the column.
+ */
 export function rowToProfile(row: ProfileRow): Profile | null {
-  const parsed = profileSchema.safeParse({
+  return coerceProfile({
     uid: row.uid,
+    // The handle is null until the member claims one; the row is still theirs.
     username: row.username ?? '',
     displayName: row.display_name,
     bio: row.bio,
     avatarUrl: row.avatar_url,
+    coverUrl: row.cover_url,
     location: row.location,
     website: row.website,
     skills: row.skills,
     interests: row.interests,
-    language: row.language === 'en' ? 'en' : 'bn',
+    language: row.language,
     onboardingComplete: row.onboarding_complete,
-    notifications: notificationPrefsSchema.safeParse(row.notifications).success
-      ? notificationPrefsSchema.parse(row.notifications)
-      : DEFAULT_NOTIFICATIONS,
-    privacy: privacyPrefsSchema.safeParse(row.privacy).success
-      ? privacyPrefsSchema.parse(row.privacy)
-      : DEFAULT_PRIVACY,
+    notifications: row.notifications,
+    privacy: row.privacy,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   });
-  return parsed.success ? parsed.data : null;
 }
 
 /** Maps the editable half of a profile onto column names. */
@@ -48,6 +50,7 @@ export function fieldsToUpdate(fields: ProfileFields): ProfileUpdate {
   if (fields.displayName !== undefined) update.display_name = fields.displayName;
   if (fields.bio !== undefined) update.bio = fields.bio;
   if (fields.avatarUrl !== undefined) update.avatar_url = fields.avatarUrl;
+  if (fields.coverUrl !== undefined) update.cover_url = fields.coverUrl;
   if (fields.location !== undefined) update.location = fields.location;
   if (fields.website !== undefined) update.website = fields.website;
   if (fields.skills !== undefined) update.skills = [...fields.skills];
@@ -75,6 +78,7 @@ export function onboardingInsert(uid: string, draft: ProfileDraft): ProfileInser
     display_name: draft.displayName,
     bio: draft.bio,
     avatar_url: draft.avatarUrl,
+    cover_url: draft.coverUrl,
     location: draft.location,
     website: draft.website,
     skills: [...draft.skills],
@@ -155,6 +159,7 @@ async function saveProfile(uid: string, draft: ProfileDraft): Promise<Profile> {
         displayName: draft.displayName,
         bio: draft.bio,
         avatarUrl: draft.avatarUrl,
+        coverUrl: draft.coverUrl,
         location: draft.location,
         website: draft.website,
         skills: draft.skills,
@@ -174,11 +179,25 @@ async function saveProfile(uid: string, draft: ProfileDraft): Promise<Profile> {
   return profile;
 }
 
+/**
+ * Writes the editable columns and checks that a row was actually written.
+ *
+ * An UPDATE that matches no row is not an error in Postgres — it is zero rows
+ * and a success — so without this check a save against a missing or
+ * unreadable profile would report success, show the member their new picture,
+ * and lose it at the next sign-in. `select('uid')` asks PostgREST for the
+ * rows it changed, which is what makes the difference visible.
+ */
 async function updateProfileFields(uid: string, fields: ProfileFields): Promise<void> {
   const update = fieldsToUpdate(fields);
   if (Object.keys(update).length === 0) return;
-  const { error } = await getSupabase().from('profiles').update(update).eq('uid', uid);
+  const { data, error } = await getSupabase()
+    .from('profiles')
+    .update(update)
+    .eq('uid', uid)
+    .select('uid');
   if (error) throw toDataError(error);
+  if ((data ?? []).length === 0) throw new Error('profile/not-found');
 }
 
 /**

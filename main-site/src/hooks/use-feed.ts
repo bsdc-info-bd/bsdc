@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Post } from '@/lib/content/post-repository';
 import {
   fetchCandidates,
@@ -11,10 +11,13 @@ import {
 } from '@/lib/feed/feed-repository';
 import {
   DEFAULT_FEED_PREFERENCES,
+  emptyReason,
   mergePages,
-  rankFeed,
+  rankFeedWithReport,
   type FeedAlgorithm,
+  type FeedEmptyReason,
   type FeedPreferences,
+  type FilterReport,
   type ScoredCandidate,
 } from '@/lib/feed/ranking';
 import { useAuthStore } from '@/store/auth-store';
@@ -27,6 +30,8 @@ interface FeedPage {
   ranked: ScoredCandidate[];
   posts: Post[];
   cursor: string | null;
+  /** Stage two's counts for the first page, which is what explains an empty feed. */
+  report: FilterReport | null;
 }
 
 export function useFeedPreferences(): {
@@ -68,6 +73,11 @@ export interface UseFeedResult {
   isFetchingNextPage: boolean;
   hasNextPage: boolean;
   isError: boolean;
+  /** Why the feed is empty, so the member is told the truth rather than a shrug. */
+  emptyReason: FeedEmptyReason;
+  /** Reads the posts this member has already seen, which the feed hides by default. */
+  showSeen: () => void;
+  includeSeen: boolean;
   loadMore: () => void;
   refresh: () => void;
   newPostCount: number;
@@ -82,17 +92,38 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const { preferences } = useFeedPreferences();
   const queryClient = useQueryClient();
+  // A member who has read everything is offered the posts back rather than an
+  // empty room; asking for them is a choice made in the UI, not a default.
+  const [includeSeen, setIncludeSeen] = useState(false);
   const effective = useMemo<FeedPreferences>(
-    () => ({ ...preferences, algorithm }),
-    [preferences, algorithm],
+    () => ({ ...preferences, algorithm, hideSeen: includeSeen ? false : preferences.hideSeen }),
+    [preferences, algorithm, includeSeen],
   );
 
   const query = useInfiniteQuery({
-    queryKey: ['feed', uid, algorithm, effective.languages.join(','), effective.showSensitive],
+    queryKey: [
+      'feed',
+      uid,
+      algorithm,
+      effective.languages.join(','),
+      effective.showSensitive,
+      effective.hideSeen,
+    ],
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam }): Promise<FeedPage> => {
       const candidates = await fetchCandidates(CANDIDATE_PAGE_SIZE, pageParam);
-      const ranked = rankFeed(candidates, effective, uid);
+      let { ranked, report } = rankFeedWithReport(candidates, effective, uid);
+
+      // The fallback stage two has always promised: when hiding what the
+      // member has read removes every candidate, read it again without that
+      // rule. A feed that repeats itself is still a feed; an empty one looks
+      // like the community has nothing to say, which is not what happened.
+      if (ranked.length === 0 && candidates.length > 0 && effective.hideSeen) {
+        const retry = rankFeedWithReport(candidates, { ...effective, hideSeen: false }, uid);
+        ranked = retry.ranked;
+        report = retry.report;
+      }
+
       const posts = await hydratePosts(ranked.map((item) => item.postId));
       const oldest = candidates.reduce<string | null>((acc, item) => {
         if (acc === null) return item.publishedAt;
@@ -101,6 +132,7 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
       return {
         ranked,
         posts,
+        report: pageParam === null ? report : null,
         cursor: candidates.length < CANDIDATE_PAGE_SIZE ? null : oldest,
       };
     },
@@ -116,6 +148,12 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
       .flatMap((page) => page.posts)
       .filter((post) => (seen.has(post.id) ? false : (seen.add(post.id), true)));
   }, [pages]);
+
+  const firstReport = pages[0]?.report ?? null;
+  const reason = useMemo<FeedEmptyReason>(
+    () => (firstReport === null ? 'nothing' : emptyReason(firstReport, ranked.length)),
+    [firstReport, ranked.length],
+  );
 
   const firstPublishedAt = posts[0]?.publishedAt ?? null;
   const { data: newPostCount = 0 } = useQuery({
@@ -176,6 +214,11 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
     isFetchingNextPage: query.isFetchingNextPage,
     hasNextPage: query.hasNextPage,
     isError: query.isError,
+    emptyReason: query.isError ? 'nothing' : reason,
+    includeSeen,
+    showSeen: () => {
+      setIncludeSeen(true);
+    },
     loadMore: () => {
       if (query.hasNextPage && !query.isFetchingNextPage) void query.fetchNextPage();
     },

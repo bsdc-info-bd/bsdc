@@ -1,4 +1,4 @@
-import { Bell, MessageSquare, PenSquare, Search, ShoppingCart } from 'lucide-react';
+import { Bell, MessageSquare, PenSquare, PlusCircle, Search, ShoppingCart } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, NavLink } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
@@ -71,6 +71,20 @@ export function AppBar() {
             <Link to={ROUTES.compose} aria-label={t('compose.title')} title={t('compose.title')}>
               <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
                 <PenSquare size={20} aria-hidden="true" />
+              </span>
+            </Link>
+          ) : null}
+          {/* The directories: an event, a job, a gig, a project, a group. On a
+              phone this lives in the bottom bar, so the icon stays off it. */}
+          {signedIn ? (
+            <Link
+              to={ROUTES.create}
+              aria-label={t('create.title')}
+              title={t('create.title')}
+              className="hidden sm:block"
+            >
+              <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
+                <PlusCircle size={20} aria-hidden="true" />
               </span>
             </Link>
           ) : null}

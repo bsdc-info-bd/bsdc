@@ -49,11 +49,14 @@ export interface Gig {
   publishedAt: string | null;
 }
 
+export type ProjectSort = 'popular' | 'recent';
+
 export interface Project {
   id: string;
   slug: string;
   name: string;
   tagline: string;
+  description: string;
   repoUrl: string;
   demoUrl: string;
   coverUrl: string;
@@ -63,6 +66,19 @@ export interface Project {
   ownerUid: string;
   stars: number;
   starred: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectOwner {
+  uid: string;
+  username: string | null;
+  displayName: string;
+  avatarUrl: string;
+}
+
+export interface ProjectDetail extends Project {
+  owner: ProjectOwner | null;
 }
 
 export interface Sketch {

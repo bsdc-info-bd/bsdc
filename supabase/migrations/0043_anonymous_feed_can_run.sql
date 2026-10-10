@@ -1,0 +1,34 @@
+-- ---------------------------------------------------------------------------
+-- The feed's first stage is granted to anonymous readers, but could never run
+-- for them.
+--
+-- 0006 grants EXECUTE on `public.feed_candidates(integer, timestamptz)` to
+-- `anon`, and 0005 documents why: it is the candidate stage of the home feed,
+-- and the only rows it can ever return are published posts the caller is
+-- already allowed to read, because row level security on `public.posts`
+-- applies inside it.
+--
+-- It is an invoker-rights function, so every table it touches needs a
+-- privilege for the calling role. It reads `public.topic_affinity` and
+-- `public.feed_seen` to fill a candidate's affinity and already-seen signals,
+-- and 0006 granted SELECT on those two tables to `authenticated` only. An
+-- anonymous caller therefore got
+--
+--   42501 permission denied for table topic_affinity
+--
+-- from an entry point the same file had just published to them — the same
+-- shape of defect as 0040, one table over. Signed-in readers never noticed
+-- because `authenticated` held the grant.
+--
+-- Granting SELECT exposes nothing: both tables carry a self-only policy
+-- (`feed_seen_self`, `topic_affinity_self`) whose predicate is
+-- `uid = bsdc.current_uid()`. An anonymous caller's `current_uid()` is null,
+-- so both subqueries legitimately return no rows and the feed reports "no
+-- affinity, nothing seen" — which is exactly the intended behaviour for a
+-- visitor who has never interacted with the site.
+--
+-- Granting a privilege that already exists is a no-op, so this file is safe to
+-- re-run.
+-- ---------------------------------------------------------------------------
+
+grant select on public.topic_affinity, public.feed_seen to anon;

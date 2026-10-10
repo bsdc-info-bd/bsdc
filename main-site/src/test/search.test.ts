@@ -64,7 +64,9 @@ describe('resultPath', () => {
     expect(resultPath(result({ kind: 'group', slug: 'dhaka-js' }))).toBe('/g/dhaka-js');
     expect(resultPath(result({ kind: 'course', slug: 'intro-sql' }))).toBe('/learn/intro-sql');
     expect(resultPath(result({ kind: 'job' }))).toBe('/jobs');
-    expect(resultPath(result({ kind: 'project' }))).toBe('/projects');
+    expect(resultPath(result({ kind: 'project', slug: 'padma-monitor' }))).toBe(
+      '/projects/padma-monitor',
+    );
   });
 
   it('falls back to an id for a member without a username', () => {

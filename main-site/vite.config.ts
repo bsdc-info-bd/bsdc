@@ -7,6 +7,13 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // The worker is written, not generated: `src/sw.ts` answers push, and a
+      // generated worker cannot listen for anything. Everything the generated one
+      // did — the precache manifest, the app-shell fallback and its denylist, the
+      // image and font caches — is in that file, with the same limits.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       registerType: 'prompt',
       injectRegister: null,
       includeAssets: ['favicon.svg', 'icons/*.png'],
@@ -42,35 +49,12 @@ export default defineConfig({
           { name: 'Notifications', url: '/notifications' },
         ],
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/__\//,
-          /^\/sitemap/,
-          /^\/rss/,
-          /^\/robots\.txt$/,
-        ],
-        cleanupOutdatedCaches: true,
-        runtimeCaching: [
-          {
-            urlPattern: ({ request }) => request.destination === 'image',
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'bsdc-images',
-              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
-            },
-          },
-          {
-            urlPattern: ({ request }) => request.destination === 'font',
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'bsdc-fonts',
-              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-            },
-          },
-        ],
+        // The largest single chunk the build makes is the Firebase one; the
+        // default ceiling of 2 MiB would leave it out of the precache and the
+        // site would not survive an offline reload of a page that needs it.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       devOptions: { enabled: false },
     }),

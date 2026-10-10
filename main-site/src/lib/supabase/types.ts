@@ -10,7 +10,7 @@ export type DbRole = 'member' | 'creator' | 'vendor' | 'moderator' | 'manager' |
 
 export type DbAccountStatus = 'active' | 'suspended' | 'deactivated' | 'deleted';
 export type DbMediaKind = 'image' | 'document' | 'audio' | 'video';
-export type DbMediaProvider = 'cloudinary' | 'imgbb' | 'external';
+export type DbMediaProvider = 'cloudinary' | 'imgbb' | 'external' | 'supabase';
 export type DbReportStatus = 'open' | 'reviewing' | 'actioned' | 'dismissed';
 
 export type ProfileRow = {
@@ -173,6 +173,7 @@ export type PostRow = {
   allow_comments: boolean;
   published_at: string | null;
   edited_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -216,6 +217,7 @@ export type PostUpdate = Partial<
     | 'is_sensitive'
     | 'allow_comments'
     | 'published_at'
+    | 'deleted_at'
   >
 >;
 
@@ -298,6 +300,7 @@ export type DbNotificationKind =
   | 'bookmark'
   | 'share'
   | 'post_published'
+  | 'message'
   | 'moderation';
 
 export type NotificationRow = {
@@ -307,6 +310,7 @@ export type NotificationRow = {
   kind: DbNotificationKind;
   post_id: string | null;
   comment_id: string | null;
+  conversation_id: string | null;
   body: string;
   read_at: string | null;
   created_at: string;
@@ -332,6 +336,7 @@ export type CommentRow = {
   replies_count: number;
   is_answer: boolean;
   edited_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -373,7 +378,7 @@ export type ToggleReactionRow = { reacted: boolean; reaction: DbReaction; total:
 export type ToggleCommentReactionRow = { reacted: boolean; total: number };
 
 export type DbConversationKind = 'direct' | 'group';
-export type DbMessageKind = 'text' | 'image' | 'file' | 'snippet' | 'system';
+export type DbMessageKind = 'text' | 'image' | 'audio' | 'video' | 'file' | 'snippet' | 'system';
 export type DbMemberRole = 'owner' | 'admin' | 'member';
 
 export type ConversationRow = {
@@ -397,6 +402,105 @@ export type ConversationMemberRow = {
   last_read_at: string;
   muted_until: string | null;
   left_at: string | null;
+  is_pinned: boolean;
+  is_archived: boolean;
+  draft_body: string;
+};
+
+/** One emoji a member left on one message. */
+export type MessageReactionRow = {
+  message_id: string;
+  uid: string;
+  reaction: string;
+  created_at: string;
+};
+
+/** The delivery and read marks a member gives one message. */
+export type MessageReceiptRow = {
+  message_id: string;
+  uid: string;
+  delivered_at: string;
+  read_at: string | null;
+};
+
+export type MessagePinRow = {
+  conversation_id: string;
+  message_id: string;
+  pinned_by: string;
+  pinned_at: string;
+};
+
+/** A private bookmark: only its owner can see it. */
+export type MessageStarRow = {
+  uid: string;
+  message_id: string;
+  created_at: string;
+};
+
+/** A message as `conversation_messages` returns it: with its reactions, my
+ * reactions, my receipt, my star, the pin state and the line it answers. */
+export type ConversationMessageRow = {
+  id: string;
+  conversation_id: string;
+  sender_uid: string | null;
+  kind: DbMessageKind;
+  body: string;
+  media_url: string;
+  media_name: string;
+  code_language: string;
+  reply_to: string | null;
+  reply_body: string | null;
+  reply_sender: string | null;
+  edited_at: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  reactions: Record<string, number>;
+  my_reactions: string[];
+  read_by: string[];
+  starred: boolean;
+  pinned: boolean;
+};
+
+export type ConversationStateRow = {
+  is_member: boolean;
+  muted: boolean;
+  is_pinned: boolean;
+  is_archived: boolean;
+  draft_body: string;
+  last_read_at: string;
+};
+
+export type ConversationPinRow = {
+  message_id: string;
+  body: string;
+  sender_uid: string | null;
+  media_name: string;
+  kind: DbMessageKind;
+  pinned_at: string;
+  pinned_by: string;
+};
+
+export type SavedMessageRow = {
+  message_id: string;
+  conversation_id: string;
+  body: string;
+  media_name: string;
+  kind: DbMessageKind;
+  created_at: string;
+};
+
+export type MessageSearchRow = {
+  message_id: string;
+  conversation_id: string;
+  sender_uid: string | null;
+  body: string;
+  created_at: string;
+};
+
+export type ToggleMessageReactionRow = {
+  reacted: boolean;
+  reaction: string;
+  total: number;
 };
 
 export type MessageRow = {
@@ -499,6 +603,28 @@ export type PageRow = {
 };
 
 export type PageFollowerRow = { page_id: string; uid: string; created_at: string };
+
+/** One row of `follow_suggestions()`: who to follow next, and why. */
+export type FollowSuggestionRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  followers_count: number;
+  mutual_count: number;
+  shared_skills: string[];
+  reason: 'mutual' | 'skills' | 'city' | 'active';
+};
+
+/** One row of `my_push_subscriptions()`: a device that asked to be woken. */
+export type PushSubscriptionRow = {
+  endpoint: string;
+  user_agent: string;
+  language: string;
+  created_at: string;
+};
 
 export type EventRow = {
   id: string;
@@ -1964,13 +2090,42 @@ export type Database = {
         Insert: Pick<ConversationMemberRow, 'conversation_id' | 'uid'> & {
           role?: DbMemberRole;
         };
-        Update: Partial<Pick<ConversationMemberRow, 'last_read_at' | 'muted_until' | 'left_at'>>;
+        Update: Partial<
+          Pick<
+            ConversationMemberRow,
+            'last_read_at' | 'muted_until' | 'left_at' | 'is_pinned' | 'is_archived' | 'draft_body'
+          >
+        >;
         Relationships: [];
       };
       messages: {
         Row: MessageRow;
         Insert: Pick<MessageRow, 'conversation_id' | 'body'> & Partial<MessageRow>;
         Update: Partial<Pick<MessageRow, 'body' | 'edited_at' | 'deleted_at'>>;
+        Relationships: [];
+      };
+      message_reactions: {
+        Row: MessageReactionRow;
+        Insert: Pick<MessageReactionRow, 'message_id' | 'uid'> & { reaction?: string };
+        Update: Partial<Pick<MessageReactionRow, 'reaction'>>;
+        Relationships: [];
+      };
+      message_receipts: {
+        Row: MessageReceiptRow;
+        Insert: Pick<MessageReceiptRow, 'message_id' | 'uid'> & { read_at?: string | null };
+        Update: Partial<Pick<MessageReceiptRow, 'read_at'>>;
+        Relationships: [];
+      };
+      message_pins: {
+        Row: MessagePinRow;
+        Insert: Pick<MessagePinRow, 'conversation_id' | 'message_id' | 'pinned_by'>;
+        Update: Partial<MessagePinRow>;
+        Relationships: [];
+      };
+      message_stars: {
+        Row: MessageStarRow;
+        Insert: Pick<MessageStarRow, 'uid' | 'message_id'>;
+        Update: Partial<MessageStarRow>;
         Relationships: [];
       };
       notifications: {
@@ -1990,7 +2145,7 @@ export type Database = {
         Insert: Pick<CommentRow, 'post_id' | 'author_uid' | 'body'> & {
           parent_id?: string | null;
         };
-        Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at'>>;
+        Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at' | 'deleted_at'>>;
         Relationships: [];
       };
       comment_reactions: {
@@ -2032,6 +2187,22 @@ export type Database = {
     Views: Record<never, never>;
     Functions: {
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
+      // Web push (0060). The flush and the content endpoint are called from the
+      // edge, where the client is a plain fetch, so they are not listed here.
+      register_push_subscription: {
+        Args: {
+          p_endpoint: string;
+          p_p256dh?: string;
+          p_auth?: string;
+          p_user_agent?: string;
+          p_language?: string;
+        };
+        Returns: undefined;
+      };
+      unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
+      my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
+      follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
+      next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };
@@ -2057,6 +2228,19 @@ export type Database = {
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
+      my_deleted_content: {
+        Args: { p_limit?: number };
+        Returns: {
+          kind: string;
+          id: string;
+          post_id: string;
+          title: string;
+          preview: string;
+          deleted_at: string;
+          expires_at: string;
+          restorable: boolean;
+        }[];
+      };
       enroll_in_course: { Args: { p_course_id: string }; Returns: string };
       complete_lesson: { Args: { p_lesson_id: string; p_seconds?: number }; Returns: number };
       grade_quiz_attempt: {
@@ -2163,6 +2347,12 @@ export type Database = {
         Returns: number;
       };
       set_user_role: { Args: { p_uid: string; p_role: DbRole }; Returns: DbRole };
+      /** Migration 0055: what the database decided about the caller. */
+      my_role: {
+        Args: Record<never, never>;
+        Returns: { role: DbRole; staff: boolean; bootstrap: boolean }[];
+      };
+      claim_bootstrap_role: { Args: Record<never, never>; Returns: DbRole };
       set_account_status: {
         Args: { p_uid: string; p_status: DbAccountStatus; p_reason?: string };
         Returns: DbAccountStatus;
@@ -2301,6 +2491,27 @@ export type Database = {
       leave_conversation: { Args: { p_conversation_id: string }; Returns: undefined };
       conversation_inbox: { Args: { p_limit: number }; Returns: ConversationInboxRow[] };
       unread_message_count: { Args: Record<never, never>; Returns: number };
+      toggle_message_reaction: {
+        Args: { p_message_id: string; p_reaction: string };
+        Returns: ToggleMessageReactionRow[];
+      };
+      mark_message_read: { Args: { p_message_id: string }; Returns: undefined };
+      toggle_message_pin: { Args: { p_message_id: string }; Returns: boolean };
+      toggle_message_star: { Args: { p_message_id: string }; Returns: boolean };
+      saved_messages: { Args: { p_limit?: number }; Returns: SavedMessageRow[] };
+      search_messages: {
+        Args: { p_query: string; p_conversation_id?: string | null; p_limit?: number };
+        Returns: MessageSearchRow[];
+      };
+      conversation_pins: { Args: { p_conversation_id: string }; Returns: ConversationPinRow[] };
+      conversation_state: {
+        Args: { p_conversation_id: string };
+        Returns: ConversationStateRow[];
+      };
+      conversation_messages: {
+        Args: { p_conversation_id: string; p_before?: string | null; p_limit?: number };
+        Returns: ConversationMessageRow[];
+      };
       post_interaction_state: {
         Args: { p_post_ids: string[] };
         Returns: InteractionStateRow[];

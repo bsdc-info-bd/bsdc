@@ -1,7 +1,7 @@
-import { Eye, ImagePlus, Plus, Send, Trash2, X } from 'lucide-react';
+import { Eye, ImagePlus, Plus, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { Seo } from '@/components/seo/Seo';
@@ -9,6 +9,7 @@ import {
   Alert,
   Button,
   Card,
+  PageSkeleton,
   Chip,
   IconButton,
   SelectField,
@@ -20,6 +21,11 @@ import {
   type TabItem,
 } from '@/design-system';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
+import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
+import { MediaGallery } from '@/components/media/MediaGallery';
+import { MediaTray } from '@/components/media/MediaTray';
+import { useFileDrop } from '@/components/media/use-file-drop';
+import { useAttachments, type Attachment } from '@/components/media/use-attachments';
 import {
   CODE_LANGUAGES,
   EMPTY_DRAFT,
@@ -27,9 +33,12 @@ import {
   POST_KINDS,
   TAGS_MAX,
   TITLE_MAX,
+  draftFromPost,
   validateDraft,
+  withReadyMedia,
   VISIBILITIES,
   type CodeLanguage,
+  type DraftMedia,
   type PostDraft,
   type PostKind,
   type Visibility,
@@ -59,10 +68,44 @@ const TAG_SUGGESTIONS = [
   'ui-design',
 ] as const;
 
+/**
+ * How many pictures one post carries.
+ *
+ * The limit is the composer's, not the database's: `post_media` has no ceiling.
+ * Ten is as many as a feed card can arrange and as many as a member will look
+ * at, and a queue longer than that is a queue somebody stopped watching.
+ */
+const MEDIA_MAX = 10;
+
+/** The picture types the file picker offers. Anything else is refused by name. */
+const ACCEPTED_IMAGES = 'image/jpeg,image/png,image/webp,image/gif,image/avif';
+
+function sameMedia(left: readonly DraftMedia[], right: readonly DraftMedia[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((item, index) => {
+      const other = right[index];
+      return (
+        other !== undefined &&
+        item.mediaId === other.mediaId &&
+        item.url === other.url &&
+        item.thumbUrl === other.thumbUrl &&
+        item.altText === other.altText &&
+        item.width === other.width &&
+        item.height === other.height
+      );
+    })
+  );
+}
+
 export default function ComposePage() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
+  const params = useParams<{ postId?: string }>();
   const user = useAuthStore((state) => state.user);
+  // `/compose/<post id>` edits that post; `/compose` writes a new one.
+  const editingId = params.postId !== undefined && params.postId.length > 0 ? params.postId : null;
+  const isEditing = editingId !== null;
 
   const [draft, setDraft] = useState<PostDraft>(() => ({
     ...EMPTY_DRAFT,
@@ -73,22 +116,93 @@ export default function ComposePage() {
   const [busy, setBusy] = useState(false);
   const [errorKeys, setErrorKeys] = useState<string[]>([]);
   const [saveErrorKey, setSaveErrorKey] = useState<string | null>(null);
+  const [existing, setExisting] = useState<'loading' | 'ready' | 'missing' | 'forbidden'>(
+    isEditing ? 'loading' : 'ready',
+  );
   const fileRef = useRef<HTMLInputElement>(null);
-  const autosave = useDraftAutosave(draft);
+  // Editing a saved post never touches the browser copy: that copy belongs to
+  // the post being written from scratch.
+  const autosave = useDraftAutosave(draft, 1200, !isEditing);
 
   // A draft left behind by an earlier session is offered back, never applied
   // silently over something the member is already writing.
   useEffect(() => {
+    if (isEditing) return;
     const stored = loadLocalDraft();
     if (stored) {
       setDraft(stored);
       setRestored(true);
+      // Pictures in a restored draft are already uploaded; they come back as
+      // attachments rather than as a queue that would send them again.
+      if (stored.media.length > 0) {
+        attachments.seed(stored.media.map((item, index) => ({ ...item, position: index })));
+      }
     }
-  }, []);
+    // `attachments.seed` is stable and deliberately not tracked: a re-run of
+    // this effect must not re-seed over pictures the member is adding.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
+
+  // The post being edited is loaded once, and only the author may open it.
+  // The database enforces the same rule on save; this stops the editor from
+  // presenting somebody else's post as editable in the first place.
+  useEffect(() => {
+    if (editingId === null) return;
+    let cancelled = false;
+    setExisting('loading');
+    void import('@/lib/content/post-repository')
+      .then((module) => module.fetchPostById(editingId))
+      .then((post) => {
+        if (cancelled) return;
+        if (post === null) {
+          setExisting('missing');
+          return;
+        }
+        if (post.author === null || post.author.uid !== user?.uid) {
+          setExisting('forbidden');
+          return;
+        }
+        setDraft(draftFromPost(post));
+        attachments.seed(post.media);
+        setExisting('ready');
+      })
+      .catch(() => {
+        if (!cancelled) setExisting('missing');
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingId, user?.uid]);
 
   const update = useCallback(<K extends keyof PostDraft>(key: K, value: PostDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
   }, []);
+
+  // The queue owns the pictures while they are being written; the draft owns
+  // them once they are attached. This is the bridge, and it only writes when
+  // something actually changed, so autosave is not woken on every render.
+  const syncDraftMedia = useCallback((ready: readonly Attachment[]) => {
+    setDraft((current) => {
+      const next = withReadyMedia(current, ready).media;
+      return sameMedia(current.media, next) ? current : { ...current, media: next };
+    });
+  }, []);
+
+  const attachments = useAttachments({
+    purpose: 'post-image',
+    uid: user?.uid ?? null,
+    max: MEDIA_MAX,
+    onChange: syncDraftMedia,
+  });
+  const [editingAttachment, setEditingAttachment] = useState<Attachment | null>(null);
+
+  // A picture can be dropped anywhere on the page or pasted from the clipboard,
+  // which on a phone is the only way a screenshot can be attached at all.
+  const { dragging } = useFileDrop({
+    onFiles: (files) => attachments.add(files),
+    disabled: user === null,
+  });
 
   const kindLabels: Record<PostKind, string> = {
     post: t('compose.kinds.post'),
@@ -99,39 +213,23 @@ export default function ComposePage() {
     media: t('compose.kinds.media'),
   };
 
-  async function attachFiles(files: FileList) {
-    if (!user) return;
-    const { uploadMedia } = await import('@/lib/storage/upload');
-    const { recordMediaAsset } = await import('@/lib/data/media-repository');
-
-    for (const file of Array.from(files).slice(0, 10 - draft.media.length)) {
-      try {
-        const result = await uploadMedia(file, { purpose: 'post-image' });
-        let mediaId = '';
-        if (isConfigured.supabase) {
-          const record = await recordMediaAsset(user.uid, result).catch(() => null);
-          mediaId = record?.id ?? '';
-        }
-        setDraft((current) => ({
-          ...current,
-          media: [
-            ...current.media,
-            { url: result.url, thumbUrl: result.thumbUrl, mediaId, altText: '' },
-          ],
-        }));
-      } catch (error) {
-        const key =
-          error instanceof Error && error.message.startsWith('media.')
-            ? error.message
-            : 'media.errors.failed';
-        toast.error(t(key));
-      }
-    }
-  }
-
   async function submit(status: 'draft' | 'published') {
     if (!user) return;
-    const issues = status === 'published' ? validateDraft(draft) : [];
+    // Publishing while a picture is still travelling would quietly drop it:
+    // the draft only carries attachments that have finished. Say so instead.
+    if (attachments.pending.length > 0) {
+      toast.info(t('compose.mediaPending', { count: attachments.pending.length }));
+      return;
+    }
+    if (attachments.failed.length > 0) {
+      toast.error(t('compose.mediaFailed', { count: attachments.failed.length }));
+      return;
+    }
+    // Do not depend on the passive onChange bridge having copied the queue into
+    // draft state yet. A completed upload is ready to save even on the render
+    // immediately before that effect runs.
+    const draftToSave = withReadyMedia(draft, attachments.ready);
+    const issues = status === 'published' ? validateDraft(draftToSave) : [];
     if (issues.length > 0) {
       setSaveErrorKey(null);
       setErrorKeys(issues.map((issue) => issue.messageKey));
@@ -142,8 +240,14 @@ export default function ComposePage() {
     setBusy(true);
     try {
       const { savePost } = await import('@/lib/content/post-repository');
-      const saved = await savePost(user.uid, draft, status);
+      const saved = await savePost(user.uid, draftToSave, status);
+      if (isEditing) {
+        toast.success(t('compose.updated'));
+        navigate(`/p/${saved.slug}`);
+        return;
+      }
       clearLocalDraft();
+      attachments.clear();
       toast.success(status === 'published' ? t('compose.published') : t('compose.savedDraft'));
       navigate(status === 'published' ? `/p/${saved.slug}` : ROUTES.home);
     } catch (error) {
@@ -163,6 +267,7 @@ export default function ComposePage() {
 
   function discard() {
     clearLocalDraft();
+    attachments.clear();
     setDraft({ ...EMPTY_DRAFT, language: i18n.language === 'en' ? 'en' : 'bn' });
     setRestored(false);
     setErrorKeys([]);
@@ -256,68 +361,39 @@ export default function ComposePage() {
         </fieldset>
       ) : null}
 
-      <div>
+      <div className="grid gap-3">
         <input
           ref={fileRef}
           type="file"
           multiple
-          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+          accept={ACCEPTED_IMAGES}
           className="sr-only"
           onChange={(event) => {
-            if (event.target.files) void attachFiles(event.target.files);
+            const files = event.target.files;
+            if (files) attachments.add(Array.from(files));
             event.target.value = '';
           }}
         />
-        <Button
-          variant="secondary"
-          size="sm"
-          iconStart={<ImagePlus size={16} />}
-          disabled={draft.media.length >= 10}
-          onClick={() => fileRef.current?.click()}
-        >
-          {t('compose.addMedia')}
-        </Button>
-        {draft.media.length > 0 ? (
-          <ul className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {draft.media.map((item, index) => (
-              <li key={item.url} className="rounded-card border border-border p-2">
-                <img
-                  src={item.thumbUrl.length > 0 ? item.thumbUrl : item.url}
-                  alt=""
-                  loading="lazy"
-                  className="h-24 w-full rounded-lg object-cover"
-                />
-                <TextField
-                  label={t('compose.fields.altText')}
-                  value={item.altText}
-                  maxLength={280}
-                  className="mt-2"
-                  onChange={(event) => {
-                    const next = [...draft.media];
-                    const current = next[index];
-                    if (!current) return;
-                    next[index] = { ...current, altText: event.target.value };
-                    update('media', next);
-                  }}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  iconStart={<Trash2 size={16} />}
-                  className="mt-1"
-                  onClick={() =>
-                    update(
-                      'media',
-                      draft.media.filter((_, position) => position !== index),
-                    )
-                  }
-                >
-                  {t('common.close')}
-                </Button>
-              </li>
-            ))}
-          </ul>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            iconStart={<ImagePlus size={16} />}
+            disabled={!attachments.canAdd}
+            onClick={() => fileRef.current?.click()}
+          >
+            {t('compose.addMedia')}
+          </Button>
+          <span className="text-2xs text-muted">
+            {t('compose.mediaHint', { count: MEDIA_MAX })}
+          </span>
+        </div>
+
+        {attachments.notice !== null ? (
+          <Alert tone="warning" title={t(attachments.notice)} className="text-sm" />
         ) : null}
+
+        <MediaTray controller={attachments} onEdit={setEditingAttachment} />
       </div>
 
       <TagInput
@@ -342,8 +418,24 @@ export default function ComposePage() {
     </div>
   );
 
+  // The preview shows the pictures as the post will show them: the same
+  // arrangement, from the same sizes, before anything is published.
+  const previewItems = attachments.attachments
+    .map((item) => ({
+      id: item.id,
+      url: item.previewUrl.length > 0 ? item.previewUrl : item.url,
+      thumbUrl: item.previewUrl.length > 0 ? item.previewUrl : item.thumbUrl,
+      altText: item.altText,
+      width: item.width,
+      height: item.height,
+    }))
+    .filter((item) => item.url.length > 0);
+
   const preview = (
     <div className="grid gap-3">
+      {previewItems.length > 0 ? (
+        <MediaGallery items={previewItems} label={t('media.gallery.postImages')} />
+      ) : null}
       {draft.title.trim().length > 0 ? <h2 className="text-2xl">{draft.title}</h2> : null}
       {draft.body.trim().length > 0 ? (
         <MarkdownView markdown={draft.body} />
@@ -375,7 +467,7 @@ export default function ComposePage() {
   return (
     <>
       <Seo
-        title={t('compose.metaTitle')}
+        title={isEditing ? t('compose.editMetaTitle') : t('compose.metaTitle')}
         description={t('compose.metaDescription')}
         path="/compose"
         noindex
@@ -383,7 +475,9 @@ export default function ComposePage() {
       <div className="fab-container py-6 sm:py-10">
         <div className="mx-auto w-full max-w-3xl">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-2xl sm:text-3xl">{t('compose.title')}</h1>
+            <h1 className="text-2xl sm:text-3xl">
+              {isEditing ? t('compose.editTitle') : t('compose.title')}
+            </h1>
             <p aria-live="polite" className="text-xs text-muted">
               {autosave === 'saving' ? t('compose.autosaving') : null}
               {autosave === 'saved' ? t('compose.autosaved') : null}
@@ -392,6 +486,16 @@ export default function ComposePage() {
 
           {!isConfigured.supabase ? (
             <Alert tone="danger" title={t('data.errors.notConfigured')} className="mt-4" />
+          ) : null}
+
+          {existing === 'loading' ? <PageSkeleton label={t('common.loading')} /> : null}
+
+          {existing === 'missing' ? (
+            <Alert tone="danger" title={t('compose.editMissing')} className="mt-4" />
+          ) : null}
+
+          {existing === 'forbidden' ? (
+            <Alert tone="danger" title={t('compose.editForbidden')} className="mt-4" />
           ) : null}
 
           {restored ? (
@@ -420,78 +524,115 @@ export default function ComposePage() {
             </Alert>
           ) : null}
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            {POST_KINDS.map((kind) => (
-              <Chip key={kind} selected={draft.kind === kind} onClick={() => update('kind', kind)}>
-                {kindLabels[kind]}
-              </Chip>
-            ))}
-          </div>
+          {existing !== 'ready' ? null : (
+            <>
+              {!isEditing ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {POST_KINDS.map((kind) => (
+                    <Chip
+                      key={kind}
+                      selected={draft.kind === kind}
+                      onClick={() => update('kind', kind)}
+                    >
+                      {kindLabels[kind]}
+                    </Chip>
+                  ))}
+                </div>
+              ) : null}
 
-          <Card className="mt-4">
-            <Tabs items={tabs} activeId={tab} onChange={setTab} label={t('compose.title')} />
-          </Card>
+              <Card className="mt-4">
+                <Tabs items={tabs} activeId={tab} onChange={setTab} label={t('compose.title')} />
+              </Card>
 
-          <Card className="mt-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <SelectField
-                label={t('compose.fields.visibility')}
-                value={draft.visibility}
-                onChange={(event) => update('visibility', event.target.value as Visibility)}
-                options={VISIBILITIES.map((visibility) => ({
-                  value: visibility,
-                  label: t(`compose.visibility.${visibility}`),
-                }))}
-              />
-              <SelectField
-                label={t('compose.fields.language')}
-                value={draft.language}
-                onChange={(event) => update('language', event.target.value === 'en' ? 'en' : 'bn')}
-                options={[
-                  { value: 'bn', label: t('language.bangla') },
-                  { value: 'en', label: t('language.english') },
-                ]}
-              />
-              <Switch
-                checked={draft.allowComments}
-                onCheckedChange={(value) => update('allowComments', value)}
-                label={t('compose.allowComments')}
-              />
-              <Switch
-                checked={draft.isSensitive}
-                onCheckedChange={(value) => update('isSensitive', value)}
-                label={t('compose.sensitive')}
-                description={t('compose.sensitiveHint')}
-              />
-            </div>
-          </Card>
+              <Card className="mt-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <SelectField
+                    label={t('compose.fields.visibility')}
+                    value={draft.visibility}
+                    onChange={(event) => update('visibility', event.target.value as Visibility)}
+                    options={VISIBILITIES.map((visibility) => ({
+                      value: visibility,
+                      label: t(`compose.visibility.${visibility}`),
+                    }))}
+                  />
+                  <SelectField
+                    label={t('compose.fields.language')}
+                    value={draft.language}
+                    onChange={(event) =>
+                      update('language', event.target.value === 'en' ? 'en' : 'bn')
+                    }
+                    options={[
+                      { value: 'bn', label: t('language.bangla') },
+                      { value: 'en', label: t('language.english') },
+                    ]}
+                  />
+                  <Switch
+                    checked={draft.allowComments}
+                    onCheckedChange={(value) => update('allowComments', value)}
+                    label={t('compose.allowComments')}
+                  />
+                  <Switch
+                    checked={draft.isSensitive}
+                    onCheckedChange={(value) => update('isSensitive', value)}
+                    label={t('compose.sensitive')}
+                    description={t('compose.sensitiveHint')}
+                  />
+                </div>
+              </Card>
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button
-              iconStart={<Send size={16} />}
-              loading={busy}
-              disabled={!isConfigured.supabase}
-              onClick={() => void submit('published')}
-            >
-              {t('compose.publish')}
-            </Button>
-            <Button
-              variant="secondary"
-              disabled={busy || !isConfigured.supabase}
-              onClick={() => void submit('draft')}
-            >
-              {t('compose.saveDraft')}
-            </Button>
-            <Button
-              variant="ghost"
-              iconStart={<Eye size={16} />}
-              onClick={() => setTab(tab === 'preview' ? 'write' : 'preview')}
-            >
-              {tab === 'preview' ? t('compose.tabs.write') : t('compose.tabs.preview')}
-            </Button>
-          </div>
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Button
+                  iconStart={<Send size={16} />}
+                  loading={busy}
+                  disabled={!isConfigured.supabase || existing !== 'ready'}
+                  onClick={() => void submit('published')}
+                >
+                  {isEditing ? t('compose.saveChanges') : t('compose.publish')}
+                </Button>
+                {!isEditing ? (
+                  <Button
+                    variant="secondary"
+                    disabled={busy || !isConfigured.supabase}
+                    onClick={() => void submit('draft')}
+                  >
+                    {t('compose.saveDraft')}
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  iconStart={<Eye size={16} />}
+                  onClick={() => setTab(tab === 'preview' ? 'write' : 'preview')}
+                >
+                  {tab === 'preview' ? t('compose.tabs.write') : t('compose.tabs.preview')}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      <ImageEditorDialog
+        open={editingAttachment !== null}
+        file={editingAttachment?.file ?? null}
+        initial={editingAttachment?.edit ?? undefined}
+        onClose={() => setEditingAttachment(null)}
+        onApply={(edited, edit) => {
+          if (editingAttachment !== null) attachments.applyEdit(editingAttachment.id, edited, edit);
+          setEditingAttachment(null);
+        }}
+      />
+
+      {dragging ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-green-950/60 p-6"
+        >
+          <div className="flex flex-col items-center gap-2 rounded-card border-2 border-dashed border-white/70 px-8 py-6 text-center text-white">
+            <ImagePlus size={28} />
+            <p className="text-sm font-semibold">{t('compose.dropHere')}</p>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

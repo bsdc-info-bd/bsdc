@@ -7,7 +7,17 @@ import { escapeXml, rpc, siteOrigin, xmlResponse, type RpcEnv } from '../_rpc';
  * filename, and anything that is not a known section is a 404 rather than an
  * empty file, because an empty sitemap tells a crawler the section is gone.
  */
-const SECTIONS = ['posts', 'products', 'courses', 'groups', 'events', 'jobs', 'tags', 'profiles'];
+const SECTIONS = [
+  'posts',
+  'products',
+  'courses',
+  'groups',
+  'events',
+  'jobs',
+  'projects',
+  'tags',
+  'profiles',
+];
 const PAGE_SIZE = 1000;
 
 interface Url {

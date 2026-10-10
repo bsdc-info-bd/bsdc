@@ -1,3 +1,10 @@
+import {
+  HOME_FEED_SELECTOR,
+  homeFeedQuery,
+  renderHomeFeed,
+  renderHomeFeedJsonLd,
+  type HomeFeedPost,
+} from '../src/lib/seo/home-feed';
 import { rpc, siteOrigin, type RpcEnv } from './_rpc';
 
 /**
@@ -14,6 +21,12 @@ import { rpc, siteOrigin, type RpcEnv } from './_rpc';
  * image written into the head. React writes the same values again on
  * hydration; the difference is that a crawler or a link preview fetcher that
  * never runs a script now gets them too.
+ *
+ * The home page gets the same treatment for its feed: the newest public posts
+ * are written into the shell as real articles and as an ItemList, so the front
+ * door of the site is readable before anybody signs in — and readable to
+ * something that will never sign in at all. That response is cached at the
+ * edge for five minutes, which is what keeps it fast.
  */
 interface SeoRow {
   path: string;
@@ -35,6 +48,7 @@ const DYNAMIC = [
   /^\/shop\/[^/]+$/,
   /^\/learn\/[^/]+$/,
   /^\/g\/[^/]+$/,
+  /^\/projects\/[^/]+$/,
   /^\/@[^/]+$/,
 ];
 
@@ -57,6 +71,20 @@ class SetText {
   }
 }
 
+class ReplaceInner {
+  constructor(private readonly html: string) {}
+  element(element: Element): void {
+    element.setInnerContent(this.html, { html: true });
+  }
+}
+
+class AppendHtml {
+  constructor(private readonly html: string) {}
+  element(element: Element): void {
+    element.append(this.html, { html: true });
+  }
+}
+
 class SetAttribute {
   constructor(
     private readonly name: string,
@@ -64,6 +92,24 @@ class SetAttribute {
   ) {}
   element(element: Element): void {
     element.setAttribute(this.name, this.value);
+  }
+}
+
+/** The newest public posts, as the anonymous visitor would read them. */
+async function fetchHomeFeed(env: RpcEnv, limit: number): Promise<HomeFeedPost[]> {
+  const base = env.SUPABASE_URL;
+  const key = env.SUPABASE_ANON_KEY;
+  if (!base || !key) return [];
+  try {
+    const response = await fetch(`${base.replace(/\/+$/, '')}/rest/v1/${homeFeedQuery(limit)}`, {
+      headers: { apikey: key, authorization: `Bearer ${key}` },
+    });
+    if (!response.ok) return [];
+    const rows = (await response.json()) as HomeFeedPost[];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    // An unreachable database costs the feed copy, never the page.
+    return [];
   }
 }
 
@@ -87,9 +133,32 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
   }
 
   const response = await context.next();
+  const contentType = response.headers.get('content-type') ?? '';
+
+  // 1b. The home page carries the live feed in its HTML.
+  if (
+    pathname === '/' &&
+    context.request.method === 'GET' &&
+    response.status === 200 &&
+    contentType.includes('text/html')
+  ) {
+    const posts = await fetchHomeFeed(context.env, 12);
+    if (posts.length > 0) {
+      const origin = siteOrigin(context.env, context.request);
+      const transformed = new HTMLRewriter()
+        .on(HOME_FEED_SELECTOR, new ReplaceInner(renderHomeFeed(posts, origin)))
+        .on('head', new AppendHtml(renderHomeFeedJsonLd(posts, origin)))
+        .transform(response);
+      // Five minutes at the edge: the page is the same for everybody, and the
+      // feed is one query per five minutes rather than one per visitor.
+      const headers = new Headers(transformed.headers);
+      headers.set('cache-control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=600');
+      return new Response(transformed.body, { status: transformed.status, headers });
+    }
+    return response;
+  }
 
   // 2. Does the page it is about to serve know what it is about?
-  const contentType = response.headers.get('content-type') ?? '';
   if (!contentType.includes('text/html') || !isDynamicPage(pathname)) return response;
 
   const rows = await rpc<SeoRow[]>(context.env, 'seo_for_path', { p_path: pathname });

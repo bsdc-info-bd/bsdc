@@ -24,7 +24,12 @@ const envSchema = z.object({
     url: z.string(),
     publishableKey: z.string(),
   }),
-  push: z.object({ vapidPublicKey: z.string() }),
+  push: z.object({
+    /** Firebase Cloud Messaging's key. Kept because a deployment may already hold it. */
+    vapidPublicKey: z.string(),
+    /** This site's own VAPID key, the one web push is signed with. */
+    webPushPublicKey: z.string(),
+  }),
   oneSignalAppId: z.string(),
   cloudinary: z.object({ cloudName: z.string(), unsignedPreset: z.string() }),
   imgbbApiKey: z.string(),
@@ -48,7 +53,10 @@ const raw: PublicEnv = {
     url: import.meta.env.VITE_SUPABASE_URL ?? '',
     publishableKey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '',
   },
-  push: { vapidPublicKey: import.meta.env.VITE_FIREBASE_VAPID_PUBLIC_KEY ?? '' },
+  push: {
+    vapidPublicKey: import.meta.env.VITE_FIREBASE_VAPID_PUBLIC_KEY ?? '',
+    webPushPublicKey: import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '',
+  },
   oneSignalAppId: import.meta.env.VITE_ONESIGNAL_APP_ID ?? '',
   cloudinary: {
     cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME ?? '',
@@ -59,12 +67,23 @@ const raw: PublicEnv = {
 
 export const env: PublicEnv = envSchema.parse(raw);
 
+/**
+ * Both halves of the Cloudinary pair are needed: an unsigned upload without
+ * its preset is rejected by the API, so a deployment that has only the cloud
+ * name reports "not configured" instead of a generic upload failure.
+ */
+export function cloudinaryConfigured(cloudName: string, preset: string): boolean {
+  return cloudName.length > 0 && preset.length > 0;
+}
+
 /** Service clients are only constructed when their configuration is present. */
 export const isConfigured = {
   firebase: raw.firebase.apiKey.length > 0 && raw.firebase.projectId.length > 0,
   supabase: raw.supabase.url.length > 0 && raw.supabase.publishableKey.length > 0,
-  push: raw.push.vapidPublicKey.length > 0,
+  // Push is configured when this site holds a key of its own. A Firebase key is
+  // not one: it only signs for Firebase's own service.
+  push: raw.push.webPushPublicKey.length > 0,
   oneSignal: raw.oneSignalAppId.length > 0,
-  cloudinary: raw.cloudinary.cloudName.length > 0,
+  cloudinary: cloudinaryConfigured(raw.cloudinary.cloudName, raw.cloudinary.unsignedPreset),
   imgbb: raw.imgbbApiKey.length > 0,
 } as const;

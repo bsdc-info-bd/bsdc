@@ -9,11 +9,12 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   Modal,
   PageSkeleton,
   SectionHeading,
-  TextField,
   TextareaField,
+  TextField,
 } from '@/design-system';
 import { useGigBoard } from '@/hooks/use-opportunities';
 import { formatSalaryRange, type Gig } from '@/lib/opportunities/opportunity-types';
@@ -64,7 +65,20 @@ export default function FreelancePage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading title={t('freelance.title')} description={t('freelance.description')} />
+        <SectionHeading
+          title={t('freelance.title')}
+          description={t('freelance.description')}
+          action={
+            <LinkButton
+              to={`${ROUTES.create}?kind=gig`}
+              variant="outline"
+              size="sm"
+              iconStart={<HandCoins size={14} />}
+            >
+              {t('create.submit.gig')}
+            </LinkButton>
+          }
+        />
 
         {board.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {board.isError ? (
@@ -77,6 +91,11 @@ export default function FreelancePage() {
               icon={<HandCoins size={22} />}
               title={t('freelance.emptyTitle')}
               description={t('freelance.emptyBody')}
+              action={
+                <LinkButton to={`${ROUTES.create}?kind=gig`} variant="primary" size="sm">
+                  {t('create.submit.gig')}
+                </LinkButton>
+              }
             />
           </div>
         ) : null}

@@ -19,6 +19,7 @@ import {
 } from 'firebase/auth';
 import { applyPersistence, getFirebaseAuth } from '@/lib/firebase';
 import { SITE } from '@/lib/site';
+import { prefersRedirectFlow, readDeviceSignals } from './device';
 import { shouldFallbackToRedirect } from './errors';
 
 /** The exact provider set approved by the owner. No MFA, no phone sign-in. */
@@ -49,19 +50,42 @@ function verificationSettings(nextPath: string) {
   return { url: url.toString(), handleCodeInApp: false };
 }
 
+export interface SignupResult {
+  credential: UserCredential;
+  /** False when the account exists but the verification mail did not go out. */
+  verificationSent: boolean;
+}
+
+/**
+ * Creates the account, names it, and asks for the address to be verified.
+ *
+ * The verification mail is the one step here that can fail without the signup
+ * having failed: an action URL whose domain is not on Firebase's list, a
+ * mailbox provider refusing the send, a handset offline at that exact moment.
+ * It used to throw the whole flow away — the member saw "something went wrong",
+ * tried again, and got "an account already exists", which is a worse lie than
+ * the first. The account is real; only the mail is missing, and the member is
+ * told so and can ask for it again from the banner on every screen.
+ */
 export async function signUpWithEmail(input: {
   email: string;
   password: string;
   displayName: string;
   remember: boolean;
   nextPath: string;
-}): Promise<UserCredential> {
+}): Promise<SignupResult> {
   await applyPersistence(input.remember);
   const auth = getFirebaseAuth();
   const credential = await createUserWithEmailAndPassword(auth, input.email, input.password);
   await updateProfile(credential.user, { displayName: input.displayName });
-  await sendEmailVerification(credential.user, verificationSettings(input.nextPath));
-  return credential;
+  const verificationSent = await sendEmailVerification(
+    credential.user,
+    verificationSettings(input.nextPath),
+  ).then(
+    () => true,
+    () => false,
+  );
+  return { credential, verificationSent };
 }
 
 export async function signInWithEmail(input: {
@@ -78,6 +102,16 @@ export async function signInWithEmail(input: {
  * the flow transparently falls back to a redirect (handled on return by
  * `startAuthListener`).
  */
+/**
+ * Which flow this device gets, decided before anything is opened.
+ *
+ * Pure so it can be tested; `readDeviceSignals` is the only part that touches
+ * a browser.
+ */
+export function oauthFlowFor(signals: ReturnType<typeof readDeviceSignals>): 'redirect' | 'popup' {
+  return signals !== null && prefersRedirectFlow(signals) ? 'redirect' : 'popup';
+}
+
 export async function signInWithProvider(
   id: OAuthProviderId,
   remember = true,
@@ -85,6 +119,14 @@ export async function signInWithProvider(
   await applyPersistence(remember);
   const auth = getFirebaseAuth();
   const provider = providerFor(id);
+
+  // A phone or an in-app browser gets the redirect first: a popup there is
+  // either refused or opened somewhere it cannot come back from.
+  if (oauthFlowFor(readDeviceSignals()) === 'redirect') {
+    await signInWithRedirect(auth, provider);
+    return null;
+  }
+
   try {
     return await signInWithPopup(auth, provider);
   } catch (error) {

@@ -1,5 +1,21 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
+import type { FollowSuggestionRow } from '@/lib/supabase/types';
+
+/** A suggestion the way the rest of the app reads it. */
+export interface FollowSuggestion {
+  uid: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  bio: string;
+  location: string;
+  followers: number;
+  mutualCount: number;
+  sharedSkills: string[];
+  /** Why this member is being suggested. Shown, because a reason is the point. */
+  reason: 'mutual' | 'skills' | 'city' | 'active';
+}
 
 /**
  * Social graph primitives. The counters on `profiles` are maintained by a
@@ -46,4 +62,33 @@ export async function unblockMember(blockerUid: string, blockedUid: string): Pro
     .eq('blocker_uid', blockerUid)
     .eq('blocked_uid', blockedUid);
   if (error) throw toDataError(error);
+}
+
+/**
+ * Who to follow next, and the reason each one is worth following.
+ *
+ * The ranking is the database's, not the client's: it knows the whole graph, and
+ * a suggestion made on one page has to agree with a suggestion made on another.
+ */
+export async function fetchFollowSuggestions(limit = 12): Promise<FollowSuggestion[]> {
+  const { data, error } = await getSupabase()
+    .rpc('follow_suggestions', { p_limit: limit })
+    .returns<FollowSuggestionRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toSuggestion);
+}
+
+function toSuggestion(row: FollowSuggestionRow): FollowSuggestion {
+  return {
+    uid: row.uid,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    location: row.location,
+    followers: row.followers_count,
+    mutualCount: row.mutual_count,
+    sharedSkills: row.shared_skills ?? [],
+    reason: row.reason,
+  };
 }

@@ -9,9 +9,15 @@ const MESSAGE_MAP: Record<string, string> = {
   'profile/username-taken': 'auth.errors.usernameTaken',
   'profile/username-invalid': 'auth.validation.usernameInvalid',
   'profile/username-reserved': 'auth.validation.usernameReserved',
+  'profile/username-cooldown': 'handle.errors.cooldown',
   'profile/not-found': 'data.errors.notFound',
   'profile/missing': 'data.errors.profileMissing',
   'auth/required': 'data.errors.signInRequired',
+  // Raised by apply_to_job / submit_proposal when the unique key resolves the
+  // second request instead of the constraint doing it: a member who submits
+  // twice is told they already have, not that a value is "already in use".
+  'job/already-applied': 'data.errors.alreadyApplied',
+  'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 
 const CODE_MAP: Record<string, string> = {

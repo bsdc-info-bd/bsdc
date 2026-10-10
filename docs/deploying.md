@@ -72,7 +72,7 @@ nothing should.
 
 **`verify`** starts an empty `postgres:16` service container, creates the
 three roles Supabase provides and a bare Postgres does not (`anon`,
-`authenticated`, `service_role`), and applies all thirty-five migrations
+`authenticated`, `service_role`), and applies all sixty-three migrations
 **from nothing**. Then it applies them a second time, which is how the claim
 that they are idempotent stops being a claim. Then it asserts, against the
 live schema rather than against the text of the files:
@@ -118,6 +118,7 @@ node scripts/db-push.mjs --plan       # list the files; no database needed
 node scripts/db-push.mjs --dry-run    # connect, say what would change, change nothing
 node scripts/db-push.mjs              # apply what is missing
 node scripts/db-push.mjs --verify     # apply, apply again, then assert the invariants
+node scripts/db-push.mjs --check      # change nothing: report what the database still owes
 node scripts/db-push.mjs --self-test  # check the runner's own logic, offline
 ```
 
@@ -292,6 +293,11 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `VITE_FB_APP_ID`                | Firebase web app id.                                                                                                  | Same panel.                                                                                                                                                               | `1:123456789012:web:0123456789abcdef012345`                                                                                                                                                                                                                                                                                  | same                                    |
 | `VITE_FB_DATABASE_URL`          | Realtime Database URL for `bsdc-bd`.                                                                                  | Firebase console → Realtime Database → the URL above the data tree.                                                                                                       | `https://bsdc-bd-default-rtdb.asia-southeast1.firebasedatabase.app` — region subdomain included, no trailing slash.                                                                                                                                                                                                          | same                                    |
 | `VITE_FB2_API_KEY` …            | The same five values for the **second** Firebase project, `bsdc-second`, which backs the thirteen corporate consoles. | Firebase console, `bsdc-second` project, same panels.                                                                                                                     | Same formats, `bsdc-second` everywhere `bsdc-bd` appears.                                                                                                                                                                                                                                                                    | `deploy.yml` (consoles)                 |
+| `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud for avatars, profile/project covers, product images, documents and voice notes. Supabase Storage is not on the upload path. | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
+| `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary **unsigned** upload preset the browser uses.                                                            | Cloudinary dashboard → Settings → Upload → Upload presets → Add preset → Signing mode **Unsigned**.                                                                       | The preset's name, e.g. `bsdc_unsigned`. It is public by design; the preset itself must cap size and formats.                                                                                                                                                                                                                 | `deploy.yml` (main-site)                |
+| `VITE_IMGBB_API_KEY`            | ImgBB key for ordinary member images (posts, comments, chat and other non-cover images). **Public by design**: it is sent in the browser request URL, not an authorization secret. | api.imgbb.com → **Get API key**.                                                                                                                                          | 32-character alphanumeric key.                                                                                                                                                                                                                                                                                               | `deploy.yml` (main-site)                |
+| `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key. Optional: without it the browser never offers push.                                    | Firebase console → Project settings → Cloud Messaging → Web configuration → Web Push certificates.                                                                       | The key pair's public key, one line.                                                                                                                                                                                                                                                                                         | `deploy.yml` (main-site)                |
+| `VITE_ONESIGNAL_APP_ID`         | OneSignal app id, used only for manual admin broadcasts. Optional.                                                     | OneSignal dashboard → Settings → Keys & IDs.                                                                                                                              | UUID.                                                                                                                                                                                                                                                                                                                        | `deploy.yml` (main-site)                |
 | `ANDROID_GOOGLE_SERVICES_JSON`  | Firebase Android config. Required for push notifications and for any release build.                                   | Firebase console → Project settings → Your apps → Android app → download `google-services.json`.                                                                          | Either the file's text verbatim, or `base64 -w0 google-services.json`. The workflow accepts both.                                                                                                                                                                                                                            | `android.yml`                           |
 | `ANDROID_KEYSTORE_BASE64`       | The upload keystore.                                                                                                  | `base64 -w0 release.keystore`                                                                                                                                             | One line of base64, no wrapping.                                                                                                                                                                                                                                                                                             | `android.yml` (release)                 |
 | `ANDROID_KEYSTORE_PASSWORD`     | Password of the keystore file.                                                                                        | Whatever you typed at `keytool` time.                                                                                                                                     | Plain text, no quotes.                                                                                                                                                                                                                                                                                                       | `android.yml` (release)                 |
@@ -299,6 +305,14 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `ANDROID_KEY_PASSWORD`          | Password of that key.                                                                                                 | From `keytool`. Often the same as the keystore password.                                                                                                                  | Plain text.                                                                                                                                                                                                                                                                                                                  | `android.yml` (release)                 |
 
 `GITHUB_TOKEN` is provided by Actions itself. It is never set by hand.
+
+> The five variables above the Android row are **build-time** values. The
+> member site is compiled in `deploy.yml` and uploaded as static files, so a
+> value that exists only in Cloudflare's dashboard (or only in a local
+> `.env`) never reaches the browser bundle. The three upload ones are in
+> `BSDC_REQUIRED_ENV`: if they are missing the deploy fails by name instead of
+> publishing a site whose avatar and image uploads answer "Uploads are not
+> configured for this deployment".
 
 ### 5.2 Cloudflare Pages environment variables — `bsdc` project only
 
@@ -317,11 +331,24 @@ again, which is the point.
 | `FB_CLIENT_EMAIL`          | the claims function                                | Service-account address used to call Identity Toolkit.                                       | `firebase-adminsdk-xxxxx@bsdc-bd.iam.gserviceaccount.com`, from the service-account JSON you generate in Firebase console → Project settings → Service accounts → Generate new private key.                             | no         |
 | `FB_PRIVATE_KEY`           | the claims function                                | RSA private key of that service account. Mints custom claims; treat it like a root password. | The `private_key` field of that JSON, including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`. Literal `\n` escapes are accepted and unescaped by the function, so pasting the JSON string as-is works. | yes        |
 | `BSDC_OWNER_UIDS`          | the claims function                                | Allowlist of uids permitted to change anybody's role.                                        | Comma-separated Firebase uids, no spaces: `abc123…,def456…`                                                                                                                                                             | no         |
+| `VITE_PUSH_VAPID_PUBLIC_KEY` | the build, and the service worker                | This site's own VAPID public key. Compiled into the bundle at build time, so it must be set **before** a deploy for push to be offered at all. | 87 characters of base64url, from `npm run push:keys`. Public by design: it is handed to every browser that subscribes. | no |
+| `PUSH_VAPID_PUBLIC_KEY`    | `functions/api/push/flush.ts`                      | The same key, as the `k=` half of the authorization header.                                  | Identical to the `VITE_` one.                                                                                                                                                                                           | no         |
+| `PUSH_VAPID_PRIVATE_KEY`   | the flush function                                 | Signs the VAPID token for every delivery. Never leaves Cloudflare.                           | 184 characters of base64url: a PKCS#8 DER P-256 private key, from `npm run push:keys`.                                                                                                                                  | yes        |
+| `PUSH_FLUSH_SECRET`        | the flush function, and whatever schedules it      | The bearer token that makes `/api/push/flush` a delivery run rather than a public endpoint. The database checks the same string. | 43 characters of base64url, from `npm run push:keys`. Also stored with the `INSERT` the script prints, into `bsdc.push_settings`.                                                                                        | yes        |
+| `PUSH_VAPID_SUBJECT`       | the flush function                                 | Contact address a push service can complain to.                                              | `mailto:rrc@bsdc.info.bd`. Optional; defaults to `mailto:admin@bsdc.info.bd`.                                                                                                                                            | no         |
 | `ANDROID_APP_ID`           | `/.well-known/assetlinks.json`                     | Android application id the site vouches for.                                                 | `bd.info.bsdc.app`                                                                                                                                                                                                      | no         |
 | `ANDROID_CERT_FINGERPRINT` | `/.well-known/assetlinks.json`                     | SHA-256 fingerprint of the signing certificate.                                              | Uppercase hex pairs separated by colons: `AB:CD:EF:…` (32 pairs). Copy it out of the Android release run summary.                                                                                                       | no         |
 
 `CF_PAGES_BRANCH` and `CF_PAGES_COMMIT_SHA` are injected by Cloudflare; the
 status endpoint reads them to report what is deployed. Do not set them.
+
+The five push variables come from one command — `cd main-site && npm run
+push:keys` — which prints them, the SQL that stores the secret where the database
+can check it, and the cron worker that has to be deployed for anything to be
+delivered. The whole path, and what each symptom means when it is not working, is
+in [push-runbook.md](./push-runbook.md). Push is the only feature here that
+degrades to nothing at all when its variables are missing: the site works, the
+settings card explains why there is no switch, and the flush answers `503`.
 
 ### 5.3 Local development
 
@@ -407,7 +434,7 @@ reviewable in the pull request.
    provider so PostgREST accepts tokens from
    `https://securetoken.google.com/bsdc-bd`.
 2. **Migrations.** Set `SUPABASE_DB_URL`, then **Actions → Database → Run
-   workflow → production**. Thirty-five migrations, about a minute. Read the
+   workflow → production**. Sixty-three migrations, about a minute. Read the
    run summary: it prints the number of tables, policies, functions and
    enumerated types that now exist.
 3. **Pages projects.** Create the fourteen projects named in the table in
@@ -456,6 +483,127 @@ workflow checks this before it tries: the step _Check the database can be
 reached at all_ resolves the host and says exactly this when there is no A
 record. It reports the shape of the target (pooler or direct, port, how many
 addresses of each kind) and never the project reference or the password.
+
+### `permission denied for schema storage`
+
+```
+ERROR:  permission denied for schema storage
+LINE 1: create table if not exists storage.buckets (
+```
+
+`storage` is the only schema in this project that this platform does not own: it
+belongs to `supabase_storage_admin`, and the role the workflow connects as —
+`postgres`, over the transaction pooler — has no `CREATE` on it. Postgres checks
+that right **before** it honours `IF NOT EXISTS`, so a bare `create table if not
+exists storage.buckets` fails in production even though the table is already
+there, and because the runner applies one file in one transaction, the failure
+took every migration after it down with it.
+
+This is fixed, not worked around. Migration `0056` now attempts each storage
+statement instead of asserting it: it creates the schema and tables where the
+role has the right (the proof databases, a local `supabase start`), leaves them
+alone where Storage already owns them (production), and writes whatever it was
+refused into `bsdc.deployment_notes`. The runner prints those notes at the end of
+every run, and `--check` reads the catalog and says what is missing without
+changing anything. `main-site/scripts/db-prove/t34.mjs` builds production's exact
+privilege shape — the schema owned by another role, its tables present, row level
+security already on, and an applying role with no `CREATE` there — and proves the
+migration applies, does the work it is allowed, records the work it is not, and
+finishes the job on a later run by a role that may.
+
+The production workflow ends by printing them where an operator actually looks:
+the run's step summary carries the ledger table and then a **What this database
+still owes** section — one bullet per open note, or "Nothing. Every migration did
+all of its work."
+
+#### Image uploads no longer use Supabase Storage
+
+The uploader now uses Supabase only for each upload's metadata row
+in `public.media_assets`; image and document bytes go to their intended external
+hosts. Post, comment, chat and other ordinary images go to ImgBB as base64 in the
+`image` form field. Avatars, profile/project covers and product images go to
+Cloudinary; documents and voice notes also go there. Routing is strict: if the
+required host is not configured, upload fails visibly instead of silently
+sending a cover to ImgBB or an ordinary post image to Cloudinary. Video uploads
+are intentionally rejected; previously stored video messages can still be read.
+Required build-time settings remain in §5.1.
+
+The storage notes and dashboard steps below are for older media rows whose
+`provider` is `supabase`. The new uploader never writes bytes there. If an old
+object is still present, completing the bucket/policy setup can make its old URL
+readable; if the object was never stored or is gone, the original file must be
+selected and attached again. SQL cannot recreate bytes that no longer exist.
+
+What a note means in practice:
+
+| Note | What is missing | Where to put it |
+| --- | --- | --- |
+| `storage.schema`, `storage.tables` | Storage is not enabled on the project | Dashboard → Storage → set up, then re-run the migrations |
+| `storage.bucket` | the public bucket named `media` | Dashboard → Storage → New bucket: name `media`, public, 20 MB, or `POST /storage/v1/bucket` with the service key |
+| `storage.policies` | the five policies on `storage.objects` | Dashboard → Storage → Policies → New policy → *For full customization*, one at a time |
+| `storage.rls` | row level security on `storage.objects` | Dashboard → Storage → Policies (it is on by default; if it is off, the project has been changed by hand) |
+
+The policies, as the dashboard's SQL editor will take them — it runs as a role
+that owns the table, which is why this works there and not in the workflow:
+
+```sql
+create policy "bsdc media is readable by anybody" on storage.objects
+  for select using (bucket_id = 'media');
+
+create policy "bsdc media is written in your own folder" on storage.objects
+  for insert with check (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is moved in your own folder" on storage.objects
+  for update using (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  ) with check (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is deleted by its owner" on storage.objects
+  for delete using (
+    bucket_id = 'media'
+    and bsdc.current_uid() is not null
+    and split_part(coalesce(name, ''), '/', 1) = bsdc.current_uid()
+  );
+
+create policy "bsdc media is reachable by staff" on storage.objects
+  for all using (bsdc.is_staff()) with check (bsdc.is_staff());
+```
+
+Then check the whole of it in one paste, from the same editor:
+
+```sql
+select 'bucket exists' as what,
+       case when exists (select 1 from storage.buckets where id = 'media')
+            then 'ok' else 'MISSING' end as state
+union all
+select 'bucket is public',
+       case when exists (select 1 from storage.buckets where id = 'media' and "public")
+            then 'ok' else 'MISSING' end
+union all
+select 'media policies',
+       count(*)::text || ' of 5'
+  from pg_policies
+ where schemaname = 'storage' and tablename = 'objects' and policyname like 'bsdc media%'
+union all
+select 'row level security',
+       case when (select c.relrowsecurity from pg_class c
+                    join pg_namespace n on n.oid = c.relnamespace
+                   where n.nspname = 'storage' and c.relname = 'objects')
+            then 'ok' else 'MISSING' end;
+```
+
+Four `ok` rows and a `5 of 5`, and uploads have somewhere to live. Anything else,
+and the row that is not `ok` is the thing to create.
 
 ### `relation "public.<something>" does not exist` on a later migration
 
@@ -569,15 +717,54 @@ a zone token. Issue a new one from the **Edit Cloudflare Workers** template.
 ### The site deploys but every data call returns 401
 
 `VITE_SUPABASE_PUBLISHABLE_KEY` is missing, truncated or belongs to another
-project. A missing build-time variable does not fail the build: Vite compiles
-`undefined` in and the first request fails at runtime. Check the key in the
-secret, then redeploy — editing a secret does not rebuild anything by itself.
+project. Vite compiles a missing value in as `undefined` and the first request
+fails at runtime, so the member site's build guards the values it cannot run
+without: `scripts/check-deploy-env.mjs` runs before `npm run build` and stops
+the deployment, naming every variable from `BSDC_REQUIRED_ENV` that is unset.
+If the deploy is failing with `refusing to deploy: … required build
+variable(s) are missing`, set the named secrets and re-run; if it published and
+still fails at runtime, the value is present but wrong (a key for another
+project, or a truncated paste). Editing a secret does not rebuild anything by
+itself — redeploy.
+
+### Uploads answer "Uploads are not configured for this deployment"
+
+`VITE_CLOUDINARY_CLOUD_NAME`, `VITE_CLOUDINARY_UNSIGNED_PRESET` or
+`VITE_IMGBB_API_KEY` is absent from the **build**. Cloudinary's pair must both
+be set: an unsigned upload without its preset is rejected by the API. Check the
+three secrets in §5.1, re-run **Deploy**, and hard-reload the site — the values
+are compiled into the JavaScript bundle, so the browser keeps serving the old
+build until the new one is published. Setting them as Cloudflare Pages
+variables does not help: the site is built in `deploy.yml` and uploaded as
+static files, so only the build environment's values reach the bundle.
 
 ### A Pages Function reads an empty variable
 
 Environment variables apply to the **next** deployment. Set the variable,
 then redeploy. Confirm you set it for the environment you are testing —
 Preview and Production are separate lists.
+
+### A member action answers "You do not have permission to do that"
+
+That string is the client's translation of PostgREST's **42501**, and it is
+almost never about the caller's role. It means a statement the browser issued
+was refused by a *privilege* somewhere in the transaction — most often an
+AFTER trigger that maintains a counters column the caller may not write
+(migration 0039 made those triggers run as the table owner) or a row level
+security policy that reads a table the caller has no `SELECT` on (0040 granted
+`SELECT` on `public.blocks`, which the follow and comment policies consult).
+The proof script asserts these paths statement by statement:
+
+```bash
+psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f scripts/rls-proof.sql
+```
+
+If the failing action is a console read — the SEO editor, the redirect table
+or the branding studio — check that the caller is staff and that the migration
+that grants `SELECT` on those tables is applied (0041). A missing
+column-privilege write grant shows up the same way: 0042 re-issues the column
+revokes that earlier migrations wrote *after* a table-wide `GRANT UPDATE`, where
+they silently did nothing.
 
 ### App links still open in the browser
 

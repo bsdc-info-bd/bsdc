@@ -17,7 +17,9 @@
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck:functions": "tsc -p functions/tsconfig.json"
+    "typecheck:functions": "tsc -p functions/tsconfig.json",
+    "db:prove": "node scripts/db-prove/run.mjs",
+    "push:keys": "node scripts/vapid-keys.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -47,6 +49,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
+    "@electric-sql/pglite": "0.5.8",
     "@testing-library/jest-dom": "6.5.0",
     "@testing-library/react": "16.0.1",
     "@testing-library/user-event": "14.5.2",
@@ -72,7 +75,12 @@
     "typescript": "5.6.2",
     "vite": "5.4.8",
     "vite-plugin-pwa": "0.20.5",
-    "vitest": "2.1.1"
+    "vitest": "2.1.1",
+    "workbox-core": "^7.4.1",
+    "workbox-expiration": "^7.4.1",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   },
   "engines": {
     "node": ">=20"

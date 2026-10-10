@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
 import { Card, Countdown, ExternalLink, LinkButton, SectionHeading } from '@/design-system';
 import { FeedTabs } from '@/components/feed/FeedTabs';
+import { FollowSuggestions } from '@/components/social/FollowSuggestions';
 import { launchConfig } from '@/lib/launch';
 import { ECOSYSTEM_LINKS, PILLARS, ROUTES, SITE, type Pillar } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
@@ -40,6 +41,9 @@ export default function HomePage() {
           <div className="mt-4">
             <FeedTabs />
           </div>
+          {/* A member who follows nobody has no ranking signals, so the feed
+              above is thin until they do. This is how they start. */}
+          <FollowSuggestions className="mt-6" />
         </section>
       </>
     );
@@ -75,6 +79,19 @@ export default function HomePage() {
           <LinkButton to={ROUTES.guidelines} variant="outline">
             {t('nav.guidelines')}
           </LinkButton>
+        </div>
+      </section>
+
+      <section className="fab-container pb-8" aria-labelledby="public-feed">
+        <SectionHeading title={t('home.feedTitle')} description={t('home.feedBody')} />
+        <h2 id="public-feed" className="fab-sr-only">
+          {t('home.feedTitle')}
+        </h2>
+        <div className="mt-4">
+          <FeedTabs signedIn={false} />
+        </div>
+        <div className="mt-4">
+          <LinkButton to={ROUTES.signup}>{t('home.feedJoin')}</LinkButton>
         </div>
       </section>
 

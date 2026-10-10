@@ -26,14 +26,17 @@ const ComposePage = lazy(() => import('@/routes/ComposePage'));
 const PostPage = lazy(() => import('@/routes/PostPage'));
 const TagPage = lazy(() => import('@/routes/TagPage'));
 const NotificationsPage = lazy(() => import('@/routes/NotificationsPage'));
+const TrashPage = lazy(() => import('./routes/TrashPage'));
 const BookmarksPage = lazy(() => import('@/routes/BookmarksPage'));
 const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
 const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
+const CreatePage = lazy(() => import('@/routes/CreatePage'));
 const GroupPage = lazy(() => import('@/routes/GroupPage'));
 const EventsPage = lazy(() => import('@/routes/EventsPage'));
 const JobsPage = lazy(() => import('@/routes/JobsPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
+const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 const SearchPage = lazy(() => import('@/routes/SearchPage'));
 const ShopPage = lazy(() => import('@/routes/ShopPage'));
@@ -94,8 +97,17 @@ const router = createBrowserRouter([
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
           { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
+          // The one door for adding to a directory: an event, a job, a gig, a
+          // project, a group. Each table already had a policy for its author;
+          // what was missing was the form.
+          { path: ROUTES.create, element: withSuspense(<CreatePage />) },
+          // The same composer, opened on an existing post. The page loads the
+          // post and refuses to show it to anybody but its author, and the
+          // database refuses the write besides.
+          { path: `${ROUTES.compose}/:postId`, element: withSuspense(<ComposePage />) },
           { path: ROUTES.notifications, element: withSuspense(<NotificationsPage />) },
           { path: ROUTES.bookmarks, element: withSuspense(<BookmarksPage />) },
+          { path: ROUTES.trash, element: withSuspense(<TrashPage />) },
           { path: ROUTES.messages, element: withSuspense(<MessagesPage />) },
           { path: '/messages/:id', element: withSuspense(<MessagesPage />) },
 
@@ -125,6 +137,7 @@ const router = createBrowserRouter([
       { path: ROUTES.jobs, element: withSuspense(<JobsPage />) },
       { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
       { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
+      { path: `${ROUTES.projects}/:slug`, element: withSuspense(<ProjectPage />) },
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },
 
       { path: ROUTES.search, element: withSuspense(<SearchPage />) },

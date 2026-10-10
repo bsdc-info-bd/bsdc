@@ -40,8 +40,10 @@ export const ROUTES = {
   onboarding: '/onboarding',
   settings: '/settings',
   compose: '/compose',
+  create: '/create',
   notifications: '/notifications',
   bookmarks: '/bookmarks',
+  trash: '/trash',
   messages: '/messages',
   groups: '/groups',
   events: '/events',
@@ -84,6 +86,11 @@ export function groupPath(slug: string): string {
   return `/g/${slug}`;
 }
 
+/** Project permalink: /projects/slug. */
+export function projectPath(slug: string): string {
+  return `${ROUTES.projects}/${encodeURIComponent(slug.trim())}`;
+}
+
 /** Product permalink: /shop/slug. */
 export function productPath(slug: string): string {
   return `/shop/${slug}`;
@@ -104,9 +111,15 @@ export function tagPath(slug: string): string {
   return `/tag/${slug}`;
 }
 
-/** Profile permalink: /@username (SEO title pattern "bsdc • username"). */
+/**
+ * Profile permalink: /@username (SEO title pattern "bsdc • username").
+ *
+ * A member who has not claimed a handle has no profile page to link to, so
+ * the link goes home rather than to `/@`, which would 404.
+ */
 export function profilePath(username: string): string {
-  return `/@${username}`;
+  const handle = username.trim();
+  return handle.length > 0 ? `/@${handle}` : ROUTES.home;
 }
 
 export type RouteKey = keyof typeof ROUTES;

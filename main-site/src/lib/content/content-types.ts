@@ -46,7 +46,16 @@ export interface DraftMedia {
   thumbUrl: string;
   mediaId: string;
   altText: string;
+  /** Measured pixels, so the composer can show the arrangement it will publish. */
+  width: number | null;
+  height: number | null;
 }
+
+/** The media fields the attachment queue has once a picture is durably recorded. */
+export type ReadyAttachmentMedia = Pick<
+  DraftMedia,
+  'url' | 'thumbUrl' | 'mediaId' | 'altText' | 'width' | 'height'
+>;
 
 export interface PostDraft {
   id: string | null;
@@ -64,6 +73,88 @@ export interface PostDraft {
   isSensitive: boolean;
   coverUrl: string;
   updatedAt: string;
+}
+
+/**
+ * Snapshot the queue's current durable attachments into a draft.
+ *
+ * The queue is authoritative at submit time: its bridge into React draft state
+ * runs in a passive effect and can lag the render that first marks an upload
+ * complete. Taking this snapshot prevents a fast publish click from saving the
+ * text while silently leaving the just-uploaded image out of `post_media`.
+ */
+export function withReadyMedia(
+  draft: PostDraft,
+  ready: readonly ReadyAttachmentMedia[],
+): PostDraft {
+  return {
+    ...draft,
+    media: ready.map((item) => ({
+      url: item.url,
+      thumbUrl: item.thumbUrl,
+      mediaId: item.mediaId,
+      altText: item.altText,
+      width: item.width,
+      height: item.height,
+    })),
+  };
+}
+
+/**
+ * The draft that opens the editor on an existing post.
+ *
+ * `updatedAt` is not taken from the post: it is the local autosave clock, and
+ * carrying the row's timestamp would make the composer claim an unsaved
+ * restore the moment it opens.
+ */
+export function draftFromPost(post: {
+  id: string;
+  kind: PostKind;
+  title: string;
+  body: string;
+  code: string;
+  codeLanguage: string;
+  tags: string[];
+  media: {
+    mediaId: string;
+    url: string;
+    thumbUrl: string;
+    altText: string;
+    width?: number | null;
+    height?: number | null;
+  }[];
+  poll: { label: string }[];
+  visibility: Visibility;
+  language: 'bn' | 'en';
+  allowComments: boolean;
+  isSensitive: boolean;
+  coverUrl: string;
+}): PostDraft {
+  const codeLanguage = CODE_LANGUAGES.find((value) => value === post.codeLanguage);
+  return {
+    id: post.id,
+    kind: post.kind,
+    title: post.title,
+    body: post.body,
+    code: post.code,
+    codeLanguage: codeLanguage ?? 'typescript',
+    tags: post.tags,
+    media: post.media.map((item) => ({
+      mediaId: item.mediaId,
+      url: item.url,
+      thumbUrl: item.thumbUrl,
+      altText: item.altText,
+      width: item.width ?? null,
+      height: item.height ?? null,
+    })),
+    pollOptions: post.poll.length > 0 ? post.poll.map((option) => option.label) : ['', ''],
+    visibility: post.visibility,
+    language: post.language,
+    allowComments: post.allowComments,
+    isSensitive: post.isSensitive,
+    coverUrl: post.coverUrl,
+    updatedAt: new Date(0).toISOString(),
+  };
 }
 
 export const EMPTY_DRAFT: PostDraft = {
@@ -89,6 +180,10 @@ const mediaSchema = z.object({
   thumbUrl: z.string(),
   mediaId: z.string(),
   altText: z.string().max(280),
+  // Optional: a draft stored on this device before sizes were kept still has
+  // to open. A missing size costs a default shape, not the member's writing.
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
 });
 
 /** Shape check used when a locally stored draft is restored. */

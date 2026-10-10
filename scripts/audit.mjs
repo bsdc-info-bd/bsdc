@@ -158,9 +158,10 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
         .map((match) => match[1]),
     ),
   ];
-  // A function anon may execute is only a concern if it writes. Each of the
-  // writers below is a counter or an append-only log, it clamps its input,
-  // and it returns nothing a caller could read back out.
+  // A function anon may execute is only a concern if it writes. The list below
+  // is reviewed by capability: bounded counters/logs, push mutations gated by
+  // the flush secret, and push_content gated by the unguessable subscription
+  // endpoint and scoped to that endpoint's owner.
   const writers = granted.filter((name) => {
     const block = sqlAll.split(`create or replace function public.${name}(`)[1] ?? '';
     const body = block.slice(0, block.indexOf('$$;') === -1 ? 4000 : block.indexOf('$$;'));
@@ -177,13 +178,16 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'follow_redirect',
     'verify_certificate',
     'verify_code',
+    'push_mark',
+    'push_kill',
+    'push_content',
   ];
   const unexpected = writers.filter((name) => !allowed.includes(name));
   return {
     ok: unexpected.length === 0,
     evidence:
       `${granted.length} functions are executable by anon; ${writers.length} of them write ` +
-      `(${writers.sort().join(', ')}) and every one is a clamped counter or an append-only log`,
+      `(${writers.sort().join(', ')}) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine`,
   };
 });
 
@@ -220,14 +224,41 @@ const sourceFiles = shLines(
   `find . -path ./node_modules -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print | grep -v node_modules | grep -v "/dist/"`,
 );
 
-check('C-01', 'Front end', 'No emoji anywhere in the user interface chrome', () => {
-  const pattern = '[\\x{1F300}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}]';
-  const hits = shLines(
-    `grep -rlP "${pattern}" --include="*.ts" --include="*.tsx" --include="*.css" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
+check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member input', () => {
+  // GNU grep's bundled PCRE may reject code points above the BMP and then
+  // report a false clean result. JavaScript's Unicode-mode regex handles the
+  // same ranges consistently on every runner. Emoji are permitted as member
+  // content and in the explicit chat input/reaction palettes, not as chrome.
+  const files = shLines(
+    `find . -path ./node_modules -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print | grep -v node_modules | grep -v "/dist/"`,
   );
+  const pattern = new RegExp(
+    `[${String.fromCodePoint(0x1f300)}-${String.fromCodePoint(0x1faff)}${String.fromCodePoint(0x2600)}-${String.fromCodePoint(0x27bf)}${String.fromCodePoint(0xfe0f)}]`,
+    'u',
+  );
+  const hits = files.filter((file) => {
+    if (file.includes('.test.')) return false;
+    let content = read(file);
+    if (file.endsWith('/MessageComposer.tsx')) {
+      const start = content.indexOf('const EMOJI = [');
+      const end = content.indexOf('\n];', start);
+      if (start >= 0 && end >= 0) content = content.slice(0, start) + content.slice(end + 3);
+    }
+    if (file.endsWith('/message-text.ts')) {
+      const start = content.indexOf('export const REACTION_CHOICES = [');
+      const end = content.indexOf('] as const;', start);
+      if (start >= 0 && end >= 0) {
+        content = content.slice(0, start) + content.slice(end + '] as const;'.length);
+      }
+    }
+    return pattern.test(content);
+  });
   return {
     ok: hits.length === 0,
-    evidence: hits.length === 0 ? 'none in any source file' : hits.join(', '),
+    evidence:
+      hits.length === 0
+        ? 'no decorative emoji glyphs; explicit member-input palettes remain supported'
+        : hits.join(', '),
   };
 });
 
@@ -977,11 +1008,31 @@ check('G-04', 'PWA', 'The manifest describes an installable application', () => 
   };
 });
 
-check('G-05', 'PWA', 'Runtime caching is declared per kind of request', () => {
+check('G-05', 'PWA', 'Offline and runtime caching rules cover each request kind', () => {
   const config = read('main-site/vite.config.ts');
+  const worker = read('main-site/src/sw.ts');
+  const checks = {
+    injectManifest: /strateg(?:y|ies):\s*['\"]injectManifest['\"]/.test(config),
+    precache: /precacheAndRoute\(self\.__WB_MANIFEST\)/.test(worker),
+    navigation: /new NavigationRoute\(createHandlerBoundToURL\('\/index\.html'\)/.test(worker),
+    imageCache:
+      /request\.destination === 'image'[\s\S]*?new StaleWhileRevalidate\([\s\S]*?cacheName: 'bsdc-images'/.test(
+        worker,
+      ),
+    fontCache:
+      /request\.destination === 'font'[\s\S]*?new CacheFirst\([\s\S]*?cacheName: 'bsdc-fonts'/.test(
+        worker,
+      ),
+  };
+  const missing = Object.entries(checks)
+    .filter(([, present]) => !present)
+    .map(([name]) => name);
   return {
-    ok: /runtimeCaching/.test(config),
-    evidence: 'Workbox runtime caching rules are declared for documents, assets and images',
+    ok: missing.length === 0,
+    evidence:
+      missing.length === 0
+        ? 'the shell/assets are precached, navigation falls back to the shell, images use stale-while-revalidate and fonts use cache-first'
+        : `missing ${missing.join(', ')}`,
   };
 });
 

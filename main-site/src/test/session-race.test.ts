@@ -95,6 +95,40 @@ describe('session ordering', () => {
     stop();
   });
 
+  it('keeps the profile on screen when the read fails instead of clearing it', async () => {
+    mocks.ensure.mockResolvedValue(token);
+    mocks.profile.mockRejectedValueOnce(new Error('network'));
+    const callbacks = handlers();
+    const stop = startAuthListener(callbacks);
+    mocks.authCallback(user);
+    await flush();
+    // A read that did not complete is not a member with no profile: the
+    // picture stays, and the failure is reported as a failure.
+    expect(callbacks.onProfile).not.toHaveBeenCalled();
+    expect(callbacks.onProfileError).toHaveBeenCalledWith('profile/access-failed');
+    expect(callbacks.onProfileSettled).toHaveBeenCalledOnce();
+    stop();
+  });
+
+  it('takes the previous member off the screen before loading the next one', async () => {
+    mocks.ensure.mockResolvedValue(token);
+    mocks.profile.mockResolvedValueOnce({ uid: 'alice' });
+    const callbacks = handlers();
+    const stop = startAuthListener(callbacks);
+    mocks.authCallback(user);
+    await flush();
+    expect(callbacks.onProfile).toHaveBeenLastCalledWith({ uid: 'alice' });
+
+    // Bob signs in without a sign-out event in between, and his read stalls.
+    const bob = { uid: 'bob' } as User;
+    mocks.auth.currentUser = bob;
+    mocks.profile.mockReturnValueOnce(new Promise(() => {}));
+    mocks.authCallback(bob);
+    await flush();
+    expect(callbacks.onProfile).toHaveBeenLastCalledWith(null);
+    stop();
+  });
+
   it('does not publish an old profile after switching accounts', async () => {
     mocks.ensure.mockResolvedValue(token);
     let resolve!: (profile: unknown) => void;

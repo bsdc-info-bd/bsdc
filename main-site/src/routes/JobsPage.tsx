@@ -10,12 +10,13 @@ import {
   Card,
   Chip,
   EmptyState,
+  LinkButton,
   Modal,
   PageSkeleton,
   SectionHeading,
   SelectField,
-  TextField,
   TextareaField,
+  TextField,
 } from '@/design-system';
 import { useJobBoard } from '@/hooks/use-opportunities';
 import {
@@ -74,7 +75,20 @@ export default function JobsPage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading title={t('jobs.title')} description={t('jobs.description')} />
+        <SectionHeading
+          title={t('jobs.title')}
+          description={t('jobs.description')}
+          action={
+            <LinkButton
+              to={`${ROUTES.create}?kind=job`}
+              variant="outline"
+              size="sm"
+              iconStart={<Briefcase size={14} />}
+            >
+              {t('create.submit.job')}
+            </LinkButton>
+          }
+        />
 
         <Card className="mt-4">
           <div className="grid gap-3 sm:grid-cols-3">
@@ -127,6 +141,11 @@ export default function JobsPage() {
               icon={<Briefcase size={22} />}
               title={t('jobs.emptyTitle')}
               description={t('jobs.emptyBody')}
+              action={
+                <LinkButton to={`${ROUTES.create}?kind=job`} variant="primary" size="sm">
+                  {t('create.submit.job')}
+                </LinkButton>
+              }
             />
           </div>
         ) : null}

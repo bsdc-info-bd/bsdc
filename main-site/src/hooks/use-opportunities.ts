@@ -8,6 +8,8 @@ import {
   type JobFilters,
   type JobListing,
   type Project,
+  type ProjectDetail,
+  type ProjectSort,
   type Sketch,
   type SketchLanguage,
 } from '@/lib/opportunities/opportunity-types';
@@ -105,6 +107,8 @@ export function useGigBoard(): GigBoardResult {
 
 export interface ProjectShowcaseResult {
   projects: Project[];
+  sort: ProjectSort;
+  setSort: (sort: ProjectSort) => void;
   isLoading: boolean;
   isError: boolean;
   star: (projectId: string) => void;
@@ -113,11 +117,12 @@ export interface ProjectShowcaseResult {
 export function useProjects(): ProjectShowcaseResult {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const queryClient = useQueryClient();
-  const queryKey = ['projects', uid];
+  const [sort, setSort] = useState<ProjectSort>('popular');
+  const queryKey = ['projects', uid, sort];
 
   const query = useQuery({
     queryKey,
-    queryFn: async () => (await repository()).fetchProjects(uid),
+    queryFn: async () => (await repository()).fetchProjects(uid, 40, sort),
     staleTime: 60_000,
   });
 
@@ -142,17 +147,77 @@ export function useProjects(): ProjectShowcaseResult {
       if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 
   return {
     projects: query.data ?? [],
+    sort,
+    setSort,
     isLoading: query.isLoading,
     isError: query.isError,
     star: (projectId) => {
       mutation.mutate(projectId);
     },
+  };
+}
+
+export interface ProjectDetailResult {
+  project: ProjectDetail | null;
+  isLoading: boolean;
+  isError: boolean;
+  star: () => void;
+  isStarring: boolean;
+}
+
+/** Loads a project directly by slug; details do not depend on the list's 40-row window. */
+export function useProject(slug: string): ProjectDetailResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  const queryKey = ['project', slug, uid];
+
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => (await repository()).fetchProjectBySlug(slug, uid),
+    enabled: slug.length > 0,
+    staleTime: 60_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (projectId: string) => (await repository()).toggleProjectStar(projectId),
+    onMutate: (projectId) => {
+      const previous = queryClient.getQueryData<ProjectDetail | null>(queryKey);
+      queryClient.setQueryData<ProjectDetail | null>(queryKey, (current) =>
+        current && current.id === projectId
+          ? {
+              ...current,
+              starred: !current.starred,
+              stars: current.starred ? Math.max(current.stars - 1, 0) : current.stars + 1,
+            }
+          : current,
+      );
+      return { previous };
+    },
+    onError: (_error, _projectId, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(queryKey, context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+
+  return {
+    project: query.data ?? null,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    star: () => {
+      if (query.data) mutation.mutate(query.data.id);
+    },
+    isStarring: mutation.isPending,
   };
 }
 

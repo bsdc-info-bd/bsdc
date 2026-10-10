@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
+import { PushCard } from '@/components/notifications/PushCard';
+import { HandleCard } from '@/components/profile/HandleCard';
+import { LocationField } from '@/components/profile/LocationField';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -53,14 +56,18 @@ function AccountPanel() {
 
   async function onAvatarUploaded(url: string) {
     if (!user) return;
-    setAvatarUrl(url);
     try {
-      const { updatePhotoUrl } = await import('@/lib/auth/auth-service');
-      await updatePhotoUrl(url);
+      // The profile row is the source of truth, so it is written first. The
+      // Firebase user's photoURL is only a cache for the first sign-in: if
+      // that mirror fails, the member still has their picture.
       await updateProfileFields(user.uid, { avatarUrl: url });
-      if (profile) setProfile({ ...profile, avatarUrl: url });
+      const { updatePhotoUrl } = await import('@/lib/auth/auth-service');
+      await updatePhotoUrl(url).catch(() => undefined);
+      setAvatarUrl(url);
+      if (profile !== null) setProfile({ ...profile, avatarUrl: url });
       toast.success(t('media.uploaded'));
     } catch (error) {
+      // Nothing was saved, so the picture already on screen stays there.
       toast.error(t(profileErrorKey(error)));
     }
   }
@@ -69,12 +76,14 @@ function AccountPanel() {
     if (!user) return;
     setSaving(true);
     try {
-      await updateDisplayName(displayName.trim());
       await updateProfileFields(user.uid, {
         displayName: displayName.trim(),
         bio: bio.trim(),
         location: location.trim(),
       });
+      // The database holds the name that matters; Firebase's copy is the
+      // cache the very first sign-in reads from.
+      await updateDisplayName(displayName.trim()).catch(() => undefined);
       if (profile) {
         setProfile({
           ...profile,
@@ -137,12 +146,7 @@ function AccountPanel() {
             maxLength={280}
             onChange={(event) => setBio(event.target.value)}
           />
-          <TextField
-            label={t('onboarding.locationLabel')}
-            value={location}
-            autoComplete="address-level2"
-            onChange={(event) => setLocation(event.target.value)}
-          />
+          <LocationField value={location} onChange={setLocation} />
           <div>
             <Button loading={saving} onClick={() => void save()}>
               {t('settings.save')}
@@ -150,6 +154,8 @@ function AccountPanel() {
           </div>
         </div>
       </Card>
+
+      <HandleCard />
     </div>
   );
 }
@@ -227,19 +233,25 @@ function NotificationsPanel() {
   ];
 
   return (
-    <Card>
-      <p className="mb-3 text-sm text-muted">{t('settings.notifications.description')}</p>
-      <div className="grid gap-3">
-        {rows.map((row) => (
-          <Switch
-            key={row.key}
-            label={row.label}
-            checked={prefs[row.key]}
-            onCheckedChange={(value) => void update(row.key, value)}
-          />
-        ))}
-      </div>
-    </Card>
+    <div className="grid gap-4">
+      {/* What the switches below decide is which notifications are written at
+          all. What this decides is whether a closed device is woken by them. */}
+      <PushCard />
+
+      <Card>
+        <p className="mb-3 text-sm text-muted">{t('settings.notifications.description')}</p>
+        <div className="grid gap-3">
+          {rows.map((row) => (
+            <Switch
+              key={row.key}
+              label={row.label}
+              checked={prefs[row.key]}
+              onCheckedChange={(value) => void update(row.key, value)}
+            />
+          ))}
+        </div>
+      </Card>
+    </div>
   );
 }
 

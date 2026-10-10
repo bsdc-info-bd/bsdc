@@ -3,6 +3,7 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   getAuth,
+  inMemoryPersistence,
   setPersistence,
   type Auth,
 } from 'firebase/auth';
@@ -59,5 +60,18 @@ export function getDb(): Firestore {
  */
 export async function applyPersistence(remember: boolean): Promise<void> {
   const auth = getFirebaseAuth();
-  await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+  try {
+    await setPersistence(auth, remember ? browserLocalPersistence : browserSessionPersistence);
+  } catch {
+    // Private-mode Safari, an in-app browser and a page opened from a file have
+    // no usable storage, and the SDK refuses to pick a persistence for them.
+    // An in-memory session still signs the member in for this visit, which is
+    // the difference between "you will not stay signed in" and a sign-in that
+    // fails on a phone and works on a tablet.
+    try {
+      await setPersistence(auth, inMemoryPersistence);
+    } catch {
+      // Nothing left to choose; the SDK keeps whatever persistence it had.
+    }
+  }
 }

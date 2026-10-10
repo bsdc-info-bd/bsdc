@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   EmptyState,
+  LinkButton,
   PageSkeleton,
   SectionHeading,
 } from '@/design-system';
@@ -51,7 +52,20 @@ export default function GroupsPage() {
         ]}
       />
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading title={t('groups.title')} description={t('groups.description')} />
+        <SectionHeading
+          title={t('groups.title')}
+          description={t('groups.description')}
+          action={
+            <LinkButton
+              to={`${ROUTES.create}?kind=group`}
+              variant="outline"
+              size="sm"
+              iconStart={<Users size={14} />}
+            >
+              {t('create.submit.group')}
+            </LinkButton>
+          }
+        />
 
         {directory.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {directory.isError ? <Alert tone="danger" title={t('groups.failed')} /> : null}
@@ -61,6 +75,11 @@ export default function GroupsPage() {
             icon={<Users size={22} />}
             title={t('groups.emptyTitle')}
             description={t('groups.emptyBody')}
+            action={
+              <LinkButton to={`${ROUTES.create}?kind=group`} variant="primary" size="sm">
+                {t('create.submit.group')}
+              </LinkButton>
+            }
           />
         ) : null}
 

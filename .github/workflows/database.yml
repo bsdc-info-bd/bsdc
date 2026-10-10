@@ -174,13 +174,10 @@ jobs:
 
       # Reaching the database is the step that fails on a first deployment,
       # and the reason is never in the error: a direct Supabase host has no
-      # IPv4 address any more, and GitHub's runners have no IPv6. This says
-      # so in as many words, without printing anything that identifies the
+      # IPv4 address any more, and GitHub's runners have no IPv6. This resolves
+      # the host and opens a socket before any migration is attempted, and says
+      # so in as many words without printing anything that identifies the
       # project.
-      # Reaching the database is the step that fails on a first deployment,
-      # and the reason is never in the error. This one resolves the host and
-      # opens a socket before any migration is attempted, and prints nothing
-      # that identifies the project.
       - name: Check the database can be reached at all
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
@@ -227,4 +224,28 @@ jobs:
             psql "$SUPABASE_DB_URL" -t -A -F '|' -v ON_ERROR_STOP=1 \
               -c "select version, name, to_char(applied_at, 'YYYY-MM-DD HH24:MI') from supabase_migrations.schema_migrations order by version desc limit 10" \
               | sed 's/^/| /; s/$/ |/'
+            echo
+            echo '### What this database still owes'
+            echo
+            # A migration that meets an object it has no rights over records the
+            # refusal instead of failing the run, so the run has to say what was
+            # refused. `storage` belongs to supabase_storage_admin, not to the
+            # role applying here; see docs/deploying.md.
+            notes=$(psql "$SUPABASE_DB_URL" -t -A \
+              -c "select to_regclass('bsdc.deployment_notes')::text")
+            if [ -z "$notes" ]; then
+              echo '_No notes table yet, so nothing has been recorded either way._'
+            else
+              owed=$(psql "$SUPABASE_DB_URL" -t -A -F '|' -v ON_ERROR_STOP=1 \
+                -c "select topic, detail from bsdc.deployment_notes where resolved_at is null order by topic")
+              if [ -z "$owed" ]; then
+                echo 'Nothing. Every migration did all of its work.'
+              else
+                echo "$owed" | while IFS='|' read -r topic detail; do
+                  echo "- **$topic** — $detail"
+                done
+                echo
+                echo 'The remedy for each is in `docs/deploying.md` §8.'
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

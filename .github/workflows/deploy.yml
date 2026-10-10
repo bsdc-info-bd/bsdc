@@ -93,9 +93,18 @@ jobs:
         if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site'
         working-directory: main-site
         env:
+          # Everything the browser needs must be compiled in here: the site is
+          # built in this job and uploaded as static files, so a value that is
+          # only set inside Cloudflare (or only in a developer's .env) never
+          # reaches the bundle. The upload keys were the omission that made
+          # production answer "Uploads are not configured for this deployment"
+          # for every avatar, cover and post image, and they are required
+          # rather than optional so the build stops instead of shipping a site
+          # whose media pipeline cannot work.
           BSDC_REQUIRED_ENV: >-
             VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
-            VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL
+            VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL,
+            VITE_CLOUDINARY_CLOUD_NAME,VITE_CLOUDINARY_UNSIGNED_PRESET,VITE_IMGBB_API_KEY
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
@@ -105,6 +114,14 @@ jobs:
           VITE_FB_MSG_SENDER_ID: ${{ secrets.VITE_FB_MSG_SENDER_ID }}
           VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
           VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
+          VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
+          VITE_CLOUDINARY_UNSIGNED_PRESET: ${{ secrets.VITE_CLOUDINARY_UNSIGNED_PRESET }}
+          VITE_IMGBB_API_KEY: ${{ secrets.VITE_IMGBB_API_KEY }}
+          # Push and OneSignal are optional features: a missing value disables
+          # them in the client, which is honest, so they are passed but not
+          # required.
+          VITE_FIREBASE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_FIREBASE_VAPID_PUBLIC_KEY }}
+          VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_SITE_URL: https://www.bsdc.info.bd
           VITE_BUILD_SHA: ${{ github.sha }}
         run: |

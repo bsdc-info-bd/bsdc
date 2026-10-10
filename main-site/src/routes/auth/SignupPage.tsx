@@ -40,6 +40,7 @@ export default function SignupPage() {
   const redirectError = useAuthStore((state) => state.redirectError);
   const [remember, setRemember] = useState(true);
   const [errorKey, setErrorKey] = useState<string | null>(null);
+  const [warningKey, setWarningKey] = useState<string | null>(null);
 
   const {
     register,
@@ -66,14 +67,18 @@ export default function SignupPage() {
 
   async function onSubmit(values: FormValues) {
     setErrorKey(null);
+    setWarningKey(null);
     try {
-      await signUpWithEmail({
+      const result = await signUpWithEmail({
         email: values.email,
         password: values.password,
         displayName: values.displayName,
         remember,
         nextPath,
       });
+      // The account exists either way. A mail that did not go out is a warning
+      // with a way to ask again, never a failed signup.
+      if (!result.verificationSent) setWarningKey('auth.errors.verificationNotSent');
     } catch (error) {
       setErrorKey(authErrorKey(error));
     }
@@ -105,6 +110,7 @@ export default function SignupPage() {
         {errorKey || redirectError ? (
           <Alert tone="danger" title={t(errorKey ?? redirectError!)} className="mb-4" />
         ) : null}
+        {warningKey ? <Alert tone="warning" title={t(warningKey)} className="mb-4" /> : null}
 
         <form
           noValidate

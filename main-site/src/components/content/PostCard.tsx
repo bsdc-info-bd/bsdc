@@ -1,8 +1,11 @@
 import { Clock, Eye, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { MediaGallery } from '@/components/media/MediaGallery';
 import { Avatar, Badge, Card, Chip } from '@/design-system';
 import type { Post } from '@/lib/content/post-repository';
+import { placementFor } from '@/lib/media/arrangement';
+import { toGalleryItems } from '@/lib/media/gallery-items';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { profilePath } from '@/lib/site';
 
@@ -11,9 +14,19 @@ export function PostCard({ post }: { post: Post }) {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const when = post.publishedAt ?? post.createdAt;
+  const gallery = toGalleryItems(post.media);
+  // One picture is the card's header and goes first, edge to edge; a set of
+  // them is content, and stays in the body where a grid does not fight the
+  // byline for the reader's first look.
+  const placement = placementFor(post.media);
+  const galleryLabel = t('media.gallery.postImages');
 
   return (
     <Card as="article" interactive>
+      {placement === 'header' ? (
+        <MediaGallery items={gallery} flush priority label={galleryLabel} className="mb-3" />
+      ) : null}
+
       <div className="flex items-center gap-2">
         {post.author ? (
           <>
@@ -43,13 +56,8 @@ export function PostCard({ post }: { post: Post }) {
         <p className="mt-1 text-sm text-muted">{post.excerpt}</p>
       </Link>
 
-      {post.media.length > 0 && post.media[0] ? (
-        <img
-          src={post.media[0].thumbUrl.length > 0 ? post.media[0].thumbUrl : post.media[0].url}
-          alt={post.media[0].altText}
-          loading="lazy"
-          className="mt-3 h-40 w-full rounded-lg object-cover"
-        />
+      {placement === 'body' ? (
+        <MediaGallery items={gallery} label={galleryLabel} className="mt-3" />
       ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-2xs text-muted">

@@ -29,6 +29,13 @@ function message(overrides: Partial<Message> & Pick<Message, 'id'>): Message {
     deletedAt: null,
     createdAt: at(0),
     author: null,
+    replyBody: null,
+    replySender: null,
+    reactions: {},
+    myReactions: [],
+    readBy: [],
+    starred: false,
+    pinned: false,
     ...overrides,
   };
 }

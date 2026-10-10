@@ -1,0 +1,38 @@
+-- ---------------------------------------------------------------------------
+-- The block list is read by policies, so the members those policies protect
+-- need SELECT on it.
+--
+-- Two row level security policies ask "is either side blocking the other?"
+-- and answer it by reading `public.blocks`:
+--
+--   * follows.follows_insert_self    — a member may not follow somebody who
+--                                      blocked them
+--   * comments.comments_read_visible — a blocked pair sees no comments either
+--                                      way
+--
+-- A policy expression is evaluated with the privileges of the caller, so both
+-- statements need SELECT on `public.blocks` for `anon` and `authenticated`.
+-- 0002 granted INSERT and DELETE on that table but not SELECT, which made the
+-- failure reach far beyond blocking:
+--
+--   * following anybody returned 42501 "permission denied for table blocks";
+--   * every SELECT of comments — a post page, the comment count, a thread
+--     refresh, for a signed-in member *or* an anonymous visitor — returned the
+--     same 42501, because the read policy could not be evaluated;
+--   * a member's own block list could not be read, and unblocking could not
+--     even evaluate its WHERE clause;
+--   * `public.feed_candidates()` runs as the caller, so the home feed refused
+--     to load for the same reason.
+--
+-- Granting SELECT does not expose anything: the policy on the table
+-- (`blocks_rw_self`) still restricts every read to the rows the caller created
+-- (`blocker_uid = bsdc.current_uid()`) or to staff. For anonymous traffic
+-- `current_uid()` is null and `is_staff()` is false, so an anonymous caller
+-- reads zero rows — enough for the policy to be evaluated, never enough to
+-- learn who blocked whom.
+--
+-- Granting a privilege that already exists is a no-op, so this file is safe to
+-- re-run.
+-- ---------------------------------------------------------------------------
+
+grant select on public.blocks to anon, authenticated;

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DataAccessBootstrapError } from '@/lib/auth/data-access';
+import { cloudinaryConfigured } from '@/lib/env';
 import { DEFAULT_FLAGS, isFlagEnabled, type FeatureFlag } from '@/lib/data/feature-flags';
 import { fieldsToUpdate, onboardingInsert, rowToProfile } from '@/lib/profile/supabase-backend';
 import {
@@ -12,8 +13,10 @@ import {
   MediaError,
 } from '@/lib/storage/upload';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { hasClaimedHandle } from '@/lib/profile/types';
 import { profileErrorKey } from '@/lib/profile/profile-errors';
 import { bootstrapDisplayName } from '@/lib/profile/profile-service';
+import { profilePath, ROUTES } from '@/lib/site';
 import type { ProfileRow } from '@/lib/supabase/types';
 
 const row: ProfileRow = {
@@ -64,8 +67,61 @@ describe('rowToProfile', () => {
     expect(profile?.privacy.discoverable).toBe(true);
   });
 
-  it('rejects a row that cannot satisfy the schema', () => {
-    expect(rowToProfile({ ...row, display_name: '' })).toBeNull();
+  it('degrades one bad field rather than throwing the whole row away', () => {
+    // A row that exists is a profile that exists. Rejecting this one is what
+    // made a member's picture vanish at sign-in while the database still had
+    // it, and the public post page — which reads the column directly — kept
+    // showing it.
+    const nameless = rowToProfile({ ...row, display_name: '' });
+    expect(nameless).not.toBeNull();
+    expect(nameless?.displayName).toBe('Member');
+    expect(nameless?.avatarUrl).toBe(row.avatar_url);
+
+    const long = rowToProfile({ ...row, bio: 'b'.repeat(400) });
+    expect(long).not.toBeNull();
+    expect(long?.bio).toHaveLength(280);
+  });
+
+  it('is null only when the row has no member in it', () => {
+    expect(rowToProfile({ ...row, uid: '' })).toBeNull();
+  });
+
+  it('reads a bootstrap row whose handle has not been claimed yet', () => {
+    const profile = rowToProfile({
+      ...row,
+      username: null,
+      avatar_url: 'https://cdn.example.com/a.jpg',
+    });
+    expect(profile).not.toBeNull();
+    expect(profile?.username).toBe('');
+    expect(profile?.avatarUrl).toBe('https://cdn.example.com/a.jpg');
+    expect(profile && hasClaimedHandle(profile)).toBe(false);
+  });
+
+  it('keeps an oddly shaped avatar URL instead of losing the whole profile', () => {
+    const profile = rowToProfile({ ...row, avatar_url: 'not-a-url' });
+    expect(profile).not.toBeNull();
+    expect(profile?.avatarUrl).toBe('not-a-url');
+  });
+
+  it('knows when a member has claimed their handle', () => {
+    expect(hasClaimedHandle({ username: 'rafi_dev' })).toBe(true);
+    expect(hasClaimedHandle({ username: '   ' })).toBe(false);
+  });
+});
+
+describe('profile paths', () => {
+  it('builds a permalink for a claimed handle', () => {
+    expect(profilePath('rafi_dev')).toBe('/@rafi_dev');
+  });
+
+  it('sends a member without a handle home rather than to /@', () => {
+    expect(profilePath('')).toBe(ROUTES.home);
+    expect(profilePath('   ')).toBe(ROUTES.home);
+  });
+
+  it('names the failure when a profile write lands nowhere', () => {
+    expect(profileErrorKey(new Error('profile/not-found'))).toBe('profile.errors.notFound');
   });
 });
 
@@ -86,6 +142,7 @@ describe('profile write payloads', () => {
       displayName: 'Rafi Ahmed',
       bio: 'Builds things in Sylhet.',
       avatarUrl: 'https://images.example/avatar.png',
+      coverUrl: 'https://images.example/cover.png',
       location: 'Sylhet',
       website: 'https://rafi.example',
       skills: ['typescript'],
@@ -97,6 +154,7 @@ describe('profile write payloads', () => {
     expect(Object.keys(insert).sort()).toEqual([
       'avatar_url',
       'bio',
+      'cover_url',
       'display_name',
       'interests',
       'language',
@@ -139,6 +197,13 @@ describe('media routing', () => {
     expect(assertUploadable(file('image/png', 1024))).toBe('image');
   });
 
+  it('needs both halves of the Cloudinary configuration', () => {
+    expect(cloudinaryConfigured('bsdc', 'bsdc_unsigned')).toBe(true);
+    expect(cloudinaryConfigured('bsdc', '')).toBe(false);
+    expect(cloudinaryConfigured('', 'bsdc_unsigned')).toBe(false);
+    expect(cloudinaryConfigured('', '')).toBe(false);
+  });
+
   it('builds Cloudinary delivery transforms', () => {
     const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/bsdc/avatar/a.png';
     expect(cloudinaryThumb(url)).toContain('c_fill,g_auto:face,w_256,h_256,f_auto,q_auto');
@@ -178,6 +243,23 @@ describe('dataErrorKey', () => {
 
   it('maps the missing-profile signal onto the onboarding prompt', () => {
     expect(dataErrorKey(new Error('profile/missing'))).toBe('data.errors.profileMissing');
+  });
+
+  it('names a repeated application instead of calling it a conflict', () => {
+    // apply_to_job/submit_proposal raise these with 23505 once the unique key
+    // resolves the second request (0045). Without the message in MESSAGE_MAP
+    // the member would read "That value is already in use." on a form they
+    // have simply submitted twice.
+    expect(dataErrorKey({ message: 'job/already-applied', code: '23505' })).toBe(
+      'data.errors.alreadyApplied',
+    );
+    expect(dataErrorKey({ message: 'gig/already-proposed', code: '23505' })).toBe(
+      'data.errors.alreadyProposed',
+    );
+    // The generic duplicate message still falls through to the conflict key.
+    expect(dataErrorKey({ message: 'duplicate key value', code: '23505' })).toBe(
+      'data.errors.conflict',
+    );
   });
 });
 
@@ -239,6 +321,8 @@ describe('isFlagEnabled', () => {
 
 describe('profile access bootstrap errors', () => {
   it('explains a service bootstrap failure without blaming member permissions', () => {
-    expect(profileErrorKey(new DataAccessBootstrapError(503))).toBe('data.errors.accessUnavailable');
+    expect(profileErrorKey(new DataAccessBootstrapError(503))).toBe(
+      'data.errors.accessUnavailable',
+    );
   });
 });

@@ -1,4 +1,5 @@
-import { AtSign, Check, Link2, MapPin } from 'lucide-react';
+import { LocationField } from '@/components/profile/LocationField';
+import { AtSign, Check, Link2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -131,6 +132,9 @@ export default function OnboardingPage() {
         ? bio.length <= 280 && websiteValid && avatarValid
         : true;
 
+  // A cover already on the row is carried through, never overwritten with ''.
+  const coverUrl = profile?.coverUrl ?? '';
+
   const finish = useCallback(async () => {
     if (!user) return;
     setSaving(true);
@@ -140,6 +144,9 @@ export default function OnboardingPage() {
       displayName: displayName.trim(),
       bio: bio.trim(),
       avatarUrl,
+      // Onboarding edits a profile, it does not replace one: a cover the
+      // member already has survives the walk through these steps.
+      coverUrl,
       location: location.trim(),
       website,
       skills,
@@ -166,6 +173,7 @@ export default function OnboardingPage() {
   }, [
     avatarUrl,
     bio,
+    coverUrl,
     displayName,
     interests,
     language,
@@ -252,13 +260,7 @@ export default function OnboardingPage() {
                   onChange={(event) => setBio(event.target.value)}
                   error={bio.length > 280 ? t('auth.validation.bioLong') : undefined}
                 />
-                <TextField
-                  label={t('onboarding.locationLabel')}
-                  value={location}
-                  onChange={(event) => setLocation(event.target.value)}
-                  autoComplete="address-level2"
-                  iconStart={<MapPin size={18} />}
-                />
+                <LocationField value={location} onChange={setLocation} />
                 <TextField
                   label={t('onboarding.websiteLabel')}
                   value={website}

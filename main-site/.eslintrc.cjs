@@ -36,6 +36,8 @@ module.exports = {
       extends: ['plugin:@typescript-eslint/disable-type-checked'],
       parserOptions: { project: null },
       rules: {
+        // A command-line script reports by printing; that is what it is for.
+        'no-console': 'off',
         '@typescript-eslint/no-unsafe-assignment': 'off',
         '@typescript-eslint/no-unsafe-call': 'off',
         '@typescript-eslint/no-unsafe-member-access': 'off',
