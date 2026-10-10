@@ -1278,8 +1278,6 @@ export const en = {
     recordVoice: 'Record a voice note',
     stopRecording: 'Stop recording',
     recording: 'Recording…',
-    emoji: 'React with an emoji',
-    emojiHint: 'Insert an emoji',
     characterCount: '{{count}} of {{max}}',
     you: 'You',
     markRead: 'Mark as read',

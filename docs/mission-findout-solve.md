@@ -24,6 +24,7 @@ harness.
 9. [The same two reports, against a build that already had the fix](#9-the-same-two-reports-against-a-build-that-already-had-the-fix)
 10. [What a crawler was told about pages that are not for crawlers](#10-what-a-crawler-was-told-about-pages-that-are-not-for-crawlers)
 11. [One cover control, and an author who could not change their own cover](#11-one-cover-control-and-an-author-who-could-not-change-their-own-cover)
+12. [A reaction is a name, not a picture](#12-a-reaction-is-a-name-not-a-picture)
 
 ---
 
@@ -221,7 +222,7 @@ including the new `0063`.
 
 ### Migrations
 
-`0064` and `0065` were added by the rounds recorded in §9 and §10. Check the
+`0064`, `0065` and `0066` were added by the rounds recorded in §9, §10 and §12. Check the
 production ledger for `0046`–`0063` because some may have been applied manually;
 do not infer production state from the branch. In order, the migrations in this
 set are:
@@ -247,10 +248,11 @@ set are:
 0063_projects_have_a_home_to_be_found.sql
 0064_a_project_can_be_corrected.sql
 0065_a_private_page_is_not_a_page_for_crawlers.sql
+0066_a_reaction_is_a_name_not_a_picture.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
-`0046`–`0065` three times over against PGlite, and `t21` builds one **without**
+`0046`–`0066` three times over against PGlite, and `t21` builds one **without**
 `0051` to prove `0058` survives a deployment that is behind. `0063` and `0065`
 replace the project SEO and sitemap functions in place; neither moves or restores
 stored image bytes. `0064` adds the `project_media` join and grants update on it
@@ -867,5 +869,83 @@ hook imports the transport dynamically and only from pages that are themselves
 loaded on demand. Launch audit 103 passed / 0 failed / 4 recorded. Counted
 features 1852, translated strings 1671 per language.
 
-The migration queue's next number is **`0066`**. §8's record says `0064` and was
-right when it was written; `0064` and `0065` have since been taken.
+The migration queue's next number is **`0067`**. §8's record says `0064` and was
+right when it was written; `0064` through `0066` have since been taken.
+
+
+---
+
+## 12. A reaction is a name, not a picture
+
+**Found while** checking the product against the owner's standing rule that
+there is no emoji anywhere and every symbol is an SVG. The rule was broken in two
+places, and one of them was in the database.
+
+**The messenger stored emoji.** `public.message_reactions.reaction` was a text
+column with a length check and nothing else. The thread wrote whatever the client
+sent, the client sent `❤️` and `👍`, and so the five production reaction words
+that posts use were not the vocabulary of the thread at all. A reaction could be
+any string up to sixteen characters, so the set of reactions was a convention the
+front end kept, not a fact the database knew.
+
+**The composer had an emoji tray.** It inserted twenty-four pictographs into the
+message text. It is removed. A member can still type anything they like; the
+product no longer offers them pictures to type.
+
+**What changed.**
+
+- Migration `0066` translates every stored emoji to the nearest of the five words
+  and removes the emoji rows. A member who reacted with both `❤️` and `🙏` ends
+  with one `support`, because the primary key is (message, member, reaction) and
+  the translation does not invent a second vote. The translation runs before the
+  constraint is added, so the constraint is added to a table that already
+  satisfies it.
+- A check constraint, `message_reactions_known_reaction`, names the five words.
+  It is what a future client cannot get around.
+- `toggle_message_reaction` refuses any other word with `22023` before it touches
+  a row. It is replaced in place with its signature and grants unchanged, and its
+  membership and privacy checks are copied from `0051` without alteration.
+- `src/components/interactions/reaction-icons.ts` is the one map from word to SVG,
+  shared by the post bar and the thread. The bubble's picker and its reaction
+  chips now draw those icons, labelled by the same translated words the post bar
+  uses. Emoji-only messages are no longer enlarged, because that rule matched
+  pictographs and the product has none to match on purpose.
+- The `chat.emoji` and `chat.emojiHint` strings are removed from both bundles.
+
+**A trap found on the way.** `t21` builds a database *without* `0051` to prove
+that later migrations survive a deployment that is behind. `0066` is the
+messenger's own follow-up and changes the table `0051` creates, so it cannot
+apply to that database. A real deployment never has `0066` without `0051`,
+because the files apply in order. The harness now skips `0066` in that scenario
+and says why; the migration itself was not weakened to hide the dependency.
+
+**How it is proved.**
+
+- `scripts/db-prove/t38.mjs` (7 checks) builds the database as it stands before
+  `0066`, plants the emoji rows the old client wrote, applies the migration as the
+  operator will, and then asks what it now holds and what it now refuses. Every
+  stored reaction is a word, two emoji from one member collapse to one word, no
+  emoji row remains, the constraint exists, the toggle refuses an emoji, a
+  capitalised word and a plausible word that is not in the set, a direct insert of
+  an emoji is refused, and a stranger still cannot react to a line they cannot
+  read. The migration then applies a second time with no change.
+- `src/test/no-emoji.test.ts` walks every source file the application and its
+  functions are built from and fails the build on any emoji code point, joiner or
+  variation selector. It is also tested against the characters it must catch, and
+  against Bangla script and ordinary punctuation, which it must leave alone.
+- The two tracked test files that named emoji as negative inputs now write them as
+  escapes. A repository-wide scan of every tracked file finds no emoji character.
+
+**Verified.** Vitest 59 files / 761 tests (was 58 / 757). `db:prove` 22 of 22
+harnesses, the new `t38` at 7 checks. Typecheck clean for the application and for
+`functions/`. ESLint clean at `--max-warnings 0`. Prettier clean. Production
+build clean at 203 precache entries and 13 prerendered routes. Launch audit 103
+passed / 0 failed / 4 recorded. Initial JavaScript 232 KB gzip against the 250 KB
+budget; it was 226 KB before this round and the cause of the six kilobytes has
+not been isolated.
+
+**What the operator does.** Apply `0066` with the normal database workflow. It
+rewrites existing reaction rows in place and then constrains the column, so it
+should be applied in a quiet window. Nothing else is required; the client that
+ships with this change sends words, and an older client still open in a browser
+will receive a `22023` for an emoji reaction and should be reloaded.

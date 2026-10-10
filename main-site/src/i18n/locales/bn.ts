@@ -1277,8 +1277,6 @@ export const bn: Translation = {
     recordVoice: 'ভয়েস নোট রেকর্ড করুন',
     stopRecording: 'রেকর্ডিং থামান',
     recording: 'রেকর্ডিং…',
-    emoji: 'ইমোজি দিয়ে প্রতিক্রিয়া',
-    emojiHint: 'ইমোজি যোগ করুন',
     characterCount: '{{max}}-এর মধ্যে {{count}}',
     you: 'আপনি',
     markRead: 'পড়া হয়েছে হিসেবে চিহ্নিত করুন',

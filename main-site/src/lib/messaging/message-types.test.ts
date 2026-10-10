@@ -58,7 +58,11 @@ describe('upsertMessage', () => {
 
   it('sees a reaction as a change and an identical line as none', () => {
     const original = message('a', 0);
-    const reacted = { ...original, reactions: { '❤️': 2 }, myReactions: ['❤️'] };
+    const reacted = {
+      ...original,
+      reactions: { support: 2 },
+      myReactions: ['support'],
+    };
     expect(sameMessage(original, reacted)).toBe(false);
     expect(sameMessage(original, { ...original })).toBe(true);
   });
