@@ -9,7 +9,7 @@
  * *looks* idempotent — a policy created without dropping it first, a function
  * whose result shape changed, a publication member added twice — errors here.
  *
- * The recent migration set, 0046 through 0064, is applied a second and a
+ * The recent migration set, 0046 through 0065, is applied a second and a
  * third time. Re-running the SEO replacements must keep their signatures and
  * grants intact just as surely as the older content and policy migrations.
  */
@@ -37,6 +37,7 @@ const FILES = [
   '0062_changing_a_handle_is_not_claiming_one.sql',
   '0063_projects_have_a_home_to_be_found.sql',
   '0064_a_project_can_be_corrected.sql',
+  '0065_a_private_page_is_not_a_page_for_crawlers.sql',
 ];
 const DIR = MIGRATIONS_DIR;
 

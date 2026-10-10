@@ -53,17 +53,11 @@ import {
 import { createListing, createProjectWithId } from '@/lib/create/create-repository';
 import type { ProjectScreenshotDraft } from '@/lib/opportunities/opportunity-repository';
 import { useAttachments } from '@/components/media/use-attachments';
+import { CoverPicker } from '@/components/media/CoverPicker';
+import { useCoverUpload, type CoverUpload } from '@/components/media/use-cover-upload';
 import { slugify } from '@/lib/content/text';
 import { dataErrorKey } from '@/lib/supabase/errors';
-import { assertUploadable, MediaError } from '@/lib/storage/upload';
-import type { UploadResult } from '@/lib/storage/upload';
 import { useAuthStore } from '@/store/auth-store';
-
-interface PreparedProjectCover {
-  file: File;
-  result: UploadResult;
-  mediaRecorded: boolean;
-}
 
 function isKind(value: string | null): value is CreateKind {
   return value !== null && (CREATE_KINDS as readonly string[]).includes(value);
@@ -95,12 +89,14 @@ export default function CreatePage() {
     language: i18n.language === 'bn' ? 'bn' : 'en',
   });
   const [projectStep, setProjectStep] = useState<ProjectStep>(0);
-  const [projectCoverFile, setProjectCoverFile] = useState<File | null>(null);
-  const [projectCoverPreviewUrl, setProjectCoverPreviewUrl] = useState('');
-  const [projectCoverProgress, setProjectCoverProgress] = useState<number | null>(null);
-  const [preparedProjectCover, setPreparedProjectCover] = useState<PreparedProjectCover | null>(
-    null,
-  );
+  /**
+   * A project's cover and an event's cover are the same control with different
+   * purposes, and the purpose is what decides which host holds the bytes. Two
+   * calls to one hook rather than two copies of the state, the preview, the
+   * progress and the "upload it once even if the insert is retried" bookkeeping.
+   */
+  const projectCover = useCoverUpload('project-cover');
+  const eventCover = useCoverUpload('cover');
   const [slugTouched, setSlugTouched] = useState(false);
   const [issues, setIssues] = useState<CreateIssue[]>([]);
 
@@ -118,16 +114,6 @@ export default function CreatePage() {
     uid: user?.uid ?? null,
     max: PROJECT_SCREENSHOT_MAX,
   });
-
-  useEffect(() => {
-    if (projectCoverFile === null) {
-      setProjectCoverPreviewUrl('');
-      return;
-    }
-    const previewUrl = URL.createObjectURL(projectCoverFile);
-    setProjectCoverPreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [projectCoverFile]);
 
   const draft = useMemo(() => {
     switch (kind) {
@@ -160,29 +146,6 @@ export default function CreatePage() {
     setParams(search, { replace: true });
   }
 
-  function chooseProjectCover(file: File | null) {
-    if (file === null) {
-      setProjectCoverFile(null);
-      setPreparedProjectCover(null);
-      setProject((current) => ({ ...current, coverUrl: '' }));
-      return;
-    }
-
-    try {
-      const kind = assertUploadable(file);
-      if (kind !== 'image') throw new MediaError('media.errors.unsupported');
-      setProjectCoverFile(file);
-      setPreparedProjectCover(null);
-      setProject((current) => ({ ...current, coverUrl: '' }));
-    } catch (error) {
-      const key =
-        error instanceof Error && error.message.startsWith('media.')
-          ? error.message
-          : 'media.errors.failed';
-      toast.error(t(key));
-    }
-  }
-
   function nextProjectStep() {
     const found = validateProjectDraftStep(project, projectStep);
     setIssues(found);
@@ -208,37 +171,22 @@ export default function CreatePage() {
     mutationFn: async (gallery: readonly ProjectScreenshotDraft[]) => {
       const ownerUid = user?.uid ?? '';
       if (kind !== 'project') {
-        return createListing(kind, ownerUid, draft);
+        // Only an event has a cover among the remaining four, so only an event
+        // has a picture to send before its row can be written.
+        if (kind !== 'event') return createListing(kind, ownerUid, draft);
+        const uploaded = await eventCover.ensureUploaded(ownerUid);
+        return createListing(kind, ownerUid, {
+          ...event,
+          coverUrl: uploaded ?? event.coverUrl,
+        });
       }
 
       // The cover is optional; the project is not. Upload it once and retain the
       // completed result if recording or the insert needs retrying, so a slow
       // phone does not send the same picture again because the database briefly
       // refused a row.
-      let coverUrl = project.coverUrl;
-      if (projectCoverFile !== null) {
-        let prepared =
-          preparedProjectCover?.file === projectCoverFile ? preparedProjectCover : null;
-        if (prepared === null) {
-          const { uploadMedia } = await import('@/lib/storage/upload');
-          const result = await uploadMedia(projectCoverFile, {
-            purpose: 'project-cover',
-            onProgress: setProjectCoverProgress,
-          });
-          prepared = { file: projectCoverFile, result, mediaRecorded: false };
-          setPreparedProjectCover(prepared);
-        }
-
-        if (!prepared.mediaRecorded) {
-          const { recordMediaAsset } = await import('@/lib/data/media-repository');
-          const row = await recordMediaAsset(ownerUid, prepared.result);
-          if (row === null) throw new Error('media.errors.recordFailed');
-          prepared = { ...prepared, mediaRecorded: true };
-          setPreparedProjectCover(prepared);
-        }
-
-        coverUrl = prepared.result.url;
-      }
+      const uploaded = await projectCover.ensureUploaded(ownerUid);
+      const coverUrl = uploaded ?? project.coverUrl;
 
       const created = await createProjectWithId(ownerUid, { ...project, coverUrl });
 
@@ -261,21 +209,18 @@ export default function CreatePage() {
     },
     onSuccess: (slug) => {
       toast.success(t('create.created'));
-      setProjectCoverProgress(null);
-      setPreparedProjectCover(null);
-      setProjectCoverFile(null);
+      projectCover.reset();
+      eventCover.reset();
       screenshots.clear();
       if (slug.length > 0) navigate(createdPath(kind, slug));
     },
     onError: (error: unknown) => {
-      setProjectCoverProgress(null);
       const messageKey =
         error instanceof Error && error.message.startsWith('media.')
           ? error.message
           : dataErrorKey(error);
       toast.error(t(messageKey));
     },
-    onSettled: () => setProjectCoverProgress(null),
   });
 
   function submit() {
@@ -305,7 +250,9 @@ export default function CreatePage() {
     {
       id: 'event',
       label: t('create.tab.event'),
-      content: <EventForm value={event} onChange={setEvent} errorFor={errorFor} />,
+      content: (
+        <EventForm value={event} onChange={setEvent} errorFor={errorFor} cover={eventCover} />
+      ),
     },
     {
       id: 'job',
@@ -325,10 +272,10 @@ export default function CreatePage() {
           value={project}
           onChange={setProject}
           step={projectStep}
-          coverFile={projectCoverFile}
-          coverPreviewUrl={projectCoverPreviewUrl}
-          coverUploadProgress={projectCoverProgress}
-          onCoverFileChange={(file) => void chooseProjectCover(file)}
+          coverFile={projectCover.file}
+          coverPreviewUrl={projectCover.previewUrl}
+          coverUploadProgress={projectCover.progress}
+          onCoverFileChange={(file) => projectCover.choose(file)}
           errorFor={errorFor}
           screenshots={screenshots}
         />
@@ -434,7 +381,12 @@ interface FormProps<Value> {
   errorFor: (field: string) => string | undefined;
 }
 
-function EventForm({ value, onChange, errorFor }: FormProps<EventDraftInput>) {
+interface EventFormProps extends FormProps<EventDraftInput> {
+  /** The event's cover: chosen here, uploaded when the member publishes. */
+  cover: CoverUpload;
+}
+
+function EventForm({ value, onChange, errorFor, cover }: EventFormProps) {
   const { t } = useTranslation();
   const set = (patch: Partial<EventDraftInput>) => onChange({ ...value, ...patch });
 
@@ -521,13 +473,32 @@ function EventForm({ value, onChange, errorFor }: FormProps<EventDraftInput>) {
           set({ capacity: event.target.value === '' ? null : Number(event.target.value) })
         }
       />
-      <TextField
-        label={t('create.fields.coverUrl')}
-        type="url"
-        value={value.coverUrl}
-        error={errorFor('coverUrl')}
-        onChange={(event) => set({ coverUrl: event.target.value })}
-      />
+      {/*
+        An event used to ask for a link to a picture instead of a picture. On a
+        phone that means finding an image, hosting it somewhere else, copying
+        the address and pasting it back — and the address could point at
+        anything, including a host that later deletes it. The cover now travels
+        the same road a project's does, and the purpose is what puts it on
+        Cloudinary rather than a decision made here.
+      */}
+      <div className="sm:col-span-2">
+        <CoverPicker
+          file={cover.file}
+          previewUrl={cover.previewUrl}
+          progress={cover.progress}
+          onFileChange={(file) => cover.choose(file)}
+          labels={{
+            title: t('create.fields.coverImage'),
+            hint: t('create.cover.hint'),
+            choose: t('create.cover.choose'),
+            replace: t('create.cover.replace'),
+            remove: t('create.cover.remove'),
+            existing: t('create.cover.existing'),
+            uploading: t('create.cover.uploading'),
+            previewAlt: t('create.cover.preview'),
+          }}
+        />
+      </div>
     </div>
   );
 }

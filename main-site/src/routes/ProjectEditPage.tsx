@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ProjectWizard } from '@/components/projects/ProjectWizard';
 import { useAttachments } from '@/components/media/use-attachments';
+import { useCoverUpload } from '@/components/media/use-cover-upload';
 import { Seo } from '@/components/seo/Seo';
 import { Alert, Button, Card, EmptyState, LinkButton, PageSkeleton } from '@/design-system';
 import {
@@ -21,15 +22,8 @@ import { isConfigured } from '@/lib/env';
 import { useProject, useProjectOwnerActions } from '@/hooks/use-opportunities';
 import { projectPath, ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
-import { assertUploadable, MediaError } from '@/lib/storage/upload';
-import type { UploadResult } from '@/lib/storage/upload';
+import { MediaError } from '@/lib/storage/upload';
 import { useAuthStore } from '@/store/auth-store';
-
-interface PreparedCover {
-  file: File;
-  result: UploadResult;
-  mediaRecorded: boolean;
-}
 
 /**
  * The owner's editor for one published project.
@@ -62,10 +56,7 @@ export default function ProjectEditPage() {
   const [step, setStep] = useState<ProjectStep>(0);
   const [draft, setDraft] = useState<ProjectDraftInput>(EMPTY_PROJECT);
   const [issues, setIssues] = useState<CreateIssue[]>([]);
-  const [coverFile, setCoverFile] = useState<File | null>(null);
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState('');
-  const [coverProgress, setCoverProgress] = useState<number | null>(null);
-  const [preparedCover, setPreparedCover] = useState<PreparedCover | null>(null);
+  const cover = useCoverUpload('project-cover');
   /** The project already poured into the form, so a refetch does not overwrite it. */
   const [loadedId, setLoadedId] = useState('');
 
@@ -109,34 +100,13 @@ export default function ProjectEditPage() {
     );
   }, [project, loadedId, seedScreenshots]);
 
-  // The replacement cover is previewed from the local bytes, exactly as in the
-  // publisher, so it is on screen before any upload finishes.
-  useEffect(() => {
-    if (coverFile === null) {
-      setCoverPreviewUrl(project?.coverUrl ?? '');
-      return;
-    }
-    const previewUrl = URL.createObjectURL(coverFile);
-    setCoverPreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [coverFile, project]);
-
-  function chooseCover(file: File | null) {
-    if (file === null) {
-      setCoverFile(null);
-      setPreparedCover(null);
-      return;
-    }
-    try {
-      assertUploadable(file);
-    } catch (error) {
-      const key = error instanceof MediaError ? error.messageKey : 'media.errors.unsupported';
-      toast.error(t(key));
-      return;
-    }
-    setCoverFile(file);
-    setPreparedCover(null);
-  }
+  /**
+   * The picture on screen is the one just chosen while there is one, and the
+   * cover that is already published while there is not — from the draft rather
+   * than the row, so removing a published cover takes it off the screen at once
+   * instead of leaving up a picture the save is not going to keep.
+   */
+  const coverPreview = cover.previewUrl.length > 0 ? cover.previewUrl : draft.coverUrl;
 
   function nextStep() {
     const found = validateProjectDraftStep(draft, step);
@@ -160,31 +130,13 @@ export default function ProjectEditPage() {
     if (!project || !project.isOwner) return;
 
     const ownerUid = uid ?? '';
-    let coverUrl = draft.coverUrl;
 
     try {
-      // Upload once and keep the result, so a retry after a database hiccup
-      // does not send the same cover a second time.
-      if (coverFile !== null && ownerUid.length > 0) {
-        let prepared = preparedCover?.file === coverFile ? preparedCover : null;
-        if (prepared === null) {
-          const { uploadMedia } = await import('@/lib/storage/upload');
-          const result = await uploadMedia(coverFile, {
-            purpose: 'project-cover',
-            onProgress: setCoverProgress,
-          });
-          prepared = { file: coverFile, result, mediaRecorded: false };
-          setPreparedCover(prepared);
-        }
-        if (!prepared.mediaRecorded) {
-          const { recordMediaAsset } = await import('@/lib/data/media-repository');
-          const row = await recordMediaAsset(ownerUid, prepared.result);
-          if (row === null) throw new MediaError('media.errors.recordFailed');
-          prepared = { ...prepared, mediaRecorded: true };
-          setPreparedCover(prepared);
-        }
-        coverUrl = prepared.result.url;
-      }
+      // Uploaded once and kept, so a retry after a database hiccup does not send
+      // the same cover a second time. Null when the author changed nothing, and
+      // the draft's own cover is what the save writes then.
+      const uploaded = ownerUid.length > 0 ? await cover.ensureUploaded(ownerUid) : null;
+      const coverUrl = uploaded ?? draft.coverUrl;
 
       // Read at save time, not from a trailing effect: the same ordering bug
       // that once published a post without its picture.
@@ -195,8 +147,7 @@ export default function ProjectEditPage() {
 
       const savedSlug = await actions.save(project.id, { ...draft, coverUrl }, gallery);
       toast.success(t('projects.saved'));
-      setPreparedCover(null);
-      setCoverFile(null);
+      cover.reset();
       navigate(projectPath(savedSlug.length > 0 ? savedSlug : project.slug));
     } catch (error) {
       const key =
@@ -208,8 +159,6 @@ export default function ProjectEditPage() {
               ? error.message
               : dataErrorKey(error);
       toast.error(t(key));
-    } finally {
-      setCoverProgress(null);
     }
   }
 
@@ -297,10 +246,11 @@ export default function ProjectEditPage() {
               value={draft}
               onChange={setDraft}
               step={step}
-              coverFile={coverFile}
-              coverPreviewUrl={coverPreviewUrl}
-              coverUploadProgress={coverProgress}
-              onCoverFileChange={chooseCover}
+              coverFile={cover.file}
+              coverPreviewUrl={coverPreview}
+              coverUploadProgress={cover.progress}
+              onCoverFileChange={(file) => cover.choose(file)}
+              onCoverRemoveExisting={() => setDraft((current) => ({ ...current, coverUrl: '' }))}
               errorFor={errorFor}
               screenshots={screenshots}
             />

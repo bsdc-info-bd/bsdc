@@ -97,7 +97,7 @@ describe('the project publishing wizard', () => {
   it('offers a real image file input for the Cloudinary cover step', () => {
     const onCoverFileChange = vi.fn();
     const { container } = renderStep(2, onCoverFileChange);
-    const input = screen.getByLabelText('create.projectSteps.chooseCover');
+    const input = screen.getByLabelText('create.cover.choose');
     expect(input).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp,image/gif,image/avif');
     fireEvent.change(input, {
       target: { files: [new File(['cover'], 'cover.webp', { type: 'image/webp' })] },
@@ -110,12 +110,12 @@ describe('the project publishing wizard', () => {
     // A cover is one picture chosen to represent the project; the gallery is the
     // product. Sharing a screen is what made neither of them findable.
     const { rerender } = renderStep(2);
-    expect(screen.getByLabelText('create.projectSteps.chooseCover')).toBeInTheDocument();
+    expect(screen.getByLabelText('create.cover.choose')).toBeInTheDocument();
     expect(screen.queryByLabelText('create.projectSteps.addScreenshots')).not.toBeInTheDocument();
 
     rerender(<WizardHarness step={3} />);
     expect(screen.getByLabelText('create.projectSteps.addScreenshots')).toBeInTheDocument();
-    expect(screen.queryByLabelText('create.projectSteps.chooseCover')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('create.cover.choose')).not.toBeInTheDocument();
   });
 
   it('accepts several screenshots at once on the gallery step', () => {

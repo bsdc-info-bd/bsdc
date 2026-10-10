@@ -22,6 +22,8 @@ harness.
 7. [Images and the project system](#7-the-round-after-post-images-are-broken-and-projects-have-no-page)
 8. [Post-image upload completes but the post has no image](#8-the-post-image-upload-completes-but-the-published-post-has-no-image)
 9. [The same two reports, against a build that already had the fix](#9-the-same-two-reports-against-a-build-that-already-had-the-fix)
+10. [What a crawler was told about pages that are not for crawlers](#10-what-a-crawler-was-told-about-pages-that-are-not-for-crawlers)
+11. [One cover control, and an author who could not change their own cover](#11-one-cover-control-and-an-author-who-could-not-change-their-own-cover)
 
 ---
 
@@ -219,9 +221,10 @@ including the new `0063`.
 
 ### Migrations
 
-`0063` is newly added in this round. Check the production ledger for `0046`–`0062`
-because some may have been applied manually; do not infer production state from
-the branch. In order, the migrations in this set are:
+`0064` and `0065` were added by the rounds recorded in §9 and §10. Check the
+production ledger for `0046`–`0063` because some may have been applied manually;
+do not infer production state from the branch. In order, the migrations in this
+set are:
 
 ```
 0046_maintenance_is_not_a_public_endpoint.sql
@@ -242,12 +245,18 @@ the branch. In order, the migrations in this set are:
 0061_the_people_worth_following_next.sql
 0062_changing_a_handle_is_not_claiming_one.sql
 0063_projects_have_a_home_to_be_found.sql
+0064_a_project_can_be_corrected.sql
+0065_a_private_page_is_not_a_page_for_crawlers.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
-`0046`–`0063` three times over against PGlite, and `t21` builds one **without**
-`0051` to prove `0058` survives a deployment that is behind. `0063` replaces
-project SEO and sitemap functions; it does not move or restore stored image bytes.
+`0046`–`0065` three times over against PGlite, and `t21` builds one **without**
+`0051` to prove `0058` survives a deployment that is behind. `0063` and `0065`
+replace the project SEO and sitemap functions in place; neither moves or restores
+stored image bytes. `0064` adds the `project_media` join and grants update on it
+per column, following the shape `0042` exists to be followed — a table-level
+`grant update` with a column-level `revoke` afterwards protects nothing, because
+the grant already covers every column and the revoke cannot subtract from it.
 Two earlier migrations change behaviour worth knowing before applying: `0059`
 removes an unused grant, and `0062` makes a second handle change wait thirty days.
 
@@ -696,3 +705,167 @@ weakened.
 Still the owner's to do, and unchanged from §7: the high-risk credentials pasted
 into the conversation (database password, Cloudinary API secret, OneSignal REST
 key) should be rotated before production use. None were added to code.
+
+---
+
+## 10. What a crawler was told about pages that are not for crawlers
+
+**Found while** checking whether the editor added in §9 — `/projects/<slug>/edit`
+— was safe to leave in an index. It was not, and it was not the only thing that
+was not.
+
+**Two lists decided which pages a search index may hold, and they had drifted
+apart.** `robots.txt` is built at deploy time from the `disallow` array in
+`src/lib/seo/static-routes.json`, and carried fourteen prefixes. The `<meta
+name="robots">` a crawler actually reads is decided by the default branch of
+`public.seo_for_path`, which `functions/_middleware.ts` calls for every path,
+and it noindexed six of them: `messages`, `settings`, `notifications`,
+`bookmarks`, `vendor`, `auth`.
+
+Everything in the first list but not the second was served to a crawler as
+`index,follow` **and** was `Disallow`ed at the same time. That is the one
+combination reliably capable of putting a bare, contentless URL in a search
+index: `robots.txt` keeps the crawler away from the only page that could have
+told it to go away. Probed against a real engine, `/compose` and `/cart` both
+answered `index`.
+
+The new editor answered `index` too. It resolves to no project — its slug
+arrives as `<slug>/edit`, which matches no row — so it fell through to the
+default branch and was handed the site's generic description, a canonical
+pointing at itself, and permission to be indexed. One empty indexable copy of
+every permalink on the platform, for each project published.
+
+**Auditing every route behind `RequireAuth` against both lists found three more
+pages in neither:** `/trash`, a member's deleted posts; `/ads`, a vendor's ad
+console; and `/offline`, the shell a service worker shows with no network, whose
+entire text is that there is no network. All three were indexable with the
+generic description attached.
+
+`/verify` was left alone deliberately, because it looks like a member route and
+is not. `ROUTES.verify` is `/auth/verify`; `/verify` is
+`ROUTES.verifyCertificate`, the public page that checks whether a certificate or
+a notice is genuine, and the build prerenders it. Disallowing the word would
+have removed a real public page from the index while leaving the private one
+exactly where it was.
+
+**Two ways this rule goes wrong by accident, both of which the first attempt
+did:**
+
+- A prefix that names an area matched every word beginning with those letters.
+  The old pattern was `^/(…|auth)` with no boundary, so it also caught
+  `/author/…`. A rule that noindexes by accident is as much a defect as one that
+  misses. The prefixes are now anchored with `(/|$)`.
+- An editor pattern written `/*/edit` cannot tell an editor from a permalink. A
+  member is free to publish a project whose slug is `edit`, so `/projects/edit`
+  is a real permalink that must stay crawlable, while `/projects/edit/edit` is
+  that project's editor and must not. Three segments are needed, not two, and
+  `^/[^/]+/[^/]+/edit$` reads the same way in SQL and in TypeScript.
+
+**What changed.** Migration `0065` replaces `seo_for_path` with its signature and
+grants unchanged. `static-routes.json` gains `/create`, `/trash`, `/ads`,
+`/offline` and the editor pattern, and `isPrivatePath()` in `src/lib/seo/engine.ts`
+learned to read a pattern as well as a prefix, so a browser and a crawler are
+told the same thing about the same URL.
+
+**How it is proved.** `scripts/db-prove/t37.mjs` does not restate either list. It
+reads the JSON that `robots.txt` and the browser-side engine are built from and
+asks the database the same question about every entry in it, then checks the two
+cases that break by accident: a project slugged `edit` keeps its crawlable
+permalink while its own editor does not, and `/author/raha`, `/authentic-tools`,
+`/createbridge` and `/cartography` stay indexable because a prefix names an area.
+It also asserts the live sitemap lists projects as permalinks and never advertises
+an editor. 53 checks. Adding a private area to one list and forgetting the other
+now fails here, which is the only reason the two can be allowed to live in two
+places at all. `src/lib/seo/engine.test.ts` pins the TypeScript half to the same
+wording.
+
+**What the operator does.** Apply `0065`. It replaces one function in place and
+is re-runnable — `t24` applies it three times over. Nothing is backfilled and
+nothing is deleted; a URL already in an index leaves it on Google's next crawl,
+which is why the `noindex` is served rather than only `Disallow`ed.
+
+---
+
+## 11. One cover control, and an author who could not change their own cover
+
+**Found while** giving events a cover. An event asked for a *link* to a picture
+rather than a picture: `create.fields.coverUrl`, an `<input type="url">`. On a
+phone that means finding an image, hosting it somewhere else, copying the
+address and pasting it back into a form — and the address could point at
+anything, including a host that later deletes it. Posts and projects had real
+uploads. Events were the one listing type never given one.
+
+**The routing for it already existed and nothing used it.** `media-contract.ts`
+declares a `'cover'` purpose and lists it among `CLOUDINARY_PURPOSES`, so a cover
+is an important image and goes to Cloudinary. Grep for `purpose: '` across the
+application returned six call sites and not one of them said `'cover'`. The
+decision had been made and never wired up.
+
+**What changed.** Two pieces, extracted rather than copied:
+
+- `src/components/media/CoverPicker.tsx` — the control. It takes its wording as
+  a `labels` object from the surface that owns it, so a project's cover step
+  keeps its own heading while the markup exists once. A second copy would be a
+  second place for the file input to lose its accessible name, or for a preview
+  to start trusting a URL the database has not recorded yet.
+- `src/components/media/use-cover-upload.ts` — the upload semantics. Validate,
+  preview from the local bytes at once, and move the bytes only when the member
+  commits: a cover belongs to a form that may never be submitted, and somebody
+  who abandons half a project should not leave a picture at a host they were
+  never told about. The completed upload is retained across a retry, so a slow
+  phone whose database briefly refused a row does not send the same picture
+  twice to get the row it was already owed; and it refuses to hand back a URL
+  the database has no `media_assets` row for.
+
+Three call sites now use them: the project wizard's cover step, the project
+editor, and the event form. Two independent copies of the prepare-once logic —
+one in `CreatePage.tsx`, one in `ProjectEditPage.tsx` — became one hook. The
+hook decides no routing of its own; it passes its `purpose` to the same contract
+the browser and the edge both read.
+
+**The bug that fell out of composing them.** On the editor, the preview falls
+back to the cover that is already published, so an author sees their own picture.
+But both buttons in that markup required a *chosen file* — the replace button
+because it only rendered beside a file, the remove button because it lived in the
+same caption. An author correcting a project therefore looked at their own cover
+with no button that did anything, and had no way to change it or take it away.
+They could add a picture; they could not replace or remove one.
+
+The control now knows the difference between the two states. With a file chosen,
+the caption names the file and removing it puts the form back to no picture. With
+the published cover showing, the caption says "Current cover", and removing it
+drops it from the record — which writes an empty `cover_url`, a column the owner
+has been allowed to write since `0042`, and which `seo_for_path` already falls
+back from to the site's own open-graph image. Removing the replacement still puts
+the published cover back rather than deleting it, which is the distinction a
+member cannot be expected to guess at.
+
+**Words.** `create.fields.coverUrl` is gone. The cover's wording moved to
+`create.cover.*` and is shared by both surfaces, in Bangla and English, with one
+new string for the published state. `src/test/i18n.test.ts` — which walks every
+non-test source file and requires every `t()` literal to exist in both bundles —
+named all seven references that had to move before any of them were moved.
+
+**How it is proved.** `CoverPicker.test.tsx` (10 tests) covers the accessible
+name of the input, the absence of any field to paste an address into, the accept
+list matching what the contract routes, the local preview, progress appearing
+only while bytes move, and both remove meanings including the one that must not
+delete a published cover. `use-cover-upload.test.tsx` (10 tests) covers the
+refusal of a document, the purpose that reaches the transport, `null` when
+nothing was chosen, uploading once across a retried publish, recording again
+without uploading again after a refused row, a fresh upload for a genuinely
+different picture, revoking the object URL it made, and `reset` leaving nothing
+behind for the next listing.
+
+**Verified.** Vitest 58 files / 757 tests (was 56 / 735). `db:prove` 21 of 21
+harnesses, the new `t37` at 53 checks. Typecheck clean for the application and
+for `functions/`. ESLint clean at `--max-warnings 0`. Prettier clean. Production
+build clean at 203 precache entries and 13 prerendered routes, with the generated
+`robots.txt` carrying all nineteen rules including `Disallow: /*/*/edit`. Initial
+JavaScript 226 KB gzip against the 250 KB budget — unchanged, because the new
+hook imports the transport dynamically and only from pages that are themselves
+loaded on demand. Launch audit 103 passed / 0 failed / 4 recorded. Counted
+features 1852, translated strings 1671 per language.
+
+The migration queue's next number is **`0066`**. §8's record says `0064` and was
+right when it was written; `0064` and `0065` have since been taken.

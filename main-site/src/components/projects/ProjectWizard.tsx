@@ -1,11 +1,9 @@
-import { Github, ImagePlus, Images, Rocket, Upload, X } from 'lucide-react';
-import { useId, useRef, useState } from 'react';
+import { Github, Images, Rocket } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Badge,
-  Button,
   ExternalLink,
-  ProgressBar,
   Stepper,
   Switch,
   TagInput,
@@ -18,6 +16,7 @@ import {
   type ProjectDraftInput,
   type ProjectStep,
 } from '@/lib/create/create-types';
+import { CoverPicker } from '@/components/media/CoverPicker';
 import { MediaImage } from '@/components/media/MediaImage';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaTray } from '@/components/media/MediaTray';
@@ -32,6 +31,11 @@ export interface ProjectWizardProps {
   coverPreviewUrl: string;
   coverUploadProgress: number | null;
   onCoverFileChange: (file: File | null) => void;
+  /**
+   * Drops a cover that is already published. Only the editor has one to drop, so
+   * only the editor passes it; a project being created has nothing published yet.
+   */
+  onCoverRemoveExisting?: (() => void) | undefined;
   errorFor: (field: string) => string | undefined;
   /**
    * The gallery queue. It is owned by the page, not by this component, because
@@ -52,12 +56,11 @@ export function ProjectWizard({
   coverPreviewUrl,
   coverUploadProgress,
   onCoverFileChange,
+  onCoverRemoveExisting,
   errorFor,
   screenshots,
 }: ProjectWizardProps) {
   const { t } = useTranslation();
-  const inputId = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
   const shotsInputRef = useRef<HTMLInputElement>(null);
   const [editingShot, setEditingShot] = useState<Attachment | null>(null);
   const set = (patch: Partial<ProjectDraftInput>) => onChange({ ...value, ...patch });
@@ -68,6 +71,22 @@ export function ProjectWizard({
     t('create.projectSteps.screenshots'),
     t('create.projectSteps.review'),
   ];
+
+  /**
+   * The wording for the cover control, handed to it rather than translated
+   * inside it. The step keeps its own heading; everything else is the same
+   * control an event's cover uses, so it says the same things.
+   */
+  const coverLabels = {
+    title: t('create.projectSteps.cover'),
+    hint: t('create.cover.hint'),
+    choose: t('create.cover.choose'),
+    replace: t('create.cover.replace'),
+    remove: t('create.cover.remove'),
+    existing: t('create.cover.existing'),
+    uploading: t('create.cover.uploading'),
+    previewAlt: t('create.cover.preview'),
+  };
 
   const shotItems = screenshots.ready.map((shot) => ({
     id: shot.id,
@@ -163,81 +182,17 @@ export function ProjectWizard({
       ) : null}
 
       {step === 2 ? (
-        <section aria-labelledby="project-step-cover" className="grid gap-4">
-          <div>
-            <h2 id="project-step-cover" className="text-base font-semibold">
-              {t('create.projectSteps.cover')}
-            </h2>
-            <p className="mt-1 text-sm text-muted">{t('create.projectSteps.coverHint')}</p>
-          </div>
-
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-            aria-label={t('create.projectSteps.chooseCover')}
-            className="fab-sr-only"
-            onChange={(event) => {
-              const file = event.target.files?.[0] ?? null;
-              event.target.value = '';
-              onCoverFileChange(file);
-            }}
+        <section aria-labelledby="project-step-cover">
+          <CoverPicker
+            headingId="project-step-cover"
+            asHeading
+            file={coverFile}
+            previewUrl={coverPreviewUrl}
+            progress={coverUploadProgress}
+            onFileChange={onCoverFileChange}
+            onRemoveExisting={onCoverRemoveExisting}
+            labels={coverLabels}
           />
-
-          {coverPreviewUrl.length > 0 ? (
-            <figure className="overflow-hidden rounded-card border border-border bg-surface">
-              <div className="relative aspect-[16/7] w-full bg-surface-2">
-                <MediaImage
-                  src={coverPreviewUrl}
-                  alt={t('create.projectSteps.coverPreview')}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              {coverFile ? (
-                <figcaption className="flex flex-wrap items-center justify-between gap-2 p-3">
-                  <span className="fab-truncate text-sm font-medium">{coverFile.name}</span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    iconStart={<X size={14} />}
-                    onClick={() => onCoverFileChange(null)}
-                  >
-                    {t('create.projectSteps.removeCover')}
-                  </Button>
-                </figcaption>
-              ) : null}
-            </figure>
-          ) : (
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="fab-tap flex min-h-48 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-border bg-surface-2/40 px-4 text-center hover:bg-surface-2"
-            >
-              <ImagePlus size={28} aria-hidden="true" className="text-green-700" />
-              <span className="font-semibold">{t('create.projectSteps.chooseCover')}</span>
-              <span className="text-xs text-muted">{t('create.projectSteps.coverHint')}</span>
-            </button>
-          )}
-
-          {coverPreviewUrl.length > 0 && coverFile ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              iconStart={<Upload size={15} />}
-              onClick={() => inputRef.current?.click()}
-              className="w-fit"
-            >
-              {t('create.projectSteps.replaceCover')}
-            </Button>
-          ) : null}
-
-          {coverUploadProgress !== null ? (
-            <ProgressBar
-              value={coverUploadProgress}
-              label={t('create.projectSteps.coverUploading')}
-            />
-          ) : null}
         </section>
       ) : null}
 
@@ -313,7 +268,7 @@ export function ProjectWizard({
               <div className="aspect-[16/7] w-full bg-surface-2">
                 <MediaImage
                   src={coverPreviewUrl}
-                  alt={t('create.projectSteps.coverPreview')}
+                  alt={t('create.cover.preview')}
                   className="h-full w-full object-cover"
                 />
               </div>
