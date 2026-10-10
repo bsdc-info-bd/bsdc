@@ -35,6 +35,7 @@ import {
   TITLE_MAX,
   draftFromPost,
   validateDraft,
+  withReadyMedia,
   VISIBILITIES,
   type CodeLanguage,
   type DraftMedia,
@@ -182,15 +183,10 @@ export default function ComposePage() {
   // them once they are attached. This is the bridge, and it only writes when
   // something actually changed, so autosave is not woken on every render.
   const syncDraftMedia = useCallback((ready: readonly Attachment[]) => {
-    const next: DraftMedia[] = ready.map((item) => ({
-      url: item.url,
-      thumbUrl: item.thumbUrl,
-      mediaId: item.mediaId,
-      altText: item.altText,
-      width: item.width,
-      height: item.height,
-    }));
-    setDraft((current) => (sameMedia(current.media, next) ? current : { ...current, media: next }));
+    setDraft((current) => {
+      const next = withReadyMedia(current, ready).media;
+      return sameMedia(current.media, next) ? current : { ...current, media: next };
+    });
   }, []);
 
   const attachments = useAttachments({
@@ -229,7 +225,11 @@ export default function ComposePage() {
       toast.error(t('compose.mediaFailed', { count: attachments.failed.length }));
       return;
     }
-    const issues = status === 'published' ? validateDraft(draft) : [];
+    // Do not depend on the passive onChange bridge having copied the queue into
+    // draft state yet. A completed upload is ready to save even on the render
+    // immediately before that effect runs.
+    const draftToSave = withReadyMedia(draft, attachments.ready);
+    const issues = status === 'published' ? validateDraft(draftToSave) : [];
     if (issues.length > 0) {
       setSaveErrorKey(null);
       setErrorKeys(issues.map((issue) => issue.messageKey));
@@ -240,7 +240,7 @@ export default function ComposePage() {
     setBusy(true);
     try {
       const { savePost } = await import('@/lib/content/post-repository');
-      const saved = await savePost(user.uid, draft, status);
+      const saved = await savePost(user.uid, draftToSave, status);
       if (isEditing) {
         toast.success(t('compose.updated'));
         navigate(`/p/${saved.slug}`);

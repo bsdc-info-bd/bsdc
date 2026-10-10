@@ -74,6 +74,30 @@ describe('post media reaches the permalink', () => {
     });
   });
 
+  it('keeps existing Cloudinary-hosted media URLs renderable', () => {
+    const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/legacy.png';
+    const post = toPost(
+      joinedPost({
+        post_media: [
+          {
+            media_id: 'legacy-cloudinary-asset',
+            position: 0,
+            alt_text: 'Legacy Cloudinary image',
+            media_assets: {
+              url,
+              thumb_url: '',
+              width: 1200,
+              height: 800,
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(post.media).toHaveLength(1);
+    expect(post.media[0]).toMatchObject({ url, thumbUrl: '', altText: 'Legacy Cloudinary image' });
+  });
+
   it('drops missing asset joins instead of producing a broken empty image source', () => {
     const post = toPost(
       joinedPost({

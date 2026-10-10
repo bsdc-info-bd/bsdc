@@ -51,6 +51,12 @@ export interface DraftMedia {
   height: number | null;
 }
 
+/** The media fields the attachment queue has once a picture is durably recorded. */
+export type ReadyAttachmentMedia = Pick<
+  DraftMedia,
+  'url' | 'thumbUrl' | 'mediaId' | 'altText' | 'width' | 'height'
+>;
+
 export interface PostDraft {
   id: string | null;
   kind: PostKind;
@@ -67,6 +73,31 @@ export interface PostDraft {
   isSensitive: boolean;
   coverUrl: string;
   updatedAt: string;
+}
+
+/**
+ * Snapshot the queue's current durable attachments into a draft.
+ *
+ * The queue is authoritative at submit time: its bridge into React draft state
+ * runs in a passive effect and can lag the render that first marks an upload
+ * complete. Taking this snapshot prevents a fast publish click from saving the
+ * text while silently leaving the just-uploaded image out of `post_media`.
+ */
+export function withReadyMedia(
+  draft: PostDraft,
+  ready: readonly ReadyAttachmentMedia[],
+): PostDraft {
+  return {
+    ...draft,
+    media: ready.map((item) => ({
+      url: item.url,
+      thumbUrl: item.thumbUrl,
+      mediaId: item.mediaId,
+      altText: item.altText,
+      width: item.width,
+      height: item.height,
+    })),
+  };
 }
 
 /**

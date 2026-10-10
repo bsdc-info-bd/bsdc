@@ -43,6 +43,14 @@ describe('the arrangement a card shows', () => {
     });
   });
 
+  it('renders a stored Cloudinary image from its original when no thumbnail was saved', () => {
+    const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/legacy.png';
+    render(
+      <MediaGallery items={[{ ...item(0, 1200, 800), url, thumbUrl: '' }]} label="Pictures" />,
+    );
+    expect(screen.getByRole('img')).toHaveAttribute('src', url);
+  });
+
   it('bleeds to the edges of the card when the picture is its header', () => {
     const { container } = render(
       <MediaGallery items={[item(0, 1600, 900)]} flush label="Pictures" />,
