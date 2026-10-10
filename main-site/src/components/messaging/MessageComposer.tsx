@@ -1,4 +1,4 @@
-import { FilePlus2, ImagePlus, Mic, Pause, Play, Send, Smile, Trash2, X } from 'lucide-react';
+import { FilePlus2, ImagePlus, Mic, Pause, Play, Send, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -9,34 +9,6 @@ import { previewLine } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
 import { MAX_VOICE_MS, recordingProgress } from '@/lib/messaging/voice-recorder';
 import { dataErrorKey } from '@/lib/supabase/errors';
-
-/** The emoji the tray inserts; reactions have their own set. */
-const EMOJI = [
-  '😀',
-  '😄',
-  '😂',
-  '🥹',
-  '😊',
-  '😍',
-  '🤔',
-  '😅',
-  '👍',
-  '🙏',
-  '👏',
-  '🎉',
-  '❤️',
-  '🔥',
-  '✅',
-  '🚀',
-  '💡',
-  '📌',
-  '📎',
-  '⏰',
-  '🇧🇩',
-  '💚',
-  '🙌',
-  '🤝',
-];
 
 /** What can leave this composer as an attachment. */
 export type AttachmentKind = 'image' | 'file' | 'audio';
@@ -80,7 +52,7 @@ interface SendingState {
 
 /**
  * The composer: text with a draft that follows the member across devices,
- * attachments, a voice note, an emoji tray, and a reply or edit context bar.
+ * attachments, a voice note, and a reply or edit context bar.
  *
  * Everything that leaves this box says what it is doing while it does it. An
  * attachment shows a percentage, because a chat that appears to have swallowed
@@ -104,7 +76,6 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
-  const [tray, setTray] = useState(false);
   const [sending, setSending] = useState<SendingState | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
@@ -227,25 +198,6 @@ export function MessageComposer({
         </div>
       ) : null}
 
-      {tray ? (
-        <div className="mb-2 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-2">
-          {EMOJI.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              className="fab-tap rounded-lg px-1.5 py-1 text-lg hover:bg-surface-2"
-              onClick={() => {
-                onDraftChange(`${draft}${emoji}`);
-                setTray(false);
-                textarea.current?.focus();
-              }}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      ) : null}
-
       {recording || voice.state === 'processing' ? (
         <div
           className="flex items-center gap-3 rounded-xl border border-danger/40 bg-danger/5 px-3 py-2"
@@ -348,13 +300,6 @@ export function MessageComposer({
           />
 
           <div className="flex items-center gap-1">
-            <IconButton
-              label={t('chat.emojiHint')}
-              icon={<Smile size={16} />}
-              aria-expanded={tray}
-              disabled={busy}
-              onClick={() => setTray((open) => !open)}
-            />
             <IconButton
               label={t('chat.attachImage')}
               icon={<ImagePlus size={16} />}

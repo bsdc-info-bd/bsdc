@@ -1,30 +1,14 @@
-import {
-  Bookmark,
-  Lightbulb,
-  MessageSquare,
-  PartyPopper,
-  Search,
-  ThumbsUp,
-  Users,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bookmark, MessageSquare } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ShareMenu } from '@/components/interactions/ShareMenu';
+import { REACTION_ICONS } from '@/components/interactions/reaction-icons';
 import { Button, IconButton } from '@/design-system';
 import { usePostInteractions } from '@/hooks/use-interactions';
-import { REACTIONS, type Reaction } from '@/lib/interactions/interaction-types';
+import { REACTIONS } from '@/lib/interactions/interaction-types';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
-
-const REACTION_ICONS: Record<Reaction, LucideIcon> = {
-  like: ThumbsUp,
-  insightful: Lightbulb,
-  celebrate: PartyPopper,
-  support: Users,
-  curious: Search,
-};
 
 export interface ReactionBarProps {
   postId: string;

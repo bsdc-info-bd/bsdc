@@ -1,4 +1,4 @@
-import { Github, Rocket, Search, Star } from 'lucide-react';
+import { Github, Pencil, Rocket, Search, Star } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -18,12 +18,12 @@ import {
   Switch,
   TextField,
 } from '@/design-system';
-import { useProjects } from '@/hooks/use-opportunities';
+import { useMyProjects, useProjects } from '@/hooks/use-opportunities';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
 import { cloudinaryWide } from '@/lib/storage/upload';
 import { filterProjects } from '@/lib/opportunities/project-filters';
-import { projectPath, ROUTES } from '@/lib/site';
+import { projectEditPath, projectPath, ROUTES } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 /** A searchable, cover-led directory of what the community is building. */
@@ -32,6 +32,7 @@ export default function ProjectsPage() {
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const showcase = useProjects();
+  const mine = useMyProjects();
   const [search, setSearch] = useState('');
   const [contributorsOnly, setContributorsOnly] = useState(false);
   const projects = useMemo(
@@ -62,6 +63,46 @@ export default function ProjectsPage() {
             </LinkButton>
           }
         />
+
+        {/* Everything this member has published, in one place.
+            The directory below is sorted by stars and capped, so an author with
+            a modest project could otherwise only find their own work by
+            remembering its address — and a project that cannot be found cannot
+            be corrected. */}
+        {isSignedIn && mine.projects.length > 0 ? (
+          <Card className="mt-4 p-3">
+            <h2 className="text-sm font-semibold">{t('projects.manageTitle')}</h2>
+            <p className="mt-1 text-xs text-muted">{t('projects.manageBody')}</p>
+            <ul className="mt-3 grid gap-2">
+              {mine.projects.map((project) => (
+                <li
+                  key={project.id}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border border-border px-3 py-2"
+                >
+                  <Link
+                    to={projectPath(project.slug)}
+                    className="fab-truncate min-w-0 flex-1 text-sm font-medium hover:underline"
+                  >
+                    {project.name}
+                  </Link>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted">
+                    <Star size={12} aria-hidden="true" />
+                    {formatNumber(project.stars, language)}
+                  </span>
+                  <LinkButton
+                    to={projectEditPath(project.slug)}
+                    variant="ghost"
+                    size="sm"
+                    iconStart={<Pencil size={14} />}
+                    className="shrink-0"
+                  >
+                    {t('projects.edit')}
+                  </LinkButton>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         <div className="mt-5 grid gap-3 rounded-card border border-border bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
           <TextField

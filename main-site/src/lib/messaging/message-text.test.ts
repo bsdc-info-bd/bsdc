@@ -117,8 +117,25 @@ describe('previewLine', () => {
 });
 
 describe('reaction choices', () => {
-  it('accepts only the offered set', () => {
-    expect(isReactionChoice(REACTION_CHOICES[0])).toBe(true);
-    expect(isReactionChoice('🚀')).toBe(false);
+  it('offers the same five words posts use, and nothing that is a picture', () => {
+    expect([...REACTION_CHOICES]).toEqual([
+      'like',
+      'insightful',
+      'celebrate',
+      'support',
+      'curious',
+    ]);
+    for (const choice of REACTION_CHOICES) {
+      // A word is a letter run. Anything with a code point outside ASCII is a
+      // character someone could mistake for an emoji, and none may be offered.
+      expect(/^[a-z]+$/.test(choice)).toBe(true);
+    }
+  });
+
+  it('accepts only the offered words', () => {
+    expect(isReactionChoice('support')).toBe(true);
+    expect(isReactionChoice('\u{1F680}')).toBe(false);
+    expect(isReactionChoice('\u{2764}\uFE0F')).toBe(false);
+    expect(isReactionChoice('LIKE')).toBe(false);
   });
 });

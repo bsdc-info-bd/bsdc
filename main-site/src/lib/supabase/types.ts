@@ -788,6 +788,18 @@ export type ProjectRow = {
 
 export type ProjectStarRow = { project_id: string; uid: string; created_at: string };
 
+/**
+ * One screenshot on a project, pointing at the same `media_assets` row a post
+ * image points at. The bytes live at the external host; this is the reference,
+ * the order and the caption. Added by migration 0064.
+ */
+export type ProjectMediaRow = {
+  project_id: string;
+  media_id: string;
+  position: number;
+  alt_text: string;
+};
+
 export type PlaygroundSketchRow = {
   id: string;
   uid: string;
@@ -1768,6 +1780,19 @@ export type Database = {
         Row: ProjectStarRow;
         Insert: Pick<ProjectStarRow, 'project_id' | 'uid'>;
         Update: Partial<ProjectStarRow>;
+        Relationships: [];
+      };
+      project_media: {
+        Row: ProjectMediaRow;
+        Insert: Pick<ProjectMediaRow, 'project_id' | 'media_id'> & Partial<ProjectMediaRow>;
+        /**
+         * Only the order and the caption are writable, because that is all
+         * migration 0064 grants: `revoke`d at the table level and granted back
+         * per column. Repointing a foreign key would move a picture into a
+         * project its uploader does not own, so the type refuses it here and the
+         * database refuses it besides.
+         */
+        Update: Partial<Pick<ProjectMediaRow, 'position' | 'alt_text'>>;
         Relationships: [];
       };
       courses: {

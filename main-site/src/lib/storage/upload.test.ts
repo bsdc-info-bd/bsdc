@@ -25,7 +25,13 @@ describe('where images go', () => {
   });
 
   it('sends profile, project and product covers to Cloudinary', () => {
-    for (const purpose of ['avatar', 'cover', 'project-cover', 'product-image'] as const) {
+    for (const purpose of [
+      'avatar',
+      'cover',
+      'project-cover',
+      'project-image',
+      'product-image',
+    ] as const) {
       expect(chooseProvider(purpose, 'image')).toBe('cloudinary');
       expect(resolveProvider(purpose, 'image', BOTH)).toBe('cloudinary');
     }

@@ -18,6 +18,12 @@ import { makeDb, MIGRATIONS_DIR } from './lib.mjs';
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const MIGRATION = join(MIGRATIONS_DIR, '0056_a_picture_needs_somewhere_to_live.sql');
 const UPLOAD_MODULE = join(HERE, '..', '..', 'src', 'lib', 'storage', 'upload.ts');
+// The routing table moved into its own module so the browser and the edge read
+// the same answer. A source check that only read the transport would pass on a
+// contract that had quietly changed underneath it.
+const CONTRACT_MODULE = join(HERE, '..', '..', 'src', 'lib', 'storage', 'media-contract.ts');
+const EDGE_MEDIA_MODULE = join(HERE, '..', '..', 'functions', '_media.ts');
+const EDGE_UPLOAD_ENDPOINT = join(HERE, '..', '..', 'functions', 'api', 'media', 'upload.ts');
 
 let pass = 0;
 const bad = [];
@@ -124,9 +130,33 @@ check(
   source.includes("body.append('image', base64)") && source.includes('api.imgbb.com/1/upload?key='),
   'ordinary images reach ImgBB as base64 with the key in the URL',
 );
+const contract = readFileSync(CONTRACT_MODULE, 'utf8');
+const edgeMedia = readFileSync(EDGE_MEDIA_MODULE, 'utf8');
+const edgeUpload = readFileSync(EDGE_UPLOAD_ENDPOINT, 'utf8');
+
 check(
-  source.includes("'project-cover'") && source.includes('api.cloudinary.com/v1_1/'),
+  contract.includes("'project-cover'") && source.includes('api.cloudinary.com/v1_1/'),
   'important covers have a Cloudinary-only route',
+);
+
+// One routing table, two readers. If the edge ever grew its own copy of
+// `chooseProvider`, the two could disagree and a cover would land where the
+// reader cannot fetch it — which is the failure this harness exists to catch.
+check(
+  edgeMedia.includes("from '../src/lib/storage/media-contract'") &&
+    !/function chooseProvider/.test(edgeMedia),
+  'the edge imports the routing table rather than restating it',
+);
+
+// The endpoint holds the keys, and the ImgBB one is a secret that must not be
+// handed back to a browser that asks what is configured.
+check(
+  edgeUpload.includes('memberOf') && edgeUpload.includes('isMediaPurpose'),
+  'the upload endpoint identifies its caller and validates the purpose',
+);
+check(
+  !/IMGBB_API_KEY/.test(readFileSync(join(HERE, '..', '..', 'functions', 'api', 'media', 'providers.ts'), 'utf8')),
+  'the capability endpoint never returns a key',
 );
 
 // ------------------------------------------------------------ whose folder ---

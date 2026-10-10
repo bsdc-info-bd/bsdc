@@ -4,6 +4,8 @@
  * Pure functions, so the rendering rules are testable without a browser.
  */
 
+import { REACTIONS, type Reaction } from '@/lib/interactions/interaction-types';
+
 export type MessageSegment =
   | { type: 'text'; value: string }
   | { type: 'link'; value: string; href: string }
@@ -129,10 +131,14 @@ export function previewLine(body: string, limit = 120): string {
   return flat.length > limit ? `${flat.slice(0, Math.max(0, limit - 1))}…` : flat;
 }
 
-/** The reaction set offered in the thread. Six is a row, not a menu. */
-export const REACTION_CHOICES = ['❤️', '👍', '😂', '😮', '🎉', '🙏'] as const;
+/**
+ * The reactions offered in the thread: the same five words posts use, in the
+ * order the picker shows them. Stored as these words (migration 0066), drawn as
+ * the SVG in `reaction-icons`, and never as a character.
+ */
+export const REACTION_CHOICES: readonly Reaction[] = REACTIONS;
 
-export type ReactionChoice = (typeof REACTION_CHOICES)[number];
+export type ReactionChoice = Reaction;
 
 /** Whether a string is one of the offered reactions. */
 export function isReactionChoice(value: string): value is ReactionChoice {

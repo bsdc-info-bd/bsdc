@@ -78,7 +78,10 @@ async function checkRefused(db, uid, sql, label) {
 // ---------------------------------------------------------------------------
 // Before: the deployed database has no change feed and nowhere to react
 // ---------------------------------------------------------------------------
-const before = await makeDb({ skip: ['0051_'] });
+// 0066 is the messenger's own follow-up: it changes the reaction table 0051
+// creates. Skipping 0051 means skipping the follow-up too, exactly as a
+// deployment that is behind on the messenger would have neither.
+const before = await makeDb({ skip: ['0051_', '0066_'] });
 console.log('--- BEFORE 0051 ---');
 const beforeTables = (
   await before.query(`
@@ -158,26 +161,26 @@ const reply = (
 const first = await as(
   db,
   rahim,
-  `select * from public.toggle_message_reaction('${message}', '❤️')`,
+  `select * from public.toggle_message_reaction('${message}', 'support')`,
   'rahim reacts',
 );
 check(db, `select count(*)::int from public.message_reactions`, 1, 'one reaction is stored');
 const second = await as(
   db,
   ada,
-  `select * from public.toggle_message_reaction('${message}', '❤️')`,
+  `select * from public.toggle_message_reaction('${message}', 'support')`,
   'ada reacts too',
 );
 check(
   db,
   `select count(*)::int from public.message_reactions`,
   2,
-  'two members, one emoji, two rows',
+  'two members, one word, two rows',
 );
 const off = await as(
   db,
   rahim,
-  `select * from public.toggle_message_reaction('${message}', '❤️')`,
+  `select * from public.toggle_message_reaction('${message}', 'support')`,
   'rahim takes his back',
 );
 check(
@@ -189,7 +192,7 @@ check(
 await checkRefused(
   db,
   sultana,
-  `select * from public.toggle_message_reaction('${message}', '👍')`,
+  `select * from public.toggle_message_reaction('${message}', 'like')`,
   'a stranger cannot react to a line they cannot read',
 );
 void first;
@@ -286,8 +289,8 @@ await checkAs(
 await checkAs(
   db,
   ada,
-  `select reactions -> '❤️' = '1'::jsonb
-        and my_reactions = array['❤️']::text[]
+  `select reactions -> 'support' = '1'::jsonb
+        and my_reactions = array['support']::text[]
         and pinned and starred = false
    from public.conversation_messages('${direct}') where id = '${message}'`,
   true,
@@ -357,7 +360,7 @@ await checkAs(
 await checkRefused(
   db,
   sultana,
-  `insert into public.message_reactions (message_id, uid, reaction) values ('${message}', '${sultana}', '👍')`,
+  `insert into public.message_reactions (message_id, uid, reaction) values ('${message}', '${sultana}', 'like')`,
   'a stranger cannot insert a reaction row',
 );
 await checkRefused(

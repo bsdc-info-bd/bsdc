@@ -70,6 +70,23 @@ describe('pages that must never be indexed', () => {
     expect(isPrivatePath('/jobs')).toBe(false);
   });
 
+  it('treats a record editor as private without swallowing the record itself', () => {
+    expect(isPrivatePath('/projects/padma-river-monitor/edit')).toBe(true);
+    expect(isPrivatePath('/create')).toBe(true);
+    // A member may publish a project whose slug is `edit`, so that permalink has
+    // to stay crawlable and only the path below it is an editor. The database is
+    // asked the same question by scripts/db-prove/t37.mjs.
+    expect(isPrivatePath('/projects/edit')).toBe(false);
+    expect(isPrivatePath('/projects/edit/edit')).toBe(true);
+  });
+
+  it('names an area rather than every word that begins with those letters', () => {
+    expect(isPrivatePath('/auth')).toBe(true);
+    expect(isPrivatePath('/author/raha')).toBe(false);
+    expect(isPrivatePath('/cartography')).toBe(false);
+    expect(isPrivatePath('/createbridge')).toBe(false);
+  });
+
   it('withholds them in the metadata rather than hoping a component remembers', () => {
     expect(metaForPath('/messages/123').robots).toBe('noindex,nofollow');
     expect(metaForPath('/jobs').robots).toBe('index,follow,max-image-preview:large');

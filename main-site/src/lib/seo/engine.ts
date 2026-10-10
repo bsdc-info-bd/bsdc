@@ -57,12 +57,35 @@ export function absoluteUrl(path: string, origin: string = SITE.url): string {
   return canonical === '/' ? `${base}/` : `${base}${canonical}`;
 }
 
-/** True when this path must never reach an index, whatever a page says. */
+/**
+ * True when this path must never reach an index, whatever a page says.
+ *
+ * An entry is a prefix, or a pattern when it holds an asterisk. The pattern
+ * exists for editors: a project's owner edits it one path segment below the
+ * permalink the whole sitemap exists to advertise, and no prefix can tell those
+ * two apart. An asterisk matches exactly one segment, so the editor pattern
+ * needs three of them and leaves `/projects/edit` alone — a member may publish
+ * a project whose slug is `edit`, and that permalink must stay crawlable.
+ *
+ * `public.seo_for_path` answers the same question for the HTML a crawler
+ * receives, and scripts/db-prove/t37.mjs fails if the two lists drift.
+ */
 export function isPrivatePath(path: string): boolean {
   const canonical = canonicalPath(path).split('?')[0] ?? '/';
-  return DISALLOWED_PATHS.some(
-    (prefix) => canonical === prefix || canonical.startsWith(`${prefix}/`),
+  return DISALLOWED_PATHS.some((entry) =>
+    entry.includes('*')
+      ? segmentPattern(entry).test(canonical)
+      : canonical === entry || canonical.startsWith(`${entry}/`),
   );
+}
+
+/** One asterisk is one path segment, so a pattern can never reach across a slash. */
+function segmentPattern(pattern: string): RegExp {
+  const literal = pattern
+    .split('*')
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[^/]+');
+  return new RegExp(`^${literal}$`);
 }
 
 export function findStaticRoute(path: string): StaticRoute | null {

@@ -17,6 +17,8 @@ import { cn } from '@/lib/cn';
 import type { Language } from '@/i18n';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { REACTION_CHOICES, previewLine } from '@/lib/messaging/message-text';
+import type { Reaction } from '@/lib/interactions/interaction-types';
+import { REACTION_ICONS } from '@/components/interactions/reaction-icons';
 import type { Message } from '@/lib/messaging/message-types';
 import { MessageBody } from './MessageBody';
 
@@ -39,8 +41,6 @@ export interface MessageBubbleProps {
   onJump: (messageId: string) => void;
   onRetry: (message: Message) => void;
 }
-
-const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\uFE0F|\u200D|\s){1,12}$/u;
 
 function messageTime(iso: string, language: Language): string {
   const date = new Date(iso);
@@ -87,7 +87,6 @@ export function MessageBubble({
     return () => document.removeEventListener('mousedown', close);
   }, [picker, menu]);
 
-  const emojiOnly = message.body.length > 0 && EMOJI_ONLY.test(message.body.trim());
   const reactions = Object.entries(message.reactions).filter(([, total]) => total > 0);
 
   return (
@@ -134,7 +133,6 @@ export function MessageBubble({
             className={cn(
               'relative break-words rounded-2xl px-3 py-2 text-sm',
               mine ? 'bg-green-700 text-white' : 'bg-surface-2 text-text',
-              emojiOnly && 'bg-transparent px-1 py-0 text-3xl',
             )}
           >
             {message.replyTo !== null && message.deletedAt === null ? (
@@ -201,7 +199,7 @@ export function MessageBubble({
                 size="sm"
                 aria-haspopup="menu"
                 aria-expanded={picker}
-                aria-label={t('chat.emoji')}
+                aria-label={t('interactions.chooseReaction')}
                 onClick={() => {
                   setPicker((open) => !open);
                   setMenu(false);
@@ -211,20 +209,24 @@ export function MessageBubble({
               </Button>
               {picker ? (
                 <div className="absolute bottom-full z-20 mb-1 flex gap-1 rounded-full border border-line bg-surface p-1 shadow-lg">
-                  {REACTION_CHOICES.map((reaction) => (
-                    <button
-                      key={reaction}
-                      type="button"
-                      className="fab-tap rounded-full px-1.5 py-0.5 text-base hover:bg-surface-2"
-                      aria-label={reaction}
-                      onClick={() => {
-                        onReact(message, reaction);
-                        setPicker(false);
-                      }}
-                    >
-                      {reaction}
-                    </button>
-                  ))}
+                  {REACTION_CHOICES.map((reaction) => {
+                    const Icon = REACTION_ICONS[reaction];
+                    return (
+                      <button
+                        key={reaction}
+                        type="button"
+                        className="fab-tap flex size-9 items-center justify-center rounded-full text-green-700 hover:bg-surface-2"
+                        aria-label={t(`interactions.reactions.${reaction}`)}
+                        title={t(`interactions.reactions.${reaction}`)}
+                        onClick={() => {
+                          onReact(message, reaction);
+                          setPicker(false);
+                        }}
+                      >
+                        <Icon size={16} aria-hidden="true" />
+                      </button>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>
@@ -333,24 +335,28 @@ export function MessageBubble({
 
         {reactions.length > 0 ? (
           <ul className="flex flex-wrap items-center gap-1">
-            {reactions.map(([reaction, total]) => (
-              <li key={reaction}>
-                <button
-                  type="button"
-                  className={cn(
-                    'fab-tap flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
-                    message.myReactions.includes(reaction)
-                      ? 'border-green-700 bg-green-700/10'
-                      : 'border-line bg-surface',
-                  )}
-                  aria-pressed={message.myReactions.includes(reaction)}
-                  onClick={() => onReact(message, reaction)}
-                >
-                  <span aria-hidden="true">{reaction}</span>
-                  <span>{formatNumber(total, language)}</span>
-                </button>
-              </li>
-            ))}
+            {reactions.map(([reaction, total]) => {
+              const Icon = REACTION_ICONS[reaction as Reaction] ?? null;
+              return (
+                <li key={reaction}>
+                  <button
+                    type="button"
+                    className={cn(
+                      'fab-tap flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
+                      message.myReactions.includes(reaction)
+                        ? 'border-green-700 bg-green-700/10'
+                        : 'border-line bg-surface',
+                    )}
+                    aria-pressed={message.myReactions.includes(reaction)}
+                    onClick={() => onReact(message, reaction)}
+                  >
+                    {Icon ? <Icon size={13} aria-hidden="true" /> : null}
+                    <span className="sr-only">{t(`interactions.reactions.${reaction}`)}</span>
+                    <span>{formatNumber(total, language)}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ) : null}
 

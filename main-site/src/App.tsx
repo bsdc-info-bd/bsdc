@@ -37,6 +37,7 @@ const JobsPage = lazy(() => import('@/routes/JobsPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
+const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 const SearchPage = lazy(() => import('@/routes/SearchPage'));
 const ShopPage = lazy(() => import('@/routes/ShopPage'));
@@ -101,6 +102,14 @@ const router = createBrowserRouter([
           // project, a group. Each table already had a policy for its author;
           // what was missing was the form.
           { path: ROUTES.create, element: withSuspense(<CreatePage />) },
+          // The owner's editor for a published project. Membership is required
+          // to reach it and ownership is checked again inside, because a
+          // stranger who arrives from a shared link should be told plainly
+          // rather than handed a form that refuses on submit.
+          {
+            path: `${ROUTES.projects}/:slug/edit`,
+            element: withSuspense(<ProjectEditPage />),
+          },
           // The same composer, opened on an existing post. The page loads the
           // post and refuses to show it to anybody but its author, and the
           // database refuses the write besides.

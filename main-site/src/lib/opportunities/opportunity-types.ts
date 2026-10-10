@@ -77,8 +77,33 @@ export interface ProjectOwner {
   avatarUrl: string;
 }
 
+/**
+ * One screenshot in a project's gallery, in the author's order.
+ *
+ * The bytes are at the external host and `media_assets` holds the row; this is
+ * the shape the gallery draws, and it mirrors `PostMediaItem` so one renderer
+ * serves both.
+ */
+export interface ProjectScreenshot {
+  mediaId: string;
+  url: string;
+  thumbUrl: string;
+  altText: string;
+  position: number;
+  width: number | null;
+  height: number | null;
+}
+
 export interface ProjectDetail extends Project {
   owner: ProjectOwner | null;
+  /** The gallery under the cover. Empty for a project published without one. */
+  screenshots: ProjectScreenshot[];
+  /**
+   * Whether the person looking at this project owns it. The database enforces
+   * ownership again on every write; this only decides whether to offer the
+   * buttons at all, so a stranger is not shown a control that will refuse them.
+   */
+  isOwner: boolean;
 }
 
 export interface Sketch {

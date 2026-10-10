@@ -37,6 +37,8 @@ import {
   EMPTY_JOB,
   EMPTY_PROJECT,
   createdPath,
+  PROJECT_LAST_STEP,
+  PROJECT_SCREENSHOT_MAX,
   validateCreateDraft,
   validateProjectDraftStep,
   type ProjectStep,
@@ -48,18 +50,14 @@ import {
   type JobDraftInput,
   type ProjectDraftInput,
 } from '@/lib/create/create-types';
-import { createListing } from '@/lib/create/create-repository';
+import { createListing, createProjectWithId } from '@/lib/create/create-repository';
+import type { ProjectScreenshotDraft } from '@/lib/opportunities/opportunity-repository';
+import { useAttachments } from '@/components/media/use-attachments';
+import { CoverPicker } from '@/components/media/CoverPicker';
+import { useCoverUpload, type CoverUpload } from '@/components/media/use-cover-upload';
 import { slugify } from '@/lib/content/text';
 import { dataErrorKey } from '@/lib/supabase/errors';
-import { assertUploadable, MediaError } from '@/lib/storage/upload';
-import type { UploadResult } from '@/lib/storage/upload';
 import { useAuthStore } from '@/store/auth-store';
-
-interface PreparedProjectCover {
-  file: File;
-  result: UploadResult;
-  mediaRecorded: boolean;
-}
 
 function isKind(value: string | null): value is CreateKind {
   return value !== null && (CREATE_KINDS as readonly string[]).includes(value);
@@ -91,24 +89,31 @@ export default function CreatePage() {
     language: i18n.language === 'bn' ? 'bn' : 'en',
   });
   const [projectStep, setProjectStep] = useState<ProjectStep>(0);
-  const [projectCoverFile, setProjectCoverFile] = useState<File | null>(null);
-  const [projectCoverPreviewUrl, setProjectCoverPreviewUrl] = useState('');
-  const [projectCoverProgress, setProjectCoverProgress] = useState<number | null>(null);
-  const [preparedProjectCover, setPreparedProjectCover] = useState<PreparedProjectCover | null>(
-    null,
-  );
+  /**
+   * A project's cover and an event's cover are the same control with different
+   * purposes, and the purpose is what decides which host holds the bytes. Two
+   * calls to one hook rather than two copies of the state, the preview, the
+   * progress and the "upload it once even if the insert is retried" bookkeeping.
+   */
+  const projectCover = useCoverUpload('project-cover');
+  const eventCover = useCoverUpload('cover');
   const [slugTouched, setSlugTouched] = useState(false);
   const [issues, setIssues] = useState<CreateIssue[]>([]);
 
-  useEffect(() => {
-    if (projectCoverFile === null) {
-      setProjectCoverPreviewUrl('');
-      return;
-    }
-    const previewUrl = URL.createObjectURL(projectCoverFile);
-    setProjectCoverPreviewUrl(previewUrl);
-    return () => URL.revokeObjectURL(previewUrl);
-  }, [projectCoverFile]);
+  /**
+   * The project's gallery.
+   *
+   * The same queue the post composer uses, so a screenshot gets the same local
+   * preview, the same percentage, the same retry, the same reordering and — the
+   * part that matters — the same refusal to look attached before the database
+   * has a `media_assets` row for it. A second, simpler uploader here would be a
+   * second place for the bug that made post images disappear to live.
+   */
+  const screenshots = useAttachments({
+    purpose: 'project-image',
+    uid: user?.uid ?? null,
+    max: PROJECT_SCREENSHOT_MAX,
+  });
 
   const draft = useMemo(() => {
     switch (kind) {
@@ -141,29 +146,6 @@ export default function CreatePage() {
     setParams(search, { replace: true });
   }
 
-  function chooseProjectCover(file: File | null) {
-    if (file === null) {
-      setProjectCoverFile(null);
-      setPreparedProjectCover(null);
-      setProject((current) => ({ ...current, coverUrl: '' }));
-      return;
-    }
-
-    try {
-      const kind = assertUploadable(file);
-      if (kind !== 'image') throw new MediaError('media.errors.unsupported');
-      setProjectCoverFile(file);
-      setPreparedProjectCover(null);
-      setProject((current) => ({ ...current, coverUrl: '' }));
-    } catch (error) {
-      const key =
-        error instanceof Error && error.message.startsWith('media.')
-          ? error.message
-          : 'media.errors.failed';
-      toast.error(t(key));
-    }
-  }
-
   function nextProjectStep() {
     const found = validateProjectDraftStep(project, projectStep);
     setIssues(found);
@@ -171,60 +153,74 @@ export default function CreatePage() {
       toast.error(t(found[0]!.messageKey));
       return;
     }
-    setProjectStep((current) => Math.min(current + 1, 3) as ProjectStep);
+    setProjectStep((current) => Math.min(current + 1, PROJECT_LAST_STEP) as ProjectStep);
   }
 
   const mutation = useMutation({
     mutationKey: ['create-listing', kind, user?.uid ?? ''],
-    mutationFn: async () => {
+    /**
+     * The gallery travels as a mutation variable rather than being read from
+     * the controller inside the mutation.
+     *
+     * `ready` is published by a passive effect, so on the render where the last
+     * upload finished, a fast press of Publish can still see the previous list —
+     * which is precisely how a post was once published with its text and without
+     * its picture. Capturing the list in the click handler that is already
+     * reading the current state removes the gap instead of racing it.
+     */
+    mutationFn: async (gallery: readonly ProjectScreenshotDraft[]) => {
       const ownerUid = user?.uid ?? '';
-      if (kind !== 'project' || projectCoverFile === null) {
-        return createListing(kind, ownerUid, draft);
-      }
-
-      // Upload once and retain the completed result if recording or the project
-      // insert needs retrying. A slow phone must not upload the same cover again
-      // just because the database briefly refused the row.
-      let prepared = preparedProjectCover?.file === projectCoverFile ? preparedProjectCover : null;
-      if (prepared === null) {
-        const { uploadMedia } = await import('@/lib/storage/upload');
-        const result = await uploadMedia(projectCoverFile, {
-          purpose: 'project-cover',
-          onProgress: setProjectCoverProgress,
+      if (kind !== 'project') {
+        // Only an event has a cover among the remaining four, so only an event
+        // has a picture to send before its row can be written.
+        if (kind !== 'event') return createListing(kind, ownerUid, draft);
+        const uploaded = await eventCover.ensureUploaded(ownerUid);
+        return createListing(kind, ownerUid, {
+          ...event,
+          coverUrl: uploaded ?? event.coverUrl,
         });
-        prepared = { file: projectCoverFile, result, mediaRecorded: false };
-        setPreparedProjectCover(prepared);
       }
 
-      if (!prepared.mediaRecorded) {
-        const { recordMediaAsset } = await import('@/lib/data/media-repository');
-        const row = await recordMediaAsset(ownerUid, prepared.result);
-        if (row === null) throw new Error('media.errors.recordFailed');
-        prepared = { ...prepared, mediaRecorded: true };
-        setPreparedProjectCover(prepared);
+      // The cover is optional; the project is not. Upload it once and retain the
+      // completed result if recording or the insert needs retrying, so a slow
+      // phone does not send the same picture again because the database briefly
+      // refused a row.
+      const uploaded = await projectCover.ensureUploaded(ownerUid);
+      const coverUrl = uploaded ?? project.coverUrl;
+
+      const created = await createProjectWithId(ownerUid, { ...project, coverUrl });
+
+      // Written after the project exists, because `project_media` points at it.
+      // A gallery that fails to save must not take the project down with it: the
+      // project is published, and the author can add its pictures from the edit
+      // page, which is why this is the one write here that is not fatal.
+      if (gallery.length > 0 && created.id.length > 0) {
+        try {
+          const { replaceProjectScreenshots } = await import(
+            '@/lib/opportunities/opportunity-repository'
+          );
+          await replaceProjectScreenshots(created.id, gallery);
+        } catch {
+          toast.error(t('create.projectSteps.screenshotsNotSaved'));
+        }
       }
 
-      return createListing('project', ownerUid, {
-        ...project,
-        coverUrl: prepared.result.url,
-      });
+      return created.slug;
     },
     onSuccess: (slug) => {
       toast.success(t('create.created'));
-      setProjectCoverProgress(null);
-      setPreparedProjectCover(null);
-      setProjectCoverFile(null);
+      projectCover.reset();
+      eventCover.reset();
+      screenshots.clear();
       if (slug.length > 0) navigate(createdPath(kind, slug));
     },
     onError: (error: unknown) => {
-      setProjectCoverProgress(null);
       const messageKey =
         error instanceof Error && error.message.startsWith('media.')
           ? error.message
           : dataErrorKey(error);
       toast.error(t(messageKey));
     },
-    onSettled: () => setProjectCoverProgress(null),
   });
 
   function submit() {
@@ -235,7 +231,14 @@ export default function CreatePage() {
       return;
     }
     if (user === null) return;
-    mutation.mutate();
+    // Only pictures the database already has a row for may be attached: an
+    // upload with no `media_assets` id has nothing to point at, and inserting
+    // one would fail the batch and lose the rest of the gallery.
+    const gallery = screenshots.ready.map((shot) => ({
+      mediaId: shot.mediaId,
+      altText: shot.altText,
+    }));
+    mutation.mutate(gallery);
   }
 
   function errorFor(field: string): string | undefined {
@@ -247,7 +250,9 @@ export default function CreatePage() {
     {
       id: 'event',
       label: t('create.tab.event'),
-      content: <EventForm value={event} onChange={setEvent} errorFor={errorFor} />,
+      content: (
+        <EventForm value={event} onChange={setEvent} errorFor={errorFor} cover={eventCover} />
+      ),
     },
     {
       id: 'job',
@@ -267,11 +272,12 @@ export default function CreatePage() {
           value={project}
           onChange={setProject}
           step={projectStep}
-          coverFile={projectCoverFile}
-          coverPreviewUrl={projectCoverPreviewUrl}
-          coverUploadProgress={projectCoverProgress}
-          onCoverFileChange={(file) => void chooseProjectCover(file)}
+          coverFile={projectCover.file}
+          coverPreviewUrl={projectCover.previewUrl}
+          coverUploadProgress={projectCover.progress}
+          onCoverFileChange={(file) => projectCover.choose(file)}
           errorFor={errorFor}
+          screenshots={screenshots}
         />
       ),
     },
@@ -337,11 +343,11 @@ export default function CreatePage() {
                 {t('create.projectSteps.previous')}
               </Button>
             ) : null}
-            {kind === 'project' && projectStep < 3 ? (
+            {kind === 'project' && projectStep < PROJECT_LAST_STEP ? (
               <Button
                 type="button"
                 onClick={nextProjectStep}
-                disabled={user === null || mutation.isPending}
+                disabled={user === null || mutation.isPending || screenshots.busy}
                 iconEnd={<ArrowRight size={16} />}
               >
                 {t('create.projectSteps.next')}
@@ -351,7 +357,12 @@ export default function CreatePage() {
                 type="button"
                 onClick={submit}
                 loading={mutation.isPending}
-                disabled={user === null}
+                // A picture still on its way up is a picture this publish would
+                // drop. Holding the button is the honest answer; the member can
+                // see the percentage beside it and knows what they are waiting
+                // for. Publishing anyway is how a post ends up live with an
+                // image that was never attached to it.
+                disabled={user === null || (kind === 'project' && screenshots.busy)}
                 iconStart={<Icon aria-hidden className="size-4" />}
               >
                 {t(`create.submit.${kind}`)}
@@ -370,7 +381,12 @@ interface FormProps<Value> {
   errorFor: (field: string) => string | undefined;
 }
 
-function EventForm({ value, onChange, errorFor }: FormProps<EventDraftInput>) {
+interface EventFormProps extends FormProps<EventDraftInput> {
+  /** The event's cover: chosen here, uploaded when the member publishes. */
+  cover: CoverUpload;
+}
+
+function EventForm({ value, onChange, errorFor, cover }: EventFormProps) {
   const { t } = useTranslation();
   const set = (patch: Partial<EventDraftInput>) => onChange({ ...value, ...patch });
 
@@ -457,13 +473,32 @@ function EventForm({ value, onChange, errorFor }: FormProps<EventDraftInput>) {
           set({ capacity: event.target.value === '' ? null : Number(event.target.value) })
         }
       />
-      <TextField
-        label={t('create.fields.coverUrl')}
-        type="url"
-        value={value.coverUrl}
-        error={errorFor('coverUrl')}
-        onChange={(event) => set({ coverUrl: event.target.value })}
-      />
+      {/*
+        An event used to ask for a link to a picture instead of a picture. On a
+        phone that means finding an image, hosting it somewhere else, copying
+        the address and pasting it back — and the address could point at
+        anything, including a host that later deletes it. The cover now travels
+        the same road a project's does, and the purpose is what puts it on
+        Cloudinary rather than a decision made here.
+      */}
+      <div className="sm:col-span-2">
+        <CoverPicker
+          file={cover.file}
+          previewUrl={cover.previewUrl}
+          progress={cover.progress}
+          onFileChange={(file) => cover.choose(file)}
+          labels={{
+            title: t('create.fields.coverImage'),
+            hint: t('create.cover.hint'),
+            choose: t('create.cover.choose'),
+            replace: t('create.cover.replace'),
+            remove: t('create.cover.remove'),
+            existing: t('create.cover.existing'),
+            uploading: t('create.cover.uploading'),
+            previewAlt: t('create.cover.preview'),
+          }}
+        />
+      </div>
     </div>
   );
 }
