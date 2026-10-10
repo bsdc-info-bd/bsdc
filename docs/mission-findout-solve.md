@@ -20,6 +20,7 @@ harness.
 5. [The commits, in order](#5-the-commits-in-order)
 6. [The production migration failure](#6-the-round-after-database-apply-to-production-failed-i-have-manually-did-it)
 7. [Images and the project system](#7-the-round-after-post-images-are-broken-and-projects-have-no-page)
+8. [Post-image upload completes but the post has no image](#8-the-post-image-upload-completes-but-the-published-post-has-no-image)
 
 ---
 
@@ -349,6 +350,7 @@ Recorded so that the next round does not mistake an absence for an oversight.
 | `9ae98ae` | 6 — a migration that meets a schema it does not own (`0056`, `--check`, `t34`) |
 | `57b0b10` | 7 — strict external media routing, linked post images, project publisher/detail pages and `0063` |
 | `d87d5c2` | allowlist two confirmed synthetic test fixtures that the whole-history secret scan misidentified; no production secret was added |
+| `83fd90d` | snapshot ready attachments at submit time so a completed post image cannot be omitted by a lagging React effect |
 
 Earlier in the same pull request, and already described in their own documents:
 `docs/messenger.md` for the messenger's hundred counted features,
@@ -514,3 +516,41 @@ upload or deployment was performed.
 Final local verification on the code commit: `db:prove` **19/19**, Vitest **54 files / 706 tests**, lint/typecheck/Prettier clean, production build clean (**200** precache entries, **13** prerendered routes), and launch audit **103 passed / 0 failed / 4 recorded**. These are repository-level proofs; live provider credentials and production migration/deployment remain the owner's actions.
 
 The code commit for this round is `57b0b1048afc9452fce8dd2dd17c045f1751d377`. The migration queue's next number is **`0064`**. The three directories still without detail pages are events, jobs and gigs; project pages are no longer on that list.
+
+---
+
+## 8. The post image upload completes but the published post has no image
+
+### What the code review found
+
+A second way for an image to disappear remained in the composer. `useAttachments`
+marks the image `attached` and publishes its ready list through a React passive
+effect. `ComposePage` copied that list into `draft.media` in another state update,
+but the Publish handler saved `draft` directly. On the render where upload state
+first became `attached`, a fast Publish click could run before the passive bridge
+updated the draft. The text post would save successfully with an empty media list,
+so `post_media` got no link even though the hosted upload and `media_assets` row
+already existed. This is a code-level race matching the reported symptom; no
+production database was inspected.
+
+### What changed
+
+- `withReadyMedia()` builds the submit snapshot from the attachment controller's
+  current durable `ready` list. Both publish and save-draft now use that snapshot,
+  rather than relying on the trailing effect. The same helper keeps the draft
+  bridge consistent; the current queue order, alt text, and removals are reflected
+  in the submitted `post_media` rows.
+- Regression tests cover a stale draft that has not received a newly uploaded
+  image yet, a removed image, and existing Cloudinary-hosted media passing through
+  the post mapper/gallery. The uploader's routing contract did not change:
+  ordinary new post images still go to ImgBB; important/profile/project/product
+  images use Cloudinary. Existing Cloudinary URLs remain renderable when linked.
+- An already-published post with no `post_media` link is not backfilled
+  automatically. Edit that post and attach the original image again; no production
+  data repair or live provider upload was performed here.
+
+Local checks on `83fd90d`: Vitest **55 files / 710 tests**, lint and typecheck
+passed, changed files pass Prettier, and the production build passed (**200**
+precache entries, **13** prerendered routes). GitHub's build, schema-from-nothing,
+Cloudflare Pages, app-quality, and Secret scan checks also passed; production apply
+was skipped by design. PR #9 remains open for owner review and merge.
