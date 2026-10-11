@@ -123,6 +123,7 @@ function toGig(row: GigRow): Gig {
     proposals: row.proposals_count,
     clientUid: row.client_uid,
     publishedAt: row.published_at,
+    status: row.status,
   };
 }
 
@@ -136,6 +137,40 @@ export async function fetchGigs(limit = 40): Promise<Gig[]> {
     .returns<GigRow[]>();
   if (error) throw toDataError(error);
   return (data ?? []).map(toGig);
+}
+
+/**
+ * One gig by its address. Row-level security decides what is visible: an open
+ * gig to anyone, and a closed or draft gig only to its client and to staff. A
+ * gig nobody may see is null, the same answer as a gig that does not exist.
+ */
+export async function fetchGigDetail(slug: string): Promise<Gig | null> {
+  const { data, error } = await getSupabase()
+    .from('gigs')
+    .select('*')
+    .eq('slug', slug)
+    .limit(1)
+    .returns<GigRow[]>();
+  if (error) throw toDataError(error);
+  const row = data?.[0];
+  return row ? toGig(row) : null;
+}
+
+/**
+ * The reader's own proposal status on a gig. Filtered to the reader's uid even
+ * though the client of a gig can read every proposal on it, so a client never
+ * sees their own gig as something they have bid on.
+ */
+export async function fetchMyProposalStatus(gigId: string, uid: string): Promise<string | null> {
+  const { data, error } = await getSupabase()
+    .from('gig_proposals')
+    .select('status')
+    .eq('gig_id', gigId)
+    .eq('freelancer_uid', uid)
+    .limit(1)
+    .returns<{ status: string }[]>();
+  if (error) throw toDataError(error);
+  return data?.[0]?.status ?? null;
 }
 
 export async function submitProposal(

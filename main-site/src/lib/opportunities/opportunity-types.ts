@@ -47,6 +47,7 @@ export interface Gig {
   proposals: number;
   clientUid: string;
   publishedAt: string | null;
+  status: ListingStatus;
 }
 
 export type ProjectSort = 'popular' | 'recent';

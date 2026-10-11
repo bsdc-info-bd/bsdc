@@ -108,6 +108,11 @@ export function jobPath(slug: string): string {
   return `${ROUTES.jobs}/${encodeURIComponent(slug.trim())}`;
 }
 
+/** A freelance gig's own page: /freelance/<slug>. */
+export function gigPath(slug: string): string {
+  return `${ROUTES.freelance}/${encodeURIComponent(slug.trim())}`;
+}
+
 /** Event permalink: /events/slug. */
 export function eventPath(slug: string): string {
   return `${ROUTES.events}/${encodeURIComponent(slug.trim())}`;

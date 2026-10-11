@@ -445,3 +445,57 @@ export function useJobDetail(slug: string): JobDetailResult {
     isApplying: mutation.isPending,
   };
 }
+
+export interface GigDetailResult {
+  gig: Gig | null;
+  /** The signed-in reader's proposal status on this gig, or null. */
+  myProposalStatus: string | null;
+  isLoading: boolean;
+  isError: boolean;
+  isNotFound: boolean;
+  propose: (pitch: string, bid: number, days: number) => Promise<void>;
+  isProposing: boolean;
+}
+
+/** One gig in full, and the reader's own proposal on it. */
+export function useGigDetail(slug: string): GigDetailResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['gig-detail', uid, slug],
+    queryFn: async () => (await repository()).fetchGigDetail(slug),
+    staleTime: 60_000,
+  });
+
+  const gigId = query.data?.id ?? null;
+  const mine = useQuery({
+    queryKey: ['gig-proposal', uid, gigId],
+    queryFn: async () => (await repository()).fetchMyProposalStatus(gigId ?? '', uid ?? ''),
+    enabled: gigId !== null && uid !== null,
+    staleTime: 60_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (input: { gigId: string; pitch: string; bid: number; days: number }) =>
+      (await repository()).submitProposal(input.gigId, input.pitch, input.bid, input.days),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['gig-detail'] });
+      void queryClient.invalidateQueries({ queryKey: ['gig-proposal'] });
+      void queryClient.invalidateQueries({ queryKey: ['gig-board'] });
+    },
+  });
+
+  return {
+    gig: query.data ?? null,
+    myProposalStatus: mine.data ?? null,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isNotFound: !query.isLoading && !query.isError && query.data === null,
+    propose: async (pitch, bid, days) => {
+      if (gigId === null) throw new Error('no gig loaded');
+      await mutation.mutateAsync({ gigId, pitch, bid, days });
+    },
+    isProposing: mutation.isPending,
+  };
+}
