@@ -1,4 +1,4 @@
--- 0067: a listing has a page, and the sitemap tells the truth about it.
+-- 0066: a listing has a page, and the sitemap tells the truth about it.
 --
 -- The sitemap already advertised /jobs/<slug> and /events/<slug> but the app had
 -- no such routes, so every entry was a 404. This migration:

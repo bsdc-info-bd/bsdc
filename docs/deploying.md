@@ -295,7 +295,7 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `VITE_FB2_API_KEY` …            | The same five values for the **second** Firebase project, `bsdc-second`, which backs the thirteen corporate consoles. | Firebase console, `bsdc-second` project, same panels.                                                                                                                     | Same formats, `bsdc-second` everywhere `bsdc-bd` appears.                                                                                                                                                                                                                                                                    | `deploy.yml` (consoles)                 |
 | `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud for avatars, profile/project covers, product images, documents and voice notes. Supabase Storage is not on the upload path. | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
 | `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary **unsigned** upload preset the browser uses.                                                            | Cloudinary dashboard → Settings → Upload → Upload presets → Add preset → Signing mode **Unsigned**.                                                                       | The preset's name, e.g. `bsdc_unsigned`. It is public by design; the preset itself must cap size and formats.                                                                                                                                                                                                                 | `deploy.yml` (main-site)                |
-| `VITE_IMGBB_API_KEY`            | ImgBB key for ordinary member images (posts, comments, chat and other non-cover images). **Public by design**: it is sent in the browser request URL, not an authorization secret. | api.imgbb.com → **Get API key**.                                                                                                                                          | 32-character alphanumeric key.                                                                                                                                                                                                                                                                                               | `deploy.yml` (main-site)                |
+| `IMGBB_API_KEY` (Pages server secret, **not** a build variable) | ImgBB key for ordinary member images (posts, comments, chat). It is a **secret**: it is read by the upload Function at request time and is never compiled into the site. | api.imgbb.com → **Get API key**. Set it under Cloudflare Pages → Settings → Environment variables, encrypted. | 32-character alphanumeric key. Rotate it if it was ever set as `VITE_IMGBB_API_KEY`. |
 | `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key. Optional: without it the browser never offers push.                                    | Firebase console → Project settings → Cloud Messaging → Web configuration → Web Push certificates.                                                                       | The key pair's public key, one line.                                                                                                                                                                                                                                                                                         | `deploy.yml` (main-site)                |
 | `VITE_ONESIGNAL_APP_ID`         | OneSignal app id, used only for manual admin broadcasts. Optional.                                                     | OneSignal dashboard → Settings → Keys & IDs.                                                                                                                              | UUID.                                                                                                                                                                                                                                                                                                                        | `deploy.yml` (main-site)                |
 | `ANDROID_GOOGLE_SERVICES_JSON`  | Firebase Android config. Required for push notifications and for any release build.                                   | Firebase console → Project settings → Your apps → Android app → download `google-services.json`.                                                                          | Either the file's text verbatim, or `base64 -w0 google-services.json`. The workflow accepts both.                                                                                                                                                                                                                            | `android.yml`                           |
@@ -758,17 +758,17 @@ curl -s https://www.bsdc.info.bd/api/media/providers
 deployed — the site is being served as static files only, and the bundle
 fallback below is the only transport available.
 
-**The bundle fallback** is `VITE_CLOUDINARY_CLOUD_NAME`,
-`VITE_CLOUDINARY_UNSIGNED_PRESET` and `VITE_IMGBB_API_KEY`, and it is the one
-that used to be the whole story: those are compiled into the JavaScript at
-**build** time, so setting them as Pages variables does nothing until the site
-is rebuilt, and the browser keeps serving the old build until the new one is
-published. Check the three in §5.1, re-run **Deploy**, then hard-reload.
+**The bundle fallback** is `VITE_CLOUDINARY_CLOUD_NAME` and
+`VITE_CLOUDINARY_UNSIGNED_PRESET`. Those two are public by design, and they are
+compiled into the JavaScript at **build** time: setting them as Pages variables
+does nothing until the site is rebuilt. Check them in §5.1, re-run **Deploy**,
+then hard-reload.
 
-Treat the fallback as a fallback. `VITE_IMGBB_API_KEY` is a *secret* published
-into a public bundle: anybody can read it and spend the account's quota. Once
-the edge endpoint is configured, leave the three `VITE_` media variables unset
-and rotate any ImgBB key that has already shipped this way.
+There is **no** bundle fallback for ImgBB. Its key is a secret, and anything in
+the JavaScript is readable by every visitor, so ordinary member images go
+through the edge or they do not go at all. If `VITE_IMGBB_API_KEY` was ever
+set as a GitHub secret, it has been published in every build since, so
+**rotate that ImgBB key** and delete the GitHub secret.
 
 ### A Pages Function reads an empty variable
 

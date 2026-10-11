@@ -32,7 +32,6 @@ const envSchema = z.object({
   }),
   oneSignalAppId: z.string(),
   cloudinary: z.object({ cloudName: z.string(), unsignedPreset: z.string() }),
-  imgbbApiKey: z.string(),
 });
 
 export type PublicEnv = z.infer<typeof envSchema>;
@@ -62,7 +61,6 @@ const raw: PublicEnv = {
     cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME ?? '',
     unsignedPreset: import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET ?? '',
   },
-  imgbbApiKey: import.meta.env.VITE_IMGBB_API_KEY ?? '',
 };
 
 export const env: PublicEnv = envSchema.parse(raw);
@@ -85,5 +83,4 @@ export const isConfigured = {
   push: raw.push.webPushPublicKey.length > 0,
   oneSignal: raw.oneSignalAppId.length > 0,
   cloudinary: cloudinaryConfigured(raw.cloudinary.cloudName, raw.cloudinary.unsignedPreset),
-  imgbb: raw.imgbbApiKey.length > 0,
 } as const;

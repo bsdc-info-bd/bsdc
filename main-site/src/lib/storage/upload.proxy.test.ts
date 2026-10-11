@@ -11,9 +11,8 @@ import {
 vi.mock('@/lib/env', () => ({
   env: {
     cloudinary: { cloudName: 'bsdctest', unsignedPreset: 'unsigned-test' },
-    imgbbApiKey: 'bundle-imgbb-key',
   },
-  isConfigured: { cloudinary: true, imgbb: true, supabase: true },
+  isConfigured: { cloudinary: true, supabase: true },
 }));
 
 const getIdToken = vi.fn(() => Promise.resolve('member-id-token'));
@@ -104,23 +103,13 @@ const EDGE_UP: UploadCapabilities = {
   proxy: true,
   proxyImgbb: true,
   proxyCloudinary: true,
-  localImgbb: true,
   localCloudinary: true,
-};
-
-const EDGE_ONLY: UploadCapabilities = {
-  proxy: true,
-  proxyImgbb: true,
-  proxyCloudinary: true,
-  localImgbb: false,
-  localCloudinary: false,
 };
 
 const EDGE_DOWN: UploadCapabilities = {
   proxy: false,
   proxyImgbb: false,
   proxyCloudinary: false,
-  localImgbb: true,
   localCloudinary: true,
 };
 
@@ -152,11 +141,10 @@ describe('choosing a transport', () => {
     });
   });
 
-  it('uses the bundle\u2019s keys when there is no edge endpoint', () => {
-    expect(planUpload('post-image', 'image', EDGE_DOWN)).toEqual({
-      route: 'direct',
-      provider: 'imgbb',
-    });
+  it('has no direct route for an ordinary picture, even with the edge down', () => {
+    // An ImgBB key never ships in the bundle, so with the edge down there is
+    // nowhere to send a post image. The caller is told, not handed a secret.
+    expect(planUpload('post-image', 'image', EDGE_DOWN)).toBeNull();
   });
 
   it('falls back for the one provider the edge is missing, not for both', () => {
@@ -189,24 +177,15 @@ describe('choosing a transport', () => {
         proxy: false,
         proxyImgbb: false,
         proxyCloudinary: false,
-        localImgbb: false,
         localCloudinary: false,
       }),
     ).toBeNull();
   });
 
   it('believes the edge only when the edge says it is configured', () => {
-    // A live endpoint holding no ImgBB key must not be trusted with an ImgBB
-    // upload just because it answered; the bundle's own key carries it instead.
-    expect(planUpload('post-image', 'image', { ...EDGE_UP, proxyImgbb: false })).toEqual({
-      route: 'direct',
-      provider: 'imgbb',
-    });
-    // With no key on either side, there is nothing left to fall back to and the
-    // caller must be told rather than handed an upload that cannot happen.
-    expect(
-      planUpload('post-image', 'image', { ...EDGE_ONLY, proxyImgbb: false, localImgbb: false }),
-    ).toBeNull();
+    // A live endpoint holding no ImgBB key cannot carry an ordinary picture, and
+    // there is no bundle key to fall back to. The caller must be told.
+    expect(planUpload('post-image', 'image', { ...EDGE_UP, proxyImgbb: false })).toBeNull();
   });
 });
 
@@ -257,31 +236,33 @@ describe('uploading through the edge', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('falls back to the bundle when the endpoint is not deployed', async () => {
+  it('refuses rather than sending the picture to ImgBB from the bundle when the endpoint is not deployed', async () => {
     answers = [
       { match: PROXY, status: 404, body: null },
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    const result = await uploadMedia(picture(), { purpose: 'post-image' });
-    expect(sent).toHaveLength(2);
-    expect(sent[0]?.url).toBe(PROXY);
-    expect(sent[1]?.url).toContain('api.imgbb.com');
-    expect(result).toMatchObject({ provider: 'imgbb', url: IMGBB_OK.data.url });
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.notConfigured',
+    });
+    // The only request was the edge probe. ImgBB was never contacted directly,
+    // because the key that would authorise it is not in this bundle.
+    expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
   it('treats an application shell answer as a missing endpoint, not as a picture', async () => {
     // A static host answers an unknown path with index.html: status 200 and a
     // body that is not JSON. Reading that as a success would give the post an
-    // image whose src is a web page.
+    // image whose src is a web page. With no edge, the picture is refused.
     answers = [
       { match: PROXY, status: 200, body: null },
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    const result = await uploadMedia(picture(), { purpose: 'post-image' });
-    expect(result.url).toBe(IMGBB_OK.data.url);
-    expect(sent.map((request) => request.url)).toEqual([PROXY, expect.stringContaining(IMGBB)]);
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.notConfigured',
+    });
+    expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
   it('gives a readable reason when no transport is left', async () => {
@@ -289,7 +270,6 @@ describe('uploading through the edge', () => {
       proxy: false,
       proxyImgbb: false,
       proxyCloudinary: false,
-      localImgbb: false,
       localCloudinary: false,
     });
     await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
@@ -336,8 +316,8 @@ describe('asking the deployment what it can do', () => {
     );
     const capabilities = await probeUploadCapabilities();
     expect(capabilities.proxy).toBe(false);
-    // The bundle's own keys are still reported, so a static host keeps working.
-    expect(capabilities.localImgbb).toBe(true);
+    // Cloudinary's public pair is still available directly, so covers keep working.
+    expect(capabilities.localCloudinary).toBe(true);
   });
 
   it('answers "no edge" when the endpoint will not say it is configured', async () => {
@@ -387,9 +367,6 @@ describe('asking the deployment what it can do', () => {
       route: 'proxy',
       provider: 'cloudinary',
     });
-    expect(planUpload('post-image', 'image', capabilities)).toEqual({
-      route: 'direct',
-      provider: 'imgbb',
-    });
+    expect(planUpload('post-image', 'image', capabilities)).toBeNull();
   });
 });

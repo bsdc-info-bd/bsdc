@@ -180,18 +180,6 @@ interface CloudinaryResponse {
   delete_token?: string;
 }
 
-interface ImgbbResponse {
-  data?: {
-    url?: string;
-    display_url?: string;
-    delete_url?: string;
-    size?: number;
-    width?: number | string;
-    height?: number | string;
-    thumb?: { url?: string };
-  };
-}
-
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -274,45 +262,6 @@ export function fileToBase64(file: Blob, signal?: AbortSignal): Promise<string> 
   });
 }
 
-async function uploadToImgbb(
-  file: File,
-  onProgress?: (percent: number) => void,
-  signal?: AbortSignal,
-): Promise<UploadResult> {
-  if (!isConfigured.imgbb) throw new MediaError('media.errors.notConfigured');
-
-  const [base64, size] = await Promise.all([fileToBase64(file, signal), readImageSize(file)]);
-  const body = new FormData();
-  // ImgBB takes a base64 string in `image`; the API key remains in its query
-  // parameter. Do not send the raw File or move the key into the request body.
-  body.append('image', base64);
-
-  const outcome = await postForm({
-    url: `https://api.imgbb.com/1/upload?key=${encodeURIComponent(env.imgbbApiKey)}`,
-    body,
-    ...(onProgress ? { onProgress } : {}),
-    ...(signal ? { signal } : {}),
-  });
-
-  if (outcome.status < 200 || outcome.status >= 300) throw new MediaError('media.errors.failed');
-  const response = outcome.body as ImgbbResponse | null;
-  const data = response?.data ?? null;
-  const url = data?.display_url ?? data?.url;
-  if (!url) throw new MediaError('media.errors.failed');
-
-  return {
-    provider: 'imgbb',
-    kind: 'image',
-    url,
-    thumbUrl: data?.thumb?.url ?? url,
-    deleteToken: data?.delete_url ?? '',
-    width: toNumber(data?.width) ?? size?.width ?? null,
-    height: toNumber(data?.height) ?? size?.height ?? null,
-    bytes: toNumber(data?.size) ?? file.size,
-    mimeType: file.type,
-  };
-}
-
 // --------------------------------------------------------------- capability ---
 
 /** What this deployment can actually upload through, discovered at runtime. */
@@ -323,8 +272,6 @@ export interface UploadCapabilities {
   proxyImgbb: boolean;
   /** The edge holds both halves of the Cloudinary pair. */
   proxyCloudinary: boolean;
-  /** A build-time ImgBB key is compiled into this bundle. */
-  localImgbb: boolean;
   /** A build-time Cloudinary pair is compiled into this bundle. */
   localCloudinary: boolean;
 }
@@ -342,7 +289,6 @@ export function localCapabilities(): UploadCapabilities {
     proxy: false,
     proxyImgbb: false,
     proxyCloudinary: false,
-    localImgbb: isConfigured.imgbb,
     localCloudinary: isConfigured.cloudinary,
   };
 }
@@ -367,9 +313,11 @@ export function planUpload(
     provider === 'cloudinary' ? capabilities.proxyCloudinary : capabilities.proxyImgbb;
   if (capabilities.proxy && viaProxy) return { route: 'proxy', provider };
 
-  const viaLocal =
-    provider === 'cloudinary' ? capabilities.localCloudinary : capabilities.localImgbb;
-  if (viaLocal) return { route: 'direct', provider };
+  // Only Cloudinary has a direct route. Its cloud name and unsigned preset are
+  // public by design; an ImgBB key is a secret and never leaves the Functions.
+  if (provider === 'cloudinary' && capabilities.localCloudinary) {
+    return { route: 'direct', provider };
+  }
 
   return null;
 }
@@ -576,14 +524,11 @@ export async function uploadMedia(file: File, options: UploadOptions): Promise<U
       // keys when it holds them. `plan` is recomputed because the probe was
       // wrong about what this deployment can do.
       const fallback = planUpload(options.purpose, kind, localCapabilities());
-      if (fallback === null) throw new MediaError('media.errors.notConfigured');
-      return fallback.provider === 'cloudinary'
-        ? uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal)
-        : uploadToImgbb(file, options.onProgress, options.signal);
+      if (fallback?.provider !== 'cloudinary') throw new MediaError('media.errors.notConfigured');
+      return uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal);
     }
   }
 
-  return plan.provider === 'cloudinary'
-    ? uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal)
-    : uploadToImgbb(file, options.onProgress, options.signal);
+  if (plan.provider !== 'cloudinary') throw new MediaError('media.errors.notConfigured');
+  return uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal);
 }

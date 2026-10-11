@@ -21,11 +21,10 @@ vi.mock('react-i18next', async (importOriginal) => {
 vi.mock('@/lib/env', () => ({
   env: {
     cloudinary: { cloudName: 'bsdctest', unsignedPreset: 'unsigned-test' },
-    imgbbApiKey: 'imgbb-test-key',
   },
   // The gallery needs a database to record an upload in; the routing of the
   // bytes is tested in lib/storage, not here.
-  isConfigured: { cloudinary: true, imgbb: true, supabase: true },
+  isConfigured: { cloudinary: true, supabase: true },
 }));
 
 // jsdom has no object URLs. The queue previews a chosen file from its local

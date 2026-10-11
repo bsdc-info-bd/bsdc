@@ -222,7 +222,7 @@ including the new `0063`.
 
 ### Migrations
 
-`0064`, `0065` and `0067` were added by the rounds recorded in §9, §10 and §13. Check the
+`0064`, `0065` and `0066` were added by the rounds recorded in §9, §10 and §13. Check the
 production ledger for `0046`–`0063` because some may have been applied manually;
 do not infer production state from the branch. In order, the migrations in this
 set are:
@@ -248,7 +248,7 @@ set are:
 0063_projects_have_a_home_to_be_found.sql
 0064_a_project_can_be_corrected.sql
 0065_a_private_page_is_not_a_page_for_crawlers.sql
-0067_a_listing_has_a_page_and_a_true_sitemap.sql
+0066_a_listing_has_a_page_and_a_true_sitemap.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
@@ -869,8 +869,9 @@ hook imports the transport dynamically and only from pages that are themselves
 loaded on demand. Launch audit 103 passed / 0 failed / 4 recorded. Counted
 features 1852, translated strings 1671 per language.
 
-The migration queue's next number is **`0067`**. §8's record says `0064` and was
-right when it was written; `0064` through `0066` have since been taken.
+The migration queue's next number was **`0067`** when this round was written. §8's
+record says `0064` and was right when it was written; `0064` through `0066` have
+since been taken (see §17 for why the listing migration is `0066`).
 
 
 ---
@@ -962,17 +963,17 @@ also received the generic index metadata, which is a soft 404.
 
 **What changed.**
 
-- `0067` adds `job_detail(p_slug)` and `event_detail(p_slug)`. Each applies the
+- `0066` adds `job_detail(p_slug)` and `event_detail(p_slug)`. Each applies the
   same visibility rule as the row-level security policy for its table, and
   returns the row together with the caller's own state: whether they have
   applied, and whether they are going. The join link of an online event is
   released only to people who said they are going, the host, and staff.
-- `0067` teaches `seo_for_path` about `/jobs/` and `/events/`. A listing the
+- `0066` teaches `seo_for_path` about `/jobs/` and `/events/`. A listing the
   anonymous reader cannot see is served `noindex` with a generic title and
   description, so a closed role or a private group's event never reaches a
   crawler through meta tags. An unknown listing is `noindex` with source
   `missing`.
-- `0067` replaces `sitemap_urls` and `sitemap_sections`. Events from private
+- `0066` replaces `sitemap_urls` and `sitemap_sections`. Events from private
   groups and cancelled events are left out, and jobs past their closing date
   are left out.
 - `/jobs/:slug` is a full role page: terms, skills, the apply dialog, an
@@ -1019,8 +1020,8 @@ also received the generic index metadata, which is a soft 404.
   budget) was rerun on the final tree. The lesson is recorded so the gate is
   rerun after the last file is written, not before.
 
-**What the operator does.** Apply `0067` through the normal database
-workflow. `0067` only replaces functions and adds two read functions, so it can
+**What the operator does.** Apply `0066` through the normal database
+workflow. `0066` only replaces functions and adds two read functions, so it can
 be applied in any window. No environment variable is added.
 
 **What this round did not do, stated plainly.**
@@ -1035,7 +1036,7 @@ be applied in any window. No environment variable is added.
 - **The ecosystem is not finished.** The feed ranking pipeline, the marketplace,
   the creator program, the Android app and the sibling sites are untouched.
 - **The body-emoji question in §12 is still open**, and so is the decision to
-  apply `0067` to production.
+  apply `0066` to production.
 
 ## 14. The emoji decision is reversed: users may send what they like
 
@@ -1069,7 +1070,111 @@ and 796 tests. `db:prove` is 22 of 22, with `t39` passing. The migration list in
 §2 no longer names `0066`. §12 remains as history of the earlier decision and is
 superseded by this section.
 
-**What the operator does.** Nothing new beyond §13: apply `0067` in the normal
+**What the operator does.** Nothing new beyond §13: apply `0066` in the normal
 database workflow. No reaction data needs converting, because none was converted
 in production.
+
+## 15. The ImgBB key left the bundle, and the build is verified under Node 20
+
+**What was wrong.** The deploy workflow made `VITE_IMGBB_API_KEY` a required
+build variable and compiled it into the browser bundle. The browser then called
+`api.imgbb.com` with that key in the URL whenever the edge endpoint was not
+reachable. ImgBB's key is a secret. Every visitor could read it from the
+JavaScript and spend the account's quota. The earlier documentation called it
+"public by design", which was wrong, and the code's own comments said the
+opposite. Section 14's reversal of the emoji rule did not touch this.
+
+**What changed.**
+
+- The client no longer reads `VITE_IMGBB_API_KEY`. `env.ts` has no ImgBB field.
+- `upload.ts` has no direct ImgBB transport. An ordinary picture (post, comment,
+  chat) goes through `POST /api/media/upload` or it is refused with
+  `media.errors.notConfigured`. A cover, a document or a voice note still goes
+  to Cloudinary directly, because its cloud name and unsigned preset are public
+  by design.
+- The deploy workflow no longer requires or passes the ImgBB key. The required
+  list is nine variables.
+- The content security policy no longer allows `api.imgbb.com` in `connect-src`.
+  The browser does not call that host now.
+- The ImgBB call, with the key in the query string and base64 in the `image`
+  field, lives only in `functions/_media.ts`, where the Function reads the key at
+  request time.
+- Tests that encoded a direct ImgBB call now assert that the call does not
+  happen. `t28` checks the Function for the prescribed call format and checks
+  that the browser module never names the ImgBB host.
+- `no-public-secret.test.ts` is new. It fails the build if a secret-named value
+  is read by the client, passed by the deploy workflow, or allowed by the policy.
+
+**Verification.** Node 20.20.2 (the version CI pins), run in this sandbox:
+
+- `npm run build` with no variables: exit 0, 13 routes prerendered.
+- `npm run build` with `VITE_IMGBB_API_KEY` set to a marker string: exit 0. The
+  marker occurs **0** times in `dist/`. Before this change it was compiled in.
+- `scripts/check-deploy-env.mjs` with the workflow's required list: exit 1 and
+  names every missing variable when none are set; exit 0 when all nine are set.
+  This is the gate that stopped the red deploy job, which is described in §16.
+- Vitest: 61 files, 800 tests. `db:prove`: 22 of 22. Typecheck for the app and
+  for Functions: clean. ESLint with `--max-warnings 0`: clean.
+
+**What the operator does, in this order.**
+
+1. Rotate the ImgBB API key at api.imgbb.com. The old key was in every bundle
+   built while `VITE_IMGBB_API_KEY` was a GitHub secret, and cannot be recalled.
+2. Set the new key as `IMGBB_API_KEY` under Cloudflare Pages → Settings →
+   Environment variables (encrypted).
+3. Delete the `VITE_IMGBB_API_KEY` GitHub secret, so no future build can pick it
+   up.
+4. Re-run **Deploy**, then check `GET /api/media/providers` returns
+   `"imgbb":true`. Until step 2 is done, ordinary member images are refused, and
+   the message says so.
+
+Until step 4 is done, posts with images will be refused on the live site. That
+is the honest state: the old behaviour was a published key, not a working
+feature.
+
+## 16. The red CI jobs
+
+Both red jobs on the branch failed at the same step, and the cause is one
+typecheck error. Verified from the run metadata and by reproducing the check.
+
+- **Deploy** (run 38149079432, head `29a8d84`), step "Build the member
+  site": failed. The step runs `npm run build`, which runs `tsc --noEmit` over
+  the test files. Reproduced at `29a8d84` in a temporary worktree: five errors
+  in `src/routes/listing-pages.test.tsx`, where a mock returned `null` for a
+  field typed `JobDetail | undefined`.
+- **Android** (run 38149076690, head `29a8d84`), job "Build the app", step
+  "Build the web application": failed for the same reason, because it runs the
+  same `npm run build`. Its later steps (shell typecheck, Gradle, signing,
+  release upload) were **skipped**, so they have not run on that commit. They
+  are not known to pass, and that is the open item for this part.
+
+**Fix.** `5aaea52` corrects the test helper. On the current tree `tsc --noEmit`
+is clean for the app and for Functions, and `npm run build` passes under Node 20
+both with no variables (the CI configuration) and with the deploy-style set. The
+deploy gate `scripts/check-deploy-env.mjs` is verified in §15.
+
+**Still unverified.** Whether a new push produces a green Deploy and a green
+Android run. Neither is claimed here until the checks on the new head commit
+report it. The Android Gradle steps have never run on this branch and need a
+run on the new head before anyone calls Android green.
+
+## 17. The listing migration is `0066`, and the number history is explained
+
+When §14 removed the emoji migration, the number `0066` became free and the
+queue had a gap: `0065` was followed by `0067`. The launch audit's check B-01,
+"Migrations are numbered without a gap", refused that, correctly.
+
+The listing migration (§§9–13) was written as `0067` and is renamed to `0066`
+with `git mv`, so its history follows the file. Nothing applied it: it has never
+been run against any database, so no recorded migration name changes. The
+references in `t39.mjs`, the header of the SQL file, and the operator steps in
+§§13 and 14 now say `0066`.
+
+**Two different files called `0066` appear in this document.** §§12 and 14 refer
+to the emoji migration, which was committed in `4aeacb7` and removed by §14. The
+listing migration, which is in the tree, is also `0066`, but only from this
+section onward. Where the document says `0066` before §17, it means the emoji
+migration, unless the sentence is about a listing or a sitemap.
+
+The next free number is `0067`.
 

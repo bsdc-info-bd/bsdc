@@ -14,7 +14,7 @@
 | `VITE_ONESIGNAL_APP_ID` | OneSignal app id (manual admin broadcasts only) |
 | `VITE_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
 | `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary unsigned upload preset |
-| `VITE_IMGBB_API_KEY` | imgbb upload key |
+| `IMGBB_API_KEY` | imgbb upload key. **Server secret only** (Pages Functions); never a `VITE_` build variable. |
 
 ### Server-only (Cloudflare Pages encrypted environment variables ONLY)
 

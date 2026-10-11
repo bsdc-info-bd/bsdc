@@ -1,5 +1,5 @@
 /**
- * Proof for 0067: a listing has a page, and the sitemap tells the truth.
+ * Proof for 0066: a listing has a page, and the sitemap tells the truth.
  *
  * The sitemap advertised /jobs/<slug> and /events/<slug>, but the app had no
  * such pages. This harness seeds one listing of each kind that a reader should
@@ -382,6 +382,6 @@ check(
   JSON.stringify(grants.rows[0]),
 );
 
-console.log(`\n${fails === 0 ? 'all' : fails} ${fails === 0 ? 'checks' : 'failed'} for 0067`);
+console.log(`\n${fails === 0 ? 'all' : fails} ${fails === 0 ? 'checks' : 'failed'} for 0066`);
 if (fails > 0) process.exitCode = 1;
 await db.close();

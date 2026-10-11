@@ -126,9 +126,17 @@ check(
   !/storage\/v1\/object\/media\//.test(source) && !/uploadToSupabase/.test(source),
   'new client uploads never send image bytes to Supabase Storage',
 );
+// ImgBB is called from the Function, which holds the key at request time. The
+// browser never calls ImgBB, so the key cannot be read out of the bundle.
+const edgeImgbb = readFileSync(EDGE_MEDIA_MODULE, 'utf8');
 check(
-  source.includes("body.append('image', base64)") && source.includes('api.imgbb.com/1/upload?key='),
-  'ordinary images reach ImgBB as base64 with the key in the URL',
+  edgeImgbb.includes("body.append('image', base64)") &&
+    edgeImgbb.includes('api.imgbb.com/1/upload?key='),
+  'ordinary images reach ImgBB from the Function as base64 with the key in the URL',
+);
+check(
+  !source.includes('api.imgbb.com'),
+  'the browser upload module never names the ImgBB host',
 );
 const contract = readFileSync(CONTRACT_MODULE, 'utf8');
 const edgeMedia = readFileSync(EDGE_MEDIA_MODULE, 'utf8');
