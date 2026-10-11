@@ -155,3 +155,12 @@ export function groupEventsByDay(
 
   return [...days.entries()].map(([day, list]) => ({ day, events: list }));
 }
+
+/** One event as its own page shows it: adds the description, the join link and the host. */
+export interface EventDetail extends CommunityEvent {
+  description: string;
+  joinUrl: string;
+  timezone: string;
+  isCancelled: boolean;
+  hostUid: string;
+}

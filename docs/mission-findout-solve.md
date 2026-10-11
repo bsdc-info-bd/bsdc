@@ -222,7 +222,7 @@ including the new `0063`.
 
 ### Migrations
 
-`0064`, `0065` and `0066` were added by the rounds recorded in §9, §10 and §12. Check the
+`0064`, `0065`, `0066` and `0067` were added by the rounds recorded in §9, §10, §12 and §13. Check the
 production ledger for `0046`–`0063` because some may have been applied manually;
 do not infer production state from the branch. In order, the migrations in this
 set are:
@@ -249,6 +249,7 @@ set are:
 0064_a_project_can_be_corrected.sql
 0065_a_private_page_is_not_a_page_for_crawlers.sql
 0066_a_reaction_is_a_name_not_a_picture.sql
+0067_a_listing_has_a_page_and_a_true_sitemap.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
@@ -949,3 +950,83 @@ rewrites existing reaction rows in place and then constrains the column, so it
 should be applied in a quiet window. Nothing else is required; the client that
 ships with this change sends words, and an older client still open in a browser
 will receive a `22023` for an emoji reaction and should be reloaded.
+
+## 13. A listing has a page, and the sitemap tells the truth
+
+**What was wrong.** The sitemap already advertised `/jobs/<slug>` for every open
+job and `/events/<slug>` for every upcoming event. The application had no such
+routes, so each of those entries was a 404 that search engines had been told to
+crawl. The same sitemap listed events hosted in private groups, which published
+the slugs of rooms that anonymous visitors cannot open, and it listed jobs past
+their closing date. A crawler asking for an unknown `/jobs/` or `/events/` path
+also received the generic index metadata, which is a soft 404.
+
+**What changed.**
+
+- `0067` adds `job_detail(p_slug)` and `event_detail(p_slug)`. Each applies the
+  same visibility rule as the row-level security policy for its table, and
+  returns the row together with the caller's own state: whether they have
+  applied, and whether they are going. The join link of an online event is
+  released only to people who said they are going, the host, and staff.
+- `0067` teaches `seo_for_path` about `/jobs/` and `/events/`. A listing the
+  anonymous reader cannot see is served `noindex` with a generic title and
+  description, so a closed role or a private group's event never reaches a
+  crawler through meta tags. An unknown listing is `noindex` with source
+  `missing`.
+- `0067` replaces `sitemap_urls` and `sitemap_sections`. Events from private
+  groups and cancelled events are left out, and jobs past their closing date
+  are left out.
+- `/jobs/:slug` is a full role page: terms, skills, the apply dialog, an
+  external apply link (only for http and https addresses), and `JobPosting`
+  structured data while the role is live. A role that is not live is `noindex`.
+- `/events/:slug` is a full event page: the time shown in the event's own time
+  zone, the caller's RSVP, the join link as described above, and clear states
+  for cancelled and ended events. Its structured data is `Event`, with the
+  location pointing at the event's own page, never at the join link.
+- The job board and the events list now link each title to its page. The job
+  board's structured data points each job at its own URL rather than at the
+  board.
+- `src/lib/listings/listing-schema.ts` holds the pure parts: the URL allowlist,
+  the live-role rule, both structured-data builders, and the zone-safe time
+  formatter. An unrecognised time zone falls back to Dhaka, because the zone is
+  stored as free text and an exception in render would blank the page.
+- Interface strings `jobs.detail.*` and `events.detail.*` exist in English and
+  Bengali.
+
+**Verification, at the commit that carries this section.**
+
+- `db:prove`: 23 of 23 harnesses. `t39` is new with 60 checks. It covers what an
+  anonymous visitor, a stranger, a group member, the host, the poster and a
+  signed-in applicant can read; the meta a crawler receives for open, expired,
+  closed, private, cancelled and missing listings; the exact sitemap lists; the
+  sitemap counts; and the grants (anonymous and authenticated may call the
+  detail reads, PUBLIC may not).
+- Unit tests: 61 files, 800 tests. The new `listing-schema.test.ts` (20 tests)
+  and `listing-pages.test.tsx` (19 tests) cover the URL allowlist, the expiry
+  boundary, the JobPosting date requirement, remote and on-site locations, the
+  salary units, the join-link gating, the cancelled and full states, and the
+  RSVP and apply flows.
+- Typecheck clean for the application and for `functions/`. ESLint clean at
+  `--max-warnings 0`. Prettier clean. Production build clean at 208 precache
+  entries and 13 prerendered routes. Launch audit 103 passed, 0 failed, 4 recorded.
+- The feature registry is regenerated: 1,867 counted features (was 1,852) and
+  1,700 translated strings per language (was 1,669).
+
+**What the operator does.** Apply `0066`, then `0067`, through the normal database
+workflow. `0067` only replaces functions and adds two read functions, so it can
+be applied in any window. No environment variable is added.
+
+**What this round did not do, stated plainly.**
+
+- **Gigs have no detail page.** `/freelance` lists gigs but a gig cannot be opened
+  on its own, and gigs are not in the sitemap. This is the next slice.
+- **Unknown paths outside the listing routes still receive index metadata.**
+  Only `/jobs/` and `/events/` were given the not-found treatment in this round.
+- **Nothing here has been seen in a real browser against live data.** The page
+  tests render each state with mocked data, and `t39` proves the database side.
+  Visual QA on a phone at the widths the brief names is still owed.
+- **The ecosystem is not finished.** The feed ranking pipeline, the marketplace,
+  the creator program, the Android app and the sibling sites are untouched.
+- **The body-emoji question in §12 is still open**, and so is the decision to
+  apply `0066` to production.
+

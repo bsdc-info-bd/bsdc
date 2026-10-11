@@ -1,9 +1,16 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
-import type { GigRow, JobBoardRow, PlaygroundSketchRow, ProjectRow } from '@/lib/supabase/types';
+import type {
+  GigRow,
+  JobBoardRow,
+  JobDetailRow,
+  PlaygroundSketchRow,
+  ProjectRow,
+} from '@/lib/supabase/types';
 import type {
   ApplicationStatus,
   Gig,
+  JobDetail,
   JobListing,
   Project,
   ProjectDetail,
@@ -75,6 +82,28 @@ export async function decideApplication(
 export async function recordJobView(jobId: string): Promise<void> {
   const { error } = await getSupabase().rpc('increment_job_view', { p_job_id: jobId });
   if (error) throw toDataError(error);
+}
+
+function toJobDetail(row: JobDetailRow): JobDetail {
+  return {
+    ...toJob(row),
+    description: row.description,
+    country: row.country,
+    applyUrl: row.apply_url,
+    status: row.status,
+    expiresAt: row.expires_at,
+    posterUid: row.poster_uid,
+  };
+}
+
+/** One job by slug. Null when the job is not open to this reader, which is the same answer as not existing. */
+export async function fetchJobDetail(slug: string): Promise<JobDetail | null> {
+  const { data, error } = await getSupabase()
+    .rpc('job_detail', { p_slug: slug })
+    .returns<JobDetailRow[]>();
+  if (error) throw toDataError(error);
+  const row = data?.[0];
+  return row ? toJobDetail(row) : null;
 }
 
 // -------------------------------- gigs --------------------------------------

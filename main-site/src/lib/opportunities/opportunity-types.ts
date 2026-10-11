@@ -240,3 +240,13 @@ export function buildSandboxDocument(language: SketchLanguage, code: string): st
     '<\\/script></body>',
   ].join('\n');
 }
+
+/** One job as its own page shows it: everything the board leaves out. */
+export interface JobDetail extends JobListing {
+  description: string;
+  country: string;
+  applyUrl: string;
+  status: ListingStatus;
+  expiresAt: string | null;
+  posterUid: string;
+}

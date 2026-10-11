@@ -3,6 +3,7 @@ import { toDataError } from '@/lib/supabase/errors';
 import type {
   ChannelRow,
   EventCalendarRow,
+  EventDetailRow,
   GroupDirectoryRow,
   GroupJoinRequestRow,
   GroupMemberRow,
@@ -12,6 +13,7 @@ import type {
 import type {
   Channel,
   CommunityEvent,
+  EventDetail,
   CommunityPage,
   Group,
   GroupMemberEntry,
@@ -275,6 +277,27 @@ export async function rsvpEvent(eventId: string, status: RsvpStatus): Promise<nu
   });
   if (error) throw toDataError(error);
   return typeof data === 'number' ? data : 0;
+}
+
+function toEventDetail(row: EventDetailRow): EventDetail {
+  return {
+    ...toEvent(row),
+    description: row.description,
+    joinUrl: row.join_url,
+    timezone: row.timezone,
+    isCancelled: row.is_cancelled,
+    hostUid: row.host_uid,
+  };
+}
+
+/** One event by slug. Null when the event is not visible to this reader. */
+export async function fetchEventDetail(slug: string): Promise<EventDetail | null> {
+  const { data, error } = await getSupabase()
+    .rpc('event_detail', { p_slug: slug })
+    .returns<EventDetailRow[]>();
+  if (error) throw toDataError(error);
+  const row = data?.[0];
+  return row ? toEventDetail(row) : null;
 }
 
 // --------------------------------- pages -------------------------------------

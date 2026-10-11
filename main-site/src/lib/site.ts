@@ -103,6 +103,16 @@ export function projectEditPath(slug: string): string {
   return `${projectPath(slug)}/edit`;
 }
 
+/** Job permalink: /jobs/slug. */
+export function jobPath(slug: string): string {
+  return `${ROUTES.jobs}/${encodeURIComponent(slug.trim())}`;
+}
+
+/** Event permalink: /events/slug. */
+export function eventPath(slug: string): string {
+  return `${ROUTES.events}/${encodeURIComponent(slug.trim())}`;
+}
+
 /** Product permalink: /shop/slug. */
 export function productPath(slug: string): string {
   return `/shop/${slug}`;

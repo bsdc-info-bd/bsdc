@@ -45,6 +45,7 @@ const HARNESSES = [
   ['t36.mjs', 'a project can be corrected, taken down, and shown with more than one picture'],
   ['t37.mjs', 'a private page is refused by the database as firmly as robots.txt promises'],
   ['t38.mjs', 'a reaction is a name: stored emoji become words, and the database refuses pictures'],
+  ['t39.mjs', 'a listing has a page, and the sitemap tells the truth: jobs and events'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

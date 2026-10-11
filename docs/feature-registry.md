@@ -10,22 +10,22 @@ Nothing is counted twice. A page is not also counted as the component that
 renders it; an RPC is not also counted as the policy that guards it; a test
 is not a feature.
 
-### Core — 1243
+### Core — 1258
 
 | Counted surface | Features |
 | --- | ---: |
-| Member-facing pages | 45 |
-| Member and public RPCs | 126 |
+| Member-facing pages | 47 |
+| Member and public RPCs | 128 |
 | Interface components | 43 |
-| Hooks, stores and selectors | 77 |
-| Domain rules in the member site | 661 |
+| Hooks, stores and selectors | 79 |
+| Domain rules in the member site | 670 |
 | Edge endpoints | 19 |
 | Stored shapes | 107 |
 | Enumerated states | 55 |
 | Integrity triggers | 61 |
 | Plugin flags | 32 |
 | Android shell rules | 17 |
-| **Subtotal** | **1243** |
+| **Subtotal** | **1258** |
 
 ### Administration — 239
 
@@ -48,7 +48,7 @@ is not a feature.
 | Database helper functions | 69 |
 | **Subtotal** | **370** |
 
-**Total counted features: 1852**
+**Total counted features: 1867**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
-Translated interface strings per language: **1669** (recorded, not counted as features).
+Translated interface strings per language: **1700** (recorded, not counted as features).

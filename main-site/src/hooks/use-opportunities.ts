@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   EMPTY_JOB_FILTERS,
   filterJobs,
   skillFacets,
   type Gig,
+  type JobDetail,
   type JobFilters,
   type JobListing,
   type Project,
@@ -386,5 +387,61 @@ export function usePlayground(): PlaygroundResult {
       await deleteMutation.mutateAsync(id);
     },
     isSaving: saveMutation.isPending,
+  };
+}
+
+export interface JobDetailResult {
+  job: JobDetail | null;
+  isLoading: boolean;
+  isError: boolean;
+  /** True when the reader may not see this job: closed, expired, or no such slug. */
+  isNotFound: boolean;
+  apply: (jobId: string, coverLetter: string) => Promise<void>;
+  isApplying: boolean;
+}
+
+/**
+ * One job page. Counts a view once per mount, and refreshes the board and the
+ * application state after an application is sent.
+ */
+export function useJobDetail(slug: string): JobDetailResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['job-detail', uid, slug],
+    queryFn: async () => (await repository()).fetchJobDetail(slug),
+    staleTime: 60_000,
+  });
+
+  const jobId = query.data?.id ?? null;
+  const counted = useRef<string | null>(null);
+  useEffect(() => {
+    if (jobId === null || counted.current === jobId) return;
+    counted.current = jobId;
+    // A view that fails to count is not worth an error on the page.
+    void repository()
+      .then((repo) => repo.recordJobView(jobId))
+      .catch(() => undefined);
+  }, [jobId]);
+
+  const mutation = useMutation({
+    mutationFn: async ({ jobId: target, coverLetter }: { jobId: string; coverLetter: string }) =>
+      (await repository()).applyToJob(target, coverLetter),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
+      void queryClient.invalidateQueries({ queryKey: ['job-board'] });
+    },
+  });
+
+  return {
+    job: query.data ?? null,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isNotFound: !query.isLoading && !query.isError && query.data === null,
+    apply: async (target, coverLetter) => {
+      await mutation.mutateAsync({ jobId: target, coverLetter });
+    },
+    isApplying: mutation.isPending,
   };
 }
