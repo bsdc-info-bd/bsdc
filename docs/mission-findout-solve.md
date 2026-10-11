@@ -1153,28 +1153,16 @@ is clean for the app and for Functions, and `npm run build` passes under Node 20
 both with no variables (the CI configuration) and with the deploy-style set. The
 deploy gate `scripts/check-deploy-env.mjs` is verified in §15.
 
-**Still unverified.** Whether a new push produces a green Deploy and a green
-Android run. Neither is claimed here until the checks on the new head commit
-report it. The Android Gradle steps have never run on this branch and need a
-run on the new head before anyone calls Android green.
+**Result on head `8b175b6`** (verified with `gh pr checks 10` and `gh api`):
+35 checks pass and 1 is skipped (`Apply to production`, which runs only on the
+main branch). That includes CI (every app's quality job, the secret scan, the
+database schema build), Database, Deploy (`main-site` built and deployed to the
+preview environment), and Android.
 
-## 17. The listing migration is `0066`, and the number history is explained
-
-When §14 removed the emoji migration, the number `0066` became free and the
-queue had a gap: `0065` was followed by `0067`. The launch audit's check B-01,
-"Migrations are numbered without a gap", refused that, correctly.
-
-The listing migration (§§9–13) was written as `0067` and is renamed to `0066`
-with `git mv`, so its history follows the file. Nothing applied it: it has never
-been run against any database, so no recorded migration name changes. The
-references in `t39.mjs`, the header of the SQL file, and the operator steps in
-§§13 and 14 now say `0066`.
-
-**Two different files called `0066` appear in this document.** §§12 and 14 refer
-to the emoji migration, which was committed in `4aeacb7` and removed by §14. The
-listing migration, which is in the tree, is also `0066`, but only from this
-section onward. Where the document says `0066` before §17, it means the emoji
-migration, unless the sentence is about a listing or a sitemap.
-
-The next free number is `0067`.
-
+Within Android, the debug APK path ran: the web build, the shell check, the
+native project generation and configuration, the manifest check, the debug APK
+build, and the debug APK upload all succeeded. **Not verified:** the release
+path. Decoding the signing key, the placeholder-Firebase refusal, the signed
+release build, the fingerprint report, and attaching the build to a release were
+all **skipped** on this branch push, so a signed release has not been produced
+or checked from this branch.
