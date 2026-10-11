@@ -1011,6 +1011,14 @@ also received the generic index metadata, which is a soft 404.
   entries and 13 prerendered routes. Launch audit 103 passed, 0 failed, 4 recorded.
 - The feature registry is regenerated: 1,867 counted features (was 1,852) and
   1,700 translated strings per language (was 1,669).
+- The first push of this change failed the Deploy build for `main-site`. The
+  build runs `tsc --noEmit`, which includes test files, and a helper in the new
+  page test had a type error. Typecheck and lint had been run before that test
+  file existed, and the build had been run before it too. The helper is fixed,
+  and every gate (typecheck for the app and functions, lint, format, 800 unit
+  tests, the CI build with and without the deploy variables, and the bundle
+  budget) was rerun on the final tree. The lesson is recorded so the gate is
+  rerun after the last file is written, not before.
 
 **What the operator does.** Apply `0066`, then `0067`, through the normal database
 workflow. `0067` only replaces functions and adds two read functions, so it can

@@ -85,7 +85,7 @@ function event(overrides: Partial<EventDetail> = {}): EventDetail {
   };
 }
 
-function jobState(overrides: Partial<ReturnType<typeof jobReturn>> = {}) {
+function jobState(overrides: Record<string, unknown> = {}) {
   return { ...jobReturn(), ...overrides };
 }
 function jobReturn() {
@@ -99,7 +99,7 @@ function jobReturn() {
   };
 }
 
-function eventState(overrides: Partial<ReturnType<typeof eventReturn>> = {}) {
+function eventState(overrides: Record<string, unknown> = {}) {
   return { ...eventReturn(), ...overrides };
 }
 function eventReturn() {
