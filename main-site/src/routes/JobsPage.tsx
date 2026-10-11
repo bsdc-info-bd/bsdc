@@ -1,6 +1,7 @@
 import { Briefcase, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -26,7 +27,7 @@ import {
   type WorkMode,
 } from '@/lib/opportunities/opportunity-types';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
-import { ROUTES, SITE } from '@/lib/site';
+import { ROUTES, SITE, jobPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -70,7 +71,7 @@ export default function JobsPage() {
             '@type': 'Place',
             address: { '@type': 'PostalAddress', addressLocality: job.city, addressCountry: 'BD' },
           },
-          url: `${SITE.url}${ROUTES.jobs}`,
+          url: `${SITE.url}${jobPath(job.slug)}`,
         }))}
       />
 
@@ -158,7 +159,11 @@ export default function JobsPage() {
               <Card as="li" key={job.id}>
                 <div className="flex flex-wrap items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <h2 className="text-lg font-semibold">{job.title}</h2>
+                    <h2 className="text-lg font-semibold">
+                      <Link to={jobPath(job.slug)} className="hover:underline">
+                        {job.title}
+                      </Link>
+                    </h2>
                     <p className="mt-1 text-sm text-muted">{job.company}</p>
                     <p className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
                       <span className="inline-flex items-center gap-1">

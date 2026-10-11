@@ -33,10 +33,14 @@ const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
 const CreatePage = lazy(() => import('@/routes/CreatePage'));
 const GroupPage = lazy(() => import('@/routes/GroupPage'));
 const EventsPage = lazy(() => import('@/routes/EventsPage'));
+const EventPage = lazy(() => import('@/routes/EventPage'));
 const JobsPage = lazy(() => import('@/routes/JobsPage'));
+const JobPage = lazy(() => import('@/routes/JobPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
+const GigPage = lazy(() => import('@/routes/GigPage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
+const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 const SearchPage = lazy(() => import('@/routes/SearchPage'));
 const ShopPage = lazy(() => import('@/routes/ShopPage'));
@@ -101,6 +105,14 @@ const router = createBrowserRouter([
           // project, a group. Each table already had a policy for its author;
           // what was missing was the form.
           { path: ROUTES.create, element: withSuspense(<CreatePage />) },
+          // The owner's editor for a published project. Membership is required
+          // to reach it and ownership is checked again inside, because a
+          // stranger who arrives from a shared link should be told plainly
+          // rather than handed a form that refuses on submit.
+          {
+            path: `${ROUTES.projects}/:slug/edit`,
+            element: withSuspense(<ProjectEditPage />),
+          },
           // The same composer, opened on an existing post. The page loads the
           // post and refuses to show it to anybody but its author, and the
           // database refuses the write besides.
@@ -132,10 +144,13 @@ const router = createBrowserRouter([
       { path: ROUTES.groups, element: withSuspense(<GroupsPage />) },
       { path: '/g/:slug', element: withSuspense(<GroupPage />) },
       { path: ROUTES.events, element: withSuspense(<EventsPage />) },
+      { path: `${ROUTES.events}/:slug`, element: withSuspense(<EventPage />) },
 
       // Opportunity surfaces: public to read, gated to act on.
       { path: ROUTES.jobs, element: withSuspense(<JobsPage />) },
+      { path: `${ROUTES.jobs}/:slug`, element: withSuspense(<JobPage />) },
       { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
+      { path: `${ROUTES.freelance}/:slug`, element: withSuspense(<GigPage />) },
       { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
       { path: `${ROUTES.projects}/:slug`, element: withSuspense(<ProjectPage />) },
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },

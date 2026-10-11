@@ -1,7 +1,21 @@
-import { ArrowLeft, CalendarDays, Github, Globe2, Rocket, Star, UsersRound } from 'lucide-react';
+import {
+  ArrowLeft,
+  CalendarDays,
+  Github,
+  Globe2,
+  Pencil,
+  Rocket,
+  Star,
+  Trash2,
+  UsersRound,
+} from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { useNavigate, Link, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { MediaImage } from '@/components/media/MediaImage';
+import { MediaGallery } from '@/components/media/MediaGallery';
+import { toGalleryItems } from '@/lib/media/gallery-items';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -12,12 +26,13 @@ import {
   EmptyState,
   ExternalLink,
   LinkButton,
+  Modal,
   PageSkeleton,
 } from '@/design-system';
-import { useProject } from '@/hooks/use-opportunities';
+import { useProject, useProjectOwnerActions } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import { cloudinaryWide } from '@/lib/storage/upload';
-import { profilePath, projectPath, ROUTES, SITE } from '@/lib/site';
+import { profilePath, projectEditPath, projectPath, ROUTES, SITE } from '@/lib/site';
 import { isConfigured } from '@/lib/env';
 import { useAuthStore, selectIsSignedIn } from '@/store/auth-store';
 
@@ -29,6 +44,26 @@ export default function ProjectPage() {
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const detail = useProject(slug);
+  const navigate = useNavigate();
+  const ownerActions = useProjectOwnerActions();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  async function takeDown(projectId: string) {
+    try {
+      await ownerActions.remove(projectId);
+      setConfirmingDelete(false);
+      toast.success(t('projects.deleted'));
+      navigate(ROUTES.projects);
+    } catch {
+      // Ownership is enforced by the database, so a refusal means this project
+      // is not the caller's or is already gone. Either way the member is told
+      // plainly and the page is re-read rather than left showing a project that
+      // is no longer theirs.
+      setConfirmingDelete(false);
+      toast.error(t('projects.errors.notYours'));
+      void detail.refetch();
+    }
+  }
 
   if (!isConfigured.supabase) {
     return (
@@ -133,23 +168,51 @@ export default function ProjectPage() {
                     <p className="mt-2 text-base leading-6 text-muted">{project.tagline}</p>
                   ) : null}
                 </div>
-                <Button
-                  variant={project.starred ? 'secondary' : 'outline'}
-                  size="md"
-                  disabled={!isSignedIn || detail.isStarring}
-                  aria-pressed={project.starred}
-                  aria-label={t(project.starred ? 'projects.unstar' : 'projects.star')}
-                  iconStart={
-                    <Star
-                      size={16}
-                      aria-hidden="true"
-                      className={project.starred ? 'fill-current text-green-700' : undefined}
-                    />
-                  }
-                  onClick={detail.star}
-                >
-                  {formatNumber(project.stars, language)}
-                </Button>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Button
+                    variant={project.starred ? 'secondary' : 'outline'}
+                    size="md"
+                    disabled={!isSignedIn || detail.isStarring}
+                    aria-pressed={project.starred}
+                    aria-label={t(project.starred ? 'projects.unstar' : 'projects.star')}
+                    iconStart={
+                      <Star
+                        size={16}
+                        aria-hidden="true"
+                        className={project.starred ? 'fill-current text-green-700' : undefined}
+                      />
+                    }
+                    onClick={detail.star}
+                  >
+                    {formatNumber(project.stars, language)}
+                  </Button>
+
+                  {/* Offered only to the owner. The database refuses anybody
+                      else regardless; not showing the control means a stranger
+                      is never invited to press something that will fail. */}
+                  {project.isOwner ? (
+                    <>
+                      <LinkButton
+                        to={projectEditPath(project.slug)}
+                        variant="outline"
+                        size="md"
+                        iconStart={<Pencil size={16} />}
+                      >
+                        {t('projects.edit')}
+                      </LinkButton>
+                      <Button
+                        variant="ghost"
+                        size="md"
+                        iconStart={<Trash2 size={16} />}
+                        onClick={() => {
+                          setConfirmingDelete(true);
+                        }}
+                      >
+                        {t('projects.delete')}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
               </header>
 
               {project.owner ? (
@@ -193,6 +256,22 @@ export default function ProjectPage() {
                   {project.description}
                 </p>
               </section>
+
+              {project.screenshots.length > 0 ? (
+                <section aria-labelledby="project-screenshots">
+                  <h2 id="project-screenshots" className="text-lg font-semibold">
+                    {t('projects.screenshotsHeading')}
+                  </h2>
+                  {/* The same gallery a post uses, so a project's pictures get
+                      the same arrangement, the same lightbox and the same
+                      accessible failure state when one cannot be fetched. */}
+                  <MediaGallery
+                    items={toGalleryItems(project.screenshots)}
+                    label={t('projects.screenshotsHeading')}
+                    className="mt-3"
+                  />
+                </section>
+              ) : null}
 
               {project.tech.length > 0 ? (
                 <section aria-labelledby="project-tech">
@@ -277,6 +356,38 @@ export default function ProjectPage() {
           </Card>
         </div>
       </article>
+
+      <Modal
+        open={confirmingDelete}
+        onClose={() => {
+          setConfirmingDelete(false);
+        }}
+        title={t('projects.deleteTitle')}
+        closeLabel={t('common.close')}
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setConfirmingDelete(false);
+              }}
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              loading={ownerActions.isRemoving}
+              onClick={() => {
+                void takeDown(project.id);
+              }}
+            >
+              {t('projects.deleteConfirm')}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm">{t('projects.deleteBody')}</p>
+      </Modal>
     </>
   );
 }

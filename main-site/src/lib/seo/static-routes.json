@@ -132,20 +132,26 @@
       "type": "website"
     }
   ],
+  "disallowComment": "Every path here is answered `noindex,nofollow` by the default branch of public.seo_for_path, and scripts/db-prove/t37.mjs fails if the two lists drift. An entry holding an asterisk is a pattern rather than a prefix: `/*/*/edit` is any record's editor, and needs three segments because a member may publish a project whose slug is `edit`, making `/projects/edit` a real permalink that must stay crawlable.",
   "disallow": [
     "/messages",
     "/settings",
     "/notifications",
     "/bookmarks",
+    "/trash",
     "/history",
+    "/ads",
     "/vendor",
     "/checkout",
     "/cart",
     "/orders",
     "/compose",
+    "/create",
     "/onboarding",
     "/admin",
+    "/offline",
     "/api",
-    "/auth"
+    "/auth",
+    "/*/*/edit"
   ]
 }

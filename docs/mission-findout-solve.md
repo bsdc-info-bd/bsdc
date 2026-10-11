@@ -21,6 +21,10 @@ harness.
 6. [The production migration failure](#6-the-round-after-database-apply-to-production-failed-i-have-manually-did-it)
 7. [Images and the project system](#7-the-round-after-post-images-are-broken-and-projects-have-no-page)
 8. [Post-image upload completes but the post has no image](#8-the-post-image-upload-completes-but-the-published-post-has-no-image)
+9. [The same two reports, against a build that already had the fix](#9-the-same-two-reports-against-a-build-that-already-had-the-fix)
+10. [What a crawler was told about pages that are not for crawlers](#10-what-a-crawler-was-told-about-pages-that-are-not-for-crawlers)
+11. [One cover control, and an author who could not change their own cover](#11-one-cover-control-and-an-author-who-could-not-change-their-own-cover)
+12. [A reaction is a name, not a picture](#12-a-reaction-is-a-name-not-a-picture)
 
 ---
 
@@ -218,9 +222,10 @@ including the new `0063`.
 
 ### Migrations
 
-`0063` is newly added in this round. Check the production ledger for `0046`–`0062`
-because some may have been applied manually; do not infer production state from
-the branch. In order, the migrations in this set are:
+`0064`, `0065` and `0066` were added by the rounds recorded in §9, §10 and §13. Check the
+production ledger for `0046`–`0063` because some may have been applied manually;
+do not infer production state from the branch. In order, the migrations in this
+set are:
 
 ```
 0046_maintenance_is_not_a_public_endpoint.sql
@@ -241,12 +246,19 @@ the branch. In order, the migrations in this set are:
 0061_the_people_worth_following_next.sql
 0062_changing_a_handle_is_not_claiming_one.sql
 0063_projects_have_a_home_to_be_found.sql
+0064_a_project_can_be_corrected.sql
+0065_a_private_page_is_not_a_page_for_crawlers.sql
+0066_a_listing_has_a_page_and_a_true_sitemap.sql
 ```
 
 They are safe to apply in one go and each is idempotent — `t24` applies
-`0046`–`0063` three times over against PGlite, and `t21` builds one **without**
-`0051` to prove `0058` survives a deployment that is behind. `0063` replaces
-project SEO and sitemap functions; it does not move or restore stored image bytes.
+`0046`–`0066` three times over against PGlite, and `t21` builds one **without**
+`0051` to prove `0058` survives a deployment that is behind. `0063` and `0065`
+replace the project SEO and sitemap functions in place; neither moves or restores
+stored image bytes. `0064` adds the `project_media` join and grants update on it
+per column, following the shape `0042` exists to be followed — a table-level
+`grant update` with a column-level `revoke` afterwards protects nothing, because
+the grant already covers every column and the revoke cannot subtract from it.
 Two earlier migrations change behaviour worth knowing before applying: `0059`
 removes an unused grant, and `0062` makes a second handle change wait thirty days.
 
@@ -554,3 +566,603 @@ passed, changed files pass Prettier, and the production build passed (**200**
 precache entries, **13** prerendered routes). GitHub's build, schema-from-nothing,
 Cloudflare Pages, app-quality, and Secret scan checks also passed; production apply
 was skipped by design. PR #9 remains open for owner review and merge.
+
+---
+
+## 9. The same two reports, against a build that already had the fix
+
+The two reports arrived again, in the same words: post images going to Supabase
+Storage and not showing on the post page; projects with no page of their own, no
+cover upload and no multi-step flow. Both had been the subject of §7 and §8, and
+both fixes were merged into `main` at `e20f2da`.
+
+### What the review actually found
+
+The first thing checked was whether the merged code did what §7 claimed. It did.
+`resolveProvider()` routes an ordinary image to ImgBB and an important one to
+Cloudinary and returns null rather than crossing hosts; there is no Supabase
+Storage byte-upload path left anywhere in the repository; `POST_SELECT` carries
+`post_media` into every read that renders a post, so the feed, the permalink,
+bookmarks and a tag archive all receive the same gallery; `toPost()` drops a row
+whose join came back empty instead of emitting `src=""`; `PostCard` and
+`PostPage` both render it; and `/projects/:slug` was a real route with a real
+cover, a real fetch by slug and `SoftwareSourceCode` JSON-LD.
+
+So the code was not the problem, and saying "already fixed" would have been both
+true and useless. What the review found instead were three things that were
+genuinely still wrong, and that between them explain a production site behaving
+as though nothing had been done.
+
+**1. The upload still depended on a build nobody had rebuilt.** Both hosts' keys
+were read from `import.meta.env`, so they were compiled into the JavaScript.
+§7's own operator list ends with "changing a Pages variable without rebuilding
+does not change the shipped JavaScript" — which means that on the deployed site,
+where those variables were set in the dashboard and no rebuild followed, every
+upload still answered `media.errors.notConfigured`. On a phone that is a toast
+you miss, and what is left on screen is a composer that appears not to work.
+
+**2. The ImgBB key was published.** `VITE_IMGBB_API_KEY` is a secret, not a
+publishable key like the Cloudinary pair. Shipping it in the bundle hands
+anybody the ability to spend that account's quota and fill it with whatever they
+like. The repository had documented this as "public by design", which is true of
+Cloudinary's unsigned preset and not true of an ImgBB API key.
+
+**3. Projects were write-once.** `public.projects` has carried an owner-update
+and an owner-delete policy since migration 0014, with the table grants to match.
+Nothing in the application ever offered either. A published project could not be
+corrected, could not be taken down, and held exactly one picture: a cover and no
+gallery, so a member could show a card and never the product.
+
+### What changed
+
+- **Uploads go through the site's own edge.** `POST /api/media/upload` verifies
+  the caller's Firebase ID token with Web Crypto against Google's published
+  secure-token certificates, validates the file, and uploads it to the host its
+  purpose requires — reading `IMGBB_API_KEY`, `CLOUDINARY_CLOUD_NAME` and
+  `CLOUDINARY_UNSIGNED_PRESET` from `context.env` at *request* time. Setting one
+  in the dashboard now takes effect on the next upload, with no rebuild. The key
+  never reaches a browser. `GET /api/media/providers` answers with three
+  booleans and no secret, so the client can plan instead of guess.
+- **One routing table, two readers.** `src/lib/storage/media-contract.ts` holds
+  the kinds, the limits, the purposes and `chooseProvider()`, and has no imports
+  at all, so both the browser and the edge read the same answer. A router
+  duplicated across a network boundary is a router that eventually disagrees
+  with itself, and that disagreement looks exactly like a picture uploaded
+  somewhere the reader cannot see it. `t28` now asserts the edge imports the
+  contract rather than restating it.
+- **The direct transport survives as a fallback, and only as one.**
+  `planUpload()` is pure and decides the route before a byte moves. A refusal
+  *from the host* surfaces its own reason and is never retried through the other
+  transport, because that would upload the same picture twice; only a missing
+  endpoint — 404, or a 200 whose body is the application shell, which is what a
+  static host answers — falls back. The capability probe is warmed while the
+  browser is idle, so the first attach does not pay for it.
+- **Projects became manageable.** `/projects/:slug/edit` opens the same
+  five-step flow on what is already published, seeded from the row, with the
+  gallery seeded as attached so saving keeps the pictures that are already
+  there. The owner gets Edit and Delete on the project page, behind a
+  confirmation. `updateProject()` deliberately does not write the slug: it is
+  the permalink the sitemap and every shared link point at. `deleteProject()`
+  reads the deleted row count, because row level security makes a stranger's
+  delete succeed against zero rows — reporting that as a save would have sent
+  the author back to a page showing the old values with a "saved" toast.
+- **A project has a gallery.** Migration `0064` adds `project_media`, the same
+  join onto `media_assets` that `post_media` is, with the same rule that the
+  bytes live at the external host and only the reference lives here. Its update
+  privilege follows the shape 0042 established and exists to be followed:
+  granted per column, `("position", alt_text)`, never at table level. Granting
+  the table and revoking the two foreign keys afterwards — the obvious reading,
+  and the one this migration was first written with — protects nothing at all,
+  because a table-level grant covers every column and a column-level revoke
+  cannot subtract from it. `t36` caught that on its first run, which is the
+  argument for proving a migration against a real engine before deploying it.
+- **The publishing race is closed at the source.** The gallery travels as a
+  mutation variable captured in the click handler, not read from a trailing
+  effect, and Publish is held while an upload is still in flight. A picture on
+  its way up is a picture that save would drop, and on an edit dropping one
+  deletes a screenshot the project already had.
+
+### Verification
+
+Local, on this commit: Vitest **56 files / 735 tests**; `db:prove` **20/20**
+harnesses, including the new `t36` (14 checks) and `t28` grown from 39 to 43;
+typecheck clean for both the app and `functions/`; ESLint clean at
+`--max-warnings 0`; Prettier clean; production build clean (**203** precache
+entries, **13** prerendered routes); launch audit **103 passed / 0 failed / 4
+recorded**; counted features **1851**.
+
+Two of those numbers moved because a check was wrong rather than because code
+was. `t28` asserted on the text of `upload.ts` that it contained
+`'project-cover'`; the routing table had moved to the contract module, so the
+assertion was reading the wrong file, and it now reads both. The launch audit's
+`any`-type rule matched the substring inside two of this round's own comments
+("as anybody", "if it has any"); the comments were reworded rather than the rule
+weakened.
+
+### What the operator does now
+
+1. Apply `0064` with the normal database workflow. It creates one table, its
+   index, two policies and four grants, and is idempotent — `t24` applies it
+   three times over.
+2. Set the three media variables in Cloudflare Pages → Settings → Environment
+   variables, as **request-time** secrets this time: `IMGBB_API_KEY`
+   (encrypted), `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_UNSIGNED_PRESET`. Confirm
+   `FB_PROJECT_ID` is set, or the endpoint cannot verify who is uploading and
+   answers 401. No rebuild is needed for these to take effect.
+3. Check what the deployment believes: `curl -s
+   https://www.bsdc.info.bd/api/media/providers` should answer
+   `{"proxy":true,"imgbb":true,"cloudinary":true}`. An HTML page instead of JSON
+   means the Functions are not deployed and only the bundle fallback exists.
+4. Deploy this build. Then attach a picture to a post and publish one project
+   through all five steps. `media_assets.provider` should read `imgbb` for the
+   post image and `cloudinary` for the cover and the screenshots; no new row
+   should say `supabase`.
+5. Once the proxy is confirmed working, **remove the three `VITE_` media
+   variables and rotate the ImgBB key.** That key has been in a public bundle,
+   and rotating it is the only thing that un-publishes it.
+6. For projects published before this round: they were never editable, so any
+   that need correcting can now be corrected from `/projects/<slug>/edit`. None
+   are backfilled with a gallery automatically; the owner adds screenshots.
+
+Still the owner's to do, and unchanged from §7: the high-risk credentials pasted
+into the conversation (database password, Cloudinary API secret, OneSignal REST
+key) should be rotated before production use. None were added to code.
+
+---
+
+## 10. What a crawler was told about pages that are not for crawlers
+
+**Found while** checking whether the editor added in §9 — `/projects/<slug>/edit`
+— was safe to leave in an index. It was not, and it was not the only thing that
+was not.
+
+**Two lists decided which pages a search index may hold, and they had drifted
+apart.** `robots.txt` is built at deploy time from the `disallow` array in
+`src/lib/seo/static-routes.json`, and carried fourteen prefixes. The `<meta
+name="robots">` a crawler actually reads is decided by the default branch of
+`public.seo_for_path`, which `functions/_middleware.ts` calls for every path,
+and it noindexed six of them: `messages`, `settings`, `notifications`,
+`bookmarks`, `vendor`, `auth`.
+
+Everything in the first list but not the second was served to a crawler as
+`index,follow` **and** was `Disallow`ed at the same time. That is the one
+combination reliably capable of putting a bare, contentless URL in a search
+index: `robots.txt` keeps the crawler away from the only page that could have
+told it to go away. Probed against a real engine, `/compose` and `/cart` both
+answered `index`.
+
+The new editor answered `index` too. It resolves to no project — its slug
+arrives as `<slug>/edit`, which matches no row — so it fell through to the
+default branch and was handed the site's generic description, a canonical
+pointing at itself, and permission to be indexed. One empty indexable copy of
+every permalink on the platform, for each project published.
+
+**Auditing every route behind `RequireAuth` against both lists found three more
+pages in neither:** `/trash`, a member's deleted posts; `/ads`, a vendor's ad
+console; and `/offline`, the shell a service worker shows with no network, whose
+entire text is that there is no network. All three were indexable with the
+generic description attached.
+
+`/verify` was left alone deliberately, because it looks like a member route and
+is not. `ROUTES.verify` is `/auth/verify`; `/verify` is
+`ROUTES.verifyCertificate`, the public page that checks whether a certificate or
+a notice is genuine, and the build prerenders it. Disallowing the word would
+have removed a real public page from the index while leaving the private one
+exactly where it was.
+
+**Two ways this rule goes wrong by accident, both of which the first attempt
+did:**
+
+- A prefix that names an area matched every word beginning with those letters.
+  The old pattern was `^/(…|auth)` with no boundary, so it also caught
+  `/author/…`. A rule that noindexes by accident is as much a defect as one that
+  misses. The prefixes are now anchored with `(/|$)`.
+- An editor pattern written `/*/edit` cannot tell an editor from a permalink. A
+  member is free to publish a project whose slug is `edit`, so `/projects/edit`
+  is a real permalink that must stay crawlable, while `/projects/edit/edit` is
+  that project's editor and must not. Three segments are needed, not two, and
+  `^/[^/]+/[^/]+/edit$` reads the same way in SQL and in TypeScript.
+
+**What changed.** Migration `0065` replaces `seo_for_path` with its signature and
+grants unchanged. `static-routes.json` gains `/create`, `/trash`, `/ads`,
+`/offline` and the editor pattern, and `isPrivatePath()` in `src/lib/seo/engine.ts`
+learned to read a pattern as well as a prefix, so a browser and a crawler are
+told the same thing about the same URL.
+
+**How it is proved.** `scripts/db-prove/t37.mjs` does not restate either list. It
+reads the JSON that `robots.txt` and the browser-side engine are built from and
+asks the database the same question about every entry in it, then checks the two
+cases that break by accident: a project slugged `edit` keeps its crawlable
+permalink while its own editor does not, and `/author/raha`, `/authentic-tools`,
+`/createbridge` and `/cartography` stay indexable because a prefix names an area.
+It also asserts the live sitemap lists projects as permalinks and never advertises
+an editor. 53 checks. Adding a private area to one list and forgetting the other
+now fails here, which is the only reason the two can be allowed to live in two
+places at all. `src/lib/seo/engine.test.ts` pins the TypeScript half to the same
+wording.
+
+**What the operator does.** Apply `0065`. It replaces one function in place and
+is re-runnable — `t24` applies it three times over. Nothing is backfilled and
+nothing is deleted; a URL already in an index leaves it on Google's next crawl,
+which is why the `noindex` is served rather than only `Disallow`ed.
+
+---
+
+## 11. One cover control, and an author who could not change their own cover
+
+**Found while** giving events a cover. An event asked for a *link* to a picture
+rather than a picture: `create.fields.coverUrl`, an `<input type="url">`. On a
+phone that means finding an image, hosting it somewhere else, copying the
+address and pasting it back into a form — and the address could point at
+anything, including a host that later deletes it. Posts and projects had real
+uploads. Events were the one listing type never given one.
+
+**The routing for it already existed and nothing used it.** `media-contract.ts`
+declares a `'cover'` purpose and lists it among `CLOUDINARY_PURPOSES`, so a cover
+is an important image and goes to Cloudinary. Grep for `purpose: '` across the
+application returned six call sites and not one of them said `'cover'`. The
+decision had been made and never wired up.
+
+**What changed.** Two pieces, extracted rather than copied:
+
+- `src/components/media/CoverPicker.tsx` — the control. It takes its wording as
+  a `labels` object from the surface that owns it, so a project's cover step
+  keeps its own heading while the markup exists once. A second copy would be a
+  second place for the file input to lose its accessible name, or for a preview
+  to start trusting a URL the database has not recorded yet.
+- `src/components/media/use-cover-upload.ts` — the upload semantics. Validate,
+  preview from the local bytes at once, and move the bytes only when the member
+  commits: a cover belongs to a form that may never be submitted, and somebody
+  who abandons half a project should not leave a picture at a host they were
+  never told about. The completed upload is retained across a retry, so a slow
+  phone whose database briefly refused a row does not send the same picture
+  twice to get the row it was already owed; and it refuses to hand back a URL
+  the database has no `media_assets` row for.
+
+Three call sites now use them: the project wizard's cover step, the project
+editor, and the event form. Two independent copies of the prepare-once logic —
+one in `CreatePage.tsx`, one in `ProjectEditPage.tsx` — became one hook. The
+hook decides no routing of its own; it passes its `purpose` to the same contract
+the browser and the edge both read.
+
+**The bug that fell out of composing them.** On the editor, the preview falls
+back to the cover that is already published, so an author sees their own picture.
+But both buttons in that markup required a *chosen file* — the replace button
+because it only rendered beside a file, the remove button because it lived in the
+same caption. An author correcting a project therefore looked at their own cover
+with no button that did anything, and had no way to change it or take it away.
+They could add a picture; they could not replace or remove one.
+
+The control now knows the difference between the two states. With a file chosen,
+the caption names the file and removing it puts the form back to no picture. With
+the published cover showing, the caption says "Current cover", and removing it
+drops it from the record — which writes an empty `cover_url`, a column the owner
+has been allowed to write since `0042`, and which `seo_for_path` already falls
+back from to the site's own open-graph image. Removing the replacement still puts
+the published cover back rather than deleting it, which is the distinction a
+member cannot be expected to guess at.
+
+**Words.** `create.fields.coverUrl` is gone. The cover's wording moved to
+`create.cover.*` and is shared by both surfaces, in Bangla and English, with one
+new string for the published state. `src/test/i18n.test.ts` — which walks every
+non-test source file and requires every `t()` literal to exist in both bundles —
+named all seven references that had to move before any of them were moved.
+
+**How it is proved.** `CoverPicker.test.tsx` (10 tests) covers the accessible
+name of the input, the absence of any field to paste an address into, the accept
+list matching what the contract routes, the local preview, progress appearing
+only while bytes move, and both remove meanings including the one that must not
+delete a published cover. `use-cover-upload.test.tsx` (10 tests) covers the
+refusal of a document, the purpose that reaches the transport, `null` when
+nothing was chosen, uploading once across a retried publish, recording again
+without uploading again after a refused row, a fresh upload for a genuinely
+different picture, revoking the object URL it made, and `reset` leaving nothing
+behind for the next listing.
+
+**Verified.** Vitest 58 files / 757 tests (was 56 / 735). `db:prove` 21 of 21
+harnesses, the new `t37` at 53 checks. Typecheck clean for the application and
+for `functions/`. ESLint clean at `--max-warnings 0`. Prettier clean. Production
+build clean at 203 precache entries and 13 prerendered routes, with the generated
+`robots.txt` carrying all nineteen rules including `Disallow: /*/*/edit`. Initial
+JavaScript 226 KB gzip against the 250 KB budget — unchanged, because the new
+hook imports the transport dynamically and only from pages that are themselves
+loaded on demand. Launch audit 103 passed / 0 failed / 4 recorded. Counted
+features 1852, translated strings 1671 per language.
+
+The migration queue's next number was **`0067`** when this round was written. §8's
+record says `0064` and was right when it was written; `0064` through `0066` have
+since been taken (see §17 for why the listing migration is `0066`).
+
+
+---
+
+## 12. A reaction is a name, not a picture
+
+**Found while** checking the product against the owner's standing rule that
+there is no emoji anywhere and every symbol is an SVG. The rule was broken in two
+places, and one of them was in the database.
+
+**The messenger stored emoji.** `public.message_reactions.reaction` was a text
+column with a length check and nothing else. The thread wrote whatever the client
+sent, the client sent `❤️` and `👍`, and so the five production reaction words
+that posts use were not the vocabulary of the thread at all. A reaction could be
+any string up to sixteen characters, so the set of reactions was a convention the
+front end kept, not a fact the database knew.
+
+**The composer had an emoji tray.** It inserted twenty-four pictographs into the
+message text. It is removed. A member can still type anything they like; the
+product no longer offers them pictures to type.
+
+**What changed.**
+
+- Migration `0066` translates every stored emoji to the nearest of the five words
+  and removes the emoji rows. A member who reacted with both `❤️` and `🙏` ends
+  with one `support`, because the primary key is (message, member, reaction) and
+  the translation does not invent a second vote. The translation runs before the
+  constraint is added, so the constraint is added to a table that already
+  satisfies it.
+- A check constraint, `message_reactions_known_reaction`, names the five words.
+  It is what a future client cannot get around.
+- `toggle_message_reaction` refuses any other word with `22023` before it touches
+  a row. It is replaced in place with its signature and grants unchanged, and its
+  membership and privacy checks are copied from `0051` without alteration.
+- `src/components/interactions/reaction-icons.ts` is the one map from word to SVG,
+  shared by the post bar and the thread. The bubble's picker and its reaction
+  chips now draw those icons, labelled by the same translated words the post bar
+  uses. Emoji-only messages are no longer enlarged, because that rule matched
+  pictographs and the product has none to match on purpose.
+- The `chat.emoji` and `chat.emojiHint` strings are removed from both bundles.
+
+**A trap found on the way.** `t21` builds a database *without* `0051` to prove
+that later migrations survive a deployment that is behind. `0066` is the
+messenger's own follow-up and changes the table `0051` creates, so it cannot
+apply to that database. A real deployment never has `0066` without `0051`,
+because the files apply in order. The harness now skips `0066` in that scenario
+and says why; the migration itself was not weakened to hide the dependency.
+
+**How it is proved.**
+
+- `scripts/db-prove/t38.mjs` (7 checks) builds the database as it stands before
+  `0066`, plants the emoji rows the old client wrote, applies the migration as the
+  operator will, and then asks what it now holds and what it now refuses. Every
+  stored reaction is a word, two emoji from one member collapse to one word, no
+  emoji row remains, the constraint exists, the toggle refuses an emoji, a
+  capitalised word and a plausible word that is not in the set, a direct insert of
+  an emoji is refused, and a stranger still cannot react to a line they cannot
+  read. The migration then applies a second time with no change.
+- `src/test/no-emoji.test.ts` walks every source file the application and its
+  functions are built from and fails the build on any emoji code point, joiner or
+  variation selector. It is also tested against the characters it must catch, and
+  against Bangla script and ordinary punctuation, which it must leave alone.
+- The two tracked test files that named emoji as negative inputs now write them as
+  escapes. A repository-wide scan of every tracked file finds no emoji character.
+
+**Verified.** Vitest 59 files / 761 tests (was 58 / 757). `db:prove` 22 of 22
+harnesses, the new `t38` at 7 checks. Typecheck clean for the application and for
+`functions/`. ESLint clean at `--max-warnings 0`. Prettier clean. Production
+build clean at 203 precache entries and 13 prerendered routes. Launch audit 103
+passed / 0 failed / 4 recorded. Initial JavaScript 232 KB gzip against the 250 KB
+budget; it was 226 KB before this round and the cause of the six kilobytes has
+not been isolated.
+
+**What the operator does.** Apply `0066` with the normal database workflow. It
+rewrites existing reaction rows in place and then constrains the column, so it
+should be applied in a quiet window. Nothing else is required; the client that
+ships with this change sends words, and an older client still open in a browser
+will receive a `22023` for an emoji reaction and should be reloaded.
+
+## 13. A listing has a page, and the sitemap tells the truth
+
+**What was wrong.** The sitemap already advertised `/jobs/<slug>` for every open
+job and `/events/<slug>` for every upcoming event. The application had no such
+routes, so each of those entries was a 404 that search engines had been told to
+crawl. The same sitemap listed events hosted in private groups, which published
+the slugs of rooms that anonymous visitors cannot open, and it listed jobs past
+their closing date. A crawler asking for an unknown `/jobs/` or `/events/` path
+also received the generic index metadata, which is a soft 404.
+
+**What changed.**
+
+- `0066` adds `job_detail(p_slug)` and `event_detail(p_slug)`. Each applies the
+  same visibility rule as the row-level security policy for its table, and
+  returns the row together with the caller's own state: whether they have
+  applied, and whether they are going. The join link of an online event is
+  released only to people who said they are going, the host, and staff.
+- `0066` teaches `seo_for_path` about `/jobs/` and `/events/`. A listing the
+  anonymous reader cannot see is served `noindex` with a generic title and
+  description, so a closed role or a private group's event never reaches a
+  crawler through meta tags. An unknown listing is `noindex` with source
+  `missing`.
+- `0066` replaces `sitemap_urls` and `sitemap_sections`. Events from private
+  groups and cancelled events are left out, and jobs past their closing date
+  are left out.
+- `/jobs/:slug` is a full role page: terms, skills, the apply dialog, an
+  external apply link (only for http and https addresses), and `JobPosting`
+  structured data while the role is live. A role that is not live is `noindex`.
+- `/events/:slug` is a full event page: the time shown in the event's own time
+  zone, the caller's RSVP, the join link as described above, and clear states
+  for cancelled and ended events. Its structured data is `Event`, with the
+  location pointing at the event's own page, never at the join link.
+- The job board and the events list now link each title to its page. The job
+  board's structured data points each job at its own URL rather than at the
+  board.
+- `src/lib/listings/listing-schema.ts` holds the pure parts: the URL allowlist,
+  the live-role rule, both structured-data builders, and the zone-safe time
+  formatter. An unrecognised time zone falls back to Dhaka, because the zone is
+  stored as free text and an exception in render would blank the page.
+- Interface strings `jobs.detail.*` and `events.detail.*` exist in English and
+  Bengali.
+
+**Verification, at the commit that carries this section.**
+
+- `db:prove`: 23 of 23 harnesses. `t39` is new with 60 checks. It covers what an
+  anonymous visitor, a stranger, a group member, the host, the poster and a
+  signed-in applicant can read; the meta a crawler receives for open, expired,
+  closed, private, cancelled and missing listings; the exact sitemap lists; the
+  sitemap counts; and the grants (anonymous and authenticated may call the
+  detail reads, PUBLIC may not).
+- Unit tests: 61 files, 800 tests. The new `listing-schema.test.ts` (20 tests)
+  and `listing-pages.test.tsx` (19 tests) cover the URL allowlist, the expiry
+  boundary, the JobPosting date requirement, remote and on-site locations, the
+  salary units, the join-link gating, the cancelled and full states, and the
+  RSVP and apply flows.
+- Typecheck clean for the application and for `functions/`. ESLint clean at
+  `--max-warnings 0`. Prettier clean. Production build clean at 208 precache
+  entries and 13 prerendered routes. Launch audit 103 passed, 0 failed, 4 recorded.
+- The feature registry is regenerated: 1,867 counted features (was 1,852) and
+  1,700 translated strings per language (was 1,669).
+- The first push of this change failed the Deploy build for `main-site`. The
+  build runs `tsc --noEmit`, which includes test files, and a helper in the new
+  page test had a type error. Typecheck and lint had been run before that test
+  file existed, and the build had been run before it too. The helper is fixed,
+  and every gate (typecheck for the app and functions, lint, format, 800 unit
+  tests, the CI build with and without the deploy variables, and the bundle
+  budget) was rerun on the final tree. The lesson is recorded so the gate is
+  rerun after the last file is written, not before.
+
+**What the operator does.** Apply `0066` through the normal database
+workflow. `0066` only replaces functions and adds two read functions, so it can
+be applied in any window. No environment variable is added.
+
+**What this round did not do, stated plainly.**
+
+- **Gigs have no detail page.** `/freelance` lists gigs but a gig cannot be opened
+  on its own, and gigs are not in the sitemap. This is the next slice.
+- **Unknown paths outside the listing routes still receive index metadata.**
+  Only `/jobs/` and `/events/` were given the not-found treatment in this round.
+- **Nothing here has been seen in a real browser against live data.** The page
+  tests render each state with mocked data, and `t39` proves the database side.
+  Visual QA on a phone at the widths the brief names is still owed.
+- **The ecosystem is not finished.** The feed ranking pipeline, the marketplace,
+  the creator program, the Android app and the sibling sites are untouched.
+- **The body-emoji question in §12 is still open**, and so is the decision to
+  apply `0066` to production.
+
+## 14. The emoji decision is reversed: users may send what they like
+
+**The decision.** In §12 the product removed emoji from the message composer, and
+migration `0066` turned stored emoji reactions into five words. That was done
+under a reading of the standing rule that the rule does not support. The owner's
+answer is that the **SVG-only rule governs the static pages of BSDC**: the about,
+contact, legal and navigation chrome that the organisation itself publishes. It
+does not govern what members write or react with. Members can send emoji, images
+and anything else in a message, and react with the emoji they choose.
+
+**What was reverted.** Commit `4aeacb7` was reverted as a unit, not patched:
+
+- The composer's emoji tray is back, and messages are sent as typed.
+- Reactions are stored as the text the member chose again. The `0066` migration
+  and its check constraint are gone. The migration was never applied to
+  production, so nothing in a live database needs undoing.
+- The reaction picker and chips use emoji again, and the shared SVG map that
+  `4aeacb7` introduced is removed with them.
+- The guard test `no-emoji.test.ts`, which failed the build on any emoji
+  character, is removed. It enforced a rule that applies to static pages, and it
+  was checking the wrong surface.
+- The `t38` harness is removed. `t21` and `t24` are back to their earlier ranges.
+
+**What is still true.** The SVG-only rule still applies to BSDC's own static
+pages, and the icons across the product chrome remain lucide SVG. Only member
+content and member reactions are unrestricted.
+
+**Verification of the revert.** Typecheck of the app is clean. Vitest is 60 files
+and 796 tests. `db:prove` is 22 of 22, with `t39` passing. The migration list in
+§2 no longer names `0066`. §12 remains as history of the earlier decision and is
+superseded by this section.
+
+**What the operator does.** Nothing new beyond §13: apply `0066` in the normal
+database workflow. No reaction data needs converting, because none was converted
+in production.
+
+## 15. The ImgBB key left the bundle, and the build is verified under Node 20
+
+**What was wrong.** The deploy workflow made `VITE_IMGBB_API_KEY` a required
+build variable and compiled it into the browser bundle. The browser then called
+`api.imgbb.com` with that key in the URL whenever the edge endpoint was not
+reachable. ImgBB's key is a secret. Every visitor could read it from the
+JavaScript and spend the account's quota. The earlier documentation called it
+"public by design", which was wrong, and the code's own comments said the
+opposite. Section 14's reversal of the emoji rule did not touch this.
+
+**What changed.**
+
+- The client no longer reads `VITE_IMGBB_API_KEY`. `env.ts` has no ImgBB field.
+- `upload.ts` has no direct ImgBB transport. An ordinary picture (post, comment,
+  chat) goes through `POST /api/media/upload` or it is refused with
+  `media.errors.notConfigured`. A cover, a document or a voice note still goes
+  to Cloudinary directly, because its cloud name and unsigned preset are public
+  by design.
+- The deploy workflow no longer requires or passes the ImgBB key. The required
+  list is nine variables.
+- The content security policy no longer allows `api.imgbb.com` in `connect-src`.
+  The browser does not call that host now.
+- The ImgBB call, with the key in the query string and base64 in the `image`
+  field, lives only in `functions/_media.ts`, where the Function reads the key at
+  request time.
+- Tests that encoded a direct ImgBB call now assert that the call does not
+  happen. `t28` checks the Function for the prescribed call format and checks
+  that the browser module never names the ImgBB host.
+- `no-public-secret.test.ts` is new. It fails the build if a secret-named value
+  is read by the client, passed by the deploy workflow, or allowed by the policy.
+
+**Verification.** Node 20.20.2 (the version CI pins), run in this sandbox:
+
+- `npm run build` with no variables: exit 0, 13 routes prerendered.
+- `npm run build` with `VITE_IMGBB_API_KEY` set to a marker string: exit 0. The
+  marker occurs **0** times in `dist/`. Before this change it was compiled in.
+- `scripts/check-deploy-env.mjs` with the workflow's required list: exit 1 and
+  names every missing variable when none are set; exit 0 when all nine are set.
+  This is the gate that stopped the red deploy job, which is described in §16.
+- Vitest: 61 files, 800 tests. `db:prove`: 22 of 22. Typecheck for the app and
+  for Functions: clean. ESLint with `--max-warnings 0`: clean.
+
+**What the operator does, in this order.**
+
+1. Rotate the ImgBB API key at api.imgbb.com. The old key was in every bundle
+   built while `VITE_IMGBB_API_KEY` was a GitHub secret, and cannot be recalled.
+2. Set the new key as `IMGBB_API_KEY` under Cloudflare Pages → Settings →
+   Environment variables (encrypted).
+3. Delete the `VITE_IMGBB_API_KEY` GitHub secret, so no future build can pick it
+   up.
+4. Re-run **Deploy**, then check `GET /api/media/providers` returns
+   `"imgbb":true`. Until step 2 is done, ordinary member images are refused, and
+   the message says so.
+
+Until step 4 is done, posts with images will be refused on the live site. That
+is the honest state: the old behaviour was a published key, not a working
+feature.
+
+## 16. The red CI jobs
+
+Both red jobs on the branch failed at the same step, and the cause is one
+typecheck error. Verified from the run metadata and by reproducing the check.
+
+- **Deploy** (run 38149079432, head `29a8d84`), step "Build the member
+  site": failed. The step runs `npm run build`, which runs `tsc --noEmit` over
+  the test files. Reproduced at `29a8d84` in a temporary worktree: five errors
+  in `src/routes/listing-pages.test.tsx`, where a mock returned `null` for a
+  field typed `JobDetail | undefined`.
+- **Android** (run 38149076690, head `29a8d84`), job "Build the app", step
+  "Build the web application": failed for the same reason, because it runs the
+  same `npm run build`. Its later steps (shell typecheck, Gradle, signing,
+  release upload) were **skipped**, so they have not run on that commit. They
+  are not known to pass, and that is the open item for this part.
+
+**Fix.** `5aaea52` corrects the test helper. On the current tree `tsc --noEmit`
+is clean for the app and for Functions, and `npm run build` passes under Node 20
+both with no variables (the CI configuration) and with the deploy-style set. The
+deploy gate `scripts/check-deploy-env.mjs` is verified in §15.
+
+**Result on head `8b175b6`** (verified with `gh pr checks 10` and `gh api`):
+35 checks pass and 1 is skipped (`Apply to production`, which runs only on the
+main branch). That includes CI (every app's quality job, the secret scan, the
+database schema build), Database, Deploy (`main-site` built and deployed to the
+preview environment), and Android.
+
+Within Android, the debug APK path ran: the web build, the shell check, the
+native project generation and configuration, the manifest check, the debug APK
+build, and the debug APK upload all succeeded. **Not verified:** the release
+path. Decoding the signing key, the placeholder-Firebase refusal, the signed
+release build, the fingerprint report, and attaching the build to a release were
+all **skipped** on this branch push, so a signed release has not been produced
+or checked from this branch.

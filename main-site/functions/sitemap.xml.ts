@@ -23,6 +23,9 @@ export const onRequestGet: PagesFunction<RpcEnv> = async (context) => {
     { loc: `${origin}/sitemap-static.xml`, lastmod: null },
   ];
   for (const section of sections) {
+    // A section with nothing in it is not advertised: an index entry that leads to
+    // an empty file tells a crawler the file is stale, which it is not.
+    if (section.urls === 0) continue;
     for (let page = 1; page <= Math.max(1, section.pages); page += 1) {
       files.push({
         loc: `${origin}/sitemaps/${section.section}-${page}.xml`,
