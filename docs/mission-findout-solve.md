@@ -222,7 +222,7 @@ including the new `0063`.
 
 ### Migrations
 
-`0064`, `0065`, `0066` and `0067` were added by the rounds recorded in §9, §10, §12 and §13. Check the
+`0064`, `0065` and `0067` were added by the rounds recorded in §9, §10 and §13. Check the
 production ledger for `0046`–`0063` because some may have been applied manually;
 do not infer production state from the branch. In order, the migrations in this
 set are:
@@ -248,7 +248,6 @@ set are:
 0063_projects_have_a_home_to_be_found.sql
 0064_a_project_can_be_corrected.sql
 0065_a_private_page_is_not_a_page_for_crawlers.sql
-0066_a_reaction_is_a_name_not_a_picture.sql
 0067_a_listing_has_a_page_and_a_true_sitemap.sql
 ```
 
@@ -1020,7 +1019,7 @@ also received the generic index metadata, which is a soft 404.
   budget) was rerun on the final tree. The lesson is recorded so the gate is
   rerun after the last file is written, not before.
 
-**What the operator does.** Apply `0066`, then `0067`, through the normal database
+**What the operator does.** Apply `0067` through the normal database
 workflow. `0067` only replaces functions and adds two read functions, so it can
 be applied in any window. No environment variable is added.
 
@@ -1036,5 +1035,41 @@ be applied in any window. No environment variable is added.
 - **The ecosystem is not finished.** The feed ranking pipeline, the marketplace,
   the creator program, the Android app and the sibling sites are untouched.
 - **The body-emoji question in §12 is still open**, and so is the decision to
-  apply `0066` to production.
+  apply `0067` to production.
+
+## 14. The emoji decision is reversed: users may send what they like
+
+**The decision.** In §12 the product removed emoji from the message composer, and
+migration `0066` turned stored emoji reactions into five words. That was done
+under a reading of the standing rule that the rule does not support. The owner's
+answer is that the **SVG-only rule governs the static pages of BSDC**: the about,
+contact, legal and navigation chrome that the organisation itself publishes. It
+does not govern what members write or react with. Members can send emoji, images
+and anything else in a message, and react with the emoji they choose.
+
+**What was reverted.** Commit `4aeacb7` was reverted as a unit, not patched:
+
+- The composer's emoji tray is back, and messages are sent as typed.
+- Reactions are stored as the text the member chose again. The `0066` migration
+  and its check constraint are gone. The migration was never applied to
+  production, so nothing in a live database needs undoing.
+- The reaction picker and chips use emoji again, and the shared SVG map that
+  `4aeacb7` introduced is removed with them.
+- The guard test `no-emoji.test.ts`, which failed the build on any emoji
+  character, is removed. It enforced a rule that applies to static pages, and it
+  was checking the wrong surface.
+- The `t38` harness is removed. `t21` and `t24` are back to their earlier ranges.
+
+**What is still true.** The SVG-only rule still applies to BSDC's own static
+pages, and the icons across the product chrome remain lucide SVG. Only member
+content and member reactions are unrestricted.
+
+**Verification of the revert.** Typecheck of the app is clean. Vitest is 60 files
+and 796 tests. `db:prove` is 22 of 22, with `t39` passing. The migration list in
+§2 no longer names `0066`. §12 remains as history of the earlier decision and is
+superseded by this section.
+
+**What the operator does.** Nothing new beyond §13: apply `0067` in the normal
+database workflow. No reaction data needs converting, because none was converted
+in production.
 

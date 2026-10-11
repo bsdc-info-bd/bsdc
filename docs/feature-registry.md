@@ -51,4 +51,4 @@ is not a feature.
 **Total counted features: 1867**
 
 Registry codes recorded as delivered across the twenty responses: **1016**.
-Translated interface strings per language: **1700** (recorded, not counted as features).
+Translated interface strings per language: **1702** (recorded, not counted as features).
