@@ -1,5 +1,6 @@
 import { CalendarDays, MapPin, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -19,7 +20,7 @@ import {
   type CommunityEvent,
 } from '@/lib/communities/community-types';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { ROUTES, SITE } from '@/lib/site';
+import { ROUTES, SITE, eventPath } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 const RSVP_CHOICES = ['going', 'interested', 'declined'] as const;
@@ -133,7 +134,11 @@ function EventCard({ event, signedIn, busy, language, onRsvp }: EventCardProps) 
     <Card as="li">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold">{event.title}</h3>
+          <h3 className="text-lg font-semibold">
+            <Link to={eventPath(event.slug)} className="hover:underline">
+              {event.title}
+            </Link>
+          </h3>
           <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
             <span className="inline-flex items-center gap-1">
               {event.mode === 'online' ? (

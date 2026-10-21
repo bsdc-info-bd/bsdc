@@ -108,7 +108,18 @@ export async function createGig(clientUid: string, draft: GigDraftInput): Promis
   return data?.slug ?? '';
 }
 
-export async function createProject(ownerUid: string, draft: ProjectDraftInput): Promise<string> {
+/**
+ * Publishes a project and returns both of its identities.
+ *
+ * The slug is the address the author is sent to; the id is what the gallery is
+ * written against. A caller that has screenshots to attach needs the id, and
+ * looking it up again by slug after the insert would be a second round trip for
+ * a value the insert already has.
+ */
+export async function createProjectWithId(
+  ownerUid: string,
+  draft: ProjectDraftInput,
+): Promise<{ slug: string; id: string }> {
   const { data, error } = await getSupabase()
     .from('projects')
     .insert({
@@ -124,10 +135,15 @@ export async function createProject(ownerUid: string, draft: ProjectDraftInput):
       looking_for_contributors: draft.lookingForContributors,
       owner_uid: ownerUid,
     })
-    .select('slug')
+    .select('id, slug')
     .single();
   if (error) throw toDataError(error);
-  return data?.slug ?? '';
+  return { slug: data?.slug ?? '', id: data?.id ?? '' };
+}
+
+export async function createProject(ownerUid: string, draft: ProjectDraftInput): Promise<string> {
+  const created = await createProjectWithId(ownerUid, draft);
+  return created.slug;
 }
 
 /** Groups go through the RPC: it writes the membership row the table cannot. */

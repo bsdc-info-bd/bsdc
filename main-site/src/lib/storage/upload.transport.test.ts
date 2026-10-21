@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { uploadMedia } from './upload';
+import { setUploadCapabilities, uploadMedia } from './upload';
 
 vi.mock('@/lib/env', () => ({
   env: {
     cloudinary: { cloudName: 'bsdctest', unsignedPreset: 'unsigned-test' },
-    imgbbApiKey: 'imgbb-test-key',
   },
   // Supabase being configured must not change where any file's bytes go.
-  isConfigured: { cloudinary: true, imgbb: true, supabase: true },
+  isConfigured: { cloudinary: true, supabase: true },
 }));
 
 interface RequestRecord {
@@ -69,28 +68,29 @@ class FakeXMLHttpRequest {
 beforeEach(() => {
   requests.length = 0;
   vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest as unknown as typeof XMLHttpRequest);
+  // Pin the transport. These two cases are about the *direct* path, so the edge
+  // endpoint is declared absent rather than left to a probe that would fail for
+  // an unrelated reason and pass the test by accident.
+  setUploadCapabilities({
+    proxy: false,
+    proxyImgbb: false,
+    proxyCloudinary: false,
+    localCloudinary: true,
+  });
 });
 
 describe('provider transport', () => {
-  it('sends post-image bytes to ImgBB as base64, never to Supabase Storage', async () => {
+  it('never sends an ordinary picture to ImgBB or Supabase from the bundle', async () => {
     const file = new File([new Uint8Array([0, 1, 2, 255])], 'post.png', {
       type: 'image/png',
     });
-    const result = await uploadMedia(file, { purpose: 'post-image' });
 
-    expect(requests).toHaveLength(1);
-    expect(requests[0]?.method).toBe('POST');
-    expect(requests[0]?.url).toBe('https://api.imgbb.com/1/upload?key=imgbb-test-key');
-    expect(requests[0]?.url).not.toContain('supabase');
-    expect((requests[0]?.body as FormData | null)?.get('image')).toBe('AAEC/w==');
-    expect((requests[0]?.body as FormData | null)?.get('file')).toBeNull();
-    expect(result).toMatchObject({
-      provider: 'imgbb',
-      url: 'https://i.ibb.co/full/picture.png',
-      thumbUrl: 'https://i.ibb.co/thumb/picture.png',
-      width: 4,
-      height: 3,
+    await expect(uploadMedia(file, { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.notConfigured',
     });
+    // No request left the page: the ImgBB key is not in the bundle, and no
+    // storage bucket is an acceptable destination for image bytes.
+    expect(requests).toHaveLength(0);
   });
 
   it('sends a project cover only to the unsigned Cloudinary image endpoint', async () => {

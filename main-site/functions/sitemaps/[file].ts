@@ -14,6 +14,7 @@ const SECTIONS = [
   'groups',
   'events',
   'jobs',
+  'gigs',
   'projects',
   'tags',
   'profiles',

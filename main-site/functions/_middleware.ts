@@ -5,6 +5,7 @@ import {
   renderHomeFeedJsonLd,
   type HomeFeedPost,
 } from '../src/lib/seo/home-feed';
+import { matchAppRoute } from '../src/lib/seo/app-routes';
 import { rpc, siteOrigin, type RpcEnv } from './_rpc';
 
 /**
@@ -43,25 +44,27 @@ interface RedirectRow {
   status: number;
 }
 
-const DYNAMIC = [
+/**
+ * Addresses whose title, description and image live in the database. Every one
+ * of these is looked up with seo_for_path, which answers for a missing record as
+ * well, so a crawler never gets the site's home description for a page that is
+ * not there. Member permalinks (/@name, and the bare /name form) are looked up
+ * through the route match, not this list.
+ */
+const RECORD_PAGES = [
   /^\/p\/[^/]+$/,
   /^\/shop\/[^/]+$/,
   /^\/learn\/[^/]+$/,
   /^\/g\/[^/]+$/,
   /^\/projects\/[^/]+$/,
-  /^\/@[^/]+$/,
+  /^\/jobs\/[^/]+$/,
+  /^\/events\/[^/]+$/,
+  /^\/freelance\/[^/]+$/,
+  /^\/tag\/[^/]+$/,
 ];
 
-function isDynamicPage(pathname: string): boolean {
-  return DYNAMIC.some((pattern) => pattern.test(pathname));
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function isRecordPage(pathname: string): boolean {
+  return RECORD_PAGES.some((pattern) => pattern.test(pathname));
 }
 
 class SetText {
@@ -158,15 +161,26 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
     return response;
   }
 
-  // 2. Does the page it is about to serve know what it is about?
-  if (!contentType.includes('text/html') || !isDynamicPage(pathname)) return response;
+  if (!contentType.includes('text/html')) return response;
 
-  const rows = await rpc<SeoRow[]>(context.env, 'seo_for_path', { p_path: pathname });
+  // 2. Is there a page at this address at all?
+  // An address no route answers is a 404 with the shell's own not-found view,
+  // never the site's home description served as a 200. This is the soft-404 fix.
+  const route = matchAppRoute(pathname);
+  if (route === null) return answerNotFound(response);
+
+  // 3. Does the page it is about to serve know what it is about?
+  let seoPath: string | null = null;
+  if (route.kind === 'handle') seoPath = `/@${route.handle}`;
+  else if (route.kind === 'param' && isRecordPage(pathname)) seoPath = pathname;
+  if (seoPath === null) return response;
+
+  const rows = await rpc<SeoRow[]>(context.env, 'seo_for_path', { p_path: seoPath });
   const meta = Array.isArray(rows) ? rows[0] : null;
   if (!meta) return response;
 
   const origin = siteOrigin(context.env, context.request);
-  const canonical = `${origin}${meta.canonical === '' ? pathname : meta.canonical}`;
+  const canonical = `${origin}${meta.canonical === '' ? seoPath : meta.canonical}`;
   const image =
     meta.image_url === ''
       ? `${origin}/og/og-image.png`
@@ -174,8 +188,8 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
         ? meta.image_url
         : `${origin}${meta.image_url}`;
 
-  return new HTMLRewriter()
-    .on('title', new SetText(escapeHtml(meta.title)))
+  const described = new HTMLRewriter()
+    .on('title', new SetText(meta.title))
     .on('meta[name="description"]', new SetAttribute('content', meta.description))
     .on('meta[property="og:title"]', new SetAttribute('content', meta.title))
     .on('meta[property="og:description"]', new SetAttribute('content', meta.description))
@@ -193,4 +207,22 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
     )
     .on('link[rel="canonical"]', new SetAttribute('href', canonical))
     .transform(response);
+
+  // A record that was looked up and is not there is answered with 404, the same
+  // as an address no route claims, so the status tells a crawler the truth.
+  return meta.source === 'missing' ? withStatus(described, 404) : described;
 };
+
+/** The shell's own not-found view, with a 404 status and a noindex directive. */
+function answerNotFound(response: Response): Response {
+  const rewritten = new HTMLRewriter()
+    .on('title', new SetText('Page not found — BSDC'))
+    .on('meta[name="robots"]', new SetAttribute('content', 'noindex,nofollow'))
+    .transform(response);
+  return withStatus(rewritten, 404);
+}
+
+function withStatus(response: Response, status: number): Response {
+  const headers = new Headers(response.headers);
+  return new Response(response.body, { status, headers });
+}

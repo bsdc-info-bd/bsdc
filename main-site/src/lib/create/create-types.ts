@@ -107,7 +107,32 @@ export interface GroupDraftInput {
   language: 'bn' | 'en';
 }
 
-export type ProjectStep = 0 | 1 | 2 | 3;
+/**
+ * The five steps of publishing a project: basics, build and links, cover,
+ * screenshots, review.
+ *
+ * Screenshots have their own step rather than sharing the cover's because they
+ * are a different decision. A cover is one picture chosen to represent the
+ * project in a directory card; screenshots are the product itself, several of
+ * them, each wanting its own description. Merging them into one screen puts a
+ * single optional field and a multi-picture gallery in the same box and asks a
+ * member on a phone to tell them apart.
+ */
+export type ProjectStep = 0 | 1 | 2 | 3 | 4;
+
+/**
+ * The last step, so no caller has to know how many there are.
+ *
+ * `satisfies` rather than a type annotation: annotating it `ProjectStep` would
+ * widen it to the whole union, and `Exclude<ProjectStep, typeof PROJECT_LAST_STEP>`
+ * in the step validator would then resolve to `never` and silently accept no
+ * step at all. Keeping the literal type is what makes that exclusion mean
+ * "every step but the last".
+ */
+export const PROJECT_LAST_STEP = 4 satisfies ProjectStep;
+
+/** How many pictures a project may show under its cover. */
+export const PROJECT_SCREENSHOT_MAX = 8;
 
 export interface CreateIssue {
   field: string;
@@ -356,16 +381,25 @@ export function validateProjectDraft(draft: ProjectDraftInput): CreateIssue[] {
   return issues;
 }
 
-/** Validate only the visible project step; step 3 checks the complete draft. */
+/**
+ * Validate only the visible project step; the last step checks the whole draft.
+ *
+ * A step validates what it shows, so a member is never told about a field they
+ * cannot see — and never allowed past the review step with one. The cover and
+ * screenshot steps have no text fields of their own: both are optional pictures
+ * whose addresses are written by the upload, so there is nothing on those
+ * screens for a member to get wrong.
+ */
 export function validateProjectDraftStep(
   draft: ProjectDraftInput,
   step: ProjectStep,
 ): CreateIssue[] {
-  if (step === 3) return validateProjectDraft(draft);
-  const fields: Record<Exclude<ProjectStep, 3>, readonly string[]> = {
+  if (step === PROJECT_LAST_STEP) return validateProjectDraft(draft);
+  const fields: Record<Exclude<ProjectStep, typeof PROJECT_LAST_STEP>, readonly string[]> = {
     0: ['name', 'tagline', 'description'],
     1: ['repoUrl', 'demoUrl', 'tech'],
     2: [],
+    3: [],
   };
   return validateProjectDraft(draft).filter((issue) => fields[step].includes(issue.field));
 }

@@ -100,11 +100,14 @@ jobs:
           # production answer "Uploads are not configured for this deployment"
           # for every avatar, cover and post image, and they are required
           # rather than optional so the build stops instead of shipping a site
-          # whose media pipeline cannot work.
+          # whose media pipeline cannot work. The ImgBB key is deliberately not
+          # here: it is a secret, and anything compiled into the bundle is
+          # public. It lives in Cloudflare Pages as IMGBB_API_KEY and is read by
+          # the upload function at request time.
           BSDC_REQUIRED_ENV: >-
             VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
             VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL,
-            VITE_CLOUDINARY_CLOUD_NAME,VITE_CLOUDINARY_UNSIGNED_PRESET,VITE_IMGBB_API_KEY
+            VITE_CLOUDINARY_CLOUD_NAME,VITE_CLOUDINARY_UNSIGNED_PRESET
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
@@ -116,7 +119,6 @@ jobs:
           VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
           VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
           VITE_CLOUDINARY_UNSIGNED_PRESET: ${{ secrets.VITE_CLOUDINARY_UNSIGNED_PRESET }}
-          VITE_IMGBB_API_KEY: ${{ secrets.VITE_IMGBB_API_KEY }}
           # Push and OneSignal are optional features: a missing value disables
           # them in the client, which is honest, so they are passed but not
           # required.

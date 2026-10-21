@@ -686,6 +686,14 @@ export type EventCalendarRow = {
   my_status: DbRsvpStatus | null;
 };
 
+export type EventDetailRow = EventCalendarRow & {
+  description: string;
+  join_url: string;
+  timezone: string;
+  is_cancelled: boolean;
+  host_uid: string;
+};
+
 export type DbJobType = 'full_time' | 'part_time' | 'contract' | 'internship';
 export type DbWorkMode = 'onsite' | 'remote' | 'hybrid';
 export type DbListingStatus = 'draft' | 'open' | 'paused' | 'closed';
@@ -788,6 +796,18 @@ export type ProjectRow = {
 
 export type ProjectStarRow = { project_id: string; uid: string; created_at: string };
 
+/**
+ * One screenshot on a project, pointing at the same `media_assets` row a post
+ * image points at. The bytes live at the external host; this is the reference,
+ * the order and the caption. Added by migration 0064.
+ */
+export type ProjectMediaRow = {
+  project_id: string;
+  media_id: string;
+  position: number;
+  alt_text: string;
+};
+
 export type PlaygroundSketchRow = {
   id: string;
   uid: string;
@@ -816,6 +836,31 @@ export type JobBoardRow = {
   skills: string[];
   applications_count: number;
   published_at: string | null;
+  my_status: DbApplicationStatus | null;
+};
+
+export type JobDetailRow = {
+  id: string;
+  slug: string;
+  title: string;
+  company: string;
+  description: string;
+  job_type: DbJobType;
+  work_mode: DbWorkMode;
+  level: DbExperienceLevel;
+  city: string;
+  country: string;
+  salary_min: number | null;
+  salary_max: number | null;
+  salary_currency: string;
+  salary_period: string;
+  skills: string[];
+  apply_url: string;
+  status: DbListingStatus;
+  applications_count: number;
+  published_at: string | null;
+  expires_at: string | null;
+  poster_uid: string;
   my_status: DbApplicationStatus | null;
 };
 
@@ -1770,6 +1815,19 @@ export type Database = {
         Update: Partial<ProjectStarRow>;
         Relationships: [];
       };
+      project_media: {
+        Row: ProjectMediaRow;
+        Insert: Pick<ProjectMediaRow, 'project_id' | 'media_id'> & Partial<ProjectMediaRow>;
+        /**
+         * Only the order and the caption are writable, because that is all
+         * migration 0064 grants: `revoke`d at the table level and granted back
+         * per column. Repointing a foreign key would move a picture into a
+         * project its uploader does not own, so the type refuses it here and the
+         * database refuses it besides.
+         */
+        Update: Partial<Pick<ProjectMediaRow, 'position' | 'alt_text'>>;
+        Relationships: [];
+      };
       courses: {
         Row: CourseRow;
         Insert: Pick<CourseRow, 'slug' | 'title' | 'instructor_uid'> & Partial<CourseRow>;
@@ -2445,6 +2503,7 @@ export type Database = {
         Args: { p_limit: number; p_work_mode?: DbWorkMode | null; p_skill?: string | null };
         Returns: JobBoardRow[];
       };
+      job_detail: { Args: { p_slug: string }; Returns: JobDetailRow[] };
       increment_job_view: { Args: { p_job_id: string }; Returns: undefined };
       create_group: {
         Args: {
@@ -2470,6 +2529,7 @@ export type Database = {
       toggle_page_follow: { Args: { p_page_id: string }; Returns: boolean };
       group_directory: { Args: { p_limit: number }; Returns: GroupDirectoryRow[] };
       event_calendar: { Args: { p_limit: number }; Returns: EventCalendarRow[] };
+      event_detail: { Args: { p_slug: string }; Returns: EventDetailRow[] };
       open_direct_conversation: { Args: { p_other_uid: string }; Returns: string };
       create_group_conversation: {
         Args: { p_title: string; p_members: string[] };

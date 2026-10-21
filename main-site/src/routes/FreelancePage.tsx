@@ -1,6 +1,7 @@
 import { HandCoins } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -19,7 +20,7 @@ import {
 import { useGigBoard } from '@/hooks/use-opportunities';
 import { formatSalaryRange, type Gig } from '@/lib/opportunities/opportunity-types';
 import { formatNumber } from '@/lib/format';
-import { ROUTES } from '@/lib/site';
+import { ROUTES, gigPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -105,7 +106,11 @@ export default function FreelancePage() {
             const budget = formatSalaryRange(gig.budgetMin, gig.budgetMax, gig.currency, language);
             return (
               <Card as="li" key={gig.id}>
-                <h2 className="text-lg font-semibold">{gig.title}</h2>
+                <h2 className="text-lg font-semibold">
+                  <Link to={gigPath(gig.slug)} className="hover:underline">
+                    {gig.title}
+                  </Link>
+                </h2>
                 <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
                   {budget !== null ? (
                     <span>

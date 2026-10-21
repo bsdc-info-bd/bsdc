@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   Channel,
   CommunityEvent,
+  EventDetail,
   Group,
   GroupMemberEntry,
   GroupSummary,
@@ -197,5 +198,54 @@ export function useEventCalendar(): EventCalendarResult {
       mutation.mutate({ eventId, status });
     },
     isSaving: mutation.isPending,
+  };
+}
+
+export interface EventDetailResult {
+  event: EventDetail | null;
+  isLoading: boolean;
+  isError: boolean;
+  /** True when the reader may not see this event: private group, or no such slug. */
+  isNotFound: boolean;
+  rsvp: (status: RsvpStatus) => void;
+  isSaving: boolean;
+  saveFailed: boolean;
+}
+
+/** One event page, with the caller's RSVP. The going count comes back from the server. */
+export function useEventDetail(slug: string): EventDetailResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  const key = ['event-detail', uid, slug];
+
+  const query = useQuery({
+    queryKey: key,
+    queryFn: async () => (await repository()).fetchEventDetail(slug),
+    staleTime: 30_000,
+  });
+
+  const mutation = useMutation({
+    mutationFn: async ({ eventId, status }: { eventId: string; status: RsvpStatus }) =>
+      (await repository()).rsvpEvent(eventId, status),
+    onSuccess: (going, { status }) => {
+      queryClient.setQueryData<EventDetail | null>(key, (current) =>
+        current ? { ...current, myStatus: status, going } : current,
+      );
+      void queryClient.invalidateQueries({ queryKey: ['event-calendar'] });
+    },
+  });
+
+  const eventId = query.data?.id ?? null;
+
+  return {
+    event: query.data ?? null,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    isNotFound: !query.isLoading && !query.isError && query.data === null,
+    rsvp: (status) => {
+      if (eventId !== null) mutation.mutate({ eventId, status });
+    },
+    isSaving: mutation.isPending,
+    saveFailed: mutation.isError,
   };
 }
