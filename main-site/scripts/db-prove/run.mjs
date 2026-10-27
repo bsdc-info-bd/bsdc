@@ -46,6 +46,13 @@ const HARNESSES = [
   ['t37.mjs', 'a private page is refused by the database as firmly as robots.txt promises'],
   ['t39.mjs', 'a listing has a page, and the sitemap tells the truth: jobs and events'],
   ['t40.mjs', 'a gig has a page, and an address that is not a page answers as missing'],
+  [
+    't41.mjs',
+    'channel post privacy, OAuth email proof, redirect origin safety, and staff review queues',
+  ],
+  ['t42.mjs', 'post child reads inherit parent visibility, trash and channel membership'],
+  ['t43.mjs', 'raw-table column grants protect media credentials and event join links'],
+  ['t44.mjs', 'database authority denies stale staff claims after demotion or suspension'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

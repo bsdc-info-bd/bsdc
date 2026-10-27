@@ -1,3 +1,4 @@
+import { BodyError, readJsonObject } from '../../_body';
 /**
  * Cloudflare Pages Function — POST /api/auth/claims
  *
@@ -29,14 +30,26 @@
 import {
   bootstrapOwnerRole,
   buildClaims,
+  corsHeadersFor,
   credentialsFor,
+  databaseAuthorityRole,
+  isAppRole,
   ownersFor,
   selfBootstrapRole,
   targetFromAudience,
   toClaimsRequest,
+  type AppRole,
   type ClaimsEnv,
   type ProjectCredentials,
 } from './claims-core';
+
+export interface ClaimsRuntimeEnv extends ClaimsEnv {
+  SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
+  VITE_SUPABASE_URL?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+}
 
 /** JWK form of Google's secure-token keys — directly importable by Web Crypto. */
 const JWKS_URL =
@@ -44,11 +57,48 @@ const JWKS_URL =
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const IDENTITY_URL = 'https://identitytoolkit.googleapis.com/v1';
 
-function json(body: unknown, status: number): Response {
+function json(body: unknown, status: number, origin: string | null = null): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      ...corsHeadersFor(origin),
+    },
   });
+}
+
+/**
+ * Asks Postgres (`public.my_role()`) what rank the caller already holds, using
+ * the caller's own verified Firebase ID token and the public Supabase key so
+ * row-level security remains in force and no privileged backend key is needed.
+ */
+async function fetchCallerDbRole(env: ClaimsRuntimeEnv, idToken: string): Promise<AppRole | null> {
+  const base = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+  const key = (
+    env.SUPABASE_ANON_KEY ??
+    env.SUPABASE_PUBLISHABLE_KEY ??
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    ''
+  ).trim();
+  if (base === '' || key === '') return null;
+  try {
+    const response = await fetch(`${base}/rest/v1/rpc/my_role`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${idToken}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    if (!response.ok) return null;
+    const rows = (await response.json()) as { role?: unknown }[] | { role?: unknown } | null;
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    return row && isAppRole(row.role) ? row.role : null;
+  } catch {
+    return null;
+  }
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
@@ -182,19 +232,23 @@ async function getAccessToken(credentials: ProjectCredentials): Promise<string> 
   return body.access_token;
 }
 
-export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
+export const onRequestOptions: PagesFunction<ClaimsRuntimeEnv> = ({ request }) =>
+  new Response(null, { status: 204, headers: corsHeadersFor(request.headers.get('origin')) });
+
+export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) => {
   const { env, request } = context;
+  const origin = request.headers.get('origin');
 
   const authorization = request.headers.get('authorization') ?? '';
   const idToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
-  if (idToken.length === 0) return json({ error: 'unauthorized' }, 401);
+  if (idToken.length === 0) return json({ error: 'unauthorized' }, 401, origin);
 
   // The caller's token names the project it belongs to. That decides which
   // service account signs the update and which owner list guards it.
   const target = targetFromAudience(env, peekAudience(idToken));
-  if (target === null) return json({ error: 'not-configured' }, 503);
+  if (target === null) return json({ error: 'not-configured' }, 503, origin);
   const credentials = credentialsFor(env, target);
-  if (credentials === null) return json({ error: 'not-configured' }, 503);
+  if (credentials === null) return json({ error: 'not-configured' }, 503, origin);
 
   let callerUid: string;
   let tokenClaims: Record<string, unknown>;
@@ -202,17 +256,17 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
     tokenClaims = await verifyIdToken(idToken, credentials.projectId);
     callerUid = tokenClaims['sub'] as string;
   } catch {
-    return json({ error: 'unauthorized' }, 401);
+    return json({ error: 'unauthorized' }, 401, origin);
   }
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
-    return json({ error: 'bad-request' }, 400);
+    body = await readJsonObject(request);
+  } catch (error) {
+    return json({ error: 'bad-request' }, error instanceof BodyError ? error.status : 400, origin);
   }
   const input = toClaimsRequest(body);
-  if (input === null) return json({ error: 'bad-request' }, 400);
+  if (input === null) return json({ error: 'bad-request' }, 400, origin);
 
   const isOwner = ownersFor(env, target).includes(callerUid);
   const selfRole = selfBootstrapRole(callerUid, tokenClaims, input);
@@ -226,12 +280,18 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
     // only. This is the branch that opens a fresh deployment, where no uid
     // list could have been arranged yet; privilege flags still follow the role.
     claims = buildClaims(birthRole);
-  } else {
-    // Everybody else reaches only the self-bootstrap branch, which derives
-    // the exact same role from their Firebase-signed token and discards
-    // requested privilege flags.
-    if (selfRole === null) return json({ error: 'forbidden' }, 403);
+  } else if (selfRole !== null) {
     claims = buildClaims(selfRole);
+  } else {
+    // Check whether Postgres (`my_role()`) already granted this caller the
+    // requested rank (for instance an approved vendor or promoted moderator).
+    const dbRole =
+      input.uid === callerUid && tokenClaims['role'] === 'authenticated'
+        ? await fetchCallerDbRole(env, idToken)
+        : null;
+    const syncedRole = databaseAuthorityRole(callerUid, input, dbRole);
+    if (syncedRole === null) return json({ error: 'forbidden' }, 403, origin);
+    claims = buildClaims(syncedRole);
   }
 
   try {
@@ -247,16 +307,16 @@ export const onRequestPost: PagesFunction<ClaimsEnv> = async (context) => {
         body: JSON.stringify({ localId: input.uid, customAttributes: JSON.stringify(claims) }),
       },
     );
-    if (!response.ok) return json({ error: 'update-failed' }, 502);
+    if (!response.ok) return json({ error: 'update-failed' }, 502, origin);
   } catch {
-    return json({ error: 'update-failed' }, 502);
+    return json({ error: 'update-failed' }, 502, origin);
   }
 
-  return json({ uid: input.uid, project: credentials.projectId, claims }, 200);
+  return json({ uid: input.uid, project: credentials.projectId, claims }, 200, origin);
 };
 
 /** Deployment readiness only: never returns credentials or accepts role changes. */
-export const onRequestGet: PagesFunction<ClaimsEnv> = ({ env }) => {
+export const onRequestGet: PagesFunction<ClaimsRuntimeEnv> = ({ env, request }) => {
   const ready = credentialsFor(env, 'main') !== null;
-  return json({ ready }, ready ? 200 : 503);
+  return json({ ready }, ready ? 200 : 503, request.headers.get('origin'));
 };

@@ -1,3 +1,5 @@
+import { BodyError, readBody } from './_body';
+
 // Fixed upstream: never accept a URL/host from query parameters or the caller.
 const AUTH_ORIGIN = 'https://bsdc-bd.firebaseapp.com';
 
@@ -22,7 +24,7 @@ export async function proxyFirebaseAuth(request: Request): Promise<Response> {
       new Request(upstream, {
         method: request.method,
         headers,
-        body: request.method === 'POST' ? await request.arrayBuffer() : null,
+        body: request.method === 'POST' ? await readBody(request, 1024 * 1024) : null,
         redirect: 'manual',
       }),
     );
@@ -39,7 +41,13 @@ export async function proxyFirebaseAuth(request: Request): Promise<Response> {
       }
     }
     return result;
-  } catch {
+  } catch (error) {
+    if (error instanceof BodyError) {
+      return new Response(error.message, {
+        status: error.status,
+        headers: { 'cache-control': 'no-store' },
+      });
+    }
     return new Response('Authentication service temporarily unavailable', {
       status: 502,
       headers: { 'cache-control': 'no-store' },

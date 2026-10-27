@@ -86,6 +86,19 @@ committed** — they are entered in Cloudflare Pages → Settings → Environmen
 Variables (encrypted) and read inside Pages Functions via `context.env`.
 See [SECURITY.md](./SECURITY.md) for the secret matrix and rotation runbook.
 
+## Production recovery (October 2026)
+
+The launch inventory is not a guarantee of production behavior. The current
+repository-based investigation, implemented fixes, open security risks and
+release acceptance criteria are in [the production recovery plan](./docs/production-recovery-plan.md).
+The reusable detailed execution brief is [the BSDC master implementation prompt](./docs/bsdc-master-implementation-prompt.md).
+Whole-platform local gate results and remaining release blockers are in
+[release readiness](./docs/release-readiness.md). Run `node scripts/release-check.mjs --install`
+to reproduce the package checks.
+Actual Chromium public-browser results are in [browser acceptance](./docs/browser-acceptance.md).
+Run `cd main-site && npm run test:browser` on Node 22+ for desktop/mobile-emulation smoke tests.
+Production/browser verification remains separate from local build and SQL proofs.
+
 ## Delivery plan
 
 The platform is delivered in 20 build responses (see `docs/delivery-plan.md`).

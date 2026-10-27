@@ -52,3 +52,9 @@ Thumbs.db
 # the same resolution to keep in step. Continuous integration installs with
 # `npm install`.
 package-lock.json
+
+# Local release gate logs
+.release-check/
+
+# Browser smoke evidence
+main-site/.browser-evidence/

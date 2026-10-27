@@ -1,3 +1,4 @@
+import { BodyError, readJsonObject } from '../../_body';
 /**
  * Cloudflare Pages Function — POST /api/geo/reverse
  *
@@ -46,9 +47,12 @@ function isCoordinate(value: unknown): value is number {
 export const onRequestPost: PagesFunction = async (context) => {
   let payload: ReverseRequest = {};
   try {
-    payload = (await context.request.json()) as ReverseRequest;
-  } catch {
-    return json({ error: 'a json body is required' }, 400);
+    payload = await readJsonObject(context.request);
+  } catch (error) {
+    return json(
+      { error: 'a bounded json object is required' },
+      error instanceof BodyError ? error.status : 400,
+    );
   }
 
   if (!isCoordinate(payload.latitude) || !isCoordinate(payload.longitude)) {

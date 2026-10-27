@@ -80,15 +80,13 @@ export interface ClaimsEnv {
  */
 export const BOOTSTRAP_OWNER_EMAILS: readonly string[] = ['rrc@bsdc.info.bd'];
 
-/** Providers that verify the address themselves, so the token may not say so. */
-const FEDERATED_PROVIDERS: readonly string[] = [
-  'google.com',
-  'github.com',
-  'yahoo.com',
-  'apple.com',
-  'twitter.com',
-  'facebook.com',
-];
+/**
+ * Providers whose sign-in assertion proves ownership of the primary email
+ * address even when the token omits `email_verified`. Providers that allow
+ * unverified primary/secondary emails (GitHub, Yahoo, Twitter, Facebook) must
+ * carry `email_verified: true` explicitly.
+ */
+const FEDERATED_PROVIDERS: readonly string[] = ['google.com', 'apple.com'];
 
 export function isAppRole(value: unknown): value is AppRole {
   return typeof value === 'string' && (APP_ROLES as readonly string[]).includes(value);
@@ -235,6 +233,50 @@ export function bootstrapOwnerRole(
   if (email === null) return null;
   if (!bootstrapOwnerEmails(env).includes(email)) return null;
   return input.role === 'owner' || input.role === 'admin' ? input.role : null;
+}
+
+/**
+ * Authoritative database role sync: when Postgres (`public.my_role()`) has
+ * already recorded a caller's rank (e.g. an approved `vendor`, promoted
+ * `moderator`, or demoted `member`), the caller may synchronize their own
+ * Firebase custom claims to match that exact rank. Privilege flags are still
+ * derived from `dbRole` inside `buildClaims`, never trusted from `input`.
+ */
+export function databaseAuthorityRole(
+  callerUid: string,
+  input: ClaimsRequest,
+  dbRole: AppRole | null,
+): AppRole | null {
+  if (callerUid.length === 0 || input.uid !== callerUid || dbRole === null) return null;
+  return input.role === dbRole ? dbRole : null;
+}
+
+/**
+ * Cross-origin headers allowing BSDC's sibling consoles (`*.bsdc.info.bd`) and
+ * local development servers to mint their own `role: "authenticated"` claim
+ * against `main-site`'s `/api/auth/claims` endpoint.
+ */
+export function corsHeadersFor(origin: string | null): Record<string, string> {
+  if (!origin) return {};
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+    const isBsdc =
+      parsed.protocol === 'https:' && (host === 'bsdc.info.bd' || host.endsWith('.bsdc.info.bd'));
+    const isLocalDev =
+      (host === 'localhost' || host === '127.0.0.1') &&
+      (parsed.port === '5173' || (Number(parsed.port) >= 5180 && Number(parsed.port) <= 5199));
+    if (!isBsdc && !isLocalDev) return {};
+    return {
+      'access-control-allow-origin': parsed.origin,
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'authorization, content-type',
+      'access-control-max-age': '86400',
+      vary: 'Origin',
+    };
+  } catch {
+    return {};
+  }
 }
 
 /** Validates a parsed JSON body into a claims request, or null when invalid. */

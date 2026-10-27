@@ -1,4 +1,11 @@
-import { siteOrigin, xmlResponse, escapeXml, type RpcEnv } from './_rpc';
+import {
+  resolveSupabasePublic,
+  siteOrigin,
+  supabaseAnonHeaders,
+  xmlResponse,
+  escapeXml,
+  type RpcEnv,
+} from './_rpc';
 
 /**
  * Cloudflare Pages Function — /rss.xml
@@ -17,17 +24,16 @@ interface PostRow {
 
 export const onRequestGet: PagesFunction<RpcEnv> = async (context) => {
   const origin = siteOrigin(context.env, context.request);
-  const base = context.env.SUPABASE_URL;
-  const key = context.env.SUPABASE_ANON_KEY;
+  const target = resolveSupabasePublic(context.env);
 
   let posts: PostRow[] = [];
-  if (base && key) {
+  if (target !== null) {
     const query =
       'posts?select=slug,title,excerpt,published_at,updated_at' +
-      '&status=eq.published&visibility=eq.public&order=published_at.desc.nullslast&limit=30';
+      '&status=eq.published&visibility=eq.public&deleted_at=is.null&channel_id=is.null&order=published_at.desc.nullslast&limit=30';
     try {
-      const response = await fetch(`${base.replace(/\/+$/, '')}/rest/v1/${query}`, {
-        headers: { apikey: key, authorization: `Bearer ${key}` },
+      const response = await fetch(`${target.base}/rest/v1/${query}`, {
+        headers: supabaseAnonHeaders(target.key),
       });
       if (response.ok) posts = (await response.json()) as PostRow[];
     } catch {

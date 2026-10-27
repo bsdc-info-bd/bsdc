@@ -1,3 +1,4 @@
+import { isObject, readJsonObject } from '../_body';
 import { rpc, type RpcEnv } from '../_rpc';
 
 /**
@@ -36,12 +37,9 @@ const text = (value: unknown, limit: number): string =>
 const accepted = (): Response => new Response(null, { status: 204 });
 
 export const onRequestPost: PagesFunction<RpcEnv> = async (context) => {
-  const length = Number(context.request.headers.get('content-length') ?? '0');
-  if (length > MAX_BODY) return accepted();
-
   let payload: { measurements?: unknown; errors?: unknown };
   try {
-    payload = (await context.request.json()) as typeof payload;
+    payload = await readJsonObject(context.request, MAX_BODY);
   } catch {
     return accepted();
   }
@@ -56,6 +54,7 @@ export const onRequestPost: PagesFunction<RpcEnv> = async (context) => {
   const work: Promise<unknown>[] = [];
 
   for (const item of measurements) {
+    if (!isObject(item)) continue;
     const value = typeof item.value === 'number' ? item.value : Number.NaN;
     if (!Number.isFinite(value) || value < 0) continue;
     work.push(
@@ -72,6 +71,7 @@ export const onRequestPost: PagesFunction<RpcEnv> = async (context) => {
   }
 
   for (const item of errors) {
+    if (!isObject(item)) continue;
     const fingerprint = text(item.fingerprint, 64);
     if (fingerprint === '') continue;
     work.push(

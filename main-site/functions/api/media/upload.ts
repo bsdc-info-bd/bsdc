@@ -1,3 +1,4 @@
+import { BodyError, readBody } from '../../_body';
 /**
  * Cloudflare Pages Function — POST /api/media/upload
  *
@@ -59,8 +60,14 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
 
   let form: FormData;
   try {
-    form = await context.request.formData();
-  } catch {
+    const bytes = await readBody(context.request, 25 * 1024 * 1024 + 64 * 1024);
+    form = await new Response(bytes, {
+      headers: { 'content-type': context.request.headers.get('content-type') ?? '' },
+    }).formData();
+  } catch (error) {
+    if (error instanceof BodyError && error.status === 413) {
+      return failure('media.errors.tooLarge', 413);
+    }
     return failure('media.errors.failed', 400);
   }
 

@@ -6,7 +6,7 @@ import {
   type HomeFeedPost,
 } from '../src/lib/seo/home-feed';
 import { matchAppRoute } from '../src/lib/seo/app-routes';
-import { rpc, siteOrigin, type RpcEnv } from './_rpc';
+import { resolveSupabasePublic, rpc, siteOrigin, supabaseAnonHeaders, type RpcEnv } from './_rpc';
 
 /**
  * Cloudflare Pages Function — middleware for every request.
@@ -100,12 +100,11 @@ class SetAttribute {
 
 /** The newest public posts, as the anonymous visitor would read them. */
 async function fetchHomeFeed(env: RpcEnv, limit: number): Promise<HomeFeedPost[]> {
-  const base = env.SUPABASE_URL;
-  const key = env.SUPABASE_ANON_KEY;
-  if (!base || !key) return [];
+  const target = resolveSupabasePublic(env);
+  if (target === null) return [];
   try {
-    const response = await fetch(`${base.replace(/\/+$/, '')}/rest/v1/${homeFeedQuery(limit)}`, {
-      headers: { apikey: key, authorization: `Bearer ${key}` },
+    const response = await fetch(`${target.base}/rest/v1/${homeFeedQuery(limit)}`, {
+      headers: supabaseAnonHeaders(target.key),
     });
     if (!response.ok) return [];
     const rows = (await response.json()) as HomeFeedPost[];
@@ -116,22 +115,50 @@ async function fetchHomeFeed(env: RpcEnv, limit: number): Promise<HomeFeedPost[]
   }
 }
 
+function isStaticAssetPath(pathname: string): boolean {
+  return (
+    /^\/(?:api|__|assets|icons|\.well-known)\//.test(pathname) ||
+    /\.(?:js|mjs|css|png|jpe?g|webp|avif|gif|svg|ico|woff2?|ttf|map|json|webmanifest|txt|xml)$/i.test(
+      pathname,
+    )
+  );
+}
+
+function safeRedirectTarget(rawTarget: string, origin: string, search: string): string | null {
+  const trimmed = rawTarget.trim();
+  if (trimmed === '' || trimmed.startsWith('//')) return null;
+  if (trimmed.startsWith('/')) return `${origin}${trimmed}${search}`;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:') return null;
+    const host = parsed.hostname.toLowerCase();
+    if (host === 'bsdc.info.bd' || host.endsWith('.bsdc.info.bd')) {
+      return parsed.toString();
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export const onRequest: PagesFunction<RpcEnv> = async (context) => {
   const url = new URL(context.request.url);
   const pathname = url.pathname.length > 1 ? url.pathname.replace(/\/+$/, '') : '/';
 
-  // Never run SEO/database redirects in front of auth callbacks or assets.
-  if (/^\/(?:api|__|assets|icons)\//.test(pathname)) return context.next();
+  // Never run SEO/database redirects in front of auth callbacks, feeds or assets.
+  if (pathname === '/playground/runner' || isStaticAssetPath(pathname)) return context.next();
 
   // 1. Has this URL moved?
   if (context.request.method === 'GET' && pathname !== '/') {
     const moved = await rpc<RedirectRow[]>(context.env, 'follow_redirect', { p_path: pathname });
     const row = Array.isArray(moved) ? moved[0] : null;
     if (row && row.target) {
-      const target = /^https?:\/\//i.test(row.target)
-        ? row.target
-        : `${siteOrigin(context.env, context.request)}${row.target}${url.search}`;
-      return Response.redirect(target, row.status || 301);
+      const target = safeRedirectTarget(
+        row.target,
+        siteOrigin(context.env, context.request),
+        url.search,
+      );
+      if (target !== null) return Response.redirect(target, row.status || 301);
     }
   }
 

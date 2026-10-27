@@ -55,7 +55,14 @@ precacheAndRoute(self.__WB_MANIFEST);
 // shell would be a lie: the API, the Firebase callbacks, the feeds and the bots.
 registerRoute(
   new NavigationRoute(createHandlerBoundToURL('/index.html'), {
-    denylist: [/^\/api\//, /^\/__\//, /^\/sitemap/, /^\/rss/, /^\/robots\.txt$/],
+    denylist: [
+      /^\/playground\/runner$/,
+      /^\/api\//,
+      /^\/__\//,
+      /^\/sitemap/,
+      /^\/rss/,
+      /^\/robots\.txt$/,
+    ],
   }),
 );
 

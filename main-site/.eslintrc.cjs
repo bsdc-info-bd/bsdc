@@ -31,6 +31,11 @@ module.exports = {
   },
   overrides: [
     {
+      files: ['public/playground/*.js'],
+      extends: ['plugin:@typescript-eslint/disable-type-checked'],
+      parserOptions: { project: null },
+    },
+    {
       files: ['scripts/**/*.mjs'],
       env: { node: true, browser: false },
       extends: ['plugin:@typescript-eslint/disable-type-checked'],
