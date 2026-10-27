@@ -46,7 +46,7 @@ describe('Supabase token boundary', () => {
   });
   it('keeps anonymous reads anonymous', async () => {
     mocks.auth.currentUser = null;
-    await expect(mocks.accessToken!()).resolves.toBe('');
+    await expect(mocks.accessToken!()).resolves.toBeNull();
     expect(mocks.ensure).not.toHaveBeenCalled();
   });
 });

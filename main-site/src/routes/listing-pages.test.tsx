@@ -128,6 +128,7 @@ const renderJob = () => renderAt('/jobs/senior-backend', '/jobs/:slug', <JobPage
 const renderEvent = () => renderAt('/events/friday-meetup', '/events/:slug', <EventPage />);
 
 beforeEach(() => {
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-10T00:00:00Z'));
   auth.user = null;
   hooks.useJobDetail.mockReset();
   hooks.useEventDetail.mockReset();

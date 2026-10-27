@@ -1,0 +1,43 @@
+name: Production-build browser smoke
+
+on:
+  push:
+    branches: ['**']
+    paths: ['main-site/**', '.github/workflows/browser.yml']
+  pull_request:
+    paths: ['main-site/**', '.github/workflows/browser.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  chromium:
+    name: Chromium desktop and mobile emulation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: main-site/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      # Bundled Chromium is installed from npm. No paid device service or
+      # production credentials; this does not validate provider integrations.
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium-smoke-evidence
+          path: main-site/.browser-evidence/
+          include-hidden-files: true
+          retention-days: 14

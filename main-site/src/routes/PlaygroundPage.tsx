@@ -1,5 +1,5 @@
 import { Play, Save, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
@@ -13,7 +13,7 @@ import {
   TextareaField,
 } from '@/design-system';
 import { usePlayground } from '@/hooks/use-opportunities';
-import { buildSandboxDocument, type SketchLanguage } from '@/lib/opportunities/opportunity-types';
+import { type SketchLanguage } from '@/lib/opportunities/opportunity-types';
 import { formatRelativeTime } from '@/lib/format';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
@@ -39,12 +39,12 @@ export default function PlaygroundPage() {
   const [title, setTitle] = useState(t('playground.untitled'));
   const [sketchLanguage, setSketchLanguage] = useState<SketchLanguage>('javascript');
   const [code, setCode] = useState(STARTER);
-  const [running, setRunning] = useState('');
-
-  const srcDoc = useMemo(
-    () => (running.length === 0 ? '' : buildSandboxDocument(sketchLanguage, running)),
-    [running, sketchLanguage],
-  );
+  const frameRef = useRef<HTMLIFrameElement>(null);
+  const [running, setRunning] = useState<{
+    code: string;
+    language: SketchLanguage;
+    id: number;
+  } | null>(null);
 
   async function save() {
     try {
@@ -118,7 +118,11 @@ export default function PlaygroundPage() {
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 onClick={() => {
-                  setRunning(code);
+                  setRunning((previous) => ({
+                    code,
+                    language: sketchLanguage,
+                    id: (previous?.id ?? 0) + 1,
+                  }));
                 }}
               >
                 <Play size={16} />
@@ -143,13 +147,21 @@ export default function PlaygroundPage() {
 
           <Card>
             <h2 className="text-sm font-semibold">{t('playground.output')}</h2>
-            {srcDoc.length === 0 ? (
+            {running === null ? (
               <p className="mt-3 text-sm text-muted">{t('playground.notRunYet')}</p>
             ) : (
               <iframe
                 title={t('playground.output')}
                 sandbox="allow-scripts"
-                srcDoc={srcDoc}
+                ref={frameRef}
+                key={running.id}
+                src="/playground/runner"
+                onLoad={() =>
+                  frameRef.current?.contentWindow?.postMessage(
+                    { type: 'bsdc-run', code: running.code, language: running.language },
+                    '*',
+                  )
+                }
                 className="mt-3 h-96 w-full rounded-lg border border-line bg-white"
               />
             )}
@@ -177,7 +189,7 @@ export default function PlaygroundPage() {
                       setTitle(sketch.title);
                       setSketchLanguage(sketch.language);
                       setCode(sketch.code);
-                      setRunning('');
+                      setRunning(null);
                     }}
                   >
                     <span className="fab-truncate block text-sm font-semibold">{sketch.title}</span>

@@ -22,11 +22,11 @@ export type BsdcSupabaseClient = SupabaseClient<Database>;
 let client: BsdcSupabaseClient | null = null;
 
 /** Reads the caller's Firebase ID token without importing Firebase eagerly. */
-async function currentAccessToken(): Promise<string> {
-  if (!isConfigured.firebase) return '';
+async function currentAccessToken(): Promise<string | null> {
+  if (!isConfigured.firebase) return null;
   const { getFirebaseAuth } = await import('@/lib/firebase');
   const user = getFirebaseAuth().currentUser;
-  if (!user) return '';
+  if (!user) return null;
   const { ensureDataAccess } = await import('@/lib/auth/data-access');
   const token = await ensureDataAccess(user);
   // Never send a previous account's token after a sign-out/account switch.
@@ -42,8 +42,8 @@ async function currentAccessToken(): Promise<string> {
  * upload has arrived — and an XHR is not a supabase-js call, so it has to ask
  * for the same token the client would have used.
  */
-export function supabaseAccessToken(): Promise<string> {
-  return currentAccessToken();
+export async function supabaseAccessToken(): Promise<string> {
+  return (await currentAccessToken()) ?? '';
 }
 
 export function getSupabase(): BsdcSupabaseClient {
@@ -75,7 +75,7 @@ export async function ensureRealtimeAuth(): Promise<void> {
   const supabase = getSupabase();
   try {
     const token = await currentAccessToken();
-    if (token.length > 0) void supabase.realtime.setAuth(token);
+    if (token !== null && token.length > 0) void supabase.realtime.setAuth(token);
   } catch {
     // A signed-out or offline member keeps the socket; the next call retries.
   }

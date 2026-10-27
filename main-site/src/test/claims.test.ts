@@ -6,6 +6,8 @@ import {
   buildClaims,
   BOOTSTRAP_OWNER_EMAILS,
   credentialsFor,
+  corsHeadersFor,
+  databaseAuthorityRole,
   isAppRole,
   isStaffRole,
   ownersFor,
@@ -285,5 +287,57 @@ describe('the first administrator, by verified address', () => {
     const role = bootstrapOwnerRole(env, 'rrc-uid', token, request);
     expect(role).not.toBeNull();
     expect(buildClaims(role ?? 'member').staff).toBe(true);
+  });
+
+  it('refuses unverified GitHub emails while keeping verified GitHub emails', () => {
+    const unverifiedGithub = {
+      sub: 'impostor',
+      email: 'rrc@bsdc.info.bd',
+      email_verified: false,
+      firebase: { sign_in_provider: 'github.com' },
+    };
+    expect(verifiedEmail(unverifiedGithub)).toBeNull();
+    expect(bootstrapOwnerRole(env, 'impostor', unverifiedGithub, request)).toBeNull();
+
+    const verifiedGithub = {
+      sub: 'rrc-uid',
+      email: 'rrc@bsdc.info.bd',
+      email_verified: true,
+      firebase: { sign_in_provider: 'github.com' },
+    };
+    expect(verifiedEmail(verifiedGithub)).toBe('rrc@bsdc.info.bd');
+    expect(bootstrapOwnerRole(env, 'rrc-uid', verifiedGithub, request)).toBe('owner');
+  });
+
+  it('synchronizes database-authoritative roles only for the caller matching my_role()', () => {
+    expect(
+      databaseAuthorityRole(
+        'vendor-1',
+        { uid: 'vendor-1', role: 'vendor', vendor: true, staff: false },
+        'vendor',
+      ),
+    ).toBe('vendor');
+    expect(
+      databaseAuthorityRole(
+        'vendor-1',
+        { uid: 'vendor-1', role: 'owner', vendor: true, staff: true },
+        'vendor',
+      ),
+    ).toBeNull();
+    expect(
+      databaseAuthorityRole(
+        'vendor-1',
+        { uid: 'other', role: 'vendor', vendor: true, staff: false },
+        'vendor',
+      ),
+    ).toBeNull();
+  });
+
+  it('allows CORS only for BSDC console origins and local dev ports', () => {
+    expect(corsHeadersFor('https://admin.main.bsdc.info.bd')['access-control-allow-origin']).toBe(
+      'https://admin.main.bsdc.info.bd',
+    );
+    expect(corsHeadersFor('https://evil.example.com')).toEqual({});
+    expect(corsHeadersFor('http://admin.main.bsdc.info.bd')).toEqual({});
   });
 });

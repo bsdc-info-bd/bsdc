@@ -1,3 +1,4 @@
+import { BodyError, readJsonObject } from '../../_body';
 /**
  * Cloudflare Pages Function — POST /api/push/content
  *
@@ -50,9 +51,12 @@ function json(body: unknown, status = 200): Response {
 export const onRequestPost: PagesFunction<RpcEnv> = async (context) => {
   let payload: ContentRequest = {};
   try {
-    payload = (await context.request.json()) as ContentRequest;
-  } catch {
-    return json({ error: 'a json body is required' }, 400);
+    payload = await readJsonObject(context.request);
+  } catch (error) {
+    return json(
+      { error: 'a bounded json object is required' },
+      error instanceof BodyError ? error.status : 400,
+    );
   }
 
   const endpoint = typeof payload.endpoint === 'string' ? payload.endpoint.trim() : '';
@@ -60,7 +64,8 @@ export const onRequestPost: PagesFunction<RpcEnv> = async (context) => {
     return json({ notifications: [] });
   }
 
-  const requested = typeof payload.limit === 'number' ? payload.limit : 5;
+  const requested =
+    typeof payload.limit === 'number' && Number.isFinite(payload.limit) ? payload.limit : 5;
   const limit = Math.min(Math.max(1, Math.trunc(requested)), MAX_ITEMS);
 
   const rows = await rpc<ContentRow[]>(context.env, 'push_content', {

@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "typecheck:functions": "tsc -p functions/tsconfig.json",
     "db:prove": "node scripts/db-prove/run.mjs",
-    "push:keys": "node scripts/vapid-keys.mjs"
+    "push:keys": "node scripts/vapid-keys.mjs",
+    "test:browser": "npm run build && node scripts/browser/smoke.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -50,6 +51,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
     "@electric-sql/pglite": "0.5.8",
+    "@sparticuz/chromium": "153.0.0",
     "@testing-library/jest-dom": "6.5.0",
     "@testing-library/react": "16.0.1",
     "@testing-library/user-event": "14.5.2",
@@ -67,6 +69,7 @@
     "eslint-plugin-react-hooks": "4.6.2",
     "eslint-plugin-react-refresh": "0.4.12",
     "jsdom": "25.0.1",
+    "playwright-core": "1.64.1",
     "postcss": "8.4.47",
     "postcss-import": "^16.1.0",
     "prettier": "3.3.3",

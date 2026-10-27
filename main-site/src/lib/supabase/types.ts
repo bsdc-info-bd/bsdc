@@ -106,7 +106,8 @@ export type MediaAssetRow = {
   kind: DbMediaKind;
   url: string;
   thumb_url: string;
-  delete_token: string;
+  /** Write-only provider credential; excluded from browser SELECT grants. */
+  delete_token?: string;
   width: number | null;
   height: number | null;
   bytes: number;
@@ -171,6 +172,7 @@ export type PostRow = {
   is_pinned: boolean;
   is_sensitive: boolean;
   allow_comments: boolean;
+  channel_id?: string | null;
   published_at: string | null;
   edited_at: string | null;
   deleted_at: string | null;
@@ -195,6 +197,7 @@ export type PostInsert = Pick<PostRow, 'author_uid' | 'kind' | 'slug'> &
       | 'reading_time'
       | 'is_sensitive'
       | 'allow_comments'
+      | 'channel_id'
       | 'published_at'
     >
   >;
@@ -216,6 +219,7 @@ export type PostUpdate = Partial<
     | 'reading_time'
     | 'is_sensitive'
     | 'allow_comments'
+    | 'channel_id'
     | 'published_at'
     | 'deleted_at'
   >
@@ -2425,6 +2429,34 @@ export type Database = {
         Returns: DbReportStatus;
       };
       admin_overview: { Args: Record<never, never>; Returns: AdminOverviewRow[] };
+      admin_pending_shops: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          slug: string;
+          name: string;
+          tagline: string;
+          city: string;
+          owner_uid: string;
+          owner_name: string;
+          created_at: string;
+        }[];
+      };
+      admin_pending_campaigns: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          name: string;
+          pricing: DbAdPricing;
+          bid: number;
+          total_budget: number;
+          daily_budget: number;
+          owner_uid: string;
+          owner_name: string;
+          creative_count: number;
+          created_at: string;
+        }[];
+      };
       admin_people: { Args: { p_search?: string; p_limit?: number }; Returns: AdminPersonRow[] };
       admin_audit: { Args: { p_limit?: number }; Returns: AuditEntryRow[] };
       my_permissions: { Args: Record<never, never>; Returns: string[] };

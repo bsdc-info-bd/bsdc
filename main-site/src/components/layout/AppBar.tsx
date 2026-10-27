@@ -1,7 +1,16 @@
-import { Bell, MessageSquare, PenSquare, PlusCircle, Search, ShoppingCart } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Bell,
+  Menu,
+  MessageSquare,
+  PenSquare,
+  PlusCircle,
+  Search,
+  ShoppingCart,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Link, NavLink } from 'react-router-dom';
-import { IconButton, LanguageToggle, Logo, ThemeToggle } from '@/design-system';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { IconButton, LanguageToggle, Logo, Modal, ThemeToggle } from '@/design-system';
 import { useUnreadNotificationCount } from '@/hooks/use-interactions';
 import { useCart } from '@/hooks/use-market';
 import { useUnreadMessageCount } from '@/hooks/use-messaging';
@@ -29,6 +38,25 @@ export function AppBar() {
   const { t } = useTranslation();
   const setCommandPaletteOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const signedIn = useAuthStore((state) => state.status === 'authenticated');
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const closeNavigation = useCallback(() => setNavigationOpen(false), []);
+  const location = useLocation();
+  useEffect(closeNavigation, [location.pathname, closeNavigation]);
+  const menuItems = [
+    ...NAV_ITEMS,
+    { to: ROUTES.freelance, labelKey: 'freelance.title' },
+    { to: ROUTES.playground, labelKey: 'playground.title' },
+    ...(signedIn
+      ? [
+          { to: ROUTES.compose, labelKey: 'compose.title' },
+          { to: ROUTES.create, labelKey: 'create.title' },
+          { to: ROUTES.messages, labelKey: 'messages.open' },
+          { to: ROUTES.notifications, labelKey: 'notifications.open' },
+          { to: ROUTES.cart, labelKey: 'cart.title' },
+          { to: ROUTES.settings, labelKey: 'settings.title' },
+        ]
+      : []),
+  ];
 
   return (
     <header className="bsdc-app-bar fab-glass fab-safe-top">
@@ -44,11 +72,11 @@ export function AppBar() {
 
         <nav
           aria-label={t('a11y.primaryNavigation')}
-          className="ms-2 hidden min-w-0 flex-1 md:block"
+          className="ms-2 hidden min-w-0 flex-1 xl:block"
         >
           <ul className="flex items-center gap-1">
-            {NAV_ITEMS.map((item) => (
-              <li key={item.to}>
+            {NAV_ITEMS.slice(0, 3).map((item) => (
+              <li key={item.to} className="shrink-0">
                 <NavLink
                   to={item.to}
                   end={item.to === ROUTES.home}
@@ -66,9 +94,21 @@ export function AppBar() {
           </ul>
         </nav>
 
-        <div className="ms-auto flex items-center gap-0.5">
+        <div className="ms-auto flex shrink-0 items-center gap-0.5">
+          <IconButton
+            label={t('a11y.primaryNavigation')}
+            icon={<Menu size={20} />}
+            aria-expanded={navigationOpen}
+            aria-haspopup="dialog"
+            onClick={() => setNavigationOpen(true)}
+          />
           {signedIn ? (
-            <Link to={ROUTES.compose} aria-label={t('compose.title')} title={t('compose.title')}>
+            <Link
+              className="hidden sm:block"
+              to={ROUTES.compose}
+              aria-label={t('compose.title')}
+              title={t('compose.title')}
+            >
               <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
                 <PenSquare size={20} aria-hidden="true" />
               </span>
@@ -88,9 +128,17 @@ export function AppBar() {
               </span>
             </Link>
           ) : null}
-          {signedIn ? <CartLink /> : null}
+          {signedIn ? (
+            <div className="hidden sm:block">
+              <CartLink />
+            </div>
+          ) : null}
           {signedIn ? <MessagesLink /> : null}
-          {signedIn ? <NotificationBell /> : null}
+          {signedIn ? (
+            <div className="hidden sm:block">
+              <NotificationBell />
+            </div>
+          ) : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
             icon={<Search size={20} />}
@@ -101,6 +149,37 @@ export function AppBar() {
           <AccountMenu />
         </div>
       </div>
+      <Modal
+        open={navigationOpen}
+        onClose={closeNavigation}
+        title={t('a11y.primaryNavigation')}
+        closeLabel={t('common.close')}
+      >
+        <div className="mb-2 sm:hidden">
+          <LanguageToggle />
+        </div>
+        <nav aria-label={t('a11y.primaryNavigation')}>
+          <ul className="grid gap-1 sm:grid-cols-2">
+            {menuItems.map((item) => (
+              <li key={item.to}>
+                <NavLink
+                  to={item.to}
+                  end={item.to === ROUTES.home}
+                  onClick={closeNavigation}
+                  className={({ isActive }) =>
+                    cn(
+                      'fab-tap flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-semibold',
+                      isActive ? 'bg-surface-2 text-green-700' : 'text-text hover:bg-surface-2',
+                    )
+                  }
+                >
+                  {t(item.labelKey)}
+                </NavLink>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      </Modal>
     </header>
   );
 }
