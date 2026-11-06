@@ -10,6 +10,17 @@ import { Banner, Button, Card, Field, Loading } from './primitives';
  * that renders first and checks later teaches people to ignore the check.
  */
 
+/** Two letters for a header avatar, from whatever name the row holds. */
+function initialsOf(name: string): string {
+  return name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => [...part][0] ?? '')
+    .join('')
+    .toUpperCase();
+}
+
 export type ConsoleTab = {
   readonly id: string;
   readonly label: string;
@@ -58,6 +69,21 @@ export function AppShell({
         )}
         {profile && (
           <div className="kit-who">
+            {profile.avatarUrl.length > 0 ? (
+              <img
+                src={profile.avatarUrl}
+                alt=""
+                width={28}
+                height={28}
+                loading="lazy"
+                decoding="async"
+                className="kit-avatar"
+              />
+            ) : (
+              <span className="kit-avatar kit-avatar-initials" aria-hidden="true">
+                {initialsOf(profile.displayName)}
+              </span>
+            )}
             <span>
               {profile.displayName} ({profile.role})
             </span>
@@ -96,7 +122,7 @@ function Gate({
   note: string | undefined;
   children: ReactNode;
 }): ReactElement {
-  const { state } = useSession();
+  const { state, signOut } = useSession();
 
   if (state.status === 'configuring') {
     return (
@@ -124,12 +150,32 @@ function Gate({
 
   if (!meetsRole(state.profile, minRole)) {
     return (
-      <Banner tone="warn" title="You do not have access to this console">
-        <p className="kit-small">
-          This console needs the {minRole} role or higher. Your account holds {state.profile.role}{' '}
-          (rank {roleRank(state.profile.role)}). Ask an owner if you believe this is wrong.
-        </p>
-      </Banner>
+      <div className="kit-stack">
+        <Banner tone="warn" title="You do not have access to this console">
+          <p className="kit-small">
+            This console needs the <strong>{minRole}</strong> role or higher. You are signed in as{' '}
+            <strong>{state.profile.role}</strong> (rank {roleRank(state.profile.role)} of 7).
+          </p>
+          <p className="kit-small">
+            A rank is given by somebody who already outranks you, in the People screen of the admin
+            console. If you are the first person setting this deployment up, the address on this
+            account has to be on the owner allowlist —{' '}
+            <span className="kit-mono">BSDC2_OWNER_UIDS</span> or{' '}
+            <span className="kit-mono">BSDC_BOOTSTRAP_OWNER_EMAILS</span> — and the account has to
+            sign out and back in so a fresh token picks the role up.
+          </p>
+        </Banner>
+        <div>
+          <Button
+            type="button"
+            onClick={() => {
+              void signOut();
+            }}
+          >
+            Sign in as somebody else
+          </Button>
+        </div>
+      </div>
     );
   }
 

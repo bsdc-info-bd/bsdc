@@ -61,6 +61,7 @@ const HARNESSES = [
     't46.mjs',
     'an upload remembers how long it was promised for, and only an abandoned picture is swept',
   ],
+  ['t47.mjs', 'a staff account can get in without being a member first'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

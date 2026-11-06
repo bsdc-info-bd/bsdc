@@ -49,6 +49,12 @@ export interface ClaimsRuntimeEnv extends ClaimsEnv {
   SUPABASE_PUBLISHABLE_KEY?: string;
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  /**
+   * The scheduler secret. Used only to call `bootstrap_staff_identity`, the one
+   * routine that may create a staff row before a staff member has a token that
+   * proves their role — which is true exactly once, for the first owner.
+   */
+  PUSH_FLUSH_SECRET?: string;
 }
 
 /** JWK form of Google's secure-token keys — directly importable by Web Crypto. */
@@ -232,6 +238,66 @@ async function getAccessToken(credentials: ProjectCredentials): Promise<string> 
   return body.access_token;
 }
 
+/**
+ * Creates the profile row an elevated claim needs, so the console that follows
+ * the claim is not told the account is empty.
+ *
+ * The claim and the row are two halves of one thing. Minting `owner` in Firebase
+ * without a `public.profiles` row produces the exact failure operators reported:
+ * the password is right, the role is right, and every console says the account
+ * has no profile. The member site creates its own row on first sign-in; a staff
+ * account is created in the Firebase console and had nothing to create one.
+ *
+ * Best-effort and never fatal. The claim is already true whether or not this
+ * succeeds, and `provision_staff` in the console covers the same ground on the
+ * next sign-in, so a database that is briefly unreachable must not turn a
+ * successful sign-in into a failed one.
+ */
+async function seedStaffProfile(
+  env: ClaimsRuntimeEnv,
+  credentials: { projectId: string },
+  uid: string,
+  email: string,
+  displayName: string,
+  role: string,
+): Promise<boolean> {
+  if (!['moderator', 'manager', 'admin', 'owner'].includes(role)) return false;
+
+  const base = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+  const anon = (
+    env.SUPABASE_ANON_KEY ??
+    env.SUPABASE_PUBLISHABLE_KEY ??
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    ''
+  ).trim();
+  const secret = (env.PUSH_FLUSH_SECRET ?? '').trim();
+  if (base === '' || anon === '' || secret.length < 32) return false;
+
+  try {
+    const response = await fetch(`${base}/rest/v1/rpc/bootstrap_staff_identity`, {
+      method: 'POST',
+      headers: {
+        apikey: anon,
+        authorization: `Bearer ${anon}`,
+        'content-type': 'application/json',
+        // The routine returns a row; nothing needs it here, and asking for no
+        // representation keeps the response empty and cheap.
+        prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        p_secret: secret,
+        p_uid: uid,
+        p_display_name: displayName.slice(0, 60),
+        p_role: role,
+        p_email: email,
+      }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const onRequestOptions: PagesFunction<ClaimsRuntimeEnv> = ({ request }) =>
   new Response(null, { status: 204, headers: corsHeadersFor(request.headers.get('origin')) });
 
@@ -312,7 +378,26 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
     return json({ error: 'update-failed' }, 502, origin);
   }
 
-  return json({ uid: input.uid, project: credentials.projectId, claims }, 200, origin);
+  // The row the claim needs. Reported, not thrown: see seedStaffProfile.
+  const email = typeof tokenClaims['email'] === 'string' ? (tokenClaims['email'] as string) : '';
+  const displayName =
+    (typeof tokenClaims['name'] === 'string' ? (tokenClaims['name'] as string) : '') ||
+    (email.length > 0 ? (email.split('@')[0] ?? '') : '');
+  const provisioned =
+    claims.bsdc_role === undefined || claims.bsdc_role === 'member'
+      ? null
+      : await seedStaffProfile(env, credentials, input.uid, email, displayName, claims.bsdc_role);
+
+  return json(
+    {
+      uid: input.uid,
+      project: credentials.projectId,
+      claims,
+      ...(provisioned === null ? {} : { profileProvisioned: provisioned }),
+    },
+    200,
+    origin,
+  );
 };
 
 /** Deployment readiness only: never returns credentials or accepts role changes. */

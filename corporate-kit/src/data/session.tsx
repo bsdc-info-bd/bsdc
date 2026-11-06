@@ -22,6 +22,10 @@ export type StaffProfile = {
   readonly uid: string;
   readonly displayName: string;
   readonly role: string;
+  /** Their picture, when they have one. A console header with initials is fine. */
+  readonly avatarUrl: string;
+  /** The database's own ranking, so the console and Postgres cannot disagree. */
+  readonly rank: number;
 };
 
 export type SessionState =
@@ -40,20 +44,133 @@ type SessionValue = {
 
 const SessionContext = createContext<SessionValue | null>(null);
 
-type ProfileRow = { uid: string; display_name: string; role: string };
+type IdentityRow = {
+  uid: string;
+  display_name: string;
+  avatar_url: string | null;
+  role: string;
+  status: string;
+  rank: number;
+  onboarding_complete: boolean;
+  created_at: string;
+  last_seen_at: string | null;
+};
 
-async function loadProfile(env: CorporateEnv, user: User): Promise<StaffProfile> {
+/** The name a staff row should fall back to when the database has none. */
+function displayNameSeed(user: User): string {
+  const named = (user.displayName ?? '').trim();
+  if (named.length > 0) return named;
+  const email = (user.email ?? '').trim();
+  if (email.length > 0) return email.split('@')[0] ?? '';
+  return '';
+}
+
+/**
+ * Who is signed in, in one call.
+ *
+ * Three things had to be true for a console to open, and they used to be checked
+ * in three different places: a profile row exists, the row's role carries enough
+ * rank for this console, and the account is not suspended. Two of the three were
+ * checked by the page after the session said "authenticated", which is why a
+ * demoted operator could see a fully rendered console for a moment before every
+ * panel refused them.
+ */
+async function loadIdentity(env: CorporateEnv, user: User): Promise<StaffProfile> {
+  const { data, error } = await getDb(env).rpc('staff_identity');
+  if (error) {
+    // A deployment that predates 0074 answers 404 for a routine it does not have.
+    // Falling back to a table read keeps that deployment working, and the read is
+    // already covered by the same row level security.
+    return loadIdentityFromTable(env, user);
+  }
+  const rows = (Array.isArray(data) ? data : [data]) as IdentityRow[];
+  const row = rows[0];
+  if (!row) {
+    // Signed in, no row. This is the state every console used to report as "this
+    // account has no profile in the community database", with no way forward.
+    return provision(env, user);
+  }
+  if (row.status !== 'active') {
+    throw new Error(
+      row.status === 'suspended'
+        ? 'This account is suspended. A manager or owner has to lift it before a console will open.'
+        : `This account is ${row.status.replace('_', ' ')}. A manager or owner has to restore it before a console will open.`,
+    );
+  }
+  return {
+    uid: row.uid,
+    displayName: row.display_name,
+    role: row.role,
+    avatarUrl: row.avatar_url ?? '',
+    rank: row.rank,
+  };
+}
+
+/**
+ * The first sign-in of an operator who has no row yet.
+ *
+ * `provision_staff` creates it from the role the token already carries — it
+ * cannot grant more than that, which is why it is safe to call on every path.
+ * A caller whose token says `member` gets a member row and is refused by the
+ * console for lack of rank, which is a true answer; the old behaviour was to tell
+ * a real owner that their account was empty.
+ */
+async function provision(env: CorporateEnv, user: User): Promise<StaffProfile> {
+  const { data, error } = await getDb(env).rpc('provision_staff', {
+    p_display_name: displayNameSeed(user),
+  });
+  if (error) {
+    if (missingRoutine(error.code)) return loadIdentityFromTable(env, user);
+    throw toDataError(error);
+  }
+  const rows = (Array.isArray(data) ? data : [data]) as IdentityRow[];
+  const row = rows[0];
+  if (!row) throw new Error('The database did not return the profile it just created.');
+  if (row.status !== 'active') {
+    throw new Error('This account is not active, so a console cannot open.');
+  }
+  return {
+    uid: row.uid,
+    displayName: row.display_name,
+    role: row.role,
+    avatarUrl: row.avatar_url ?? '',
+    rank: row.rank,
+  };
+}
+
+/** 0074 is not applied: read the table, and say something useful when it is empty. */
+async function loadIdentityFromTable(env: CorporateEnv, user: User): Promise<StaffProfile> {
   const { data, error } = await getDb(env)
     .from('profiles')
-    .select('uid, display_name, role')
+    .select('uid, display_name, role, avatar_url, status')
     .eq('uid', user.uid)
     .maybeSingle();
   if (error) throw toDataError(error);
-  const row = data as ProfileRow | null;
+  const row = data as Omit<
+    IdentityRow,
+    'rank' | 'onboarding_complete' | 'created_at' | 'last_seen_at'
+  > | null;
   if (!row) {
-    throw new Error('This account has no profile in the community database.');
+    throw new Error(
+      'This account has no profile in the community database, and this deployment cannot create one. ' +
+        'Apply migration 0074, or sign in at bsdc.info.bd once with this address and try again.',
+    );
   }
-  return { uid: row.uid, displayName: row.display_name, role: row.role };
+  if (row.status !== 'active') {
+    throw new Error('This account is not active, so a console cannot open.');
+  }
+  return {
+    uid: row.uid,
+    displayName: row.display_name,
+    role: row.role,
+    avatarUrl: row.avatar_url ?? '',
+    rank: 0,
+  };
+}
+
+/** True when the failure means the routine itself is absent, not that it refused. */
+function missingRoutine(code: string | undefined): boolean {
+  return code === 'PGRST202' || code === '42883' || code === 'PGRST301';
 }
 
 export function SessionProvider({
@@ -77,7 +194,7 @@ export function SessionProvider({
         return;
       }
       setState({ status: 'loading' });
-      loadProfile(env, user)
+      loadIdentity(env, user)
         .then((profile) => {
           if (active) setState({ status: 'authenticated', profile });
         })

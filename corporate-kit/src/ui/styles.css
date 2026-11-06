@@ -179,6 +179,33 @@ a {
   font-size: 0.8rem;
 }
 
+.kit-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgb(255 255 255 / 35%);
+  flex: none;
+}
+
+.kit-avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A console on a phone is used one-handed, standing up, in a hurry. */
+@media (max-width: 40rem) {
+  .kit-who > span:not(.kit-avatar) {
+    display: none;
+  }
+}
+
 .kit-main {
   flex: 1;
   width: min(1280px, 100%);
