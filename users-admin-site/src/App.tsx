@@ -32,6 +32,7 @@ import {
   type StaffDraft,
   type StaffRow,
 } from './model';
+import { People } from './People';
 
 /**
  * Staff records and identity cards. A record may only be written for
@@ -44,6 +45,7 @@ export function App(): ReactElement {
       minRole="admin"
       note="Staff records carry personal data. Only open what you need."
       tabs={[
+        { id: 'people', label: 'People', render: () => <People /> },
         { id: 'directory', label: 'Directory', render: () => <Directory /> },
         { id: 'verify', label: 'Verify a card', render: () => <Verify /> },
       ]}
