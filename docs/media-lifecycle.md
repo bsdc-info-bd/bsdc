@@ -56,6 +56,28 @@ future and inside a year, and the member's live-upload ceiling. A client that
 tries `update media_assets set expires_at = now() + interval '10 years'` is
 refused, and `t46.mjs` proves it.
 
+### Every upload path records its row
+
+A file with no row in `media_assets` is invisible to the sweeper and its expiry
+was never stored, so the host keeps it forever. Three paths upload, and all three
+now record:
+
+| Path | Records | Note |
+| --- | --- | --- |
+| Avatar and cover upload | `recordMediaAsset` | already did |
+| Post and gallery attachments | `use-attachments` | already did |
+| **A chat attachment or voice note** | `recordIfSignedIn` in `MessageComposer` | **did not**, which is exactly the case that matters most: a photograph sent in a direct message is the one file whose lifetime is finite |
+
+The chat path records **before** the message is sent, not after. An asset nobody
+has attached yet is an orphan the sweeper can see and will collect in a day; a
+file recorded only after a successful send is invisible for the duration of a
+failed send, which is the case that leaves something on the host forever.
+
+A recording failure does not stop the message. The bytes are already at the host
+and the member's sentence is worth more than the trail, so the send goes through
+and the failure is logged as what it is: one file that will need deleting by
+hand.
+
 ### What gets swept, and what never does
 
 `media_pending_purge(secret, limit)` returns exactly two kinds of row:

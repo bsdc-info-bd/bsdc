@@ -5,10 +5,39 @@ import { toast } from 'sonner';
 import { Button, IconButton, ProgressBar, TextareaField } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
+import { useAuthStore } from '@/store/auth-store';
+import { isConfigured } from '@/lib/env';
+import type { UploadResult } from '@/lib/storage/upload';
 import { previewLine } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
 import { MAX_VOICE_MS, recordingProgress } from '@/lib/messaging/voice-recorder';
 import { dataErrorKey } from '@/lib/supabase/errors';
+
+/**
+ * Records an uploaded file against the member who uploaded it.
+ *
+ * A failure here is not a failure to send. The bytes are already at the host and
+ * the message is about to reference them, so refusing to send would lose the
+ * message and leave the file orphaned anyway. What is lost is the trail: the
+ * expiry and the delete capability, which means that one file will sit on a
+ * third party's disk until somebody deletes it by hand.
+ *
+ * Reported rather than swallowed, because it is the difference between a
+ * conversation that cleans up after itself and one that does not.
+ */
+async function recordIfSignedIn(result: UploadResult): Promise<void> {
+  const ownerUid = useAuthStore.getState().user?.uid ?? '';
+  if (ownerUid.length === 0) return;
+  if (!isConfigured.supabase) return;
+  try {
+    const { recordMediaAsset } = await import('@/lib/data/media-repository');
+    await recordMediaAsset(ownerUid, result);
+  } catch {
+    // The message still sends. The file is unreachable by the sweeper, which is
+    // worth a line in a log and not worth losing what somebody said.
+    console.warn('a chat attachment was not recorded, so it cannot be swept later');
+  }
+}
 
 /** The emoji the tray inserts; reactions have their own set. */
 const EMOJI = [
@@ -143,6 +172,17 @@ export function MessageComposer({
           ),
       });
       setSending((current) => (current === null ? current : { ...current, percent: 100 }));
+
+      // The row first, then the message. `media_assets` is what the clean-up job
+      // reads to know a file exists and how long it was promised for, and a file
+      // with no row is a file nothing can ever delete — it is also a file whose
+      // expiry was never recorded, so ImgBB keeps it forever.
+      //
+      // Recording before sending is the safe order: an asset nobody attached yet
+      // is an orphan the sweeper can see, and if the message fails to send it is
+      // swept in a day. Recording *after* would leave the file invisible for the
+      // duration of a failed send, which is the case this exists to prevent.
+      await recordIfSignedIn(result);
       await onSendAttachment({
         body: draft.trim(),
         mediaUrl: result.url,
