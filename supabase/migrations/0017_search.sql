@@ -277,7 +277,7 @@ as $$
   -- function promises three columns, and `select *` would hand back four.
   select matches.kind, matches.slug, matches.title from (
     select 'person' as kind, coalesce(pr.username::text, '') as slug, pr.display_name as title,
-           extensions.similarity(pr.display_name, (select value from term)) as score
+           similarity(pr.display_name, (select value from term)) as score
     from public.profiles pr
     where (select char_length(value) from term) >= 2
       and pr.status = 'active'
@@ -285,13 +285,13 @@ as $$
       and (pr.display_name ilike '%' || (select value from term) || '%'
            or pr.username::text ilike (select value from term) || '%')
     union all
-    select 'group', g.slug::text, g.name, extensions.similarity(g.name, (select value from term))
+    select 'group', g.slug::text, g.name, similarity(g.name, (select value from term))
     from public.groups g
     where (select char_length(value) from term) >= 2
       and not g.is_archived
       and g.name ilike '%' || (select value from term) || '%'
     union all
-    select 'course', c.slug::text, c.title, extensions.similarity(c.title, (select value from term))
+    select 'course', c.slug::text, c.title, similarity(c.title, (select value from term))
     from public.courses c
     where (select char_length(value) from term) >= 2
       and c.status = 'published'

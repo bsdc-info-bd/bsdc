@@ -203,20 +203,23 @@ check('B-03c', 'Database', '`pg_temp` is last, so a caller cannot get in front o
   return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
 });
 
-// The same class of mistake in a different coat: an extension-owned function
-// called without its schema, from a file whose search path may not have it.
-// `db:prove` catches this by building a production-shaped database; this
-// catches the file that would be deployed before the harness runs.
-check('B-03d', 'Database', 'Extension-owned functions are called by their schema or not at all', () => {
+// The same class of mistake in a different coat. A function body is resolved
+// against *its own* pinned search path at the moment it is created, so a file
+// that calls an extension-owned symbol must say where to look. Qualifying the
+// call instead would tie the file to one deployment's layout; naming the
+// schema in the path works wherever the extension landed.
+check('B-03d', 'Database', 'A file that calls an extension-owned symbol says where to find it', () => {
   const owned = ['gen_random_bytes', 'digest', 'hmac', 'gen_salt', 'crypt', 'similarity', 'show_trgm'];
-  const bare = [];
-  for (const line of sqlCode.split('\n')) {
-    for (const name of owned) {
-      const pattern = new RegExp(`(?<![.\\w])${name}\\s*\\(`, 'g');
-      if (pattern.test(line)) bare.push(`${name}: ${line.trim().slice(0, 90)}`);
-    }
+  const bad = [];
+  for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
+    const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
+    const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
+    if (uses.length === 0) continue;
+    const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
+    const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
+    if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
   }
-  return { ok: bare.length === 0, evidence: bare.length === 0 ? 'none unqualified' : bare.join(' | ') };
+  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
 });
 
 check('B-04', 'Database', 'No migration grants a blanket write to anon', () => {

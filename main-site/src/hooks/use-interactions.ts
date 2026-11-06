@@ -159,6 +159,11 @@ export interface NotificationsResult {
   isLoading: boolean;
   isError: boolean;
   markAllRead: () => void;
+  /** One line, when it is opened. Reading one line must not read them all. */
+  markRead: (ids: string[]) => void;
+  /** Everything already read, gone. Nothing unread is swept away. */
+  clearRead: () => void;
+  isClearing: boolean;
 }
 
 export function useNotifications(): NotificationsResult {
@@ -172,12 +177,38 @@ export function useNotifications(): NotificationsResult {
     staleTime: 30_000,
   });
 
-  const mutation = useMutation({
+  // Reading is optimistic in one direction only: the row goes read on screen
+  // at once, and if the write fails the list is refetched rather than left
+  // claiming something the database does not agree with.
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
+    void queryClient.invalidateQueries({ queryKey: ['notifications-unread', uid] });
+  };
+
+  const markRead = useMutation({
+    mutationFn: async (ids: string[]) => (await repository()).markNotificationsRead(ids),
+    onMutate: (ids) => {
+      queryClient.setQueryData<AppNotification[]>(['notifications', uid], (current) =>
+        current?.map((item) =>
+          ids.includes(item.id) ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+        ),
+      );
+    },
+    onSuccess: refresh,
+    onError: refresh,
+  });
+
+  const markAll = useMutation({
     mutationFn: async () => (await repository()).markNotificationsRead(null),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['notifications', uid] });
+      refresh();
       queryClient.setQueryData(['notifications-unread', uid], 0);
     },
+  });
+
+  const clear = useMutation({
+    mutationFn: async () => (await repository()).clearInbox(),
+    onSuccess: refresh,
   });
 
   return {
@@ -185,8 +216,15 @@ export function useNotifications(): NotificationsResult {
     isLoading: query.isLoading,
     isError: query.isError,
     markAllRead: () => {
-      mutation.mutate();
+      markAll.mutate();
     },
+    markRead: (ids: string[]) => {
+      markRead.mutate(ids);
+    },
+    clearRead: () => {
+      clear.mutate();
+    },
+    isClearing: clear.isPending,
   };
 }
 

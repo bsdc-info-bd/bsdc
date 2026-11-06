@@ -1241,6 +1241,11 @@ export const en = {
       message: '{{actor}} sent you a message',
       moderation: 'A moderation update concerns your content',
     },
+    failedHint: 'Nothing was lost. Check your connection and open this screen again.',
+    clearRead: 'Clear read',
+    clearHint: 'Removes the notifications you have already read. Unread ones stay.',
+    unreadOne: 'Unread',
+    andMore: 'and {{count}} more',
     someone: 'Someone',
   },
   follow: {

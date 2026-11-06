@@ -51,6 +51,18 @@ export interface CommentNode extends Comment {
 
 export type NotificationKind = DbNotificationKind;
 
+/**
+ * One line in the inbox.
+ *
+ * A line is not a notification: `my_inbox` coalesces, so a thread with nine
+ * messages is one line that says nine. `id` is therefore the newest
+ * notification the line stands for — the row that is marked read and the row a
+ * push would have been about — and `occurrences` is how many are behind it.
+ *
+ * `targetUrl` comes from the database rather than being assembled here, because
+ * the push worker decides where a notification leads from the same function.
+ * Two places disagreeing about that is a bug no member can report.
+ */
 export interface AppNotification {
   id: string;
   kind: NotificationKind;
@@ -59,8 +71,16 @@ export interface AppNotification {
   commentId: string | null;
   /** Set on a `message` notification: the thread it opens. */
   conversationId: string | null;
+  /** Where opening the line goes. Always a path on this site. */
+  targetUrl: string;
   readAt: string | null;
   createdAt: string;
+  /** Newest first: the moment the line is timestamped by. */
+  lastAt: string;
+  /** How many notifications this one line stands for. */
+  occurrences: number;
+  unreadCount: number;
+  isUnread: boolean;
   actor: CommentAuthor | null;
 }
 

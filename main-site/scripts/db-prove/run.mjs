@@ -66,6 +66,7 @@ const HARNESSES = [
     't48.mjs',
     'the database tested here is the database production deploys: extensions in `extensions`',
   ],
+  ['t49.mjs', 'the inbox has a shape: one call, coalesced, and it knows where every line leads'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

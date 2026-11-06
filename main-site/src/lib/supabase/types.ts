@@ -2335,6 +2335,32 @@ export type Database = {
         Returns: boolean;
       };
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
+      my_inbox: {
+        Args: { p_limit?: number };
+        Returns: {
+          notification_id: string;
+          kind: DbNotificationKind;
+          actor_uid: string | null;
+          actor_username: string | null;
+          actor_name: string | null;
+          actor_avatar: string | null;
+          body: string;
+          post_id: string | null;
+          comment_id: string | null;
+          conversation_id: string | null;
+          target_url: string;
+          read_at: string | null;
+          last_at: string;
+          created_at: string;
+          occurrences: number;
+          unread_count: number;
+          is_unread: boolean;
+        }[];
+      };
+      inbox_unread_count: { Args: Record<never, never>; Returns: number };
+      mark_inbox_read: { Args: { p_ids?: string[] | null }; Returns: number };
+      clear_inbox: { Args: { p_keep_days?: number }; Returns: number };
+      mute_notification_kind: { Args: { p_kind: DbNotificationKind }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
       my_deleted_content: {
