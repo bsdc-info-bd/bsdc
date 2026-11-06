@@ -619,10 +619,14 @@ check('G-03', 'PWA', 'The offline state is honest rather than a blank page', () 
 
 note('H-01', 'Tests', 'Unit tests by package', () => {
   const counts = packages.map((name) => {
+    // `Tests  6 passed (6)` is the summary vitest prints; the second number in
+    // parentheses is the same count. Grepping only the first form missed a package
+    // whose run ended in a different shape and reported it as zero tests, which is
+    // indistinguishable from a package with no tests.
     const output = sh(
-      `cd ${name} && npx vitest run 2>&1 | grep -oE "Tests  [0-9]+ passed" | head -1 || true`,
+      `cd ${name} && npx vitest run 2>&1 | grep -E "^ *Tests +[0-9]+ (passed|failed)" | tail -1 || true`,
     );
-    const n = Number(output.match(/(\d+)/)?.[1] ?? 0);
+    const n = Number(output.match(/(\d+) (?:passed|failed)/)?.[1] ?? 0);
     return { name, n };
   });
   const total = counts.reduce((sum, entry) => sum + entry.n, 0);

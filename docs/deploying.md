@@ -800,6 +800,46 @@ column-privilege write grant shows up the same way: 0042 re-issues the column
 revokes that earlier migrations wrote *after* a table-wide `GRANT UPDATE`, where
 they silently did nothing.
 
+### A console says the account "has no profile in the community database"
+
+This was a real, reported lockout, and the cause is worth knowing because it looks
+like a credentials problem and is not. The seven corporate consoles decide who is
+signed in by reading `public.profiles`. The member site creates that row for itself
+the first time somebody signs in there. A staff account is created in the **Firebase
+console**, which is the only way to make the first owner — so there was no code path
+anywhere that created its row, and every console answered an operator with a correct
+password and a correct `bsdc_role` claim that their account was empty.
+
+Migration `0074` closes it, in three parts:
+
+| Routine | Who can call it | What it does |
+|---|---|---|
+| `provision_staff(p_display_name)` | any signed-in caller | Creates the caller's own row **from the role their verified token already carries**. It cannot grant a role it was not given, refuses a suspended account, invents no handle, and reconciles an existing row upward only. |
+| `staff_identity()` | any signed-in caller | One call returning row, role, rank, standing and last-seen, so the console gate cannot disagree with Postgres. |
+| `bootstrap_staff_identity(secret, uid, …)` | `anon`, gated by the flush secret | The first owner, before any staff token exists. `/api/auth/claims` calls it when it mints an elevated claim, so the claim and the row cannot drift. |
+
+If a console still refuses after `0074` is applied, the message now names which of
+the five things went wrong, and each has one cause:
+
+| Message | Cause | Fix |
+|---|---|---|
+| *email address and password do not match a staff account* | The account is not in `bsdc-second`. | Staff sign in against the **second** project. A member account at `bsdc.info.bd` will not open a console. |
+| *holds no staff role* | The account exists and has no role claim. | An owner gives it one: People screen, or `/api/auth/claims` for that uid. |
+| *suspended* | `profiles.status` is not `active`. | A manager lifts it — suspending is deliberate and never lapses on its own. |
+| *no profile … cannot create one* | `0074` is not applied to this database. | Run the migrations. This message is the fallback path and should not occur on a current deployment. |
+| *too many attempts* | Firebase is rate-limiting the address. | Wait; the lockout is Firebase's, not this platform's. |
+
+The `VITE_FB2_*` variables are what point a console at `bsdc-second`; if they are
+missing the console reports the missing names before it tries to sign anybody in.
+
+### The Approvals tab counts work nobody can decide
+
+`admin_overview()` returns `shops_pending` and `campaigns_pending` and always has.
+The decisions need the read models — `admin_pending_shops()`, `admin_pending_campaigns()`
+— which `0068` added, and the console tab that calls them, which is in this
+deployment. A count with no queue behind it means the database is ahead of the
+console build: check that the console was deployed after `0068`.
+
 ### App links still open in the browser
 
 `ANDROID_CERT_FINGERPRINT` is unset or does not match the certificate that

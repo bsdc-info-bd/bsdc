@@ -146,7 +146,7 @@ rather than marked done.
 cd main-site
 node scripts/db-prove/t46.mjs      # 46 checks against 0073, offline
 npx vitest run functions/api/media # 6 checks on the address allowlist
-node scripts/db-prove/run.mjs      # all of it, 29 harnesses
+node scripts/db-prove/run.mjs      # all of it, 30 harnesses
 ```
 
 `t46.mjs` covers: a member recording their own upload; the expiry being stored;
@@ -158,3 +158,27 @@ reported as deletable; a stranger with the wrong secret getting nothing; claim,
 release and confirm; a released row coming back; a purged row never coming back;
 one member never seeing another's pictures; and each function being granted to
 exactly the right role.
+
+## What fast means, and where it is proved
+
+Expiry is about correctness; this is about the other half of the same complaint —
+that pictures felt slow. The two are one system: a picture is either fetched once at
+the size it is drawn, or it is fetched repeatedly at a size nobody can use.
+
+| Layer | File | What it decides |
+|---|---|---|
+| Where a picture is hosted | `lib/storage/media-contract.ts` | A picture a feed draws goes to Cloudinary, the only host that can be asked for the width a card shows. ImgBB keeps chat attachments, whose bytes the edge caches on the way past. |
+| The address it is fetched from | `lib/media/optimise.ts` | A width from a real layout ladder, `f_auto` (AVIF → WebP → JPEG by negotiation) and `q_auto`, plus a `srcset` so the browser chooses before it starts. A host that cannot be resized is never rewritten. |
+| What the browser is told | `components/media/MediaImage.tsx` | `slotWidth` becomes `srcset`/`sizes` on the first attempt only. A retry must reach the retried address; a `srcset` on a retry lets the browser re-request a candidate known to be bad. |
+| What the upload contains | `lib/storage/upload.ts` | Re-encoded to WebP at 2560px before it leaves the phone — roughly a quarter of the bytes to upload, and no visible difference at any drawn size. A GIF, an SVG, a canvas that refuses, or an encode larger than the original all send the original untouched. |
+| What is discovered first | `lib/seo/home-feed.ts` | The home page's first picture is preloaded in the head **with** `imagesrcset`, so the LCP picture costs one round trip instead of four. A preload for the wrong width is worse than none. |
+
+The numbers these produce, in the order they arrive: the preconnect removes a TLS
+handshake, the preload removes a discovery round trip, `srcset` stops the wrong
+candidate being fetched at all, `f_auto` cuts the bytes of the right candidate, and
+the upload rewrite cuts the bytes a member sends. Every one of them is a test in
+`lib/media/optimise.test.ts`, `lib/seo/home-feed.test.ts` or
+`components/media/MediaGallery.test.tsx`, and the routing decision is pinned in
+`lib/storage/upload.test.ts` — including the rule that a host which cannot resize a
+picture is never substituted for one that can, because that substitution is how the
+feed became slow in the first place.
