@@ -79,19 +79,33 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
           </Badge>
         </div>
 
-        <Link
-          to={`/p/${post.slug}`}
-          className="mt-3 block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
-        >
+        <div className="mt-3">
           {post.title.length > 0 ? (
-            <h2 className="text-xl font-bold leading-snug tracking-tight group-hover:text-green-800 sm:text-2xl dark:group-hover:text-green-300">
-              {post.title}
+            <h2 className="text-xl font-bold leading-snug tracking-tight sm:text-2xl">
+              <Link
+                to={`/p/${post.slug}`}
+                className="rounded-sm transition-colors duration-150 ease-app hover:text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 dark:hover:text-green-300"
+              >
+                {post.title}
+              </Link>
             </h2>
           ) : null}
+          {/* A titleless post still needs a way in, so the excerpt carries the
+              link. Only one of the two is ever a link, so a screen reader is not
+              read the same sentence twice. */}
           {post.excerpt.length > 0 ? (
-            <p className="mt-1.5 line-clamp-3 text-sm text-muted">{post.excerpt}</p>
+            post.title.length > 0 ? (
+              <p className="mt-1.5 line-clamp-3 text-sm text-muted">{post.excerpt}</p>
+            ) : (
+              <Link
+                to={`/p/${post.slug}`}
+                className="mt-1.5 line-clamp-3 block text-sm text-muted hover:text-foreground"
+              >
+                {post.excerpt}
+              </Link>
+            )
           ) : null}
-        </Link>
+        </div>
 
         {placement === 'body' ? (
           <MediaGallery items={gallery} label={galleryLabel} className="mt-3" />
