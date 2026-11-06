@@ -46,7 +46,7 @@ create or replace function bsdc.sync_follow_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -69,7 +69,7 @@ create or replace function bsdc.sync_post_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' and new.status = 'published' then
@@ -89,7 +89,7 @@ create or replace function bsdc.sync_tag_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -105,7 +105,7 @@ create or replace function bsdc.sync_poll_votes()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -123,7 +123,7 @@ create or replace function bsdc.record_post_revision()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if old.status = 'published' and (old.title is distinct from new.title
@@ -141,7 +141,7 @@ create or replace function bsdc.sync_reaction_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_author text;
@@ -165,7 +165,7 @@ create or replace function bsdc.sync_comment_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_author text;
@@ -206,7 +206,7 @@ create or replace function bsdc.sync_comment_reaction_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_author text;
@@ -232,7 +232,7 @@ create or replace function bsdc.sync_conversation_activity()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_preview text;
@@ -264,7 +264,7 @@ create or replace function bsdc.sync_group_member_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -282,7 +282,7 @@ create or replace function bsdc.sync_page_follower_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -300,7 +300,7 @@ create or replace function bsdc.sync_event_rsvp_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' and new.status = 'going' then
@@ -323,7 +323,7 @@ create or replace function bsdc.sync_application_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -340,7 +340,7 @@ create or replace function bsdc.sync_proposal_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -357,7 +357,7 @@ create or replace function bsdc.sync_project_stars()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then

@@ -8,6 +8,18 @@
 -- completed lessons and the passing score itself.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_course_level') then
@@ -112,7 +124,7 @@ create or replace function bsdc.sync_course_totals()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_course uuid := coalesce(new.course_id, old.course_id);
@@ -157,7 +169,7 @@ create or replace function bsdc.sync_enrolled_count()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if tg_op = 'INSERT' then
@@ -193,7 +205,7 @@ create or replace function bsdc.sync_enrollment_progress()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_course uuid := coalesce(new.course_id, old.course_id);
@@ -302,7 +314,7 @@ create or replace function bsdc.new_certificate_code()
 returns text
 language plpgsql
 volatile
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_alphabet constant text := 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -335,7 +347,7 @@ create or replace function public.enroll_in_course(p_course_id uuid)
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid    text := bsdc.current_uid();
@@ -366,7 +378,7 @@ create or replace function public.complete_lesson(
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -414,7 +426,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();
@@ -534,7 +546,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     c.id, c.slug::text, c.title, c.summary, c.cover_url, c.level, c.language, c.tags,
@@ -572,7 +584,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     l.id, l.slug::text, l.title, l.kind, l.duration_minutes, l.position,
@@ -611,7 +623,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select qq.id, qq.prompt, qq.kind, qq.marks, qq.position, o.id, o.label, o.position
   from public.quiz_questions qq
@@ -635,7 +647,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     cert.code, cert.recipient_name, cert.course_title, c.slug::text,
@@ -651,7 +663,7 @@ create or replace function public.revoke_certificate(p_code text, p_reason text 
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if not bsdc.is_staff() then

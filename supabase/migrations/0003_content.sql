@@ -8,6 +8,18 @@
 -- columns scattered across the main table.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_post_kind') then
@@ -203,7 +215,7 @@ create or replace function public.cast_poll_vote(p_post_id uuid, p_option_id uui
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -291,7 +303,7 @@ create or replace function public.increment_post_view(p_post_id uuid)
 returns void
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions, pg_temp
 as $$
   update public.posts set views_count = views_count + 1 where id = p_post_id;
 $$;

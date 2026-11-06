@@ -24,6 +24,18 @@
 -- still immediate and free; only a change waits, and only because there is
 -- something to wait for.
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 alter table public.profiles add column if not exists username_changed_at timestamptz;
 
 create index if not exists profiles_username_changed_idx
@@ -37,7 +49,7 @@ create or replace function public.claim_username(p_username citext)
 returns public.profiles
 language plpgsql
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();
@@ -145,7 +157,7 @@ returns timestamptz
 language sql
 stable
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select case
            -- No handle yet: nothing to wait for.

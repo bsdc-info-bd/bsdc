@@ -67,6 +67,18 @@
 -- the same as receiving their mail.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 create table if not exists bsdc.bootstrap_admins (
   email      citext primary key,
   role       bsdc_role not null default 'owner',
@@ -101,7 +113,7 @@ returns bsdc_role
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with claims as (
     select coalesce(current_setting('request.jwt.claims', true), '{}')::jsonb as c
@@ -134,7 +146,7 @@ returns bsdc_role
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select case
     when bsdc.role_rank(coalesce(bsdc.bootstrap_role(), 'member'::bsdc_role))
@@ -158,7 +170,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
            (current_setting('request.jwt.claims', true)::jsonb ->> 'staff')::boolean,
@@ -181,7 +193,7 @@ returns table (role text, staff boolean, bootstrap boolean)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     bsdc.actor_role()::text,
@@ -209,7 +221,7 @@ create or replace function public.claim_bootstrap_role()
 returns text
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();

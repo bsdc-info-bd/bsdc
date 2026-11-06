@@ -615,7 +615,7 @@ create or replace function bsdc.enforce_recovery_window()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if old.deleted_at is not null
@@ -644,7 +644,7 @@ create or replace function bsdc.stamp_post_edited()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if new.title is distinct from old.title
@@ -688,7 +688,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with me as (select bsdc.current_uid() as uid)
   select
@@ -729,7 +729,7 @@ create or replace function public.purge_deleted_content(p_days integer default 3
 returns table (posts_removed integer, comments_removed integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_days     integer := greatest(coalesce(p_days, 30), 7);

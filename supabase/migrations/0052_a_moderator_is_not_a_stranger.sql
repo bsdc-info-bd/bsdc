@@ -113,7 +113,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with me as (select bsdc.current_uid() as uid)
   select

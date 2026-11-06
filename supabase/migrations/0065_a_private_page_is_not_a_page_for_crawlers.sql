@@ -66,7 +66,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public, bsdc, pg_temp
+SET search_path = public, bsdc, extensions, pg_temp
 AS $function$
 DECLARE
   v_path text := bsdc.normalise_path(p_path);

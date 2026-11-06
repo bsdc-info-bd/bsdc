@@ -62,6 +62,10 @@ const HARNESSES = [
     'an upload remembers how long it was promised for, and only an abandoned picture is swept',
   ],
   ['t47.mjs', 'a staff account can get in without being a member first'],
+  [
+    't48.mjs',
+    'the database tested here is the database production deploys: extensions in `extensions`',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

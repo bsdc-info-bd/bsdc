@@ -19,6 +19,18 @@
 --      somebody can type.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_config_type') then
@@ -132,7 +144,7 @@ create or replace function public.set_site_config(p_key text, p_value jsonb)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_row public.site_config%rowtype;
@@ -174,7 +186,7 @@ create or replace function public.revert_site_config(p_history_id bigint)
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_entry public.site_config_history%rowtype;
@@ -195,7 +207,7 @@ returns setof public.site_config
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select * from public.site_config
   where is_public or bsdc.has_permission('settings.read')
@@ -207,7 +219,7 @@ returns table (id bigint, old_value jsonb, new_value jsonb, changed_by text, cha
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select h.id, h.old_value, h.new_value, h.changed_by, h.changed_at
   from public.site_config_history h
@@ -258,7 +270,7 @@ create or replace function public.move_page_section(p_section_id uuid, p_to inte
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_page uuid;
@@ -313,7 +325,7 @@ create or replace function public.add_page_section(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_id uuid;
@@ -346,7 +358,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id, p.slug::text, p.title, p.description, p.noindex,
@@ -409,7 +421,9 @@ create or replace function public.issue_staff_card(p_uid text)
 returns text
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+-- `extensions` joins the pinned path: without it the card generator could not
+-- read the random bytes it prints, which is what production reported.
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_body text;
@@ -424,8 +438,9 @@ begin
 
   loop
     v_try := v_try + 1;
-    v_body := upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 8));
-    v_body := translate(v_body, 'OI', '48');
+    -- The same generator the rest of the ecosystem uses, so one alphabet and
+    -- one check digit cover a staff card and a certificate alike.
+    v_body := substr(bsdc.issue_doc_code('XX'), 6, 8);
     v_code := 'BSDC-ID-' || v_body || '-' || bsdc.card_check_digit(v_body)::text;
     exit when not exists (select 1 from public.staff_records where card_code = v_code);
     if v_try > 10 then
@@ -455,7 +470,7 @@ create or replace function public.upsert_staff_record(
 returns text
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_role bsdc_role;
@@ -512,7 +527,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     s.uid, p.display_name, p.username::text, p.role, s.staff_no, s.department,
@@ -559,7 +574,7 @@ returns table (decision text, matched cidr, reason text)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with best as (
     select r.kind, r.range, r.reason
@@ -597,7 +612,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     e.ip,
@@ -622,7 +637,7 @@ create or replace function public.set_ip_rule(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_id uuid;
@@ -649,7 +664,7 @@ create or replace function public.drop_ip_rule(p_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('people.suspend');
@@ -736,7 +751,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     s.key, s.name, s.category, s.state,
@@ -764,7 +779,7 @@ create or replace function public.record_service_check(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('settings.write');
@@ -796,7 +811,7 @@ create or replace function public.open_incident(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_id uuid;
@@ -827,7 +842,7 @@ create or replace function public.resolve_incident(p_incident_id uuid, p_body te
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_service text;
@@ -871,7 +886,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     i.id, i.service_key, i.title, i.impact, i.started_at, i.resolved_at,
@@ -929,7 +944,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     c.id, c.slug::text, c.name, c.topic, c.is_private,

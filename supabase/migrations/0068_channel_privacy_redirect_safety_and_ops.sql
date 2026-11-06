@@ -46,7 +46,7 @@ create or replace function bsdc.audit(
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select bsdc.audit(
     p_action,
@@ -69,7 +69,7 @@ returns bsdc_role
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with claims as (
     select coalesce(current_setting('request.jwt.claims', true), '{}')::jsonb as c
@@ -97,7 +97,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select p_channel_id is null
       or bsdc.is_staff()
@@ -118,7 +118,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select p_channel_id is null
       or exists (
@@ -176,7 +176,7 @@ create or replace function bsdc.sync_group_post_counts()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_old_live boolean := false;
@@ -237,7 +237,7 @@ returns table(loc text, lastmod timestamptz, changefreq text, priority numeric)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $function$
   with page as (
     select greatest(1, coalesce(p_page, 1)) as n,
@@ -317,7 +317,7 @@ returns table(section text, urls integer, pages integer, lastmod timestamptz)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $function$
   with sizes as (
     select least(5000, greatest(1, coalesce(p_size, 1000))) as size
@@ -390,7 +390,7 @@ returns table(
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $function$
 declare
   v_path text := bsdc.normalise_path(p_path);
@@ -653,7 +653,7 @@ create or replace function public.set_redirect(
 returns public.redirects
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_from text := bsdc.normalise_path(p_from);
@@ -736,7 +736,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     s.id,
@@ -772,7 +772,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     a.id,

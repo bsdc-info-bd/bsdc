@@ -7,6 +7,18 @@
 -- and the applicant may read an application.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_job_type') then
@@ -258,7 +270,7 @@ create or replace function public.apply_to_job(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -292,7 +304,7 @@ create or replace function public.withdraw_application(p_application_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   update public.job_applications
@@ -308,7 +320,7 @@ create or replace function public.decide_application(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid    text := bsdc.current_uid();
@@ -343,7 +355,7 @@ create or replace function public.submit_proposal(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -374,7 +386,7 @@ create or replace function public.toggle_project_star(p_project_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -420,7 +432,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     j.id, j.slug::text, j.title, j.company, j.job_type, j.work_mode, j.level, j.city,
@@ -442,7 +454,7 @@ create or replace function public.increment_job_view(p_job_id uuid)
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   update public.jobs set views_count = views_count + 1 where id = p_job_id;
 $$;

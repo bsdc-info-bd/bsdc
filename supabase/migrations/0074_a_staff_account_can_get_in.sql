@@ -50,7 +50,7 @@ create or replace function public.provision_staff(p_display_name text default nu
 returns public.profiles
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid       text := bsdc.current_uid();
@@ -199,7 +199,7 @@ create or replace function public.bootstrap_staff_identity(
 returns public.profiles
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_row public.profiles;
@@ -272,7 +272,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();

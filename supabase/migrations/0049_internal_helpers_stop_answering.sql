@@ -38,7 +38,7 @@ create or replace function bsdc.notify_follow()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.notify(new.followee_uid, new.follower_uid, 'follow');
@@ -50,7 +50,7 @@ create or replace function bsdc.notify_mention()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_author text;

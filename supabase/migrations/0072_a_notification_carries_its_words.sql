@@ -65,7 +65,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_lookback integer := greatest(1, least(coalesce(p_lookback_hours, 72), 24 * 14));
@@ -130,7 +130,7 @@ create or replace function public.push_mark_devices(p_secret text, p_ids uuid[])
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;
@@ -159,7 +159,7 @@ create or replace function public.push_kill_device(p_secret text, p_endpoint tex
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if not bsdc.push_secret_matches(p_secret) then
@@ -197,7 +197,7 @@ create or replace function public.push_flag_invalid_device(p_secret text, p_endp
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if not bsdc.push_secret_matches(p_secret) then
@@ -237,7 +237,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     s.endpoint,
@@ -266,7 +266,7 @@ create or replace function public.forget_push_device(p_endpoint text)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -294,7 +294,7 @@ create or replace function public.push_sweep_dead_devices(p_secret text, p_days 
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;

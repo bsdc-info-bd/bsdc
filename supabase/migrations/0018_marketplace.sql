@@ -15,6 +15,18 @@
 -- There is no floating point anywhere in this file.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_shop_status') then
@@ -235,7 +247,7 @@ create or replace function bsdc.sync_review_totals()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_product uuid := coalesce(new.product_id, old.product_id);
@@ -277,7 +289,7 @@ create or replace function bsdc.cart_for(p_uid text)
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_id uuid;
@@ -298,7 +310,7 @@ create or replace function public.add_to_cart(p_product_id uuid, p_quantity inte
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -339,7 +351,7 @@ create or replace function public.set_cart_quantity(p_product_id uuid, p_quantit
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid  text := bsdc.current_uid();
@@ -369,7 +381,7 @@ create or replace function public.clear_cart()
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -401,7 +413,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id, p.slug::text, p.title, coalesce(p.images[1], ''), p.price, p.currency,
@@ -426,7 +438,7 @@ create or replace function bsdc.new_order_code()
 returns text
 language sql
 volatile
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select 'BSD' || lpad(((random() * 9999999999)::bigint)::text, 10, '0');
 $$;
@@ -445,7 +457,7 @@ create or replace function public.place_order(
 returns table (order_id uuid, code text, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();
@@ -577,7 +589,7 @@ create or replace function public.cancel_order(p_order_id uuid, p_reason text de
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -627,7 +639,7 @@ create or replace function public.submit_review(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -666,7 +678,7 @@ create or replace function public.toggle_wishlist(p_product_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -718,7 +730,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id, p.slug::text, p.title, p.summary, coalesce(p.images[1], ''),
@@ -769,7 +781,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     o.id, o.code, o.status, o.payment_status, o.payment_method, o.total, o.currency,

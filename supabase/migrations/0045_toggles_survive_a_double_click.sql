@@ -44,7 +44,7 @@ create or replace function public.toggle_reaction(p_post_id uuid, p_reaction bsd
 returns table (reacted boolean, reaction bsdc_reaction, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();
@@ -90,7 +90,7 @@ create or replace function public.toggle_comment_reaction(p_comment_id uuid)
 returns table (reacted boolean, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -122,7 +122,7 @@ create or replace function public.toggle_bookmark(p_post_id uuid, p_collection_i
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -149,7 +149,7 @@ create or replace function public.toggle_page_follow(p_page_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -174,7 +174,7 @@ create or replace function public.toggle_project_star(p_project_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -206,7 +206,7 @@ create or replace function public.apply_to_job(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -250,7 +250,7 @@ create or replace function public.submit_proposal(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -288,7 +288,7 @@ create or replace function public.toggle_wishlist(p_product_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();

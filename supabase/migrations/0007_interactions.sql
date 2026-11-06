@@ -59,7 +59,7 @@ create or replace function bsdc.notify(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if p_uid is null or p_uid = p_actor_uid then
@@ -128,7 +128,7 @@ create or replace function public.toggle_reaction(p_post_id uuid, p_reaction bsd
 returns table (reacted boolean, reaction bsdc_reaction, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid      text := bsdc.current_uid();
@@ -323,7 +323,7 @@ create or replace function public.toggle_comment_reaction(p_comment_id uuid)
 returns table (reacted boolean, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -354,7 +354,7 @@ create or replace function public.mark_answer(p_comment_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -413,7 +413,7 @@ create or replace function public.toggle_bookmark(p_post_id uuid, p_collection_i
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -447,7 +447,7 @@ create or replace function public.record_share(p_post_id uuid, p_channel text)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid    text := bsdc.current_uid();
@@ -503,7 +503,7 @@ returns integer
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select count(*)::integer
     from public.notifications
@@ -514,7 +514,7 @@ create or replace function public.mark_notifications_read(p_ids uuid[] default n
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -545,7 +545,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id,

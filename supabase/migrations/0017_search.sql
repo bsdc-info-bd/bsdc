@@ -18,12 +18,24 @@
 -- "generation expression is not immutable". Joining an array of text is in
 -- fact deterministic, and this wrapper says so — narrowed to text[] rather
 -- than anyarray, which is the part that makes the claim true.
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 create or replace function bsdc.join_text(p_values text[], p_separator text default ' ')
 returns text
 language sql
 immutable
 parallel safe
-set search_path = pg_catalog
+set search_path = pg_catalog, extensions, pg_temp
 as $$
   select coalesce(array_to_string(coalesce(p_values, '{}'::text[]), p_separator), '')
 $$;
@@ -84,7 +96,7 @@ create or replace function bsdc.to_search_query(p_input text)
 returns tsquery
 language plpgsql
 immutable
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_words text[];
@@ -127,7 +139,7 @@ create or replace function public.log_search(p_term text, p_results integer)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_term text := lower(btrim(coalesce(p_term, '')));
@@ -146,7 +158,7 @@ returns table (term text, uses integer)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select term, count(*)::integer as uses
   from public.search_log
@@ -178,7 +190,7 @@ returns table (
 )
 language sql
 stable
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with q as (select bsdc.to_search_query(p_query) as query),
   wanted as (
@@ -258,14 +270,14 @@ create or replace function public.search_suggestions(p_prefix text, p_limit inte
 returns table (kind text, slug text, title text)
 language sql
 stable
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with term as (select lower(btrim(coalesce(p_prefix, ''))) as value)
   -- The ranking column is computed in the subquery and dropped here: the
   -- function promises three columns, and `select *` would hand back four.
   select matches.kind, matches.slug, matches.title from (
     select 'person' as kind, coalesce(pr.username::text, '') as slug, pr.display_name as title,
-           similarity(pr.display_name, (select value from term)) as score
+           extensions.similarity(pr.display_name, (select value from term)) as score
     from public.profiles pr
     where (select char_length(value) from term) >= 2
       and pr.status = 'active'
@@ -273,13 +285,13 @@ as $$
       and (pr.display_name ilike '%' || (select value from term) || '%'
            or pr.username::text ilike (select value from term) || '%')
     union all
-    select 'group', g.slug::text, g.name, similarity(g.name, (select value from term))
+    select 'group', g.slug::text, g.name, extensions.similarity(g.name, (select value from term))
     from public.groups g
     where (select char_length(value) from term) >= 2
       and not g.is_archived
       and g.name ilike '%' || (select value from term) || '%'
     union all
-    select 'course', c.slug::text, c.title, similarity(c.title, (select value from term))
+    select 'course', c.slug::text, c.title, extensions.similarity(c.title, (select value from term))
     from public.courses c
     where (select char_length(value) from term) >= 2
       and c.status = 'published'
@@ -305,7 +317,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select case p_kind
     when 'follow'  then coalesce((p.notifications ->> 'followers')::boolean, true)
@@ -329,7 +341,7 @@ create or replace function bsdc.notify(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if p_uid is null or p_uid = p_actor_uid then

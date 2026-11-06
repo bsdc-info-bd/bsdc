@@ -300,7 +300,7 @@ create or replace function public.claim_username(p_username citext)
 returns public.profiles
 language plpgsql
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();

@@ -121,7 +121,7 @@ create or replace function bsdc.settle_order(p_order_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_order      public.orders%rowtype;
@@ -165,7 +165,7 @@ create or replace function public.advance_order(
 returns bsdc_order_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -222,7 +222,7 @@ create or replace function public.mark_order_paid(p_order_id uuid, p_reference t
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -254,7 +254,7 @@ create or replace function public.publish_product(p_product_id uuid, p_publish b
 returns bsdc_product_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -303,7 +303,7 @@ create or replace function public.restock_product(p_product_id uuid, p_delta int
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -345,7 +345,7 @@ create or replace function public.open_shop(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -376,7 +376,7 @@ create or replace function public.decide_shop(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_owner text;
@@ -413,7 +413,7 @@ returns integer
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(sum(amount), 0)::integer
   from public.shop_ledger
@@ -429,7 +429,7 @@ create or replace function public.request_payout(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -480,7 +480,7 @@ create or replace function public.decide_payout(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_payout public.payouts%rowtype;
@@ -534,7 +534,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     s.id, s.slug::text, s.name, s.status, s.logo_url, s.commission_bps,
@@ -571,7 +571,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     o.id, o.code, o.status, o.payment_status, o.payment_method, o.total, o.currency,
@@ -608,7 +608,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id, p.slug::text, p.title, p.status, p.price, p.currency, p.stock, p.is_digital,
@@ -631,7 +631,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select l.id, l.kind, l.amount, l.memo, l.created_at
   from public.shop_ledger l
@@ -655,7 +655,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id, p.amount, p.status, p.reference, p.requested_at, p.decided_at,

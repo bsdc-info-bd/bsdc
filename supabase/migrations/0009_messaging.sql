@@ -92,7 +92,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select exists (
     select 1 from public.conversation_members cm
@@ -154,7 +154,7 @@ create or replace function public.open_direct_conversation(p_other_uid text)
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid  text := bsdc.current_uid();
@@ -206,7 +206,7 @@ create or replace function public.create_group_conversation(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -254,7 +254,7 @@ create or replace function public.send_message(
 returns public.messages
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -297,7 +297,7 @@ create or replace function public.mark_conversation_read(p_conversation_id uuid)
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   update public.conversation_members
     set last_read_at = now()
@@ -308,7 +308,7 @@ create or replace function public.leave_conversation(p_conversation_id uuid)
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   update public.conversation_members
     set left_at = now()
@@ -335,7 +335,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with mine as (
     select cm.conversation_id, cm.last_read_at, cm.muted_until
@@ -381,7 +381,7 @@ returns integer
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(sum(
     (

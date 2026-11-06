@@ -176,7 +176,7 @@ returns integer
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(sum(spend), 0)::integer
   from public.ad_daily_stats
@@ -192,7 +192,7 @@ returns integer
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(sum(amount), 0)::integer
   from public.ad_wallet_entries
@@ -207,7 +207,7 @@ create or replace function public.topup_ad_wallet(
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_balance integer;
@@ -252,7 +252,7 @@ create or replace function public.create_campaign(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -289,7 +289,7 @@ create or replace function public.add_creative(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -325,7 +325,7 @@ create or replace function public.submit_campaign(p_campaign_id uuid)
 returns bsdc_ad_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid       text := bsdc.current_uid();
@@ -374,7 +374,7 @@ create or replace function public.decide_campaign(
 returns bsdc_ad_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_status bsdc_ad_status;
@@ -409,7 +409,7 @@ create or replace function public.set_campaign_paused(
 returns bsdc_ad_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid    text := bsdc.current_uid();
@@ -459,7 +459,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with viewer as (
     select
@@ -515,7 +515,7 @@ create or replace function public.record_ad_event(
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid       text := bsdc.current_uid();
@@ -627,7 +627,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     a.id, a.name, a.status, a.pricing, a.bid, a.total_budget, a.daily_budget,
@@ -661,7 +661,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     c.id, c.placement, c.headline, c.body, c.image_url, c.cta_label,
@@ -687,7 +687,7 @@ returns table (day date, impressions integer, clicks integer, spend integer)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select s.day,
          sum(s.impressions)::integer,
@@ -714,7 +714,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select w.id, w.kind, w.amount, w.memo, w.reference, w.created_at
   from public.ad_wallet_entries w

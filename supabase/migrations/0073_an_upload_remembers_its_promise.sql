@@ -80,7 +80,7 @@ create or replace function public.record_media_asset(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -209,7 +209,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_limit integer := greatest(1, least(coalesce(p_limit, 100), 400));
@@ -267,7 +267,7 @@ create or replace function public.media_claim_purge(p_secret text, p_ids uuid[])
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;
@@ -297,7 +297,7 @@ create or replace function public.media_mark_purged(p_secret text, p_ids uuid[])
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;
@@ -327,7 +327,7 @@ create or replace function public.media_release_purge(p_secret text, p_ids uuid[
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;
@@ -371,7 +371,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     a.id,
@@ -404,7 +404,7 @@ create or replace function public.media_sweep_forgotten(p_secret text, p_days in
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;

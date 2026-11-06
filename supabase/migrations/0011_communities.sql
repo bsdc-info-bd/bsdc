@@ -7,6 +7,18 @@
 -- collects RSVPs. Posts gain an optional home: a channel.
 -- ---------------------------------------------------------------------------
 
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'bsdc_group_privacy') then
@@ -101,7 +113,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select exists (
     select 1 from public.group_members gm
@@ -114,7 +126,7 @@ returns bsdc_group_role
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select gm.role from public.group_members gm
   where gm.group_id = p_group_id and gm.uid = p_uid;
@@ -125,7 +137,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
     bsdc.group_role(p_group_id, p_uid) in ('owner', 'admin', 'moderator'),
@@ -140,7 +152,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select p_privacy <> 'secret'
       or bsdc.is_group_member(p_group_id, bsdc.current_uid())
@@ -303,7 +315,7 @@ create or replace function public.join_group(p_group_id uuid, p_message text def
 returns bsdc_join_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();
@@ -343,7 +355,7 @@ create or replace function public.decide_join_request(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor text := bsdc.current_uid();
@@ -370,7 +382,7 @@ create or replace function public.leave_group(p_group_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -394,7 +406,7 @@ create or replace function public.set_group_role(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor_role bsdc_group_role := bsdc.group_role(p_group_id, bsdc.current_uid());
@@ -410,7 +422,7 @@ create or replace function public.rsvp_event(p_event_id uuid, p_status bsdc_rsvp
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid   text := bsdc.current_uid();
@@ -447,7 +459,7 @@ create or replace function public.toggle_page_follow(p_page_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -476,7 +488,7 @@ create or replace function public.create_group(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -516,7 +528,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     g.id, g.slug::text, g.name, g.description, g.privacy, g.avatar_url,
@@ -555,7 +567,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     e.id, e.slug::text, e.title, e.mode, e.venue, e.city, e.cover_url,

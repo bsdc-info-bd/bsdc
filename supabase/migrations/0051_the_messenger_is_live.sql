@@ -228,7 +228,7 @@ create or replace function public.toggle_message_reaction(
 returns table (reacted boolean, reaction text, total integer)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 -- The OUT column is called `reaction`, like the table column, so an
 -- unqualified name in this body belongs to the column.
@@ -276,7 +276,7 @@ create or replace function public.mark_message_read(p_message_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid        text := bsdc.current_uid();
@@ -304,7 +304,7 @@ create or replace function public.toggle_message_pin(p_message_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid          text := bsdc.current_uid();
@@ -341,7 +341,7 @@ create or replace function public.toggle_message_star(p_message_id uuid)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -384,7 +384,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select m.id, m.conversation_id, m.sender_uid, m.body, m.created_at
   from public.messages m
@@ -412,7 +412,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select m.id, m.body, m.sender_uid, m.media_name, m.kind, p.pinned_at, p.pinned_by
   from public.message_pins p
@@ -438,7 +438,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select true,
          (cm.muted_until is not null and cm.muted_until > now()),
@@ -482,7 +482,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     m.id,
@@ -547,7 +547,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select m.id, m.conversation_id, m.body, m.media_name, m.kind, m.created_at
   from public.message_stars s

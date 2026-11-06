@@ -128,7 +128,7 @@ returns bsdc_role
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
     (select p.role from public.profiles p where p.uid = bsdc.current_uid()),
@@ -141,7 +141,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select exists (
     select 1 from public.role_permissions r
@@ -187,7 +187,7 @@ create or replace function bsdc.audit(
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   insert into public.audit_log (actor_uid, action, subject, metadata)
   values (bsdc.current_uid(), p_action, coalesce(p_subject, ''), coalesce(p_metadata, '{}'::jsonb));
@@ -267,7 +267,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     f.key, f.label, f.description, f.module, f.enabled, f.audience, f.is_core,
@@ -294,7 +294,7 @@ create or replace function public.set_plugin_enabled(
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_flag     public.feature_flags%rowtype;
@@ -371,7 +371,7 @@ create or replace function public.set_plugin_rollout(
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('plugins.write');
@@ -407,7 +407,7 @@ create or replace function public.set_user_role(
 returns bsdc_role
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor     text := bsdc.current_uid();
@@ -457,7 +457,7 @@ create or replace function public.set_account_status(
 returns bsdc_account_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor      text := bsdc.current_uid();
@@ -517,7 +517,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     r.id, r.subject_type, r.subject_id, r.reason, r.details, r.status,
@@ -536,7 +536,7 @@ create or replace function public.claim_report(p_report_id uuid)
 returns text
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor    text := bsdc.current_uid();
@@ -571,7 +571,7 @@ create or replace function public.resolve_report(
 returns bsdc_report_status
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_actor  text := bsdc.current_uid();
@@ -649,7 +649,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     (select count(*)::integer from public.profiles),
@@ -679,7 +679,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select p.uid, p.username::text, p.display_name, p.role, p.status, p.created_at
   from public.profiles p
@@ -705,7 +705,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select a.id, a.actor_uid, a.action, a.subject, a.metadata, a.created_at
   from public.audit_log a
@@ -719,7 +719,7 @@ returns text[]
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
     array(
@@ -738,7 +738,7 @@ create or replace function public.set_admin_setting(
 returns jsonb
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('settings.write');

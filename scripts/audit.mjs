@@ -131,6 +131,20 @@ check('A-06', 'Delivery', 'The delivery plan records all twenty responses', () =
 
 const migrations = shLines('ls supabase/migrations/*.sql');
 const sqlAll = migrations.map((path) => read(path.replace(/^\.\//, ''))).join('\n');
+/**
+ * The migrations with their comments and string literals removed.
+ *
+ * A check about SQL must not fire on prose that describes SQL, and one of
+ * these checks does: `0075` builds `alter function ... set search_path = ...`
+ * inside a `format()` literal, which is the repair, not the mistake. Code
+ * that quotes code is exactly what a text search cannot tell apart.
+ */
+const sqlCode = sqlAll
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/--.*$/gm, '')
+  // A literal spanning several lines is blanked but keeps its newlines, so a
+  // line-by-line check still sees the line boundaries the file has.
+  .replace(/'(?:[^']|'')*'/g, (literal) => "''" + '\n'.repeat((literal.match(/\n/g) ?? []).length));
 
 check('B-01', 'Database', 'Migrations are numbered without a gap', () => {
   const numbers = migrations.map((path) => Number(path.match(/(\d{4})_/)[1]));
@@ -160,6 +174,49 @@ check('B-03', 'Database', 'Every security-definer function pins its search path'
     .filter((block) => !/set search_path = /.test(block.slice(0, 900)))
     .map((block) => block.slice(0, block.indexOf('(')));
   return { ok: bad.length === 0, evidence: bad.length === 0 ? 'all of them' : bad.join(', ') };
+});
+
+// The outage this check exists for: `gen_random_bytes(integer) does not exist`
+// from a certificate screen, while every test in the repository passed. PGlite
+// installs the extensions into `public`, Supabase installs them into
+// `extensions`, and only one of those was ever in a pinned search path.
+check('B-03b', 'Database', 'No pinned search path leaves out the extensions schema', () => {
+  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+    match[1].trim(),
+  );
+  // A `format()` template is not a path: `0075` builds the corrected path in
+  // one, and the literal `%s` it leaves behind is the repair, not a mistake.
+  const bad = [...new Set(paths)].filter(
+    (path) => !path.includes('%') && !/(^|,)\s*extensions\s*(,|$)/.test(path),
+  );
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
+  };
+});
+
+check('B-03c', 'Database', '`pg_temp` is last, so a caller cannot get in front of a real schema', () => {
+  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+    match[1].trim(),
+  );
+  const bad = [...new Set(paths)].filter((path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path));
+  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
+});
+
+// The same class of mistake in a different coat: an extension-owned function
+// called without its schema, from a file whose search path may not have it.
+// `db:prove` catches this by building a production-shaped database; this
+// catches the file that would be deployed before the harness runs.
+check('B-03d', 'Database', 'Extension-owned functions are called by their schema or not at all', () => {
+  const owned = ['gen_random_bytes', 'digest', 'hmac', 'gen_salt', 'crypt', 'similarity', 'show_trgm'];
+  const bare = [];
+  for (const line of sqlCode.split('\n')) {
+    for (const name of owned) {
+      const pattern = new RegExp(`(?<![.\\w])${name}\\s*\\(`, 'g');
+      if (pattern.test(line)) bare.push(`${name}: ${line.trim().slice(0, 90)}`);
+    }
+  }
+  return { ok: bare.length === 0, evidence: bare.length === 0 ? 'none unqualified' : bare.join(' | ') };
 });
 
 check('B-04', 'Database', 'No migration grants a blanket write to anon', () => {
