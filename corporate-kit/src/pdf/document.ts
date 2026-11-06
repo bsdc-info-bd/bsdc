@@ -21,10 +21,26 @@ export type TextOptions = {
   readonly bold?: boolean;
   /** 0 is black, 1 is white. */
   readonly grey?: number;
+  /** An explicit colour wins over `grey`, for type that is part of the brand. */
+  readonly colour?: Rgb;
   readonly align?: 'left' | 'center' | 'right';
+  /** Extra space between characters in points: a letterspaced caption. */
+  readonly tracking?: number;
 };
 
 export type Rgb = readonly [number, number, number];
+
+/** Type placed at an exact point, for geometry rather than prose. */
+export type PlaceOptions = {
+  readonly size?: number;
+  readonly bold?: boolean;
+  /** An explicit colour, or `grey` when it is a shade of black. */
+  readonly colour?: Rgb;
+  /** 0 is black, 1 is white. Ignored when `colour` is given. */
+  readonly grey?: number;
+  readonly rotate?: number;
+  readonly tracking?: number;
+};
 
 const A4_SHORT = 595.28;
 const A4_LONG = 841.89;
@@ -35,17 +51,62 @@ export function escapePdfText(value: string): string {
 }
 
 /**
- * Replaces anything the base-14 fonts cannot draw with a space, so a stray
- * Bangla character degrades to a visible gap instead of corrupting the
- * stream — and deleting it would silently fuse two words together.
+ * Makes a string safe for a base-14 font with `WinAnsiEncoding`.
+ *
+ * Two mistakes are possible here and both are visible on paper. Dropping a
+ * character fuses two words together; keeping a character the font cannot draw
+ * produces a box or a blank. The third mistake is the one this function now
+ * exists to prevent: writing a JavaScript string straight into the content
+ * stream, where `TextEncoder` turns `·` into two bytes and the reader, told the
+ * stream is WinAnsi, prints `Â·`. So the output is ASCII, punctuation that has
+ * an honest ASCII equivalent is translated, and anything else becomes a space.
+ *
+ * An em dash becomes a hyphen, curly quotes become straight ones, and a
+ * non-breaking space becomes a space — the visible difference is nil and the
+ * document is correct on every reader.
  */
+const ASCII_FALLBACK: Readonly<Record<string, string>> = {
+  '\u2018': "'",
+  '\u2019': "'",
+  '\u201a': ',',
+  '\u201b': "'",
+  '\u201c': '"',
+  '\u201d': '"',
+  '\u201e': '"',
+  '\u2013': '-',
+  '\u2014': '-',
+  '\u2015': '-',
+  '\u2212': '-',
+  '\u2026': '...',
+  '\u00b7': '-',
+  '\u2022': '*',
+  '\u00a0': ' ',
+  '\u2009': ' ',
+  '\u202f': ' ',
+  '\u2192': '->',
+  '\u2190': '<-',
+  '\u2264': '<=',
+  '\u2265': '>=',
+  '\u00d7': 'x',
+  '\u20b9': 'BDT ',
+  '\u00a3': 'GBP ',
+  '\u20ac': 'EUR ',
+};
+
 export function toLatin(value: string): string {
   let out = '';
   for (const character of value) {
+    const replacement = ASCII_FALLBACK[character];
+    if (replacement !== undefined) {
+      out += replacement;
+      continue;
+    }
     const code = character.codePointAt(0) ?? 0;
-    out += code >= 32 && code <= 255 ? character : ' ';
+    // Printable ASCII only: that is what WinAnsiEncoding and Helvetica agree on
+    // for every character that is not a language-specific one.
+    out += code >= 32 && code <= 126 ? character : ' ';
   }
-  return out.replace(/\s+/g, ' ').trim();
+  return out.replace(/[ \t]+/g, ' ').trim();
 }
 
 /** Width of a string in points, using Helvetica's average advance. */
@@ -134,44 +195,141 @@ export class PdfDocument {
     return this;
   }
 
-  private xFor(line: string, size: number, bold: boolean, align: TextOptions['align']): number {
-    if (align === 'center') return (this.width - textWidth(line, size, bold)) / 2;
-    if (align === 'right') return this.width - this.margin - textWidth(line, size, bold);
+  /** Where a run of type starts, before any tracking is added. */
+  xAt(value: string, size: number, options: TextOptions = {}): number {
+    const tracked = this.trackedWidth(value, size, options.bold === true, options.tracking ?? 0);
+    if (options.align === 'center') return (this.width - tracked) / 2;
+    if (options.align === 'right') return this.width - this.margin - tracked;
     return this.margin;
+  }
+
+  private trackedWidth(value: string, size: number, bold: boolean, tracking: number): number {
+    return textWidth(value, size, bold) + Math.max(0, value.length - 1) * tracking;
+  }
+
+  /** The colour operator a run of type is drawn with. */
+  private colourOp(options: TextOptions): string {
+    if (options.colour) return `${options.colour.map((part) => part.toFixed(3)).join(' ')} rg`;
+    return `${(options.grey ?? 0).toFixed(2)} g`;
+  }
+
+  /**
+   * One run of type on one line.
+   *
+   * `Tc` is the character-spacing operator, which is how a letterspaced
+   * caption is set without drawing each letter by hand; it is reset in the
+   * same block so it cannot leak into the next line.
+   */
+  private drawLine(
+    line: string,
+    size: number,
+    bold: boolean,
+    options: TextOptions,
+    y: number,
+  ): void {
+    const font = bold ? '/F2' : '/F1';
+    const tracking = options.tracking ?? 0;
+    const trackingOp = tracking === 0 ? '' : ` ${tracking.toFixed(2)} Tc`;
+    this.current.push(
+      `BT ${font} ${String(size)} Tf${trackingOp} ${this.colourOp(options)} ` +
+        `${this.xAt(line, size, options).toFixed(2)} ${y.toFixed(2)} Td ` +
+        `(${escapePdfText(line)}) Tj ET` +
+        (tracking === 0 ? '' : ' BT 0 Tc ET'),
+    );
   }
 
   text(value: string, options: TextOptions = {}): this {
     const size = options.size ?? 10;
-    const grey = options.grey ?? 0;
     const bold = options.bold === true;
-    const font = bold ? '/F2' : '/F1';
     const lines = wrapText(toLatin(value), size, this.contentWidth, bold);
 
     for (const line of lines) {
       this.ensure(size + 4);
       this.cursor -= size + 4;
-      this.current.push(
-        `BT ${font} ${String(size)} Tf ${grey.toFixed(2)} g ` +
-          `${this.xFor(line, size, bold, options.align).toFixed(2)} ${this.cursor.toFixed(2)} Td ` +
-          `(${escapePdfText(line)}) Tj ET`,
-      );
+      this.drawLine(line, size, bold, options, this.cursor);
     }
     return this;
   }
 
   /** Text in the document's accent colour, used for headings on a certificate. */
   colouredText(value: string, colour: Rgb, options: TextOptions = {}): this {
+    return this.text(value, { ...options, colour });
+  }
+
+  /**
+   * Type at an exact place on the page, in an exact colour, with no wrapping
+   * and no cursor movement: the vocabulary a layout needs when it is drawing
+   * a mark rather than writing a document.
+   */
+  place(value: string, x: number, y: number, options: PlaceOptions = {}): this {
     const size = options.size ?? 10;
-    const bold = options.bold === true;
-    const line = toLatin(value);
-    this.ensure(size + 6);
-    this.cursor -= size + 6;
+    const font = options.bold === true ? '/F2' : '/F1';
+    const colour = options.colour
+      ? `${options.colour.map((part) => part.toFixed(3)).join(' ')} rg`
+      : `${(options.grey ?? 0).toFixed(2)} g`;
+    const tracking = options.tracking === undefined ? '' : ` ${options.tracking.toFixed(2)} Tc`;
+    // Rotation is a transformation of the text matrix, so the angle is applied
+    // inside `BT`/`ET` and cannot affect anything else on the page.
+    const place =
+      options.rotate === undefined
+        ? `1 0 0 1 ${x.toFixed(2)} ${y.toFixed(2)} Tm`
+        : // A rotation matrix inside `BT`/`ET`: cos, sin, -sin, cos, then the
+          // origin. The angle is applied to the text matrix only, so nothing
+          // else on the page can be affected by it.
+          `${Math.cos(options.rotate).toFixed(4)} ${Math.sin(options.rotate).toFixed(4)} ` +
+          `${(-Math.sin(options.rotate)).toFixed(4)} ${Math.cos(options.rotate).toFixed(4)} ` +
+          `${x.toFixed(2)} ${y.toFixed(2)} Tm`;
     this.current.push(
-      `BT ${bold ? '/F2' : '/F1'} ${String(size)} Tf ` +
-        `${colour.map((part) => part.toFixed(3)).join(' ')} rg ` +
-        `${this.xFor(line, size, bold, options.align).toFixed(2)} ${this.cursor.toFixed(2)} Td ` +
-        `(${escapePdfText(line)}) Tj ET`,
+      `BT ${font} ${size.toFixed(2)} Tf${tracking} ${colour} ${place} (${escapePdfText(toLatin(value))}) Tj ET`,
     );
+    return this;
+  }
+
+  /** Raw content-stream operators, for the geometry modules. */
+  ops(...operators: readonly string[]): this {
+    this.current.push(...operators);
+    return this;
+  }
+
+  /**
+   * A straight line between two points, in a colour and at a weight. The
+   * building block of every ornament that is not a curve.
+   */
+  line(
+    from: { readonly x: number; readonly y: number },
+    to: { readonly x: number; readonly y: number },
+    options: { readonly colour?: Rgb; readonly width?: number } = {},
+  ): this {
+    const colour = `${(options.colour ?? [0, 0, 0]).map((part) => part.toFixed(3)).join(' ')} RG`;
+    this.current.push(
+      `${(options.width ?? 0.5).toFixed(2)} w ${colour} ` +
+        `${from.x.toFixed(2)} ${from.y.toFixed(2)} m ${to.x.toFixed(2)} ${to.y.toFixed(2)} l S`,
+    );
+    return this;
+  }
+
+  /** A circle, filled or stroked, in absolute page coordinates. */
+  circle(
+    centre: { readonly x: number; readonly y: number },
+    radius: number,
+    options: { readonly fill?: Rgb; readonly stroke?: Rgb; readonly width?: number } = {},
+  ): this {
+    const arc = `${centre.x.toFixed(2)} ${centre.y.toFixed(2)} ${radius.toFixed(2)} 0 360 arc`;
+    if (options.stroke) {
+      const colour = options.stroke.map((part) => part.toFixed(3)).join(' ');
+      this.current.push(`${(options.width ?? 0.5).toFixed(2)} w ${colour} RG ${arc} S`);
+    }
+    if (options.fill) {
+      const colour = options.fill.map((part) => part.toFixed(3)).join(' ');
+      this.current.push(`${colour} rg ${arc} f`);
+    }
+    return this;
+  }
+
+  /** A filled shape described by already-formatted path operators. */
+  fillPath(operators: readonly string[], colour: Rgb): this {
+    const rgb = colour.map((part) => part.toFixed(3)).join(' ');
+    this.current.push(`${rgb} rg ${operators.join(' ')} f`);
     return this;
   }
 

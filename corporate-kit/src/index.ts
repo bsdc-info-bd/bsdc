@@ -21,6 +21,7 @@ export * from './domain/brand';
 export * from './domain/perf';
 export * from './domain/moderation';
 export * from './pdf/document';
+export * from './pdf/ornament';
 export * from './pdf/qr';
 export * from './ui/primitives';
 export * from './ui/AppShell';
