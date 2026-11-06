@@ -41,6 +41,7 @@ import {
   statusTone,
   type Decision,
 } from './model';
+import { Reports } from './Reports';
 
 /**
  * The moderation panel.
@@ -56,6 +57,7 @@ export function App(): ReactElement {
       note="Every decision here is recorded against your account, with its reason."
       tabs={[
         { id: 'queue', label: 'Queue', render: () => <Queue /> },
+        { id: 'reports', label: 'Reports', render: () => <Reports /> },
         { id: 'patterns', label: 'Patterns', render: () => <Patterns /> },
       ]}
     />
