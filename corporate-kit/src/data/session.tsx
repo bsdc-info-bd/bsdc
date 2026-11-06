@@ -93,7 +93,7 @@ async function loadIdentity(env: CorporateEnv, user: User): Promise<StaffProfile
   if (row.status !== 'active') {
     throw new Error(
       row.status === 'suspended'
-        ? 'This account is suspended. A manager or owner has to lift it before a console will open.'
+        ? signInMessage('suspended')
         : `This account is ${row.status.replace('_', ' ')}. A manager or owner has to restore it before a console will open.`,
     );
   }
@@ -150,12 +150,7 @@ async function loadIdentityFromTable(env: CorporateEnv, user: User): Promise<Sta
     IdentityRow,
     'rank' | 'onboarding_complete' | 'created_at' | 'last_seen_at'
   > | null;
-  if (!row) {
-    throw new Error(
-      'This account has no profile in the community database, and this deployment cannot create one. ' +
-        'Apply migration 0074, or sign in at bsdc.info.bd once with this address and try again.',
-    );
-  }
+  if (!row) throw new Error(signInMessage('no-profile'));
   if (row.status !== 'active') {
     throw new Error('This account is not active, so a console cannot open.');
   }
@@ -232,21 +227,57 @@ export function SessionProvider({
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
-function signInMessage(error: unknown): string {
+/**
+ * What a failed sign-in says.
+ *
+ * One sentence per cause, because the causes are not interchangeable and the
+ * person reading has one action available for each:
+ *
+ *   - The credentials are wrong. Deliberately the same sentence for "no such
+ *     user" and "wrong password": a public sign-in form that distinguishes them
+ *     is a way to enumerate which addresses have corporate accounts.
+ *   - The account exists but holds no rank. They need somebody who outranks them,
+ *     and now the console can create their row on the way in, so this is rare.
+ *   - The account is suspended or disabled. Not their action to take.
+ *   - The console cannot reach the database. Not a credential problem at all.
+ *
+ * Exported for the tests, which is the only reason a message function would be:
+ * the wording is the fix for the reported bug, so it is pinned like behaviour.
+ */
+export function signInMessage(error: unknown): string {
   const code =
-    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+    typeof error === 'string'
+      ? error
+      : typeof error === 'object' && error !== null && 'code' in error
+        ? String(error.code)
+        : '';
+
   if (
     code.includes('invalid-credential') ||
     code.includes('wrong-password') ||
-    code.includes('user-not-found')
+    code.includes('user-not-found') ||
+    code.includes('invalid-email')
   ) {
-    return 'That email address and password do not match a staff account.';
+    return 'That email address and password do not match a staff account. Staff accounts are created by an owner in the corporate project — a member account at bsdc.info.bd will not open this console.';
   }
   if (code.includes('too-many-requests')) {
     return 'Too many attempts. Wait a few minutes before trying again.';
   }
-  if (code.includes('network'))
+  if (code.includes('network') || code.includes('unavailable')) {
     return 'The network did not answer. Check the connection and try again.';
+  }
+  if (code.includes('user-disabled')) {
+    return 'This account has been disabled in Firebase. An owner has to re-enable it before a console will open.';
+  }
+  if (code === 'not-staff') {
+    return 'You are signed in, but this account holds no staff role. An owner has to give it one in the People screen before this console will open.';
+  }
+  if (code === 'no-profile') {
+    return 'You are signed in, but the community database has no profile for this account and this deployment cannot create one. Apply migration 0074, or ask an owner to add you.';
+  }
+  if (code === 'suspended') {
+    return 'This account is suspended. A manager or owner has to lift it before a console will open.';
+  }
   return messageOf(error);
 }
 
