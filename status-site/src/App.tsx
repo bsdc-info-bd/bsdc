@@ -184,7 +184,12 @@ function Status(): ReactElement {
         ) : (
           <div className="kit-stack">
             {incidents.map((incident) => (
-              <Incident key={incident.id} incident={incident} onChanged={reload} canResolve={canResolve} />
+              <Incident
+                key={incident.id}
+                incident={incident}
+                onChanged={reload}
+                canResolve={canResolve}
+              />
             ))}
           </div>
         )}

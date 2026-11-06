@@ -288,7 +288,10 @@ jobs:
 
       - name: Install
         if: steps.changed.outputs.run == 'true'
-        run: npm ci --no-audit --no-fund
+        # The worker has no committed lockfile (the repository ignores them), so
+        # `npm ci` cannot run here. See .gitignore for why the lockfiles are not
+        # committed.
+        run: npm install --no-audit --no-fund
 
       - name: Typecheck
         if: steps.changed.outputs.run == 'true'
