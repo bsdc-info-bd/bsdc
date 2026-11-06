@@ -2,83 +2,138 @@ import { Clock, Eye, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { MediaGallery } from '@/components/media/MediaGallery';
-import { Avatar, Badge, Card, Chip } from '@/design-system';
+import { Avatar, Badge, Chip } from '@/design-system';
+import { cn } from '@/lib/cn';
 import type { Post } from '@/lib/content/post-repository';
+import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { placementFor } from '@/lib/media/arrangement';
 import { toGalleryItems } from '@/lib/media/gallery-items';
-import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { profilePath } from '@/lib/site';
 
-/** Feed and listing representation of a post. Never renders raw markdown. */
-export function PostCard({ post }: { post: Post }) {
+/**
+ * One post, as a reader meets it in the feed.
+ *
+ * The shape is dev.to's, because it is the shape that survived contact with a
+ * developer audience: a small avatar and a name with the date beside it, a title
+ * that is the largest type in the card and is the link, tags as `#hashtags` in the
+ * accent colour, and the counters as quiet metadata at the bottom. No card inside
+ * a card, no shadow on a hover that does not respond, no "read more" on a card
+ * that is already a link.
+ *
+ * Two things it does that the reference does not:
+ *
+ *   - The picture is fetched at the width the card draws it, so a feed of twenty
+ *     cards is not twenty multi-megabyte originals. That is not decoration; it is
+ *     the difference between a feed that opens in half a second and one that
+ *     opens in six.
+ *   - The whole card is not a link. Only the title is, plus the author and the
+ *     tags. A card that is one big anchor cannot contain a working avatar link, and
+ *     it makes selecting the excerpt text a lottery.
+ */
+export function PostCard({ post, priority = false }: { post: Post; priority?: boolean }) {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const when = post.publishedAt ?? post.createdAt;
   const gallery = toGalleryItems(post.media);
   // One picture is the card's header and goes first, edge to edge; a set of
   // them is content, and stays in the body where a grid does not fight the
-  // byline for the reader's first look.
-  const placement = placementFor(post.media);
+  // title for attention.
+  const placement = placementFor(gallery);
   const galleryLabel = t('media.gallery.postImages');
 
   return (
-    <Card as="article" interactive>
+    <article
+      className={cn(
+        'group relative rounded-card border border-border bg-surface transition-colors duration-150 ease-app',
+        'hover:border-green-300 dark:hover:border-green-800',
+      )}
+    >
       {placement === 'header' ? (
-        <MediaGallery items={gallery} flush priority label={galleryLabel} className="mb-3" />
+        <div className="overflow-hidden rounded-t-card">
+          <MediaGallery items={gallery} flush priority={priority} label={galleryLabel} />
+        </div>
       ) : null}
 
-      <div className="flex items-center gap-2">
-        {post.author ? (
-          <>
-            <Link to={profilePath(post.author.username)} className="shrink-0">
-              <Avatar src={post.author.avatarUrl} name={post.author.displayName} size="sm" />
-            </Link>
-            <div className="min-w-0">
-              <Link
-                to={profilePath(post.author.username)}
-                className="fab-truncate block text-sm font-semibold hover:underline"
-              >
-                {post.author.displayName}
+      <div className="p-4 sm:p-5">
+        <div className="flex items-center gap-2">
+          {post.author ? (
+            <>
+              <Link to={profilePath(post.author.username)} className="shrink-0">
+                <Avatar src={post.author.avatarUrl} name={post.author.displayName} size="sm" />
               </Link>
-              <p className="text-2xs text-muted">{formatRelativeTime(new Date(when), language)}</p>
-            </div>
-          </>
+              <div className="min-w-0">
+                <Link
+                  to={profilePath(post.author.username)}
+                  className="block truncate text-sm font-semibold hover:text-green-700 hover:underline dark:hover:text-green-300"
+                >
+                  {post.author.displayName}
+                </Link>
+                <p className="text-2xs text-muted">
+                  {formatRelativeTime(new Date(when), language)}
+                </p>
+              </div>
+            </>
+          ) : null}
+          <Badge tone="neutral" className="ms-auto shrink-0">
+            {t(`compose.kinds.${post.kind}`)}
+          </Badge>
+        </div>
+
+        <Link
+          to={`/p/${post.slug}`}
+          className="mt-3 block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+        >
+          {post.title.length > 0 ? (
+            <h2 className="text-xl font-bold leading-snug tracking-tight group-hover:text-green-800 sm:text-2xl dark:group-hover:text-green-300">
+              {post.title}
+            </h2>
+          ) : null}
+          {post.excerpt.length > 0 ? (
+            <p className="mt-1.5 line-clamp-3 text-sm text-muted">{post.excerpt}</p>
+          ) : null}
+        </Link>
+
+        {placement === 'body' ? (
+          <MediaGallery items={gallery} label={galleryLabel} className="mt-3" />
         ) : null}
-        <Badge tone="neutral" className="ms-auto">
-          {t(`compose.kinds.${post.kind}`)}
-        </Badge>
-      </div>
 
-      <Link to={`/p/${post.slug}`} className="mt-3 block">
-        {post.title.length > 0 ? (
-          <h3 className="text-lg font-semibold hover:underline">{post.title}</h3>
+        {/* Tags below the text, as hashtags, which is how a developer scans for a
+            subject they care about without reading the excerpt. */}
+        {post.tags.length > 0 ? (
+          <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
+            {post.tags.slice(0, 4).map((tag) => (
+              <li key={tag}>
+                <Link
+                  to={`/tag/${tag}`}
+                  className="text-xs font-medium text-muted transition-colors duration-150 ease-app hover:text-green-700 dark:hover:text-green-300"
+                >
+                  #{tag}
+                </Link>
+              </li>
+            ))}
+          </ul>
         ) : null}
-        <p className="mt-1 text-sm text-muted">{post.excerpt}</p>
-      </Link>
 
-      {placement === 'body' ? (
-        <MediaGallery items={gallery} label={galleryLabel} className="mt-3" />
-      ) : null}
-
-      <div className="mt-3 flex flex-wrap items-center gap-3 text-2xs text-muted">
-        <span className="inline-flex items-center gap-1">
-          <Clock size={13} aria-hidden="true" />
-          {t('post.readingTime', { minutes: formatNumber(post.readingTime, language) })}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Eye size={13} aria-hidden="true" />
-          {formatNumber(post.views, language)}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <MessageSquare size={13} aria-hidden="true" />
-          {formatNumber(post.comments, language)}
-        </span>
-        {post.tags.slice(0, 3).map((tag) => (
-          <Link key={tag} to={`/tag/${tag}`}>
-            <Chip>#{tag}</Chip>
-          </Link>
-        ))}
+        <div className="mt-4 flex flex-wrap items-center gap-4 text-2xs text-muted">
+          <span className="inline-flex items-center gap-1">
+            <Clock size={13} aria-hidden="true" />
+            {t('post.readingTime', { minutes: formatNumber(post.readingTime, language) })}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Eye size={13} aria-hidden="true" />
+            {formatNumber(post.views, language)}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <MessageSquare size={13} aria-hidden="true" />
+            {formatNumber(post.comments, language)}
+          </span>
+          {post.kind === 'question' ? (
+            <Chip>
+              <Link to={`/p/${post.slug}`}>{t('feed.answer', { defaultValue: 'Answer it' })}</Link>
+            </Chip>
+          ) : null}
+        </div>
       </div>
-    </Card>
+    </article>
   );
 }

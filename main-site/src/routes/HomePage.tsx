@@ -11,7 +11,9 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
 import { Card, Countdown, ExternalLink, LinkButton, SectionHeading } from '@/design-system';
+import { FeedRail, TrendingTags } from '@/components/feed/FeedRail';
 import { FeedTabs } from '@/components/feed/FeedTabs';
+import { ComposeBox } from '@/components/content/ComposeBox';
 import { FollowSuggestions } from '@/components/social/FollowSuggestions';
 import { launchConfig } from '@/lib/launch';
 import { ECOSYSTEM_LINKS, PILLARS, ROUTES, SITE, type Pillar } from '@/lib/site';
@@ -36,15 +38,26 @@ export default function HomePage() {
     return (
       <>
         <Seo title={t('feed.heading')} description={t('feed.description')} path="/" noindex />
-        <section className="fab-container py-6">
+        <FeedLayout
+          rail={
+            <>
+              <FeedRail />
+              <TrendingTags className="mt-6" />
+              {/* A member who follows nobody has no ranking signals, so the feed
+                  is thin until they do. This is how they start, and on a wide
+                  screen it belongs beside the feed rather than pushing it down. */}
+              <FollowSuggestions className="mt-6" />
+            </>
+          }
+        >
           <SectionHeading title={t('feed.heading')} description={t('feed.description')} />
+          <div className="mt-4">
+            <ComposeBox />
+          </div>
           <div className="mt-4">
             <FeedTabs />
           </div>
-          {/* A member who follows nobody has no ranking signals, so the feed
-              above is thin until they do. This is how they start. */}
-          <FollowSuggestions className="mt-6" />
-        </section>
+        </FeedLayout>
       </>
     );
   }
@@ -82,7 +95,27 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="fab-container pb-8" aria-labelledby="public-feed">
+      <FeedLayout
+        id="public-feed"
+        rail={
+          <>
+            <FeedRail />
+            <TrendingTags className="mt-6" />
+            <Card className="mt-6">
+              <h2 className="text-base font-semibold">{t('home.feedJoin')}</h2>
+              <p className="mt-1 text-sm text-muted">{t('home.feedBody')}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <LinkButton to={ROUTES.signup} size="sm">
+                  {t('auth.signup.title')}
+                </LinkButton>
+                <LinkButton to={ROUTES.login} size="sm" variant="outline">
+                  {t('auth.login.title')}
+                </LinkButton>
+              </div>
+            </Card>
+          </>
+        }
+      >
         <SectionHeading title={t('home.feedTitle')} description={t('home.feedBody')} />
         <h2 id="public-feed" className="fab-sr-only">
           {t('home.feedTitle')}
@@ -90,10 +123,7 @@ export default function HomePage() {
         <div className="mt-4">
           <FeedTabs signedIn={false} />
         </div>
-        <div className="mt-4">
-          <LinkButton to={ROUTES.signup}>{t('home.feedJoin')}</LinkButton>
-        </div>
-      </section>
+      </FeedLayout>
 
       {launchConfig.launched ? null : (
         <section className="fab-container pb-8" aria-labelledby="launch-countdown">
@@ -142,5 +172,27 @@ export default function HomePage() {
         </ul>
       </section>
     </>
+  );
+}
+
+/**
+ * The three-column reading layout, from dev.to.
+ *
+ * A rail, a column of posts, and — on a very wide screen — nothing else, because a
+ * second sidebar is the difference between a reading page and a dashboard. Below
+ * `lg` the rail moves above the feed as a short horizontal strip: hiding it behind
+ * a drawer on a phone means half the audience never finds the marketplace, and a
+ * drawer that has to be discovered is a drawer that is not used.
+ */
+function FeedLayout({ rail, id, children }: { rail: ReactNode; id?: string; children: ReactNode }) {
+  return (
+    <section id={id} className="fab-container pb-10 pt-4 sm:pt-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[14rem_minmax(0,44rem)] xl:justify-center 2xl:gap-10">
+        <aside aria-label="Sections and tags" className="lg:sticky lg:top-20 lg:self-start">
+          {rail}
+        </aside>
+        <div className="min-w-0">{children}</div>
+      </div>
+    </section>
   );
 }

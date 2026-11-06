@@ -1091,6 +1091,17 @@ export const bn: Translation = {
     emptyTitle: 'এই ট্যাগে এখনো কোনো পোস্ট নেই',
     emptyBody: 'এখানে প্রথম কিছু প্রকাশ করুন।',
   },
+  rail: {
+    label: 'প্রধান',
+    home: 'হোম',
+    groups: 'গ্রুপ',
+    jobs: 'চাকরি',
+    projects: 'প্রকল্প',
+    market: 'মার্কেটপ্লেস',
+    write: 'পোস্ট লিখুন',
+    trending: 'জনপ্রিয় ট্যাগ',
+    trendingEmpty: 'মানুষ ট্যাগ ব্যবহার শুরু করলে সেগুলো এখানে দেখা যাবে।',
+  },
   feed: {
     heading: 'আপনার ফিড',
     description: 'আপনি কাকে অনুসরণ করেন, কোন বিষয় পড়েন এবং পোস্ট কত নতুন তার ভিত্তিতে সাজানো।',
@@ -1107,6 +1118,9 @@ export const bn: Translation = {
     errorTitle: 'ফিড লোড করা যায়নি',
     errorBody: 'সংযোগ যাচাই করে আবার চেষ্টা করুন।',
     newPosts: '{{total}}টি নতুন পোস্ট',
+    composePrompt: 'একটি পোস্ট লিখুন, প্রশ্ন করুন বা স্নিপেট শেয়ার করুন…',
+    composeImage: 'ছবি যোগ করুন',
+    answer: 'উত্তর দিন',
     empty: {
       ranked: {
         title: 'এখনও পড়ার কিছু নেই',

@@ -90,7 +90,7 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-3 sm:gap-4">
       {feed.newPostCount > 0 ? (
         <div className="sticky top-16 z-20 flex justify-center">
           <Button size="sm" variant="secondary" onClick={feed.refresh}>
@@ -100,9 +100,11 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
         </div>
       ) : null}
 
-      {feed.posts.map((post) => (
+      {feed.posts.map((post, index) => (
         <div key={post.id} ref={feed.observe(post.id)}>
-          <PostCard post={post} />
+          {/* The first card is the page's LCP element, so its picture is the one
+              worth telling the browser not to defer. */}
+          <PostCard post={post} priority={index === 0} />
         </div>
       ))}
 

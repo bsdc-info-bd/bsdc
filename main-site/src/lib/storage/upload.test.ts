@@ -41,7 +41,9 @@ describe('where images go', () => {
 
   it('never substitutes the other host when the required one is missing', () => {
     // A chat attachment needs the key the bundle does not carry.
-    expect(resolveProvider('chat-document', 'image', { cloudinary: true, imgbb: false })).toBeNull();
+    expect(
+      resolveProvider('chat-document', 'image', { cloudinary: true, imgbb: false }),
+    ).toBeNull();
     // A cover needs Cloudinary, and having ImgBB does not make it postable.
     expect(
       resolveProvider('project-cover', 'image', { cloudinary: false, imgbb: true }),

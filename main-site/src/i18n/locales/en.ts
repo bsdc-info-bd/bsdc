@@ -1098,6 +1098,17 @@ export const en = {
     emptyTitle: 'No posts with this tag yet',
     emptyBody: 'Be the first to publish something here.',
   },
+  rail: {
+    label: 'Main',
+    home: 'Home',
+    groups: 'Groups',
+    jobs: 'Jobs',
+    projects: 'Projects',
+    market: 'Marketplace',
+    write: 'Create post',
+    trending: 'Trending tags',
+    trendingEmpty: 'Tags appear here once people start using them.',
+  },
   feed: {
     heading: 'Your feed',
     description: 'Ranked by what you follow, the topics you read and how fresh a post is.',
@@ -1114,6 +1125,9 @@ export const en = {
     errorTitle: 'The feed could not be loaded',
     errorBody: 'Check your connection and try again.',
     newPosts: '{{total}} new posts',
+    composePrompt: 'Write a post, ask a question, share a snippet…',
+    composeImage: 'Add a picture',
+    answer: 'Answer it',
     empty: {
       ranked: {
         title: 'Nothing to read yet',
