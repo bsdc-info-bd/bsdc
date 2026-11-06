@@ -1,5 +1,7 @@
 import { useState } from 'react';
+
 import { cn } from '@/lib/cn';
+import { MediaImage } from '@/components/media/MediaImage';
 
 export interface AvatarProps {
   /** Image URL. When absent or broken, initials are rendered instead. */
@@ -18,26 +20,55 @@ const SIZES = {
   xl: 'h-20 w-20 text-xl',
 } as const;
 
+/** The widest an avatar is ever drawn, so the pixel ratio stays honest. */
+const PIXELS = 96;
+
 function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).slice(0, 2);
   return parts.map((part) => [...part][0] ?? '').join('');
 }
 
+/**
+ * A member's picture, or their initials.
+ *
+ * ## Why this uses `MediaImage` and not an `<img>`
+ *
+ * An avatar is the most-repeated picture on the platform — every row of every
+ * list has one — so it is the first thing a member notices when pictures stop
+ * loading, and it was the one image path that never recovered from a single
+ * failure: the plain `<img>` below set `failed` on the first `onError` and
+ * latched it forever, so a picture that failed once while the phone was on a
+ * train stayed initials for the rest of the session, even after the connection
+ * came back.
+ *
+ * `MediaImage` walks the recovery ladder instead: a transient failure retries,
+ * an expired signature is re-resolved, a poisoned cache entry is busted, and the
+ * site's own proxy is the last rung before the initials. It also verifies the
+ * paint, which the `<img>` could not do — an HTML error page served with
+ * `200 image/jpeg` fires no `onError` and draws nothing.
+ *
+ * The initials are not a degraded state here; they are a designed one. A member
+ * without a picture sees them from the first render, and the `src` change below
+ * is what stops a *broken* picture from being permanent.
+ */
 export function Avatar({ src, name, size = 'md', online, className }: AvatarProps) {
-  const [failed, setFailed] = useState(false);
-  const showImage = typeof src === 'string' && src.length > 0 && !failed;
+  // When the address changes, the picture is a different picture: a member who
+  // uploads a replacement, or a list tile that is recycled for another row. The
+  // old code kept `failed` across both, so the new address was never tried.
+  const [failedFor, setFailedFor] = useState<string | null>(null);
+  const address = typeof src === 'string' && src.length > 0 ? src : null;
+  const showImage = address !== null && failedFor !== address;
 
   return (
     <span className={cn('relative inline-flex shrink-0', className)}>
       {showImage ? (
-        <img
-          src={src}
+        <MediaImage
+          src={address}
           alt={name}
-          width={96}
-          height={96}
+          width={PIXELS}
+          height={PIXELS}
           loading="lazy"
-          decoding="async"
-          onError={() => setFailed(true)}
+          onFailure={() => setFailedFor(address)}
           className={cn('rounded-full border border-border object-cover', SIZES[size])}
         />
       ) : (

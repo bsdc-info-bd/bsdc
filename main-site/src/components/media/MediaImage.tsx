@@ -28,6 +28,15 @@ export interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement
   allowProxy?: boolean;
   /** Called after a paint that was verified as a real picture. */
   onRecovered?: () => void;
+  /**
+   * Called when the ladder has run out and no picture will be shown.
+   *
+   * Distinct from `onError`, which the browser fires on every failed rung. This
+   * fires once, at the end, and it is what a caller uses to swap in something
+   * that is not a picture at all — initials, in the avatar's case. A caller that
+   * wanted to try a different address of its own would hear about it here.
+   */
+  onFailure?: () => void;
 }
 
 /** The longest single delay the ladder will wait before trying again. */
@@ -73,6 +82,7 @@ export function MediaImage({
   onLoad,
   allowProxy = true,
   onRecovered,
+  onFailure,
   ...imageProps
 }: MediaImageProps) {
   const { t } = useTranslation();
@@ -162,16 +172,18 @@ export function MediaImage({
           // Not a failure of the picture: a failure of the connection. The tile
           // says so, and the `online` effect restarts the ladder.
           setOfflineTile(true);
+          onFailure?.();
           return;
         }
         setGaveUp(true);
+        onFailure?.();
         return;
       }
 
       setOfflineTile(false);
       paint(next, plan.delayMs);
     },
-    [canProxy, fallback, online, paint, primary],
+    [canProxy, fallback, online, paint, primary, onFailure],
   );
 
   /**
