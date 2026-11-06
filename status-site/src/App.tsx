@@ -31,6 +31,8 @@ import {
   buildTimelines,
   byCategory,
   impactTone,
+  openFor,
+  resolutionProblems,
   sortIncidents,
   uptimeOf,
   type CheckRow,
@@ -141,6 +143,7 @@ function Status(): ReactElement {
     );
   }
 
+  const canResolve = meetsRole(profile, 'admin');
   const overall = overallState(state.data.timelines);
   const incidents = sortIncidents(state.data.incidents);
   const open = incidents.filter((incident) => incident.resolved_at === null);
@@ -181,7 +184,7 @@ function Status(): ReactElement {
         ) : (
           <div className="kit-stack">
             {incidents.map((incident) => (
-              <Incident key={incident.id} incident={incident} />
+              <Incident key={incident.id} incident={incident} onChanged={reload} canResolve={canResolve} />
             ))}
           </div>
         )}
@@ -236,7 +239,54 @@ function ServiceRow({
   );
 }
 
-function Incident({ incident }: { incident: IncidentRow }): ReactElement {
+/**
+ * One incident, with the decision that closes it.
+ *
+ * `resolve_incident()` has existed and been called by nothing: an incident could
+ * be opened from this board and never closed from it, so a resolved outage stayed
+ * on the public status page until somebody used a SQL console. It also appends the
+ * closing note as the last public update, which is why an empty note is refused
+ * here as well as in the routine.
+ *
+ * Resolution needs the admin role because `resolve_incident()` requires the
+ * `settings.write` permission, and a control that leads to a 403 is worse than no
+ * control.
+ */
+function Incident({
+  incident,
+  onChanged,
+  canResolve,
+}: {
+  incident: IncidentRow;
+  onChanged: () => void;
+  canResolve: boolean;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const problems = resolutionProblems(note);
+
+  const resolve = (): void => {
+    if (problems.length > 0) {
+      setError(problems[0] ?? '');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    callRpc(env, 'resolve_incident', { p_incident_id: incident.id, p_body: note.trim() })
+      .then(() => {
+        setNote('');
+        onChanged();
+      })
+      .catch((cause: unknown) => {
+        setError(messageOf(cause));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
   return (
     <article className="kit-card">
       <div className="kit-row" style={{ justifyContent: 'space-between' }}>
@@ -249,8 +299,10 @@ function Incident({ incident }: { incident: IncidentRow }): ReactElement {
         </span>
       </div>
       <p className="kit-small kit-muted">
-        {new Date(incident.started_at).toLocaleString('en-GB')} — lasted{' '}
-        {formatDuration(incident.started_at, incident.resolved_at)}
+        {new Date(incident.started_at).toLocaleString('en-GB')} —{' '}
+        {incident.resolved_at === null
+          ? `open for ${openFor(incident)}`
+          : `lasted ${formatDuration(incident.started_at, incident.resolved_at)}`}
         {incident.service_key === null ? '' : ` — ${incident.service_key}`}
       </p>
       <ol className="kit-small" style={{ margin: 0, paddingInlineStart: '1.1rem' }}>
@@ -263,6 +315,30 @@ function Incident({ incident }: { incident: IncidentRow }): ReactElement {
           </li>
         ))}
       </ol>
+
+      {incident.resolved_at === null && canResolve ? (
+        <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
+          {error !== '' ? (
+            <Banner tone="bad" title="The incident was not resolved">
+              <p className="kit-small">{error}</p>
+            </Banner>
+          ) : null}
+          <TextArea
+            label="Closing update"
+            hint="Published on the public board as the last update. Say what happened and what was done."
+            value={note}
+            onChange={(event) => {
+              setNote(event.target.value);
+            }}
+          />
+          <div className="kit-row">
+            <Button variant="danger" disabled={busy || problems.length > 0} onClick={resolve}>
+              {busy ? 'Resolving' : 'Resolve incident'}
+            </Button>
+            {problems.length > 0 ? <span className="kit-hint">{problems[0]}</span> : null}
+          </div>
+        </div>
+      ) : null}
     </article>
   );
 }

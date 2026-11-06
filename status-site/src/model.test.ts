@@ -11,12 +11,16 @@ import {
 import {
   buildTimelines,
   byCategory,
+  checkIsHumanEntered,
+  checkProblems,
   dayWindow,
   impactTone,
+  openFor,
+  resolutionProblems,
   sortIncidents,
-  uptimeOf,
   type IncidentRow,
   type UptimeRow,
+  uptimeOf,
 } from './model';
 
 const service = (over: Partial<UptimeRow> = {}): UptimeRow => ({
@@ -170,5 +174,73 @@ describe('grouping', () => {
     ]);
     expect(grouped.map((group) => group.category)).toEqual(['app', 'data']);
     expect(grouped[0]?.rows).toHaveLength(2);
+  });
+});
+
+describe('an incident on the board', () => {
+  const incident = (overrides: Partial<IncidentRow> = {}): IncidentRow => ({
+    id: 'inc-1',
+    service_key: 'api',
+    title: 'API is slow',
+    impact: 'major',
+    started_at: '2026-11-06T10:00:00.000Z',
+    resolved_at: null,
+    updates: [],
+    ...overrides,
+  });
+
+  it('says how long an open incident has been open, in the units an operator uses', () => {
+    const now = Date.parse('2026-11-06T10:45:00.000Z');
+    expect(openFor(incident(), now)).toBe('45m');
+    expect(openFor(incident({ started_at: '2026-11-06T07:30:00.000Z' }), now)).toBe('3h 15m');
+    expect(openFor(incident({ started_at: '2026-11-04T10:00:00.000Z' }), now)).toBe('2d 0h');
+  });
+
+  it('uses a resolved incident’s own window, not the clock at the time of reading', () => {
+    const resolved = incident({ resolved_at: '2026-11-06T11:30:00.000Z' });
+    expect(openFor(resolved, Date.parse('2027-01-01T00:00:00.000Z'))).toBe('1h 30m');
+  });
+
+  it('refuses a closing update that says nothing, because it is published', () => {
+    expect(resolutionProblems('')).toHaveLength(1);
+    expect(resolutionProblems('fixed')).toHaveLength(1);
+    expect(resolutionProblems('A bad deploy; rolled back and verified.')).toEqual([]);
+  });
+
+  it('treats an unreadable start as unknown rather than as zero', () => {
+    expect(openFor(incident({ started_at: 'not a date' }))).toBe('unknown');
+  });
+});
+
+describe('a service check', () => {
+  const services = ['api', 'web', 'db'];
+
+  it('accepts the three fields the routine actually takes', () => {
+    expect(checkProblems({ serviceKey: 'api', ok: true, latencyMs: 120 }, services)).toEqual([]);
+    expect(checkProblems({ serviceKey: 'api', ok: false, latencyMs: 0 }, services)).toEqual([]);
+  });
+
+  it('refuses a key the board does not know, which would be a check nobody sees', () => {
+    const problems = checkProblems({ serviceKey: 'nope', ok: true, latencyMs: 100 }, services);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]).toContain('nope');
+  });
+
+  it('refuses a latency that is not a plausible number of milliseconds', () => {
+    expect(checkProblems({ serviceKey: 'api', ok: true, latencyMs: -1 }, services)).toHaveLength(1);
+    expect(
+      checkProblems({ serviceKey: 'api', ok: true, latencyMs: 120_001 }, services),
+    ).toHaveLength(1);
+    expect(
+      checkProblems({ serviceKey: 'api', ok: true, latencyMs: Number.NaN }, services),
+    ).toHaveLength(1);
+  });
+
+  it('never mistakes a hand-written check for a measurement', () => {
+    // Uptime is computed from these rows. A row with no measured latency is a
+    // note, not a probe, and must not be recorded as one.
+    expect(checkIsHumanEntered({ serviceKey: 'api', ok: true, latencyMs: 0 })).toBe(true);
+    expect(checkIsHumanEntered({ serviceKey: '', ok: true, latencyMs: 12 })).toBe(true);
+    expect(checkIsHumanEntered({ serviceKey: 'api', ok: true, latencyMs: 87 })).toBe(false);
   });
 });
