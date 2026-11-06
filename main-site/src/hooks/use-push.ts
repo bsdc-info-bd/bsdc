@@ -35,6 +35,8 @@ export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 export interface PushControl {
   /** Why push cannot be used here, or `'ok'`. */
   block: PushBlock;
+  /** How many devices a notification could actually reach right now. */
+  liveDevices: number;
   /** The sentence for `block`, so a page can show it without a lookup. */
   blockKey: string;
   permission: PushPermission;
@@ -175,6 +177,13 @@ export function usePush(): PushControl {
       setBusy(true);
       try {
         await (await repository()).unregisterPushSubscription(endpoint);
+        // A device this browser owns is unsubscribed as well, so the browser
+        // does not immediately re-register the row that was just removed.
+        if (block === 'ok') {
+          const here = await currentSubscription().catch(() => null);
+          if (here !== null && here.endpoint === endpoint)
+            await here.unsubscribe().catch(() => false);
+        }
         await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
       } catch (error) {
         setErrorKey(dataErrorKey(error));
@@ -182,16 +191,19 @@ export function usePush(): PushControl {
         setBusy(false);
       }
     },
-    [uid, queryClient],
+    [uid, block, queryClient],
   );
 
   const dismissError = useCallback(() => setErrorKey(null), []);
 
+  const devices = devicesQuery.data ?? [];
+
   return {
     block,
     blockKey: PUSH_BLOCK_KEYS[block],
+    liveDevices: devices.filter((device) => device.state === 'live').length,
     permission,
-    devices: devicesQuery.data ?? [],
+    devices,
     busy,
     errorKey,
     dismissError,

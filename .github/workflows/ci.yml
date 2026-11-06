@@ -173,3 +173,58 @@ jobs:
             -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "content-type: application/json" \
             -d "{\"p_app\":\"main-site\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
+
+  # ---------------------------------------------------------------------------
+  # The licence gate.
+  #
+  # BSDC ships under PASVL-1.0, whose Appendix C permits permissive and weak
+  # copyleft dependencies and refuses strong or service copyleft. That is a claim
+  # about a dependency tree, and a dependency tree changes without anybody
+  # editing a licence sentence. `--check` fails the build the day a refused
+  # licence appears, which is the only moment it can be replaced cheaply.
+  # ---------------------------------------------------------------------------
+  licences:
+    name: Dependency licences
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Refuse a licence PASVL does not permit
+        run: node scripts/licence-report.mjs --check
+
+  # ---------------------------------------------------------------------------
+  # The push delivery worker.
+  #
+  # A separate package, so the matrix above does not discover it (the matrix is
+  # one level deep and this one needs a Worker bundle rather than a Vite build).
+  # It gets the same four gates as everything else, plus a dry-run deployment
+  # that proves the bundle is buildable without a single credential.
+  # ---------------------------------------------------------------------------
+  push-worker:
+    name: Push worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: push-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Format check
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+      - name: Bundle (no credentials)
+        run: npm run build

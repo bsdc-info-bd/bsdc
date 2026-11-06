@@ -3,7 +3,39 @@
  * are widened to `string` so the Bangla bundle can be typed against the same
  * shape (missing or renamed keys then fail `tsc --noEmit`).
  */
+/**
+ * The system check page. Kept in its own object because the sentences are long
+ * and the page is the one place a support reply is copied from; folding them
+ * into the middle of the interface strings would bury them.
+ */
+export const DIAGNOSTICS = {
+  title: 'System check',
+  description:
+    'Runs the checks that separate a broken deployment from a broken device, and shows the result for each one.',
+  running: 'Checking every dependency…',
+  runAgain: 'Run the checks again',
+  copy: 'Copy the report',
+  copied: 'Report copied. Paste it into a support message.',
+  copyFailed: 'The clipboard is blocked here. Select the text in the list instead.',
+  failed: 'The checks could not run in this browser.',
+  privacy:
+    'This report contains no password, no token, no address and nothing about your account. It is the same lines a support reply would ask you for.',
+  verdict: {
+    ok: 'Everything checked passed ({{total}} checks).',
+    warn: '{{warned}} of {{total}} checks are worth knowing about, but nothing is broken.',
+    fail: '{{failed}} of {{total}} checks failed. The list below names what to fix.',
+    skipped: 'Nothing failed. {{total}} checks ran.',
+  },
+  state: {
+    ok: 'pass',
+    warn: 'warning',
+    fail: 'failed',
+    skipped: 'skipped',
+  },
+};
+
 export const en = {
+  diagnostics: DIAGNOSTICS,
   common: {
     brand: 'BSDC',
     brandFull: 'Bangladesh Software Development Community',
@@ -475,6 +507,16 @@ export const en = {
       title: 'Language',
       description: 'Interface language for menus, buttons and messages.',
     },
+    media: {
+      title: 'Pictures',
+      description: 'Repair the picture cache without signing out.',
+      body: 'If pictures stop loading, this drops the cached copies on this device and asks for them again. Nothing else is removed: you stay signed in, your drafts stay, and your settings stay.',
+      repair: 'Repair pictures',
+      repairing: 'Repairing…',
+      repaired: 'Done. Pictures are being fetched again.',
+      repairFailed: 'The cache could not be cleared. Reload the page and try again.',
+      hint: 'This never asks you to clear all site data. If it does not help, the problem is at the picture host, not on your device.',
+    },
     notifications: {
       title: 'Notifications',
       description: 'Choose what BSDC may notify you about.',
@@ -563,6 +605,12 @@ export const en = {
     gallery: {
       postImages: 'Pictures in this post',
       imageUnavailable: 'This image could not be loaded.',
+      imageOffline: 'You are offline. This picture will load when the connection returns.',
+      imageRetrying: 'Loading this picture again…',
+    },
+    repair: {
+      banner: 'Pictures not loading? Repair just the picture cache.',
+      repaired: 'Picture cache repaired. Pictures will reload now.',
     },
     lightbox: {
       title: 'Picture',
@@ -716,6 +764,17 @@ export const en = {
       title: 'Devices that will be woken',
       unknown: 'A device this browser did not name',
       remove: 'Stop waking this device',
+      liveCount: '{{count}} of {{total}} still reachable',
+      lastUsed: 'Last reached {{when}}',
+      neverUsed: 'Not reached yet',
+      staleNote:
+        'Open that browser once while signed in and it re-registers itself. Until then nothing is sent to it.',
+    },
+    state: {
+      live: 'A notification sent now would reach this device.',
+      invalid:
+        "This device's push keys were refused. Open this browser once while signed in and it re-registers itself.",
+      dead: 'The push service says this address is gone. Open this browser once while signed in; it will register a new one, and this row can then be removed.',
     },
     errors: {
       permissionDenied: 'The browser refused the permission, so there is nothing to send to.',

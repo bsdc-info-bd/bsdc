@@ -1,0 +1,1347 @@
+# PUBLIC AVAILABILITY WITH SOURCE-CODE VISIBILITY LICENSE
+
+## Version 1.0 (PASVL-1.0)
+
+**Short identifier:** `LicenseRef-PASVL-1.0`
+**Steward:** Bangladesh Software Development Community (BSDC)
+**Document status:** Published, in force from 2026-01-01
+**Canonical URL:** https://github.com/bsdc-info-bd/PASVL_LOSDA/blob/main/LICENSE
+**Human-readable summary (non-binding):** [legal/plain-language.md](legal/plain-language.md)
+
+---
+
+### PREAMBLE
+
+Software is written to be seen, studied, audited, trusted, and improved. Software is also
+written by people who must eat, pay rent, hire colleagues, and keep the lights on. For
+decades the industry has pretended that these two facts must be traded against one another:
+either you publish under a permissive license and surrender the commercial value of your
+work to whoever copies it fastest, or you close the source and surrender the trust of
+everyone who must run it.
+
+This License rejects that false choice.
+
+This License makes the **source code public and permanently visible**, so that any person on
+Earth may read it, learn from it, audit it, teach with it, cite it, criticize it, and propose
+improvements to it — without asking anyone for anything. It simultaneously keeps the **right
+to run the software as a deployed system** under the control of the Author, so that
+deployment is a deliberate, recorded, individually-granted act rather than an accident of
+copying.
+
+The instrument by which that grant is made is the **Letter of Software Deployment Approval
+(LOSDA)**. A LOSDA is not a purchase receipt, not a click-through, and not a courtesy. It is
+a signed permission instrument with an identifier, a scope, a term, a register entry, and a
+revocation path. This License and the LOSDA constitute a two-part framework: the License
+governs what everyone may do; the LOSDA governs who may deploy, where, how, and for how long.
+
+Together they form the **PASVL/LOSDA framework**: a public-availability, permission-gated,
+professionally governed licensing system for the next era of software distribution.
+
+**The Author retains all rights not expressly granted. There is no implied license. Reading
+is free. Deployment is licensed.**
+
+---
+
+### ARTICLE 1 — DEFINITIONS
+
+Capitalized terms have the meanings set out in this Article. Terms defined in the singular
+include the plural and vice versa. "Including" means "including without limitation".
+
+**1.1 "Affiliate"** means, with respect to an entity, any other entity that controls, is
+controlled by, or is under common control with that entity, where "control" means direct or
+indirect ownership of more than fifty percent (50%) of the voting interests, or the power to
+direct the management and policies of the entity.
+
+**1.2 "Author"** means the natural person or legal entity that created the Work and holds the
+economic rights in it, or, where the Work has been assigned or contributed to BSDC, BSDC
+acting as rights holder. Where a Work has multiple Authors, each is an Author of the entirety
+of the Work unless the NOTICE states otherwise.
+
+**1.3 "BSD C" or "Steward"** means the Bangladesh Software Development Community, a
+community organization registered and operating under the laws of the People's Republic of
+Bangladesh, acting in its capacity as steward, publisher, registrar, and custodian of this
+License and of the LOSDA framework, and not as a party to any commercial transaction between
+an Author and a licensee.
+
+**1.4 "Commercial Deployment"** means any Deployment that is intended to generate, or that
+reasonably can be expected to generate, directly or indirectly, revenue, cost savings,
+competitive advantage, or other commercial benefit for the deployer or for any third party,
+including Deployment in the course of a trade, business, profession, or public procurement.
+
+**1.5 "Contribution"** means any code, documentation, design, specification, test, artwork, or
+other material that You intentionally submit to an Author or to BS C for inclusion in, or for
+the improvement of, a Work, by any means including pull request, patch, issue attachment,
+mailing list, chat message, or code review comment.
+
+**1.6 "Contributor"** means a person or entity that makes a Contribution.
+
+**1.7 "Deployment"** means any act of executing, loading into memory for execution, running,
+installing for operational purposes, hosting, serving, exposing over a network, embedding,
+flashing, distributing in executable form, or otherwise putting a Work or a Derivative Work
+into operational use, in whole or in substantial part, whether for internal purposes, for
+external service provision, or for inclusion in a product, device, or system. Deployment
+includes Deployment by a service provider on behalf of another person. Deployment does not
+include the acts permitted under Sections 3 (Visibility Grant) and 6 (Evaluation Use).
+
+**1.8 "Deployment Scope"** means the totality of permissions set out in a LOSDA, including
+the Licensed Work, the permitted Deployment type, the Territory, the Field of Use, the
+scale limits, the Term, and any conditions or restrictions stated in that LOSDA.
+
+**1.9 "Derivative Work"** means any work that is based on, incorporates, adapts, translates,
+modifies, or otherwise is derived from a Work or any part of it, including any Modification,
+any work that links to or combines with the Work, and any work in which the Work's expressive
+content is recast, transformed, or adapted, to the fullest extent permitted by applicable
+copyright law.
+
+**1.10 "Distribution"** means the transfer of a copy of a Work or Derivative Work to another
+person, in source or executable form, by any means, whether or not for consideration.
+
+**1.11 "Evaluation Use"** means a temporary, private, non-commercial, non-production use of a
+Work as set out in Section 6.
+
+**1.12 "Effective Date"** means the date on which a LOSDA takes effect as stated in the LOSDA
+Record, being not earlier than the date of its issuance.
+
+**1.13 "Enforcement Register"** means the public, redacted record maintained by the Steward
+under Article 20 listing Notices of Non-Compliance, revocations, and other enforcement
+actions taken under this License.
+
+**1.14 "Fork"** means a copy of a repository of a Work created within a public code hosting
+platform, together with its associated history, created for the purpose of viewing,
+experimenting, proposing Contributions, or preserving a record.
+
+**1.15 "Hosted Service"** means any Deployment in which the functionality of a Work is made
+available to persons other than the deployer, whether over a network, by API, by interface, by
+batch job, or by any other means.
+
+**1.16 "License"** means this Public Availability with Source-Code Visibility License,
+Version 1.0, together with all Appendices, any NOTICE adopted by the Author, and any
+authoritative amendment published by the Steward under Article 26.
+
+**1.17 "LOSDA"** means a Letter of Software Deployment Approval issued under Article 10 and
+Appendix A, in the form published by the Steward, and identified by a unique LOSDA ID.
+
+**1.18 "LOSDA Record"** means the authoritative machine-readable record of a LOSDA held in
+the LOSDA Registry, which prevails over any summary, copy, PDF, email, or screenshot in case
+of conflict.
+
+**1.19 "LOSDA Registry"** means the registry maintained by the Steward at
+`registry/losda-registry.json` in the canonical repository, together with any successor
+system publicly designated by the Steward.
+
+**1.20 "Machine Learning Use"** means the use of a Work, in whole or in part, as training
+data, fine-tuning data, evaluation data, embedding input, or as a source of synthetic data
+generation, for the development or improvement of any machine learning model, regardless of
+model architecture, regardless of whether the output is source code, and regardless of
+whether the resulting model is distributed publicly, privately, or as a service.
+
+**1.21 "Modification"** means any change to a Work, including addition, deletion, renaming,
+refactoring, translation, porting, patching, configuration that alters behavior, and
+combination with other software.
+
+**1.22 "Non-Commercial Purpose"** means a purpose that is not primarily intended for or
+directed toward commercial advantage or monetary compensation. Deployment by a for-profit
+entity is presumed Commercial Deployment; Deployment by a non-profit, charitable,
+educational, or governmental entity may be Non-Commercial only where the Deployment is not
+part of an income-generating activity and is not performed on behalf of a for-profit entity.
+
+**1.23 "NOTICE"** means a file named `NOTICE` or `PASVL-NOTICE.md` placed at or near the root
+of a Work's repository, or, where no such file exists, the notice header in the Work's source
+files, which states the Author's identity, contact channel, and the Mode under Section 6.2.
+
+**1.24 "Notice of Non-Compliance" or "NNC"** means a formal written notice issued under
+Section 20.4 identifying an alleged Violation and the cure period applicable to it.
+
+**1.25 "Production Deployment"** means any Deployment that is not Evaluation Use and that is
+used for real operational purposes, including any Deployment serving real users, processing
+real data, supporting real business processes, or forming part of a product offered to
+others.
+
+**1.26 "Publicly Available"** means that the Source Code of a Work is accessible to the
+general public without payment, registration, or confidentiality obligation, through a public
+repository or an equivalent publicly accessible location.
+
+**1.27 "Redistribution"** means Distribution to any person, including Distribution of a
+Derivative Work and Distribution in executable, containerized, or bundled form.
+
+**1.28 "Registry Custodian"** means the person or persons appointed by the Steward under
+Article 20 and the Registry Policy to operate the LOSDA Registry.
+
+**1.29 "Reliance Period"** means the period described in Section 19.2 during which a
+compliant Deployment Licensee may continue existing Deployment after a revocation or
+termination.
+
+**1.30 "Revocation"** means the withdrawal of a LOSDA by the issuing Author, in whole or in
+part, in accordance with Article 10 and Section 18.7.
+
+**1.31 "Service Bureau Use"** means any arrangement in which the deployer permits a third
+party to use a Work's functionality, directly or indirectly, as a substitute for the third
+party obtaining its own LOSDA, whether by shared instance, white-labelling, agency
+arrangement, resale, capacity resale, or automated provisioning on the third party's request.
+
+**1.32 "Software" or "Work"** means the software, source code, documentation, data files,
+configuration, assets, and other materials made available by the Author under this License,
+including all Modifications and Derivative Works made by the Author.
+
+**1.33 "Source Code"** means the preferred form of a Work for making modifications to it,
+including all build scripts, schemas, configuration required for reproducible builds, and
+interface definition files.
+
+**1.34 "Standard LOSDA"** means a LOSDA issued on the Steward's standard terms for the
+applicable LOSDA Class, without negotiated variations to the standard conditions.
+
+**1.35 "Substantial Portion"** means any portion of a Work that is quantitatively or
+qualitatively material to the Work's functionality, value, or distinctiveness, including any
+module, library, component, algorithm, schema, model, or dataset that is not trivial,
+independently trivial to recreate, or purely decorative.
+
+**1.36 "Territory"** means the geographic, jurisdictional, or organizational area within which
+a LOSDA permits Deployment.
+
+**1.37 "Third-Party Components"** means software, libraries, data, or assets included in or
+required by a Work that are governed by their own licenses, as identified in the Work's
+package manifests or third-party notices.
+
+**1.38 "Trademarks"** means the names, logos, trade dresses, service marks, and domain names
+associated with a Work or with BSDC, including the "PASVL", "LOSDA", and "BSD C" designations.
+
+**1.39 "Verification URL"** means the stable public URL at which the current validity and
+scope of a LOSDA can be checked.
+
+**1.40 "Violation"** means any act or omission that breaches this License or a LOSDA,
+including any act that exceeds the Deployment Scope of a LOSDA.
+
+**1.41 "You"** means the individual or legal entity exercising rights under this License, and
+any Affiliate of that entity whose acts are directed or controlled by it. "Your" has a
+corresponding meaning.
+
+---
+
+### ARTICLE 2 — ACCEPTANCE, ELIGIBILITY, AND ORDER OF PRECEDENCE
+
+**2.1 Acceptance by conduct.** You accept this License by any act that exercises a right
+granted under it, including cloning, forking, downloading, reading, building, or executing a
+Work. If You do not accept this License, You must not exercise any right granted under it.
+
+**2.2 Acceptance by entity.** If You accept this License on behalf of an entity, You represent
+that You have authority to bind that entity, and "You" includes that entity and its
+Affiliates acting on its behalf.
+
+**2.3 Eligibility.** This License is available to any natural person or legal entity, except
+a person or entity that is (a) subject to sanctions that prohibit the transaction; (b)
+excluded under Section 22; or (c) the subject of an active suspension under Section 18.9, in
+respect of the suspended rights only.
+
+**2.4 No registration required for the Visibility Grant.** No account, registration, payment,
+or permission is required to exercise the rights granted under Article 3.
+
+**2.5 Order of precedence.** In the event of conflict, the following order prevails:
+(a) mandatory provisions of applicable law;
+(b) the LOSDA Record, as to the terms of that LOSDA only;
+(c) this License;
+(d) the NOTICE;
+(e) any README, documentation, or marketing material.
+
+**2.6 Relationship to Third-Party Components.** Third-Party Components remain governed by
+their own licenses. This License does not grant rights in Third-Party Components beyond those
+their own licenses provide, and does not restrict rights that their own licenses
+irrevocably grant.
+
+**2.7 Relationship to platform terms.** Use of a public code hosting platform is also subject
+to that platform's terms of service. This License does not purport to override platform
+terms, and nothing in this License grants permission that the platform terms withhold. See
+Article 28 and `legal/platform-reality.md`.
+
+---
+
+### ARTICLE 3 — THE VISIBILITY GRANT
+
+Subject to Your compliance with Article 4, the Author grants to You, free of charge,
+worldwide, a perpetual, royalty-free, non-exclusive, non-transferable, non-sublicensable
+license to do the following with a Work, for any purpose including commercial purposes:
+
+**3.1 Read and study.** To read, view, display, and study the Source Code of the Work.
+
+**3.2 Audit and verify.** To audit, inspect, analyze, test for vulnerabilities, verify
+behavior, and evaluate the security, privacy, and correctness of the Work, subject to
+Article 8.
+
+**3.3 Clone, fork, and archive.** To clone, Fork, mirror, and archive the Work, and to retain
+copies for reference and record-keeping. Archived copies remain subject to this License and
+do not expand Your rights.
+
+**3.4 Learn and teach.** To learn from the Work and to use it as teaching material, in
+lectures, courses, textbooks, tutorials, workshops, and academic publications, provided that
+such use does not involve Deployment and complies with Article 4.
+
+**3.5 Cite and comment.** To quote portions of the Source Code for the purposes of citation,
+criticism, review, commentary, journalism, research, or comparative analysis, with
+attribution and in a manner that does not create a competing deployment.
+
+**3.6 Propose changes.** To prepare and submit Contributions and to create Forks for that
+purpose, subject to Article 12.
+
+**3.7 Build for verification.** To compile, build, or execute the Work in a controlled,
+private, non-production environment solely to verify that it does what it claims, within the
+limits of Section 6.
+
+**3.8 Report.** To report defects, vulnerabilities, licensing concerns, or misconduct to the
+Author, the Steward, or a competent authority.
+
+**3.9 Personal study copy.** To keep and use a private copy on Your own devices for personal
+study, provided that the copy is not used for Deployment.
+
+**3.10 No other rights.** No right to Deploy, to Distribute in executable form, to provide a
+Hosted Service, to Redistribute, to sublicense, or to commercialize the Work is granted
+under this Article. Those rights are reserved under Article 5.
+
+---
+
+### ARTICLE 4 — CONDITIONS OF THE VISIBILITY GRANT
+
+The Visibility Grant is conditioned on the following. Failure to comply suspends the
+Visibility Grant automatically and constitutes a Violation.
+
+**4.1 Attribution.** Where You distribute, publish, quote, or present the Work or any
+Substantial Portion outside Your own organization, You must retain and display the Author's
+copyright notice, this License's name and version, the LOSDA requirement statement, and a
+link to the canonical repository.
+
+**4.2 No removal of notices.** You must not remove, obscure, alter, or circumvent any
+copyright notice, license header, attribution statement, NOTICE file, or digital watermark
+included in or on the Work.
+
+**4.3 No misrepresentation.** You must not state or imply that the Work is licensed under any
+other license, that it is "open source" within the meaning of the Open Source Definition,
+that it is free to deploy, or that You have authority to grant rights in it.
+
+**4.4 No relicensing.** You must not relicense, sublicense, or purport to grant any rights in
+the Work, in whole or in Substantial Portion, to any third party, except as expressly
+permitted by this License or by a LOSDA.
+
+**4.5 No laundering.** You must not incorporate a Substantial Portion of the Work into
+another work in order to avoid the deployment restrictions of this License, whether by
+renaming, refactoring, transpiling, extracting, minifying, bundling, or translating the Work
+into another language or representation.
+
+**4.6 No deployment.** You must not Deploy the Work except as permitted by Article 6 or by a
+valid LOSDA.
+
+**4.7 No automated extraction.** You must not use automated means to extract, scrape, or
+harvest the Work's Source Code for Machine Learning Use, except as permitted by Article 14.
+
+**4.8 Compliance with law.** You must comply with all applicable laws in exercising rights
+under this License.
+
+**4.9 Respect for persons.** You must not use the Work, its Source Code, its documentation, or
+its community spaces to harass, defame, discriminate against, or endanger any person, or to
+facilitate serious harm.
+
+---
+
+### ARTICLE 5 — RESERVED RIGHTS: DEPLOYMENT REQUIRES A LOSDA
+
+**5.1 Reservation.** All rights not expressly granted are reserved by the Author. Without
+limiting the foregoing, the right to Deploy is expressly reserved and is granted only by a
+LOSDA issued under Article 10.
+
+**5.2 No implied license.** No license may be implied from the Author's conduct, from
+tolerance of past Deployment, from the availability of the Source Code, from the presence of
+the Work in a public repository, from the existence of a Fork, from the absence of a
+technical restriction, or from the Author's failure to enforce this License in any instance.
+
+**5.3 Deployment without a LOSDA is a Violation.** Any Deployment without a valid LOSDA,
+other than as permitted by Section 6, is a material breach of this License, an infringement
+of the Author's rights where the Work is protected, and a breach of the deployment
+conditions of this License.
+
+**5.4 Consideration and formation.** A LOSDA forms a binding agreement between the Author and
+the licensee, supported by the consideration stated in the LOSDA (which may be a fee, a
+reciprocal obligation, or the licensee's undertakings under Article 11). A LOSDA that states
+no consideration is nonetheless binding as a unilateral permission instrument granted in
+reliance on the licensee's undertakings.
+
+**5.5 Instrument, not sale.** A LOSDA grants permission; it does not transfer ownership of
+the Work, does not assign copyright, and does not create a partnership, joint venture,
+agency, franchise, or employment relationship.
+
+---
+
+### ARTICLE 6 — LIMITED USE WITHOUT A LOSDA
+
+**6.1 Purpose of this Article.** This Article defines the narrow envelope in which a Work may
+be executed without a LOSDA. It exists so that the public can verify and learn from the Work
+without making the framework unworkable. It is not a general permission to use the Work.
+
+**6.2 Mode.** The Author specifies the applicable Mode in the NOTICE:
+(a) **Mode S (Standard)** — Evaluation Use is permitted under Section 6.3;
+(b) **Mode U (Universal)** — no execution of any kind is permitted without a LOSDA; Section
+6.3 does not apply. If the NOTICE is silent, Mode S applies.
+
+**6.3 Evaluation Use.** In Mode S, and without a LOSDA, You may execute the Work solely for
+Evaluation Use, provided that all of the following are true:
+(a) the execution is private to You and does not serve any person other than You;
+(b) the execution is not connected to real users, real customers, real production data, or
+any live system;
+(c) the execution is not part of any Commercial Deployment and generates no revenue;
+(d) the execution is not part of any product, service, or offering made available to others;
+(e) the execution does not exceed thirty (30) cumulative days per Work per twelve-month
+period, unless the Author states a longer period in the NOTICE;
+(f) the execution is not used to develop a competing product or a substitute for the Work;
+(g) You retain all notices and do not remove attribution from the Work's interface or
+outputs where present.
+
+**6.4 Evaluation Use is not a deployment license.** Evaluation Use creates no expectation of
+continuity, confers no right to support, and does not survive the termination of this
+License.
+
+**6.5 Extension.** The Author or the Steward may issue an Evaluation Extension LOSDA under
+Appendix A to extend the period in Section 6.3(e) or to widen the envelope for a defined
+purpose.
+
+**6.6 Organizational limit.** Evaluation Use by an entity is limited to a single copy per
+Work for the entity as a whole, and may not be used to evaluate the Work in a manner that
+substitutes for production use across an organization.
+
+---
+
+### ARTICLE 7 — NON-COMMERCIAL RESEARCH, TEACHING, AND STUDY EXCEPTION
+
+**7.1 Research use.** Accredited educational institutions, public research organizations, and
+independent researchers may execute a Work for Non-Commercial Purpose in a research setting
+without a LOSDA, provided that:
+(a) the execution is confined to the researcher's controlled environment;
+(b) no real personal data of third parties is processed without a lawful basis;
+(c) results are published in a manner that does not disclose confidential information;
+(d) the execution does not provide a service to persons outside the research team;
+(e) the execution is not used to train or improve a commercial product; and
+(f) the researcher acknowledges the Work and this License in resulting publications.
+
+**7.2 Teaching use.** An instructor may execute a Work in a classroom or laboratory setting
+for teaching purposes without a LOSDA, provided that the execution is confined to the
+teaching environment, is not offered as a service, and is not used for the institution's
+operational or administrative needs.
+
+**7.3 Institutional deployment requires a LOSDA.** Deployment of a Work in an institution's
+production systems, including student information systems, learning platforms, libraries,
+administrative systems, and research infrastructure serving users at scale, requires a
+LOSDA. An Academic LOSDA is available at no fee under Appendix A.
+
+**7.4 Attribution.** Published research, teaching material, and theses that rely on the Work
+must cite the Work, its Authors, and this License.
+
+---
+
+### ARTICLE 8 — SECURITY RESEARCH AND COORDINATED DISCLOSURE
+
+**8.1 Safe harbor.** Good-faith security research conducted under this Article does not
+constitute a Violation and does not breach any anti-circumvention term of this License.
+
+**8.2 Conditions.** The safe harbor applies where the researcher:
+(a) accesses only systems and data that the researcher is authorized to access, or that are
+provided by the Author for testing;
+(b) does not degrade, disrupt, or deny service to others;
+(c) does not exfiltrate, retain, or publish personal data or trade secrets;
+(d) reports the vulnerability privately to the Author or the Steward without undue delay,
+and in any event before public disclosure;
+(e) allows a coordinated disclosure period of ninety (90) days, extendable by mutual written
+agreement, or such shorter period as the Author permits;
+(f) does not use the vulnerability for extortion, advantage, or commercial exploitation; and
+(g) complies with applicable law.
+
+**8.3 No liability for research.** Subject to Section 8.2, the Author waives claims under this
+License arising from good-faith security research.
+
+**8.4 Disclosure of license violations.** Reporting a suspected Violation to the Steward is a
+protected act. The Steward must not disclose the identity of a reporter without consent,
+except where required by law.
+
+**8.5 Vulnerability handling.** The Author or Steward must acknowledge a report within seven
+(7) days and must publish a remediation plan within thirty (30) days, or explain why none is
+possible.
+
+---
+
+### ARTICLE 9 — PUBLIC-INTEREST AND HUMANITARIAN USES
+
+**9.1 Emergency use.** During a declared public emergency, a governmental or humanitarian
+organization may Deploy a Work without prior LOSDA for the duration of the emergency, up to
+ninety (90) days, provided that it (a) notifies the Author or Steward in writing within
+fourteen (14) days of commencing Deployment, (b) does not sell the Deployment, and (c)
+applies for a regular LOSDA within the ninety-day period if Deployment is to continue.
+
+**9.2 Continuity of essential services.** Where a Deployment supports an essential service
+and the Author becomes unavailable, insolvent, or unresponsive for more than sixty (60) days,
+the deployer may apply to the Steward for a Continuity LOSDA, which the Steward may issue on
+behalf of the Author in accordance with the Registry Policy.
+
+**9.3 Public-interest licensing commitment.** The Steward must maintain a Public-Interest
+Program under which LOSDAs are issued at no fee for qualifying uses, including disaster
+response, public health, accessibility, civil-liberties tooling, and digital public
+infrastructure.
+
+**9.4 Non-discrimination.** LOSDAs must not be refused on the basis of nationality, ethnicity,
+religion, sex, gender identity, sexual orientation, disability, age, caste, or political
+opinion, except where refusal is required by law or by sanctions.
+
+---
+
+### ARTICLE 10 — THE LETTER OF SOFTWARE DEPLOYMENT APPROVAL (LOSDA)
+
+**10.1 Function.** A LOSDA is the only instrument by which the Author grants the right to
+Deploy a Work. A LOSDA operates within this License and does not replace it. The licensee
+remains bound by this License in addition to the LOSDA.
+
+**10.2 Issuance authority.** Only the Author may issue a LOSDA for a Work. The Steward may
+issue a LOSDA only where (a) the Author has expressly appointed the Steward as its issuing
+agent in the NOTICE; (b) the LOSDA is a Continuity LOSDA under Section 9.2; or (c) the LOSDA
+is an Evaluation Extension under Section 6.5 and the Author has not objected in writing.
+
+**10.3 Form.** A LOSDA must be issued in the form published at `templates/LOSDA-TEMPLATE.md`,
+must contain every element listed in Appendix A, and must be recorded in the LOSDA Registry
+before it takes effect.
+
+**10.4 No valid LOSDA without registration.** A LOSDA that is not recorded in the Registry,
+or whose record does not match the instrument presented, is not valid. A Registry entry that
+has been superseded, suspended, or revoked confers no permission.
+
+**10.5 Scope is exhaustive.** A LOSDA grants only what it expressly states. Rights not stated
+are not granted. Any ambiguity is resolved against expansion of scope.
+
+**10.6 Non-exclusive.** Unless the LOSDA states otherwise, a LOSDA is non-exclusive and does
+not prevent the Author from issuing other LOSDAs for the same Work.
+
+**10.7 Non-transferable.** A LOSDA is personal to the licensee named in it, unless it names
+Affiliates, successors, or assignees. Assignment requires the Author's prior written
+approval, recorded in the Registry.
+
+**10.8 Sublicensing.** A LOSDA does not permit sublicensing unless it expressly does so.
+
+**10.9 Fees.** Fees, if any, are stated in the LOSDA. Fees are for permission to Deploy, not
+for copies of the Work, and are not a sale of the Work or of any rights in it. Fee terms,
+refund policy, and payment schedule must be stated or incorporated by reference.
+
+**10.10 Term.** A LOSDA must state its term, or state that it is perpetual subject to
+compliance. Where a term is stated, Deployment after expiry is a Violation unless renewed.
+
+**10.11 Amendment.** A LOSDA may be amended only by a written instrument issued by the
+issuing authority and recorded in the Registry. Amendments that reduce the licensee's rights
+take effect only with the licensee's written consent.
+
+**10.12 Verification.** Every LOSDA carries a Verification URL. A deployer must be able to
+produce, on request, its LOSDA ID and a current Registry status.
+
+**10.13 Public summary.** The Registry must publish, for each LOSDA, the LOSDA ID, the
+Licensed Work, the LOSDA Class, the licensee's public display name (or an anonymized
+identifier at the licensee's request where the policy permits), the Effective Date, the term,
+the Territory, and the status.
+
+**10.14 Classes.** LOSDAs are issued in the following classes, further described in
+`legal/losda-specification.md` and `docs/deployment-scopes.md`:
+(a) **S — Standard Commercial**; (b) **E — Enterprise / Portfolio**; (c) **I — Internal
+Use**; (d) **H — Hosted Service / SaaS**; (e) **D — Distribution / OEM / Embedded**;
+(f) **A — Academic / Non-Commercial**; (g) **G — Government / Public Sector**;
+(h) **P — Public Interest**; (i) **R — Research**; (j) **X — Evaluation Extension**;
+(k) **C — Continuity**; (l) **M — Machine Learning / AI Data**; (m) **O — Open Deployment**
+(authorized public deployment, where the Author chooses to permit it).
+
+**10.15 Revocation.** A LOSDA may be revoked only for cause under Section 18.7, subject to the
+Reliance Period in Article 19.
+
+---
+
+### ARTICLE 11 — OBLIGATIONS OF A DEPLOYMENT LICENSEE
+
+A licensee under a LOSDA must:
+
+**11.1 Deploy within scope.** Deploy only within the Deployment Scope, and obtain an amended
+or additional LOSDA before expanding scope, including by increased scale, new Territory, new
+Field of Use, new Affiliates, new products, or new hosting arrangements.
+
+**11.2 Preserve notices.** Preserve all copyright, license, attribution, and NOTICE material
+in the Deployment, in the Source Code, and in documentation provided to users.
+
+**11.3 Identify the license to users.** Where the Deployment exposes an interface to end
+users, present the license identification, the Author's attribution, and a link to the
+canonical repository in a reasonably accessible location.
+
+**11.4 Report scale.** Report Deployment scale at the intervals stated in the LOSDA, where
+the LOSDA contains scale limits.
+
+**11.5 Security cooperation.** Notify the Author without undue delay of any material security
+incident arising from or affecting the Deployment, and cooperate in good faith on remediation.
+
+**11.6 No circumvention.** Not structure its affairs to avoid the need for a LOSDA, including
+by splitting an organization, interposing an Affiliate, using a contractor as a conduit,
+or re-hosting.
+
+**11.7 No hostile assertions.** Not assert any patent, copyright, or other right against the
+Author or any Contributor in respect of the Work, except in defense of an assertion first
+made against the licensee.
+
+**11.8 Compliance.** Comply with the laws applicable to the Deployment, including data
+protection, consumer protection, accessibility, and sector regulation.
+
+**11.9 Records.** Keep records sufficient to demonstrate compliance with this Article for
+three (3) years after the end of the term, and make them available to the Author on
+reasonable request, subject to confidentiality.
+
+**11.10 Accurate registry data.** Provide accurate licensee identification and keep contact
+details current.
+
+---
+
+### ARTICLE 12 — CONTRIBUTIONS
+
+**12.1 Inbound license.** By submitting a Contribution, You grant the Author and the Steward a
+perpetual, worldwide, royalty-free, irrevocable, non-exclusive license to use, reproduce,
+modify, adapt, publish, distribute, sublicense, and relicense the Contribution, in any form
+and for any purpose, including for the commercial licensing of the Work under this License
+and under any LOSDA.
+
+**12.2 Copyright retention.** You retain copyright in Your Contribution. No assignment is
+required unless You separately agree to one in writing.
+
+**12.3 Representations.** You represent that (a) You are legally entitled to grant the license
+in Section 12.1; (b) the Contribution is Your original work or is submitted with the necessary
+permissions; (c) the Contribution does not infringe third-party rights; and (d) if Your
+employer has rights in the Contribution, You have obtained permission or the employer has
+waived those rights.
+
+**12.4 Developer Certificate of Origin.** Contributions must be accompanied by a sign-off
+certifying the Developer Certificate of Origin, version 1.1, unless the Author's CONTRIBUTING
+file requires an alternative.
+
+**12.5 Contributions under this License.** Contributions become part of the Work and are
+licensed to the public under this License. Contributors do not acquire any deployment rights
+by contributing; a Contributor who wishes to Deploy must obtain a LOSDA like anyone else.
+
+**12.6 No obligation to accept.** The Author may accept, reject, or modify any Contribution
+without giving reasons and without liability.
+
+**12.7 Attribution of contributors.** The Author must maintain a contributors file and credit
+Contributions where reasonably practicable, but the absence of credit is not a breach.
+
+**12.8 Contribution misconduct.** Contributions that contain malicious code, undisclosed
+tracking, license laundering, or plagiarized material are a Violation and may be reported
+under Article 20.
+
+---
+
+### ARTICLE 13 — PROHIBITED CONDUCT AND ANTI-CIRCUMVENTION
+
+The following are prohibited and constitute Violations:
+
+**13.1 Unlicensed Deployment.** Deploying a Work without a valid LOSDA, other than as
+permitted by Article 6, 7, 8, or 9.
+
+**13.2 Scope abuse.** Deploying outside the Deployment Scope, including exceeding scale limits,
+serving users in a Territory not granted, or entering a Field of Use not granted.
+
+**13.3 Licensing laundering.** Removing, replacing, or obscuring license notices in order to
+present a Work or Derivative Work as licensed under different terms.
+
+**13.4 Fork abuse.** Using a Fork, mirror, or archived copy to Deploy outside the terms of a
+LOSDA, or maintaining a Fork for the purpose of circumventing revocation.
+
+**13.5 Service Bureau Use.** Providing Service Bureau Use without a LOSDA that expressly
+permits it.
+
+**13.6 Sublicensing.** Granting any third party rights in a Work, or representing to a third
+party that it may Deploy the Work, without authority.
+
+**13.7 Circumvention of technical measures.** Defeating, disabling, or bypassing any license
+enforcement mechanism, deployment gate, watermark, or telemetry consent mechanism included in
+a Work, except as permitted by Article 8.
+
+**13.8 Fraudulent records.** Presenting a forged, altered, expired, superseded, or revoked
+LOSDA, or registering a LOSDA with false information.
+
+**13.9 Misrepresentation.** Falsely claiming to be an Author, a Steward, a Registry Custodian,
+or an authorized issuer of LOSDAs.
+
+**13.10 Malicious modification.** Introducing malicious code, backdoors, unauthorized data
+exfiltration, or destructive functionality into a Work or a Contribution.
+
+**13.11 Model laundering.** Using a Work to train or distil a model in order to reproduce its
+functionality while avoiding the deployment conditions of this License, except as permitted
+by Article 14.
+
+**13.12 Harassment of enforcers.** Retaliating against any person who reports a Violation,
+participates in an enforcement proceeding, or refuses to participate in a Violation.
+
+**13.13 Sanctions evasion.** Using the Work in violation of Article 22.
+
+**13.14 Unconscionable use.** Using the Work for mass surveillance, autonomous weapons
+targeting, or other uses prohibited by the Steward's Ethics Policy where the applicable LOSDA
+incorporates that policy.
+
+---
+
+### ARTICLE 14 — MACHINE LEARNING AND AUTOMATED PROCESSING
+
+**14.1 Default rule.** Machine Learning Use of a Work requires a LOSDA of Class M, unless
+permitted by Section 14.2.
+
+**14.2 Permitted without a LOSDA.** You may use a Work for Machine Learning Use where:
+(a) the use is limited to research permitted by Article 7 and the resulting model is not
+deployed commercially; or
+(b) the use is for security testing or vulnerability detection conducted under Article 8; or
+(c) the Author has stated in the NOTICE that Machine Learning Use is permitted, in which case
+the terms stated apply.
+
+**14.3 Attribution of training data.** Where Machine Learning Use is permitted, You must
+record the use of the Work in the model card, dataset card, or equivalent documentation, and
+must not represent the resulting model as independent of the Work.
+
+**14.4 No output laundering.** You must not use a model trained on a Work to generate a
+substitute for the Work for the purpose of avoiding a LOSDA.
+
+**14.5 Automated agents.** Automated agents, crawlers, and code-generation systems must
+respect this Article and must not treat the public availability of the Source Code as
+permission for Machine Learning Use.
+
+**14.6 Reserved consideration.** The Author reserves the right to require a Class M LOSDA
+with negotiated terms for large-scale or commercial Machine Learning Use, and to decline such
+use.
+
+---
+
+### ARTICLE 15 — ATTRIBUTION, NOTICES, AND NAMING
+
+**15.1 Required notices.** Every copy, Fork, and Deployment must retain the copyright notice,
+this License's name and version, the LOSDA requirement statement, and the disclaimer of
+warranty.
+
+**15.2 NOTICE file.** The Author may include a NOTICE file specifying additional attribution,
+the Mode under Section 6.2, the issuing agent under Section 10.2, and contact channels. A
+NOTICE may add attribution requirements but may not reduce the rights granted by Article 3.
+
+**15.3 Naming.** A Derivative Work must not use the Author's name, the Work's name, or the
+Work's logos in a way that suggests endorsement, sponsorship, or official status, except as
+permitted by Article 17 or by written permission.
+
+**15.4 Modified versions.** A Derivative Work must carry a prominent notice stating that it
+has been modified and identifying the modifier.
+
+**15.5 False association.** You must not represent a Fork, a Derivative Work, or a Deployment
+as an official BSDC product or an official release of the Author unless authorized in
+writing.
+
+---
+
+### ARTICLE 16 — COPYRIGHT, PATENT, MORAL RIGHTS, AND DATABASE RIGHTS
+
+**16.1 Copyright.** The Author retains all copyright and neighbouring rights in the Work. The
+rights granted under this License are licenses, not assignments.
+
+**16.2 Patent grant.** Subject to Section 16.3, the Author grants You a perpetual, worldwide,
+royalty-free, non-exclusive patent license to make, use, sell, offer for sale, import, and
+otherwise practice the Work, limited to patent claims necessarily infringed by the Work as
+distributed by the Author, and only to the extent necessary to exercise rights granted under
+this License or under a LOSDA.
+
+**16.3 Patent termination.** If You initiate patent litigation alleging that the Work
+infringes a patent, the patent license granted to You under Section 16.2 terminates
+immediately.
+
+**16.4 No trademark grant.** No rights in the Trademarks are granted. See Article 17.
+
+**16.5 Moral rights.** To the extent permitted by law, the Author waives and agrees not to
+assert moral rights in a manner that would prevent the exercise of rights granted under this
+License; where waiver is not permitted, the Author consents to the acts necessary to exercise
+those rights, provided attribution is preserved.
+
+**16.6 Database rights.** Where a Work includes a database protected by sui generis database
+rights, the Author grants the same rights in respect of that database as are granted in
+respect of the Work, subject to the same conditions.
+
+**16.7 Government works.** Where the Work is a work of a government, the Author must state any
+statutory limitations in the NOTICE; nothing in this License purports to restrict rights that
+applicable law grants to the public.
+
+**16.8 Reservation of unenforceable grants.** If any grant in this Article is unenforceable in
+a jurisdiction, the remainder of the Article continues to apply and the Author must not
+assert the unenforceable right against a compliant beneficiary.
+
+---
+
+### ARTICLE 17 — TRADEMARKS AND BRAND
+
+**17.1 No implied endorsement.** Use of the Work does not grant permission to use the
+Trademarks.
+
+**17.2 Nominative use.** You may use the Work's name and the "PASVL" and "LOSDA" designations
+in a factual, nominative manner to describe the Work, its license, or a LOSDA, provided that
+the use is accurate and does not suggest endorsement.
+
+**17.3 Badges.** The official license and LOSDA status badges published in `assets/` may be
+displayed by any person to indicate the actual licensing status of a Work, and by licensees
+to indicate a valid LOSDA, in accordance with `docs/badge-usage.md`. Altering, recolouring, or
+misrepresenting a badge is a Violation.
+
+**17.4 BSDC marks.** "Bangladesh Software Development Community", "BSD C", and the BSDC logo
+are trademarks of BSDC and may be used only as permitted by `TRADEMARK.md`.
+
+**17.5 Domain names.** You must not register a domain name, social handle, or package name
+that is confusingly similar to a Work's name or to a BSDC mark.
+
+---
+
+### ARTICLE 18 — TERM, TERMINATION, CURE, AND REINSTATEMENT
+
+**18.1 Term of the License.** The Visibility Grant runs for the duration of the copyright in
+the Work, unless terminated earlier under this Article.
+
+**18.2 Termination for breach.** This License and all rights granted under it terminate
+automatically, without notice, upon Your material breach of Article 4, Article 5, Article 11,
+Article 12, Article 13, or Article 14, subject to the cure rights in Section 18.4.
+
+**18.3 Termination of a LOSDA.** A LOSDA terminates on (a) expiry of its term; (b) Revocation
+under Section 18.7; or (c) the licensee's material breach, subject to cure.
+
+**18.4 Cure.** Where a breach is capable of cure, the breaching party may cure within thirty
+(30) days of receiving an NNC, or such longer period as the NNC specifies, and the termination
+is suspended during the cure period. Cure requires (a) cessation of the breach, (b)
+remediation of its effects where reasonably possible, and (c) written confirmation to the
+issuing authority. Breaches that are incapable of cure, including fraudulent LOSDA use,
+malicious code introduction, and knowing circumvention, are not curable.
+
+**18.5 Restitution on termination.** On termination, You must cease all Deployment, remove
+executable copies from production systems, and, where the Author requires, certify cessation
+in writing. You may retain archival copies for legal-record purposes only.
+
+**18.6 Survival.** Sections 4.1, 4.2, 4.3, 4.4, 4.5, 12.1, 16.1 through 16.6, 18.5, 18.6,
+Article 19, Article 20, Article 21, Article 22, Article 23, Article 24, and Article 25
+survive termination.
+
+**18.7 Revocation of a LOSDA.** The issuing authority may revoke a LOSDA, in whole or in part,
+only on the following grounds:
+(a) material breach of the LOSDA or of this License;
+(b) fraudulent or materially false information in the LOSDA application or Registry record;
+(c) use of the Work in a manner that causes, or is reasonably likely to cause, substantial
+harm to persons, to the Author, to the Steward, or to the integrity of the framework;
+(d) non-payment of fees after thirty (30) days' written notice, where fees apply;
+(e) a requirement of law, court order, or sanctions; or
+(f) the licensee's persistent conduct that brings the framework into disrepute, following a
+final finding under Article 20.
+
+**18.8 Procedure for revocation.** Revocation requires (a) written notice stating the grounds
+and the evidence relied on; (b) a thirty (30) day opportunity to respond, except in urgent
+cases under Section 18.10; (c) a reasoned decision by the issuing authority, reviewed by a
+second reviewer appointed by the Steward; (d) recording in the Registry; and (e) notice of
+the right of appeal under `governance/APPEALS.md`.
+
+**18.9 Suspension.** Pending investigation, the issuing authority may suspend a LOSDA for up
+to thirty (30) days, extendable once by thirty (30) days, where there is credible evidence of
+a serious Violation. Suspension must be recorded in the Registry with the reason.
+
+**18.10 Urgent action.** Where a Deployment presents an imminent risk of serious harm, the
+issuing authority may act immediately and must provide the notice and hearing described in
+Section 18.8 within five (5) business days after acting.
+
+**18.11 Reinstatement.** A party whose rights were terminated or whose LOSDA was revoked may
+be reinstated:
+(a) automatically, if the breach is cured within the cure period and the party complies
+prospectively;
+(b) on application, where the Steward's Reinstatement Panel finds that reinstatement is
+consistent with the purposes of this License; or
+(c) on the Author's written election.
+Reinstatement is prospective and does not excuse liability for past breaches.
+
+**18.12 Good-faith first-breach reinstatement.** A first-time, good-faith, non-commercial
+breach that is cured within thirty (30) days of notice results in automatic reinstatement,
+provided the breaching party did not conceal the breach.
+
+**18.13 Termination does not affect third parties.** The termination of Your rights does not
+terminate the rights of other compliant beneficiaries, and does not affect rights validly
+granted under other LOSDAs.
+
+---
+
+### ARTICLE 19 — RELIANCE PROTECTION AND WIND-DOWN
+
+**19.1 Purpose.** This Article protects licensees who have invested in Deployment in good
+reliance on a valid LOSDA. It does not protect a licensee that is in breach.
+
+**19.2 Reliance Period.** Where a LOSDA terminates or is revoked for a reason other than the
+licensee's material breach, sanctions, or a court order, the licensee may continue the
+existing Deployment for one hundred and eighty (180) days, or for the remainder of the stated
+term if shorter, provided that the licensee:
+(a) is not in material breach;
+(b) pays any accrued fees;
+(c) uses the period solely to migrate away from the Work or to negotiate a replacement
+LOSDA; and
+(d) does not expand the Deployment during the period.
+
+**19.3 No new deployments.** During the Reliance Period the licensee must not commence new
+Deployments, onboard new users beyond ordinary growth, or enter new Fields of Use.
+
+**19.4 Perpetual grants.** Where a LOSDA states that it is perpetual and irrevocable, the
+Author may revoke it only for (a) the licensee's material breach, (b) fraud, (c) a requirement
+of law, or (d) the grounds in Section 18.7(c).
+
+**19.5 Release-based certainty.** Once a version of a Work has been released under a given
+version of this License, the Author must not revoke the rights granted under Article 3 in
+respect of that released version.
+
+**19.6 Wind-down support.** The Author should provide reasonable migration assistance during
+a Reliance Period where the Author terminated the LOSDA without cause.
+
+---
+
+### ARTICLE 20 — MONITORING, AUDIT, AND ENFORCEMENT
+
+**20.1 Good-faith enforcement.** The Author and the Steward must exercise enforcement powers
+in good faith, proportionately, and consistently, and must publish enforcement statistics
+annually.
+
+**20.2 Detection.** The Author or Steward may investigate suspected Violations using publicly
+available information, reports, and, where the licensee has consented in the LOSDA, audit
+rights. Investigation must not involve unauthorized access to systems.
+
+**20.3 Reporting a Violation.** Any person may report a suspected Violation using the form in
+`templates/VIOLATION-REPORT.md` or the repository's issue template. Reports may be made
+confidentially on request.
+
+**20.4 Notice of Non-Compliance.** On credible evidence of a Violation, the Author or Steward
+must issue an NNC stating (a) the identity of the Work; (b) the conduct alleged; (c) the
+provision breached; (d) the evidence relied on, to the extent disclosure is lawful; (e) the
+cure period; and (f) the consequences of non-compliance.
+
+**20.5 Cure period.** The standard cure period is thirty (30) days. For non-commercial,
+good-faith, or accidental breaches, the cure period is extended to sixty (60) days where the
+breaching party engages in good faith. For breaches causing harm to persons, the cure period
+may be shortened to seven (7) days.
+
+**20.6 Enforcement ladder.** Enforcement must proceed in the following order, escalating only
+as necessary:
+(a) **Stage 0 — Informal resolution:** a private message inviting correction;
+(b) **Stage 1 — NNC and cure:** formal notice and cure opportunity;
+(c) **Stage 2 — Suspension:** suspension of LOSDA or of the Visibility Grant in respect of the
+breaching party;
+(d) **Stage 3 — Revocation and Registry entry:** revocation of LOSDA, public redacted entry in
+the Enforcement Register;
+(e) **Stage 4 — Platform action:** takedown requests, package registry complaints, app store
+complaints, and hosting notifications;
+(f) **Stage 5 — Legal action:** civil proceedings, including claims for infringement, breach,
+and injunctive relief, and, where the conduct is criminal under applicable law, referral to
+authorities.
+
+**20.7 Proportionality.** Enforcement must be proportionate to (a) the seriousness of the
+breach, (b) whether the breach was knowing, (c) the harm caused, (d) the breaching party's
+size and capacity, and (e) the breaching party's cooperation.
+
+**20.8 No private enforcement beyond the framework.** Beneficiaries may report Violations and
+may exercise rights as third-party beneficiaries under Section 25.11, but must not demand
+payment, threaten publicity, or purport to grant or withhold LOSDAs.
+
+**20.9 Enforcement Register.** The Steward must maintain the Enforcement Register containing,
+for each action, the date, the LOSDA ID or Work, the provision breached, the stage reached, the
+outcome, and the appeal status. Personal data must be minimized and redacted consistently
+with Article 23.
+
+**20.10 Misuse of enforcement.** Knowingly false reports are a Violation and may result in
+restriction of the reporter's participation in the community, subject to appeal.
+
+**20.11 Presumption of good faith.** A party that has cured a breach in full is presumed to be
+in compliance unless new evidence arises.
+
+**20.12 Limitation.** Enforcement action must be commenced within the period permitted by
+applicable law. Failure to enforce in one instance is not a waiver.
+
+---
+
+### ARTICLE 21 — DISCLAIMER OF WARRANTY; LIMITATION OF LIABILITY; INDEMNITY
+
+**21.1 Disclaimer.** THE WORK IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS,
+IMPLIED, OR STATUTORY, INCLUDING ANY WARRANTY OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, ACCURACY, NON-INFRINGEMENT, OR UNINTERRUPTED OR ERROR-FREE OPERATION. THE
+AUTHOR DOES NOT WARRANT THAT THE WORK IS FREE OF DEFECTS, VULNERABILITIES, OR HARMFUL
+COMPONENTS.
+
+**21.2 Assumption of risk.** You are solely responsible for determining the appropriateness of
+using or redeploying the Work, for the security of Your Deployment, and for compliance with
+the laws applicable to You.
+
+**21.3 Limitation of liability.** TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, NO
+AUTHOR, CONTRIBUTOR, OR STEWARD SHALL BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, PUNITIVE, OR CONSEQUENTIAL DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUE, DATA,
+GOODWILL, OR BUSINESS OPPORTUNITY, ARISING OUT OF OR RELATING TO THIS LICENSE, THE WORK, OR
+ANY LOSDA, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+**21.4 Cap.** TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE TOTAL AGGREGATE LIABILITY
+OF THE AUTHOR ARISING OUT OF OR RELATING TO THIS LICENSE OR ANY LOSDA SHALL NOT EXCEED THE
+GREATER OF (A) THE FEES PAID BY YOU TO THE AUTHOR UNDER THE APPLICABLE LOSDA IN THE TWELVE
+(12) MONTHS PRECEDING THE CLAIM, OR (B) ONE HUNDRED UNITED STATES DOLLARS (USD 100).
+
+**21.5 Exclusions.** Nothing in this Article limits liability for (a) fraud or wilful
+misconduct; (b) death or personal injury caused by negligence; (c) breach of confidentiality;
+(d) infringement of intellectual property by a party's own acts; or (e) any liability that
+cannot be limited by law.
+
+**21.6 Consumer rights.** Nothing in this License affects statutory rights of consumers that
+cannot be waived.
+
+**21.7 Indemnity by deployer.** A licensee under a LOSDA must indemnify the Author and the
+Steward against third-party claims arising from the licensee's Deployment, including claims
+relating to the licensee's modifications, data processing, or compliance failures, except to
+the extent the claim arises from the Author's own wilful misconduct.
+
+**21.8 Indemnity by Author for paid LOSDA.** Where a LOSDA is issued for a fee and expressly
+states an indemnity, the Author must indemnify the licensee against third-party claims that
+the unmodified Work infringes copyright or patent, subject to the terms stated in that LOSDA.
+
+---
+
+### ARTICLE 22 — EXPORT CONTROL, SANCTIONS, AND RESTRICTED PARTIES
+
+**22.1 Compliance.** You must comply with applicable export control and economic sanctions
+laws and regulations.
+
+**22.2 Restricted parties.** You must not exercise rights under this License, and no LOSDA
+may be issued, where doing so would breach sanctions or would involve a person identified on
+an applicable restricted-party list.
+
+**22.3 No representation.** The Author makes no representation that the Work is exportable to
+any particular jurisdiction and does not undertake to obtain export authorizations.
+
+**22.4 Termination.** Rights under this License terminate immediately if Your exercise of them
+would breach Section 22.1 or 22.2.
+
+**22.5 Reporting.** The Steward may report suspected sanctions evasion to competent
+authorities.
+
+---
+
+### ARTICLE 23 — PRIVACY AND DATA PROTECTION
+
+**23.1 The Work.** The Author must disclose in the NOTICE any personal data the Work collects,
+the purposes, and the legal basis. Where the Work includes telemetry, the Author must provide
+a documented means of disabling it, and disabling it is not a circumvention under Section
+13.7.
+
+**23.2 Deployer obligations.** A deployer is a controller or processor of any personal data it
+processes using the Work, and must comply with applicable data protection law, including
+lawful basis, transparency, data minimization, retention limits, security, and cross-border
+transfer rules.
+
+**23.3 Registry data.** The Registry processes limited personal data to operate the LOSDA
+framework. The Steward must publish a privacy notice, must minimize published data, and must
+honor data-subject rights to the extent compatible with the integrity of the Registry and
+legal-record obligations. Requests for anonymized public listing must be granted where the
+law and the transparency interests of the framework permit.
+
+**23.4 Confidentiality.** Information exchanged in a LOSDA application, an audit, or an
+enforcement proceeding is confidential and must not be disclosed except as required by law,
+as necessary to enforce this License, or with consent.
+
+**23.5 Retention.** Enforcement records must be retained for the period required by law and,
+in any event, not longer than necessary for the purposes of Article 20.
+
+**23.6 Breach notification.** The Steward must notify affected persons and competent
+authorities of a personal-data breach in the Registry without undue delay, consistent with
+applicable law.
+
+---
+
+### ARTICLE 24 — GOVERNING LAW, DISPUTE RESOLUTION, AND JURISDICTION
+
+**24.1 Governing law.** This License is governed by the laws of the People's Republic of
+Bangladesh, without regard to conflict-of-laws rules, unless the NOTICE or the LOSDA
+designates another governing law for that Work or that LOSDA. Mandatory consumer-protection
+and employment rules of the licensee's habitual residence prevail where they cannot be
+contractually displaced.
+
+**24.2 Amicable settlement.** The parties must attempt in good faith to resolve any dispute
+arising out of or relating to this License or a LOSDA through negotiation for thirty (30)
+days after written notice of the dispute.
+
+**24.3 Mediation.** If negotiation fails, the parties must attempt mediation administered by a
+recognized mediation institution for a further thirty (30) days, unless the dispute concerns
+urgent injunctive relief or a security incident.
+
+**24.4 Arbitration.** Failing settlement, the dispute must be finally resolved by arbitration
+administered under the UNCITRAL Arbitration Rules, with a seat in Dhaka, Bangladesh, before
+one arbitrator, in the English language. Where the parties are outside Bangladesh, they may
+agree in the LOSDA to a different seat or to institutional arbitration. The award is final and
+binding, and judgment on the award may be entered in any court of competent jurisdiction
+subject to applicable public policy.
+
+**24.5 Small claims and consumer disputes.** Either party may bring an individual claim in a
+court of competent jurisdiction where the value of the claim is below the applicable
+small-claims threshold, or where mandatory law grants a forum to a consumer.
+
+**24.6 Injunctive relief.** Nothing in this Article prevents either party from seeking urgent
+interim or injunctive relief from a court of competent jurisdiction, including relief to
+prevent irreparable harm, to protect confidential information, or to prevent a security
+incident.
+
+**24.7 Enforcement actions by the Steward.** The Steward may bring a claim in its own name as
+steward of the framework where the claim concerns the integrity of the Registry, the
+Enforcement Register, or the use of the Trademarks.
+
+**24.8 No class proceedings waiver where prohibited.** Nothing in this Article prevents
+participation in a class or representative proceeding where applicable law grants that right,
+nor does it prevent a claim by a consumer body acting under statute.
+
+**24.9 Language.** Arbitration and dispute proceedings are conducted in English unless the
+parties agree otherwise.
+
+**24.10 Continuity.** If the arbitration agreement is held unenforceable, the courts of Dhaka,
+Bangladesh, have exclusive jurisdiction, subject to Section 24.5.
+
+---
+
+### ARTICLE 25 — GENERAL PROVISIONS
+
+**25.1 Severability.** If any provision is held invalid or unenforceable, it must be modified to the
+minimum extent necessary to make it enforceable, and the remaining provisions continue in
+full force.
+
+**25.2 Entire agreement.** This License, together with the NOTICE and any applicable LOSDA,
+constitutes the entire agreement regarding the Work and supersedes prior understandings
+regarding licensing.
+
+**25.3 No waiver.** Failure or delay in exercising a right is not a waiver. A waiver is
+effective only if in writing and signed by the waiving party, and applies only to the specific
+instance.
+
+**25.4 Assignment.** You may not assign or transfer this License or a LOSDA without the
+Author's prior written consent, which must be recorded in the Registry. The Author may assign
+its rights to a successor in interest provided the successor assumes the Author's obligations
+under this License and the Registry is updated.
+
+**25.5 Notices.** Notices to the Author must be sent to the contact channel stated in the
+NOTICE. Notices to a licensee are effective when sent to the contact address in the LOSDA
+Record. Notices to the Steward must be sent to the address published in `GOVERNANCE.md`.
+
+**25.6 Force majeure.** Neither party is liable for delay or failure caused by events beyond
+its reasonable control, provided it notifies the other party and mitigates the effect.
+
+**25.7 No agency.** Nothing in this License creates an agency, partnership, joint venture, or
+fiduciary relationship, except the limited issuing agency under Section 10.2.
+
+**25.8 Third-party beneficiaries.** Except as stated in Section 25.9, no person other than the
+parties has rights under this License.
+
+**25.9 Beneficiary standing.** Contributors to a Work and BSDC are intended third-party
+beneficiaries of Article 4, Article 11, and Article 13 and may enforce those provisions,
+subject to Article 20.
+
+**25.10 Headings.** Headings are for convenience only and do not affect interpretation.
+
+**25.11 Further assurances.** Each party must execute such further documents as are reasonably
+necessary to give effect to this License or a LOSDA.
+
+**25.12 Cumulative remedies.** Remedies are cumulative and not exclusive, subject to Article
+21.
+
+**25.13 Anti-bribery and integrity.** Neither party may offer, solicit, or accept any improper
+advantage in connection with a LOSDA or an enforcement decision.
+
+**25.14 Publicity.** A licensee may state factually that it holds a LOSDA, and may use the
+official badges under Article 17, but may not describe the relationship as a partnership or
+endorsement.
+
+**25.15 Counterparts and electronic signature.** LOSDAs may be issued and signed
+electronically, including by cryptographic signature, and in counterparts, each of which is an
+original.
+
+---
+
+### ARTICLE 26 — VERSIONING, AMENDMENT, AND COMPATIBILITY
+
+**26.1 Version identity.** Each version of this License is identified by a version number.
+This document is Version 1.0. The version applicable to a Work is the version stated in its
+NOTICE or, where no version is stated, the version published at the time the version of the
+Work was released.
+
+**26.2 No unilateral amendment of granted rights.** The Steward may publish amendments only in
+accordance with the Amendment Process in `governance/AMENDMENT-PROCESS.md`, which requires a
+public RFC, a minimum forty-five (45) day comment period, and the approval of the License
+Council by a two-thirds majority.
+
+**26.3 Effect of amendments.** A published amendment applies prospectively to new versions of
+a Work and does not retroactively reduce rights validly granted under a prior version, except
+where required by law or by a court order.
+
+**26.4 Corrections.** Typographical corrections, clarifications that do not change substance,
+and updates to URLs or contact details may be made by the Steward on notice, without the full
+amendment process, provided the change is logged in `CHANGELOG.md` and does not alter rights.
+
+**26.5 Compatibility.** A Work may be combined with works under the licenses listed in
+Appendix C to the extent stated there. Any other combination does not grant rights in
+Third-Party Components and may create obligations You must satisfy independently.
+
+**26.6 Relicensing by the Author.** The Author may release later versions of the Work under
+different terms, provided that the release of a later version does not withdraw the rights
+granted in respect of earlier releases under Section 19.5.
+
+**26.7 Successor framework.** If the Steward ceases to operate, the License Council must
+appoint a successor steward or transfer the Registry and framework to a suitable institution,
+and must publish a notice of transition.
+
+---
+
+### ARTICLE 27 — THE STEWARD AND THE LICENSE COUNCIL
+
+**27.1 Role of the Steward.** The Steward (a) publishes and versions this License; (b)
+maintains the LOSDA Registry and the Enforcement Register; (c) publishes templates, guidance,
+and the LOSDA specification; (d) operates the appeals and reinstatement processes; (e)
+publishes an annual transparency report; and (f) holds the trademarks of the framework.
+
+**27.2 Limits on the Steward.** The Steward must not (a) issue a LOSDA for a Work without
+authority under Section 10.2; (b) revoke a LOSDA except as an issuing authority or under
+Article 18; (c) disclose confidential Registry information except as permitted by Article 23;
+or (d) use the framework to obtain an unfair commercial advantage.
+
+**27.3 License Council.** The License Council is the governing body established in
+`GOVERNANCE.md`. It approves amendments, appoints the Registry Custodian, oversees
+enforcement integrity, and hears final appeals where an appeal panel is not independent.
+
+**27.4 Conflicts of interest.** Members of the License Council, Registry Custodians, and
+appeal panellists must disclose conflicts and recuse themselves, in accordance with
+`governance/CONFLICT-OF-INTEREST.md`.
+
+**27.5 Fiduciary standard.** The Steward and the License Council must act in the interests of
+the framework as a whole, balancing the interests of Authors, deployers, contributors, and the
+public.
+
+**27.6 Dissolution.** On dissolution of the Steward, the Registry, the Enforcement Register,
+the trademarks, and the right to publish this License vest in a successor institution selected
+by the License Council, and failing that, in a court-appointed trustee. No dissolution may
+retroactively reduce rights granted under Article 3.
+
+---
+
+### ARTICLE 28 — INTERPRETATION AND LANGUAGE
+
+**28.1 Purposive interpretation.** This License must be interpreted to give effect to its
+purposes: public visibility, auditable transparency, and permission-gated deployment.
+
+**28.2 No contra proferentem against the framework.** Ambiguity in a LOSDA is resolved against
+expansion of the licensee's rights, consistent with Section 10.5. Ambiguity in this License is
+resolved to preserve the Visibility Grant, consistent with Article 3.
+
+**28.3 Independence of provisions.** The Articles are independent. The unenforceability of the
+deployment restriction in a jurisdiction does not affect the enforceability of the Visibility
+Grant in that jurisdiction.
+
+**28.4 Language.** This License is executed in English. Translations published by the Steward,
+including the Bengali translation, are for convenience only; the English text prevails in case
+of conflict. A translation may be designated authoritative for a specific jurisdiction by
+notice of the Steward.
+
+**28.5 Not open source.** This License is not an open-source license within the meaning of the
+Open Source Definition, has not been submitted for OSI approval, and must not be described as
+open source. It is a source-available license with permission-gated deployment.
+
+**28.6 Not legal advice.** This License and the accompanying documentation do not constitute
+legal advice. Authors and deployers should obtain independent legal advice for their
+jurisdiction.
+
+**28.7 Precedence of mandatory law.** Nothing in this License restricts rights that applicable
+law grants to the public and that cannot be contractually excluded, including rights under
+fair use, fair dealing, exhaustion, interoperability exceptions, and statutory reverse
+engineering rights.
+
+---
+
+### APPENDIX A — REQUIRED CONTENTS OF A LOSDA
+
+Every LOSDA must contain at least the following elements. The authoritative form is
+`templates/LOSDA-TEMPLATE.md`.
+
+| # | Element | Requirement |
+|---|---------|-------------|
+| A.1 | LOSDA ID | Unique, permanent, in the format `LOSDA-<ISSUER>-<YYYY>-<NNNNNN>` |
+| A.2 | Version | `LOSDA-1.0` |
+| A.3 | Licensed Work | Repository URL plus commit or release reference |
+| A.4 | Author / Issuer | Legal name, identity reference, capacity to issue |
+| A.5 | Licensee | Legal name, registration or identity reference, country |
+| A.6 | Class | One of the classes in Section 10.14 |
+| A.7 | Deployment type | Production, hosted, embedded, internal, distribution, or another stated type |
+| A.8 | Territory | Named territories or "Worldwide" |
+| A.9 | Field of use | Permitted purpose, product, or market |
+| A.10 | Scale limits | Users, seats, instances, requests, revenue, or "unlimited" |
+| A.11 | Conditions | Attribution, reporting, security, audit, resale rights |
+| A.12 | Fees | Amount, currency, schedule, refunds, or "none" |
+| A.13 | Term | Start date, end date or "perpetual", renewal terms |
+| A.14 | Effective Date | Date the license takes effect |
+| A.15 | Reliance Period | Confirm 180 days or state an alternative |
+| A.16 | Verification URL | Stable public verification endpoint |
+| A.17 | Signature | Author or authorized signatory, digital signature permitted |
+| A.18 | Registry reference | Registry entry hash or canonical record identifier |
+
+A LOSDA missing A.1, A.3, A.4, A.5, A.6, A.13, A.14, A.17, or A.18 is invalid.
+
+---
+
+### APPENDIX B — NOTICE HEADER AND MACHINE-READABLE IDENTIFIERS
+
+**B.1 Source file header.** Each source file should carry:
+
+```
+Copyright (c) <year> <Author>
+Licensed under the Public Availability with Source-Code Visibility License, Version 1.0
+(PASVL-1.0). Source is public. Deployment requires a Letter of Software Deployment
+Approval (LOSDA). See https://github.com/bsdc-info-bd/PASVL_LOSDA
+SPDX-License-Identifier: LicenseRef-PASVL-1.0
+```
+
+**B.2 NOTICE file.** A minimal NOTICE file:
+
+```
+Work: <name>
+Author: <name / entity / contact>
+License: PASVL-1.0
+Mode: S | U
+Steward: BSD C (Bangladesh Software Development Community)
+Issuing agent: <author | steward | both>
+Deployment approval: required (LOSDA). Request: <contact or URL>
+```
+
+**B.3 Package manifests.** Because PASVL is not an OSI-approved identifier, use
+`LicenseRef-PASVL-1.0` where a manifest accepts `LicenseRef-*` (for example in SPDX
+expressions). Where a manifest requires a recognized value, use the most restrictive
+recognized value and add a comment referencing this License.
+
+---
+
+### APPENDIX C — COMPATIBILITY
+
+| License | Can PASVL code be included? | Notes |
+|---------|-----------------------------|-------|
+| MIT / BSD-2 / BSD-3 / ISC | Yes | Retain notices. Do not relicense the combined work in a way that conflicts. |
+| Apache-2.0 | Yes, one-way | Apache terms apply to Apache code; PASVL terms apply to PASVL code. |
+| MPL-2.0 | Yes, per-file | Keep file-level boundaries and notices. |
+| LGPL-3.0 | Only via dynamic linking | Follow the LGPL's own requirements independently. |
+| GPL-2.0 / GPL-3.0 / AGPL-3.0 | No | Incompatible. Do not combine without written permission from the rights holder. |
+| PolyForm / BUSL / Elastic-2.0 | Case-by-case | Requires written compatibility assessment. |
+| Public domain / CC0 | Yes | Attribution is still required by the PASVL-side obligations. |
+
+---
+
+### APPENDIX D — DOCUMENT CONTROL
+
+| Field | Value |
+|-------|-------|
+| Document | Public Availability with Source-Code Visibility License |
+| Version | 1.0 |
+| Status | Published, in force |
+| In force from | 2026-01-01 |
+| Steward | Bangladesh Software Development Community (BSD C) |
+| Canonical location | `LICENSE` in the PASVL_LOSDA repository |
+| Companion instrument | Letter of Software Deployment Approval, Version 1.0 |
+| Change history | `CHANGELOG.md` |
+| Amendment route | `governance/AMENDMENT-PROCESS.md` |
+| License classification | Source-available, permission-gated deployment. Not open source. |
+
+---
+
+**END OF LICENSE TEXT — PASVL-1.0**
+
+Prefer a shorter version? Read [legal/plain-language.md](legal/plain-language.md).
+Want permission to deploy? Read [docs/for-deployers.md](docs/for-deployers.md).
+Want to adopt this for your project? Read [docs/for-authors.md](docs/for-authors.md).

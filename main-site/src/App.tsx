@@ -62,6 +62,7 @@ const VendorPayoutsPage = lazy(() => import('@/routes/VendorPayoutsPage'));
 const LearnPage = lazy(() => import('@/routes/LearnPage'));
 const CoursePage = lazy(() => import('@/routes/CoursePage'));
 const VerifyCertificatePage = lazy(() => import('@/routes/VerifyCertificatePage'));
+const SystemCheckPage = lazy(() => import('@/routes/SystemCheckPage'));
 
 function Loader() {
   const { t } = useTranslation();
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
       { path: ROUTES.offline, element: withSuspense(<OfflinePage />) },
+      { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 
       // Guests only: a signed-in member is sent back to the home page.
       {

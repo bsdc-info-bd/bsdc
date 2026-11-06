@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Bangladesh Software Development Community - main community platform (www.bsdc.info.bd)",
-  "license": "SEE LICENSE IN ../LICENSE.md",
+  "license": "SEE LICENSE IN ../LICENSE",
   "scripts": {
     "brand": "node scripts/generate-brand-assets.mjs",
     "prerender": "node scripts/prerender.mjs",

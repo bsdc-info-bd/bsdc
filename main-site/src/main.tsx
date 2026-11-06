@@ -9,7 +9,7 @@ import { AppCrashFallback } from './components/layout/AppCrashFallback';
 import './i18n';
 import './styles/index.css';
 import { startPerformanceReporting } from './lib/perf/collect';
-import { registerServiceWorker } from './pwa';
+import { healMediaCachesOnce, registerServiceWorker } from './pwa';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +42,17 @@ createRoot(container).render(
 );
 
 registerServiceWorker();
+
+/**
+ * Drop a picture cache left behind by an older worker, before React paints
+ * anything.
+ *
+ * This runs on the page rather than inside the worker because the worker that
+ * wrote the bad cache is the one being replaced, and it is waiting behind an
+ * update prompt. A member who has been clearing their whole cache for months
+ * should not have to press anything for pictures to work again.
+ */
+void healMediaCachesOnce();
 
 // Ask the deployment what it can upload through, once, while the browser is
 // idle. The first member to attach a picture should not pay for that question

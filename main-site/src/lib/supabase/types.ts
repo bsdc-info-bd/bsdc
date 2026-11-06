@@ -630,6 +630,21 @@ export type PushSubscriptionRow = {
   created_at: string;
 };
 
+/**
+ * One row of `my_push_devices()` (0072): the same device, plus whether it can
+ * still be woken. `dead` means the push service answered 404/410 — the browser
+ * threw its keys away and only that browser can put them back. `invalid` means
+ * the recorded keys were refused, which the member fixes by opening that browser.
+ */
+export type PushDeviceRow = {
+  endpoint: string;
+  user_agent: string;
+  language: string;
+  created_at: string;
+  last_used_at: string | null;
+  state: 'live' | 'invalid' | 'dead';
+};
+
 export type EventRow = {
   id: string;
   slug: string;
@@ -2263,6 +2278,8 @@ export type Database = {
       };
       unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
+      my_push_devices: { Args: Record<string, never>; Returns: PushDeviceRow[] };
+      forget_push_device: { Args: { p_endpoint: string }; Returns: undefined };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };

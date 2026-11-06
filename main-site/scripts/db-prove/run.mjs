@@ -53,6 +53,10 @@ const HARNESSES = [
   ['t42.mjs', 'post child reads inherit parent visibility, trash and channel membership'],
   ['t43.mjs', 'raw-table column grants protect media credentials and event join links'],
   ['t44.mjs', 'database authority denies stale staff claims after demotion or suspension'],
+  [
+    't45.mjs',
+    'push carries its words: the delivery worker reads keys, refused strangers, suspended members and retiring devices',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

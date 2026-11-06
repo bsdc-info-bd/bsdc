@@ -16,6 +16,16 @@ export default defineConfig({
       filename: 'sw.ts',
       registerType: 'prompt',
       injectRegister: null,
+      // Asks for a new worker on every load rather than trusting a 24-hour HTTP
+      // cache: a fix that a browser will not fetch for a day is not a fix.
+      // `public/_headers` sets the same intent at the edge.
+      injectManifest: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // The largest single chunk the build makes is the Firebase one; the
+        // default ceiling of 2 MiB would leave it out of the precache and the
+        // site would not survive an offline reload of a page that needs it.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+      },
       includeAssets: ['favicon.svg', 'icons/*.png'],
       manifest: {
         id: '/',
@@ -48,13 +58,6 @@ export default defineConfig({
           { name: 'Messages', url: '/messages' },
           { name: 'Notifications', url: '/notifications' },
         ],
-      },
-      injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // The largest single chunk the build makes is the Firebase one; the
-        // default ceiling of 2 MiB would leave it out of the precache and the
-        // site would not survive an offline reload of a page that needs it.
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
       },
       devOptions: { enabled: false },
     }),

@@ -242,3 +242,72 @@ jobs:
             echo "- ${{ steps.pages.outputs.deployment-url || 'deployed' }}"
             echo "- commit ${GITHUB_SHA::7} on branch ${{ github.head_ref || github.ref_name }}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # The push delivery worker.
+  #
+  # A Cloudflare Worker with a cron trigger, deployed by `wrangler deploy` rather
+  # than by the Pages action above. It exists because Pages Functions have no
+  # cron handler of their own, and because a push that carries its words has to
+  # be encrypted per subscription before it leaves — which a request-triggered
+  # function cannot do for a device whose browser is closed.
+  #
+  # Deployment needs three GitHub secrets that the Pages app does not use:
+  # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (already present) plus the
+  # worker's own secrets, which are NOT passed here. They live in Cloudflare and
+  # are set once with `npx wrangler secret put`. A workflow that carried a VAPID
+  # private key would be a second copy of the key in a second place.
+  #
+  # If the token is absent the job explains itself and exits 0: a fork or a
+  # first-time checkout must not be red because it cannot reach an account it
+  # has never been given.
+  # ---------------------------------------------------------------------------
+  push-worker:
+    name: Push worker → bsdc-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    defaults:
+      run:
+        working-directory: push-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Did the worker change?
+        id: changed
+        shell: bash
+        run: |
+          if git diff --quiet "HEAD~1" -- push-worker 2>/dev/null; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The push worker did not change in this push."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install
+        if: steps.changed.outputs.run == 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        if: steps.changed.outputs.run == 'true'
+        run: npm run typecheck
+
+      - name: Test
+        if: steps.changed.outputs.run == 'true'
+        run: npm run test
+
+      - name: Deploy
+        if: steps.changed.outputs.run == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: '3.114.17'
+          workingDirectory: push-worker
+          command: deploy
+
+      - name: Record where it went
+        if: steps.changed.outputs.run == 'true'
+        run: echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"

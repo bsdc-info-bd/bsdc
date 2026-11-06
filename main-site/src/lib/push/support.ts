@@ -112,3 +112,85 @@ export function describeUserAgent(userAgent: string): string {
   const system = systems.find(([pattern]) => pattern.test(agent))?.[1] ?? '';
   return [browser, system].filter((part) => part.length > 0).join(' · ');
 }
+
+/**
+ * Whether a recorded device can still be woken, in the words the list uses.
+ *
+ * `state` is what `my_push_devices()` says (0072). `live` is the only one that
+ * means a notification will arrive; the other two are shown rather than hidden,
+ * because a member looking at "3 devices" and getting no notifications deserves
+ * to be told that two of the three stopped being reachable.
+ */
+export type PushDeviceState = 'live' | 'invalid' | 'dead';
+
+export interface DeviceStateWords {
+  /** A short label for the row, or empty for a live device. */
+  label: string;
+  /** The i18n key of the sentence that explains the state. */
+  key: string;
+  /** `dead` and `invalid` are worth a warning tone; `live` is not. */
+  tone: 'quiet' | 'warn';
+}
+
+export const PUSH_DEVICE_STATE_KEYS: Record<PushDeviceState, string> = {
+  live: 'push.state.live',
+  invalid: 'push.state.invalid',
+  dead: 'push.state.dead',
+};
+
+export function describeDeviceState(state: PushDeviceState, language: string): DeviceStateWords {
+  if (state === 'dead') {
+    return {
+      label: language === 'en' ? 'Stopped' : 'বন্ধ',
+      key: PUSH_DEVICE_STATE_KEYS.dead,
+      tone: 'warn',
+    };
+  }
+  if (state === 'invalid') {
+    return {
+      label: language === 'en' ? 'Needs a visit' : 'খুলুন',
+      key: PUSH_DEVICE_STATE_KEYS.invalid,
+      tone: 'warn',
+    };
+  }
+  return { label: '', key: PUSH_DEVICE_STATE_KEYS.live, tone: 'quiet' };
+}
+
+/**
+ * The one sentence a member needs when some of their devices cannot be woken.
+ *
+ * Returns `null` when every device is live, which is the common case and should
+ * cost the card no vertical space at all.
+ */
+export function staleDevicesNote(
+  states: readonly PushDeviceState[],
+  language: string,
+): string | null {
+  const dead = states.filter((state) => state === 'dead').length;
+  const invalid = states.filter((state) => state === 'invalid').length;
+  if (dead === 0 && invalid === 0) return null;
+
+  const parts: string[] = [];
+  if (dead > 0) {
+    parts.push(
+      language === 'en'
+        ? `${count(dead, 'device')} stopped answering`
+        : `${toBanglaDigits(dead)}টি ডিভাইস আর সাড়া দিচ্ছে না`,
+    );
+  }
+  if (invalid > 0) {
+    parts.push(
+      language === 'en'
+        ? `${count(invalid, 'device')} needs to be opened once`
+        : `${toBanglaDigits(invalid)}টি ডিভাইস একবার খুলতে হবে`,
+    );
+  }
+  const joined = parts.join(language === 'en' ? ', ' : ', ');
+  return language === 'en'
+    ? `${joined}. Notifications are not reaching those. Open the browser once and it re-registers.`
+    : `${joined}। ওগুলোতে নোটিফিকেশন পৌঁছাচ্ছে না। ব্রাউজারটি একবার খুললেই আবার যুক্ত হবে।`;
+}
+
+function count(value: number, noun: string): string {
+  return value === 1 ? `1 ${noun}` : `${value} ${noun}s`;
+}

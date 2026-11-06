@@ -8,8 +8,13 @@ A platform of **RRC Development** — Rizwan Rahim Chowdhury, CEO.
 - Repository: https://github.com/bsdc-info-bd/bsdc
 - Contact: hello@bsdc.info.bd · bsdc.rrc@gmail.com
 
-> BSDC is proprietary software. See [LICENSE.md](./LICENSE.md). Unauthorized
-> deployment of this project will result in legal action.
+> BSDC is released under **PASVL-1.0** (Public Availability with Source-Code
+> Visibility License). The source is public: read it, audit it, learn from it,
+> teach with it, cite it, file issues and send patches. **Deployment** — running
+> this as a service anyone can reach — requires a **LOSDA** (Letter of Software
+> Deployment Approval) issued by RRC Development. See [LICENSE](./LICENSE),
+> [NOTICE](./NOTICE) and [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+> Request a LOSDA: hello@bsdc.info.bd.
 
 ## Architecture
 
@@ -54,10 +59,27 @@ to the same three databases.
 
 ### Serverless
 
-All serverless logic lives in each app's `functions/` directory as **Cloudflare
-Pages Functions** (TypeScript). There are no standalone Cloudflare Workers and no
-worker-based SSR. SEO is solved with build-time prerendering plus Pages Functions
+Request-time logic lives in each app's `functions/` directory as **Cloudflare
+Pages Functions** (TypeScript) — API endpoints, the media repair proxy, the OAuth
+and claim bridges. SEO is solved with build-time prerendering plus Pages Function
 endpoints (`/sitemap.xml`, `/rss.xml`, `/robots.txt`).
+
+There is exactly **one standalone Cloudflare Worker**, and it is not SSR:
+
+| | |
+| --- | --- |
+| **`push-worker/`** | Push delivery. A cron trigger every minute picks up what the database says is waiting and sends one RFC 8291-encrypted Web Push per device — the words included, so a phone whose browser is closed shows the notification without waking the app first. It also serves `GET /health` and an authenticated `POST /run` for an operator. |
+
+It is a separate deployment because a Pages Function cannot hold a cron trigger,
+and because a notification for a closed browser has to be sent when nobody is
+asking. Everything it does is on the Workers **free** plan: one invocation a
+minute is 1,440 a day against a 100,000 a day allowance. Setup, secrets and the
+scheduler are in [`docs/push-runbook.md`](./docs/push-runbook.md).
+
+The push path exists twice on purpose. `main-site/functions/api/push/flush.ts`
+sends an empty wake-up and is the fallback if the Worker is ever down or has not
+been deployed; the Worker sends the words. Both are gated by the same
+`PUSH_FLUSH_SECRET`, checked by the database, and neither holds a service key.
 
 ## Local development
 
@@ -130,9 +152,9 @@ The platform is delivered in 20 build responses (see `docs/delivery-plan.md`).
 
 | Workflow                         | Does                                                                | Runs on                     |
 | -------------------------------- | ------------------------------------------------------------------- | --------------------------- |
-| `.github/workflows/ci.yml`       | Five gates per package plus the size budget                         | Every push                  |
+| `.github/workflows/ci.yml`       | Five gates per package, plus the licence gate and the push worker    | Every push                  |
 | `.github/workflows/database.yml` | Builds the schema from nothing, proves it, then migrates production | Changes to `supabase/**`    |
-| `.github/workflows/deploy.yml`   | Ships the fourteen apps to Cloudflare Pages                         | Push to `main`              |
+| `.github/workflows/deploy.yml`   | Ships the fourteen apps to Cloudflare Pages, and the push worker    | Push to `main`              |
 | `.github/workflows/android.yml`  | Debug APK always, signed APK and AAB on an `android-v*` tag         | Changes to `android-app/**` |
 
 The runbook, the secret inventory and the first-deployment order are in
@@ -154,6 +176,22 @@ At the launch commit: 107 checkpoints with no failures, 627 tests across
 sixteen packages, 101 tables under row level security with 185 policies, and
 initial JavaScript between 100 and 205 KB gzip against a 250 KB budget on all
 fourteen applications.
+
+## Licence
+
+This repository is **PASVL-1.0**. Source public, deployment licensed:
+
+- [LICENSE](./LICENSE) — the full text, from
+  [bsdc-info-bd/PASVL_LOSDA](https://github.com/bsdc-info-bd/PASVL_LOSDA).
+- [NOTICE](./NOTICE) — who the Author is, the issuing agent for a LOSDA, and
+  every additional term PASVL §15.2 permits.
+- [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md) — the dependency licence
+  policy, and `node main-site/scripts/licence-report.mjs --check` which enforces
+  it in CI. Currently 794 runtime packages: 792 permitted, none refused, two
+  (prebuilt `libvips` for `sharp`) recorded with the reading that permits them.
+
+Deploying this requires a **LOSDA**; request one through
+[`templates/LOSDA-REQUEST.md`](https://github.com/bsdc-info-bd/PASVL_LOSDA/blob/main/templates/LOSDA-REQUEST.md).
 
 ## Ecosystem link partners (not built here)
 
