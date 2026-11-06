@@ -88,17 +88,34 @@ export function kindOf(mimeType: string): MediaKind | null {
 }
 
 /**
- * The purposes that need Cloudinary: an avatar and a cover are transformed on
- * delivery (face-aware crops, format negotiation), and a product image is
- * rendered at several sizes on a card, a page and a receipt. Everything else is
- * an ordinary picture a member attached, and those go to ImgBB so that the
- * Cloudinary free tier is spent on the images that actually need it.
+ * The purposes that need Cloudinary.
+ *
+ * Two reasons a purpose is on this list, and the second is the expensive one to
+ * get wrong:
+ *
+ *   1. It is transformed on delivery — an avatar is a face-aware square, a cover
+ *      is a wide crop, a product image is drawn at four sizes on four screens.
+ *   2. **It is drawn in a feed.** A post picture and a comment picture are the
+ *      pictures there are most of, and they are the ones that make the site feel
+ *      slow, because a feed draws each of them a few hundred pixels wide while
+ *      the original is several thousand. Cloudinary is the only one of the two
+ *      hosts that can be asked for the width the card can show, in the smallest
+ *      format the browser accepts. ImgBB serves the original and ignores every
+ *      parameter, so a feed of ImgBB pictures downloads megabytes per card and
+ *      that is exactly what "the images load so slow" was reporting.
+ *
+ * ImgBB is still used, deliberately, for the one case where its unlimited
+ * capacity genuinely wins: a chat attachment, drawn at one size, in one place,
+ * whose bytes the edge caches on the way past. Voice notes and documents are not
+ * images and go to Cloudinary because ImgBB is not an image host for those.
  */
 export const CLOUDINARY_PURPOSES: readonly MediaPurpose[] = [
   'avatar',
   'cover',
   'project-cover',
   'project-image',
+  'post-image',
+  'comment-image',
   'product-image',
 ];
 

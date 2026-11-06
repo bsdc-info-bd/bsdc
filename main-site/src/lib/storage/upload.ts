@@ -208,8 +208,20 @@ async function uploadToCloudinary(
 ): Promise<UploadResult> {
   if (!isConfigured.cloudinary) throw new MediaError('media.errors.notConfigured');
 
+  // Downscale before uploading, when the browser can.
+  //
+  // The upload is the member's own connection, and it is the slowest part of
+  // posting: a 12-megapixel phone photograph is four megabytes of radio time for
+  // a picture the feed will draw 480 pixels wide. Re-encoding it to a 2560-pixel
+  // WebP at 0.86 quality typically costs 400 KB, is indistinguishable on any
+  // screen, and makes posting four times faster on a phone. Where the browser
+  // cannot do it — an old Safari, a decode failure, a GIF that must keep
+  // animating — the original is sent, which is what happened before.
+  const prepared: { blob: Blob; name: string } =
+    kind === 'image' ? await shrinkForUpload(file, purpose) : { blob: file, name: file.name };
+
   const body = new FormData();
-  body.append('file', file);
+  body.append('file', prepared.blob, prepared.name);
   body.append('upload_preset', env.cloudinary.unsignedPreset);
   body.append('folder', cloudinaryFolder(purpose));
 
@@ -232,10 +244,79 @@ async function uploadToCloudinary(
     deleteToken: response.delete_token ?? '',
     width: toNumber(response.width),
     height: toNumber(response.height),
-    bytes: toNumber(response.bytes) ?? file.size,
+    bytes: toNumber(response.bytes) ?? prepared.blob.size,
     mimeType: file.type,
     expiresAt: null,
   };
+}
+
+/**
+ * The largest a picture needs to be, per purpose, before anything is uploaded.
+ *
+ * 2560 covers a retina desktop hero with room to crop; a cover is drawn wider than
+ * an avatar but never wider than that; a product shot is enlarged by zoom on the
+ * page it lives on, so it keeps its detail. Above these widths the extra pixels
+ * are bytes nobody can see.
+ */
+const UPLOAD_MAX_EDGE: Partial<Record<MediaPurpose, number>> = {
+  avatar: 640,
+  cover: 2560,
+  'project-cover': 2560,
+  'project-image': 2000,
+  'post-image': 2560,
+  'comment-image': 1600,
+  'product-image': 2000,
+};
+
+/** Refuse to re-encode a picture whose result would be larger than the original. */
+const SHRINK_QUALITY = 0.86;
+
+/**
+ * Re-encode an image at a size the page can actually draw.
+ *
+ * Returns the original file whenever anything is less than ideal: no canvas, a
+ * format that must not be flattened (a GIF's animation, an SVG's vectors), a
+ * picture already smaller than the limit, or an encode that came out larger than
+ * what went in. Correctness first — the only cost of the original is bytes.
+ */
+export async function shrinkForUpload(
+  file: File,
+  purpose: MediaPurpose,
+): Promise<{ blob: Blob; name: string }> {
+  const maxEdge = UPLOAD_MAX_EDGE[purpose] ?? 2560;
+  const unchanged: { blob: Blob; name: string } = { blob: file, name: file.name };
+  if (file.type === 'image/gif' || file.type === 'image/svg+xml') return unchanged;
+  if (typeof createImageBitmap !== 'function') return unchanged;
+  if (typeof document === 'undefined' || typeof OffscreenCanvas === 'undefined') return unchanged;
+  // A picture that is already small is already fast: re-encoding it would cost a
+  // decode and a tick of main-thread time to save nothing.
+  if (file.size <= 320 * 1024) return unchanged;
+
+  let bitmap: ImageBitmap | null = null;
+  try {
+    bitmap = await createImageBitmap(file);
+    const longest = Math.max(bitmap.width, bitmap.height);
+    const scale = longest > maxEdge ? maxEdge / longest : 1;
+    // A picture within the limit is still worth a quality pass when it is heavy;
+    // anything at or below the limit that is already light has returned above.
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext('2d');
+    if (context === null) return unchanged;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(bitmap, 0, 0, width, height);
+    const encoded = await canvas.convertToBlob({ type: 'image/webp', quality: SHRINK_QUALITY });
+    if (encoded.size === 0 || encoded.size >= file.size) return unchanged;
+    const base = file.name.replace(/\.[^.]+$/, '');
+    return { blob: encoded, name: `${base}.webp` };
+  } catch {
+    // An older browser, a corrupt file, a canvas that refused the encode: send
+    // the original. A picture that uploads slowly is better than one that fails.
+    return unchanged;
+  } finally {
+    bitmap?.close?.();
+  }
 }
 
 /** Read image bytes as base64 for imgbb's `image` form field. */

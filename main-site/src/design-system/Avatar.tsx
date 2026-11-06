@@ -67,6 +67,7 @@ export function Avatar({ src, name, size = 'md', online, className }: AvatarProp
           alt={name}
           width={PIXELS}
           height={PIXELS}
+          slotWidth={PIXELS}
           loading="lazy"
           onFailure={() => setFailedFor(address)}
           className={cn('rounded-full border border-border object-cover', SIZES[size])}

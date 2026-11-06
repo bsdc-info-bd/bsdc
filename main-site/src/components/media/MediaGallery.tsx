@@ -33,6 +33,15 @@ export interface MediaGalleryProps {
   /** Alt text for the lightbox caption comes from the picture; this labels the grid. */
   label?: string | undefined;
   className?: string | undefined;
+  /**
+   * The width of the column the gallery is drawn in, in CSS pixels.
+   *
+   * The grid knows how many columns it is splitting that width into, so it can
+   * tell each picture its real slot and the host can return that width instead of
+   * the original. Defaults to the widest a feed column gets on a phone, which is
+   * the common case and always correct on one.
+   */
+  containerWidth?: number;
   /** Called with the picture a member opened, for analytics that already exist. */
   onOpen?: ((index: number) => void) | undefined;
 }
@@ -50,6 +59,7 @@ export function MediaGallery({
   priority = false,
   label,
   className,
+  containerWidth = 384,
   onOpen,
 }: MediaGalleryProps) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -85,6 +95,13 @@ export function MediaGallery({
           const item = items[cell.index];
           if (!item) return null;
           const first = position === 0;
+          // A cell that spans several columns is that many times wider, so the
+          // picture fetched for it has to be too, or a full-width header arrives
+          // blurry next to sharp neighbours. CSS pixels only: the screen density
+          // is applied once, inside the picture, not twice.
+          const slot = Math.round(
+            (Math.max(containerWidth, 1) / Math.max(arrangement.columns, 1)) * cell.columnSpan,
+          );
           return (
             <button
               key={item.id}
@@ -115,6 +132,7 @@ export function MediaGallery({
                 alt={item.altText}
                 width={item.width ?? undefined}
                 height={item.height ?? undefined}
+                slotWidth={slot}
                 loading={priority && first ? 'eager' : 'lazy'}
                 decoding="async"
                 {...(priority && first ? HIGH_PRIORITY : {})}

@@ -243,8 +243,14 @@ note('B-06', 'Database', 'Tables, functions and policies shipped', () => {
 
 check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
   const blocks = sqlAll.split(/create or replace function public\./).slice(1);
+  // `bsdc.push_secret_matches` is an identity check too: it is how a scheduler
+  // proves itself to a routine that has no member to ask. `bsdc.role_rank` is a
+  // pure comparison and is not one, so the pattern names the secret check
+  // explicitly rather than matching anything under the `bsdc.` namespace.
   const guarded = blocks.filter((block) =>
-    /require_permission|has_permission|current_uid\(\)/.test(block.slice(0, 2500)),
+    /require_permission|has_permission|current_uid\(\)|push_secret_matches/.test(
+      block.slice(0, 2500),
+    ),
   );
   return {
     ok: guarded.length / blocks.length > 0.8,

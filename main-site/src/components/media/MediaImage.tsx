@@ -4,6 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { cn } from '@/lib/cn';
 import {
+  optimisedCloudinaryUrl,
+  responsiveSource,
+  widthFor,
+  type ResponsiveSource,
+} from '@/lib/media/optimise';
+import {
   advanceRecovery,
   classifyImageFailure,
   initialRecoveryState,
@@ -37,6 +43,21 @@ export interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement
    * wanted to try a different address of its own would hear about it here.
    */
   onFailure?: () => void;
+  /**
+   * The width, in CSS pixels, of the slot this picture is drawn into.
+   *
+   * Supplying it is the difference between a fast feed and a slow one. Without it
+   * a member's four-megabyte photograph is downloaded in full to fill a 360-pixel
+   * card; with it, a resizable host is asked for the width the card can actually
+   * show, in the smallest format the browser accepts, and the browser is given a
+   * `srcset` so it chooses before it starts rather than after.
+   *
+   * A host that cannot be resized — ImgBB, a Google avatar — is left untouched,
+   * which is why this is a hint rather than a rule.
+   */
+  slotWidth?: number;
+  /** Overrides the `sizes` descriptor when the layout is not a plain column. */
+  sizesAttribute?: string;
 }
 
 /** The longest single delay the ladder will wait before trying again. */
@@ -83,6 +104,8 @@ export function MediaImage({
   allowProxy = true,
   onRecovered,
   onFailure,
+  slotWidth,
+  sizesAttribute,
   ...imageProps
 }: MediaImageProps) {
   const { t } = useTranslation();
@@ -96,8 +119,29 @@ export function MediaImage({
    * original does. A fallback identical to the primary is not a fallback, and
    * saying so here keeps the ladder from spending a rung on the same address.
    */
-  const primary = src.length > 0 ? src : fallbackSrc;
-  const fallback = fallbackSrc.length > 0 && fallbackSrc !== primary ? fallbackSrc : '';
+  const rawPrimary = src.length > 0 ? src : fallbackSrc;
+  const rawFallback = fallbackSrc.length > 0 && fallbackSrc !== rawPrimary ? fallbackSrc : '';
+
+  /**
+   * The address to ask for, given the slot.
+   *
+   * Only a resizable host changes; everything else arrives exactly as the caller
+   * sent it. The descriptor list is rebuilt from the same ladder the recovery
+   * machine walks, so a retry and a `srcset` candidate can never disagree about
+   * which picture is being drawn.
+   */
+  const slot = typeof slotWidth === 'number' && slotWidth > 0 ? slotWidth : 0;
+  const responsive: ResponsiveSource | null =
+    slot > 0
+      ? responsiveSource(rawPrimary, slot, sizesAttribute === undefined ? {} : { sizesAttribute })
+      : null;
+  const primary = responsive !== null && responsive.srcset !== '' ? responsive.src : rawPrimary;
+  const fallback =
+    rawFallback.length === 0
+      ? ''
+      : slot > 0
+        ? optimisedCloudinaryUrl(rawFallback, widthFor(slot))
+        : rawFallback;
   const canProxy = allowProxy && primary.length > 0;
 
   const machine = useRef<RecoveryState>(initialRecoveryState(primary));
@@ -259,9 +303,16 @@ export function MediaImage({
     );
   }
 
+  const fresh = painting.attempt === 0;
+  const descriptor =
+    responsive !== null && fresh && responsive.srcset !== ''
+      ? { srcSet: responsive.srcset, sizes: responsive.sizes }
+      : {};
+
   return (
     <img
       {...imageProps}
+      {...descriptor}
       key={painting.key}
       src={painting.url}
       alt={alt}

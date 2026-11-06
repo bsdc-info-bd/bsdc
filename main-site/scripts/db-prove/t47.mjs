@@ -25,7 +25,6 @@
 import { makeDb } from './lib.mjs';
 
 const owner = 'aaaaaaaa-1111-4111-8111-000000000001';
-const admin = 'bbbbbbbb-2222-4222-8222-000000000002';
 const member = 'cccccccc-3333-4333-8333-000000000003';
 const suspended = 'dddddddd-4444-4444-8444-000000000004';
 const communityMember = 'eeeeeeee-5555-4555-8555-000000000005';

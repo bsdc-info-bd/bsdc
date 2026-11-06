@@ -127,9 +127,12 @@ beforeEach(() => {
 
 describe('choosing a transport', () => {
   it('prefers the edge whenever the edge can carry that provider', () => {
+    // A post picture is drawn in the feed, so it goes to the host that can be
+    // asked for the width the card shows — and through the edge, which holds the
+    // key and hides it from the bundle.
     expect(planUpload('post-image', 'image', EDGE_UP)).toEqual({
       route: 'proxy',
-      provider: 'imgbb',
+      provider: 'cloudinary',
     });
     expect(planUpload('project-cover', 'image', EDGE_UP)).toEqual({
       route: 'proxy',
@@ -141,10 +144,22 @@ describe('choosing a transport', () => {
     });
   });
 
-  it('has no direct route for an ordinary picture, even with the edge down', () => {
-    // An ImgBB key never ships in the bundle, so with the edge down there is
-    // nowhere to send a post image. The caller is told, not handed a secret.
-    expect(planUpload('post-image', 'image', EDGE_DOWN)).toBeNull();
+  it('still has a route for a post picture with the edge down', () => {
+    // Cloudinary's unsigned preset is the one credential that may live in the
+    // bundle, so a feed picture survives the edge being unreachable. Nothing is
+    // sent to ImgBB from the bundle: its key never ships.
+    expect(planUpload('post-image', 'image', EDGE_DOWN)).toEqual({
+      route: 'direct',
+      provider: 'cloudinary',
+    });
+  });
+
+  it('sends a chat attachment to ImgBB only through the edge', () => {
+    expect(planUpload('chat-document', 'image', EDGE_UP)).toEqual({
+      route: 'proxy',
+      provider: 'imgbb',
+    });
+    expect(planUpload('chat-document', 'image', EDGE_DOWN)).toBeNull();
   });
 
   it('falls back for the one provider the edge is missing, not for both', () => {
@@ -155,20 +170,21 @@ describe('choosing a transport', () => {
       route: 'direct',
       provider: 'cloudinary',
     });
+    // The routing table does not bend to availability in the other direction
+    // either: a feed picture the edge cannot carry goes straight to Cloudinary.
     expect(planUpload('post-image', 'image', imgbbOnly)).toEqual({
-      route: 'proxy',
-      provider: 'imgbb',
+      route: 'direct',
+      provider: 'cloudinary',
     });
   });
 
   it('refuses rather than sending a cover to the wrong host', () => {
     const noCloudinaryAnywhere = { ...EDGE_UP, proxyCloudinary: false, localCloudinary: false };
     expect(planUpload('project-cover', 'image', noCloudinaryAnywhere)).toBeNull();
-    // The ordinary image is unaffected by Cloudinary being absent.
-    expect(planUpload('post-image', 'image', noCloudinaryAnywhere)).toEqual({
-      route: 'proxy',
-      provider: 'imgbb',
-    });
+    // A feed picture is on the same host for the same reason, so it is refused
+    // too. Sending it to ImgBB would upload a picture the feed then cannot size,
+    // which is a slower site that also looks worse.
+    expect(planUpload('post-image', 'image', noCloudinaryAnywhere)).toBeNull();
   });
 
   it('has nowhere to go when no host is configured at all', () => {
@@ -183,9 +199,15 @@ describe('choosing a transport', () => {
   });
 
   it('believes the edge only when the edge says it is configured', () => {
-    // A live endpoint holding no ImgBB key cannot carry an ordinary picture, and
+    // A live endpoint holding no ImgBB key cannot carry a chat attachment, and
     // there is no bundle key to fall back to. The caller must be told.
-    expect(planUpload('post-image', 'image', { ...EDGE_UP, proxyImgbb: false })).toBeNull();
+    expect(planUpload('chat-document', 'image', { ...EDGE_UP, proxyImgbb: false })).toBeNull();
+    // A feed picture is not affected by the missing ImgBB key: it does not want
+    // that host at all.
+    expect(planUpload('post-image', 'image', { ...EDGE_UP, proxyImgbb: false })).toEqual({
+      route: 'proxy',
+      provider: 'cloudinary',
+    });
   });
 });
 
@@ -236,13 +258,13 @@ describe('uploading through the edge', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('refuses rather than sending the picture to ImgBB from the bundle when the endpoint is not deployed', async () => {
+  it('refuses rather than sending a chat attachment to ImgBB from the bundle', async () => {
     answers = [
       { match: PROXY, status: 404, body: null },
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+    await expect(uploadMedia(picture(), { purpose: 'chat-document' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
     // The only request was the edge probe. ImgBB was never contacted directly,
@@ -259,7 +281,7 @@ describe('uploading through the edge', () => {
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+    await expect(uploadMedia(picture(), { purpose: 'chat-document' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
     expect(sent.map((request) => request.url)).toEqual([PROXY]);
@@ -361,12 +383,17 @@ describe('asking the deployment what it can do', () => {
       proxyImgbb: false,
       proxyCloudinary: true,
     });
-    // A cover can ride the edge; an ordinary image cannot, and must not be
-    // planned onto a host that is not there.
+    // A cover and a feed picture both want Cloudinary, so both can ride an edge
+    // that holds the Cloudinary key. A chat attachment cannot: its host is the
+    // one the edge is missing.
     expect(planUpload('project-cover', 'image', capabilities)).toEqual({
       route: 'proxy',
       provider: 'cloudinary',
     });
-    expect(planUpload('post-image', 'image', capabilities)).toBeNull();
+    expect(planUpload('post-image', 'image', capabilities)).toEqual({
+      route: 'proxy',
+      provider: 'cloudinary',
+    });
+    expect(planUpload('chat-document', 'image', capabilities)).toBeNull();
   });
 });
