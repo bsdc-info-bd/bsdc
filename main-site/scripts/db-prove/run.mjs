@@ -57,6 +57,10 @@ const HARNESSES = [
     't45.mjs',
     'push carries its words: the delivery worker reads keys, refused strangers, suspended members and retiring devices',
   ],
+  [
+    't46.mjs',
+    'an upload remembers how long it was promised for, and only an abandoned picture is swept',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

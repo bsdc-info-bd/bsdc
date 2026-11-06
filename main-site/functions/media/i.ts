@@ -203,6 +203,7 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
         // as a type other than the picture it declares itself to be.
         'x-content-type-options': 'nosniff',
         'cross-origin-resource-policy': 'cross-origin',
+        'access-control-allow-origin': '*',
         'x-bsdc-media-repair': '1',
       },
     });

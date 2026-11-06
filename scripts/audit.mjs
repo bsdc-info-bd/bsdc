@@ -208,6 +208,15 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'push_kill_device',
     'push_flag_invalid_device',
     'push_sweep_dead_devices',
+    // 0073. Picture clean-up. Each is gated by the same flush secret, which the
+    // database checks itself, and each mutates only the three purge columns on a
+    // media row: claimed, released, confirmed, swept. A member never reaches any
+    // of them, and `media_pending_purge` (the read) is the only way to learn
+    // which rows exist.
+    'media_claim_purge',
+    'media_mark_purged',
+    'media_release_purge',
+    'media_sweep_forgotten',
   ];
   const unexpected = writers.filter((name) => !allowed.includes(name));
   return {

@@ -2280,6 +2280,36 @@ export type Database = {
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
       my_push_devices: { Args: Record<string, never>; Returns: PushDeviceRow[] };
       forget_push_device: { Args: { p_endpoint: string }; Returns: undefined };
+      /** 0073. Records an upload, validating the promise the host was given. */
+      record_media_asset: {
+        Args: {
+          p_provider: string;
+          p_kind: string;
+          p_url: string;
+          p_thumb_url?: string;
+          p_delete_token?: string;
+          p_width?: number | null;
+          p_height?: number | null;
+          p_bytes?: number;
+          p_mime_type?: string;
+          p_expires_at?: string | null;
+        };
+        Returns: string;
+      };
+      my_media_assets: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          url: string;
+          thumb_url: string;
+          kind: string;
+          provider: string;
+          bytes: number;
+          created_at: string;
+          expires_at: string | null;
+          in_use: boolean;
+        }[];
+      };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };

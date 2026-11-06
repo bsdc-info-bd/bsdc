@@ -58,6 +58,16 @@ export interface UploadResult {
   height: number | null;
   bytes: number;
   mimeType: string;
+  /**
+   * When the host was told to stop serving this file, or `null` for never.
+   *
+   * The edge decides this per purpose (`UPLOAD_LIFETIME_SECONDS` in
+   * `functions/_media.ts`) and states what it told the host. The browser does not
+   * decide it and cannot extend it: the database validates it again in
+   * `record_media_asset`. It is carried here so a caller can say "this goes in
+   * 30 days" rather than "this disappears eventually".
+   */
+  expiresAt: string | null;
 }
 
 export class MediaError extends Error {
@@ -224,6 +234,7 @@ async function uploadToCloudinary(
     height: toNumber(response.height),
     bytes: toNumber(response.bytes) ?? file.size,
     mimeType: file.type,
+    expiresAt: null,
   };
 }
 
@@ -472,6 +483,7 @@ async function uploadThroughProxy(
       height: toNumber(payload.height),
       bytes: toNumber(payload.bytes) ?? file.size,
       mimeType: payload.mimeType || file.type,
+      expiresAt: typeof payload.expiresAt === 'string' ? payload.expiresAt : null,
     };
   }
 

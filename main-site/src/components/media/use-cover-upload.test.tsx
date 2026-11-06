@@ -76,6 +76,7 @@ function result(url: string): UploadResult {
     kind: 'image',
     bytes: 4096,
     mimeType: 'image/png',
+    expiresAt: null,
     width: 1600,
     height: 900,
     deleteToken: '',
