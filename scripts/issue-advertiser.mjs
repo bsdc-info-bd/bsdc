@@ -1,42 +1,30 @@
 #!/usr/bin/env node
-/**
- * Issue an advertiser their account.
- *
- * An advertiser does not sign up. Staff create the campaign, staff issue the
- * credentials, and from then on the advertiser signs in to a console that shows
- * their own numbers and nobody else's.
- *
- *      SUPABASE_URL=https://… \
- *      SUPABASE_SERVICE_ROLE_KEY=… \
- *      SUPABASE_STAFF_EMAIL=ops@bsdc.info.bd \
- *      SUPABASE_STAFF_PASSWORD=… \
- *      node scripts/issue-advertiser.mjs \
- *        --name "Winter Intake Co" --email ads@example.test --generate
- *
- * The work itself is in `advertiser-issuing.mjs`, because that is the part with
- * decisions in it and it is proved by `main-site/scripts/db-prove/t52.mjs`
- * without a network. This file is the shell around it: read the arguments,
- * refuse the ones that are wrong, print what happened, and never print a
- * password that was not generated here.
- */
-import { IssueError, SIGN_IN_URL, generatedPassword, issueAdvertiser, optionProblems, parseArgs } from './advertiser-issuing.mjs';
+/** Staff issue member-site credentials using Firebase and a permission-checked profile RPC. */
+import {
+  IssueError,
+  SIGN_IN_URL,
+  configurationProblems,
+  issueAdvertiser,
+  optionProblems,
+  parseArgs,
+} from './advertiser-issuing.mjs';
 
 const HELP = [
-  'Issue an advertiser account.',
+  'Issue an advertiser account in the member Firebase project.',
   '',
   '  node scripts/issue-advertiser.mjs --name "Company" --email a@b.test --generate',
-  '  node scripts/issue-advertiser.mjs --name "Company" --email a@b.test --password "…"',
   '',
   'Options:',
-  '  --name      the name the advertiser is known by (required)',
-  '  --email     the address they sign in with (required)',
-  '  --password  set this password; it is never printed',
-  '  --generate  make a password and print it once, to hand over in person',
-  '  --username  a handle, if the derived one is not wanted',
-  '  --dry-run   check the arguments and the environment, change nothing',
+  '  --name       advertiser name (required)',
+  '  --email      member-site sign-in address (required)',
+  '  --generate   generate a password, printed once for a newly created account',
+  '  --password   use a supplied password (avoid shell history; prefer --generate)',
+  '  --username   preferred handle, optional',
+  '  --dry-run    validate arguments and configuration without network requests',
   '',
-  'Environment: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,',
-  '             SUPABASE_STAFF_EMAIL, SUPABASE_STAFF_PASSWORD.',
+  'Environment: SUPABASE_URL, SUPABASE_ANON_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY),',
+  '  VITE_FB2_API_KEY, BSDC_STAFF_EMAIL, BSDC_STAFF_PASSWORD,',
+  '  FIREBASE_SERVICE_ACCOUNT_BSDC_BD (member-project service-account JSON).',
 ].join('\n');
 
 let options;
@@ -51,53 +39,57 @@ try {
   process.exit(2);
 }
 
-const problems = optionProblems(options);
+let serviceAccount = null;
+try {
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_BSDC_BD ?? 'null');
+} catch {
+  console.error('FIREBASE_SERVICE_ACCOUNT_BSDC_BD must be valid service-account JSON.');
+  process.exit(2);
+}
+const config = {
+  databaseUrl: process.env.SUPABASE_URL,
+  publishableKey: process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  staffApiKey: process.env.VITE_FB2_API_KEY,
+  staffEmail: process.env.BSDC_STAFF_EMAIL,
+  staffPassword: process.env.BSDC_STAFF_PASSWORD,
+  serviceAccount,
+  expectedProject: 'bsdc-bd',
+};
+const problems = [...optionProblems(options), ...configurationProblems(config)];
 if (problems.length > 0) {
   console.error(`\n${problems.join('\n')}\n\n${HELP}`);
   process.exit(2);
 }
-
-const url = process.env.SUPABASE_URL;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!url || !serviceKey) {
-  console.error('\nSUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.\n');
-  process.exit(2);
-}
-
 if (options.dryRun) {
-  console.log('Arguments and environment look right. Nothing was changed.');
-  console.log(`Would issue an account for ${options.email} (${options.name.trim()}).`);
+  console.log(
+    `Configuration looks right. Would issue an account for ${options.email}; nothing changed.`,
+  );
   process.exit(0);
 }
 
 try {
   const result = await issueAdvertiser({
     fetch,
-    url,
-    serviceKey,
-    staffEmail: process.env.SUPABASE_STAFF_EMAIL,
-    staffPassword: process.env.SUPABASE_STAFF_PASSWORD,
+    ...config,
     options,
-    password: options.generate ? generatedPassword() : options.password,
     log: (line) => console.log(line),
   });
-
-  console.log('');
-  console.log(`Advertiser:  ${options.name.trim()} (@${result.username})`);
+  console.log(`\nAdvertiser:  ${options.name.trim()} (@${result.username ?? 'no handle'})`);
   console.log(`Signs in at: ${SIGN_IN_URL}`);
   console.log(`With:        ${options.email}`);
   if (result.generated !== null) {
     console.log(`Password:    ${result.generated}`);
-    console.log('             Shown once. Hand it over and ask them to change it.');
+    console.log('             Shown once. Deliver securely and ask them to change it.');
+  } else if (!result.createdAuth) {
+    console.log('Password:    existing Firebase password; it was not changed.');
   }
-  console.log(
-    `Profile:     ${result.profileCreated ? 'created' : 'already existed, left alone'}`,
-  );
-  console.log('');
-  console.log('Next: set up their campaign in the admin panel, under Campaigns.');
+  console.log(`Profile:     ${result.profileCreated ? 'created' : 'already existed, left alone'}`);
+  if (result.createdAuth)
+    console.log('Email:       not yet verified; the advertiser should verify it after sign-in.');
+  console.log('\nNext: set up their campaign in the admin panel, under Campaigns.');
 } catch (error) {
-  const message = error instanceof IssueError ? error.message : `Unexpected: ${error.message}`;
+  const message =
+    error instanceof IssueError ? error.message : 'Unexpected issue while issuing the account.';
   console.error(`\nNot issued: ${message}`);
   process.exit(1);
 }

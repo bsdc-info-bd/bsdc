@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   Badge,
   Banner,
@@ -23,9 +23,9 @@ import {
   STATUS_LABELS,
   STATUS_TONES,
   activationRefusal,
-  campaignArgs,
   count,
   creativeArgs,
+  setupArgs,
   dateToIso,
   eventCost,
   forecastEvents,
@@ -75,15 +75,43 @@ function today(): string {
 export function Campaigns(): ReactElement {
   const env = useCorporateEnv();
 
-  const load = useCallback(
-    async () => ({
-      campaigns: oldestFirst(await listRpc<CampaignRow>(env, 'campaign_book', { p_limit: 100 })),
-      owners: await listRpc<OwnerRow>(env, 'campaign_owners', { p_search: '', p_limit: 100 }),
-      inventory: await listRpc<PlacementRow>(env, 'ad_inventory'),
-    }),
-    [env],
-  );
-  const { state, reload } = useAsync(load, [env]);
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [version, setVersion] = useState(0);
+  const [data, setData] = useState<{
+    search: string;
+    campaigns: CampaignRow[];
+    owners: readonly OwnerRow[];
+    inventory: readonly PlacementRow[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useCallback(() => setVersion((value) => value + 1), []);
+
+  // Refresh without unmounting the controls: an acknowledgement must not
+  // disappear while the updated wallet balance is being loaded.
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      listRpc<CampaignRow>(env, 'campaign_book', { p_limit: 100 }),
+      listRpc<OwnerRow>(env, 'campaign_owners', { p_search: search, p_limit: 100 }),
+      listRpc<PlacementRow>(env, 'ad_inventory'),
+    ])
+      .then(([campaigns, owners, inventory]) => {
+        if (active) setData({ search, campaigns: oldestFirst(campaigns), owners, inventory });
+      })
+      .catch((cause: unknown) => {
+        if (active) setError(messageOf(cause));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [env, search, version]);
 
   return (
     <div className="kit-stack">
@@ -95,20 +123,137 @@ export function Campaigns(): ReactElement {
         </p>
       </Banner>
 
-      {state.status === 'loading' ? <Loading label="Loading the campaign book." /> : null}
-      {state.status === 'error' ? (
+      <Card
+        title="Find an advertiser"
+        description="Search by name, handle or Firebase UID, including newly issued accounts."
+      >
+        <div className="kit-row">
+          <Field
+            label="Advertiser search"
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+          />
+          <Button onClick={() => setSearch(searchInput.trim())}>Search</Button>
+        </div>
+      </Card>
+      {loading ? <Loading label="Refreshing the campaign book." /> : null}
+      {error !== null ? (
         <Banner tone="bad" title="The campaign book did not load">
-          <p className="kit-small">{state.message}</p>
+          <p className="kit-small">{error}</p>
         </Banner>
       ) : null}
-
-      {state.status === 'ready' ? (
+      {data !== null && data.search === search && error === null ? (
         <>
-          <Builder owners={state.data.owners} inventory={state.data.inventory} onCreated={reload} />
-          <Book campaigns={state.data.campaigns} onChanged={reload} />
+          <WalletCredit key={`wallet-${search}`} owners={data.owners} onChanged={reload} />
+          <Builder
+            key={`builder-${search}`}
+            owners={data.owners}
+            inventory={data.inventory}
+            onCreated={reload}
+          />
+          <Book campaigns={data.campaigns} onChanged={reload} />
         </>
       ) : null}
     </div>
+  );
+}
+
+/** Staff record received payments, not advertiser self-service credits. */
+function WalletCredit({
+  owners,
+  onChanged,
+}: {
+  owners: readonly OwnerRow[];
+  onChanged: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [ownerUid, setOwnerUid] = useState(owners[0]?.uid ?? '');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const poisha = takaToPoisha(amount);
+
+  async function credit(): Promise<void> {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const balance = await callRpc<number>(env, 'topup_ad_wallet', {
+        p_owner_uid: ownerUid,
+        p_amount: poisha,
+        p_reference: reference.trim(),
+      });
+      setFailed(false);
+      setMessage(
+        `Payment recorded. Wallet balance: ${money(balance)}. Retrying the same reference does not credit it twice.`,
+      );
+      setAmount('');
+      setReference('');
+      onChanged();
+    } catch (error) {
+      setFailed(true);
+      setMessage(messageOf(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Card
+      title="Record a received payment"
+      description="Only credit money that finance has received. The payment reference protects retries for this wallet."
+    >
+      {owners.length === 0 ? (
+        <Empty>No advertiser matched. Issue an account or try a different search.</Empty>
+      ) : (
+        <>
+          <div className="kit-grid kit-grid--2">
+            <Select
+              label="Advertiser"
+              value={ownerUid}
+              options={owners.map((owner) => ({
+                value: owner.uid,
+                label: `${owner.display_name} (@${owner.username}) · ${money(owner.wallet_balance)}`,
+              }))}
+              onChange={(event) => setOwnerUid(event.target.value)}
+            />
+            <Field
+              label="Amount received (৳)"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+            />
+            <Field
+              label="Payment reference"
+              value={reference}
+              maxLength={100}
+              hint="Use the bank or payment-provider reference."
+              onChange={(event) => setReference(event.target.value)}
+            />
+          </div>
+          {message !== null ? (
+            <Banner
+              tone={failed ? 'bad' : 'ok'}
+              title={failed ? 'Payment not recorded' : 'Recorded'}
+            >
+              <p className="kit-small">{message}</p>
+            </Banner>
+          ) : null}
+          <Button
+            disabled={
+              busy ||
+              ownerUid === '' ||
+              poisha <= 0 ||
+              poisha > 1_000_000_000 ||
+              reference.trim().length === 0
+            }
+            onClick={() => void credit()}
+          >
+            {busy ? 'Recording…' : 'Credit wallet'}
+          </Button>
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -186,22 +331,24 @@ function Builder({
   const problemFor = (field: string): string | undefined =>
     problems.find((problem) => problem.field === field)?.message;
 
+  const hasCreative = [
+    creative.headline,
+    creative.body,
+    creative.targetUrl,
+    creative.imageUrl,
+    creative.ctaLabel,
+  ].some((value) => value.trim().length > 0);
+  const needsCreative = activate || hasCreative;
+
   async function create(): Promise<void> {
     setBusy(true);
     setFailure(null);
     setDone(null);
     try {
-      const campaignId = await callRpc<string>(env, 'staff_create_campaign', campaignArgs(draft));
-      if (creativeProblems.length === 0 && creative.headline.trim().length > 0) {
-        await callRpc<string>(env, 'staff_add_creative', creativeArgs(campaignId, creative));
-        setDone(
-          `${name.trim()} is created with its first creative. It is ${activate ? 'running' : 'a draft'}.`,
-        );
-      } else {
-        setDone(
-          `${name.trim()} is created. Add a creative before it can serve — without one it cannot be approved.`,
-        );
-      }
+      await callRpc<string>(env, 'staff_setup_campaign', setupArgs(draft, creative));
+      setDone(
+        `${name.trim()} is created${hasCreative ? ' with its first creative' : ''}. It is ${activate ? 'running' : 'a draft'}.`,
+      );
       setName('');
       setBidTaka('');
       setBudgetTaka('');
@@ -219,7 +366,11 @@ function Builder({
     }
   }
 
-  const blocked = busy || problems.length > 0 || funding !== null;
+  const blocked =
+    busy ||
+    problems.length > 0 ||
+    funding !== null ||
+    (needsCreative && creativeProblems.length > 0);
 
   return (
     <Card
@@ -228,8 +379,8 @@ function Builder({
     >
       {owners.length === 0 ? (
         <Empty>
-          Nobody has an advertiser account yet. Issue one first: a campaign has to be billed to
-          somebody, and the account is how they sign in to read their results.
+          No advertiser matched. Issue an account or try a different search; a campaign must be
+          billed to somebody with an account.
         </Empty>
       ) : (
         <>
@@ -365,8 +516,8 @@ function Builder({
               }}
             />
             <span>
-              Start it immediately. It begins serving as soon as it has a creative, and only if the
-              wallet can cover the whole budget.
+              Start it immediately after staff approval. A creative and enough wallet credit to
+              cover the full budget are required.
             </span>
           </label>
 
@@ -452,6 +603,8 @@ function Builder({
             </Button>
             {problems.length > 0 ? (
               <span className="kit-small kit-muted">{problems[0]?.message}</span>
+            ) : needsCreative && creativeProblems.length > 0 ? (
+              <span className="kit-small kit-muted">{creativeProblems[0]?.message}</span>
             ) : null}
           </div>
         </>
@@ -588,9 +741,10 @@ function CampaignDetail({
       }),
     [env, campaignId],
   );
-  const { state } = useAsync(load, [campaignId]);
+  const { state, reload } = useAsync(load, [campaignId]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [creative, setCreative] = useState<CreativeDraft>(EMPTY_CREATIVE);
 
   if (state.status === 'loading') return <Loading label="Loading the campaign." />;
   if (state.status === 'error') {
@@ -629,6 +783,38 @@ function CampaignDetail({
         p_paused: !running,
       });
       setNote(running ? 'Running again.' : 'Paused. It serves nothing until resumed.');
+      reload();
+      onChanged();
+    } catch (error) {
+      setNote(messageOf(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addFirstCreative(): Promise<void> {
+    setBusy(true);
+    setNote(null);
+    try {
+      await callRpc<string>(env, 'staff_add_creative', creativeArgs(campaignId, creative));
+      setCreative(EMPTY_CREATIVE);
+      setNote('Creative added. Submit the campaign for staff review when ready.');
+      reload();
+      onChanged();
+    } catch (error) {
+      setNote(messageOf(error));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitDraft(): Promise<void> {
+    setBusy(true);
+    setNote(null);
+    try {
+      await callRpc<string>(env, 'submit_campaign', { p_campaign_id: campaignId });
+      setNote('Sent for review. Approve it in Approvals.');
+      reload();
       onChanged();
     } catch (error) {
       setNote(messageOf(error));
@@ -683,6 +869,64 @@ function CampaignDetail({
         <Banner tone="neutral" title="Last action">
           <p className="kit-small">{note}</p>
         </Banner>
+      ) : null}
+
+      {row.status === 'draft' || row.status === 'rejected' ? (
+        <>
+          <h3>Add a creative</h3>
+          <div className="kit-grid kit-grid--2">
+            <Field
+              label="Headline"
+              value={creative.headline}
+              onChange={(event) => setCreative({ ...creative, headline: event.target.value })}
+            />
+            <Select
+              label="Placement"
+              value={creative.placement}
+              options={PLACEMENTS.map((placement) => ({
+                value: placement,
+                label: PLACEMENT_LABELS[placement],
+              }))}
+              onChange={(event) =>
+                setCreative({ ...creative, placement: event.target.value as AdPlacement })
+              }
+            />
+            <Field
+              label="Destination"
+              value={creative.targetUrl}
+              onChange={(event) => setCreative({ ...creative, targetUrl: event.target.value })}
+            />
+            <Field
+              label="Button label"
+              value={creative.ctaLabel}
+              onChange={(event) => setCreative({ ...creative, ctaLabel: event.target.value })}
+            />
+          </div>
+          <TextArea
+            label="Body"
+            rows={2}
+            value={creative.body}
+            onChange={(event) => setCreative({ ...creative, body: event.target.value })}
+          />
+          <div className="kit-row">
+            <Button
+              variant="quiet"
+              disabled={busy || validateCreative(creative).length > 0}
+              onClick={() => void addFirstCreative()}
+            >
+              Add creative
+            </Button>
+            <Button
+              disabled={busy || row.active_creatives === 0}
+              onClick={() => void submitDraft()}
+            >
+              Send for review
+            </Button>
+          </div>
+          <p className="kit-small kit-muted">
+            A funded wallet and an enabled creative are required. Staff approve it from Approvals.
+          </p>
+        </>
       ) : null}
 
       <div className="kit-row">

@@ -52,3 +52,60 @@ Supabase Postgres (primary SQL) + Firebase Realtime Database (realtime) +
 Firestore (small config/cache). Staff apps authenticate against the
 `bsdc-second` Firebase project with role claims, master-passkey gating for
 destructive actions and writes to the shared `staff_audit_log`.
+
+## Issue an advertiser and book a campaign
+
+Account issuance is a staff-only command, run from the repository root on a
+trusted machine with Node 20 or newer. The member site signs in with Firebase
+project `bsdc-bd`; the corporate consoles use the separate `bsdc-second`
+project. Creating a Supabase Auth user does **not** create a member-site login.
+
+Supply these environment variables through your secret manager or an existing
+protected shell environment (do not commit them):
+
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or `VITE_SUPABASE_PUBLISHABLE_KEY`):
+  the same database endpoint and public key used by the console.
+- `VITE_FB2_API_KEY`, `BSDC_STAFF_EMAIL` and `BSDC_STAFF_PASSWORD`: the
+  corporate Firebase API key and a staff sign-in. The staff profile must be
+  active, able to use the corporate console, and have `ads.manage` in the
+  database; the command checks that permission before using the admin account.
+- `FIREBASE_SERVICE_ACCOUNT_BSDC_BD`: the complete JSON for a service account
+  belonging to `bsdc-bd`, with permission to look up and create Firebase Auth
+  users (`firebaseauth.users.get` and `firebaseauth.users.create`). Keep its
+  private key out of source control and logs. It is used locally to obtain a
+  short-lived Identity Toolkit token; it is never sent to the database or the
+  advertiser's browser.
+
+```sh
+# Validate configuration and arguments without making any network requests.
+node scripts/issue-advertiser.mjs --name "Example business" --email ads@example.test --generate --dry-run
+
+# Create or find the Firebase identity and issue its database profile.
+node scripts/issue-advertiser.mjs --name "Example business" --email ads@example.test --generate
+```
+
+For a new account, the generated password is printed **once**. Deliver it over
+an appropriately secure channel, and direct the advertiser to
+`https://www.bsdc.info.bd/auth/login`. The address is not marked verified:
+the advertiser should use the site's verification flow after sign-in. If the
+address already has a member Firebase account, the command reuses it without
+changing its password or verification state and does not print a generated
+password. If account creation succeeds but profile creation fails, retry the
+command; it will not reset the existing password. If a newly generated password
+was lost, use the normal Firebase password-reset flow. Prefer `--generate` to
+putting a password in shell history or a process argument.
+
+In **Campaigns**, search for the newly issued advertiser by name, handle or
+Firebase UID. Record a received payment with its provider/bank reference; a
+retry with the same reference and amount for that wallet is idempotent. Staff
+then set the bid, budget, dates, targeting and creative. The builder can create
+a draft or, if funded and supplied with a creative, create and approve it
+atomically. A draft without a creative can be opened in the campaign book to
+add one and send it to **Approvals**. Staff review and approve there.
+
+The advertiser's `/ads` page contains only their reporting, pause/resume and
+copy editing. Saving copy sends even a paused campaign back to staff review.
+Campaigns share the owner's wallet: charges stop when the wallet or a daily
+cap is exhausted, so several approved campaign budgets are not a reservation
+of separate funds. Replenishing a wallet is always a staff action backed by a
+received payment.

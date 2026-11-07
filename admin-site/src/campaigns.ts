@@ -20,7 +20,7 @@ export type AdPricing = 'cpm' | 'cpc';
 
 export type AdStatus = 'draft' | 'pending_review' | 'active' | 'rejected' | 'paused' | 'completed';
 
-export type AdPlacement = 'feed' | 'sidebar' | 'search' | 'profile' | 'digest';
+export type AdPlacement = 'feed' | 'sidebar' | 'search' | 'shop' | 'article';
 
 export interface CampaignDraft {
   readonly ownerUid: string;
@@ -146,20 +146,14 @@ export interface DayRow {
   readonly ctr: number | string;
 }
 
-export const PLACEMENTS: readonly AdPlacement[] = [
-  'feed',
-  'sidebar',
-  'search',
-  'profile',
-  'digest',
-];
+export const PLACEMENTS: readonly AdPlacement[] = ['feed', 'sidebar', 'search', 'shop', 'article'];
 
 export const PLACEMENT_LABELS: Readonly<Record<AdPlacement, string>> = {
   feed: 'Feed',
   sidebar: 'Sidebar',
   search: 'Search results',
-  profile: 'Profile',
-  digest: 'Weekly digest',
+  shop: 'Shop',
+  article: 'Article',
 };
 
 export const STATUS_LABELS: Readonly<Record<AdStatus, string>> = {
@@ -446,6 +440,19 @@ export function campaignArgs(draft: CampaignDraft): Record<string, unknown> {
     p_topics: draft.topics,
     p_language: draft.language.trim() === '' ? 'any' : draft.language.trim(),
     p_activate: draft.activate,
+  };
+}
+
+/** Arguments for the atomic staff builder, including optional first creative. */
+export function setupArgs(draft: CampaignDraft, creative: CreativeDraft): Record<string, unknown> {
+  return {
+    ...campaignArgs(draft),
+    p_placement: creative.placement,
+    p_headline: creative.headline.trim(),
+    p_body: creative.body.trim(),
+    p_target_url: creative.targetUrl.trim(),
+    p_image_url: creative.imageUrl.trim(),
+    p_cta_label: creative.ctaLabel.trim(),
   };
 }
 

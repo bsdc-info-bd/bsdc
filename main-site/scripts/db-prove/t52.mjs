@@ -1,19 +1,10 @@
 /**
- * Proof that issuing an advertiser account does the right things, in the right
- * order, and refuses the wrong ones.
- *
- * The client of Auth's admin API is a real risk surface: it is the one place in
- * this platform that holds a service role key, and the things that go wrong
- * there are not type errors. They are: an account made twice because a request
- * was retried, a password reset on somebody who already had an account, a
- * profile created with no caller behind it so its permission check silently
- * passes, or a script that prints a password into a CI log.
- *
- * So this harness drives `scripts/advertiser-issuing.mjs` through a fake
- * `fetch` that records every request. No network, no secret, no Auth server —
- * but every decision the module makes is exercised, including the ones that
- * only happen when something is already there.
+ * Issuing a member-site advertiser uses Firebase, not Supabase Auth.
+ * The fake server proves ordering, identity, permissions and retry behaviour
+ * without sending a credential to a real service.
  */
+import { generateKeyPairSync, verify } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
@@ -32,310 +23,478 @@ function check(condition, label, detail = '') {
 const module = await import(
   pathToFileURL(resolve(process.cwd(), '..', 'scripts', 'advertiser-issuing.mjs')).href
 );
-const { IssueError, deriveHandle, generatedPassword, issueAdvertiser, optionProblems, parseArgs } =
-  module;
+const {
+  IssueError,
+  SIGN_IN_URL,
+  configurationProblems,
+  deriveHandle,
+  generatedPassword,
+  issueAdvertiser,
+  optionProblems,
+  parseArgs,
+} = module;
+const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const serviceAccount = {
+  type: 'service_account',
+  project_id: 'bsdc-bd',
+  client_email: 'fixture@bsdc-bd.iam.gserviceaccount.com',
+  private_key: privateKey.export({ format: 'pem', type: 'pkcs8' }).toString(),
+};
 
-/** A fake Auth + PostgREST that records what was asked of it. */
-function fakeServer({ users = [], failure = null } = {}) {
+function fakeServer({
+  existing = null,
+  permissions = ['ads.manage'],
+  failure = null,
+  race = false,
+} = {}) {
   const calls = [];
+  let lookups = 0;
   const fetch = async (url, init = {}) => {
-    const method = init.method ?? 'GET';
-    const body = init.body === undefined ? null : JSON.parse(init.body);
+    const raw = init.body ?? '';
+    const body = typeof raw === 'string' && raw.startsWith('{') ? JSON.parse(raw) : raw;
     const headers = init.headers ?? {};
-    calls.push({ url, method, body, headers });
-
+    calls.push({ url, method: init.method ?? 'GET', body, headers });
     const json = (status, payload) => ({
       ok: status >= 200 && status < 300,
       status,
       text: async () => JSON.stringify(payload),
     });
-
-    if (url.includes('/auth/v1/token?grant_type=password')) {
-      return json(200, { access_token: 'staff-token', user: { id: 'staff-uid' } });
+    if (url.includes('/accounts:signInWithPassword?key=')) {
+      if (failure === 'signin')
+        return json(400, { error: { message: 'INVALID_LOGIN_CREDENTIALS' } });
+      if (failure === 'signin-echo')
+        return json(400, { error: { message: `oops ${body.password} corporate-test-key` } });
+      return json(200, { idToken: 'staff-firebase-token', localId: 'staff-uid' });
     }
-    if (url.includes('/auth/v1/admin/users?') && method === 'GET') {
-      return json(200, { users });
+    if (url.endsWith('/rest/v1/rpc/my_permissions')) return json(200, permissions);
+    if (url === 'https://oauth2.googleapis.com/token')
+      return json(200, { access_token: 'firebase-admin-access' });
+    if (url.endsWith('/projects/bsdc-bd/accounts:lookup')) {
+      lookups += 1;
+      if (race && lookups > 1)
+        return json(200, { users: [{ localId: 'race-uid', email: 'ads@example.test' }] });
+      if (failure === 'missing-error') return json(400, { error: { message: 'USER_NOT_FOUND' } });
+      return json(200, { users: existing ? [existing] : [] });
     }
-    if (url.endsWith('/auth/v1/admin/users') && method === 'POST') {
-      if (failure?.on === 'create') return json(422, { msg: failure.message });
-      return json(200, { id: 'new-advertiser-uid', email: body.email });
-    }
-    if (url.includes('/auth/v1/admin/users/') && method === 'PUT') {
-      return json(200, { id: url.split('/').pop() });
+    if (url.endsWith('/projects/bsdc-bd/accounts')) {
+      if (failure === 'create') return json(400, { error: { message: 'INVALID_EMAIL' } });
+      if (failure === 'create-echo')
+        return json(400, { error: { message: `oops ${body.password} ${headers.authorization}` } });
+      if (race) return json(400, { error: { message: 'EMAIL_EXISTS' } });
+      return json(200, { localId: 'firebase-new-uid', email: body.email });
     }
     if (url.endsWith('/rest/v1/rpc/issue_advertiser_account')) {
-      if (failure?.on === 'profile') return json(403, { message: failure.message, code: '42501' });
+      if (failure === 'profile')
+        return json(403, { message: 'Permission ads.manage is required', code: '42501' });
       return json(200, [{ uid: body.p_uid, username: 'winter_intake_co', created: true }]);
     }
-    return json(404, { message: `unexpected ${method} ${url}` });
+    return json(404, { message: `unexpected ${url}` });
   };
   return { fetch, calls };
 }
 
 const BASE = {
-  url: 'https://project.supabase.co',
-  serviceKey: 'service-key',
-  staffEmail: 'ops@bsdc.info.bd',
-  staffPassword: 'staff-password',
+  databaseUrl: 'https://project.supabase.co',
+  publishableKey: 'public-test-key',
+  staffApiKey: 'corporate-test-key',
+  staffEmail: 'ops@example.test',
+  staffPassword: 'staff-fixture',
+  serviceAccount,
+};
+const OPTIONS = {
+  name: 'Winter Intake Co',
+  email: 'ads@example.test',
+  generate: true,
+  username: '',
+  dryRun: false,
 };
 
-// ---------------------------------------------------------------------------
-// 1. The arguments
-// ---------------------------------------------------------------------------
-const ok = parseArgs(['--name', 'Winter Intake Co', '--email', 'ads@example.test', '--generate']);
-check(ok.name === 'Winter Intake Co' && ok.email === 'ads@example.test', 'arguments parse');
-check(ok.generate === true && ok.dryRun === false, 'and the flags default to off');
-
+const args = parseArgs(['--name', 'Winter Intake Co', '--email', 'ads@example.test', '--generate']);
 check(
-  (() => {
-    try {
-      parseArgs(['--nonsense']);
-      return false;
-    } catch (error) {
-      return error instanceof IssueError && error.message.includes('Unknown option');
-    }
-  })(),
-  'an unknown option is an error, not something to ignore',
+  args.name === OPTIONS.name && args.email === OPTIONS.email && args.generate,
+  'arguments parse',
 );
-
-check(
-  (() => {
-    try {
-      parseArgs(['--name', '--email']);
-      return false;
-    } catch {
-      return true;
-    }
-  })(),
-  'a flag with no value is refused rather than read as the next flag',
-);
-
-const problems = optionProblems({ name: 'x', email: 'nope', generate: false, username: '' });
-check(problems.length === 3, 'a short name, a bad address and no password are three problems',
-  `${problems.length}`);
-check(
-  optionProblems({ name: 'Winter Intake Co', email: 'a@b.test', generate: true, username: '' })
-    .length === 0,
-  'a complete set of arguments has none',
-);
-check(
-  optionProblems({
-    name: 'Winter Intake Co',
-    email: 'a@b.test',
-    generate: true,
-    password: 'both',
-    username: '',
-  }).some((problem) => problem.includes('not both')),
-  'and passing both a password and --generate is refused, since one would be ignored',
-);
-check(
-  optionProblems({ name: 'Winter Intake Co', email: 'a@b.test', generate: true, username: 'Bad-Handle' })
-    .some((problem) => problem.includes('--username')),
-  'a handle that does not match the profiles constraint is caught before the round trip',
-);
-
-check(deriveHandle('Winter Intake Co') === 'winter_intake_co', 'the handle is derived the way SQL derives it',
-  deriveHandle('Winter Intake Co'));
-check(deriveHandle('   ') === 'advertiser', 'an empty name still gets a valid handle');
-check(/^[a-z0-9_]{3,24}$/.test(deriveHandle('A'.repeat(40))), 'and a long one is cut to fit');
-
-const password = generatedPassword((length) => Uint8Array.from({ length }, (_, index) => index));
-check(/^[^01lIO]{5}-[^01lIO]{5}-[^01lIO]{5}-[^01lIO]{5}$/.test(password), 'the generated password is readable',
-  password);
-check(new Set(generatedPassword().replace(/-/g, '')).size > 1, 'and is not one repeated character');
-
-// ---------------------------------------------------------------------------
-// 2. A new advertiser
-// ---------------------------------------------------------------------------
-{
-  const server = fakeServer();
-  const result = await issueAdvertiser({
-    fetch: server.fetch,
-    ...BASE,
-    options: { name: 'Winter Intake Co', email: 'ads@example.test', generate: true, username: '', dryRun: false },
-    password: 'generated-for-the-test',
-    log: () => undefined,
-  });
-
-  check(result.uid === 'new-advertiser-uid', 'a new advertiser gets an account', result.uid);
-  check(result.createdAuth === true, 'and it is recorded as new');
-  check(result.profileCreated === true, 'and a profile row was created');
-
-  const order = server.calls.map((call) => `${call.method} ${call.url.replace(BASE.url, '')}`);
-  check(
-    order[0]?.startsWith('POST /auth/v1/token'),
-    'the staff sign-in happens first, because the profile call needs a caller',
-    order[0],
-  );
-  check(
-    order.indexOf('POST /auth/v1/admin/users') > 0 &&
-      order.findIndex((entry) => entry.includes('rpc/issue_advertiser_account')) >
-        order.indexOf('POST /auth/v1/admin/users'),
-    'the sign-in is created before the profile',
-    order.join(' → '),
-  );
-
-  const profileCall = server.calls.find((call) => call.url.endsWith('issue_advertiser_account'));
-  check(
-    profileCall?.headers.authorization === 'Bearer staff-token',
-    'the profile is created as the staff member, not as the service key',
-    profileCall?.headers.authorization,
-  );
-  check(
-    profileCall?.headers.apikey === BASE.serviceKey,
-    'while the key is still what makes the request acceptable to the gateway',
-  );
-  check(
-    profileCall?.body.p_uid === 'new-advertiser-uid' && profileCall?.body.p_email === 'ads@example.test',
-    'and it is given the identifier the sign-in was created with',
-    JSON.stringify(profileCall?.body),
-  );
-
-  const create = server.calls.find(
-    (call) => call.method === 'POST' && call.url.endsWith('/auth/v1/admin/users'),
-  );
-  check(create?.body.email_confirm === true, 'the address is created already confirmed');
-  check(
-    create?.body.user_metadata?.purpose === 'advertiser',
-    'and the sign-in says what it is for, so it can be found later',
-  );
+try {
+  parseArgs(['--nonsense']);
+  check(false, 'unknown option is refused');
+} catch (error) {
+  check(error instanceof IssueError, 'unknown option is refused');
 }
-
-// ---------------------------------------------------------------------------
-// 3. An advertiser who already has a sign-in
-// ---------------------------------------------------------------------------
-{
-  const server = fakeServer({ users: [{ id: 'existing-uid', email: 'Ads@Example.test' }] });
-  const result = await issueAdvertiser({
-    fetch: server.fetch,
+try {
+  parseArgs(['--name', '--email']);
+  check(false, 'missing option value is refused');
+} catch {
+  check(true, 'missing option value is refused');
+}
+check(
+  optionProblems({ name: 'x', email: 'nope', generate: false, username: '' }).length === 3,
+  'short name, invalid email and no password are three problems',
+);
+check(optionProblems(OPTIONS).length === 0, 'valid arguments have no problems');
+check(
+  optionProblems({ ...OPTIONS, password: 'both' }).some((p) => p.includes('not both')),
+  'password and generate cannot both be set',
+);
+check(
+  optionProblems({ ...OPTIONS, username: '_bad' }).some((p) => p.includes('--username')),
+  'a handle cannot begin with an underscore',
+);
+check(
+  deriveHandle('Winter Intake Co') === 'winter_intake_co',
+  'the handle uses the database shape',
+);
+check(deriveHandle('XY') === 'advertiser', 'a short derived handle falls back to a valid one');
+const generated = generatedPassword((length) => Uint8Array.from({ length }, (_, index) => index));
+check(
+  /^[^01lIO]{5}-[^01lIO]{5}-[^01lIO]{5}-[^01lIO]{5}$/.test(generated),
+  'the generated password is readable',
+);
+check(SIGN_IN_URL.endsWith('/auth/login'), 'the sign-in address is the actual member-site route');
+check(configurationProblems(BASE).length === 0, 'the member project configuration is accepted');
+check(
+  configurationProblems({
     ...BASE,
-    options: {
-      name: 'Winter Intake Co',
-      email: 'ads@example.test',
-      password: 'a-password-they-chose',
-      generate: false,
-      username: '',
-      dryRun: false,
+    serviceAccount: { ...serviceAccount, project_id: 'bsdc-second' },
+  }).length > 0,
+  'the corporate Firebase project cannot accidentally receive advertiser accounts',
+);
+check(
+  configurationProblems({
+    ...BASE,
+    serviceAccount: {
+      ...serviceAccount,
+      project_id: 'bsdc-second',
+      client_email: 'fixture@bsdc-second.iam.gserviceaccount.com',
     },
-    log: () => undefined,
-  });
+    expectedProject: 'bsdc-second',
+  }).length > 0,
+  'an override cannot make the corporate project the member project',
+);
+check(
+  optionProblems({ ...OPTIONS, name: 'x'.repeat(61) }).some((p) => p.includes('--name')),
+  'an overlong name is refused before an identity can be created',
+);
 
-  check(result.uid === 'existing-uid', 'an existing sign-in is found by its address, whatever its case',
-    result.uid);
-  check(result.createdAuth === false, 'and is not created again');
-  check(
-    !server.calls.some((call) => call.method === 'POST' && call.url.endsWith('/auth/v1/admin/users')),
-    'so a retried run cannot make a second identity for one advertiser',
-  );
-  check(
-    server.calls.some((call) => call.method === 'PUT' && call.url.endsWith('/auth/v1/admin/users/existing-uid')),
-    'the existing address is confirmed, so they can sign in immediately',
-  );
-  check(
-    !server.calls.some((call) => JSON.stringify(call.body ?? {}).includes('a-password-they-chose')),
-    'and the password they already had is never sent, so it cannot be overwritten',
-  );
-  check(result.generated === null, 'and nothing generated is reported back');
-}
-
-// ---------------------------------------------------------------------------
-// 4. Refusals carry the database's own sentence
-// ---------------------------------------------------------------------------
-{
-  const server = fakeServer({ failure: { on: 'profile', message: 'Permission ads.manage is required' } });
-  let thrown = null;
-  try {
-    await issueAdvertiser({
-      fetch: server.fetch,
-      ...BASE,
-      options: { name: 'Winter Intake Co', email: 'ads@example.test', generate: true, username: '', dryRun: false },
-      password: 'x',
-      log: () => undefined,
-    });
-  } catch (error) {
-    thrown = error;
-  }
-  check(thrown instanceof IssueError, 'a refused profile is an error');
-  check(
-    thrown?.message === 'Permission ads.manage is required',
-    'and the message is the database sentence, not a rewritten one',
-    thrown?.message,
-  );
-  check(thrown?.status === 403, 'with the status that explains it', String(thrown?.status));
-}
-
-{
-  const server = fakeServer({ failure: { on: 'create', message: 'A user with this email address has already been registered' } });
-  let thrown = null;
-  try {
-    await issueAdvertiser({
-      fetch: server.fetch,
-      ...BASE,
-      options: { name: 'Winter Intake Co', email: 'ads@example.test', generate: true, username: '', dryRun: false },
-      password: 'x',
-      log: () => undefined,
-    });
-  } catch (error) {
-    thrown = error;
-  }
-  check(
-    thrown?.message.includes('already been registered'),
-    'a sign-in that already exists is reported in Auth words, not swallowed',
-    thrown?.message,
-  );
-}
-
-// ---------------------------------------------------------------------------
-// 5. The things it must refuse before touching the network
-// ---------------------------------------------------------------------------
-for (const [label, overrides, expected] of [
-  ['no staff sign-in', { staffEmail: '', staffPassword: '' }, 'staff sign-in'],
-  ['no project', { url: '' }, 'SUPABASE_URL'],
-  ['a bad address', { options: { name: 'Winter Intake Co', email: 'not-an-address', generate: true, username: '', dryRun: false } }, '--email'],
-]) {
-  const server = fakeServer();
-  let thrown = null;
-  try {
-    await issueAdvertiser({
-      fetch: server.fetch,
-      ...BASE,
-      options: { name: 'Winter Intake Co', email: 'ads@example.test', generate: true, username: '', dryRun: false },
-      password: 'x',
-      log: () => undefined,
-      ...overrides,
-    });
-  } catch (error) {
-    thrown = error;
-  }
-  check(thrown instanceof IssueError, `${label} is refused`);
-  check(
-    String(thrown?.message).toLowerCase().includes(expected.toLowerCase()),
-    `${label}: the refusal names what is missing`,
-    thrown?.message,
-  );
-  check(server.calls.length === 0, `${label}: and nothing was sent anywhere`, `${server.calls.length} calls`);
-}
-
-// ---------------------------------------------------------------------------
-// 6. A dry run changes nothing
-// ---------------------------------------------------------------------------
 {
   const server = fakeServer();
-  // The CLI short-circuits a dry run before it reaches the module; this checks
-  // the module itself is not what a dry run relies on, so a caller that forgets
-  // to short-circuit cannot silently issue an account.
+  const lines = [];
   const result = await issueAdvertiser({
     fetch: server.fetch,
-    url: '',
-    serviceKey: 'key',
-    staffEmail: 'ops@bsdc.info.bd',
-    staffPassword: 'x',
-    options: { name: 'Winter Intake Co', email: 'ads@example.test', generate: true, username: '', dryRun: true },
-    password: 'x',
-    log: () => undefined,
-  }).catch((error) => error);
-  check(result instanceof IssueError, 'a misconfigured run fails rather than pretending to succeed');
-  check(server.calls.length === 0, 'and sends nothing');
+    ...BASE,
+    options: OPTIONS,
+    password: 'generated-fixture',
+    log: (line) => lines.push(line),
+  });
+  const urls = server.calls.map((call) => call.url);
+  check(
+    urls[0]?.includes('accounts:signInWithPassword'),
+    'the corporate staff member signs in first',
+  );
+  check(
+    urls[1]?.endsWith('/rpc/my_permissions'),
+    'database permissions are checked before using the Firebase admin account',
+  );
+  check(
+    urls[2] === 'https://oauth2.googleapis.com/token',
+    'only then is a Firebase admin token requested',
+  );
+  check(
+    urls[3]?.endsWith('/projects/bsdc-bd/accounts:lookup'),
+    'existing identities are looked up in the member Firebase project',
+  );
+  check(
+    urls[4]?.endsWith('/projects/bsdc-bd/accounts'),
+    'a missing identity is created in that same project',
+  );
+  check(
+    urls[5]?.endsWith('/rpc/issue_advertiser_account'),
+    'the profile is issued after the Firebase identity',
+  );
+  const assertion = new URLSearchParams(server.calls[2].body).get('assertion');
+  const [header, payload, signature] = assertion.split('.');
+  const claims = JSON.parse(Buffer.from(payload, 'base64url').toString());
+  check(
+    claims.scope === 'https://www.googleapis.com/auth/identitytoolkit' &&
+      claims.aud === 'https://oauth2.googleapis.com/token',
+    'the assertion is scoped to Identity Toolkit',
+  );
+  check(
+    verify(
+      'RSA-SHA256',
+      Buffer.from(`${header}.${payload}`),
+      publicKey,
+      Buffer.from(signature, 'base64url'),
+    ),
+    'the assertion is signed by the service-account key',
+  );
+  const create = server.calls[4];
+  check(
+    create.headers.authorization === 'Bearer firebase-admin-access',
+    'Firebase creation uses the short-lived admin token',
+  );
+  check(create.body.emailVerified === false, 'the new address is not falsely marked verified');
+  const profile = server.calls[5];
+  check(
+    profile.headers.authorization === 'Bearer staff-firebase-token' &&
+      profile.headers.apikey === BASE.publishableKey,
+    'the database call uses the staff Firebase token, not an admin key',
+  );
+  check(
+    profile.body.p_uid === 'firebase-new-uid',
+    'the profile uses the Firebase UID the member site will send',
+  );
+  check(
+    result.createdAuth && result.profileCreated && result.generated === 'generated-fixture',
+    'the newly created credential can be handed over once',
+  );
+  check(
+    lines.every(
+      (line) =>
+        !line.includes('generated-fixture') &&
+        !line.includes('staff-fixture') &&
+        !line.includes('firebase-admin-access'),
+    ),
+    'progress logs contain no passwords or tokens',
+  );
+  check(!urls.some((url) => url.includes('/auth/v1/')), 'Supabase Auth is never used');
+}
+
+{
+  const server = fakeServer({
+    existing: { localId: 'firebase-existing', email: 'Ads@Example.test', emailVerified: false },
+  });
+  const result = await issueAdvertiser({
+    fetch: server.fetch,
+    ...BASE,
+    options: OPTIONS,
+    password: 'unused-password',
+  });
+  check(
+    result.uid === 'firebase-existing' && !result.createdAuth,
+    'an existing Firebase identity is reused',
+  );
+  check(result.generated === null, 'no generated password is reported for an existing user');
+  check(
+    !server.calls.some((call) => call.url.endsWith('/projects/bsdc-bd/accounts')),
+    'no new identity is created',
+  );
+  check(
+    !server.calls.some((call) => call.url.includes('accounts:update')),
+    'existing identity settings are never updated',
+  );
+  check(
+    !server.calls.some((call) => JSON.stringify(call.body).includes('unused-password')),
+    'the existing user’s password is never sent',
+  );
+}
+
+{
+  const server = fakeServer({ race: true });
+  const temporaryFixture = ['temporary', 'fixture'].join('-');
+  const result = await issueAdvertiser({
+    fetch: server.fetch,
+    ...BASE,
+    options: OPTIONS,
+    password: temporaryFixture,
+  });
+  check(
+    result.uid === 'race-uid' && !result.createdAuth && result.generated === null,
+    'an EMAIL_EXISTS race reuses the account and reports no password',
+  );
+  check(
+    !server.calls.some((call) => call.url.includes('accounts:update')),
+    'the race does not update the existing user',
+  );
+}
+
+{
+  const server = fakeServer({ permissions: [] });
+  let error;
+  try {
+    await issueAdvertiser({ fetch: server.fetch, ...BASE, options: OPTIONS });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError && error.status === 403,
+    'a staff account without ads.manage is refused',
+  );
+  check(
+    server.calls.length === 2 &&
+      !server.calls.some((call) => call.url.includes('oauth2.googleapis.com')),
+    'denial happens before the privileged Firebase request',
+  );
+}
+{
+  const server = fakeServer({ existing: { localId: 'disabled-uid', disabled: true } });
+  let error;
+  try {
+    await issueAdvertiser({ fetch: server.fetch, ...BASE, options: OPTIONS });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError && error.message.includes('disabled'),
+    'a disabled existing identity is refused',
+  );
+  check(
+    !server.calls.some((call) => call.url.endsWith('/rpc/issue_advertiser_account')),
+    'a disabled identity is not issued a profile',
+  );
+}
+{
+  const server = fakeServer({ failure: 'profile' });
+  let error;
+  try {
+    await issueAdvertiser({
+      fetch: server.fetch,
+      ...BASE,
+      options: OPTIONS,
+      password: 'generated-fixture',
+    });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError && error.message.includes('Firebase sign-in was created'),
+    'a partial failure reports that the Firebase identity exists',
+  );
+  check(
+    !error.message.includes('generated-fixture') && error.message.includes('password reset'),
+    'recovery is explained without printing the password',
+  );
+}
+{
+  const server = fakeServer();
+  let error;
+  try {
+    await issueAdvertiser({ fetch: server.fetch, ...BASE, serviceAccount: null, options: OPTIONS });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError && server.calls.length === 0,
+    'missing configuration is refused before network access',
+  );
+}
+
+{
+  const server = fakeServer({ failure: 'missing-error' });
+  const result = await issueAdvertiser({
+    fetch: server.fetch,
+    ...BASE,
+    options: OPTIONS,
+    password: 'generated-fixture',
+  });
+  check(
+    result.createdAuth && result.uid === 'firebase-new-uid',
+    'USER_NOT_FOUND is treated like an empty lookup',
+  );
+}
+{
+  const server = fakeServer({ failure: 'signin-echo' });
+  let error;
+  try {
+    await issueAdvertiser({ fetch: server.fetch, ...BASE, options: OPTIONS });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError &&
+      !error.message.includes('staff-fixture') &&
+      !error.message.includes('corporate-test-key'),
+    'sign-in errors redact the password and Firebase API key even when echoed',
+  );
+  check(
+    server.calls.length === 1,
+    'a failed staff sign-in cannot reach privileged identity operations',
+  );
+}
+{
+  const server = fakeServer({ failure: 'create-echo' });
+  let error;
+  try {
+    await issueAdvertiser({
+      fetch: server.fetch,
+      ...BASE,
+      options: OPTIONS,
+      password: 'generated-fixture',
+    });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError &&
+      !error.message.includes('generated-fixture') &&
+      !error.message.includes('firebase-admin-access'),
+    'identity errors redact the new password and OAuth token even when echoed',
+  );
+  check(
+    !server.calls.some((call) => call.url.endsWith('/rpc/issue_advertiser_account')),
+    'a failed identity creation never issues a profile',
+  );
+}
+
+{
+  const server = fakeServer();
+  const result = await issueAdvertiser({ fetch: server.fetch, ...BASE, options: OPTIONS });
+  check(
+    typeof result.generated === 'string' && /^[^-]{5}(?:-[^-]{5}){3}$/.test(result.generated),
+    'real cryptographic generation works on the supported Node runtime',
+  );
+}
+{
+  const cli = spawnSync(
+    process.execPath,
+    [
+      resolve(process.cwd(), '..', 'scripts', 'issue-advertiser.mjs'),
+      '--name',
+      'Winter Intake Co',
+      '--email',
+      'ads@example.test',
+      '--generate',
+      '--dry-run',
+    ],
+    {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        SUPABASE_URL: BASE.databaseUrl,
+        SUPABASE_ANON_KEY: BASE.publishableKey,
+        VITE_FB2_API_KEY: BASE.staffApiKey,
+        BSDC_STAFF_EMAIL: BASE.staffEmail,
+        BSDC_STAFF_PASSWORD: BASE.staffPassword,
+        FIREBASE_SERVICE_ACCOUNT_BSDC_BD: JSON.stringify(serviceAccount),
+      },
+    },
+  );
+  check(
+    cli.status === 0 && cli.stdout.includes('nothing changed'),
+    'CLI dry-run validates configuration without issuing an account',
+  );
+  check(
+    !cli.stdout.includes(BASE.staffPassword) && !cli.stdout.includes(serviceAccount.private_key),
+    'CLI dry-run does not print credentials',
+  );
+}
+
+{
+  const server = fakeServer({ failure: 'create-echo' });
+  let error;
+  try {
+    await issueAdvertiser({
+      fetch: server.fetch,
+      ...BASE,
+      options: OPTIONS,
+      password: 'q'.repeat(1200),
+    });
+  } catch (caught) {
+    error = caught;
+  }
+  check(
+    error instanceof IssueError && !error.message.includes('q'.repeat(100)),
+    'a long credential is redacted before error text is truncated',
+  );
 }
 
 console.log(`\nSUMMARY: ${pass} passed, ${bad.length} failed`);

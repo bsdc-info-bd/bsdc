@@ -14,8 +14,7 @@ import type {
   Campaign,
   CampaignCreative,
   CampaignDay,
-  CampaignDraft,
-  CreativeDraft,
+  CreativeCopy,
   ServedAd,
   WalletEntry,
 } from './ads-types';
@@ -141,41 +140,15 @@ export async function fetchWalletHistory(limit = 50): Promise<WalletEntry[]> {
   }));
 }
 
-export async function createCampaign(draft: CampaignDraft): Promise<string> {
-  const { data, error } = await getSupabase().rpc('create_campaign', {
-    p_name: draft.name.trim(),
-    p_pricing: draft.pricing,
-    p_bid: draft.bid,
-    p_total_budget: draft.totalBudget,
-    p_daily_budget: draft.dailyBudget,
-    p_cities: draft.cities,
-    p_topics: draft.topics,
-    p_language: draft.language,
+/** Copy only: placement, image and destination remain a staff decision. */
+export async function editCreativeCopy(creativeId: string, copy: CreativeCopy): Promise<void> {
+  const { error } = await getSupabase().rpc('edit_campaign_creative', {
+    p_creative_id: creativeId,
+    p_headline: copy.headline.trim(),
+    p_body: copy.body,
+    p_cta_label: copy.ctaLabel,
   });
   if (error) throw toDataError(error);
-  return data;
-}
-
-export async function addCreative(campaignId: string, draft: CreativeDraft): Promise<string> {
-  const { data, error } = await getSupabase().rpc('add_creative', {
-    p_campaign_id: campaignId,
-    p_placement: draft.placement,
-    p_headline: draft.headline.trim(),
-    p_body: draft.body.trim(),
-    p_target_url: draft.targetUrl.trim(),
-    p_image_url: draft.imageUrl.trim(),
-    p_cta_label: draft.ctaLabel.trim(),
-  });
-  if (error) throw toDataError(error);
-  return data;
-}
-
-export async function submitCampaign(campaignId: string): Promise<AdStatus> {
-  const { data, error } = await getSupabase().rpc('submit_campaign', {
-    p_campaign_id: campaignId,
-  });
-  if (error) throw toDataError(error);
-  return data;
 }
 
 export async function setCampaignPaused(campaignId: string, paused: boolean): Promise<AdStatus> {

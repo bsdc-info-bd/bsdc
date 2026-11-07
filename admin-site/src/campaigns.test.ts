@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   LIMITS,
+  PLACEMENTS,
   activationRefusal,
   bestCreative,
   campaignArgs,
+  setupArgs,
   dateToIso,
   eventCost,
   forecastEvents,
@@ -45,6 +47,22 @@ const CREATIVE: CreativeDraft = {
   imageUrl: '',
   ctaLabel: 'Read more',
 };
+
+describe('staff booking contract', () => {
+  it('uses exactly the placements accepted by the database enum', () => {
+    expect(PLACEMENTS).toEqual(['feed', 'sidebar', 'search', 'shop', 'article']);
+  });
+
+  it('sends the campaign and first creative to one atomic function', () => {
+    const args = setupArgs({ ...DRAFT, activate: true }, { ...CREATIVE, placement: 'shop' });
+    expect(args.p_owner_uid).toBe('uid-1');
+    expect(args.p_activate).toBe(true);
+    expect(args.p_placement).toBe('shop');
+    expect(args.p_headline).toBe(CREATIVE.headline);
+    expect(args.p_target_url).toBe(CREATIVE.targetUrl);
+    expect(args).not.toHaveProperty('p_campaign_id');
+  });
+});
 
 describe('eventCost', () => {
   // The whole point of this file: the client must charge what the database

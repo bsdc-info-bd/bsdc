@@ -72,7 +72,11 @@ const HARNESSES = [
     'a campaign is made by staff and read by the owner who paid for it, and by nobody else',
   ],
   ['t51.mjs', 'three implementations of one poisha: the wallet, the operator and the advertiser'],
-  ['t52.mjs', 'issuing an advertiser account: once, as the staff member, without printing a password'],
+  [
+    't52.mjs',
+    'issuing an advertiser account: once, as the staff member, without printing a password',
+  ],
+  ['t53.mjs', 'advertising charges respect one shared wallet and daily caps'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

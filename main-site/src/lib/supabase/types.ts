@@ -2459,6 +2459,10 @@ export type Database = {
         Args: { p_campaign_id: string; p_approve: boolean; p_note?: string };
         Returns: DbAdStatus;
       };
+      edit_campaign_creative: {
+        Args: { p_creative_id: string; p_headline: string; p_body: string; p_cta_label: string };
+        Returns: string;
+      };
       set_campaign_paused: {
         Args: { p_campaign_id: string; p_paused: boolean };
         Returns: DbAdStatus;

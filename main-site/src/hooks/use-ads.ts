@@ -1,18 +1,43 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type * as AdsRepository from '@/lib/ads/ads-repository';
+import type * as FirebaseModule from '@/lib/firebase';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AdPlacement,
   Campaign,
   CampaignCreative,
   CampaignDay,
-  CampaignDraft,
-  CreativeDraft,
+  CreativeCopy,
   ServedAd,
-  WalletEntry,
 } from '@/lib/ads/ads-types';
 import { useAuthStore } from '@/store/auth-store';
 
-const repository = () => import('@/lib/ads/ads-repository');
+let repositoryModule: Promise<typeof AdsRepository> | null = null;
+const repository = () => {
+  repositoryModule ??= import('@/lib/ads/ads-repository').catch((error: unknown) => {
+    repositoryModule = null;
+    throw error;
+  });
+  return repositoryModule;
+};
+let firebaseModule: Promise<typeof FirebaseModule> | null = null;
+
+/** Never cache one Firebase user's answer under another user's query key. */
+async function forOwner<T>(uid: string | null, request: () => Promise<T>): Promise<T> {
+  firebaseModule ??= import('@/lib/firebase').catch((error: unknown) => {
+    firebaseModule = null;
+    throw error;
+  });
+  const { getFirebaseAuth } = await firebaseModule;
+  const isCurrent = () =>
+    uid !== null &&
+    useAuthStore.getState().user?.uid === uid &&
+    getFirebaseAuth().currentUser?.uid === uid;
+  if (!isCurrent()) throw new Error('auth/account-changed');
+  const result = await request();
+  if (!isCurrent()) throw new Error('auth/account-changed');
+  return result;
+}
 
 /** How long a creative must be at least half visible before it counts. */
 const VIEWABLE_MS = 1000;
@@ -93,91 +118,61 @@ export function useAdSlot(placement: AdPlacement): AdSlotResult {
 export interface CampaignsResult {
   campaigns: Campaign[];
   balance: number;
-  wallet: WalletEntry[];
   isLoading: boolean;
   isError: boolean;
-  create: (draft: CampaignDraft) => Promise<string>;
-  addCreative: (campaignId: string, draft: CreativeDraft) => Promise<void>;
-  submit: (campaignId: string) => Promise<void>;
   setPaused: (campaignId: string, paused: boolean) => Promise<void>;
+  editCopy: (creativeId: string, copy: CreativeCopy) => Promise<void>;
   isSaving: boolean;
 }
 
-/** The advertiser's own campaigns, wallet and the actions on them. */
+/** Only the signed-in owner's reporting and permitted controls. */
 export function useCampaigns(): CampaignsResult {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const queryClient = useQueryClient();
-
   const campaignQuery = useQuery({
     queryKey: ['campaigns', uid],
-    queryFn: async () => (await repository()).fetchCampaigns(),
+    queryFn: async () => forOwner(uid, async () => (await repository()).fetchCampaigns()),
     enabled: uid !== null,
     staleTime: 30_000,
   });
-
   const balanceQuery = useQuery({
     queryKey: ['ad-wallet', uid],
-    queryFn: async () => (await repository()).fetchWalletBalance(),
+    queryFn: async () => forOwner(uid, async () => (await repository()).fetchWalletBalance()),
     enabled: uid !== null,
     staleTime: 30_000,
-  });
-
-  const historyQuery = useQuery({
-    queryKey: ['ad-wallet-history', uid],
-    queryFn: async () => (await repository()).fetchWalletHistory(),
-    enabled: uid !== null,
-    staleTime: 60_000,
   });
 
   const invalidate = (): void => {
-    void queryClient.invalidateQueries({ queryKey: ['campaigns'] });
-    void queryClient.invalidateQueries({ queryKey: ['ad-wallet'] });
-    void queryClient.invalidateQueries({ queryKey: ['creatives'] });
+    void queryClient.invalidateQueries({ queryKey: ['campaigns', uid] });
+    void queryClient.invalidateQueries({ queryKey: ['creatives', uid] });
   };
-
-  const createMutation = useMutation({
-    mutationFn: async (draft: CampaignDraft) => (await repository()).createCampaign(draft),
-    onSuccess: invalidate,
-  });
-
-  const creativeMutation = useMutation({
-    mutationFn: async (input: { campaignId: string; draft: CreativeDraft }) =>
-      (await repository()).addCreative(input.campaignId, input.draft),
-    onSuccess: invalidate,
-  });
-
-  const submitMutation = useMutation({
-    mutationFn: async (campaignId: string) => (await repository()).submitCampaign(campaignId),
-    onSuccess: invalidate,
-  });
-
   const pauseMutation = useMutation({
     mutationFn: async (input: { campaignId: string; paused: boolean }) =>
-      (await repository()).setCampaignPaused(input.campaignId, input.paused),
+      forOwner(uid, async () =>
+        (await repository()).setCampaignPaused(input.campaignId, input.paused),
+      ),
+    onSuccess: invalidate,
+  });
+  const copyMutation = useMutation({
+    mutationFn: async (input: { creativeId: string; copy: CreativeCopy }) =>
+      forOwner(uid, async () =>
+        (await repository()).editCreativeCopy(input.creativeId, input.copy),
+      ),
     onSuccess: invalidate,
   });
 
   return {
     campaigns: campaignQuery.data ?? [],
     balance: balanceQuery.data ?? 0,
-    wallet: historyQuery.data ?? [],
-    isLoading: campaignQuery.isLoading,
-    isError: campaignQuery.isError,
-    create: async (draft) => createMutation.mutateAsync(draft),
-    addCreative: async (campaignId, draft) => {
-      await creativeMutation.mutateAsync({ campaignId, draft });
-    },
-    submit: async (campaignId) => {
-      await submitMutation.mutateAsync(campaignId);
-    },
+    isLoading: campaignQuery.isLoading || balanceQuery.isLoading,
+    isError: campaignQuery.isError || balanceQuery.isError,
     setPaused: async (campaignId, paused) => {
       await pauseMutation.mutateAsync({ campaignId, paused });
     },
-    isSaving:
-      createMutation.isPending ||
-      creativeMutation.isPending ||
-      submitMutation.isPending ||
-      pauseMutation.isPending,
+    editCopy: async (creativeId, copy) => {
+      await copyMutation.mutateAsync({ creativeId, copy });
+    },
+    isSaving: pauseMutation.isPending || copyMutation.isPending,
   };
 }
 
@@ -185,26 +180,31 @@ export interface CampaignDetailResult {
   creatives: CampaignCreative[];
   daily: CampaignDay[];
   isLoading: boolean;
+  isError: boolean;
 }
 
 export function useCampaignDetail(campaignId: string | null): CampaignDetailResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const creativeQuery = useQuery({
-    queryKey: ['creatives', campaignId],
-    queryFn: async () => (await repository()).fetchCreatives(campaignId ?? ''),
-    enabled: campaignId !== null,
+    queryKey: ['creatives', uid, campaignId],
+    queryFn: async () =>
+      forOwner(uid, async () => (await repository()).fetchCreatives(campaignId ?? '')),
+    enabled: uid !== null && campaignId !== null,
     staleTime: 30_000,
   });
 
   const dailyQuery = useQuery({
-    queryKey: ['campaign-daily', campaignId],
-    queryFn: async () => (await repository()).fetchDaily(campaignId ?? ''),
-    enabled: campaignId !== null,
+    queryKey: ['campaign-daily', uid, campaignId],
+    queryFn: async () =>
+      forOwner(uid, async () => (await repository()).fetchDaily(campaignId ?? '')),
+    enabled: uid !== null && campaignId !== null,
     staleTime: 60_000,
   });
 
   return {
     creatives: creativeQuery.data ?? [],
     daily: dailyQuery.data ?? [],
-    isLoading: creativeQuery.isLoading,
+    isLoading: creativeQuery.isLoading || dailyQuery.isLoading,
+    isError: creativeQuery.isError || dailyQuery.isError,
   };
 }

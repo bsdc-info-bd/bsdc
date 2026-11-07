@@ -17,7 +17,8 @@
  * It also checks the inverse: a forecast must never promise more events than
  * the budget can pay for.
  */
-import { pathToFileURL } from 'node:url';
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
 import { resolve } from 'node:path';
 import { makeDb } from './lib.mjs';
 
@@ -33,12 +34,18 @@ function check(condition, label, detail = '') {
   }
 }
 
-const admin = await import(
-  pathToFileURL(resolve(process.cwd(), '..', 'admin-site', 'src', 'campaigns.ts')).href
-);
-const member = await import(
-  pathToFileURL(resolve(process.cwd(), 'src', 'lib', 'ads', 'ads-types.ts')).href
-);
+// Node 20 (the CI runtime) cannot import .ts files. Transpile the actual
+// clients in memory instead of relying on the type stripping in newer Node.
+// Both files have only type imports, so no runtime resolution is needed.
+async function loadClient(path) {
+  const source = readFileSync(path, 'utf8');
+  const javascript = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  return import(`data:text/javascript;base64,${Buffer.from(javascript).toString('base64')}`);
+}
+const admin = await loadClient(resolve(process.cwd(), '..', 'admin-site', 'src', 'campaigns.ts'));
+const member = await loadClient(resolve(process.cwd(), 'src', 'lib', 'ads', 'ads-types.ts'));
 
 /** Both clients, so one loop can hold all three implementations to account. */
 const CLIENTS = [
@@ -55,7 +62,9 @@ const BIDS = [100, 499, 999, 1000, 1001, 1499, 1500, 1900, 1999, 2000, 2500, 12_
 
 /** The database's answer for one event, for every bid in the list. */
 async function sqlCost(pricing, kind) {
-  const values = BIDS.map((bid) => `('${pricing}'::bsdc_ad_pricing, ${bid}, '${kind}'::bsdc_ad_event_kind)`).join(', ');
+  const values = BIDS.map(
+    (bid) => `('${pricing}'::bsdc_ad_pricing, ${bid}, '${kind}'::bsdc_ad_event_kind)`,
+  ).join(', ');
   const rows = await db.query(
     `select v.bid, bsdc.ad_event_cost(v.pricing, v.bid, v.kind) as cost
        from (values ${values}) as v(pricing, bid, kind)`,
@@ -77,7 +86,9 @@ for (const [pricing, kind] of [
       `${pricing}/${kind}: the ${label} charges what the database charges`,
       mismatched
         .slice(0, 3)
-        .map((row) => `bid ${row.bid}: sql ${row.cost} vs client ${eventCost(pricing, row.bid, kind)}`)
+        .map(
+          (row) => `bid ${row.bid}: sql ${row.cost} vs client ${eventCost(pricing, row.bid, kind)}`,
+        )
         .join('; '),
     );
   }
@@ -102,18 +113,27 @@ for (const pricing of ['cpm', 'cpc']) {
         continue;
       }
       // Never more than the budget pays for.
-      if (events * unit > budget) overPromised.push(`${pricing}/${bid}/${budget}: ${events} x ${unit} > ${budget}`);
+      if (events * unit > budget)
+        overPromised.push(`${pricing}/${bid}/${budget}: ${events} x ${unit} > ${budget}`);
       // And never leave a whole event's worth of money unspent.
       if ((events + 1) * unit <= budget) {
-        underPromised.push(`${pricing}/${bid}/${budget}: could afford ${events + 1}, showed ${events}`);
+        underPromised.push(
+          `${pricing}/${bid}/${budget}: could afford ${events + 1}, showed ${events}`,
+        );
       }
     }
   }
 }
-check(overPromised.length === 0, 'a forecast never promises more events than the budget pays for',
-  overPromised.slice(0, 3).join('; '));
-check(underPromised.length === 0, 'and never leaves a whole event unbought',
-  underPromised.slice(0, 3).join('; '));
+check(
+  overPromised.length === 0,
+  'a forecast never promises more events than the budget pays for',
+  overPromised.slice(0, 3).join('; '),
+);
+check(
+  underPromised.length === 0,
+  'and never leaves a whole event unbought',
+  underPromised.slice(0, 3).join('; '),
+);
 
 // The form's own bounds and the table's have to be the same numbers, or a
 // draft the console says is fine is refused on insert.
@@ -143,7 +163,9 @@ const budgetDef = (
     `select pg_get_constraintdef(oid) as def from pg_constraint
       where conrelid = 'public.ad_campaigns'::regclass and pg_get_constraintdef(oid) like '%total_budget%'`,
   )
-).rows.map((row) => row.def).join(' | ');
+).rows
+  .map((row) => row.def)
+  .join(' | ');
 check(
   budgetDef.includes(String(admin.LIMITS.budgetMin)),
   'and the smallest budget the form accepts is the smallest the table accepts',

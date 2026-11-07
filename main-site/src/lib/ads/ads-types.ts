@@ -131,7 +131,8 @@ export function forecastEvents(
  * Whether a campaign can be shown right now. This repeats the serve_ads
  * predicate so a dashboard can explain a silent campaign without guessing.
  */
-export function isServable(campaign: Campaign, now = new Date()): boolean {
+export function isServable(campaign: Campaign, now = new Date(), walletBalance?: number): boolean {
+  if (walletBalance !== undefined && walletBalance <= 0) return false;
   if (campaign.status !== 'active') return false;
   if (new Date(campaign.startsAt).getTime() > now.getTime()) return false;
   if (campaign.endsAt !== null && new Date(campaign.endsAt).getTime() <= now.getTime()) {
@@ -143,9 +144,14 @@ export function isServable(campaign: Campaign, now = new Date()): boolean {
 }
 
 /** Why a campaign is not being shown, as a translation key. */
-export function pauseReasonKey(campaign: Campaign, now = new Date()): string | null {
-  if (isServable(campaign, now)) return null;
+export function pauseReasonKey(
+  campaign: Campaign,
+  now = new Date(),
+  walletBalance?: number,
+): string | null {
+  if (isServable(campaign, now, walletBalance)) return null;
   if (campaign.status !== 'active') return `ads.statuses.${campaign.status}`;
+  if (walletBalance !== undefined && walletBalance <= 0) return 'ads.reasons.walletEmpty';
   if (campaign.spent >= campaign.totalBudget) return 'ads.reasons.budgetSpent';
   if (campaign.dailyBudget > 0 && campaign.spendToday >= campaign.dailyBudget) {
     return 'ads.reasons.dailyCap';
@@ -163,12 +169,14 @@ export function canResume(status: AdStatus): boolean {
   return status === 'paused';
 }
 
+/** Staff may submit these states; the member console does not submit. */
 export function canSubmit(status: AdStatus): boolean {
-  return status === 'draft' || status === 'rejected' || status === 'paused';
+  return status === 'draft' || status === 'rejected';
 }
 
+/** Editing copy sends every unfinished campaign back to review. */
 export function canEdit(status: AdStatus): boolean {
-  return status === 'draft' || status === 'rejected';
+  return status !== 'completed';
 }
 
 export interface CampaignDraft {
@@ -181,6 +189,13 @@ export interface CampaignDraft {
   cities: string[];
   topics: string[];
   language: 'any' | 'bn' | 'en';
+}
+
+/** The only fields an advertiser can change on an existing creative. */
+export interface CreativeCopy {
+  headline: string;
+  body: string;
+  ctaLabel: string;
 }
 
 export interface CreativeDraft {
@@ -227,6 +242,16 @@ export function validateCampaign(draft: CampaignDraft): AdProblem[] {
     problems.push({ field: 'bid', key: 'ads.errors.bidOverBudget' });
   }
 
+  return problems;
+}
+
+export function validateCopy(copy: CreativeCopy): AdProblem[] {
+  const problems: AdProblem[] = [];
+  if (copy.headline.trim().length < 3 || copy.headline.trim().length > 80) {
+    problems.push({ field: 'headline', key: 'ads.errors.headline' });
+  }
+  if (copy.body.length > 200) problems.push({ field: 'body', key: 'ads.errors.body' });
+  if (copy.ctaLabel.length > 32) problems.push({ field: 'ctaLabel', key: 'ads.errors.ctaLabel' });
   return problems;
 }
 
