@@ -6,8 +6,9 @@
 `dcd42978094e584a849c84a51450eeac40c8826057d566ea6d4b9627a403a05a`.
 It is distributed under the SIL Open Font License 1.1 in `OFL.txt`.
 The encoded form lets browser builds and the test runner use the same local
-font without a third-party request when a document is downloaded.
-
+font without a third-party request when a document is downloaded. A unit test
+checks canonical encoding and the hash above; the secret scanner excludes this
+file only from its AWS access-key rule because binary data can match that pattern.
 
 The ASCII advance-width tables in `../document.ts` are derived from Adobe's
 Helvetica and Helvetica-Bold Core 14 AFM files, downloaded from the pdfkit

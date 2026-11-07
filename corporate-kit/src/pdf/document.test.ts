@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import bundledFont from './fonts/NotoSansBengali.b64?raw';
 import {
   PdfDocument,
   escapePdfText,
@@ -294,5 +295,19 @@ describe('the document as a file', () => {
       const offset = Number(match[1]);
       expect(content.slice(offset, offset + 4)).toMatch(/^\d+ 0/);
     }
+  });
+});
+
+describe('the bundled Bengali font', () => {
+  it('is canonical base64 of the documented, publicly licensed font', async () => {
+    expect(bundledFont).toMatch(/^[A-Za-z0-9+/]+={0,2}$/);
+    const binary = atob(bundledFont);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    expect(btoa(binary)).toBe(bundledFont);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const sha256 = Array.from(new Uint8Array(digest), (byte) =>
+      byte.toString(16).padStart(2, '0'),
+    ).join('');
+    expect(sha256).toBe('dcd42978094e584a849c84a51450eeac40c8826057d566ea6d4b9627a403a05a');
   });
 });

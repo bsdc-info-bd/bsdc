@@ -53,3 +53,19 @@ paths = [
 regexes = [
   '''^abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789$''',
 ]
+
+# The one-line, publicly licensed Noto font is canonical base64 of a binary
+# asset. Random character sequences in it match the AWS access-key pattern.
+# Keep every other rule active for this file and keep this AWS rule identical
+# to the version pinned in CI. A unit test validates the canonical base64 and
+# exact upstream SHA-256, so the exception cannot hide arbitrary replacement data.
+[[rules]]
+id = "aws-access-token"
+description = "Identified a pattern that may indicate AWS credentials, risking unauthorized cloud resource access and data breaches on AWS platforms."
+regex = '''(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}'''
+keywords = ["akia", "asia", "abia", "acca"]
+[rules.allowlist]
+description = "Exact, hash-checked public Noto font binary encoded as base64"
+paths = [
+  '''^corporate-kit/src/pdf/fonts/NotoSansBengali\.b64$''',
+]
