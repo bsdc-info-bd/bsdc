@@ -12,15 +12,16 @@
  * function — so `gen_random_bytes` resolved here and nowhere else. The harness
  * was building a database no customer has.
  *
- * This harness builds the other one. Before the first migration runs it moves
- * `pgcrypto`, `citext`, `pg_trgm` and `unaccent` into `extensions`, takes
- * `public` off the apply session's search path, and only then replays the
- * repository. If any function in the schema depends on an extension being
- * unqualified in `public`, the migration fails or the check below fails.
+ * This harness builds the other one. Before the first migration it moves the
+ * installed extensions into `extensions`. Before every migration it resets the
+ * search path to `public`, just like the fresh psql session used by db-push,
+ * then applies every file twice. A path set by one file cannot hide a missing
+ * path in the next file, and the second pass starts after 0075 moved extensions.
  *
  * Six claims, and the last two are the ones that would have caught the outage:
  *
- *   1. Every migration replays on a production-shaped database.
+ *   1. Every migration applies and replays in isolated sessions on a
+ *      production-shaped database.
  *   2. Issuing a certificate works, and the code it returns verifies at the
  *      public desk.
  *   3. A notice gets a code, a staff card gets a code, and both verify.
@@ -102,28 +103,55 @@ await db.exec(`
 `);
 
 // ---------------------------------------------------------------------------
-// 1. Every migration replays
+// 1. Every migration applies, then replays, with a fresh-session search path
 // ---------------------------------------------------------------------------
-let applied = 0;
-let failed = null;
-for (const file of readdirSync(MIGRATIONS_DIR)
-  .filter((name) => name.endsWith('.sql'))
-  .sort()) {
-  try {
-    await db.exec('begin;\n' + readFileSync(join(MIGRATIONS_DIR, file), 'utf8') + '\ncommit;');
-    applied += 1;
-  } catch (error) {
-    failed = { file, error };
-    break;
-  }
-}
+await db.exec('set search_path = public;');
+const unqualifiedType = await db.query(`select to_regtype('citext') as type`);
 check(
-  failed === null,
-  'every migration applies to a database whose extensions live in `extensions`',
-  failed ? `${failed.file}: ${failed.error.message.split('\n')[0]}` : '',
+  unqualifiedType.rows[0]?.type === null,
+  'a fresh session cannot resolve citext while extensions is off its search path',
 );
-check(applied >= 75, 'the whole set applied, not a prefix of it', `${applied} files`);
-if (failed) {
+
+const files = readdirSync(MIGRATIONS_DIR)
+  .filter((name) => name.endsWith('.sql'))
+  .sort();
+async function applyInFreshSessions() {
+  let applied = 0;
+  for (const file of files) {
+    try {
+      // PGlite uses one connection, unlike the real migration runner. Reset
+      // it explicitly so a previous file cannot carry its path into this one.
+      await db.exec('set search_path = public;');
+      await db.exec('begin;\n' + readFileSync(join(MIGRATIONS_DIR, file), 'utf8') + '\ncommit;');
+      applied += 1;
+    } catch (error) {
+      await db.exec('rollback;');
+      return { applied, failed: { file, error } };
+    }
+  }
+  return { applied, failed: null };
+}
+
+const firstPass = await applyInFreshSessions();
+check(
+  firstPass.failed === null,
+  'every migration applies to the production layout in a fresh session',
+  firstPass.failed ? `${firstPass.failed.file}: ${firstPass.failed.error.message.split('\n')[0]}` : '',
+);
+check(firstPass.applied === files.length && files.length >= 75, 'the whole set applied, not a prefix of it', `${firstPass.applied} files`);
+if (firstPass.failed) {
+  console.log(`\nSUMMARY: ${pass} passed, ${bad.length} failed`);
+  process.exit(1);
+}
+
+const secondPass = await applyInFreshSessions();
+check(
+  secondPass.failed === null,
+  'every migration replays in a fresh session after extensions have moved',
+  secondPass.failed ? `${secondPass.failed.file}: ${secondPass.failed.error.message.split('\n')[0]}` : '',
+);
+check(secondPass.applied === files.length, 'the whole set replayed, not a prefix of it', `${secondPass.applied} files`);
+if (secondPass.failed) {
   console.log(`\nSUMMARY: ${pass} passed, ${bad.length} failed`);
   process.exit(1);
 }

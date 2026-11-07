@@ -106,7 +106,23 @@ jobs:
           SQL
 
       - name: Apply every migration, twice, then assert the invariants
-        run: node scripts/db-push.mjs --verify
+        # The log of a failed step lives behind a signed URL on a host that is
+        # not always reachable, and a red X with no sentence beside it costs
+        # whoever is reading the pull request an hour. A check annotation is
+        # part of the checks API, so the first real error is copied into one
+        # rather than only into the log.
+        run: |
+          set +e
+          node scripts/db-push.mjs --verify > /tmp/verify.log 2>&1
+          status=$?
+          cat /tmp/verify.log
+          if [ "$status" -ne 0 ]; then
+            message=$(grep -E '(^|[^[:alpha:]])(ERROR|FATAL|PANIC|FAIL)(:|[[:space:]])|^Error:' /tmp/verify.log | head -4 | tr '\n' ' ')
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/}
+            echo "::error title=Schema verify failed::${message:-no diagnostic line; see the log}"
+          fi
+          exit "$status"
 
       # A schema that applies is not the same as a schema that works. These
       # calls exercise the shapes every console depends on; a signature

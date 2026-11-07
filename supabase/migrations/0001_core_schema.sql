@@ -9,6 +9,11 @@
 -- Apply with:  supabase db push      (or psql -f against the project database)
 -- ---------------------------------------------------------------------------
 
+-- Each migration runs in its own session. On Supabase, the extensions are in
+-- `extensions`, not `public`; the same is true after 0075 relocates them on
+-- a fresh database. This path is needed on both the first apply and a replay.
+set search_path = public, extensions, pg_temp;
+
 -- Extensions come first, all of them, before any type they provide is used.
 -- Supabase pre-installs these; a bare Postgres does not, and a column typed
 -- `citext` declared before the extension exists fails with "type citext does

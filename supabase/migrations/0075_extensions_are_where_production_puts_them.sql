@@ -26,10 +26,9 @@
 --      that has no `extensions` is untouched — an unset schema on a search
 --      path costs nothing and resolves nothing, so the file is safe to replay
 --      against a layout that never created one.
---   2. Makes `pgcrypto` and `pg_trgm` reachable by name from the session that
---      applies migrations, so the migration files themselves can be replayed
---      on a database whose extensions live in `extensions`. A database whose
---      extensions are already in `public` gets a no-op.
+--   2. Moves extensions to the layout used in production and sets this file's
+--      search path. Each migration that needs an extension sets its own path,
+--      because the apply runner opens a fresh session for every file.
 --   3. Replaces the two functions whose generation of a printed code depended
 --      on an unqualified `gen_random_bytes`, and states the code format once.
 --   4. Records what it found in `bsdc.deployment_notes`, because a deployment
@@ -107,11 +106,9 @@ begin
 end;
 $$;
 
--- The apply session needs the same reach, because the migration files below
--- `public` were written against a search path that had the extensions in it.
--- `set search_path` here is scoped to this migration's transaction by
--- `db-push.mjs`, which runs each file in one; on the Supabase CLI it lasts for
--- the session that applies the rest of the run, which is the intent.
+-- `db-push.mjs` applies each migration in its own session, so this setting
+-- applies only to this file. Earlier files that use extension-provided types
+-- or operators must set their own path, including 0001 when it is replayed.
 set search_path = public, extensions;
 
 -- ---------------------------------------------------------------------------

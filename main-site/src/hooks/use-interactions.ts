@@ -190,7 +190,9 @@ export function useNotifications(): NotificationsResult {
     onMutate: (ids) => {
       queryClient.setQueryData<AppNotification[]>(['notifications', uid], (current) =>
         current?.map((item) =>
-          ids.includes(item.id) ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item,
+          ids.includes(item.id)
+            ? { ...item, readAt: item.readAt ?? new Date().toISOString() }
+            : item,
         ),
       );
     },

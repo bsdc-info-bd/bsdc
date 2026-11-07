@@ -46,3 +46,10 @@ paths = [
   '''main-site/scripts/db-prove/t3[0-9]\.mjs$''',
   '''main-site/scripts/db-prove/t4[0-9]\.mjs$''',
 ]
+
+# This exact public alphabet appeared as one literal in the historical
+# advertiser-issuing script; it is not a credential. Ignore only that value,
+# not the script or its rule, since the scan includes the whole Git history.
+regexes = [
+  '''^abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789$''',
+]
