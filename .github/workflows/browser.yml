@@ -35,7 +35,20 @@ jobs:
       # production credentials; this does not validate provider integrations.
       - run: npm run test:browser
       - name: Messenger interactions with mocked providers
-        run: npm run test:messenger-browser
+        shell: bash
+        run: |
+          set +e
+          npm run test:messenger-browser > /tmp/messenger-browser.log 2>&1
+          status=$?
+          cat /tmp/messenger-browser.log
+          if [ "$status" -ne 0 ]; then
+            message=$(tail -35 /tmp/messenger-browser.log | head -c 6000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/'%0D'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Messenger browser smoke failed::$message"
+          fi
+          exit "$status"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

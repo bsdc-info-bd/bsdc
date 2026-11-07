@@ -305,7 +305,7 @@ export interface ConversationResult {
   react: (messageId: string, reaction: string) => Promise<void>;
   star: (messageId: string) => Promise<void>;
   pin: (messageId: string) => Promise<void>;
-  loadOlder: () => Promise<void>;
+  loadOlder: () => Promise<string | null>;
   loadUntil: (messageId: string) => Promise<boolean>;
   signalTyping: () => void;
   saveDraft: (body: string) => void;
@@ -750,7 +750,7 @@ export function useConversation(conversationId: string): ConversationResult {
 
   const loadOlder = useCallback(async () => {
     const oldest = messages.find((message) => message.clientState === undefined);
-    if (oldest === undefined || !hasOlder || loadingOlder.current) return;
+    if (oldest === undefined || !hasOlder || loadingOlder.current) return null;
     loadingOlder.current = true;
     setIsLoadingOlder(true);
     try {
@@ -763,6 +763,9 @@ export function useConversation(conversationId: string): ConversationResult {
         for (const message of page) list = upsertMessage(list, message);
         return list;
       });
+      // Lets the view wait until React has actually rendered the new page
+      // before restoring the reader's scroll position.
+      return page[0]?.id ?? null;
     } finally {
       loadingOlder.current = false;
       setIsLoadingOlder(false);

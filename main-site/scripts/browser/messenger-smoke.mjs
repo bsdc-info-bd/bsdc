@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { chromium, devices } from 'playwright-core';
 import bundled from '@sparticuz/chromium';
 import { createServer } from 'vite';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -18,10 +18,12 @@ const output = resolve(process.env.BROWSER_REPORT_DIR ?? join(root, '.browser-ev
 await mkdir(output, { recursive: true });
 const require = createRequire(import.meta.url);
 let libraryPath = process.env.LD_LIBRARY_PATH ?? '';
+let extractedLibraries = null;
 if (!process.env.CHROMIUM_EXECUTABLE_PATH && process.platform === 'linux') {
   const bin = resolve(dirname(require.resolve('@sparticuz/chromium')), '../bin');
-  const target = join(tmpdir(), 'bsdc-browser-libs');
-  await mkdir(target, { recursive: true });
+  // Independent runs must not write or extract the same tar at once.
+  const target = await mkdtemp(join(tmpdir(), 'bsdc-browser-libs-'));
+  extractedLibraries = target;
   const tar = join(target, 'libs.tar');
   await writeFile(tar, brotliDecompressSync(await readFile(join(bin, 'al2023.tar.br'))));
   assert.equal(spawnSync('tar', ['-xf', tar, '-C', target]).status, 0);
@@ -223,7 +225,11 @@ try {
     await check(`${name}: text sends via the visible button`, async () => {
       const text = `${name} working send`;
       await input.fill(text);
-      await page.getByRole('button', { name: 'Send', exact: true }).click();
+      await Promise.all([
+        page.waitForResponse((response) => response.url().endsWith('/rpc/send_message_once') &&
+          response.request().postDataJSON()?.p_body === text && response.status() === 200),
+        page.getByRole('button', { name: 'Send', exact: true }).click(),
+      ]);
       await page.getByText(text, { exact: true }).waitFor();
       assert.equal(await input.inputValue(), '');
       assert(attempts.some((entry) => entry.p_body === text));
@@ -277,12 +283,19 @@ try {
       await check('phone: older history loads without losing the scroll position', async () => {
         const scroller = page.locator('.fab-scroll.overflow-y-auto');
         await scroller.evaluate((element) => { element.scrollTop = 0; });
+        const anchor = await scroller.evaluate((element) => {
+          const first = element.querySelector('[id^="message-"]');
+          return { id: first.id, top: first.getBoundingClientRect().top };
+        });
         const before = records.length;
         await page.getByRole('button', { name: 'Load older messages' }).click();
         await page.getByText('History message 1', { exact: true }).waitFor();
+        await page.waitForFunction(() => document.querySelector('[data-message-scroller]').scrollTop > 0);
         const request = records.slice(before).find((record) => record.name === 'conversation_messages_page');
         assert(request?.args.p_before && request?.args.p_before_id, 'history request must include both cursor fields');
-        assert((await scroller.evaluate((element) => element.scrollTop)) > 0, 'loading older messages should preserve the reading position');
+        const anchorTop = await page.locator(`[id="${anchor.id}"]`).evaluate((element) => element.getBoundingClientRect().top);
+        assert(Math.abs(anchorTop - anchor.top) <= 2,
+          `loading older messages should preserve the same visible line: ${JSON.stringify({ before: anchor.top, after: anchorTop })}`);
       });
       await check('phone: replying while editing restores the unsent draft', async () => {
         await input.fill('Draft before editing');
@@ -428,4 +441,5 @@ try {
 } finally {
   await browser?.close();
   await server.close();
+  if (extractedLibraries !== null) await rm(extractedLibraries, { recursive: true, force: true });
 }

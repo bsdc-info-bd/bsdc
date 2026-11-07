@@ -301,7 +301,11 @@ describe('messenger delivery', () => {
     const { result } = renderHook(() => useConversation('pagination-room'), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.messages).toHaveLength(60));
     expect(result.current.hasOlder).toBe(true);
-    await act(async () => result.current.loadOlder());
+    let firstLoadedId: string | null = null;
+    await act(async () => {
+      firstLoadedId = await result.current.loadOlder();
+    });
+    expect(firstLoadedId).toBe('id-09');
     expect(mocks.fetchConversationMessages).toHaveBeenLastCalledWith(
       'pagination-room',
       first[0]?.createdAt,

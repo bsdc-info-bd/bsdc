@@ -12,7 +12,7 @@ import {
   MoreHorizontal,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -98,6 +98,15 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
   const [leaving, setLeaving] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
   const scroller = useRef<HTMLDivElement | null>(null);
+  const loadingPrevious = useRef(false);
+  const [historyAnchor, setHistoryAnchor] = useState<{
+    element: HTMLDivElement;
+    anchorId: string | null;
+    anchorTop: number;
+    oldHeight: number;
+    oldTop: number;
+    loadedId: string | null;
+  } | null>(null);
   const [firstReadMark, setFirstReadMark] = useState<string | null>(null);
   const search = useMessageSearch(searchText, conversationId, searching);
 
@@ -129,6 +138,28 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
       setDraft(conversation.state.draftBody);
     setFirstReadMark(conversation.state.lastReadAt);
   }, [conversation.state]);
+
+  // The request can resolve before React commits the older rows. Restore on
+  // the commit that contains them, not on a guessed animation-frame deadline.
+  useLayoutEffect(() => {
+    if (historyAnchor === null) return;
+    const { element, anchorId, anchorTop, oldHeight, oldTop, loadedId } = historyAnchor;
+    if (element !== scroller.current) {
+      setHistoryAnchor(null);
+      return;
+    }
+    if (loadedId !== null && !conversation.messages.some((message) => message.id === loadedId)) {
+      return;
+    }
+    const previous = anchorId === null ? null : document.getElementById(anchorId);
+    if (previous !== null && element.contains(previous)) {
+      const currentTop = previous.getBoundingClientRect().top - element.getBoundingClientRect().top;
+      element.scrollTop += currentTop - anchorTop;
+    } else {
+      element.scrollTop = oldTop + element.scrollHeight - oldHeight;
+    }
+    setHistoryAnchor(null);
+  }, [conversation.messages, historyAnchor]);
 
   const lastMessageId = conversation.messages.at(-1)?.id ?? null;
   useEffect(() => {
@@ -222,15 +253,25 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
   async function loadPrevious(): Promise<void> {
     const element = scroller.current;
-    const oldHeight = element?.scrollHeight ?? 0;
-    const oldTop = element?.scrollTop ?? 0;
+    if (element === null || loadingPrevious.current) return;
+    const top = element.getBoundingClientRect().top;
+    const previous = [...element.querySelectorAll<HTMLElement>('[id^="message-"]')].find(
+      (message) => message.getBoundingClientRect().bottom >= top,
+    );
+    const anchorId = previous?.id ?? null;
+    const anchorTop = previous === undefined ? 0 : previous.getBoundingClientRect().top - top;
+    const oldHeight = element.scrollHeight;
+    const oldTop = element.scrollTop;
+    loadingPrevious.current = true;
     try {
-      await conversation.loadOlder();
-      requestAnimationFrame(() => {
-        if (element !== null) element.scrollTop = oldTop + element.scrollHeight - oldHeight;
-      });
+      const loadedId = await conversation.loadOlder();
+      if (element === scroller.current) {
+        setHistoryAnchor({ element, anchorId, anchorTop, oldHeight, oldTop, loadedId });
+      }
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
+    } finally {
+      loadingPrevious.current = false;
     }
   }
 
