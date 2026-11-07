@@ -43,6 +43,7 @@ import {
   type SitemapSection,
 } from '@kit';
 import { Approvals } from './Approvals';
+import { Campaigns } from './Campaigns';
 import { Overview } from './Overview';
 import {
   EMPTY_OVERRIDE,
@@ -83,6 +84,9 @@ export function App(): ReactElement {
         // Approvals next: it is the only tab with work that is waiting on a
         // person, and a queue nobody opens is a queue that grows.
         { id: 'approvals', label: 'Approvals', render: () => <Approvals /> },
+        // Campaigns after approvals: staff set one up from here, and approve it
+        // a tab to the left. The builder and the queue are one workflow.
+        { id: 'campaigns', label: 'Campaigns', render: () => <Campaigns /> },
         { id: 'pages', label: 'Pages', render: () => <Pages /> },
         { id: 'redirects', label: 'Redirects', render: () => <Redirects /> },
         { id: 'sitemap', label: 'Sitemap', render: () => <Sitemap /> },

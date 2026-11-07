@@ -98,6 +98,53 @@ $$;
 -- ---------------------------------------------------------------------------
 -- 2. The inbox
 -- ---------------------------------------------------------------------------
+-- `notifications` had no way to tell two rows apart inside one transaction.
+--
+-- `created_at` defaults to `now()`, which Postgres fixes at the start of the
+-- transaction: a single action that notifies three people writes three rows
+-- with the same timestamp. That was harmless until `my_inbox` had to choose
+-- which of two grouped notifications a line speaks for, and it chose by
+-- primary key — a random uuid, ordered as text. The same inbox could then draw
+-- the same lines in a different order on the next page load, and
+-- "Rahim replied" could become "Karim replied" for no reason a member could
+-- see.
+--
+-- `seq` is the order the rows were written in, which is the order the events
+-- happened in. It is a plain sequence rather than an identity column so the
+-- existing rows keep their contents and only gain a number.
+alter table public.notifications
+  add column if not exists seq bigint;
+
+create sequence if not exists public.notifications_seq_seq;
+
+alter table public.notifications
+  alter column seq set default nextval('public.notifications_seq_seq');
+
+-- Number whatever was written before this migration, newest last, so the
+-- column is usable without a backfill pause.
+update public.notifications n
+   set seq = numbered.n
+  from (
+    select id, row_number() over (order by created_at, id) as n
+    from public.notifications
+    where seq is null
+  ) numbered
+ where n.id = numbered.id;
+
+select setval(
+  'public.notifications_seq_seq',
+  coalesce((select max(seq) from public.notifications), 0) + 1,
+  false
+);
+
+alter table public.notifications
+  alter column seq set not null;
+
+-- The inbox sorts by time and breaks ties by this, so the index says so.
+create index if not exists notifications_inbox_seq_idx
+  on public.notifications (uid, created_at desc, seq desc);
+
+-- ---------------------------------------------------------------------------
 -- Returns one row per line the screen draws. A line can stand for several
 -- notifications — `count` says how many, `unread_count` how many of those the
 -- member has not seen — and `last_at` is the newest of them, which is what an
@@ -134,11 +181,15 @@ as $$
   with mine as (
     select
       n.id, n.kind, n.actor_uid, n.body, n.post_id, n.comment_id, n.conversation_id,
-      n.read_at, n.created_at,
-      -- One line per conversation, per post, per person who followed. A
-      -- notification with no object at all groups by its own id, so it is
-      -- never merged with an unrelated one.
-      coalesce(n.conversation_id::text, n.post_id::text, n.actor_uid, n.id::text) each,
+      n.read_at, n.created_at, n.seq,
+      -- One line per conversation, per post, per person who followed — and per
+      -- *kind*, because "three people reacted" and "one person commented" are
+      -- two different facts about one post. Merging them into one line made the
+      -- newest fact the only one the line could describe, so a post that had
+      -- both a reaction and a comment showed only the comment, and a reader had
+      -- no way to learn that anybody had reacted at all.
+      n.kind::text || '|' ||
+        coalesce(n.conversation_id::text, n.post_id::text, n.actor_uid, n.id::text) each,
       coalesce(n.conversation_id, n.post_id, null) as solid,
       n.kind = 'follow' as by_actor
     from public.notifications n
@@ -173,18 +224,19 @@ as $$
       -- The newest row of each group is the one whose words the line shows:
       -- "Rahim replied" beats "Karim replied" only because it is more recent,
       -- which is the right tie-break for a feed of things that already
-      -- happened. The id breaks a tie, because two notifications written in
-      -- the same transaction share one `now()` and an arbitrary winner would
-      -- make the same inbox render differently on two page loads.
-      (array_agg(mine.id order by mine.created_at desc, mine.id desc))[1]                as notification_id,
-      (array_agg(mine.kind order by mine.created_at desc, mine.id desc))[1]              as kind,
-      (array_agg(mine.actor_uid order by mine.created_at desc, mine.id desc))[1]         as actor_uid,
-      (array_agg(mine.body order by mine.created_at desc, mine.id desc))[1]              as body,
-      (array_agg(mine.post_id order by mine.created_at desc, mine.id desc))[1]           as post_id,
-      (array_agg(mine.comment_id order by mine.created_at desc, mine.id desc))[1]        as comment_id,
-      (array_agg(mine.conversation_id order by mine.created_at desc, mine.id desc))[1]   as conversation_id,
-      (array_agg(mine.read_at order by mine.created_at desc, mine.id desc))[1]            as read_at,
-      (array_agg(mine.created_at order by mine.created_at desc, mine.id desc))[1]        as created_at
+      -- happened. `seq` breaks a tie, because two notifications written in the
+      -- same transaction share one `now()`; the id cannot, because it is
+      -- random and the inbox would then order itself differently on every
+      -- page load.
+      (array_agg(mine.id order by mine.created_at desc, mine.seq desc))[1]                as notification_id,
+      (array_agg(mine.kind order by mine.created_at desc, mine.seq desc))[1]              as kind,
+      (array_agg(mine.actor_uid order by mine.created_at desc, mine.seq desc))[1]         as actor_uid,
+      (array_agg(mine.body order by mine.created_at desc, mine.seq desc))[1]              as body,
+      (array_agg(mine.post_id order by mine.created_at desc, mine.seq desc))[1]           as post_id,
+      (array_agg(mine.comment_id order by mine.created_at desc, mine.seq desc))[1]        as comment_id,
+      (array_agg(mine.conversation_id order by mine.created_at desc, mine.seq desc))[1]   as conversation_id,
+      (array_agg(mine.read_at order by mine.created_at desc, mine.seq desc))[1]            as read_at,
+      (array_agg(mine.created_at order by mine.created_at desc, mine.seq desc))[1]        as created_at
     from mine
     group by mine.each
   )
@@ -216,7 +268,10 @@ as $$
   -- still happened; the join is left so one deleted account does not erase
   -- somebody's inbox.
   left join public.profiles p on p.uid = g.actor_uid
-  order by g.last_at desc
+  -- Total order: `last_at`, then the sequence number of the row the line
+  -- speaks for. Two lines written in one transaction otherwise swap places
+  -- between page loads.
+  order by g.last_at desc, g.created_at desc, g.notification_id
   limit greatest(1, least(coalesce(p_limit, 50), 200));
 $$;
 

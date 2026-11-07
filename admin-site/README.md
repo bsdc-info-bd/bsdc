@@ -22,6 +22,17 @@ The SEO centre and the branding studio: everything the site tells search engines
 - **Branding** — the palette, checked for WCAG contrast here and again in
   Postgres, with a wordmark drawn from the tokens and a theme that goes live
   only when an administrator says so.
+- **Approvals** — the two review queues, shops and campaigns, worked oldest
+  first, with a refusal that has to carry a reason the owner will read.
+- **Campaigns** — the campaign builder. Staff choose the advertiser, the bid,
+  the budget and the dates; the form checks every constraint the table enforces
+  and shows what the budget actually buys, computed with the same integer
+  truncation the wallet charges with (`bsdc.ad_event_cost`, and `t51` holds the
+  three implementations of that arithmetic to each other). The owner is issued
+  an account with `scripts/issue-advertiser.mjs` and reads their own
+  performance from `main-site/ads`; they can pause and resume, and edit copy,
+  but cannot create a campaign, change a bid, change a budget or top up a
+  wallet.
 
 The governance centre that the earlier plan sketched for this folder —
 command centre, users, content oversight, marketplace, ads and analytics —

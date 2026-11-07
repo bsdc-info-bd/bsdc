@@ -106,7 +106,25 @@ await db.exec(`
 const adaInbox = await asMember(ada, `select * from public.my_inbox(50)`);
 check(adaInbox.error === null, 'the inbox answers in one call', adaInbox.error?.message ?? '');
 const lines = adaInbox.rows;
-check(lines.length === 4, 'six notifications collapse into four lines', `${lines.length} lines`);
+// Two messages in one thread are one line, and a reaction and a comment on the
+// same post are two: "three people reacted" and "somebody commented" are
+// different facts about that post, and merging them hid one of the two.
+check(lines.length === 5, 'seven notifications collapse into five lines', `${lines.length} lines`);
+check(
+  lines.filter((row) => row.post_id === '11111111-1111-4111-8111-000000000001').length === 2,
+  'a reaction and a comment on one post are two lines, not one',
+  String(lines.filter((row) => row.post_id === '11111111-1111-4111-8111-000000000001').length),
+);
+
+// The same inbox, asked twice, has to answer the same way. Two notifications
+// written in one transaction share one `created_at`, and ordering the tie by a
+// random uuid made this false: the lines swapped places between page loads.
+const adaAgain = await asMember(ada, `select * from public.my_inbox(50)`);
+check(
+  JSON.stringify(adaAgain.rows.map((row) => [row.notification_id, row.kind, row.actor_uid])) ===
+    JSON.stringify(lines.map((row) => [row.notification_id, row.kind, row.actor_uid])),
+  'the same inbox renders the same way twice',
+);
 
 const rahimInbox = await asMember(rahim, `select * from public.my_inbox(50)`);
 check(rahimInbox.rows.length === 1, 'the second member sees only their own inbox', `${rahimInbox.rows.length}`);
@@ -127,9 +145,14 @@ check(
   byKind('message')?.target_url ?? 'missing',
 );
 check(
-  byKind('reaction')?.target_url === '/p/a-river-level',
-  'a reaction opens the post by its readable slug',
-  byKind('reaction')?.target_url ?? 'missing',
+  lines
+    .filter((row) => row.kind === 'reaction')
+    .every((row) => row.target_url.startsWith('/p/')),
+  'every reaction opens its post by its readable slug',
+  lines
+    .filter((row) => row.kind === 'reaction')
+    .map((row) => row.target_url)
+    .join(' '),
 );
 check(
   byKind('moderation')?.target_url === '/moderation',
@@ -156,10 +179,18 @@ check(
   'the line shows the newest actor of the group, not the oldest',
   messageLine?.actor_username ?? '',
 );
+const reactionLine = lines.find(
+  (row) => row.kind === 'reaction' && row.post_id === '11111111-1111-4111-8111-000000000001',
+);
 check(
-  byKind('reaction')?.actor_name === 'Rahim Second',
+  reactionLine?.actor_name === 'Rahim Second',
   'the actor is resolved in the same row, so the screen never polls a second table',
-  byKind('reaction')?.actor_name ?? '',
+  reactionLine?.actor_name ?? '',
+);
+check(
+  reactionLine?.target_url === '/p/a-river-level',
+  'and the line points at the post by its readable slug',
+  reactionLine?.target_url ?? 'missing',
 );
 check(
   byKind('follow')?.actor_avatar === '',

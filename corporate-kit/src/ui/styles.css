@@ -523,6 +523,39 @@ a {
   overflow-wrap: anywhere;
 }
 
+/* ------------------------------ advertising ------------------------------ */
+/* A check with a sentence beside it: the sentence is the important half, so it
+   is allowed to be long and the box stays the size of its label. */
+.kit-check {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  margin: var(--sp-3) 0;
+  font-size: 0.85rem;
+}
+
+.kit-check input {
+  margin-top: 0.2em;
+  flex: 0 0 auto;
+}
+
+/* A creative, shown the way a reader would meet it: the label above the copy,
+   the destination under it, and nothing else competing for the eye. */
+.kit-adpreview {
+  display: grid;
+  gap: var(--sp-1);
+  justify-items: start;
+  padding: var(--sp-3);
+  border: 1px dashed var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+
+.kit-adpreview .kit-small {
+  margin: 0;
+  color: var(--c-muted);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.001ms !important;

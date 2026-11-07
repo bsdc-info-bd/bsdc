@@ -67,6 +67,12 @@ const HARNESSES = [
     'the database tested here is the database production deploys: extensions in `extensions`',
   ],
   ['t49.mjs', 'the inbox has a shape: one call, coalesced, and it knows where every line leads'],
+  [
+    't50.mjs',
+    'a campaign is made by staff and read by the owner who paid for it, and by nobody else',
+  ],
+  ['t51.mjs', 'three implementations of one poisha: the wallet, the operator and the advertiser'],
+  ['t52.mjs', 'issuing an advertiser account: once, as the staff member, without printing a password'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
