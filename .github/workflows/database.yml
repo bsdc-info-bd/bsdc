@@ -107,6 +107,26 @@ jobs:
           grant usage on schema public to anon, authenticated, service_role;
           SQL
 
+      - name: Prove dry-run leaves empty and legacy ledgers untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/db-push.mjs --dry-run > /tmp/empty-dry-run.log
+          grep -Eq '^[0-9]+ would be applied, 0 skipped' /tmp/empty-dry-run.log
+          test -z "$(psql "$SUPABASE_DB_URL" -t -A -c \
+            "select to_regclass('supabase_migrations.schema_migrations')")"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create schema supabase_migrations;
+          create table supabase_migrations.schema_migrations (
+            version text primary key, name text, statements text[]
+          );
+          insert into supabase_migrations.schema_migrations (version) values ('0001');
+          SQL
+          node scripts/db-push.mjs --dry-run > /tmp/legacy-dry-run.log
+          grep -Eq '^  APPLY  0001_.*file changed' /tmp/legacy-dry-run.log
+          test "$(psql "$SUPABASE_DB_URL" -t -A -c \
+            "select count(*) from information_schema.columns where table_schema = 'supabase_migrations' and table_name = 'schema_migrations' and column_name = 'checksum'")" = '0'
+
       - name: Apply every migration, twice, then assert the invariants
         # The log of a failed step lives behind a signed URL on a host that is
         # not always reachable, and a red X with no sentence beside it costs
@@ -125,6 +145,41 @@ jobs:
             echo "::error title=Schema verify failed::${message:-no diagnostic line; see the log}"
           fi
           exit "$status"
+
+      # Exercise the real ledger, not just the runner's pure plan function.
+      # A failed later migration must leave the first replayed version pending
+      # so retrying restores every subsequent definition in order.
+      - name: Prove migration ledger and interrupted replay recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-before.log
+          grep -Eq '^0 would be applied, [0-9]+ skipped' /tmp/ledger-before.log
+          scratch=$(mktemp -d)
+          mkdir -p "$scratch/supabase"
+          cp -a scripts "$scratch/scripts"
+          cp -a supabase/migrations "$scratch/supabase/migrations"
+          printf '\nselect 1 / 0;\n' >> "$scratch/supabase/migrations/0080_performance_reports_and_print_integrity.sql"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = 'ci-replay-test' where version = '0079'" > /dev/null
+          if node "$scratch/scripts/db-push.mjs" > /tmp/ledger-interrupted.log 2>&1; then
+            echo '::error::The intentionally failing migration unexpectedly succeeded.'
+            exit 1
+          fi
+          grep -qi 'division by zero' /tmp/ledger-interrupted.log
+          marker=$(psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 -c \
+            "select checksum from supabase_migrations.schema_migrations where version = '0079'")
+          if [ -n "$marker" ]; then
+            echo '::error::The replay anchor was recorded before later migrations finished.'
+            exit 1
+          fi
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-retry.log
+          grep -Eq '^  APPLY  0079_' /tmp/ledger-retry.log
+          grep -Eq '^  APPLY  0080_' /tmp/ledger-retry.log
+          node scripts/db-push.mjs > /tmp/ledger-recovered.log
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-after.log
+          grep -Eq '^0 would be applied, [0-9]+ skipped' /tmp/ledger-after.log
+          echo 'A no-op is skipped and an interrupted replay resumes from its anchor.'
 
       # A schema that applies is not the same as a schema that works. These
       # calls exercise the shapes every console depends on; a signature

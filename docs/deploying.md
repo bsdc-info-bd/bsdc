@@ -116,23 +116,32 @@ export SUPABASE_DB_URL='postgresql://postgres.PROJECTREF:…@aws-0-REGION.pooler
 
 node scripts/db-push.mjs --plan       # list the files; no database needed
 node scripts/db-push.mjs --dry-run    # connect, say what would change, change nothing
-node scripts/db-push.mjs              # apply what is missing
+node scripts/db-push.mjs              # apply the ordered plan
 node scripts/db-push.mjs --verify     # apply, apply again, then assert the invariants
 node scripts/db-push.mjs --check      # change nothing: report what the database still owes
 node scripts/db-push.mjs --self-test  # check the runner's own logic, offline
 ```
 
-Each file is applied inside **one transaction**, so a failure leaves nothing
-half-applied. What has been applied is recorded in
-`supabase_migrations.schema_migrations` — the same table the Supabase CLI
-uses, so `supabase db push` and this runner cannot disagree about the state
-of the database. A file whose checksum has changed since it was applied is
-applied again, which is safe precisely because every migration is idempotent.
+Each SQL file is applied in **one transaction**, so a failed file rolls back;
+the whole sequence is not one transaction. The ledger is
+`supabase_migrations.schema_migrations`, which is also used by the Supabase
+CLI. An unchanged, fully recorded sequence is skipped. If an earlier file
+is missing or its checksum changed, the runner replays it **and every later
+file** in order, so an old definition cannot override a newer one. A legacy
+ledger without checksums requires a replay. Review `--dry-run` and back up or
+rehearse against a representative staging database before production changes.
+
+During a replay the first affected ledger entry remains pending until all the
+later files have succeeded. A failure or interruption therefore causes the
+next run to start again at that entry; the SQL may already have been applied,
+so every migration must be idempotent. Do not run the Supabase CLI or another
+migration runner concurrently with a replay. `--verify` deliberately applies
+all files again and is intended for disposable verification databases.
 
 ### Adding a migration
 
-1. Create `supabase/migrations/0036_<name>.sql`. The number must be the next
-   one: the runner refuses a gap or a duplicate, because an out-of-order file
+1. Create `supabase/migrations/<next-number>_<name>.sql`. The number must be
+   the next one: the runner refuses a gap or a duplicate, because an out-of-order file
    is a file that will be applied in a different order on a fresh database
    than it was on yours.
 2. Make it idempotent: `create table if not exists`, `create or replace
@@ -146,7 +155,8 @@ not exists`.
    a migration, or the schema cannot be rebuilt from nothing.
 5. Open the pull request. `database.yml` builds the whole schema from nothing
    with your file in it, twice.
-6. Merge. The `deploy` job applies only your file to production.
+6. Merge. The `deploy` job applies the ordered plan; historical changes can
+   require a replay of later files.
 
 ---
 

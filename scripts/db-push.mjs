@@ -69,14 +69,30 @@ export function listMigrations(dir = migrationsDir) {
   });
 }
 
-/** What needs doing, given what the ledger says is already there. */
+/**
+ * What needs doing, given what the ledger says is already there. Once an old
+ * file changes, replay every later file in order: a later CREATE OR REPLACE,
+ * grant, or policy can otherwise be silently undone by the older definition.
+ */
 export function plan(migrations, applied, { all = false } = {}) {
+  let replayFrom = '';
   return migrations.map((migration) => {
     const previous = applied.get(migration.version);
     if (all) return { ...migration, action: 'apply', because: 'every file was requested' };
-    if (!previous) return { ...migration, action: 'apply', because: 'not applied yet' };
+    if (!previous) {
+      replayFrom ||= migration.version;
+      return { ...migration, action: 'apply', because: 'not applied yet' };
+    }
     if (previous.checksum !== migration.checksum) {
+      replayFrom ||= migration.version;
       return { ...migration, action: 'apply', because: 'the file changed since it was applied' };
+    }
+    if (replayFrom) {
+      return {
+        ...migration,
+        action: 'apply',
+        because: `replay follows changed file ${replayFrom}`,
+      };
     }
     return { ...migration, action: 'skip', because: 'already applied, unchanged' };
   });
@@ -139,7 +155,7 @@ function psql(url, sql, { file = false } = {}) {
 
 /** One row per applied migration, version and checksum, tab separated. */
 const LEDGER_ROWS =
-  "select version || '\\t' || coalesce(checksum, '') from supabase_migrations.schema_migrations order by version";
+  "select version || chr(9) || coalesce(checksum, '') from supabase_migrations.schema_migrations order by version";
 
 function parseLedger(rows) {
   const applied = new Map();
@@ -150,34 +166,65 @@ function parseLedger(rows) {
   return applied;
 }
 
+/** Read without creating or altering anything, including on --dry-run. */
 function readLedger(url) {
-  psql(url, LEDGER);
-  return parseLedger(psql(url, LEDGER_ROWS));
+  const exists = psql(url, "select to_regclass('supabase_migrations.schema_migrations')::text");
+  if (!exists) return new Map();
+  const hasChecksum =
+    psql(
+      url,
+      `select exists (
+         select 1 from pg_attribute
+         where attrelid = 'supabase_migrations.schema_migrations'::regclass
+           and attname = 'checksum' and not attisdropped
+       )`,
+    ) === 't';
+  const query = hasChecksum
+    ? LEDGER_ROWS
+    : 'select version || chr(9) from supabase_migrations.schema_migrations order by version';
+  return parseLedger(psql(url, query));
 }
 
-/**
- * One file, one transaction. If a statement fails, nothing in that file is
- * left behind — a half-applied migration is the worst state a database can
- * be in, because the next run cannot tell what it is looking at.
- */
-function applyOne(url, migration) {
+function ledgerEntry(migration) {
+  return `insert into supabase_migrations.schema_migrations (version, name, statements, checksum)
+          values ('${migration.version}', '${migration.name}', array[]::text[], '${migration.checksum}')
+          on conflict (version) do update
+            set name = excluded.name,
+                checksum = excluded.checksum,
+                applied_at = now();`;
+}
+
+/** One file, one transaction: an error rolls back that file's SQL. */
+function applyOne(url, migration, { record = true } = {}) {
   const scratch = mkdtempSync(join(tmpdir(), 'bsdc-migration-'));
   const path = join(scratch, migration.file);
   writeFileSync(
     path,
-    [
-      'begin;',
-      migration.sql,
-      `insert into supabase_migrations.schema_migrations (version, name, statements, checksum)
-       values ('${migration.version}', '${migration.name}', array[]::text[], '${migration.checksum}')
-       on conflict (version) do update
-         set name = excluded.name,
-             checksum = excluded.checksum,
-             applied_at = now();`,
-      'commit;',
-    ].join('\n\n'),
+    ['begin;', migration.sql, record ? ledgerEntry(migration) : '', 'commit;'].join('\n\n'),
   );
   psql(url, path, { file: true });
+}
+
+/**
+ * Leave the first file visibly pending until the entire ordered replay is
+ * complete. If any later file fails or the process dies, the next run starts
+ * at this anchor again instead of skipping definitions it must restore.
+ * An absent anchor is left absent; an existing one is marked by a blank
+ * checksum. Both are already understood by plan().
+ */
+function applyInOrder(url, migrations, { announce = false } = {}) {
+  const anchor = migrations[0];
+  if (!anchor) return;
+  psql(
+    url,
+    `update supabase_migrations.schema_migrations set checksum = '' where version = '${anchor.version}';`,
+  );
+  for (const [index, migration] of migrations.entries()) {
+    if (announce) process.stdout.write(`applying ${migration.file} ... `);
+    applyOne(url, migration, { record: index !== 0 });
+    if (announce) process.stdout.write('done\n');
+  }
+  psql(url, ledgerEntry(anchor));
 }
 
 /* ------------------------------------------------------------------ *
@@ -280,9 +327,9 @@ async function check(url) {
   if (ledger === '') {
     line(false, 'no migration ledger: this database has not been through db-push');
   } else {
-    // Read straight from the table. `readLedger` also creates it if it is
-    // missing, and `--check` has promised to change nothing.
-    const applied = parseLedger(ask(LEDGER_ROWS));
+    // The reader handles older CLI ledgers without a checksum column and
+    // never creates or alters anything during this read-only check.
+    const applied = readLedger(url);
     const pending = plan(listMigrations(), applied).filter((entry) => entry.action === 'apply');
     line(
       pending.length === 0,
@@ -361,8 +408,31 @@ function selfTest() {
   assert('an applied, unchanged file is skipped', planned[0].action === 'skip');
   assert('an unapplied file is applied', planned[2].action === 'apply');
 
-  const changed = new Map([[migrations[0].version, { checksum: 'deadbeefdeadbeef' }]]);
-  assert('a changed file is applied again', plan(migrations, changed)[0].action === 'apply');
+  const matching = new Map(
+    migrations.map((entry) => [entry.version, { checksum: entry.checksum }]),
+  );
+  assert(
+    'an unchanged ledger skips every file',
+    plan(migrations, matching).every((e) => e.action === 'skip'),
+  );
+  const changed = new Map(matching);
+  changed.set(migrations[1].version, { checksum: 'deadbeefdeadbeef' });
+  const replay = plan(migrations, changed);
+  assert('files before the changed file are skipped', replay[0].action === 'skip');
+  assert('a changed file is applied again', replay[1].action === 'apply');
+  assert(
+    'later files are replayed in order',
+    replay.slice(2).every((e) => e.action === 'apply'),
+  );
+  const gap = new Map(matching);
+  gap.delete(migrations[1].version);
+  assert(
+    'later files replay after a missing ledger entry',
+    plan(migrations, gap)[2].action === 'apply',
+  );
+  const ledger = parseLedger('0001\t1234567890abcdef\n0002\t\n');
+  assert('ledger rows split on a real tab', ledger.get('0001')?.checksum === '1234567890abcdef');
+  assert('an empty checksum stays pending', ledger.get('0002')?.checksum === '');
   assert(
     '--all re-applies everything',
     plan(migrations, applied, { all: true }).every((entry) => entry.action === 'apply'),
@@ -427,11 +497,8 @@ async function main() {
     return 0;
   }
 
-  for (const entry of todo) {
-    process.stdout.write(`applying ${entry.file} ... `);
-    applyOne(url, entry);
-    process.stdout.write('done\n');
-  }
+  if (todo.length > 0 || want('--verify')) psql(url, LEDGER);
+  applyInOrder(url, todo, { announce: true });
   process.stdout.write(`\n${todo.length} applied, ${work.length - todo.length} already present.\n`);
   reportDeploymentNotes(url);
 
@@ -439,9 +506,7 @@ async function main() {
     // Running the whole set a second time proves the claim the audit makes
     // about these files: every one of them is idempotent.
     process.stdout.write('\nre-applying every migration to prove idempotency\n');
-    for (const entry of migrations) {
-      applyOne(url, entry);
-    }
+    applyInOrder(url, migrations);
     process.stdout.write('all migrations applied twice without error\n\n');
     const failures = runAssertions(url);
     if (failures > 0) {
