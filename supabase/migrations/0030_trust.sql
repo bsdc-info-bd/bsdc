@@ -61,15 +61,33 @@ create index if not exists verification_log_time_idx on public.verification_log 
 create or replace function bsdc.issue_doc_code(p_kind text)
 returns text
 language plpgsql
+security definer
+-- `extensions` is named rather than inherited: Supabase installs pgcrypto
+-- there, and a pinned path that omits it makes `gen_random_bytes` invisible to
+-- the very functions that pin it.
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
-  v_body text;
+  -- Crockford's base-32 alphabet, minus the letters a person reads back as a
+  -- digit: no I or L (both read as 1), no O (reads as 0) and no U (a typo for
+  -- V). `translate` used to repair two of those after the fact; the alphabet
+  -- simply does not contain them, so nothing needs repairing.
+  c_alphabet constant text := '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+  v_body text := '';
+  v_byte integer;
 begin
   if p_kind !~ '^[A-Z]{2}$' then
     raise exception 'A document kind is two capital letters' using errcode = '22023';
   end if;
-  v_body := upper(substr(encode(gen_random_bytes(8), 'hex'), 1, 8));
-  v_body := translate(v_body, 'OI', '48');
+
+  -- Eight characters, five bits each, forty bits of entropy. A byte reduced
+  -- to its low five bits is still uniform, so no character is more likely
+  -- than another and no platform's shift arithmetic is trusted to agree.
+  for i in 1..8 loop
+    v_byte := get_byte(extensions.gen_random_bytes(1), 0) & 31;
+    v_body := v_body || substr(c_alphabet, v_byte + 1, 1);
+  end loop;
+
   return 'BSDC-' || p_kind || '-' || v_body || '-' || bsdc.card_check_digit(v_body)::text;
 end;
 $$;
@@ -156,7 +174,7 @@ create or replace function public.issue_certificate(
 returns text
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_template public.certificate_templates;
@@ -209,7 +227,7 @@ create or replace function public.revoke_issued_certificate(p_code text, p_reaso
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('certificates.issue');
@@ -248,7 +266,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     c.code, c.template_key, c.recipient_name, c.subject, c.issued_on, c.expires_on,
@@ -304,6 +322,8 @@ create trigger notices_touch before update on public.notices
 create or replace function bsdc.notices_code()
 returns trigger
 language plpgsql
+security definer
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_try integer := 0;
@@ -343,7 +363,7 @@ create or replace function public.publish_notice(p_id uuid, p_publish_at timesta
 returns timestamptz
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_at timestamptz := coalesce(p_publish_at, now());
@@ -367,7 +387,7 @@ create or replace function public.archive_notice(p_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('notices.publish');
@@ -383,7 +403,7 @@ create or replace function public.acknowledge_notice(p_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if bsdc.current_uid() is null then
@@ -415,7 +435,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     n.id, n.code, n.title, n.summary, n.body, n.category, n.audience, n.priority,
@@ -461,7 +481,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     n.id, n.code, n.title, n.summary, n.body, n.category, n.audience, n.priority,
@@ -501,7 +521,7 @@ returns table (
 -- next caller receives.
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_code   text;
@@ -629,7 +649,7 @@ returns table (day date, kind text, checks integer, misses integer)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     d.day,

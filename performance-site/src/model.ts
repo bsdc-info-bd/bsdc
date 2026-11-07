@@ -22,6 +22,14 @@ export const APPS = [
   { id: 'bsdc-notice', label: 'Notices' },
   { id: 'bsdc-vf', label: 'Verification portal' },
   { id: 'bsdc-status', label: 'Service status' },
+  { id: 'bsdc-perf', label: 'Performance' },
+  { id: 'bsdc-config', label: 'Configuration' },
+  { id: 'bsdc-connect', label: 'Staff connect' },
+  { id: 'bsdc-custom', label: 'Site composer' },
+  { id: 'bsdc-ip', label: 'IP intelligence' },
+  { id: 'bsdc-mod', label: 'Moderation' },
+  { id: 'bsdc-uadmin', label: 'Staff records' },
+  { id: 'bsdc-umod', label: 'People operations' },
 ] as const;
 
 export const WINDOWS = [
@@ -121,7 +129,10 @@ export function summaryCsv(rows: readonly VitalRow[]): string {
 }
 
 /** The axis labels a sparkline needs: the first day, the last, and the peak. */
-export function trendBounds(points: readonly TrendPoint[]): {
+export function trendBounds(
+  points: readonly TrendPoint[],
+  metric: Vital = 'LCP',
+): {
   readonly from: string;
   readonly to: string;
   readonly peak: string;
@@ -134,7 +145,7 @@ export function trendBounds(points: readonly TrendPoint[]): {
   return {
     from: points[0]?.day ?? '',
     to: points[points.length - 1]?.day ?? '',
-    peak: peak === null ? '—' : `${peak.day}: ${formatVital('LCP', peak.p75)}`,
+    peak: peak === null ? '—' : `${peak.day}: ${formatVital(metric, peak.p75)}`,
   };
 }
 

@@ -105,7 +105,8 @@ is not a hypothetical: see the `citext` entry in
 
 ### The one secret it needs
 
-`SUPABASE_DB_URL`, and only in the `deploy` job. The `verify` job uses a
+`SUPABASE_DB_URL` is used by the Database production job and by the read-only
+member-site rollout gate in `deploy.yml`. The Database `verify` job uses a
 throwaway local database whose connection string is a literal in the
 workflow, printed on purpose so a failing run can be reproduced exactly.
 
@@ -116,23 +117,32 @@ export SUPABASE_DB_URL='postgresql://postgres.PROJECTREF:…@aws-0-REGION.pooler
 
 node scripts/db-push.mjs --plan       # list the files; no database needed
 node scripts/db-push.mjs --dry-run    # connect, say what would change, change nothing
-node scripts/db-push.mjs              # apply what is missing
+node scripts/db-push.mjs              # apply the ordered plan
 node scripts/db-push.mjs --verify     # apply, apply again, then assert the invariants
 node scripts/db-push.mjs --check      # change nothing: report what the database still owes
 node scripts/db-push.mjs --self-test  # check the runner's own logic, offline
 ```
 
-Each file is applied inside **one transaction**, so a failure leaves nothing
-half-applied. What has been applied is recorded in
-`supabase_migrations.schema_migrations` — the same table the Supabase CLI
-uses, so `supabase db push` and this runner cannot disagree about the state
-of the database. A file whose checksum has changed since it was applied is
-applied again, which is safe precisely because every migration is idempotent.
+Each SQL file is applied in **one transaction**, so a failed file rolls back;
+the whole sequence is not one transaction. The ledger is
+`supabase_migrations.schema_migrations`, which is also used by the Supabase
+CLI. An unchanged, fully recorded sequence is skipped. If an earlier file
+is missing or its checksum changed, the runner replays it **and every later
+file** in order, so an old definition cannot override a newer one. A legacy
+ledger without checksums requires a replay. Review `--dry-run` and back up or
+rehearse against a representative staging database before production changes.
+
+During a replay the first affected ledger entry remains pending until all the
+later files have succeeded. A failure or interruption therefore causes the
+next run to start again at that entry; the SQL may already have been applied,
+so every migration must be idempotent. Do not run the Supabase CLI or another
+migration runner concurrently with a replay. `--verify` deliberately applies
+all files again and is intended for disposable verification databases.
 
 ### Adding a migration
 
-1. Create `supabase/migrations/0036_<name>.sql`. The number must be the next
-   one: the runner refuses a gap or a duplicate, because an out-of-order file
+1. Create `supabase/migrations/<next-number>_<name>.sql`. The number must be
+   the next one: the runner refuses a gap or a duplicate, because an out-of-order file
    is a file that will be applied in a different order on a fresh database
    than it was on yours.
 2. Make it idempotent: `create table if not exists`, `create or replace
@@ -146,7 +156,8 @@ not exists`.
    a migration, or the schema cannot be rebuilt from nothing.
 5. Open the pull request. `database.yml` builds the whole schema from nothing
    with your file in it, twice.
-6. Merge. The `deploy` job applies only your file to production.
+6. Merge. The `deploy` job applies the ordered plan; historical changes can
+   require a replay of later files.
 
 ---
 
@@ -177,6 +188,39 @@ Pages projects are created once, by hand in the dashboard or with
 `wrangler pages project create bsdc-<name>` (what the workflow itself does),
 and are listed in the matrix at the top of the workflow next to their
 folder. Adding an application means adding one line there.
+
+### Messenger database before the member-site bundle
+
+The repaired messenger requires migration **0082** and its exact ordered
+predecessors before the new main-site bundle is published. The Database and
+Deploy workflows otherwise start independently on a push to `main`. To avoid
+that race, the production member-site job waits up to 15 minutes for the
+read-only `scripts/wait-for-messenger-migration.mjs` gate: the full migration
+ledger must match this checkout and the messenger RPCs and column privileges
+must be present. It does not apply SQL. If the gate times out, check the
+Database workflow and rerun the member-site deployment after it succeeds.
+`SUPABASE_DB_URL` must point at the same project as `VITE_SUPABASE_URL`.
+Preview deployments do not use the production DB secret; use an already
+migrated staging project when testing the messenger in a preview.
+
+Before applying 0082, back up and rehearse on representative data. The
+migration restricts direct `conversation_members` reads to named non-draft
+columns. Older consumers using `select *` on that table must switch to named
+columns or `conversation_state`; check them and test the actual Supabase
+Realtime subscription after deployment. Typing and presence are currently
+public Realtime topics, not membership-authorized; see `docs/messenger.md`.
+The browser/DB proofs use mocked providers or disposable databases, not
+production Firebase, Realtime, or media.
+
+If the gate fails, the existing Pages bundle stays in place. After diagnosing
+and completing the Database workflow, rerun the member-site deployment for the
+same commit. If a frontend rollback is needed, roll back the Pages deployment
+and leave 0082 in place: the previous member bundle still has the legacy send
+and history RPCs available. Do not replay older SQL over 0082 or remove it while
+new or cached PWA clients may still call its RPCs; doing so can break retries
+or restore unsafe grants. Database rollback or backup restoration requires a
+separately rehearsed recovery plan and can lose messages created since the
+backup. Check other consumers of `conversation_members` before rolling back.
 
 ### One publisher, and it is the workflow
 
@@ -280,7 +324,7 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 
 | Secret                          | What it is                                                                                                            | Where to get it                                                                                                                                                           | Exact format                                                                                                                                                                                                                                                                                                                 | Needed by                               |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `SUPABASE_DB_URL`               | Postgres connection used to apply migrations. Full superuser-equivalent access to the data.                           | Supabase dashboard → Project Settings → Database → Connection string → **Transaction pooler**, not _Direct connection_, then replace `[YOUR-PASSWORD]` with the real one. | `postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres` — the user is `postgres.PROJECTREF`, not `postgres`. No quotes, no trailing newline; URL-encode `@ : / ?` in the password. The direct `db.PROJECTREF.supabase.co` host resolves to IPv6 only and a GitHub runner cannot reach it. | `database.yml` (deploy job)             |
+| `SUPABASE_DB_URL`               | Postgres connection used to apply migrations and check the member-site rollout gate. Full superuser-equivalent access to the data.                           | Supabase dashboard → Project Settings → Database → Connection string → **Transaction pooler**, not _Direct connection_, then replace `[YOUR-PASSWORD]` with the real one. | `postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres` — the user is `postgres.PROJECTREF`, not `postgres`. No quotes, no trailing newline; URL-encode `@ : / ?` in the password. The direct `db.PROJECTREF.supabase.co` host resolves to IPv6 only and a GitHub runner cannot reach it. | `database.yml` (deploy job), `deploy.yml` (member-site gate) |
 | `CLOUDFLARE_API_TOKEN`          | Lets `wrangler` publish builds.                                                                                       | Cloudflare dashboard → My Profile → API Tokens → Create Token → template **Edit Cloudflare Workers**, or a custom token with _Account → Cloudflare Pages → Edit_.         | 40-character opaque string, e.g. `v1.0-aBc…`. Account-scoped, not zone-scoped.                                                                                                                                                                                                                                               | `deploy.yml`                            |
 | `CLOUDFLARE_ACCOUNT_ID`         | Which Cloudflare account to publish into.                                                                             | Cloudflare dashboard → Workers & Pages → right-hand sidebar, or the hex string in the dashboard URL.                                                                      | 32 lowercase hex characters.                                                                                                                                                                                                                                                                                                 | `deploy.yml`                            |
 | `VITE_SUPABASE_URL`             | REST/Realtime endpoint the browser calls. **Public by design.**                                                       | Supabase → Project Settings → API → Project URL.                                                                                                                          | `https://abcdefgh.supabase.co` — no trailing slash, no `/rest/v1`.                                                                                                                                                                                                                                                           | `deploy.yml`, `android.yml`             |
@@ -334,6 +378,10 @@ again, which is the point.
 | `FB_CLIENT_EMAIL`          | the claims function                                | Service-account address used to call Identity Toolkit.                                       | `firebase-adminsdk-xxxxx@bsdc-bd.iam.gserviceaccount.com`, from the service-account JSON you generate in Firebase console → Project settings → Service accounts → Generate new private key.                             | no         |
 | `FB_PRIVATE_KEY`           | the claims function                                | RSA private key of that service account. Mints custom claims; treat it like a root password. | The `private_key` field of that JSON, including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`. Literal `\n` escapes are accepted and unescaped by the function, so pasting the JSON string as-is works. | yes        |
 | `BSDC_OWNER_UIDS`          | the claims function                                | Allowlist of uids permitted to change anybody's role.                                        | Comma-separated Firebase uids, no spaces: `abc123…,def456…`                                                                                                                                                             | no         |
+| `FB2_PROJECT_ID`           | the claims function | Corporate Firebase project ID (the same project as `VITE_FB2_PROJECT_ID`). | `bsdc-second` | no |
+| `FB2_CLIENT_EMAIL`         | the claims function | Service-account email for the corporate Firebase project; required to repair console tokens. | From the `bsdc-second` service-account JSON. | no |
+| `FB2_PRIVATE_KEY`          | the claims function | Private RSA key for that corporate service account; never compile it into a browser bundle. | The JSON `private_key` field, stored as a Pages secret. | yes |
+| `BSDC2_OWNER_UIDS`         | the claims function | Corporate-project UID allowlist permitted to assign claims, if used. | Comma-separated corporate Firebase UIDs. | no |
 | `VITE_PUSH_VAPID_PUBLIC_KEY` | the build, and the service worker                | This site's own VAPID public key. Compiled into the bundle at build time, so it must be set **before** a deploy for push to be offered at all. | 87 characters of base64url, from `npm run push:keys`. Public by design: it is handed to every browser that subscribes. | no |
 | `PUSH_VAPID_PUBLIC_KEY`    | `functions/api/push/flush.ts`                      | The same key, as the `k=` half of the authorization header.                                  | Identical to the `VITE_` one.                                                                                                                                                                                           | no         |
 | `PUSH_VAPID_PRIVATE_KEY`   | the flush function                                 | Signs the VAPID token for every delivery. Never leaves Cloudflare.                           | 184 characters of base64url: a PKCS#8 DER P-256 private key, from `npm run push:keys`.                                                                                                                                  | yes        |
@@ -780,13 +828,13 @@ you are testing: Preview and Production are separate lists.
 
 ### A member action answers "You do not have permission to do that"
 
-That string is the client's translation of PostgREST's **42501**, and it is
-almost never about the caller's role. It means a statement the browser issued
-was refused by a *privilege* somewhere in the transaction — most often an
-AFTER trigger that maintains a counters column the caller may not write
-(migration 0039 made those triggers run as the table owner) or a row level
-security policy that reads a table the caller has no `SELECT` on (0040 granted
-`SELECT` on `public.blocks`, which the follow and comment policies consult).
+That string can translate PostgREST's **42501**. It may mean an explicit
+application-role check, an unauthenticated or expired session, a missing SQL
+grant, or a privilege failure inside the transaction. Inspect the original
+database message and the caller's current effective role rather than assuming
+one cause. Earlier examples included an AFTER trigger that maintains a counter
+the caller may not write (0039) and an RLS policy reading a table the caller
+could not `SELECT` (0040).
 The proof script asserts these paths statement by statement:
 
 ```bash
@@ -799,6 +847,93 @@ that grants `SELECT` on those tables is applied (0041). A missing
 column-privilege write grant shows up the same way: 0042 re-issues the column
 revokes that earlier migrations wrote *after* a table-wide `GRANT UPDATE`, where
 they silently did nothing.
+
+### Corporate sign-in, database authority and permission failures
+
+Corporate consoles sign in against the **second** Firebase project. PostgREST
+also needs `role: authenticated` in that project's Firebase ID token. The
+consoles now use `/api/auth/claims` on the member site to repair that claim for
+the signed-in UID, refresh the token and then ask `my_role()` for the effective
+database role. The claim chooses the database login role; it does not give a
+member staff privileges. If an old elevated token cannot yet query the database,
+self-repair first issues a member claim; an actual database staff role still
+works, and can be synchronized afterward. A stale signed role alone cannot
+renew Firebase's staff flag or recreate a staff profile. Campaigns, certificates
+and performance reports retain their own database permission checks.
+
+Apply migrations through **0081** and deploy both the member-site Pages Function
+and the updated console builds. `https://www.bsdc.info.bd/api/auth/claims` will
+then return `{"ready":true,"corporateReady":true}` if both sets of Firebase
+bindings are present. This is a **presence check only**; it does not prove that
+Firebase accepts the keys, that the token issuer is trusted by Supabase, that
+CORS works, or that a real administrator can sign in and run an action.
+
+The member site's Cloudflare Pages production environment needs
+`FB2_PROJECT_ID`, `FB2_CLIENT_EMAIL`, and `FB2_PRIVATE_KEY` for `bsdc-second`,
+in addition to the `FB_*` member-project bindings. They may be set in Pages
+settings. Alternatively, set the GitHub Actions secret
+`FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND` to the corporate project's service-account
+JSON; the production deploy validates it against `VITE_FB2_PROJECT_ID` and
+uploads the three server-only bindings. Never paste the key into chat or put it
+in `VITE_*` variables. If no GitHub corporate credential is provided, the deploy
+retains any existing Pages bindings. Its post-deploy check fails if they are
+missing; it does not roll back an already published deployment. Preview and
+production have separate runtime settings.
+
+`bsdc.bootstrap_admins` is the **database** list of verified bootstrap email
+addresses. It defaults to the named main administrator; removing or changing
+an entry is a privileged operational decision. The claims endpoint also has
+its own `BSDC_BOOTSTRAP_OWNER_EMAILS` override. If using that override, ensure
+it and the database list reflect the same authorized people. Email must be
+verified by Firebase or an accepted provider; a matching unverified address
+is not enough. Firebase UIDs are project-specific: a member-project account
+and its corporate-project account are not automatically the same database UID.
+
+| Routine | Current behavior |
+|---|---|
+| `provision_staff(p_display_name)` | Creates the caller's own **member** profile, except for a verified database bootstrap administrator; preserves an existing role and refuses inactive profiles. |
+| `staff_identity()` + `my_role()` | Return the current profile and effective database authority; an inactive profile does not open a console. |
+| `bootstrap_staff_identity(secret, uid, …)` | Gated by the privileged flush secret. The claims endpoint calls it for authorized owner assignments or verified bootstrap operations, never for a stale self-repair claim alone. |
+
+**Compatibility:** staff who previously had only a Firebase staff claim and no
+active `public.profiles` staff role must be explicitly granted their correct
+role by an authorized owner. Their stale token alone no longer recreates or
+promotes a staff profile. If necessary, sign in once to create the ordinary
+profile, then have an owner grant the role to that **corporate Firebase UID** in
+the People screen. A demoted or suspended account remains demoted or suspended.
+A verified bootstrap owner is the narrowly scoped exception described above.
+
+Revoking an administrator also requires reviewing the separate
+`BSDC_OWNER_UIDS`/`BSDC2_OWNER_UIDS` and bootstrap-email allowlists. Database
+demotion takes effect immediately for database actions, but Firebase rules can
+still see a previously issued `staff` claim until that token/claim is updated
+or revoked. Follow the Firebase project's token-revocation procedure when an
+operator must lose Firebase-side access immediately.
+
+| Message | What to check |
+|---|---|
+| *email address and password do not match a staff account* | The account must exist in `bsdc-second`, not just the member project. |
+| *staff sign-in service could not prepare database access* | Check the `FB2_*` runtime bindings on the member-site Pages project, Firebase service-account permission, and its deployment. |
+| *database denied this request (42501)* | Check the authenticated token, current migrations, grants and profile status; 42501 does not by itself prove a missing application role. |
+| *needs the … permission* | A database permission check refused this action. An owner should review the **current database role**, not widen grants to everyone. |
+| *holds no staff role* | An owner should grant the correct role to the corporate UID, if authorized. |
+| *suspended* | A manager or owner must restore the profile deliberately. |
+| *no profile … cannot create one* | Check the migrations and database connection; the compatibility fallback cannot create a profile without `provision_staff`. |
+| *too many attempts* | Wait for Firebase's rate limit to expire. |
+
+After deployment, use a real corporate administrator account to create a draft
+campaign, issue and download a test certificate, and log into the performance
+console and create a report. Verify that an ordinary member and a suspended
+account are still refused. These require real credentials and services; mocked
+browser and disposable-database tests alone cannot verify the production setup.
+
+### The Approvals tab counts work nobody can decide
+
+`admin_overview()` returns `shops_pending` and `campaigns_pending` and always has.
+The decisions need the read models — `admin_pending_shops()`, `admin_pending_campaigns()`
+— which `0068` added, and the console tab that calls them, which is in this
+deployment. A count with no queue behind it means the database is ahead of the
+console build: check that the console was deployed after `0068`.
 
 ### App links still open in the browser
 

@@ -179,6 +179,33 @@ a {
   font-size: 0.8rem;
 }
 
+.kit-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid rgb(255 255 255 / 35%);
+  flex: none;
+}
+
+.kit-avatar-initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(255 255 255 / 16%);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/* A console on a phone is used one-handed, standing up, in a hurry. */
+@media (max-width: 40rem) {
+  .kit-who > span:not(.kit-avatar) {
+    display: none;
+  }
+}
+
 .kit-main {
   flex: 1;
   width: min(1280px, 100%);
@@ -195,6 +222,9 @@ a {
 
 .kit-stack {
   display: grid;
+  /* Let wide tables scroll inside their wrappers, not widen the whole phone. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--sp-4);
 }
 
@@ -494,6 +524,39 @@ a {
   border-radius: var(--r-md);
   padding: var(--sp-2) var(--sp-3);
   overflow-wrap: anywhere;
+}
+
+/* ------------------------------ advertising ------------------------------ */
+/* A check with a sentence beside it: the sentence is the important half, so it
+   is allowed to be long and the box stays the size of its label. */
+.kit-check {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: flex-start;
+  margin: var(--sp-3) 0;
+  font-size: 0.85rem;
+}
+
+.kit-check input {
+  margin-top: 0.2em;
+  flex: 0 0 auto;
+}
+
+/* A creative, shown the way a reader would meet it: the label above the copy,
+   the destination under it, and nothing else competing for the eye. */
+.kit-adpreview {
+  display: grid;
+  gap: var(--sp-1);
+  justify-items: start;
+  padding: var(--sp-3);
+  border: 1px dashed var(--c-line);
+  border-radius: var(--r-md);
+  background: var(--c-surface-2);
+}
+
+.kit-adpreview .kit-small {
+  margin: 0;
+  color: var(--c-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

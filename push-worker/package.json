@@ -1,0 +1,30 @@
+{
+  "name": "bsdc-push-worker",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "BSDC push delivery worker — wakes a device whose browser is closed, with the words already encrypted into the push.",
+  "license": "SEE LICENSE IN ../LICENSE",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "secret:put": "wrangler secret put",
+    "typecheck": "tsc --noEmit",
+    "lint": "prettier --check \"src/**/*.ts\"",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "wrangler deploy --dry-run --outdir dist --no-bundle=false && rm -rf dist"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240925.0",
+    "typescript": "5.6.2",
+    "vitest": "2.1.1",
+    "wrangler": "^3.99.0",
+    "prettier": "3.3.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

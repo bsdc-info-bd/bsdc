@@ -8,8 +8,73 @@ import { AuthProvider } from './components/auth/AuthProvider';
 import { AppCrashFallback } from './components/layout/AppCrashFallback';
 import './i18n';
 import './styles/index.css';
+import { isConfigured } from './lib/env';
 import { startPerformanceReporting } from './lib/perf/collect';
-import { registerServiceWorker } from './pwa';
+import { healMediaCachesOnce, registerServiceWorker } from './pwa';
+
+/**
+ * The connection to the database is opened before React asks for anything.
+ *
+ * Two of the first three requests a visitor makes go to the Supabase project:
+ * the session, then the first page of the feed, then the counters beside it.
+ * Each one otherwise pays for a DNS lookup and a TLS handshake to a hostname the
+ * page has never spoken to, and a handshake is most of a second on a mobile
+ * network. Starting it here, from a module that loads with the bundle rather than
+ * from a component that appears after the first paint, means the handshake is
+ * already finished by the time a query needs it.
+ *
+ * `crossorigin` because the requests carry an `apikey` header and an auth bearer
+ * token: a preconnect without it opens a connection the fetch cannot reuse, which
+ * is a handshake spent for nothing.
+ */
+function preconnectDatabase(): void {
+  if (typeof document === 'undefined' || !isConfigured.supabase) return;
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!url) return;
+  let origin: string;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    return;
+  }
+  for (const attributes of [{ rel: 'preconnect', crossorigin: '' }, { rel: 'dns-prefetch' }]) {
+    // A second copy of a hint is a wasted element, and this file is imported by
+    // tests as well as by the entry point.
+    if (document.head.querySelector(`link[rel="${attributes.rel}"][href="${origin}"]`)) continue;
+    const link = document.createElement('link');
+    link.rel = attributes.rel;
+    link.href = origin;
+    if (attributes.crossorigin !== undefined) link.crossOrigin = '';
+    document.head.append(link);
+  }
+}
+
+preconnectDatabase();
+
+/**
+ * Whether this browser will take the modern picture formats.
+ *
+ * Every picture URL that reaches Cloudinary asks for `f_auto`, so Cloudinary
+ * negotiates the format itself and this class is purely advisory: it exists so
+ * the `<html>` element can say what the page is capable of before the first paint,
+ * and so a stylesheet or a font can be chosen from it without a layout shift.
+ */
+function markImageCapability(): void {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  const probe = document.createElement('canvas');
+  const context = probe.getContext?.('2d');
+  if (context === null || context === undefined) return;
+  const candidates: [string, string][] = [
+    ['avif', 'image/avif'],
+    ['webp', 'image/webp'],
+  ];
+  for (const [name, mime] of candidates) {
+    if (probe.toDataURL(mime).startsWith(`data:${mime}`)) root.dataset.imageFormat = name;
+  }
+}
+
+markImageCapability();
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +107,17 @@ createRoot(container).render(
 );
 
 registerServiceWorker();
+
+/**
+ * Drop a picture cache left behind by an older worker, before React paints
+ * anything.
+ *
+ * This runs on the page rather than inside the worker because the worker that
+ * wrote the bad cache is the one being replaced, and it is waiting behind an
+ * update prompt. A member who has been clearing their whole cache for months
+ * should not have to press anything for pictures to work again.
+ */
+void healMediaCachesOnce();
 
 // Ask the deployment what it can upload through, once, while the browser is
 // idle. The first member to attach a picture should not pay for that question

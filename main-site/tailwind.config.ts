@@ -44,10 +44,12 @@ const config: Config = {
         danger: 'var(--bsdc-danger)',
         warn: 'var(--bsdc-warn)',
         online: 'var(--bsdc-online)',
+        'chat-outgoing': 'var(--bsdc-chat-outgoing)',
+        'chat-outgoing-hover': 'var(--bsdc-chat-outgoing-hover)',
       },
       fontFamily: {
-        sans: ['Inter', 'Noto Sans Bengali', 'Hind Siliguri', 'Segoe UI', 'Arial', 'sans-serif'],
-        bangla: ['Noto Sans Bengali', 'Hind Siliguri', 'Inter', 'sans-serif'],
+        sans: ['Inter', 'BSDC Bengali', 'Noto Sans Bengali', 'Hind Siliguri', 'Segoe UI', 'Arial', 'sans-serif'],
+        bangla: ['BSDC Bengali', 'Noto Sans Bengali', 'Hind Siliguri', 'Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       fontSize: {

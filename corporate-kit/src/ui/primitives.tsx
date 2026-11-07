@@ -139,7 +139,7 @@ export function Select({
   return (
     <label className="kit-field" htmlFor={id}>
       <span>{label}</span>
-      <select id={id} aria-describedby={`${id}-note`} {...rest}>
+      <select id={id} aria-label={label} aria-describedby={`${id}-note`} {...rest}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}

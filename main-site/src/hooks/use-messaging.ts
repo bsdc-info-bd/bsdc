@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationChannel, LiveStatus } from '@/lib/messaging/messenger-channel';
+import type * as MessengerChannelModule from '@/lib/messaging/messenger-channel';
+import type * as MessageRepositoryModule from '@/lib/messaging/message-repository';
 import type {
   ConversationMember,
   ConversationPin,
@@ -13,28 +15,76 @@ import type {
   SavedMessage,
 } from '@/lib/messaging/message-types';
 import {
+  compareMessageInstants,
   groupMessages,
   matchesFilter,
   sortConversations,
   upsertMessage,
 } from '@/lib/messaging/message-types';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { readOutbox, writeOutbox } from '@/lib/messaging/outbox';
 import { useAuthStore } from '@/store/auth-store';
 
 // Both modules reach a network SDK, so they are only ever loaded on demand —
 // the app bar's unread badge must stay cheap.
-const repository = () => import('@/lib/messaging/message-repository');
-const channelModule = () => import('@/lib/messaging/messenger-channel');
+let repositoryPromise: Promise<typeof MessageRepositoryModule> | null = null;
+let channelPromise: Promise<typeof MessengerChannelModule> | null = null;
+const repository = () => {
+  repositoryPromise ??= import('@/lib/messaging/message-repository').catch((error: unknown) => {
+    repositoryPromise = null;
+    throw error;
+  });
+  return repositoryPromise;
+};
+const channelModule = () => {
+  channelPromise ??= import('@/lib/messaging/messenger-channel').catch((error: unknown) => {
+    channelPromise = null;
+    throw error;
+  });
+  return channelPromise;
+};
 
 /**
  * A poll is a last resort, not the transport: it runs only while the realtime
- * socket is not joined, and stops the moment the socket reports live.
+ * socket is not joined. A slower reconciliation while live also repairs missed
+ * events after token refreshes, reconnections and transient publication gaps.
  */
 const FALLBACK_THREAD_MS = 12_000;
 const FALLBACK_INBOX_MS = 30_000;
+const LIVE_RECONCILE_MS = 60_000;
 const META_DEBOUNCE_MS = 250;
 const DRAFT_DEBOUNCE_MS = 900;
 const READ_DEBOUNCE_MS = 400;
+const draftWrites = new Map<string, Promise<void>>();
+interface PendingDraft {
+  body: string;
+  failed: boolean;
+}
+// A server refresh must not overwrite a newer, locally edited draft while its
+// debounced write is still in flight. Keys are scoped to both account and room.
+const pendingDrafts = new Map<string, PendingDraft>();
+const draftKey = (uid: string, conversationId: string) => JSON.stringify([uid, conversationId]);
+
+function writeDraftInOrder(conversationId: string, uid: string, body: string): Promise<void> {
+  const key = draftKey(uid, conversationId);
+  const previous = draftWrites.get(key) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(async () => {
+      await (
+        await repository()
+      ).updateConversationSettings(conversationId, uid, {
+        draft_body: body.slice(0, 8_000),
+      });
+    });
+  draftWrites.set(key, next);
+  void next
+    .finally(() => {
+      if (draftWrites.get(key) === next) draftWrites.delete(key);
+    })
+    .catch(() => undefined);
+  return next;
+}
 
 interface MemberSettings {
   pinned: boolean;
@@ -44,6 +94,8 @@ interface MemberSettings {
 
 export interface InboxResult {
   conversations: ConversationSummary[];
+  /** Includes conversations hidden by the current inbox filter. */
+  allConversations: ConversationSummary[];
   filter: InboxFilter;
   setFilter: (filter: InboxFilter) => void;
   query: string;
@@ -53,7 +105,7 @@ export interface InboxResult {
   isError: boolean;
   unreadTotal: number;
   settingsOf: (conversationId: string) => MemberSettings;
-  markRead: (conversationId: string) => void;
+  markRead: (conversationId: string) => Promise<void>;
   refresh: () => void;
 }
 
@@ -71,12 +123,12 @@ export function useInbox(): InboxResult {
     queryFn: async () => (await repository()).fetchInbox(),
     enabled: uid !== null,
     staleTime: 10_000,
-    refetchInterval: status === 'live' ? false : FALLBACK_INBOX_MS,
+    refetchInterval: status === 'live' ? LIVE_RECONCILE_MS : FALLBACK_INBOX_MS,
   });
 
   const settingsQuery = useQuery({
     queryKey: ['inbox-settings', uid],
-    queryFn: async () => (await repository()).fetchMyConversationSettings(),
+    queryFn: async () => (await repository()).fetchMyConversationSettings(uid ?? ''),
     enabled: uid !== null,
     staleTime: 30_000,
   });
@@ -98,10 +150,14 @@ export function useInbox(): InboxResult {
       }, 400);
     };
 
-    void channelModule().then((module) => {
-      if (cancelled) return;
-      stop = module.joinInbox(uid, { onActivity: touch, onStatus: setStatus });
-    });
+    void channelModule()
+      .then((module) => {
+        if (cancelled) return;
+        stop = module.joinInbox(uid, { onActivity: touch, onStatus: setStatus });
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('offline');
+      });
 
     return () => {
       cancelled = true;
@@ -149,27 +205,24 @@ export function useInbox(): InboxResult {
   );
 
   const markRead = useCallback(
-    (conversationId: string) => {
-      void repository()
-        .then(async (module) => module.markConversationRead(conversationId))
-        .then(() => {
-          void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
-          void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
-        })
-        .catch(() => undefined);
+    async (conversationId: string) => {
+      await (await repository()).markConversationRead(conversationId);
+      void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
+      void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
     },
     [queryClient, uid],
   );
 
   return {
     conversations,
+    allConversations: inboxQuery.data ?? [],
     filter,
     setFilter,
     query,
     setQuery,
     status,
-    isLoading: inboxQuery.isLoading,
-    isError: inboxQuery.isError,
+    isLoading: inboxQuery.isLoading || settingsQuery.isLoading,
+    isError: inboxQuery.isError || settingsQuery.isError,
     unreadTotal,
     settingsOf,
     markRead,
@@ -183,27 +236,37 @@ export function useInbox(): InboxResult {
 export function useUnreadMessageCount(): number {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const [status, setStatus] = useState<LiveStatus>('connecting');
+  const queryClient = useQueryClient();
   const { data = 0 } = useQuery({
     queryKey: ['messages-unread', uid],
     queryFn: async () => (await repository()).fetchUnreadMessageCount(),
     enabled: uid !== null,
     staleTime: 10_000,
-    refetchInterval: status === 'live' ? false : FALLBACK_INBOX_MS,
+    refetchInterval: status === 'live' ? LIVE_RECONCILE_MS : FALLBACK_INBOX_MS,
   });
 
   useEffect(() => {
     if (uid === null) return;
     let stop: (() => void) | null = null;
     let cancelled = false;
-    void channelModule().then((module) => {
-      if (cancelled) return;
-      stop = module.joinInbox(uid, { onStatus: setStatus });
-    });
+    void channelModule()
+      .then((module) => {
+        if (cancelled) return;
+        stop = module.joinInbox(uid, {
+          onStatus: setStatus,
+          onActivity: () => {
+            void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
+          },
+        });
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('offline');
+      });
     return () => {
       cancelled = true;
       stop?.();
     };
-  }, [uid]);
+  }, [uid, queryClient]);
 
   return data;
 }
@@ -211,6 +274,9 @@ export function useUnreadMessageCount(): number {
 export interface SendOptions {
   replyTo?: string | null;
   kind?: Message['kind'];
+  mediaUrl?: string;
+  mediaName?: string;
+  codeLanguage?: string;
 }
 
 export interface ConversationResult {
@@ -227,14 +293,20 @@ export interface ConversationResult {
   isError: boolean;
   isSending: boolean;
   hasOlder: boolean;
+  isLoadingOlder: boolean;
+  draftSaveFailed: boolean;
+  retryDraft: () => void;
+  refresh: () => void;
   send: (body: string, options?: SendOptions) => Promise<void>;
   retry: (message: Message) => Promise<void>;
+  discard: (message: Message) => void;
   edit: (messageId: string, body: string) => Promise<void>;
   remove: (messageId: string) => Promise<void>;
   react: (messageId: string, reaction: string) => Promise<void>;
   star: (messageId: string) => Promise<void>;
   pin: (messageId: string) => Promise<void>;
-  loadOlder: () => void;
+  loadOlder: () => Promise<string | null>;
+  loadUntil: (messageId: string) => Promise<boolean>;
   signalTyping: () => void;
   saveDraft: (body: string) => void;
   markRead: (messageId: string) => void;
@@ -249,37 +321,72 @@ export function useConversation(conversationId: string): ConversationResult {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const queryClient = useQueryClient();
   const [older, setOlder] = useState<Message[]>([]);
-  const [live, setLive] = useState<Message[]>([]);
-  const [hasOlder, setHasOlder] = useState(true);
+  const [olderExhausted, setOlderExhausted] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  const loadingOlder = useRef(false);
   const [typingUids, setTypingUids] = useState<string[]>([]);
   const [presentUids, setPresentUids] = useState<string[]>([]);
   const [status, setStatus] = useState<LiveStatus>('connecting');
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [draftSaveFailed, setDraftSaveFailed] = useState(
+    () => uid !== null && (pendingDrafts.get(draftKey(uid, conversationId))?.failed ?? false),
+  );
+  const activeDraftKey = uid === null ? null : draftKey(uid, conversationId);
+  const activeDraftKeyRef = useRef(activeDraftKey);
+  activeDraftKeyRef.current = activeDraftKey;
+  useEffect(() => {
+    setDraftSaveFailed(
+      activeDraftKey !== null && (pendingDrafts.get(activeDraftKey)?.failed ?? false),
+    );
+  }, [activeDraftKey]);
   const channel = useRef<ConversationChannel | null>(null);
   const lastTypingAt = useRef(0);
   const metaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readUpTo = useRef<string | null>(null);
+  const readPending = useRef<string | null>(null);
 
   const keys = useMemo(
     () => ({
-      messages: ['messages', conversationId],
-      members: ['conversation-members', conversationId],
-      state: ['conversation-state', conversationId],
-      pins: ['conversation-pins', conversationId],
+      messages: ['messages', uid, conversationId],
+      members: ['conversation-members', uid, conversationId],
+      state: ['conversation-state', uid, conversationId],
+      pins: ['conversation-pins', uid, conversationId],
+      outbox: ['message-outbox', uid, conversationId],
     }),
-    [conversationId],
+    [conversationId, uid],
   );
 
-  const enabled = conversationId.length > 0;
+  const enabled = conversationId.length > 0 && uid !== null;
+
+  // A tab-scoped outbox survives navigation and reloads, and is keyed by user
+  // and conversation. Session storage is removed when the browser tab closes.
+  const outboxQuery = useQuery<Message[]>({
+    queryKey: keys.outbox,
+    queryFn: () => Promise.resolve([]),
+    initialData: () => (uid === null ? [] : readOutbox(uid, conversationId)),
+    enabled: false,
+    gcTime: 24 * 60 * 60 * 1_000,
+  });
+  const outbox = outboxQuery.data;
+  const updateOutbox = useCallback(
+    (update: (current: Message[]) => Message[]) => {
+      queryClient.setQueryData<Message[]>(keys.outbox, (current) => {
+        const next = update(current ?? []);
+        if (uid !== null) writeOutbox(uid, conversationId, next);
+        return next;
+      });
+    },
+    [queryClient, keys.outbox, uid, conversationId],
+  );
 
   const query = useQuery({
     queryKey: keys.messages,
     queryFn: async () => (await repository()).fetchConversationMessages(conversationId, null, 60),
     enabled,
     staleTime: 10_000,
-    refetchInterval: status === 'live' ? false : FALLBACK_THREAD_MS,
+    refetchInterval: status === 'live' ? LIVE_RECONCILE_MS : FALLBACK_THREAD_MS,
   });
 
   const membersQuery = useQuery({
@@ -294,6 +401,9 @@ export function useConversation(conversationId: string): ConversationResult {
     queryFn: async () => (await repository()).fetchConversationState(conversationId),
     enabled,
     staleTime: 60_000,
+    // Membership may be revoked while Realtime is disconnected or an event is
+    // missed. Periodically recheck so an open composer cannot stay enabled.
+    refetchInterval: status === 'live' ? LIVE_RECONCILE_MS : FALLBACK_THREAD_MS,
   });
 
   const pinsQuery = useQuery({
@@ -326,20 +436,7 @@ export function useConversation(conversationId: string): ConversationResult {
         void repository()
           .then(async (module) => module.fetchConversationMessages(conversationId, null, 60))
           .then((page) => {
-            queryClient.setQueryData<Message[]>(keys.messages, (current) => {
-              const known = new Set((current ?? []).map((message) => message.id));
-              const fresh = page.map((message) => {
-                const pending = (current ?? []).find((entry) => entry.id === message.id);
-                return pending?.clientState === undefined
-                  ? message
-                  : { ...message, clientState: pending.clientState };
-              });
-              const keptLive = (current ?? []).filter((message) => !known.has(message.id));
-              let merged: Message[] = [];
-              for (const message of [...fresh, ...keptLive])
-                merged = upsertMessage(merged, message);
-              return merged;
-            });
+            queryClient.setQueryData<Message[]>(keys.messages, page);
             void queryClient.invalidateQueries({ queryKey: keys.pins });
           })
           .catch(() => undefined);
@@ -357,67 +454,103 @@ export function useConversation(conversationId: string): ConversationResult {
     let stop: (() => void) | null = null;
     let cancelled = false;
 
-    void channelModule().then((module) => {
-      if (cancelled) return;
-      const joined = module.joinConversation(conversationId, uid, {
-        onStatus: setStatus,
-        onTyping: setTypingUids,
-        onPresence: setPresentUids,
-        onLatency: setLatencyMs,
-        onMessage: (row, event) => {
-          if (event === 'DELETE') {
-            refreshRef.current(0);
-            return;
-          }
-          queryClient.setQueryData<Message[]>(keys.messages, (current) => {
-            if (event === 'UPDATE') {
-              const existing = (current ?? []).find((message) => message.id === row.id);
-              if (existing !== undefined) {
-                const { clientState: _settled, ...rest } = existing;
-                void _settled;
-                return upsertMessage(current ?? [], {
-                  ...rest,
-                  body: row.body,
-                  editedAt: row.edited_at,
-                  deletedAt: row.deleted_at,
-                });
-              }
+    void channelModule()
+      .then((module) => {
+        if (cancelled) return;
+        const joined = module.joinConversation(conversationId, uid, {
+          onStatus: setStatus,
+          onTyping: setTypingUids,
+          onPresence: setPresentUids,
+          onLatency: setLatencyMs,
+          onMessage: (row, event) => {
+            // A lost HTTP response can follow a commit. Reconcile the local
+            // copy as soon as the matching durable live row is received.
+            if (event !== 'DELETE' && row.sender_uid === uid && row.client_id) {
+              updateOutbox((current) =>
+                current.filter((message) => message.clientId !== row.client_id),
+              );
             }
-            const author = authorRef.current(row.sender_uid);
-            if (author === null && row.sender_uid !== uid) refreshRef.current();
-            return upsertMessage(current ?? [], {
-              id: row.id,
-              conversationId: row.conversation_id,
-              senderUid: row.sender_uid,
-              kind: row.kind,
-              body: row.body,
-              mediaUrl: row.media_url,
-              mediaName: row.media_name,
-              codeLanguage: row.code_language,
-              replyTo: row.reply_to,
-              replyBody: null,
-              replySender: null,
-              editedAt: row.edited_at,
-              deletedAt: row.deleted_at,
-              createdAt: row.created_at,
-              author,
-              reactions: {},
-              myReactions: [],
-              readBy: [],
-              starred: false,
-              pinned: false,
+            if (event === 'DELETE') {
+              setOlder((current) => current.filter((message) => message.id !== row.id));
+              queryClient.setQueryData<Message[]>(keys.messages, (current) =>
+                (current ?? []).filter((message) => message.id !== row.id),
+              );
+              refreshRef.current(0);
+              return;
+            }
+            if (event === 'UPDATE') {
+              setOlder((current) =>
+                current.map((message) =>
+                  message.id === row.id
+                    ? {
+                        ...message,
+                        body: row.body,
+                        editedAt: row.edited_at,
+                        deletedAt: row.deleted_at,
+                      }
+                    : message,
+                ),
+              );
+            }
+            queryClient.setQueryData<Message[]>(keys.messages, (current) => {
+              if (event === 'UPDATE') {
+                const existing = (current ?? []).find((message) => message.id === row.id);
+                if (existing !== undefined) {
+                  const { clientState: _settled, ...rest } = existing;
+                  void _settled;
+                  return upsertMessage(current ?? [], {
+                    ...rest,
+                    body: row.body,
+                    editedAt: row.edited_at,
+                    deletedAt: row.deleted_at,
+                    ...(row.client_id ? { clientId: row.client_id } : {}),
+                  });
+                }
+              }
+              const author = authorRef.current(row.sender_uid);
+              if (author === null && row.sender_uid !== uid) refreshRef.current();
+              return upsertMessage(current ?? [], {
+                id: row.id,
+                conversationId: row.conversation_id,
+                senderUid: row.sender_uid,
+                kind: row.kind,
+                body: row.body,
+                mediaUrl: row.media_url,
+                mediaName: row.media_name,
+                codeLanguage: row.code_language,
+                replyTo: row.reply_to,
+                replyBody: null,
+                replySender: null,
+                editedAt: row.edited_at,
+                deletedAt: row.deleted_at,
+                createdAt: row.created_at,
+                ...(row.client_id ? { clientId: row.client_id } : {}),
+                author,
+                reactions: {},
+                myReactions: [],
+                readBy: [],
+                starred: false,
+                pinned: false,
+              });
             });
-          });
-          void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
-        },
-        onMessageMeta: () => refreshRef.current(),
-        onMembers: () => {
-          void queryClient.invalidateQueries({ queryKey: keys.members });
-        },
+            void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
+          },
+          onMessageMeta: () => refreshRef.current(),
+          onMembers: (row) => {
+            void queryClient.invalidateQueries({ queryKey: keys.members });
+            if (row === null || row.uid === uid) {
+              // Leaving or losing access must disable this composer promptly.
+              void queryClient.invalidateQueries({ queryKey: keys.state });
+              void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
+            }
+          },
+        });
+        channel.current = joined;
+        stop = joined.stop;
+      })
+      .catch(() => {
+        if (!cancelled) setStatus('offline');
       });
-      channel.current = joined;
-      stop = joined.stop;
-    });
 
     return () => {
       cancelled = true;
@@ -426,62 +559,66 @@ export function useConversation(conversationId: string): ConversationResult {
       setTypingUids([]);
       setPresentUids([]);
     };
-  }, [enabled, conversationId, uid, queryClient, keys]);
+  }, [enabled, conversationId, uid, queryClient, keys, updateOutbox]);
 
   const recent = useMemo(() => query.data ?? [], [query.data]);
+  useEffect(() => {
+    if (uid === null || outbox.length === 0) return;
+    const confirmed = new Set(
+      recent
+        .filter((message) => message.senderUid === uid && message.clientId !== undefined)
+        .map((message) => message.clientId),
+    );
+    if (outbox.some((message) => confirmed.has(message.clientId))) {
+      updateOutbox((current) => current.filter((message) => !confirmed.has(message.clientId)));
+    }
+  }, [uid, recent, outbox, updateOutbox]);
+
   const messages = useMemo(() => {
     let list: Message[] = [];
-    for (const message of [...older, ...recent, ...live]) list = upsertMessage(list, message);
-    return list;
-  }, [older, recent, live]);
+    for (const message of [...older, ...recent, ...outbox]) list = upsertMessage(list, message);
+    return list.map((message) => {
+      if (message.senderUid !== uid || message.clientState !== undefined) return message;
+      const readers = members
+        .filter(
+          (member) =>
+            member.uid !== uid &&
+            member.leftAt === null &&
+            compareMessageInstants(member.lastReadAt, message.createdAt) >= 0,
+        )
+        .map((member) => member.uid);
+      return { ...message, readBy: [...new Set([...message.readBy, ...readers])] };
+    });
+  }, [older, recent, outbox, members, uid]);
 
   const groups = useMemo(() => groupMessages(messages), [messages]);
 
-  // Reading the thread marks it read, which clears the badge; the per-line
-  // receipt is what turns one tick into two.
-  const lastIncoming = useMemo(
-    () => [...messages].reverse().find((message) => message.senderUid !== uid) ?? null,
-    [messages, uid],
-  );
+  const hasOlder = !olderExhausted && (older.length > 0 || recent.length >= 60);
 
-  useEffect(() => {
-    if (!enabled || uid === null || lastIncoming === null) return;
-    if (readUpTo.current === lastIncoming.id) return;
-    readUpTo.current = lastIncoming.id;
-    if (readTimer.current !== null) clearTimeout(readTimer.current);
-    readTimer.current = setTimeout(() => {
-      readTimer.current = null;
-      void repository()
-        .then(async (module) => {
-          await module.markConversationRead(conversationId);
-          await module.markMessageRead(lastIncoming.id);
-        })
-        .then(() => {
-          void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
-          void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
-        })
-        .catch(() => undefined);
-    }, READ_DEBOUNCE_MS);
-  }, [enabled, conversationId, uid, lastIncoming, queryClient]);
+  type SendInput = {
+    clientId: string;
+    body: string;
+    replyTo: string | null;
+    kind: Message['kind'];
+    mediaUrl: string;
+    mediaName: string;
+    codeLanguage: string;
+  };
 
   const sendMutation = useMutation({
-    mutationFn: async (input: { body: string; replyTo: string | null; kind: Message['kind'] }) =>
-      (await repository()).sendMessage({
-        conversationId,
-        body: input.body,
-        replyTo: input.replyTo,
-        kind: input.kind,
-      }),
+    mutationFn: async (input: SendInput) =>
+      (await repository()).sendMessage({ conversationId, ...input }),
     onMutate: (input) => {
       const optimistic: Message = {
-        id: `pending:${crypto.randomUUID()}`,
+        id: `pending:${input.clientId}`,
+        clientId: input.clientId,
         conversationId,
         senderUid: uid,
         kind: input.kind,
         body: input.body,
-        mediaUrl: '',
-        mediaName: '',
-        codeLanguage: '',
+        mediaUrl: input.mediaUrl,
+        mediaName: input.mediaName,
+        codeLanguage: input.codeLanguage,
         replyTo: input.replyTo,
         replyBody: null,
         replySender: null,
@@ -496,42 +633,30 @@ export function useConversation(conversationId: string): ConversationResult {
         pinned: false,
         clientState: 'pending',
       };
-      setLive((current) => upsertMessage(current, optimistic));
-      return { optimisticId: optimistic.id };
-    },
-    onSuccess: (row, _input, context) => {
-      const confirmed: Message = {
-        id: row.id,
-        conversationId: row.conversationId,
-        senderUid: row.senderUid,
-        kind: row.kind,
-        body: row.body,
-        mediaUrl: row.mediaUrl,
-        mediaName: row.mediaName,
-        codeLanguage: row.codeLanguage,
-        replyTo: row.replyTo,
-        replyBody: null,
-        replySender: null,
-        editedAt: row.editedAt,
-        deletedAt: row.deletedAt,
-        createdAt: row.createdAt,
-        author: authorRef.current(row.senderUid),
-        reactions: {},
-        myReactions: [],
-        readBy: [],
-        starred: false,
-        pinned: false,
-      };
-      setLive((current) => {
-        const withoutPending = current.filter((message) => message.id !== context?.optimisticId);
-        return upsertMessage(withoutPending, confirmed);
+      updateOutbox((current) => {
+        const existing = current.find((message) => message.id === optimistic.id);
+        return upsertMessage(current, {
+          ...optimistic,
+          createdAt: existing?.createdAt ?? optimistic.createdAt,
+        });
       });
+    },
+    onSuccess: (row, input) => {
+      // A change-feed row can arrive before the HTTP response. Preserve any
+      // richer receipt/reaction data it already carries and remove only our
+      // matching pending item.
+      queryClient.setQueryData<Message[]>(keys.messages, (current) => {
+        if ((current ?? []).some((message) => message.id === row.id)) return current;
+        return upsertMessage(current ?? [], { ...row, author: authorRef.current(row.senderUid) });
+      });
+      updateOutbox((current) => current.filter((message) => message.clientId !== input.clientId));
+      refreshRef.current(0);
       if (uid !== null) void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
     },
-    onError: (_error, _input, context) => {
-      setLive((current) =>
+    onError: (_error, input) => {
+      updateOutbox((current) =>
         current.map((message) =>
-          message.id === context?.optimisticId ? { ...message, clientState: 'failed' } : message,
+          message.clientId === input.clientId ? { ...message, clientState: 'failed' } : message,
         ),
       );
     },
@@ -539,94 +664,147 @@ export function useConversation(conversationId: string): ConversationResult {
 
   const retry = useCallback(
     async (message: Message) => {
-      setLive((current) => current.filter((entry) => entry.id !== message.id));
+      if (message.clientId === undefined || message.clientState !== 'failed') return;
       await sendMutation.mutateAsync({
+        clientId: message.clientId,
         body: message.body,
         replyTo: message.replyTo,
         kind: message.kind,
+        mediaUrl: message.mediaUrl,
+        mediaName: message.mediaName,
+        codeLanguage: message.codeLanguage,
       });
     },
     [sendMutation],
   );
 
+  const patchMessage = useCallback(
+    (messageId: string, apply: (message: Message) => Message) => {
+      const patch = (list: Message[]) =>
+        list.map((message) => (message.id === messageId ? apply(message) : message));
+      queryClient.setQueryData<Message[]>(keys.messages, (current) => patch(current ?? []));
+      setOlder(patch);
+    },
+    [keys.messages, queryClient],
+  );
+
   const editMutation = useMutation({
     mutationFn: async ({ messageId, body }: { messageId: string; body: string }) =>
       (await repository()).editMessage(messageId, body),
-    onSuccess: () => refreshRef.current(0),
+    onSuccess: (_result, { messageId, body }) => {
+      patchMessage(messageId, (message) => ({
+        ...message,
+        body: body.trim(),
+        editedAt: new Date().toISOString(),
+      }));
+      refreshRef.current(0);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (messageId: string) => (await repository()).deleteMessage(messageId),
-    onSuccess: () => refreshRef.current(0),
+    onSuccess: (_result, messageId) => {
+      patchMessage(messageId, (message) => ({
+        ...message,
+        body: '',
+        deletedAt: new Date().toISOString(),
+      }));
+      refreshRef.current(0);
+    },
   });
 
   const reactionMutation = useMutation({
     mutationFn: async ({ messageId, reaction }: { messageId: string; reaction: string }) =>
       (await repository()).toggleMessageReaction(messageId, reaction),
-    onMutate: ({ messageId, reaction }) => {
-      const apply = (message: Message): Message => {
-        if (message.id !== messageId) return message;
-        const mine = message.myReactions.includes(reaction);
-        const count = Math.max(0, (message.reactions[reaction] ?? 0) + (mine ? -1 : 1));
+    onSuccess: (result, { messageId, reaction }) => {
+      patchMessage(messageId, (message) => {
         const reactions = { ...message.reactions };
-        if (count === 0) delete reactions[reaction];
-        else reactions[reaction] = count;
+        if (result.total === 0) delete reactions[reaction];
+        else reactions[reaction] = result.total;
         return {
           ...message,
           reactions,
-          myReactions: mine
-            ? message.myReactions.filter((value) => value !== reaction)
-            : [...message.myReactions, reaction],
+          myReactions: result.reacted
+            ? [...new Set([...message.myReactions, reaction])]
+            : message.myReactions.filter((value) => value !== reaction),
         };
-      };
-      queryClient.setQueryData<Message[]>(keys.messages, (current) => (current ?? []).map(apply));
-      setLive((current) => current.map(apply));
+      });
     },
-    onError: () => refreshRef.current(0),
   });
 
   const starMutation = useMutation({
     mutationFn: async (messageId: string) => (await repository()).toggleMessageStar(messageId),
-    onMutate: (messageId) => {
-      const apply = (message: Message): Message =>
-        message.id === messageId ? { ...message, starred: !message.starred } : message;
-      queryClient.setQueryData<Message[]>(keys.messages, (current) => (current ?? []).map(apply));
-      setLive((current) => current.map(apply));
+    onSuccess: (starred, messageId) => {
+      patchMessage(messageId, (message) => ({ ...message, starred }));
+      void queryClient.invalidateQueries({ queryKey: ['saved-messages', uid] });
     },
-    onError: () => refreshRef.current(0),
   });
 
   const pinMutation = useMutation({
     mutationFn: async (messageId: string) => (await repository()).toggleMessagePin(messageId),
-    onMutate: (messageId) => {
-      const apply = (message: Message): Message =>
-        message.id === messageId ? { ...message, pinned: !message.pinned } : message;
-      queryClient.setQueryData<Message[]>(keys.messages, (current) => (current ?? []).map(apply));
-      setLive((current) => current.map(apply));
-    },
-    onSettled: () => {
+    onSuccess: (pinned, messageId) => {
+      patchMessage(messageId, (message) => ({ ...message, pinned }));
       void queryClient.invalidateQueries({ queryKey: keys.pins });
     },
   });
 
-  const loadOlder = useCallback(() => {
-    const oldest = messages[0]?.createdAt;
-    if (oldest === undefined || !hasOlder) return;
-    void repository()
-      .then(async (module) => module.fetchConversationMessages(conversationId, oldest, 60))
-      .then((page) => {
-        if (page.length === 0) {
-          setHasOlder(false);
-          return;
-        }
-        setOlder((current) => {
-          let list = current;
-          for (const message of page) list = upsertMessage(list, message);
-          return list;
-        });
-      })
-      .catch(() => undefined);
+  const loadOlder = useCallback(async () => {
+    const oldest = messages.find((message) => message.clientState === undefined);
+    if (oldest === undefined || !hasOlder || loadingOlder.current) return null;
+    loadingOlder.current = true;
+    setIsLoadingOlder(true);
+    try {
+      const page = await (
+        await repository()
+      ).fetchConversationMessages(conversationId, oldest.createdAt, 60, oldest.id);
+      if (page.length < 60) setOlderExhausted(true);
+      setOlder((current) => {
+        let list = current;
+        for (const message of page) list = upsertMessage(list, message);
+        return list;
+      });
+      // Lets the view wait until React has actually rendered the new page
+      // before restoring the reader's scroll position.
+      return page[0]?.id ?? null;
+    } finally {
+      loadingOlder.current = false;
+      setIsLoadingOlder(false);
+    }
   }, [conversationId, messages, hasOlder]);
+
+  // Search and pins can point outside the newest page. Load contiguous older
+  // pages, bounded per click, rather than pretending an off-screen jump worked.
+  const loadUntil = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      if (messages.some((message) => message.id === messageId)) return true;
+      if (!hasOlder || loadingOlder.current) return false;
+      let before = messages.find((message) => message.clientState === undefined);
+      if (before === undefined) return false;
+      loadingOlder.current = true;
+      setIsLoadingOlder(true);
+      try {
+        for (let i = 0; i < 10; i += 1) {
+          const page = await (
+            await repository()
+          ).fetchConversationMessages(conversationId, before.createdAt, 60, before.id);
+          setOlder((current) => {
+            let list = current;
+            for (const message of page) list = upsertMessage(list, message);
+            return list;
+          });
+          if (page.length < 60) setOlderExhausted(true);
+          if (page.some((message) => message.id === messageId)) return true;
+          if (page.length < 60 || page[0] === undefined) return false;
+          before = page[0];
+        }
+        return false;
+      } finally {
+        loadingOlder.current = false;
+        setIsLoadingOlder(false);
+      }
+    },
+    [conversationId, messages, hasOlder],
+  );
 
   const signalTyping = useCallback(() => {
     const now = Date.now();
@@ -643,21 +821,33 @@ export function useConversation(conversationId: string): ConversationResult {
   const saveDraft = useCallback(
     (body: string) => {
       if (uid === null) return;
+      const key = draftKey(uid, conversationId);
+      const pending: PendingDraft = { body, failed: false };
+      pendingDrafts.set(key, pending);
+      setDraftSaveFailed(false);
+      // Keep the unsent text available immediately on return to this room.
+      queryClient.setQueryData<ConversationState | null>(keys.state, (current) =>
+        current === null || current === undefined ? current : { ...current, draftBody: body },
+      );
       if (draftTimer.current !== null) clearTimeout(draftTimer.current);
       draftTimer.current = setTimeout(() => {
         draftTimer.current = null;
-        void repository()
-          .then(async (module) =>
-            module.updateConversationSettings(conversationId, uid, {
-              draft_body: body.slice(0, 4_000),
-            }),
-          )
+        void writeDraftInOrder(conversationId, uid, body)
           .then(() => {
+            // An older write may finish after newer typing. It must not reset
+            // the cached draft or clear the newer write's pending overlay.
+            if (pendingDrafts.get(key) !== pending) return;
             queryClient.setQueryData<ConversationState | null>(keys.state, (current) =>
               current === null || current === undefined ? current : { ...current, draftBody: body },
             );
+            pendingDrafts.delete(key);
+            if (activeDraftKeyRef.current === key) setDraftSaveFailed(false);
           })
-          .catch(() => undefined);
+          .catch(() => {
+            if (pendingDrafts.get(key) !== pending) return;
+            pending.failed = true;
+            if (activeDraftKeyRef.current === key) setDraftSaveFailed(true);
+          });
       }, DRAFT_DEBOUNCE_MS);
     },
     [conversationId, keys, queryClient, uid],
@@ -665,19 +855,35 @@ export function useConversation(conversationId: string): ConversationResult {
 
   const markRead = useCallback(
     (messageId: string) => {
-      if (uid === null) return;
-      readUpTo.current = messageId;
-      void repository()
-        .then(async (module) => {
-          await module.markMessageRead(messageId);
-          await module.markConversationRead(conversationId);
-        })
-        .then(() => {
-          void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
-        })
-        .catch(() => undefined);
+      if (uid === null || readUpTo.current === messageId || readPending.current === messageId)
+        return;
+      if (readTimer.current !== null) clearTimeout(readTimer.current);
+      readPending.current = messageId;
+      readTimer.current = setTimeout(() => {
+        readTimer.current = null;
+        void repository()
+          .then(async (module) => module.markMessageRead(messageId))
+          .then(() => {
+            readUpTo.current = messageId;
+            void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
+            void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            if (readPending.current === messageId) readPending.current = null;
+          });
+      }, READ_DEBOUNCE_MS);
     },
-    [conversationId, queryClient, uid],
+    [queryClient, uid],
+  );
+
+  useEffect(
+    () => () => {
+      if (metaTimer.current !== null) clearTimeout(metaTimer.current);
+      if (readTimer.current !== null) clearTimeout(readTimer.current);
+      // Draft writes intentionally finish even after the member switches rooms.
+    },
+    [],
   );
 
   return {
@@ -685,26 +891,58 @@ export function useConversation(conversationId: string): ConversationResult {
     groups,
     members,
     pins: pinsQuery.data ?? [],
-    state: stateQuery.data ?? null,
+    state:
+      stateQuery.data === null || stateQuery.data === undefined
+        ? null
+        : {
+            ...stateQuery.data,
+            draftBody:
+              uid === null
+                ? stateQuery.data.draftBody
+                : (pendingDrafts.get(draftKey(uid, conversationId))?.body ??
+                  stateQuery.data.draftBody),
+          },
     typingUids,
     presentUids,
     status,
     latencyMs,
-    isLoading: query.isLoading,
-    isError: query.isError,
+    isLoading: query.isLoading || stateQuery.isLoading,
+    isError:
+      query.isError || stateQuery.isError || (stateQuery.isSuccess && stateQuery.data === null),
     isSending: sendMutation.isPending,
     hasOlder,
+    isLoadingOlder,
+    draftSaveFailed,
+    retryDraft: () => {
+      if (uid === null) return;
+      const pending = pendingDrafts.get(draftKey(uid, conversationId));
+      if (pending !== undefined) saveDraft(pending.body);
+    },
+    refresh: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.messages });
+      void queryClient.invalidateQueries({ queryKey: keys.state });
+      void queryClient.invalidateQueries({ queryKey: keys.members });
+    },
     send: async (body, options) => {
       const trimmed = body.trim();
-      if (trimmed.length === 0) return;
+      const kind = options?.kind ?? 'text';
+      if (trimmed.length === 0 && kind === 'text') return;
       await sendMutation.mutateAsync({
+        clientId: crypto.randomUUID(),
         body: trimmed,
         replyTo: options?.replyTo ?? null,
-        kind: options?.kind ?? 'text',
+        kind,
+        mediaUrl: options?.mediaUrl ?? '',
+        mediaName: options?.mediaName ?? '',
+        codeLanguage: options?.codeLanguage ?? '',
       });
       clearTyping();
     },
     retry,
+    discard: (message) => {
+      if (message.clientState === 'failed')
+        updateOutbox((current) => current.filter((entry) => entry.id !== message.id));
+    },
     edit: async (messageId, body) => {
       await editMutation.mutateAsync({ messageId, body });
     },
@@ -721,6 +959,7 @@ export function useConversation(conversationId: string): ConversationResult {
       await pinMutation.mutateAsync(messageId);
     },
     loadOlder,
+    loadUntil,
     signalTyping,
     saveDraft,
     markRead,
@@ -732,43 +971,33 @@ export function useMessageSearch(
   query: string,
   conversationId: string | null,
   enabled = true,
-): { hits: MessageSearchHit[]; isLoading: boolean } {
+): { hits: MessageSearchHit[]; isLoading: boolean; isError: boolean; retry: () => void } {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const trimmed = query.trim();
   const result = useQuery({
-    queryKey: ['message-search', conversationId, trimmed],
+    queryKey: ['message-search', uid, conversationId, trimmed],
     queryFn: async () => (await repository()).searchMessages(trimmed, conversationId, 40),
-    enabled: enabled && trimmed.length >= 2,
+    enabled: enabled && uid !== null && trimmed.length >= 2,
     staleTime: 5_000,
   });
-  return { hits: result.data ?? [], isLoading: result.isLoading };
+  return {
+    hits: result.data ?? [],
+    isLoading: result.isLoading,
+    isError: result.isError,
+    retry: () => {
+      void result.refetch();
+    },
+  };
 }
 
-/** The settings a member has not told us about yet. */
-const UNLOADED_STATE: ConversationState = {
-  muted: false,
-  isPinned: false,
-  isArchived: false,
-  draftBody: '',
-  lastReadAt: '',
-};
-
 /**
- * One conversation's member settings, writable from the inbox or the thread.
- *
- * Pin, archive and mute all live on the member's own `conversation_members`
- * row, which is a write the caller cannot see the result of: nothing on screen
- * changes except what the client changes. Two things follow from that.
- *
- * The optimistic patch has to work before the settings query has resolved —
- * a member who opens a conversation and archives it immediately would
- * otherwise have the patch thrown away and the toggle snap back, which reads
- * as a button that does nothing.
- *
- * And a failure has to be reported. Archiving can be refused (a deployment
- * whose grant does not yet cover the column, a lost connection), and a refused
- * write that quietly reverts is indistinguishable from a broken one.
+ * Writable settings for one member. The inbox already has a bulk settings
+ * read and can opt out of a redundant per-row state query.
  */
-export function useConversationSettings(conversationId: string): {
+export function useConversationSettings(
+  conversationId: string,
+  loadState = true,
+): {
   state: ConversationState | null;
   /** An i18n key, when the last pin, archive or mute was refused. */
   errorKey: string | null;
@@ -780,24 +1009,33 @@ export function useConversationSettings(conversationId: string): {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const queryClient = useQueryClient();
   const [errorKey, setErrorKey] = useState<string | null>(null);
-  const key = useMemo(() => ['conversation-state', conversationId], [conversationId]);
+  const key = useMemo(() => ['conversation-state', uid, conversationId], [uid, conversationId]);
   const query = useQuery({
     queryKey: key,
     queryFn: async () => (await repository()).fetchConversationState(conversationId),
-    enabled: conversationId.length > 0,
+    enabled: loadState && conversationId.length > 0 && uid !== null,
     staleTime: 60_000,
   });
 
   const patch = useCallback(
     (next: Partial<ConversationState>) => {
-      queryClient.setQueryData<ConversationState | null>(key, (current) => ({
-        ...(current ?? UNLOADED_STATE),
-        ...next,
-      }));
+      queryClient.setQueryData<ConversationState | null>(key, (current) =>
+        current === null || current === undefined ? current : { ...current, ...next },
+      );
+      queryClient.setQueryData<Map<string, MemberSettings>>(['inbox-settings', uid], (current) => {
+        const existing = current?.get(conversationId);
+        if (current === undefined || existing === undefined) return current;
+        const updated = new Map(current);
+        updated.set(conversationId, {
+          pinned: next.isPinned ?? existing.pinned,
+          archived: next.isArchived ?? existing.archived,
+          muted: next.muted ?? existing.muted,
+        });
+        return updated;
+      });
       void queryClient.invalidateQueries({ queryKey: ['inbox', uid] });
-      void queryClient.invalidateQueries({ queryKey: ['inbox-settings', uid] });
     },
-    [key, queryClient, uid],
+    [conversationId, key, queryClient, uid],
   );
 
   const failed = useCallback(
@@ -859,7 +1097,7 @@ export function useConversationSettings(conversationId: string): {
   });
 
   return {
-    state: query.data ?? null,
+    state: loadState ? (query.data ?? null) : null,
     errorKey,
     dismissError: () => setErrorKey(null),
     setPinned: (pinned) => pinMutation.mutate(pinned),
@@ -869,14 +1107,27 @@ export function useConversationSettings(conversationId: string): {
 }
 
 /** The viewer's saved lines, from every conversation. */
-export function useSavedMessages(enabled = true): { saved: SavedMessage[]; isLoading: boolean } {
+export function useSavedMessages(enabled = true): {
+  saved: SavedMessage[];
+  isLoading: boolean;
+  isError: boolean;
+  retry: () => void;
+} {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const query = useQuery({
-    queryKey: ['saved-messages'],
+    queryKey: ['saved-messages', uid],
     queryFn: async () => (await repository()).fetchSavedMessages(),
-    enabled,
+    enabled: enabled && uid !== null,
     staleTime: 30_000,
   });
-  return { saved: query.data ?? [], isLoading: query.isLoading };
+  return {
+    saved: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    retry: () => {
+      void query.refetch();
+    },
+  };
 }
 
 /** Leaving a group, or a direct chat, from the inbox. */

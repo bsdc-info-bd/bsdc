@@ -112,7 +112,7 @@ create or replace function bsdc.note_deployment(p_topic text, p_detail text)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   insert into bsdc.deployment_notes (topic, detail)
@@ -128,7 +128,7 @@ create or replace function bsdc.resolve_deployment_note(p_topic text)
 returns void
 language sql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   update bsdc.deployment_notes
      set resolved_at = now()

@@ -125,6 +125,52 @@ export interface EdgeUploadResult {
   height: number | null;
   bytes: number;
   mimeType: string;
+  /**
+   * When the host will stop serving this file by itself, or `null` when it never
+   * will.
+   *
+   * This is the difference between a picture that is eventually deleted by the
+   * provider and a picture that is never deleted at all. ImgBB is the second
+   * kind: an upload with no `expiration` is kept indefinitely, which is fine for
+   * a post and wrong for an avatar somebody replaced. Cloudinary is the first
+   * kind when the preset has a scheduled deletion.
+   *
+   * Recorded rather than inferred, because "we think this one expires" is not a
+   * promise a cleaner can act on.
+   */
+  expiresAt: string | null;
+}
+
+/**
+ * The lifetime an upload is given, by purpose, in seconds.
+ *
+ * `0` means the host keeps it forever. A direct message attachment earns a
+ * shorter life than a post: a photograph sent to one person should not outlive
+ * the conversation, and the member who sent it has no way to delete it from the
+ * host after the fact — so the platform promises it for them.
+ *
+ * These are ImgBB's semantics exactly: `expiration` is seconds from upload, and
+ * a value that is not a positive integer means "no expiration".
+ */
+export const UPLOAD_LIFETIME_SECONDS: Record<MediaPurpose, number> = {
+  avatar: 0,
+  cover: 0,
+  'project-cover': 0,
+  'project-image': 0,
+  'post-image': 0,
+  'comment-image': 0,
+  'product-image': 0,
+  // A document handed to one member in a conversation is not a publication.
+  'chat-document': 60 * 60 * 24 * 180,
+  // A voice note is the most personal thing on the platform and the shortest.
+  'voice-note': 60 * 60 * 24 * 90,
+};
+
+/** ISO string for `seconds` from now, or null when the host keeps it forever. */
+export function expiresAtFor(purpose: MediaPurpose, now = Date.now()): string | null {
+  const seconds = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(now + seconds * 1000).toISOString();
 }
 
 interface ImgbbResponse {
@@ -156,11 +202,21 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-async function sendToImgbb(file: File, key: string): Promise<EdgeUploadResult> {
+async function sendToImgbb(
+  file: File,
+  key: string,
+  purpose: MediaPurpose,
+  now = Date.now(),
+): Promise<EdgeUploadResult> {
   const base64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
   const body = new FormData();
-  // ImgBB's contract: the key in the query string, base64 in the `image` field.
+  // ImgBB's contract: the key in the query string, base64 in the `image` field,
+  // and `expiration` in *seconds from upload*. Omitting it means the file is
+  // kept until somebody deletes it by hand, which is why every purpose has an
+  // explicit number in `UPLOAD_LIFETIME_SECONDS` rather than a default.
   body.append('image', base64);
+  const lifetime = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
+  if (lifetime > 0) body.append('expiration', String(lifetime));
 
   const response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
     method: 'POST',
@@ -182,6 +238,7 @@ async function sendToImgbb(file: File, key: string): Promise<EdgeUploadResult> {
     height: toNumber(payload.data?.height),
     bytes: toNumber(payload.data?.size) ?? file.size,
     mimeType: file.type,
+    expiresAt: expiresAtFor(purpose, now),
   };
 }
 
@@ -214,6 +271,10 @@ async function sendToCloudinary(
     height: toNumber(payload.height),
     bytes: toNumber(payload.bytes) ?? file.size,
     mimeType: file.type,
+    // Cloudinary deletes on its own schedule only when the preset says so, and
+    // the preset is not readable from here. An upload that claims an expiry the
+    // host will not honour is worse than one that claims none.
+    expiresAt: null,
   };
 }
 
@@ -236,5 +297,5 @@ export async function sendToHost(
 
   return provider === 'cloudinary'
     ? sendToCloudinary(file, kind, purpose, credentials)
-    : sendToImgbb(file, credentials.imgbbKey);
+    : sendToImgbb(file, credentials.imgbbKey, purpose);
 }

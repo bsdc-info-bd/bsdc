@@ -166,7 +166,7 @@ create or replace function public.record_vital(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_metric bsdc_vital;
@@ -216,7 +216,7 @@ create or replace function public.record_client_error(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if coalesce(btrim(p_fingerprint), '') = '' then return; end if;
@@ -250,7 +250,7 @@ create or replace function public.record_edge_timing(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if p_duration_ms is null or p_duration_ms < 0 or p_duration_ms > 120000 then return; end if;
@@ -276,7 +276,7 @@ create or replace function public.record_bundle_size(
 returns public.bundle_sizes
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_row public.bundle_sizes;
@@ -312,7 +312,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with window_rows as (
     select v.route, v.metric, v.value
@@ -363,7 +363,7 @@ returns table (day date, samples integer, p75 numeric, mobile_p75 numeric, deskt
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     d.day,
@@ -388,7 +388,7 @@ returns table (endpoint text, calls integer, p50 numeric, p95 numeric, error_rat
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     t.endpoint,
@@ -421,7 +421,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select e.fingerprint, e.name, e.message, e.route, e.build, e.occurrences,
          e.first_seen, e.last_seen, e.is_resolved
@@ -436,7 +436,7 @@ create or replace function public.resolve_client_error(p_fingerprint text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   perform bsdc.require_permission('performance.read');
@@ -460,7 +460,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     b.recorded_at,
@@ -490,7 +490,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with daily as (
     select d.day,

@@ -20,6 +20,7 @@ export interface HomeFeedPost {
   published_at: string | null;
   created_at: string;
   language: string | null;
+  cover_url?: string | null;
   profiles: { display_name: string; username: string | null } | null;
 }
 
@@ -108,10 +109,61 @@ export function renderHomeFeedJsonLd(posts: readonly HomeFeedPost[], origin: str
   return `<script type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>`;
 }
 
+/**
+ * The one picture the home page must not wait for.
+ *
+ * The first card's picture is the largest thing on the page, which makes it the
+ * largest contentful paint, which makes it the number the browser reports and the
+ * number a visitor feels. Without this it is discovered late: the HTML arrives,
+ * the bundle parses, React mounts, the feed query resolves, and only then does
+ * anybody ask for a picture. Preloading it in the head turns four round trips
+ * into one, and `imagesrcset` means the preload asks for the *right* size rather
+ * than the size the preloader guessed — a preload for the wrong width is worse
+ * than none, because it is a download that is then thrown away.
+ *
+ * Empty when the first post has no picture, because a preload of nothing is a
+ * wasted hint.
+ */
+export function renderHomeFeedPreload(posts: readonly HomeFeedPost[]): string {
+  const art = posts.find((post) => (post.cover_url ?? '').trim().length > 0);
+  const raw = (art?.cover_url ?? '').trim();
+  if (raw === '') return '';
+  if (!/^https:\/\/[^\s"'<>]+$/.test(raw)) return '';
+
+  // Same ladder the cards use, so the preloaded candidate is one the card would
+  // actually have chosen.
+  const widths = [384, 640, 960, 1280];
+  const isCloudinary = raw.includes('res.cloudinary.com/');
+  const candidates = widths
+    .map((width) =>
+      isCloudinary
+        ? `${raw.replace('/image/upload/', `/image/upload/c_fill,g_auto,w_${width},f_auto,q_auto/`)} ${width}w`
+        : '',
+    )
+    .filter((candidate) => candidate !== '');
+
+  const href = isCloudinary
+    ? raw.replace('/image/upload/', '/image/upload/c_fill,g_auto,w_960,f_auto,q_auto/')
+    : raw;
+  const attributes = [
+    'rel="preload"',
+    'as="image"',
+    `href="${escapeHtml(href)}"`,
+    'fetchpriority="high"',
+    ...(candidates.length > 0
+      ? [
+          `imagesrcset="${escapeHtml(candidates.join(', '))}"`,
+          'imagesizes="(min-width: 1024px) 640px, 100vw"',
+        ]
+      : []),
+  ];
+  return `<link ${attributes.join(' ')}>`;
+}
+
 /** The PostgREST query that produces `HomeFeedPost` rows, newest first. */
 export function homeFeedQuery(limit: number): string {
   return (
-    'posts?select=slug,title,excerpt,published_at,created_at,language,' +
+    'posts?select=slug,title,excerpt,published_at,created_at,language,cover_url,' +
     'profiles:author_uid(display_name,username)' +
     '&status=eq.published&visibility=eq.public' +
     '&order=published_at.desc.nullslast&limit=' +

@@ -58,7 +58,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select case p_kind
     when 'follow'  then coalesce((p.notifications ->> 'followers')::boolean, true)
@@ -84,7 +84,7 @@ create or replace function bsdc.notify(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if p_uid is null or p_uid = p_actor_uid then
@@ -135,7 +135,7 @@ create or replace function public.send_message(
 returns public.messages
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid     text := bsdc.current_uid();

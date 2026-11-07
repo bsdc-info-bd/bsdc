@@ -39,7 +39,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 -- The returned columns have the same names as the columns they come from, and
 -- plpgsql would otherwise refuse to guess which one `uid` means.

@@ -3,10 +3,15 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { Alert, Button, Card, IconButton, Switch, TimeAgo } from '@/design-system';
+import { Alert, Badge, Button, Card, IconButton, Switch, TimeAgo } from '@/design-system';
 import { useErrorToast } from '@/hooks/use-error-toast';
 import { usePush } from '@/hooks/use-push';
-import { describeUserAgent, deviceCountLabel } from '@/lib/push/support';
+import {
+  describeDeviceState,
+  describeUserAgent,
+  deviceCountLabel,
+  staleDevicesNote,
+} from '@/lib/push/support';
 
 export interface PushCardProps {
   /**
@@ -36,7 +41,15 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
 
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const blocked = push.block !== 'ok';
+  // `on` is about this browser's permission and the existence of a recorded
+  // device. `reachable` is the stricter question the list answers: of those
+  // devices, how many can a notification actually arrive on *today*.
   const on = push.permission === 'granted' && push.devices.length > 0;
+  const reachable = push.liveDevices;
+  const staleNote = staleDevicesNote(
+    push.devices.map((device) => device.state),
+    language,
+  );
 
   if (variant === 'prompt' && (dismissed || blocked || push.permission !== 'default')) {
     return null;
@@ -102,7 +115,14 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
           label={t('push.switch.label')}
           description={
             on
-              ? `${t('push.switch.on')} — ${deviceCountLabel(push.devices.length, language)}`
+              ? `${t('push.switch.on')} — ${
+                  reachable === push.devices.length
+                    ? deviceCountLabel(push.devices.length, language)
+                    : t('push.devices.liveCount', {
+                        count: reachable,
+                        total: push.devices.length,
+                      })
+                }`
               : t('push.switch.off')
           }
           disabled={blocked || push.busy}
@@ -111,19 +131,41 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
         {push.devices.length > 0 ? (
           <div>
             <h3 className="text-sm font-semibold text-ink-2">{t('push.devices.title')}</h3>
+            {staleNote !== null ? (
+              <Alert tone="warning" title={t('push.devices.title')} className="mt-2">
+                {staleNote}
+              </Alert>
+            ) : null}
             <ul className="mt-2 grid gap-2">
               {push.devices.map((device) => {
                 const named = describeUserAgent(device.userAgent);
+                const words = describeDeviceState(device.state, language);
                 return (
                   <li
                     key={device.endpoint}
                     className="flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2"
+                    title={t(words.key)}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p className="flex items-center gap-2 truncate text-sm font-medium">
                         {named.length > 0 ? named : t('push.devices.unknown')}
+                        {words.tone === 'warn' ? (
+                          <Badge tone="warn" className="shrink-0">
+                            {words.label}
+                          </Badge>
+                        ) : null}
                       </p>
                       <p className="text-2xs text-ink-3">
+                        {device.lastUsedAt !== null ? (
+                          <>
+                            {t('push.devices.lastUsed', {
+                              when: device.lastUsedAt.slice(0, 10),
+                            })}
+                            {' · '}
+                          </>
+                        ) : (
+                          <>{t('push.devices.neverUsed')} · </>
+                        )}
                         <TimeAgo date={device.createdAt} />
                       </p>
                     </div>

@@ -1,0 +1,4 @@
+# Wrangler's local state: a dev session's database, KV and secrets.
+.wrangler/
+.dev.vars
+node_modules/

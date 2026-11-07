@@ -271,28 +271,32 @@ check(
 // --------------------------------- 4. Pending shops & campaigns staff queues ---
 await as('gmember-1', {}, `select public.open_shop('dhaka-dev-gear', 'Dhaka Dev Gear', 'Dhaka')`);
 const campRes = await as(
-  'gmember-1',
-  {},
-  `select public.create_campaign('Hiring Rust Devs', 'cpm'::bsdc_ad_pricing, 500, 50000, 10000) as id`,
+  'owner-1',
+  { bsdc_role: 'owner', staff: true },
+  `select public.staff_create_campaign('gmember-1', 'Hiring Rust Devs', 'cpm'::bsdc_ad_pricing, 500, 50000, 10000) as id`,
 );
 check(
   campRes.ok && Boolean(campRes.rows?.[0]?.id),
-  'member creates draft campaign',
+  'staff creates a draft campaign for the advertiser',
   campRes.message,
 );
 const campId = campRes.rows?.[0]?.id;
 const creativeRes = await as(
-  'gmember-1',
-  {},
-  `select public.add_creative('${campId}'::uuid, 'feed'::bsdc_ad_placement, 'Rust Systems Role', 'Join our Dhaka systems team', 'https://www.bsdc.info.bd/jobs', '', 'Apply')`,
+  'owner-1',
+  { bsdc_role: 'owner', staff: true },
+  `select public.staff_add_creative('${campId}'::uuid, 'feed'::bsdc_ad_placement, 'Rust Systems Role', 'Join our Dhaka systems team', 'https://www.bsdc.info.bd/jobs', '', 'Apply')`,
 );
-check(creativeRes.ok, 'member attaches ad creative', creativeRes.message);
+check(creativeRes.ok, 'staff attaches ad creative', creativeRes.message);
 await db.exec(`
   insert into public.ad_wallet_entries (owner_uid, kind, amount, memo)
   values ('gmember-1', 'topup', 100000, 'Seed wallet');
 `);
-const submitRes = await as('gmember-1', {}, `select public.submit_campaign('${campId}'::uuid)`);
-check(submitRes.ok, 'member submits funded campaign for review', submitRes.message);
+const submitRes = await as(
+  'owner-1',
+  { bsdc_role: 'owner', staff: true },
+  `select public.submit_campaign('${campId}'::uuid)`,
+);
+check(submitRes.ok, 'staff submits funded campaign for review', submitRes.message);
 
 const seoWrite = await as(
   'owner-1',

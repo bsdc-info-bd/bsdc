@@ -31,7 +31,7 @@ working, wired-up features — never scaffolding for its own sake.
 - Monorepo skeleton: 14 web app folders, the Android shell folder and the
   brand library, each documented with its Pages project, domain and access
   model.
-- Root governance: `LICENSE.md` (proprietary, legal warning), `SECURITY.md`
+- Root governance: `LICENSE` (PASVL-1.0, deployment licensed by LOSDA), `SECURITY.md`
   (secret classification plus rotation checklist), `README.md`,
   `CONTRIBUTING.md`, `.gitignore`, Prettier and EditorConfig.
 - `main-site`: Vite 5 + React 18 + TypeScript 5 strict project with

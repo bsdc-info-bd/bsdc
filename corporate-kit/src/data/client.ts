@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { CorporateEnv } from './env';
+import { ensureCorporateDataAccess } from './data-access';
 
 /**
  * One Firebase app and one Supabase client per console. Identity comes from
@@ -26,6 +27,7 @@ export class NotConfiguredError extends Error {
 
 let app: FirebaseApp | null = null;
 let supabase: SupabaseClient | null = null;
+let publicSupabase: SupabaseClient | null = null;
 
 export function getFirebase(env: CorporateEnv): FirebaseApp {
   if (!env.firebase.apiKey) throw new NotConfiguredError();
@@ -55,14 +57,32 @@ export function getDb(env: CorporateEnv): SupabaseClient {
   if (supabase) return supabase;
   supabase = createClient(env.supabase.url, env.supabase.publishableKey, {
     accessToken: async () => {
-      const user = getCorporateAuth(env).currentUser;
-      return user ? user.getIdToken() : '';
+      const auth = getCorporateAuth(env);
+      const user = auth.currentUser;
+      if (!user) return null;
+      const token = await ensureCorporateDataAccess(env, user);
+      // Never send the previous account's token after a sign-out or switch.
+      if (auth.currentUser !== user) throw new Error('Your session changed. Sign in again.');
+      return token.token;
     },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { 'x-bsdc-app': env.appId } },
     db: { schema: 'public' },
   });
   return supabase;
+}
+
+/** Anonymous-only client for public desks; it never initializes Firebase. */
+export function getPublicDb(env: CorporateEnv): SupabaseClient {
+  if (!env.supabase.url || !env.supabase.publishableKey) throw new NotConfiguredError();
+  if (!publicSupabase) {
+    publicSupabase = createClient(env.supabase.url, env.supabase.publishableKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { 'x-bsdc-app': env.appId } },
+      db: { schema: 'public' },
+    });
+  }
+  return publicSupabase;
 }
 
 export function watchUser(env: CorporateEnv, handler: (user: User | null) => void): () => void {
@@ -81,6 +101,7 @@ export async function signOut(env: CorporateEnv): Promise<void> {
 export function resetClients(): void {
   app = null;
   supabase = null;
+  publicSupabase = null;
 }
 
 export type { User };

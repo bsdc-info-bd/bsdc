@@ -14,8 +14,8 @@ import { BodyError, readJsonObject } from '../../_body';
  *
  * Two projects are served by the one endpoint. The caller's own token chooses
  * which one: its audience names the project. Owners may assign claims for
- * their own project; an ordinary member may only bootstrap the least-
- * privileged claim for their own signed-in account. A member-project owner
+ * their own project; an ordinary member may only repair the login claim for
+ * their own account without inventing an application role. A member-project owner
  * cannot mint console claims and vice versa.
  *
  * Secrets (Cloudflare Pages encrypted environment variables):
@@ -34,6 +34,7 @@ import {
   credentialsFor,
   databaseAuthorityRole,
   isAppRole,
+  maySeedStaffProfile,
   ownersFor,
   selfBootstrapRole,
   targetFromAudience,
@@ -49,6 +50,12 @@ export interface ClaimsRuntimeEnv extends ClaimsEnv {
   SUPABASE_PUBLISHABLE_KEY?: string;
   VITE_SUPABASE_URL?: string;
   VITE_SUPABASE_PUBLISHABLE_KEY?: string;
+  /**
+   * The scheduler secret. Used only to call `bootstrap_staff_identity`, the one
+   * routine that may create a staff row before a staff member has a token that
+   * proves their role — which is true exactly once, for the first owner.
+   */
+  PUSH_FLUSH_SECRET?: string;
 }
 
 /** JWK form of Google's secure-token keys — directly importable by Web Crypto. */
@@ -232,6 +239,64 @@ async function getAccessToken(credentials: ProjectCredentials): Promise<string> 
   return body.access_token;
 }
 
+/**
+ * Creates the profile row an elevated claim needs, so the console that follows
+ * the claim is not told the account is empty.
+ *
+ * The claim and the row are two halves of one thing. Minting `owner` in Firebase
+ * without a `public.profiles` row produces the exact failure operators reported:
+ * the password is right, the role is right, and every console says the account
+ * has no profile. The member site creates its own row on first sign-in; a staff
+ * account is created in the Firebase console and had nothing to create one.
+ *
+ * Best-effort and never fatal. Only an explicitly authorized owner assignment
+ * or verified bootstrap owner may seed an elevated profile. Re-minting a stale
+ * signed claim by itself cannot recreate a deleted staff account.
+ */
+async function seedStaffProfile(
+  env: ClaimsRuntimeEnv,
+  uid: string,
+  email: string,
+  displayName: string,
+  role: string,
+): Promise<boolean> {
+  if (!['moderator', 'manager', 'admin', 'owner'].includes(role)) return false;
+
+  const base = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+  const anon = (
+    env.SUPABASE_ANON_KEY ??
+    env.SUPABASE_PUBLISHABLE_KEY ??
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    ''
+  ).trim();
+  const secret = (env.PUSH_FLUSH_SECRET ?? '').trim();
+  if (base === '' || anon === '' || secret.length < 32) return false;
+
+  try {
+    const response = await fetch(`${base}/rest/v1/rpc/bootstrap_staff_identity`, {
+      method: 'POST',
+      headers: {
+        apikey: anon,
+        authorization: `Bearer ${anon}`,
+        'content-type': 'application/json',
+        // The routine returns a row; nothing needs it here, and asking for no
+        // representation keeps the response empty and cheap.
+        prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        p_secret: secret,
+        p_uid: uid,
+        p_display_name: displayName.slice(0, 60),
+        p_role: role,
+        p_email: email,
+      }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const onRequestOptions: PagesFunction<ClaimsRuntimeEnv> = ({ request }) =>
   new Response(null, { status: 204, headers: corsHeadersFor(request.headers.get('origin')) });
 
@@ -281,7 +346,14 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
     // list could have been arranged yet; privilege flags still follow the role.
     claims = buildClaims(birthRole);
   } else if (selfRole !== null) {
-    claims = buildClaims(selfRole);
+    // A signed application role can be stale after a demotion or deletion.
+    // When the token already reaches PostgREST, use its current database role;
+    // otherwise mint the least-privileged login claim first. A verified database
+    // promotion can be synchronized later, but an old token cannot perpetuate a
+    // staff flag in other Firebase services merely by requesting self-repair.
+    const currentRole =
+      tokenClaims['role'] === 'authenticated' ? await fetchCallerDbRole(env, idToken) : null;
+    claims = buildClaims(currentRole ?? 'member');
   } else {
     // Check whether Postgres (`my_role()`) already granted this caller the
     // requested rank (for instance an approved vendor or promoted moderator).
@@ -312,11 +384,30 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
     return json({ error: 'update-failed' }, 502, origin);
   }
 
-  return json({ uid: input.uid, project: credentials.projectId, claims }, 200, origin);
+  // The row the claim needs. Reported, not thrown: see seedStaffProfile.
+  const email = typeof tokenClaims['email'] === 'string' ? (tokenClaims['email'] as string) : '';
+  const displayName =
+    (typeof tokenClaims['name'] === 'string' ? (tokenClaims['name'] as string) : '') ||
+    (email.length > 0 ? (email.split('@')[0] ?? '') : '');
+  const provisioned = maySeedStaffProfile(claims.bsdc_role, isOwner, birthRole)
+    ? await seedStaffProfile(env, input.uid, email, displayName, claims.bsdc_role)
+    : null;
+
+  return json(
+    {
+      uid: input.uid,
+      project: credentials.projectId,
+      claims,
+      ...(provisioned === null ? {} : { profileProvisioned: provisioned }),
+    },
+    200,
+    origin,
+  );
 };
 
 /** Deployment readiness only: never returns credentials or accepts role changes. */
 export const onRequestGet: PagesFunction<ClaimsRuntimeEnv> = ({ env, request }) => {
   const ready = credentialsFor(env, 'main') !== null;
-  return json({ ready }, ready ? 200 : 503, request.headers.get('origin'));
+  const corporateReady = credentialsFor(env, 'second') !== null;
+  return json({ ready, corporateReady }, ready ? 200 : 503, request.headers.get('origin'));
 };

@@ -3,9 +3,9 @@ name: Production-build browser smoke
 on:
   push:
     branches: ['**']
-    paths: ['main-site/**', '.github/workflows/browser.yml']
+    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
   pull_request:
-    paths: ['main-site/**', '.github/workflows/browser.yml']
+    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
   workflow_dispatch:
 
 permissions:
@@ -34,10 +34,53 @@ jobs:
       # Bundled Chromium is installed from npm. No paid device service or
       # production credentials; this does not validate provider integrations.
       - run: npm run test:browser
+      - name: Messenger interactions with mocked providers
+        shell: bash
+        run: |
+          set +e
+          npm run test:messenger-browser > /tmp/messenger-browser.log 2>&1
+          status=$?
+          cat /tmp/messenger-browser.log
+          if [ "$status" -ne 0 ]; then
+            message=$(tail -35 /tmp/messenger-browser.log | head -c 6000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/'%0D'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Messenger browser smoke failed::$message"
+          fi
+          exit "$status"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: chromium-smoke-evidence
           path: main-site/.browser-evidence/
+          include-hidden-files: true
+          retention-days: 14
+
+  corporate:
+    name: Corporate document and reporting flows (mocked providers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: main-site/package-lock.json
+      - name: Install browser tools and application dependencies
+        run: |
+          cd main-site && npm ci --no-audit --no-fund && cd ..
+          for app in corporate-kit performance-site vf-site admin-site certificate-site notice-site; do
+            (cd "$app" && npm install --no-audit --no-fund)
+          done
+      - name: Exercise production bundles against mock providers
+        working-directory: main-site
+        run: npm run test:corporate-browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: corporate-browser-failure
+          path: main-site/.browser-evidence/corporate-failure.png
           include-hidden-files: true
           retention-days: 14

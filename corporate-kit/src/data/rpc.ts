@@ -1,5 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
-import { getDb } from './client';
+import { getDb, getPublicDb } from './client';
 import type { CorporateEnv } from './env';
 
 /**
@@ -22,14 +22,19 @@ export class DataError extends Error {
 }
 
 const FRIENDLY: Record<string, string> = {
-  '42501': 'Your role does not allow this action.',
   '23505': 'That value is already taken.',
   '23514': 'The value did not pass a database check.',
   PGRST301: 'Your session expired. Sign in again.',
 };
 
 export function toDataError(error: PostgrestError): DataError {
-  const friendly = FRIENDLY[error.code] ?? error.message ?? 'The request failed.';
+  let friendly = FRIENDLY[error.code] ?? error.message ?? 'The request failed.';
+  if (error.code === '42501') {
+    const required = /^Permission ([a-z][a-z0-9_.]*) is required$/i.exec(error.message ?? '');
+    friendly = required
+      ? `This account needs the ${required[1]} permission. Ask an owner to review its staff access.`
+      : 'The database denied this request (42501). Check the signed-in account and deployed database grants.';
+  }
   return new DataError(friendly, error.code ?? 'unknown', error.details ?? '');
 }
 
@@ -40,6 +45,17 @@ export async function callRpc<T>(
   args: Record<string, unknown> = {},
 ): Promise<T> {
   const { data, error } = await getDb(env).rpc(name, args);
+  if (error) throw toDataError(error);
+  return data as T;
+}
+
+/** A public RPC must not depend on a staff Firebase session. */
+export async function callPublicRpc<T>(
+  env: CorporateEnv,
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const { data, error } = await getPublicDb(env).rpc(name, args);
   if (error) throw toDataError(error);
   return data as T;
 }

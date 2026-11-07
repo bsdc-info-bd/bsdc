@@ -3,6 +3,7 @@ import {
   homeFeedQuery,
   renderHomeFeed,
   renderHomeFeedJsonLd,
+  renderHomeFeedPreload,
   type HomeFeedPost,
 } from '../src/lib/seo/home-feed';
 import { matchAppRoute } from '../src/lib/seo/app-routes';
@@ -177,6 +178,9 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
       const origin = siteOrigin(context.env, context.request);
       const transformed = new HTMLRewriter()
         .on(HOME_FEED_SELECTOR, new ReplaceInner(renderHomeFeed(posts, origin)))
+        // The preload first: the browser needs it before it starts the bundle,
+        // and the JSON-LD can wait behind it.
+        .on('head', new AppendHtml(renderHomeFeedPreload(posts)))
         .on('head', new AppendHtml(renderHomeFeedJsonLd(posts, origin)))
         .transform(response);
       // Five minutes at the edge: the page is the same for everybody, and the

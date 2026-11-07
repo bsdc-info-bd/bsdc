@@ -11,7 +11,6 @@ import {
   Select,
   TextArea,
   callRpc,
-  downloadPdf,
   formatDocCode,
   getDb,
   listRpc,
@@ -43,7 +42,6 @@ import {
   type NoticePriority,
   type NoticeRow,
 } from './model';
-import { buildNoticePdf, printFromRow } from './notice-pdf';
 
 /**
  * The notice builder. A notice carries its number from the moment it is
@@ -127,10 +125,11 @@ function NoticeCard({
   onChanged: () => void;
 }): ReactElement {
   const [error, setError] = useState('');
+  const [printing, setPrinting] = useState(false);
   const [when, setWhen] = useState('');
   const state = liveState(row);
   const progress = ackProgress(row);
-  const portal = env.siteUrl.replace('www.', 'vf.');
+  const portal = env.verificationUrl;
 
   const publish = (): void => {
     setError('');
@@ -231,14 +230,22 @@ function NoticeCard({
         <Button
           size="small"
           variant="quiet"
+          disabled={printing}
           onClick={() => {
-            downloadPdf(
-              buildNoticePdf(printFromRow(row, portal)),
-              noticeFilename(row.code, row.title),
-            );
+            setError('');
+            setPrinting(true);
+            void Promise.all([import('./notice-pdf'), import('@kit/pdf')])
+              .then(([notice, pdf]) => {
+                pdf.downloadPdf(
+                  notice.buildNoticePdf(notice.printFromRow(row, portal)),
+                  noticeFilename(row.code, row.title),
+                );
+              })
+              .catch((cause: unknown) => setError(messageOf(cause)))
+              .finally(() => setPrinting(false));
           }}
         >
-          PDF
+          {printing ? 'Preparing…' : 'PDF'}
         </Button>
         {row.status !== 'archived' && (
           <Button size="small" variant="danger" onClick={archive}>

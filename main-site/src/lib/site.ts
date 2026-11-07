@@ -33,6 +33,10 @@ export const ROUTES = {
   guidelines: '/guidelines',
   contact: '/contact',
   offline: '/offline',
+  // The page that proves the platform is working, with evidence a member can
+  // copy into a support message. Public on purpose: a visitor whose pictures do
+  // not load should be able to answer the question without signing in.
+  systemCheck: '/system-check',
   login: '/auth/login',
   signup: '/auth/signup',
   reset: '/auth/reset',

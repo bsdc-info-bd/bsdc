@@ -45,7 +45,7 @@ create or replace function public.prune_feed_seen(p_days integer default 30)
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   -- A week is the shortest window that cannot be called a wipe: the feed's own

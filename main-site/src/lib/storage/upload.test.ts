@@ -16,12 +16,14 @@ function file(type: string, size: number): File {
 describe('where images go', () => {
   const BOTH = { cloudinary: true, imgbb: true } as const;
 
-  it('sends ordinary post and comment images to imgbb', () => {
-    expect(chooseProvider('post-image', 'image')).toBe('imgbb');
-    expect(chooseProvider('comment-image', 'image')).toBe('imgbb');
+  it('sends the pictures a feed draws to Cloudinary, which can resize them', () => {
+    expect(chooseProvider('post-image', 'image')).toBe('cloudinary');
+    expect(chooseProvider('comment-image', 'image')).toBe('cloudinary');
+    expect(resolveProvider('post-image', 'image', BOTH)).toBe('cloudinary');
+    expect(resolveProvider('comment-image', 'image', BOTH)).toBe('cloudinary');
+    // A chat attachment is drawn at one size in one place, and the edge caches
+    // it, so the free-tier capacity is the better trade there.
     expect(chooseProvider('chat-document', 'image')).toBe('imgbb');
-    expect(resolveProvider('post-image', 'image', BOTH)).toBe('imgbb');
-    expect(resolveProvider('comment-image', 'image', BOTH)).toBe('imgbb');
   });
 
   it('sends profile, project and product covers to Cloudinary', () => {
@@ -38,10 +40,17 @@ describe('where images go', () => {
   });
 
   it('never substitutes the other host when the required one is missing', () => {
-    expect(resolveProvider('post-image', 'image', { cloudinary: true, imgbb: false })).toBeNull();
+    // A chat attachment needs the key the bundle does not carry.
+    expect(
+      resolveProvider('chat-document', 'image', { cloudinary: true, imgbb: false }),
+    ).toBeNull();
+    // A cover needs Cloudinary, and having ImgBB does not make it postable.
     expect(
       resolveProvider('project-cover', 'image', { cloudinary: false, imgbb: true }),
     ).toBeNull();
+    // A feed picture is in the same position for the same reason: a host that
+    // cannot resize it is a feed that loads slowly, so there is no fallback.
+    expect(resolveProvider('post-image', 'image', { cloudinary: false, imgbb: true })).toBeNull();
   });
 
   it('keeps documents and audio on Cloudinary', () => {

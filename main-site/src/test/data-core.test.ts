@@ -182,12 +182,22 @@ describe('media routing', () => {
     expect(kindOf('application/x-msdownload')).toBeNull();
   });
 
-  it('keeps important media on Cloudinary and ordinary images on imgbb', () => {
+  it('puts every picture a feed draws on the host that can resize it', () => {
+    // The feed is where the pictures are. A host that serves the original is a
+    // host that makes twenty cards cost twenty originals, which is the slowness
+    // that was reported; only Cloudinary can be asked for the width a card shows.
     expect(chooseProvider('avatar', 'image')).toBe('cloudinary');
+    expect(chooseProvider('cover', 'image')).toBe('cloudinary');
+    expect(chooseProvider('post-image', 'image')).toBe('cloudinary');
+    expect(chooseProvider('comment-image', 'image')).toBe('cloudinary');
     expect(chooseProvider('chat-document', 'document')).toBe('cloudinary');
     expect(chooseProvider('voice-note', 'audio')).toBe('cloudinary');
-    expect(chooseProvider('post-image', 'image')).toBe('imgbb');
-    expect(chooseProvider('comment-image', 'image')).toBe('imgbb');
+  });
+
+  it('still uses imgbb where its capacity genuinely wins', () => {
+    // A chat attachment is drawn at one size in one place, and the edge caches
+    // the bytes on the way past, so the free-tier capacity is the better trade.
+    expect(chooseProvider('chat-document', 'image')).toBe('imgbb');
   });
 
   it('rejects unsupported, empty and oversized files', () => {

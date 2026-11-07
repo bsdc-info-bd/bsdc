@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Bangladesh Software Development Community - main community platform (www.bsdc.info.bd)",
-  "license": "SEE LICENSE IN ../LICENSE.md",
+  "license": "SEE LICENSE IN ../LICENSE",
   "scripts": {
     "brand": "node scripts/generate-brand-assets.mjs",
     "prerender": "node scripts/prerender.mjs",
@@ -20,7 +20,9 @@
     "typecheck:functions": "tsc -p functions/tsconfig.json",
     "db:prove": "node scripts/db-prove/run.mjs",
     "push:keys": "node scripts/vapid-keys.mjs",
-    "test:browser": "npm run build && node scripts/browser/smoke.mjs"
+    "test:browser": "npm run build && node scripts/browser/smoke.mjs",
+    "test:corporate-browser": "node scripts/browser/corporate-smoke.mjs",
+    "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

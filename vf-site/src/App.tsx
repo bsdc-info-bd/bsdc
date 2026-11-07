@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Badge,
   Banner,
@@ -6,19 +6,27 @@ import {
   Card,
   Field,
   Loading,
-  callRpc,
+  callPublicRpc,
   docKindLabel,
   formatDocCode,
   localRejection,
   messageOf,
-  missingConfig,
   parseDocCode,
   stateHeadline,
   stateTone,
   useCorporateEnv,
+  verifyReportPdf,
   type VerificationResult,
 } from '@kit';
-import { advice, codeFromSearch, pushRecent, resultLines, shareUrl } from './model';
+import {
+  advice,
+  codeFromSearch,
+  pushRecent,
+  reportIdFromSearch,
+  resultLines,
+  shareUrl,
+  type VerifiedReport,
+} from './model';
 
 /**
  * The public verification desk.
@@ -38,7 +46,10 @@ export function App(): ReactElement {
   const [error, setError] = useState('');
   const [recent, setRecent] = useState<readonly string[]>([]);
 
-  const configured = missingConfig(env).length === 0;
+  const configured = env.supabase.url !== '' && env.supabase.publishableKey !== '';
+  const [report, setReport] = useState<VerifiedReport | null>(null);
+  const [reportError, setReportError] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
 
   const check = useCallback(
     (raw: string): void => {
@@ -57,7 +68,7 @@ export function App(): ReactElement {
         return;
       }
       setBusy(true);
-      callRpc<VerificationResult[]>(env, 'verify_code', { p_code: parsed.code })
+      callPublicRpc<VerificationResult[]>(env, 'verify_code', { p_code: parsed.code })
         .then((rows) => {
           const row = rows[0] ?? null;
           setResult(row);
@@ -83,6 +94,33 @@ export function App(): ReactElement {
     if (initial !== '') check(initial);
   }, [check]);
 
+  // Report QR codes use an unguessable receipt ID, distinct from document codes.
+  useEffect(() => {
+    const id = typeof window === 'undefined' ? '' : reportIdFromSearch(window.location.search);
+    if (id === '') return;
+    if (!configured) {
+      setReportError('The verification database is not configured for this deployment.');
+      return;
+    }
+    let active = true;
+    setReportBusy(true);
+    callPublicRpc<VerifiedReport[]>(env, 'verify_performance_report', { p_id: id })
+      .then((rows) => {
+        if (!active) return;
+        if (rows[0]) setReport(rows[0]);
+        else setReportError('No finalized report is registered for this link.');
+      })
+      .catch((cause: unknown) => {
+        if (active) setReportError(messageOf(cause));
+      })
+      .finally(() => {
+        if (active) setReportBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [env, configured]);
+
   const parsed = parseDocCode(code);
 
   return (
@@ -96,6 +134,14 @@ export function App(): ReactElement {
 
       <main className="kit-main">
         <div className="kit-stack" style={{ maxWidth: '46rem', margin: '0 auto', width: '100%' }}>
+          {reportBusy && <Loading label="Checking the report receipt." />}
+          {reportError !== '' && (
+            <Banner tone="bad" title="Report verification unavailable">
+              {reportError}
+            </Banner>
+          )}
+          {report && <ReportResult report={report} />}
+
           <Card
             title="Check a BSDC document"
             description="Certificates, notices and staff identity cards all carry a code. Type it here, or scan the code printed beside it."
@@ -186,6 +232,108 @@ export function App(): ReactElement {
   );
 }
 
+function ReportResult({ report }: { report: VerifiedReport }): ReactElement {
+  const [fileState, setFileState] = useState<'idle' | 'checking' | 'match' | 'mismatch'>('idle');
+  const [fileError, setFileError] = useState('');
+  const fileCheck = useRef(0);
+  useEffect(
+    () => () => {
+      fileCheck.current += 1;
+    },
+    [],
+  );
+  const checkFile = async (file: File | undefined): Promise<void> => {
+    const check = ++fileCheck.current;
+    setFileError('');
+    if (!file) {
+      setFileState('idle');
+      return;
+    }
+    setFileState('checking');
+    try {
+      if (file.size > 25 * 1024 * 1024) throw new Error('Choose a PDF smaller than 25 MB.');
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const matches = await verifyReportPdf(bytes, report.sha256);
+      if (check === fileCheck.current) setFileState(matches ? 'match' : 'mismatch');
+    } catch (cause) {
+      if (check !== fileCheck.current) return;
+      setFileState('idle');
+      setFileError(messageOf(cause));
+    }
+  };
+  const date = new Date(report.generated_at);
+  const generated = Number.isNaN(date.getTime())
+    ? report.generated_at
+    : `${date
+        .toISOString()
+        .replace('T', ' ')
+        .replace(/\.\d{3}Z$/, '')} UTC`;
+  return (
+    <Card
+      title="Registered performance report"
+      actions={<Badge tone="ok">registered</Badge>}
+      description="The registry confirms these details. Upload the PDF to check that every byte matches the issued copy."
+    >
+      <div className="kit-tablewrap">
+        <table className="kit-table">
+          <tbody>
+            <tr>
+              <th scope="row">Title</th>
+              <td>{report.title}</td>
+            </tr>
+            <tr>
+              <th scope="row">Application</th>
+              <td>{report.app}</td>
+            </tr>
+            <tr>
+              <th scope="row">Period</th>
+              <td>{report.days} days</td>
+            </tr>
+            <tr>
+              <th scope="row">Generated</th>
+              <td>{generated}</td>
+            </tr>
+            <tr>
+              <th scope="row">Sections</th>
+              <td>{report.sections.join(', ')}</td>
+            </tr>
+            <tr>
+              <th scope="row">SHA-256</th>
+              <td className="kit-mono kit-small" style={{ overflowWrap: 'anywhere' }}>
+                {report.sha256}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <label className="kit-field" style={{ marginTop: 'var(--sp-3)' }}>
+        <span>Check the PDF file (stays on this device)</span>
+        <input
+          type="file"
+          accept=".pdf,application/pdf"
+          onChange={(event) => void checkFile(event.currentTarget.files?.[0])}
+        />
+      </label>
+      {fileState === 'checking' && <Loading label="Checking the PDF fingerprint." />}
+      {fileState === 'match' && (
+        <Banner tone="ok" title="Exact match">
+          The file matches the PDF registered by BSDC.
+        </Banner>
+      )}
+      {fileState === 'mismatch' && (
+        <Banner tone="bad" title="File does not match">
+          The file differs from the registered PDF or is the wrong report.
+        </Banner>
+      )}
+      {fileError !== '' && (
+        <Banner tone="bad" title="The file could not be checked">
+          {fileError}
+        </Banner>
+      )}
+    </Card>
+  );
+}
+
 function Result({ result }: { result: VerificationResult }): ReactElement {
   const tone = stateTone(result.state);
   return (
@@ -239,13 +387,15 @@ function Explainer(): ReactElement {
           <li>Certificates, whose codes begin BSDC-CT.</li>
           <li>Notices, whose codes begin BSDC-NT.</li>
           <li>Staff identity cards, whose codes begin BSDC-ID.</li>
+          <li>Performance reports, by scanning their receipt QR and uploading the PDF.</li>
         </ul>
       </Card>
       <Card title="What this page will not tell you">
         <p className="kit-small">
-          The answer describes the document and nothing else. A staff card confirms a name and a
-          role; it does not reveal a contact detail, an address or anything the holder has not
-          already shown you.
+          For certificates, notices and cards the answer checks the listed registry fields, not
+          every line of the file. The answer describes the document and nothing else. A staff card
+          confirms a name and a role; it does not reveal a contact detail, an address or anything
+          the holder has not already shown you.
         </p>
       </Card>
       <Card title="If a code will not read">

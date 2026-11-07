@@ -63,4 +63,6 @@ export const useAuthStore = create<AuthState>((set) => ({
 }));
 
 export const selectIsSignedIn = (state: AuthState): boolean => state.status === 'authenticated';
+/** The Firebase user, or null. A selector so a component re-renders only for this. */
+export const selectUser = (state: AuthState): User | null => state.user;
 export const selectIsStaff = (state: AuthState): boolean => state.claims.staff;

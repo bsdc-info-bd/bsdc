@@ -4,7 +4,6 @@ import { toDataError } from '@/lib/supabase/errors';
 import type {
   CommentRow,
   InteractionStateRow,
-  NotificationRow,
   ToggleCommentReactionRow,
   ToggleReactionRow,
 } from '@/lib/supabase/types';
@@ -14,6 +13,7 @@ import {
   type Comment,
   type CommentAuthor,
   type InteractionState,
+  type NotificationKind,
   type Reaction,
   type ShareChannel,
 } from './interaction-types';
@@ -212,41 +212,86 @@ export async function markAnswer(commentId: string): Promise<boolean> {
 }
 
 // ---------------------------- notifications --------------------------------
+//
+// The inbox is one call to `my_inbox`, which is where the shape of a line is
+// decided: coalesced, the actor resolved, and the place it leads already
+// answered. Assembling this from raw rows in the client is what made the
+// notification screen throw while every migration passed — the row it asked
+// for was not a row the database promised.
 
-type JoinedNotificationRow = NotificationRow & { actor: AuthorJoin | null };
+/** The row `my_inbox` returns, as PostgREST spells it. */
+interface InboxRow {
+  notification_id: string;
+  kind: NotificationKind;
+  actor_uid: string | null;
+  actor_username: string | null;
+  actor_name: string | null;
+  actor_avatar: string | null;
+  body: string;
+  post_id: string | null;
+  comment_id: string | null;
+  conversation_id: string | null;
+  target_url: string;
+  read_at: string | null;
+  last_at: string;
+  created_at: string;
+  occurrences: number;
+  unread_count: number;
+  is_unread: boolean;
+}
 
-export async function fetchNotifications(limit = 40): Promise<AppNotification[]> {
+export async function fetchNotifications(limit = 50): Promise<AppNotification[]> {
   const { data, error } = await getSupabase()
-    .from('notifications')
-    .select(
-      'id, kind, body, post_id, comment_id, conversation_id, read_at, created_at, actor:actor_uid (uid, username, display_name, avatar_url)',
-    )
-    .order('created_at', { ascending: false })
-    .limit(limit)
-    .returns<JoinedNotificationRow[]>();
+    .rpc('my_inbox', { p_limit: limit })
+    .returns<InboxRow[]>();
   if (error) throw toDataError(error);
 
   return (data ?? []).map((row) => ({
-    id: row.id,
+    id: row.notification_id,
     kind: row.kind,
     body: row.body,
     postId: row.post_id,
     commentId: row.comment_id,
     conversationId: row.conversation_id,
+    targetUrl: row.target_url,
     readAt: row.read_at,
     createdAt: row.created_at,
-    actor: toAuthor(row.actor),
+    lastAt: row.last_at,
+    occurrences: row.occurrences,
+    unreadCount: row.unread_count,
+    isUnread: row.is_unread,
+    // A member with no handle still has a name, and a deleted account has
+    // neither: the line keeps its words rather than losing its row.
+    actor:
+      row.actor_uid === null
+        ? null
+        : {
+            uid: row.actor_uid,
+            username: row.actor_username ?? '',
+            displayName: row.actor_name ?? '',
+            avatarUrl: row.actor_avatar ?? '',
+          },
   }));
 }
 
 export async function fetchUnreadCount(): Promise<number> {
-  const { data, error } = await getSupabase().rpc('unread_notification_count');
+  // The function the badge reads and the function the list reads agree by
+  // construction; `inbox_unread_count` shares the list's predicates, so the
+  // number can never describe a list that is not there.
+  const { data, error } = await getSupabase().rpc('inbox_unread_count');
   if (error) throw toDataError(error);
   return typeof data === 'number' ? data : 0;
 }
 
 export async function markNotificationsRead(ids: string[] | null = null): Promise<number> {
-  const { data, error } = await getSupabase().rpc('mark_notifications_read', { p_ids: ids });
+  const { data, error } = await getSupabase().rpc('mark_inbox_read', { p_ids: ids });
+  if (error) throw toDataError(error);
+  return typeof data === 'number' ? data : 0;
+}
+
+/** Read rows only, so nothing a member has not seen can be swept away. */
+export async function clearInbox(keepDays = 0): Promise<number> {
+  const { data, error } = await getSupabase().rpc('clear_inbox', { p_keep_days: keepDays });
   if (error) throw toDataError(error);
   return typeof data === 'number' ? data : 0;
 }

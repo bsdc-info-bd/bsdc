@@ -6,6 +6,7 @@ const blank: CorporateEnv = {
   appId: 'bsdc-config',
   appName: 'Configuration',
   siteUrl: 'https://www.bsdc.info.bd',
+  verificationUrl: 'https://vf.main.bsdc.info.bd',
   firebase: { apiKey: '', authDomain: '', projectId: '', appId: '', databaseURL: '' },
   supabase: { url: '', publishableKey: '' },
 };
@@ -43,6 +44,7 @@ describe('corporate environment', () => {
     expect(env.appId).toBe('bsdc-ip');
     expect(env.appName).toBe('IP intelligence');
     expect(env.siteUrl.startsWith('https://')).toBe(true);
+    expect(env.verificationUrl).toBe('https://vf.main.bsdc.info.bd');
   });
 });
 
@@ -55,8 +57,19 @@ describe('data errors', () => {
   it('turns a permission failure into something a person can act on', () => {
     const error = toDataError(pgError('42501', 'permission denied'));
     expect(error).toBeInstanceOf(DataError);
-    expect(error.message).toBe('Your role does not allow this action.');
+    expect(error.message).toContain('database grants');
     expect(error.code).toBe('42501');
+  });
+
+  it('names a required application permission without mislabeling SQL grants', () => {
+    const error = toDataError(pgError('42501', 'Permission ads.manage is required'));
+    expect(error.message).toContain('ads.manage');
+    expect(error.message).not.toContain('database grants');
+    const grant = toDataError(
+      pgError('42501', 'permission denied for function staff_setup_campaign'),
+    );
+    expect(grant.message).toContain('database grants');
+    expect(grant.message).not.toContain('ads.manage');
   });
 
   it('keeps an unmapped database message rather than inventing one', () => {

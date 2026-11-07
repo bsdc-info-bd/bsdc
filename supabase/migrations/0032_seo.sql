@@ -232,7 +232,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_path text := bsdc.normalise_path(p_path);
@@ -368,7 +368,7 @@ create or replace function public.set_redirect(
 returns public.redirects
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_from text := bsdc.normalise_path(p_from);
@@ -430,7 +430,7 @@ create or replace function public.remove_redirect(p_from text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_from text := bsdc.normalise_path(p_from);
@@ -450,7 +450,7 @@ create or replace function public.follow_redirect(p_path text)
 returns table (target text, status smallint)
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_from text := bsdc.normalise_path(p_path);
@@ -483,7 +483,7 @@ create or replace function public.set_seo_override(
 returns public.seo_overrides
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_path text := bsdc.normalise_path(p_path);
@@ -533,7 +533,7 @@ create or replace function public.clear_seo_override(p_path text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_path text := bsdc.normalise_path(p_path);
@@ -561,7 +561,7 @@ returns table (loc text, lastmod timestamptz, changefreq text, priority numeric)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with page as (
     select greatest(1, coalesce(p_page, 1)) as n,
@@ -624,7 +624,7 @@ returns table (section text, urls integer, pages integer, lastmod timestamptz)
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with sizes as (select least(5000, greatest(1, coalesce(p_size, 1000))) as size),
   counted as (
@@ -725,7 +725,7 @@ create or replace function public.save_brand_theme(
 returns public.brand_themes
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_row public.brand_themes;
@@ -751,7 +751,7 @@ create or replace function public.activate_brand_theme(p_key text)
 returns public.brand_themes
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_row public.brand_themes;
@@ -779,7 +779,7 @@ returns text
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
     ':root{' || string_agg('--brand-' || t.key || ':' || (t.value #>> '{}'), ';'

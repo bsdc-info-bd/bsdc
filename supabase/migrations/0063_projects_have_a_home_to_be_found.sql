@@ -17,7 +17,7 @@ RETURNS TABLE(loc text, lastmod timestamptz, changefreq text, priority numeric)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, bsdc, pg_temp
+SET search_path = public, bsdc, extensions, pg_temp
 AS $function$
   WITH page AS (
     SELECT greatest(1, coalesce(p_page, 1)) AS n,
@@ -84,7 +84,7 @@ RETURNS TABLE(section text, urls integer, pages integer, lastmod timestamptz)
 LANGUAGE sql
 STABLE
 SECURITY DEFINER
-SET search_path = public, bsdc, pg_temp
+SET search_path = public, bsdc, extensions, pg_temp
 AS $function$
   WITH sizes AS (
     SELECT least(5000, greatest(1, coalesce(p_size, 1000))) AS size
@@ -144,7 +144,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
-SET search_path = public, bsdc, pg_temp
+SET search_path = public, bsdc, extensions, pg_temp
 AS $function$
 DECLARE
   v_path text := bsdc.normalise_path(p_path);

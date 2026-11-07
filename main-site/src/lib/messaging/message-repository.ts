@@ -80,7 +80,7 @@ type JoinedMessageRow = MessageRow & { profiles: ProfileJoin | null };
 
 const MESSAGE_SELECT = `
   id, conversation_id, sender_uid, kind, body, media_url, media_name,
-  code_language, reply_to, edited_at, deleted_at, created_at,
+  code_language, reply_to, edited_at, deleted_at, created_at, client_id,
   profiles:sender_uid (uid, username, display_name, avatar_url)
 `;
 
@@ -100,6 +100,7 @@ function toMessage(row: JoinedMessageRow): Message {
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
     author: toAuthor(row.profiles),
     reactions: {},
     myReactions: [],
@@ -129,6 +130,7 @@ export function toConversationMessage(
     editedAt: row.edited_at,
     deletedAt: row.deleted_at,
     createdAt: row.created_at,
+    ...(row.client_id ? { clientId: row.client_id } : {}),
     author,
     reactions: row.reactions ?? {},
     myReactions: row.my_reactions ?? [],
@@ -165,11 +167,13 @@ export async function fetchConversationMessages(
   conversationId: string,
   before: string | null = null,
   limit = 60,
+  beforeId: string | null = null,
 ): Promise<Message[]> {
   const { data, error } = await getSupabase()
-    .rpc('conversation_messages', {
+    .rpc('conversation_messages_page', {
       p_conversation_id: conversationId,
       p_before: before,
+      p_before_id: beforeId,
       p_limit: limit,
     })
     .returns<ConversationMessageRow[]>();
@@ -205,12 +209,13 @@ export async function fetchConversationState(
  * conversation. One read, so the inbox can sort and filter without touching
  * anybody else's row.
  */
-export async function fetchMyConversationSettings(): Promise<
-  Map<string, { pinned: boolean; archived: boolean; muted: boolean }>
-> {
+export async function fetchMyConversationSettings(
+  uid: string,
+): Promise<Map<string, { pinned: boolean; archived: boolean; muted: boolean }>> {
   const { data, error } = await getSupabase()
     .from('conversation_members')
     .select('conversation_id, is_pinned, is_archived, muted_until')
+    .eq('uid', uid)
     .returns<
       Pick<ConversationMemberRow, 'conversation_id' | 'is_pinned' | 'is_archived' | 'muted_until'>[]
     >();
@@ -332,12 +337,15 @@ export async function updateConversationSettings(
   uid: string,
   patch: Partial<Pick<ConversationMemberRow, 'is_pinned' | 'is_archived' | 'draft_body'>>,
 ): Promise<void> {
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('conversation_members')
     .update(patch)
     .eq('conversation_id', conversationId)
-    .eq('uid', uid);
+    .eq('uid', uid)
+    .select('uid')
+    .maybeSingle();
   if (error) throw toDataError(error);
+  if (data === null) throw new Error('profile/not-found');
 }
 
 /** Newest first from the database, returned oldest first for rendering. */
@@ -362,6 +370,8 @@ export async function fetchMessages(
 
 export interface SendMessageInput {
   conversationId: string;
+  /** Reused for every retry of the same logical send. */
+  clientId: string;
   body: string;
   kind?: MessageKind;
   mediaUrl?: string;
@@ -372,8 +382,9 @@ export interface SendMessageInput {
 
 export async function sendMessage(input: SendMessageInput): Promise<Message> {
   const { data, error } = await getSupabase()
-    .rpc('send_message', {
+    .rpc('send_message_once', {
       p_conversation_id: input.conversationId,
+      p_client_id: input.clientId,
       p_body: input.body,
       p_kind: input.kind ?? 'text',
       p_media_url: input.mediaUrl ?? '',
@@ -387,20 +398,26 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
 }
 
 export async function editMessage(messageId: string, body: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('messages')
     .update({ body: body.trim(), edited_at: new Date().toISOString() })
-    .eq('id', messageId);
+    .eq('id', messageId)
+    .select('id')
+    .maybeSingle();
   if (error) throw toDataError(error);
+  if (data === null) throw new Error('profile/not-found');
 }
 
 /** Messages are tombstoned, never erased, so replies keep their context. */
 export async function deleteMessage(messageId: string): Promise<void> {
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('messages')
     .update({ body: '', deleted_at: new Date().toISOString() })
-    .eq('id', messageId);
+    .eq('id', messageId)
+    .select('id')
+    .maybeSingle();
   if (error) throw toDataError(error);
+  if (data === null) throw new Error('profile/not-found');
 }
 
 export async function markConversationRead(conversationId: string): Promise<void> {
@@ -483,10 +500,13 @@ export async function setConversationMuted(
   muted: boolean,
 ): Promise<void> {
   const until = muted ? new Date(Date.now() + 365 * 24 * 3_600_000).toISOString() : null;
-  const { error } = await getSupabase()
+  const { data, error } = await getSupabase()
     .from('conversation_members')
     .update({ muted_until: until })
     .eq('conversation_id', conversationId)
-    .eq('uid', uid);
+    .eq('uid', uid)
+    .select('uid')
+    .maybeSingle();
   if (error) throw toDataError(error);
+  if (data === null) throw new Error('profile/not-found');
 }

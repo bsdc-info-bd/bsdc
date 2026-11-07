@@ -67,7 +67,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     d.day,
@@ -107,7 +107,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with daily as (
     select
@@ -155,7 +155,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     d.day,
@@ -199,7 +199,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   with bounded as (
     select greatest(1, least(coalesce(p_weeks, 8), 26)) as weeks
@@ -251,7 +251,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     o.id, o.slug::text, o.title, o.likes_count, o.comments_count, o.created_at
@@ -275,7 +275,7 @@ create or replace function public.create_report_snapshot(
 returns uuid
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_id      uuid;
@@ -347,7 +347,7 @@ returns table (
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select s.id, s.kind, s.title, s.period_from, s.period_to, s.created_by, s.created_at
   from public.report_snapshots s
@@ -361,7 +361,7 @@ returns jsonb
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select s.payload
   from public.report_snapshots s

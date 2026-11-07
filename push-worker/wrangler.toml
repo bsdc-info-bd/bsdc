@@ -1,0 +1,72 @@
+# BSDC push delivery worker.
+#
+# Deploy:  npx wrangler deploy
+# Secrets: npx wrangler secret put PUSH_VAPID_PRIVATE_KEY   (and the rest, below)
+#
+# Everything here runs inside Cloudflare's free plan:
+#   - Workers free: 100,000 requests a day. A cron every minute is 1,440.
+#   - Cron Triggers free: yes.
+#   - Queues free: 1,000,000 operations a month (an optional burst path).
+# There is no paid dependency anywhere in this file.
+
+name = "bsdc-push"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+# Web Crypto is available without a flag, but the flag makes the intent explicit
+# and keeps the behaviour stable if the default ever changes.
+compatibility_flags = ["nodejs_compat"]
+
+# The worker is stateless: nothing is stored here that is not in the database.
+# A short log retention keeps a deployment cheap and a payload out of long-term
+# storage. `wrangler tail` is how an operator watches it live.
+[observability]
+enabled = true
+head_sampling_rate = 1
+
+[vars]
+# The optional allowlist for the HTTP trigger's CORS answers. The site's own
+# origin, so an operator's browser can call /run from a staff console.
+ADMIN_ORIGINS = "https://www.bsdc.info.bd,https://admin.corporate.main.bsdc.info.bd"
+VERBOSE = "0"
+
+# ---------------------------------------------------------------------------
+# Cron. Every minute: the fastest interval the free plan offers, and the
+# difference between "a notification arrives" and "a notification arrives
+# eventually". A run with nothing pending exits in a few milliseconds.
+# ---------------------------------------------------------------------------
+[triggers]
+crons = ["* * * * *"]
+
+# ---------------------------------------------------------------------------
+# Optional burst path. Create the queue once with:
+#   npx wrangler queues create bsdc-push
+# then uncomment this block and the consumer below. The cron alone is enough for
+# this platform's volume; the queue exists so one very popular post cannot make
+# a single minute's run longer than a minute.
+# ---------------------------------------------------------------------------
+# [[queues.producers]]
+# queue = "bsdc-push"
+# binding = "PUSH_QUEUE"
+
+# [[queues.consumers]]
+# queue = "bsdc-push"
+# max_batch_size = 10
+# max_batch_timeout = 5
+# max_retries = 3
+# dead_letter_queue = "bsdc-push-dead"
+
+# ---------------------------------------------------------------------------
+# Secrets — never in this file, never in the repository:
+#
+#   npx wrangler secret put SUPABASE_URL
+#   npx wrangler secret put SUPABASE_ANON_KEY
+#   npx wrangler secret put PUSH_FLUSH_SECRET
+#   npx wrangler secret put PUSH_VAPID_PRIVATE_KEY
+#   npx wrangler secret put PUSH_VAPID_PUBLIC_KEY
+#   npx wrangler secret put PUSH_VAPID_SUBJECT
+#
+# The VAPID pair and the flush secret come from `npm run push:keys` in
+# `main-site/`, which prints exactly where each value goes. The flush secret must
+# be the same string that is stored in `bsdc.push_settings`; the database checks
+# it, and no function here is given a key that could bypass that check.
+# ---------------------------------------------------------------------------

@@ -127,14 +127,17 @@ const pinned = await as(
   me,
   `update public.conversation_members set is_pinned = true, draft_body = 'half a thought'
     where conversation_id = '${conversation}' and uid = '${me}'
-    returning is_pinned, draft_body`,
+    returning is_pinned`,
 );
+// 0082 intentionally does not grant direct SELECT of draft_body. Read the
+// caller's own draft through the same RPC the messenger uses instead.
+const ownState = await as(me, `select draft_body from public.conversation_state('${conversation}')`);
 check(
   pinned.ok &&
     pinned.rows?.[0]?.is_pinned === true &&
-    pinned.rows?.[0]?.draft_body === 'half a thought',
+    ownState.ok && ownState.rows?.[0]?.draft_body === 'half a thought',
   'as are the pin and the draft that follows the member across devices',
-  pinned.code ?? pinned.message ?? '',
+  pinned.code ?? pinned.message ?? ownState.code ?? ownState.message ?? '',
 );
 
 const unarchived = await as(

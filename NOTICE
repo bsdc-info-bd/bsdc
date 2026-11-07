@@ -1,0 +1,54 @@
+# NOTICE
+
+This NOTICE supplies the additional terms permitted by PASVL §15.2. It does not
+reduce any right granted by Article 3 of the License.
+
+---
+
+Work:            BSDC — Bangladesh Software Development Community
+                 (the platform: every application in this repository, the
+                 database schema, the delivery worker, the design system, the
+                 brand assets and the documentation)
+Author:          RRC Development — Rizwan Rahim Chowdhury, CEO
+Contact:         hello@bsdc.info.bd  ·  bsdc.rrc@gmail.com
+Copyright:       (c) 2026 RRC Development. All rights reserved.
+License:         PASVL-1.0
+License text:    ./LICENSE
+Canonical:       https://github.com/bsdc-info-bd/PASVL_LOSDA
+
+Steward:         Bangladesh Software Development Community (BSD C)
+
+Deployment approval:
+  Required:      Yes.
+  Instrument:    Letter of Software Deployment Approval (LOSDA).
+  Issuing agent: RRC Development, as Author.
+  Request:       https://github.com/bsdc-info-bd/PASVL_LOSDA/blob/main/templates/LOSDA-REQUEST.md
+                 or hello@bsdc.info.bd
+
+Mode:            U  (source-visible; deployment licensed. The verification
+                 scripts in this repository — `scripts/audit.mjs`,
+                 `scripts/db-prove/`, `scripts/release-check.mjs`, every
+                 `npm run test` — are intended to be read and run locally to
+                 check the claims this repository makes.)
+
+Third-party components:
+  The platform is built on open-source packages listed in each application's
+  `package.json` and resolved by its lockfile. Their licenses remain their own;
+  this NOTICE does not relicense them. A per-package inventory of the runtime
+  dependency tree is produced by `main-site/scripts/licence-report.mjs`.
+
+Trademarks:
+  "BSDC", "Bangladesh Software Development Community", the BSDC shield mark and
+  wordmark, "PASVL" and "LOSDA" are designations of RRC Development and of the
+  framework's Steward. Nominative use in documentation and in compatibility
+  statements is permitted; use as a product name is not.
+
+---
+
+## What this means in one paragraph
+
+Anyone may read this repository, run it locally, audit it, learn from it, teach
+with it, write about it and propose changes to it. Nobody may deploy it as a
+running service — a public website, an app store listing, an internal tool, a
+demo for a client — without a LOSDA from RRC Development. Source is public.
+Deployment is licensed. There is no implied licence.

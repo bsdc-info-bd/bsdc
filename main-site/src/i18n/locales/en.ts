@@ -3,7 +3,39 @@
  * are widened to `string` so the Bangla bundle can be typed against the same
  * shape (missing or renamed keys then fail `tsc --noEmit`).
  */
+/**
+ * The system check page. Kept in its own object because the sentences are long
+ * and the page is the one place a support reply is copied from; folding them
+ * into the middle of the interface strings would bury them.
+ */
+export const DIAGNOSTICS = {
+  title: 'System check',
+  description:
+    'Runs the checks that separate a broken deployment from a broken device, and shows the result for each one.',
+  running: 'Checking every dependency…',
+  runAgain: 'Run the checks again',
+  copy: 'Copy the report',
+  copied: 'Report copied. Paste it into a support message.',
+  copyFailed: 'The clipboard is blocked here. Select the text in the list instead.',
+  failed: 'The checks could not run in this browser.',
+  privacy:
+    'This report contains no password, no token, no address and nothing about your account. It is the same lines a support reply would ask you for.',
+  verdict: {
+    ok: 'Everything checked passed ({{total}} checks).',
+    warn: '{{warned}} of {{total}} checks are worth knowing about, but nothing is broken.',
+    fail: '{{failed}} of {{total}} checks failed. The list below names what to fix.',
+    skipped: 'Nothing failed. {{total}} checks ran.',
+  },
+  state: {
+    ok: 'pass',
+    warn: 'warning',
+    fail: 'failed',
+    skipped: 'skipped',
+  },
+};
+
 export const en = {
+  diagnostics: DIAGNOSTICS,
   common: {
     brand: 'BSDC',
     brandFull: 'Bangladesh Software Development Community',
@@ -475,6 +507,16 @@ export const en = {
       title: 'Language',
       description: 'Interface language for menus, buttons and messages.',
     },
+    media: {
+      title: 'Pictures',
+      description: 'Repair the picture cache without signing out.',
+      body: 'If pictures stop loading, this drops the cached copies on this device and asks for them again. Nothing else is removed: you stay signed in, your drafts stay, and your settings stay.',
+      repair: 'Repair pictures',
+      repairing: 'Repairing…',
+      repaired: 'Done. Pictures are being fetched again.',
+      repairFailed: 'The cache could not be cleared. Reload the page and try again.',
+      hint: 'This never asks you to clear all site data. If it does not help, the problem is at the picture host, not on your device.',
+    },
     notifications: {
       title: 'Notifications',
       description: 'Choose what BSDC may notify you about.',
@@ -563,6 +605,12 @@ export const en = {
     gallery: {
       postImages: 'Pictures in this post',
       imageUnavailable: 'This image could not be loaded.',
+      imageOffline: 'You are offline. This picture will load when the connection returns.',
+      imageRetrying: 'Loading this picture again…',
+    },
+    repair: {
+      banner: 'Pictures not loading? Repair just the picture cache.',
+      repaired: 'Picture cache repaired. Pictures will reload now.',
     },
     lightbox: {
       title: 'Picture',
@@ -716,6 +764,17 @@ export const en = {
       title: 'Devices that will be woken',
       unknown: 'A device this browser did not name',
       remove: 'Stop waking this device',
+      liveCount: '{{count}} of {{total}} still reachable',
+      lastUsed: 'Last reached {{when}}',
+      neverUsed: 'Not reached yet',
+      staleNote:
+        'Open that browser once while signed in and it re-registers itself. Until then nothing is sent to it.',
+    },
+    state: {
+      live: 'A notification sent now would reach this device.',
+      invalid:
+        "This device's push keys were refused. Open this browser once while signed in and it re-registers itself.",
+      dead: 'The push service says this address is gone. Open this browser once while signed in; it will register a new one, and this row can then be removed.',
     },
     errors: {
       permissionDenied: 'The browser refused the permission, so there is nothing to send to.',
@@ -1039,6 +1098,17 @@ export const en = {
     emptyTitle: 'No posts with this tag yet',
     emptyBody: 'Be the first to publish something here.',
   },
+  rail: {
+    label: 'Main',
+    home: 'Home',
+    groups: 'Groups',
+    jobs: 'Jobs',
+    projects: 'Projects',
+    market: 'Marketplace',
+    write: 'Create post',
+    trending: 'Trending tags',
+    trendingEmpty: 'Tags appear here once people start using them.',
+  },
   feed: {
     heading: 'Your feed',
     description: 'Ranked by what you follow, the topics you read and how fresh a post is.',
@@ -1055,6 +1125,9 @@ export const en = {
     errorTitle: 'The feed could not be loaded',
     errorBody: 'Check your connection and try again.',
     newPosts: '{{total}} new posts',
+    composePrompt: 'Write a post, ask a question, share a snippet…',
+    composeImage: 'Add a picture',
+    answer: 'Answer it',
     empty: {
       ranked: {
         title: 'Nothing to read yet',
@@ -1168,6 +1241,11 @@ export const en = {
       message: '{{actor}} sent you a message',
       moderation: 'A moderation update concerns your content',
     },
+    failedHint: 'Nothing was lost. Check your connection and open this screen again.',
+    clearRead: 'Clear read',
+    clearHint: 'Removes the notifications you have already read. Unread ones stay.',
+    unreadOne: 'Unread',
+    andMore: 'and {{count}} more',
     someone: 'Someone',
   },
   follow: {
@@ -1202,10 +1280,12 @@ export const en = {
     pickBody: 'Choose a thread on the left to read it here.',
     inboxFailed: 'Your conversations could not be loaded.',
     threadFailed: 'This conversation could not be loaded.',
+    draftSaveFailed: 'Draft not saved. Keep this tab open and try again.',
     sayHello: 'No messages yet. Say hello.',
     loadOlder: 'Load older messages',
     composerLabel: 'Write a message',
-    composerPlaceholder: 'Write a message. Enter sends, Shift and Enter makes a new line.',
+    composerPlaceholder: 'Write a message…',
+    composerHint: 'Enter sends; Shift and Enter makes a new line.',
     send: 'Send',
     typing: '{{names}} is typing',
     sent: 'Sent',
@@ -1235,6 +1315,7 @@ export const en = {
     searchAll: 'Search every conversation',
     searchPlaceholder: 'Type at least two letters',
     searchEmpty: 'Nothing matched in this conversation.',
+    searchFailed: 'Search could not be completed.',
     searchClose: 'Close search',
     pinned: 'Pinned message',
     unpin: 'Unpin',
@@ -1244,13 +1325,16 @@ export const en = {
     savedMessages: 'Saved',
     showSaved: 'Saved messages',
     emptySaved: 'Save a message and it is collected here.',
+    savedFailed: 'Saved messages could not be loaded.',
     reply: 'Reply',
     replyingTo: 'Replying to {{name}}',
     cancelReply: 'Cancel reply',
     edit: 'Edit',
     editing: 'Editing',
+    saveEdit: 'Save changes',
     cancelEdit: 'Cancel edit',
     copy: 'Copy',
+    copyUnavailable: 'Could not copy. Check clipboard permissions and try again.',
     deleteMessage: 'Delete message',
     deleteMessageTitle: 'Delete this message?',
     deleteMessageBody:
@@ -1259,9 +1343,14 @@ export const en = {
       sending: 'Sending…',
       sent: 'Sent',
       read: 'Read by {{n}}',
-      retry: 'Send again',
+      unconfirmed: 'Delivery unconfirmed',
+      retry: 'Try again',
+      discard: 'Discard',
     },
     more: 'More actions',
+    conversationActions: 'Conversation actions',
+    inboxActions: 'Actions for {{name}}',
+    messageNotLoaded: 'More history was loaded. Select this message again to continue.',
     today: 'Today',
     yesterday: 'Yesterday',
     newMessages: 'New messages',
@@ -1314,7 +1403,7 @@ export const en = {
     unpinConversation: 'Unpin this conversation',
     leave: 'Leave conversation',
     leaveTitle: 'Leave this conversation?',
-    leaveBody: 'The history stays with you, but no new messages arrive after you leave.',
+    leaveBody: 'You will no longer see this conversation or receive new messages after leaving.',
     newChat: 'New conversation',
     newChatTitle: 'Start a conversation',
     newChatHint: 'A username opens a direct chat. Add a title and usernames for a group.',
@@ -2006,10 +2095,11 @@ export const en = {
   },
   ads: {
     metaTitle: 'Advertising — BSDC',
-    metaDescription: 'Run campaigns across the BSDC network.',
+    metaDescription: 'See the performance of your BSDC campaigns.',
     title: 'Advertising',
-    description: 'Reach the community honestly: a clear budget, counted views, nothing hidden.',
-    signInTitle: 'Sign in to run a campaign.',
+    description: 'Your campaigns, their performance and the budget managed by BSDC staff.',
+    signInTitle: 'Sign in to see your campaigns.',
+    signInAction: 'Sign in',
     failed: 'Campaigns could not be loaded.',
     sponsored: 'Sponsored',
     slotLabel: 'Sponsored message',
@@ -2035,7 +2125,26 @@ export const en = {
     forecastImpressions: 'About {{total}} views at this bid.',
     forecastClicks: 'About {{total}} clicks at this bid.',
     emptyTitle: 'No campaigns yet',
-    emptyBody: 'Create your first campaign and it will appear here.',
+    emptyBody: 'Staff will set up your campaign; it will appear here when it is ready.',
+    shownCampaignsHint: 'Total for campaigns shown here.',
+    costPerClick: '{{amount}} per click',
+    costPerClickUnknown: 'Cost per click not available yet',
+    viewDetails: 'View performance and copy',
+    closeDetails: 'Close details',
+    detailsFailed: 'Campaign details could not be loaded.',
+    dailyTitle: 'Daily performance · recent days',
+    noDaily: 'No views or clicks have been recorded yet.',
+    day: 'Day',
+    views: 'Views',
+    clicks: 'Clicks',
+    spend: 'Spend',
+    editCopy: 'Edit copy',
+    copyReviewTitle: 'Changes require review',
+    copyReviewBody:
+      'Saving sends the campaign back to staff review and stops it serving until approved, even if it was paused.',
+    copySaved: 'Copy saved and sent for review.',
+    saveCopy: 'Save and send for review',
+    cancelCopy: 'Cancel',
     budgetUsed: '{{spent}} of {{total}} spent',
     remaining: '{{amount}} left',
     counted: '{{impressions}} views, {{clicks}} clicks',
@@ -2076,6 +2185,7 @@ export const en = {
       completed: 'Finished',
     },
     reasons: {
+      walletEmpty: 'The wallet is empty. Contact BSDC staff to fund this campaign.',
       budgetSpent: 'The budget has been spent in full.',
       dailyCap: "Today's cap has been reached; it resumes tomorrow.",
       notStarted: 'This campaign has not started yet.',

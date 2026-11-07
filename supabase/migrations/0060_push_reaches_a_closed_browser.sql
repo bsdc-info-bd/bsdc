@@ -51,7 +51,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select exists (
     select 1
@@ -123,7 +123,7 @@ create or replace function public.register_push_subscription(
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -164,7 +164,7 @@ create or replace function public.unregister_push_subscription(p_endpoint text)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -186,7 +186,7 @@ returns table (endpoint text, user_agent text, language text, created_at timesta
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select s.endpoint, s.user_agent, s.language, s.created_at
     from public.push_subscriptions s
@@ -212,7 +212,7 @@ returns table (
 language plpgsql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if not bsdc.push_secret_matches(p_secret) then
@@ -239,7 +239,7 @@ create or replace function public.push_mark(p_secret text, p_ids uuid[])
 returns integer
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_count integer;
@@ -263,7 +263,7 @@ create or replace function public.push_kill(p_secret text, p_endpoint text)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 begin
   if not bsdc.push_secret_matches(p_secret) then
@@ -296,7 +296,7 @@ returns table (
 )
 language plpgsql
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_subscription public.push_subscriptions;

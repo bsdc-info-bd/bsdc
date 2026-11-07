@@ -15,7 +15,7 @@ export default defineConfig({
       { find: '@kit', replacement: kit },
     ],
   },
-  server: { host: '0.0.0.0', port: 5191, fs: { allow: ['..'] } },
+  server: { host: '0.0.0.0', allowedHosts: ['.e2b.app'], port: 5191, fs: { allow: ['..'] } },
   preview: { host: '0.0.0.0', port: 5191 },
   build: {
     target: 'es2022',

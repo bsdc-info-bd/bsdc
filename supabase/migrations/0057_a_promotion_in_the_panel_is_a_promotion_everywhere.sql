@@ -33,7 +33,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select coalesce(
            (current_setting('request.jwt.claims', true)::jsonb ->> 'staff')::boolean,
@@ -49,7 +49,7 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public, bsdc, pg_temp
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select bsdc.role_rank(bsdc.actor_role()) >= bsdc.role_rank('moderator'::bsdc_role);
 $$;

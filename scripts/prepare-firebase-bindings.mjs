@@ -5,19 +5,19 @@ import { createPrivateKey, generateKeyPairSync } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 
-export function bindingsFromCredential(raw, expectedProject) {
+function validatedCredential(raw, expectedProject, project, secretName) {
   let credential;
   try {
     credential = JSON.parse(raw);
   } catch {
-    throw new Error('FIREBASE_SERVICE_ACCOUNT_BSDC_BD must contain valid service-account JSON.');
+    throw new Error(`${secretName} must contain valid service-account JSON.`);
   }
   if (!credential || credential.type !== 'service_account' ||
-      credential.project_id !== 'bsdc-bd' || expectedProject !== credential.project_id) {
-    throw new Error('The service account and VITE_FB_PROJECT_ID must both belong to bsdc-bd.');
+      credential.project_id !== project || expectedProject !== credential.project_id) {
+    throw new Error(`The service account and Firebase project ID must both belong to ${project}.`);
   }
   if (typeof credential.client_email !== 'string' ||
-      !credential.client_email.endsWith('@bsdc-bd.iam.gserviceaccount.com') ||
+      !credential.client_email.endsWith(`@${project}.iam.gserviceaccount.com`) ||
       typeof credential.private_key !== 'string') {
     throw new Error('The Firebase service account is missing its email or private key.');
   }
@@ -27,10 +27,24 @@ export function bindingsFromCredential(raw, expectedProject) {
   } catch {
     throw new Error('The Firebase service account private key must be a valid RSA PEM key.');
   }
+  return credential;
+}
+
+export function bindingsFromCredential(raw, expectedProject) {
+  const credential = validatedCredential(raw, expectedProject, 'bsdc-bd', 'FIREBASE_SERVICE_ACCOUNT_BSDC_BD');
   return {
     FB_PROJECT_ID: credential.project_id,
     FB_CLIENT_EMAIL: credential.client_email,
     FB_PRIVATE_KEY: credential.private_key,
+  };
+}
+
+export function corporateBindingsFromCredential(raw, expectedProject) {
+  const credential = validatedCredential(raw, expectedProject, 'bsdc-second', 'FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND');
+  return {
+    FB2_PROJECT_ID: credential.project_id,
+    FB2_CLIENT_EMAIL: credential.client_email,
+    FB2_PRIVATE_KEY: credential.private_key,
   };
 }
 
@@ -51,7 +65,17 @@ if (process.argv.includes('--self-test')) {
   assert.throws(() => bindingsFromCredential(JSON.stringify({ ...fixture, type: 'authorized_user' }), 'bsdc-bd'));
   assert.throws(() => bindingsFromCredential(JSON.stringify({ ...fixture, client_email: 'wrong@example.com' }), 'bsdc-bd'));
   assert.throws(() => bindingsFromCredential(JSON.stringify({ ...fixture, private_key: 'not-a-key' }), 'bsdc-bd'));
-  console.log('8 Firebase binding checks passed. No credentials printed.');
+  const corporate = { ...fixture, project_id: 'bsdc-second', client_email: 'test@bsdc-second.iam.gserviceaccount.com' };
+  const corporateValid = JSON.stringify(corporate);
+  const corporateBindings = corporateBindingsFromCredential(corporateValid, 'bsdc-second');
+  assert.deepEqual(Object.keys(corporateBindings).sort(), ['FB2_CLIENT_EMAIL', 'FB2_PRIVATE_KEY', 'FB2_PROJECT_ID']);
+  assert.equal(corporateBindings.FB2_PRIVATE_KEY, fixture.private_key);
+  assert.throws(() => corporateBindingsFromCredential('', 'bsdc-second'));
+  assert.throws(() => corporateBindingsFromCredential(valid, 'bsdc-second'));
+  assert.throws(() => corporateBindingsFromCredential(corporateValid, 'bsdc-bd'));
+  assert.throws(() => corporateBindingsFromCredential(JSON.stringify({ ...corporate, client_email: 'wrong@example.com' }), 'bsdc-second'));
+  assert.throws(() => corporateBindingsFromCredential(JSON.stringify({ ...corporate, private_key: 'not-a-key' }), 'bsdc-second'));
+  console.log('15 Firebase binding checks passed. No credentials printed.');
 } else {
   try {
     const output = process.argv[2];
@@ -60,6 +84,14 @@ if (process.argv.includes('--self-test')) {
       process.env.FIREBASE_SERVICE_ACCOUNT_BSDC_BD ?? '',
       process.env.VITE_FB_PROJECT_ID ?? '',
     );
+    const corporate = process.env.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND ?? '';
+    if (corporate.trim() !== '') {
+      Object.assign(bindings, corporateBindingsFromCredential(corporate, process.env.VITE_FB2_PROJECT_ID ?? ''));
+    } else {
+      // Cloudflare may already have these secrets. Bulk upload does not erase
+      // other bindings; the post-deploy readiness check verifies their presence.
+      console.log('Corporate credential not supplied; checking existing Pages bindings after deployment.');
+    }
     writeFileSync(output, JSON.stringify(bindings), { mode: 0o600, flag: 'wx' });
     console.log('Validated server-only Firebase bindings written to temporary storage.');
   } catch (error) {

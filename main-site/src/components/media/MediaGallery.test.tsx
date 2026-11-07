@@ -48,7 +48,11 @@ describe('the arrangement a card shows', () => {
     render(
       <MediaGallery items={[{ ...item(0, 1200, 800), url, thumbUrl: '' }]} label="Pictures" />,
     );
-    expect(screen.getByRole('img')).toHaveAttribute('src', url);
+    // The picture is still the one that was saved; it is now asked for at the
+    // width the card draws rather than at the width it was uploaded at.
+    const drawn = screen.getByRole('img').getAttribute('src') ?? '';
+    expect(drawn).toContain('/v1/post/legacy.png');
+    expect(drawn).toMatch(/w_\d+/);
   });
 
   it('bleeds to the edges of the card when the picture is its header', () => {
@@ -116,15 +120,36 @@ describe('the arrangement a card shows', () => {
     expect(screen.getByRole('button', { name: 'Pictures 1' })).toBeInTheDocument();
   });
 
-  it('retries the original when a thumbnail fails, then names a final failure', () => {
+  it('retries the original the moment a thumbnail fails', () => {
     render(<MediaGallery items={[item(0, 1000, 1000)]} label="Pictures" />);
-    const thumbnail = screen.getByRole('img');
-    fireEvent.error(thumbnail);
-    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn.example/0.jpg');
-
     fireEvent.error(screen.getByRole('img'));
-    expect(screen.getByRole('img', { name: 'The first picture' }).tagName).toBe('SPAN');
-    expect(screen.getByText('media.gallery.imageUnavailable')).toBeInTheDocument();
+    expect(screen.getByRole('img')).toHaveAttribute('src', 'https://cdn.example/0.jpg');
+  });
+
+  it('keeps trying through the whole ladder before it names a failure', () => {
+    // The old component gave up on the second error, which is why a poisoned
+    // cache looked permanent: one bad body, one fallback, one empty tile. The
+    // ladder now has five rungs - the other size, a retry, a slower retry, a
+    // cache-busted address and the platform's own proxy - and only then does it
+    // draw the empty tile. Every rung is asserted in
+    // `src/lib/media/resilience.test.ts`; this only proves the component walks
+    // them and ends somewhere designed.
+    vi.useFakeTimers();
+    try {
+      render(<MediaGallery items={[item(0, 1000, 1000)]} label="Pictures" />);
+
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const image = screen.queryByRole('img');
+        if (image === null || image.tagName !== 'IMG') break;
+        fireEvent.error(image);
+        vi.runOnlyPendingTimers();
+      }
+
+      expect(screen.getByRole('img', { name: 'The first picture' }).tagName).toBe('SPAN');
+      expect(screen.getByText('media.gallery.imageUnavailable')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('renders nothing at all for a post with no pictures', () => {

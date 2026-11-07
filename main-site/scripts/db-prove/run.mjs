@@ -53,6 +53,33 @@ const HARNESSES = [
   ['t42.mjs', 'post child reads inherit parent visibility, trash and channel membership'],
   ['t43.mjs', 'raw-table column grants protect media credentials and event join links'],
   ['t44.mjs', 'database authority denies stale staff claims after demotion or suspension'],
+  [
+    't45.mjs',
+    'push carries its words: the delivery worker reads keys, refused strangers, suspended members and retiring devices',
+  ],
+  [
+    't46.mjs',
+    'an upload remembers how long it was promised for, and only an abandoned picture is swept',
+  ],
+  ['t47.mjs', 'a staff account can get in without being a member first'],
+  [
+    't48.mjs',
+    'the database tested here is the database production deploys: extensions in `extensions`',
+  ],
+  ['t49.mjs', 'the inbox has a shape: one call, coalesced, and it knows where every line leads'],
+  [
+    't50.mjs',
+    'a campaign is made by staff and read by the owner who paid for it, and by nobody else',
+  ],
+  ['t51.mjs', 'three implementations of one poisha: the wallet, the operator and the advertiser'],
+  [
+    't52.mjs',
+    'issuing an advertiser account: once, as the staff member, without printing a password',
+  ],
+  ['t53.mjs', 'advertising charges respect one shared wallet and daily caps'],
+  ['t54.mjs', 'accurate performance reports, private receipts and faithful certificate reprints'],
+  ['t55.mjs', 'current corporate authority for campaigns, certificates and reports'],
+  ['t56.mjs', 'messenger retries, private drafts, safe replies and membership boundaries'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

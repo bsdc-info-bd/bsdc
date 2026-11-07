@@ -119,3 +119,89 @@ export function byCategory(rows: readonly UptimeRow[]): ReadonlyArray<{
   }
   return order.map((category) => ({ category, rows: buckets.get(category) ?? [] }));
 }
+
+/**
+ * What a service check should say, before it is recorded.
+ *
+ * `record_service_check()` accepts a key, a verdict and a latency and nothing
+ * else — no message, no status code. That means a console which lets an operator
+ * type free text would be writing it nowhere, so the panel asks only for the three
+ * fields the routine takes, and this decides what they mean.
+ */
+export interface CheckDraft {
+  readonly serviceKey: string;
+  readonly ok: boolean;
+  readonly latencyMs: number;
+}
+
+export const EMPTY_CHECK: CheckDraft = { serviceKey: '', ok: true, latencyMs: 0 };
+
+/** The problems with a check before it is recorded, in the order they are read. */
+export function checkProblems(
+  draft: CheckDraft,
+  knownServices: readonly string[],
+): readonly string[] {
+  const problems: string[] = [];
+  if (draft.serviceKey.trim() === '') {
+    problems.push('Choose the service this check is about.');
+  } else if (knownServices.length > 0 && !knownServices.includes(draft.serviceKey)) {
+    // A key the board does not know would be recorded and never shown, which is a
+    // check that exists only in the database.
+    problems.push(`“${draft.serviceKey}” is not one of the services on the board.`);
+  }
+  if (!Number.isFinite(draft.latencyMs) || draft.latencyMs < 0 || draft.latencyMs > 120_000) {
+    problems.push('A latency is a number of milliseconds between 0 and 120000.');
+  }
+  return problems;
+}
+
+/**
+ * Why a check must not be recorded by a person.
+ *
+ * This is the rule that stops the uptime figure from becoming a lie. Uptime is
+ * computed from these rows, and a row written by hand is a row that says a service
+ * was up because somebody looked at it. The scheduler probes from four regions and
+ * writes what it saw; a console writes a note, not a measurement.
+ */
+export function checkIsHumanEntered(draft: CheckDraft): boolean {
+  // A missing key is not a measurement either.
+  return draft.serviceKey.trim() === '' || draft.latencyMs === 0;
+}
+
+/**
+ * How long an incident has been open, in words, for the board's own header.
+ *
+ * A resolved incident uses its own window. An open one uses now, which is the
+ * number an operator is looking at when they decide whether to escalate.
+ */
+export function openFor(incident: IncidentRow, now = Date.now()): string {
+  const start = Date.parse(incident.started_at);
+  if (Number.isNaN(start)) return 'unknown';
+  const end = incident.resolved_at === null ? now : Date.parse(incident.resolved_at);
+  if (Number.isNaN(end)) return 'unknown';
+  const minutes = Math.max(0, Math.floor((end - start) / 60_000));
+  if (minutes < 60) return `${String(minutes)}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${String(hours)}h ${String(minutes % 60)}m`;
+  return `${String(Math.floor(hours / 24))}d ${String(hours % 24)}h`;
+}
+
+/**
+ * Whether a resolution note is acceptable.
+ *
+ * `resolve_incident()` appends the body as the closing update on the public board,
+ * so an empty one publishes "resolved" with no explanation — the exact thing a
+ * status page exists to avoid.
+ */
+export function resolutionProblems(body: string): readonly string[] {
+  return body.trim().length < 12
+    ? [
+        'Say what happened and what was done. This is the last update anybody reading the board will see.',
+      ]
+    : [];
+}
+
+/** Whether an incident update is acceptable, whatever it is being used for. */
+export function noteProblems(body: string, minimum = 12): readonly string[] {
+  return body.trim().length < minimum ? [`Write at least ${String(minimum)} characters.`] : [];
+}

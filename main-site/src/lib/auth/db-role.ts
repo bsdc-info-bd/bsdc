@@ -111,8 +111,8 @@ export async function claimBootstrapRole(): Promise<UserRole | null> {
 
 /**
  * Asks the edge to mint the rank the database already grants, so the token
- * agrees with the row and the thirteen consoles — which read the claim, not
- * this site's session — see the same administrator.
+ * agrees with the row. Corporate consoles independently read the database's
+ * effective role rather than trusting that Firebase claim for authorization.
  *
  * Every failure here is survivable: the endpoint may be unconfigured, or the
  * account may not be one it is allowed to elevate. Authority on this site

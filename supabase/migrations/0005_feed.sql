@@ -11,6 +11,18 @@
 -- ---------------------------------------------------------------------------
 -- feed_preferences — per member feed controls
 -- ---------------------------------------------------------------------------
+-- Extensions live where the deployment put them.
+--
+-- `0001` asks for `citext`, `pgcrypto`, `pg_trgm` and `unaccent` with
+-- `if not exists`, and where they land is not this repository's decision:
+-- PGlite puts them in `public`, Supabase puts them in `extensions`, and a
+-- deployment that created them by hand may have put them anywhere. This file
+-- names a type or a function one of them owns, so it says where to look
+-- instead of inheriting a search path that happened to be right on the machine
+-- it was written on. That inheritance is what made a certificate fail in
+-- production while every proof here passed.
+set search_path = public, extensions, pg_temp;
+
 create table if not exists public.feed_preferences (
   uid              text primary key references public.profiles (uid) on delete cascade,
   algorithm        text        not null default 'ranked'
@@ -44,7 +56,7 @@ create or replace function public.prune_feed_seen(p_days integer default 30)
 returns integer
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions, pg_temp
 as $$
 declare
   v_deleted integer;
@@ -73,7 +85,7 @@ create or replace function bsdc.bump_author_affinity()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_author text;
@@ -101,7 +113,7 @@ create or replace function public.record_feed_impression(p_post_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
 declare
   v_uid text := bsdc.current_uid();
@@ -149,7 +161,7 @@ returns table (
 )
 language sql
 stable
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select
     p.id,
@@ -195,7 +207,7 @@ create or replace function public.feed_new_count(p_since timestamptz)
 returns integer
 language sql
 stable
-set search_path = public, bsdc
+set search_path = public, bsdc, extensions, pg_temp
 as $$
   select count(*)::integer
   from public.posts p

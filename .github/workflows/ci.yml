@@ -145,16 +145,16 @@ jobs:
             exit 1
           fi
 
-      # The size of a build is the cause of a field slowdown three weeks
-      # later, so it is recorded next to the field measurements rather than
-      # left in a log that expires. The step is skipped on forks and on any
-      # checkout without the secret, and it never fails the build: a
-      # bookkeeping outage must not block a release.
+      # Record total emitted JS gzip (including lazy chunks) for successful
+      # main-branch builds. A missing credential or an unavailable database is
+      # reported but does not block CI. Feature-branch builds are not production
+      # history, so they are deliberately excluded.
       - name: Record the bundle size
-        if: matrix.app == 'main-site' && github.event_name == 'push'
+        if: matrix.app != 'corporate-kit' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         shell: bash
         env:
+          APP_DIR: ${{ matrix.app }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
@@ -162,14 +162,92 @@ jobs:
             echo "No Supabase credentials on this checkout; size not recorded."
             exit 0
           fi
+          case "$APP_DIR" in
+            main-site) app=main-site ;;
+            admin-site) app=bsdc-admin ;;
+            certificate-site) app=bsdc-cert ;;
+            config-site) app=bsdc-config ;;
+            connect-site) app=bsdc-connect ;;
+            customize-site) app=bsdc-custom ;;
+            ip-site) app=bsdc-ip ;;
+            moderator-site) app=bsdc-mod ;;
+            notice-site) app=bsdc-notice ;;
+            performance-site) app=bsdc-perf ;;
+            status-site) app=bsdc-status ;;
+            users-admin-site) app=bsdc-uadmin ;;
+            users-moderator-site) app=bsdc-umod ;;
+            vf-site) app=bsdc-vf ;;
+            *) echo "No performance app ID for $APP_DIR; skipping."; exit 0 ;;
+          esac
           gzipped=0
           for file in dist/assets/*.js; do
             [ -f "$file" ] || continue
             gzipped=$((gzipped + $(gzip -c "$file" | wc -c)))
           done
+          if [ "$gzipped" -eq 0 ]; then echo "No built JS; skipping."; exit 0; fi
           curl --fail --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/record_bundle_size" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "content-type: application/json" \
-            -d "{\"p_app\":\"main-site\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
+            -d "{\"p_app\":\"${app}\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
+
+  # ---------------------------------------------------------------------------
+  # The licence gate.
+  #
+  # BSDC ships under PASVL-1.0, whose Appendix C permits permissive and weak
+  # copyleft dependencies and refuses strong or service copyleft. That is a claim
+  # about a dependency tree, and a dependency tree changes without anybody
+  # editing a licence sentence. `--check` fails the build the day a refused
+  # licence appears, which is the only moment it can be replaced cheaply.
+  # ---------------------------------------------------------------------------
+  licences:
+    name: Dependency licences
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Refuse a licence PASVL does not permit
+        run: node scripts/licence-report.mjs --check
+
+  # ---------------------------------------------------------------------------
+  # The push delivery worker.
+  #
+  # A separate package, so the matrix above does not discover it (the matrix is
+  # one level deep and this one needs a Worker bundle rather than a Vite build).
+  # It gets the same four gates as everything else, plus a dry-run deployment
+  # that proves the bundle is buildable without a single credential.
+  # ---------------------------------------------------------------------------
+  push-worker:
+    name: Push worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: push-worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install
+        # `npm install`, not `npm ci`: this repository deliberately does not
+        # commit lockfiles (see .gitignore), so `npm ci` fails with EUSAGE before
+        # it resolves anything. The matrix jobs all use `npm install` for the same
+        # reason; this one was missed, and the whole job failed on its fourth step
+        # for it.
+        run: npm install --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Format check
+        run: npm run lint
+      - name: Unit tests
+        run: npm run test
+      - name: Bundle (no credentials)
+        run: npm run build

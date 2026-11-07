@@ -15,6 +15,7 @@ import {
   takaToPoisha,
   validateCampaign,
   validateCreative,
+  validateCopy,
   type Campaign,
   type CampaignDraft,
   type CreativeDraft,
@@ -129,6 +130,12 @@ describe('serving eligibility', () => {
     }
   });
 
+  it('explains when the shared wallet has no funds', () => {
+    expect(isServable(campaign(), NOW, 0)).toBe(false);
+    expect(pauseReasonKey(campaign(), NOW, 0)).toBe('ads.reasons.walletEmpty');
+    expect(isServable(campaign(), NOW, 100)).toBe(true);
+  });
+
   it('stops at the total budget', () => {
     const spent = campaign({ spent: 500_000 });
     expect(isServable(spent, NOW)).toBe(false);
@@ -159,18 +166,29 @@ describe('campaign state', () => {
     expect(canResume('active')).toBe(false);
   });
 
-  it('allows submission from draft, rejected or paused', () => {
+  it('allows staff submission from draft or rejected, not paused', () => {
     expect(canSubmit('draft')).toBe(true);
     expect(canSubmit('rejected')).toBe(true);
-    expect(canSubmit('paused')).toBe(true);
+    expect(canSubmit('paused')).toBe(false);
     expect(canSubmit('pending_review')).toBe(false);
     expect(canSubmit('completed')).toBe(false);
   });
 
-  it('freezes the text once it is under review', () => {
+  it('allows copy edits on unfinished campaigns; edits return to review', () => {
     expect(canEdit('draft')).toBe(true);
-    expect(canEdit('pending_review')).toBe(false);
-    expect(canEdit('active')).toBe(false);
+    expect(canEdit('pending_review')).toBe(true);
+    expect(canEdit('active')).toBe(true);
+    expect(canEdit('paused')).toBe(true);
+    expect(canEdit('completed')).toBe(false);
+  });
+
+  it('validates only the three copy fields the owner may change', () => {
+    expect(validateCopy({ headline: 'A headline', body: '', ctaLabel: 'Visit' })).toEqual([]);
+    expect(
+      validateCopy({ headline: 'ab', body: 'x'.repeat(201), ctaLabel: 'x'.repeat(33) }).map(
+        (p) => p.field,
+      ),
+    ).toEqual(['headline', 'body', 'ctaLabel']);
   });
 });
 

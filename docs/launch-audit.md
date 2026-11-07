@@ -115,41 +115,42 @@ workflow:
 
 ## Checkpoints
 
-Current result: **103 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Current result: **104 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| A-01 | Sixteen packages carry build gates | Pass | 16: admin-site, android-app, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site |
+| A-01 | Seventeen packages carry build gates | Pass | 17: admin-site, android-app, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, push-worker, status-site, users-admin-site, users-moderator-site, vf-site |
 | A-02 | Fourteen web applications are deployable to Pages | Pass | admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site |
+| A-14 | The push worker is a deployable unit of its own | Pass | push-worker/ has wrangler.toml with a cron trigger and its own entry point; it is deployed by deploy.yml and gated by the push-worker job in ci.yml |
 | A-03 | The Android shell is a real package, not a note | Pass | capacitor.config.ts and src/links.ts are present |
-| A-04 | Every application declares the five gate scripts | Pass | all sixteen |
+| A-04 | Every application declares the five gate scripts | Pass | all 17 |
 | A-05 | Every console has a distinct dev port | Pass | 5181, 5182, 5183, 5184, 5185, 5186, 5187, 5188, 5189, 5190, 5191, 5192, 5193 |
 | A-06 | The delivery plan records all twenty responses | Pass | 20 rows, last is 20 |
 | A-07 | Every package is marked private and cannot be published | Pass | all sixteen are private |
-| A-08 | Every package carries a README that says what it is | Pass | all sixteen |
-| A-09 | The root governance documents are present | Pass | LICENSE.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md |
+| A-08 | Every package carries a README that says what it is | Pass | all 17 |
+| A-09 | The root governance documents are present | Pass | LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md |
 | A-10 | Every delivery row is recorded as done | Pass | all twenty rows read Done |
 | A-11 | Every console registers under its own application id | Pass | bsdc-admin, bsdc-cert, bsdc-config, bsdc-connect, bsdc-custom, bsdc-ip, bsdc-mod, bsdc-notice, bsdc-perf, bsdc-status, bsdc-uadmin, bsdc-umod, bsdc-vf |
-| A-12 | Every migration opens with a comment saying what it does | Pass | 63 migrations |
+| A-12 | Every migration opens with a comment saying what it does | Pass | 74 migrations |
 
 ### Database
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| B-01 | Migrations are numbered without a gap | Pass | 0001..0063 |
-| B-02 | Every table has row level security enabled | Pass | 106 tables |
+| B-01 | Migrations are numbered without a gap | Pass | 0001..0074 |
+| B-02 | Every table has row level security enabled | Pass | 107 tables |
 | B-03 | Every security-definer function pins its search path | Pass | all of them |
 | B-04 | No migration grants a blanket write to anon | Pass | none found |
-| B-05 | Every anonymous write path is a counted exception | Pass | 32 functions are executable by anon; 10 of them write (follow_redirect, increment_job_view, increment_post_view, log_search, push_content, push_kill, push_mark, record_ad_event, record_share, verify_code) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine |
-| B-06 | Tables, functions and policies shipped | Recorded | 106 tables, 183 RPCs, 69 helpers, 204 policies, 63 migrations |
-| B-07 | Permission checks guard the privileged RPCs | Pass | 164 of 194 RPCs check identity or permission |
-| B-08 | Every migration can be re-run without error | Pass | 63 migrations are idempotent |
-| B-09 | Every policy is dropped before it is created | Pass | 194 policies |
+| B-05 | Every anonymous write path is a counted exception | Pass | 44 functions are executable by anon; 18 of them write (follow_redirect, increment_job_view, increment_post_view, log_search, media_claim_purge, media_mark_purged, media_release_purge, media_sweep_forgotten, push_content, push_flag_invalid_device, push_kill, push_kill_device, push_mark, push_mark_devices, push_sweep_dead_devices, record_ad_event, record_share, verify_code) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine |
+| B-06 | Tables, functions and policies shipped | Recorded | 107 tables, 204 RPCs, 73 helpers, 210 policies, 74 migrations |
+| B-07 | Permission checks guard the privileged RPCs | Pass | 189 of 219 RPCs check identity or permission |
+| B-08 | Every migration can be re-run without error | Pass | 74 migrations are idempotent |
+| B-09 | Every policy is dropped before it is created | Pass | 197 policies |
 | B-10 | Money is never stored as a floating point number | Pass | money columns are integer or numeric, never real |
 | B-11 | State lives in enumerated types, not in free text | Pass | 55 enumerated types, including bsdc_role, bsdc_account_status, bsdc_media_kind, bsdc_media_provider |
-| B-12 | Row level security is forced, so even a table owner is subject to it | Pass | 112 tables enable RLS, 0 additionally force it; the application role is never the table owner |
+| B-12 | Row level security is forced, so even a table owner is subject to it | Pass | 113 tables enable RLS, 0 additionally force it; the application role is never the table owner |
 | B-13 | A record that can change records when it changed | Pass | 34 tables carry updated_at; 37 touch triggers maintain it |
 | B-14 | The audit trail cannot be edited or deleted | Pass | audit_log, verification_log, report_snapshots have no update or delete policy, so history is append-only |
 
@@ -159,15 +160,15 @@ Current result: **103 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | --- | --- | --- | --- |
 | C-01 | Interface icons are vector assets; emoji are member input | Pass | no decorative emoji glyphs; explicit member-input palettes remain supported |
 | C-02 | No placeholder or demo content left in source | Pass | none |
-| C-03 | Strict TypeScript everywhere, with no escape hatches | Pass | strict in all 16 packages; 0 suppression comments |
+| C-03 | Strict TypeScript everywhere, with no escape hatches | Pass | strict in all 17 packages; 0 suppression comments |
 | C-04 | Nothing logs to the console in shipped code | Pass | none |
 | C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
 | C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
-| C-07 | Both languages carry the same keys | Pass | 53 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 35795 Bangla code points in the Bangla locale |
+| C-07 | Both languages carry the same keys | Pass | 55 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
+| C-08 | Bangla is a real translation, not a copy of English | Pass | 38840 Bangla code points in the Bangla locale |
 | C-09 | Every application ships a security header set | Pass | all fourteen |
 | C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
-| C-11 | TypeScript source files under version control | Recorded | 435 .ts/.tsx files |
+| C-11 | TypeScript source files under version control | Recorded | 514 .ts/.tsx files |
 | C-12 | No link opens a new tab without severing the opener | Pass | every _blank link carries rel="noopener" |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text | Pass | every <img> declares alt, decorative images with an empty one |
@@ -225,16 +226,16 @@ Current result: **103 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere | Pass | main-site 225 KB |
+| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere | Pass | main-site 234 KB, moderator-site 177 KB, status-site 174 KB, users-admin-site 177 KB |
 | F-02 | Routes are code split, so a visitor pays only for the page | Pass | React.lazy per route in main-site/src/App.tsx |
 | F-03 | Field measurement is collected and stored | Pass | a hand-written collector, a beacon endpoint and the web_vitals table |
 | F-04 | Speed is reported at the 75th percentile with its sample count | Pass | percentile_cont(0.75) in vitals_by_route, with samples returned beside it |
 | F-05 | Build weight is recorded on every push, next to the field data | Pass | CI posts the gzipped size of each main-site push into bundle_sizes |
-| F-06 | Images below the fold are loaded lazily | Pass | 6 image sites opt into lazy loading |
+| F-06 | Images below the fold are loaded lazily | Pass | 7 image sites opt into lazy loading |
 | F-07 | No render-blocking font or stylesheet is fetched from a third party | Pass | system font stack; nothing is fetched from a font CDN |
 | F-08 | Query caching is configured rather than left at the defaults | Pass | React Query is given explicit staleTime, gcTime, retry and focus behaviour |
 | F-09 | No source map is shipped to production | Pass | none in any dist/ |
-| F-10 | Stylesheets stay small enough to inline-parse quickly | Pass | main-site 9 KB |
+| F-10 | Stylesheets stay small enough to inline-parse quickly | Pass | main-site 9 KB, moderator-site 2 KB, status-site 2 KB, users-admin-site 2 KB |
 
 ### PWA
 
@@ -251,7 +252,7 @@ Current result: **103 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| H-01 | Unit tests by package | Recorded | 706 tests: admin-site 0, android-app 0, certificate-site 0, config-site 0, connect-site 0, corporate-kit 0, customize-site 0, ip-site 0, main-site 706, moderator-site 0, notice-site 0, performance-site 0, status-site 0, users-admin-site 0, users-moderator-site 0, vf-site 0 |
+| H-01 | Unit tests by package | Recorded | 1166 tests: admin-site 62, android-app 0, certificate-site 0, config-site 0, connect-site 0, corporate-kit 15, customize-site 0, ip-site 0, main-site 1000, moderator-site 33, notice-site 0, performance-site 0, push-worker 0, status-site 22, users-admin-site 34, users-moderator-site 0, vf-site 0 |
 | H-02 | Every package has at least one test file | Pass | all sixteen |
 
 ### CI
@@ -274,9 +275,6 @@ Current result: **103 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | J-03 | Distinct registry codes recorded | Recorded | 1016 distinct codes |
 | J-04 | The audit and the registry are reproducible commands, not prose | Pass | node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record |
 
-## What a program cannot check
-
-Three things in this platform are matters of judgement, and they are
 recorded here rather than dressed up as automated results.
 
 **Whether the Bangla reads naturally.** A test can prove that both locales

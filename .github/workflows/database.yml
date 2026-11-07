@@ -20,12 +20,22 @@ on:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
+      - 'scripts/prove-corporate-permissions.sql'
+      - 'scripts/prove-ad-wallet-concurrency.mjs'
+      - 'scripts/prove-staff-provision-concurrency.mjs'
+      - 'scripts/prove-messenger-concurrency.mjs'
+      - 'scripts/wait-for-messenger-migration.mjs'
       - '.github/workflows/database.yml'
   pull_request:
     paths:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
+      - 'scripts/prove-corporate-permissions.sql'
+      - 'scripts/prove-ad-wallet-concurrency.mjs'
+      - 'scripts/prove-staff-provision-concurrency.mjs'
+      - 'scripts/prove-messenger-concurrency.mjs'
+      - 'scripts/wait-for-messenger-migration.mjs'
       - '.github/workflows/database.yml'
   workflow_dispatch:
     inputs:
@@ -105,8 +115,107 @@ jobs:
           grant usage on schema public to anon, authenticated, service_role;
           SQL
 
+      - name: Prove dry-run leaves empty and legacy ledgers untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/db-push.mjs --dry-run > /tmp/empty-dry-run.log
+          grep -Eq '^[0-9]+ would be applied, 0 skipped' /tmp/empty-dry-run.log
+          test -z "$(psql "$SUPABASE_DB_URL" -t -A -c \
+            "select to_regclass('supabase_migrations.schema_migrations')")"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          create schema supabase_migrations;
+          create table supabase_migrations.schema_migrations (
+            version text primary key, name text, statements text[]
+          );
+          insert into supabase_migrations.schema_migrations (version) values ('0001');
+          SQL
+          node scripts/db-push.mjs --dry-run > /tmp/legacy-dry-run.log
+          grep -Eq '^  APPLY  0001_.*file changed' /tmp/legacy-dry-run.log
+          test "$(psql "$SUPABASE_DB_URL" -t -A -c \
+            "select count(*) from information_schema.columns where table_schema = 'supabase_migrations' and table_name = 'schema_migrations' and column_name = 'checksum'")" = '0'
+
       - name: Apply every migration, twice, then assert the invariants
-        run: node scripts/db-push.mjs --verify
+        # The log of a failed step lives behind a signed URL on a host that is
+        # not always reachable, and a red X with no sentence beside it costs
+        # whoever is reading the pull request an hour. A check annotation is
+        # part of the checks API, so the first real error is copied into one
+        # rather than only into the log.
+        run: |
+          set +e
+          node scripts/db-push.mjs --verify > /tmp/verify.log 2>&1
+          status=$?
+          cat /tmp/verify.log
+          if [ "$status" -ne 0 ]; then
+            message=$(grep -E '(^|[^[:alpha:]])(ERROR|FATAL|PANIC|FAIL)(:|[[:space:]])|^Error:' /tmp/verify.log | head -4 | tr '\n' ' ')
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/}
+            echo "::error title=Schema verify failed::${message:-no diagnostic line; see the log}"
+          fi
+          exit "$status"
+
+      # Exercise the real ledger, not just the runner's pure plan function.
+      # A failed later migration must leave the first replayed version pending
+      # so retrying restores every subsequent definition in order.
+      - name: Prove migration ledger and interrupted replay recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-before.log
+          grep -Eq '^0 would be applied, [0-9]+ skipped' /tmp/ledger-before.log
+          scratch=$(mktemp -d)
+          mkdir -p "$scratch/supabase"
+          cp -a scripts "$scratch/scripts"
+          cp -a supabase/migrations "$scratch/supabase/migrations"
+          printf '\nselect 1 / 0;\n' >> "$scratch/supabase/migrations/0080_performance_reports_and_print_integrity.sql"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = 'ci-replay-test' where version = '0079'" > /dev/null
+          if node "$scratch/scripts/db-push.mjs" > /tmp/ledger-interrupted.log 2>&1; then
+            echo '::error::The intentionally failing migration unexpectedly succeeded.'
+            exit 1
+          fi
+          grep -qi 'division by zero' /tmp/ledger-interrupted.log
+          marker=$(psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 -c \
+            "select checksum from supabase_migrations.schema_migrations where version = '0079'")
+          if [ -n "$marker" ]; then
+            echo '::error::The replay anchor was recorded before later migrations finished.'
+            exit 1
+          fi
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-retry.log
+          grep -Eq '^  APPLY  0079_' /tmp/ledger-retry.log
+          grep -Eq '^  APPLY  0080_' /tmp/ledger-retry.log
+          node scripts/db-push.mjs > /tmp/ledger-recovered.log
+          node scripts/db-push.mjs --dry-run > /tmp/ledger-after.log
+          grep -Eq '^0 would be applied, [0-9]+ skipped' /tmp/ledger-after.log
+          echo 'A no-op is skipped and an interrupted replay resumes from its anchor.'
+
+      - name: Prove the read-only member-site rollout gate
+        env:
+          BSDC_MESSENGER_WAIT_SECONDS: '0'
+        run: |
+          set -euo pipefail
+          node scripts/wait-for-messenger-migration.mjs --self-test
+          node scripts/wait-for-messenger-migration.mjs
+          checksum=$(psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 -c \
+            "select checksum from supabase_migrations.schema_migrations where version = '0082'")
+          test -n "$checksum"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = 'ci-gate-mismatch' where version = '0082'" > /dev/null
+          if node scripts/wait-for-messenger-migration.mjs; then
+            echo '::error::The gate accepted a mismatched migration checksum.'
+            exit 1
+          fi
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = '$checksum' where version = '0082'" > /dev/null
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            'grant update on public.messages to authenticated' > /dev/null
+          if node scripts/wait-for-messenger-migration.mjs; then
+            echo '::error::The gate accepted unsafe message update privileges.'
+            exit 1
+          fi
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            'revoke update on public.messages from authenticated' > /dev/null
+          node scripts/wait-for-messenger-migration.mjs
 
       # A schema that applies is not the same as a schema that works. These
       # calls exercise the shapes every console depends on; a signature
@@ -140,6 +249,24 @@ jobs:
       # mint themselves a database role on their own row.
       - name: Prove the row-level security by exercising it
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction -f scripts/rls-proof.sql
+
+      - name: Prove shared advertising wallets under concurrency
+        env:
+          BSDC_THROWAWAY_DB: '1'
+        run: node scripts/prove-ad-wallet-concurrency.mjs
+
+      - name: Prove corporate permissions on PostgreSQL
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/prove-corporate-permissions.sql
+
+      - name: Prove concurrent corporate first sign-ins
+        env:
+          BSDC_THROWAWAY_DB: '1'
+        run: node scripts/prove-staff-provision-concurrency.mjs
+
+      - name: Prove concurrent messenger delivery
+        env:
+          BSDC_THROWAWAY_DB: '1'
+        run: node scripts/prove-messenger-concurrency.mjs
 
       - name: Report what was built
         run: |

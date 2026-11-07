@@ -43,6 +43,33 @@ describe('upsertMessage', () => {
     expect(withLate.map((item) => item.id)).toEqual(['a', 'b', 'c']);
   });
 
+  it('orders tied timestamps by message id to match the pagination cursor', () => {
+    let list = [message('b', 0)];
+    list = upsertMessage(list, message('a', 0));
+    list = upsertMessage(list, message('c', 0));
+    expect(list.map((item) => item.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('orders offsets and sub-millisecond timestamps like the database cursor', () => {
+    const entries = [
+      message('z-later-microsecond', 0, { createdAt: '2026-10-08T12:00:00.123789+00:00' }),
+      message('a-earlier-microsecond', 0, { createdAt: '2026-10-08T12:00:00.123123+00:00' }),
+      message('pending', 0, { createdAt: '2026-10-08T12:00:00.123Z' }),
+      message('offset', 0, { createdAt: '2026-10-08T18:00:00+06:00' }),
+      message('utc', 0, { createdAt: '2026-10-08T12:00:00.000Z' }),
+      message('short-offset', 0, { createdAt: '2026-10-08T12:00:00.123456+00' }),
+    ];
+    const list = entries.reduce<Message[]>((current, item) => upsertMessage(current, item), []);
+    expect(list.map((item) => item.id)).toEqual([
+      'offset',
+      'utc',
+      'pending',
+      'a-earlier-microsecond',
+      'short-offset',
+      'z-later-microsecond',
+    ]);
+  });
+
   it('returns the same array when nothing changed', () => {
     const list = [message('a', 0)];
     expect(upsertMessage(list, message('a', 0))).toBe(list);

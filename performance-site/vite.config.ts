@@ -15,14 +15,13 @@ export default defineConfig({
       { find: '@kit', replacement: kit },
     ],
   },
-  server: { host: '0.0.0.0', port: 5192, fs: { allow: ['..'] } },
+  server: { host: '0.0.0.0', allowedHosts: ['.e2b.app'], port: 5192, fs: { allow: ['..'] } },
   preview: { host: '0.0.0.0', port: 5192 },
   build: {
     target: 'es2022',
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: (id: string) => (id.includes('node_modules') ? 'vendor' : undefined),
         entryFileNames: 'assets/index-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
       },

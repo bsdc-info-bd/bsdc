@@ -1,0 +1,446 @@
+/**
+ * BSDC push delivery worker.
+ *
+ * ## What it is
+ *
+ * A Cloudflare Worker, on the free plan, that is the reason a notification
+ * arrives on a phone whose browser is closed. Three triggers, one engine:
+ *
+ *   - `scheduled` — a cron every minute. This is the real path: a member likes a
+ *     post, the database writes a notification row, and within a minute the
+ *     device that is allowed to know about it is woken with the words already
+ *     encrypted into the push.
+ *   - `queue` — an optional Cloudflare Queue for bursts. The cron is enough for
+ *     this platform's volume; the queue exists so a viral post cannot make one
+ *     minute's run longer than a minute.
+ *   - `fetch` — an authenticated endpoint, for an operator who needs to flush
+ *     now (`POST /run`) or check the deployment (`GET /health`), and a
+ *     Cloudflare-friendly `POST /` that a Pages Function can call.
+ *
+ * ## Why it exists twice
+ *
+ * `main-site/functions/api/push/flush.ts` already wakes devices, and it is kept:
+ * it is a Pages Function, so it runs on the same deployment as the site and is
+ * the fallback if this worker is ever down. It sends an *empty* wake-up, so the
+ * service worker has to ask what it missed. That costs a round trip and it means
+ * the notification is written by the browser, not by the sender.
+ *
+ * This worker sends the *words*: an RFC 8291 encrypted payload with the title,
+ * the body, the icon and the path to open already in it. The device shows it
+ * without a network request, which is the difference between a notification in
+ * under a second and one in however long the phone's radio takes to wake.
+ *
+ * ## What it never does
+ *
+ * It never holds a service key; every database call is a secret-gated function.
+ * It never logs a subscription endpoint, a payload or a token. It never sends to
+ * a device the database did not name for that notification, which is what stops
+ * a bug here from becoming a leak there.
+ *
+ * ## Free tier
+ *
+ * One cron a minute is 1,440 invocations a day, well inside the Workers free
+ * allowance, and each run exits in milliseconds when nothing is waiting. The
+ * work is bounded per run so a backlog is drained over several minutes rather
+ * than by one request that exceeds the subrequest limit.
+ */
+import { callRpc, DatabaseUnavailable, type DeviceRow } from './api';
+import { deliver, shouldRetry, type DeliveryKeys, type DeliveryOutcome } from './deliver';
+import { adminOrigins, vapidSubject, type Env } from './env';
+import {
+  summarise,
+  wordsFor,
+  cleanPreview,
+  type NotificationKind,
+  type NotificationSource,
+} from './notifications';
+
+export interface PushMessage {
+  /** What to do. `flush` is the only one that sends. */
+  type: 'flush';
+  /** Cap on notifications picked up in this run. */
+  limit?: number;
+  /** Only send notifications created before this ISO timestamp (for replay). */
+  before?: string;
+}
+
+/** The most one run will pick up. A backlog drains over several runs. */
+const MAX_PER_RUN = 400;
+/** How many push services are talked to at once. */
+const CONCURRENCY = 10;
+/** How far back a notification is worth waking somebody for. */
+const LOOKBACK_HOURS = 72;
+
+interface RunStats {
+  waiting: number;
+  devices: number;
+  sent: number;
+  dead: number;
+  invalid: number;
+  unauthorized: number;
+  retry: number;
+  failed: number;
+  marked: number;
+  skipped: number;
+  milliseconds: number;
+}
+
+function emptyStats(): RunStats {
+  return {
+    waiting: 0,
+    devices: 0,
+    sent: 0,
+    dead: 0,
+    invalid: 0,
+    unauthorized: 0,
+    retry: 0,
+    failed: 0,
+    marked: 0,
+    skipped: 0,
+    milliseconds: 0,
+  };
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    },
+  });
+}
+
+/** Equal in the same time whether the strings match or not. */
+export function sameSecret(presented: string, expected: string): boolean {
+  if (expected.length === 0 || presented.length !== expected.length) return false;
+  let difference = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    difference |= presented.charCodeAt(index) ^ expected.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+function bearer(request: Request): string {
+  const header = request.headers.get('authorization') ?? '';
+  return header.toLowerCase().startsWith('bearer ') ? header.slice(7).trim() : '';
+}
+
+/** The number of notifications this run may pick up. */
+export function runLimit(requested: unknown): number {
+  const value =
+    typeof requested === 'number' ? requested : Number.parseInt(String(requested ?? ''), 10);
+  if (!Number.isFinite(value)) return MAX_PER_RUN / 2;
+  return Math.min(Math.max(1, Math.trunc(value)), MAX_PER_RUN);
+}
+
+/** Runs work in bounded waves, so a subrequest limit is never approached. */
+async function inWaves<T>(
+  items: readonly T[],
+  size: number,
+  run: (item: T) => Promise<void>,
+): Promise<void> {
+  for (let start = 0; start < items.length; start += size) {
+    await Promise.all(items.slice(start, start + size).map(run));
+  }
+}
+
+/** The signing material, or null when the deployment is not configured for it. */
+export function deliveryKeys(env: Env): DeliveryKeys | null {
+  const privateKey = (env.PUSH_VAPID_PRIVATE_KEY ?? '').trim();
+  const publicKey = (env.PUSH_VAPID_PUBLIC_KEY ?? '').trim();
+  if (privateKey.length === 0 || publicKey.length === 0) return null;
+  return { privateKey, publicKey, subject: vapidSubject(env.PUSH_VAPID_SUBJECT) };
+}
+
+/** One notification row as the words module wants it. */
+export function toSource(row: DeviceRow, language: 'bn' | 'en'): NotificationSource {
+  return {
+    id: row.notification_id,
+    kind: row.kind as NotificationKind,
+    actorName: row.actor_name,
+    preview: cleanPreview(row.body),
+    url: row.url,
+    language,
+    ...(row.conversation_id !== null ? { conversationId: row.conversation_id } : {}),
+    ...(row.post_id !== null ? { postId: row.post_id } : {}),
+  };
+}
+
+/**
+ * The engine.
+ *
+ * One run reads what is pending, groups it by device, sends one push per device
+ * carrying either the single thing that happened or a summary of several, and
+ * marks what was delivered. Grouping is the whole point: a member who was
+ * mentioned nine times in a busy thread should get one notification that says
+ * nine, not nine that each say one.
+ */
+export async function runPush(env: Env, options: { limit?: number } = {}): Promise<RunStats> {
+  const started = Date.now();
+  const stats = emptyStats();
+  const secret = (env.PUSH_FLUSH_SECRET ?? '').trim();
+
+  if (secret.length < 32) {
+    throw new DatabaseUnavailable(503, 'PUSH_FLUSH_SECRET is not set to a long enough value');
+  }
+  const keys = deliveryKeys(env);
+  if (keys === null) {
+    throw new DatabaseUnavailable(503, 'the VAPID key pair is not configured');
+  }
+
+  const limit = runLimit(options.limit);
+  const pending = await callRpc<DeviceRow[] | null>(env, 'push_pending_devices', {
+    p_secret: secret,
+    p_limit: limit,
+    p_lookback_hours: LOOKBACK_HOURS,
+  });
+
+  const rows = Array.isArray(pending) ? pending : [];
+  stats.waiting = rows.length;
+  if (rows.length === 0) {
+    stats.milliseconds = Date.now() - started;
+    return stats;
+  }
+
+  // One push per device, not per notification.
+  const byEndpoint = new Map<string, DeviceRow[]>();
+  for (const row of rows) {
+    if (typeof row.endpoint !== 'string' || row.endpoint.length < 20) {
+      stats.skipped += 1;
+      continue;
+    }
+    const list = byEndpoint.get(row.endpoint);
+    if (list === undefined) byEndpoint.set(row.endpoint, [row]);
+    else list.push(row);
+  }
+  stats.devices = byEndpoint.size;
+
+  /** Notification ids whose device was reached, in whole or in part. */
+  const reached = new Set<string>();
+  /** Endpoints the push service says are gone. */
+  const dead = new Set<string>();
+  /** Endpoints whose keys were unusable. */
+  const invalid = new Set<string>();
+
+  await inWaves([...byEndpoint.entries()], CONCURRENCY, async ([endpoint, deviceRows]) => {
+    const first = deviceRows[0];
+    if (first === undefined) return;
+    const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
+
+    const sources = deviceRows.map((row) => toSource(row, language));
+    const words =
+      sources.length > 1
+        ? summarise(sources, language)
+        : sources[0] !== undefined
+          ? wordsFor(sources[0])
+          : null;
+    if (words === null) {
+      stats.skipped += deviceRows.length;
+      return;
+    }
+
+    const payload = {
+      title: words.title,
+      body: words.body,
+      url: words.url,
+      tag: words.tag,
+      icon: '/icons/icon-192.png',
+      badge: '/icons/maskable-512.png',
+      ts: Date.now(),
+    };
+
+    const outcome: DeliveryOutcome = await deliver({
+      target: { endpoint, p256dh: first.p256dh ?? '', auth: first.auth ?? '' },
+      keys,
+      payload,
+      topic: words.topic,
+      // A message is worth interrupting for; a summary is not.
+      urgency: sources.length > 1 ? 'normal' : 'high',
+    });
+
+    switch (outcome) {
+      case 'sent':
+        stats.sent += 1;
+        for (const row of deviceRows) reached.add(row.notification_id);
+        break;
+      case 'dead':
+        stats.dead += 1;
+        dead.add(endpoint);
+        break;
+      case 'invalid':
+        stats.invalid += 1;
+        invalid.add(endpoint);
+        break;
+      case 'unauthorized':
+        stats.unauthorized += 1;
+        break;
+      case 'retry':
+        stats.retry += 1;
+        break;
+      default:
+        stats.failed += 1;
+        break;
+    }
+
+    if (shouldRetry(outcome)) {
+      // Nothing is marked: the next run picks these rows up again. That is how a
+      // push survived a push service's bad minute without a queue of its own.
+      return;
+    }
+  });
+
+  // Retiring a subscription is a database write with the secret, exactly like
+  // marking: no device row is deleted by a worker that cannot prove itself.
+  await Promise.all(
+    [...dead].map((endpoint) =>
+      callRpc(env, 'push_kill_device', { p_secret: secret, p_endpoint: endpoint }).catch(
+        () => null,
+      ),
+    ),
+  );
+
+  const ids = [...reached];
+  if (ids.length > 0) {
+    const marked = await callRpc<number>(env, 'push_mark_devices', {
+      p_secret: secret,
+      p_ids: ids,
+    });
+    stats.marked = typeof marked === 'number' ? marked : 0;
+  }
+
+  // A subscription with unusable keys is not marked dead, because the keys may
+  // be repairable when the browser opens again and re-registers. It is recorded
+  // so the member's own device list can show it, which is more honest than
+  // silently dropping the device.
+  await Promise.all(
+    [...invalid].map((endpoint) =>
+      callRpc(env, 'push_flag_invalid_device', { p_secret: secret, p_endpoint: endpoint }).catch(
+        () => null,
+      ),
+    ),
+  );
+
+  stats.milliseconds = Date.now() - started;
+  return stats;
+}
+
+// -------------------------------------------------------------- the handler ---
+
+export default {
+  /** The cron. Every minute, and it costs nothing when nothing is waiting. */
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      runPush(env)
+        .then((stats) => {
+          if (stats.waiting > 0) {
+            console.warn(
+              `push run: waiting=${stats.waiting} devices=${stats.devices} sent=${stats.sent} dead=${stats.dead} invalid=${stats.invalid} unauthorized=${stats.unauthorized} retry=${stats.retry} failed=${stats.failed} marked=${stats.marked} ms=${stats.milliseconds} cron=${controller.cron}`,
+            );
+          }
+        })
+        .catch((error: unknown) => {
+          // Awaited by `waitUntil`, so it reaches the Workers log. It carries a
+          // message and never a payload, an endpoint or a token.
+          console.error(
+            `push run failed: ${error instanceof DatabaseUnavailable ? `${error.status} ${error.message}` : 'unexpected error'}`,
+          );
+        }),
+    );
+  },
+
+  /** The optional queue, for a burst the cron should not have to wait a minute for. */
+  async queue(batch: MessageBatch<PushMessage>, env: Env): Promise<void> {
+    for (const message of batch.messages) {
+      try {
+        if (message.body.type !== 'flush') {
+          message.ack();
+          continue;
+        }
+        await runPush(env, {
+          ...(message.body.limit !== undefined ? { limit: message.body.limit } : {}),
+        });
+        message.ack();
+      } catch (error) {
+        // `retry` puts it back on the queue with its own backoff. A message that
+        // cannot be delivered is retried by the queue, not by a loop here.
+        void error;
+        message.retry({ delaySeconds: 30 });
+      }
+    }
+  },
+
+  /** The HTTP trigger: health for a monitor, and a manual run for an operator. */
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const url = new URL(request.url);
+    const origin = request.headers.get('origin') ?? '';
+    const allowed = adminOrigins(env.ADMIN_ORIGINS);
+    const corsHeaders: Record<string, string> = {
+      vary: 'origin',
+      ...(allowed.includes(origin)
+        ? {
+            'access-control-allow-origin': origin,
+            'access-control-allow-headers': 'authorization, content-type',
+            'access-control-allow-methods': 'GET, POST, OPTIONS',
+            'access-control-max-age': '600',
+          }
+        : {}),
+    };
+
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    if (url.pathname === '/health' && request.method === 'GET') {
+      const keys = deliveryKeys(env);
+      return json(
+        {
+          worker: 'bsdc-push',
+          status: keys === null ? 'unconfigured' : 'ok',
+          vapid: keys !== null,
+          secret: (env.PUSH_FLUSH_SECRET ?? '').trim().length >= 32,
+          database: env.SUPABASE_URL.trim().length > 0 && env.SUPABASE_ANON_KEY.trim().length > 0,
+          time: new Date().toISOString(),
+        },
+        200,
+      );
+    }
+
+    if ((url.pathname === '/' || url.pathname === '/run') && request.method === 'POST') {
+      const secret = (env.PUSH_FLUSH_SECRET ?? '').trim();
+      if (secret.length < 32) {
+        // Nothing can be authorised on a deployment that has no secret, so this
+        // is a configuration answer, not a rejection: saying "forbidden" would
+        // send an operator looking for a wrong password that does not exist.
+        return json({ error: 'push is not configured on this deployment' }, 503);
+      }
+      if (!sameSecret(bearer(request), secret)) {
+        return json({ error: 'forbidden' }, 403);
+      }
+      try {
+        const stats = await runPush(env, {
+          ...(url.searchParams.get('limit')
+            ? { limit: Number(url.searchParams.get('limit')) }
+            : {}),
+        });
+        return new Response(JSON.stringify(stats), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json; charset=utf-8',
+            'cache-control': 'no-store',
+            ...corsHeaders,
+          },
+        });
+      } catch (error) {
+        const status = error instanceof DatabaseUnavailable ? error.status : 500;
+        return json(
+          { error: error instanceof DatabaseUnavailable ? error.message : 'unexpected error' },
+          status,
+        );
+      }
+    }
+
+    return json({ error: 'not found' }, 404);
+  },
+};

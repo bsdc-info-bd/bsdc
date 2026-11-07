@@ -22,8 +22,8 @@ function hasDataRole(token: IdTokenResult): boolean {
 
 /**
  * Uses the role already present in a signed Firebase token when repairing a
- * legacy token. The server verifies and preserves that signed role; a browser
- * cannot choose a more privileged role in this flow.
+ * legacy token. The server verifies the request but uses current database
+ * authority, not that cached role, when issuing application privileges.
  */
 export function bootstrapRole(claims: Record<string, unknown>) {
   return readClaims(claims).role;
@@ -45,8 +45,8 @@ async function bootstrapDataAccess(user: User): Promise<IdTokenResult> {
     body: JSON.stringify({
       uid: user.uid,
       role: bootstrapRole(current.claims),
-      // The endpoint derives vendor/staff from the signed role for this
-      // self-service path; never let the browser request either privilege.
+      // The endpoint derives vendor/staff from verified database authority,
+      // never from browser-supplied privilege flags or a stale signed role.
       vendor: false,
       staff: false,
     }),

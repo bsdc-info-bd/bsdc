@@ -458,6 +458,7 @@ export type ConversationMessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  client_id?: string | null;
   reactions: Record<string, number>;
   my_reactions: string[];
   read_by: string[];
@@ -520,6 +521,7 @@ export type MessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  client_id: string | null;
 };
 
 export type ConversationInboxRow = {
@@ -628,6 +630,21 @@ export type PushSubscriptionRow = {
   user_agent: string;
   language: string;
   created_at: string;
+};
+
+/**
+ * One row of `my_push_devices()` (0072): the same device, plus whether it can
+ * still be woken. `dead` means the push service answered 404/410 — the browser
+ * threw its keys away and only that browser can put them back. `invalid` means
+ * the recorded keys were refused, which the member fixes by opening that browser.
+ */
+export type PushDeviceRow = {
+  endpoint: string;
+  user_agent: string;
+  language: string;
+  created_at: string;
+  last_used_at: string | null;
+  state: 'live' | 'invalid' | 'dead';
 };
 
 export type EventRow = {
@@ -2263,6 +2280,38 @@ export type Database = {
       };
       unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
+      my_push_devices: { Args: Record<string, never>; Returns: PushDeviceRow[] };
+      forget_push_device: { Args: { p_endpoint: string }; Returns: undefined };
+      /** 0073. Records an upload, validating the promise the host was given. */
+      record_media_asset: {
+        Args: {
+          p_provider: string;
+          p_kind: string;
+          p_url: string;
+          p_thumb_url?: string;
+          p_delete_token?: string;
+          p_width?: number | null;
+          p_height?: number | null;
+          p_bytes?: number;
+          p_mime_type?: string;
+          p_expires_at?: string | null;
+        };
+        Returns: string;
+      };
+      my_media_assets: {
+        Args: { p_limit?: number };
+        Returns: {
+          id: string;
+          url: string;
+          thumb_url: string;
+          kind: string;
+          provider: string;
+          bytes: number;
+          created_at: string;
+          expires_at: string | null;
+          in_use: boolean;
+        }[];
+      };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
@@ -2288,6 +2337,32 @@ export type Database = {
         Returns: boolean;
       };
       record_share: { Args: { p_post_id: string; p_channel: string }; Returns: undefined };
+      my_inbox: {
+        Args: { p_limit?: number };
+        Returns: {
+          notification_id: string;
+          kind: DbNotificationKind;
+          actor_uid: string | null;
+          actor_username: string | null;
+          actor_name: string | null;
+          actor_avatar: string | null;
+          body: string;
+          post_id: string | null;
+          comment_id: string | null;
+          conversation_id: string | null;
+          target_url: string;
+          read_at: string | null;
+          last_at: string;
+          created_at: string;
+          occurrences: number;
+          unread_count: number;
+          is_unread: boolean;
+        }[];
+      };
+      inbox_unread_count: { Args: Record<never, never>; Returns: number };
+      mark_inbox_read: { Args: { p_ids?: string[] | null }; Returns: number };
+      clear_inbox: { Args: { p_keep_days?: number }; Returns: number };
+      mute_notification_kind: { Args: { p_kind: DbNotificationKind }; Returns: undefined };
       unread_notification_count: { Args: Record<never, never>; Returns: number };
       mark_notifications_read: { Args: { p_ids: string[] | null }; Returns: number };
       my_deleted_content: {
@@ -2385,6 +2460,10 @@ export type Database = {
       decide_campaign: {
         Args: { p_campaign_id: string; p_approve: boolean; p_note?: string };
         Returns: DbAdStatus;
+      };
+      edit_campaign_creative: {
+        Args: { p_creative_id: string; p_headline: string; p_body: string; p_cta_label: string };
+        Returns: string;
       };
       set_campaign_paused: {
         Args: { p_campaign_id: string; p_paused: boolean };
@@ -2579,6 +2658,19 @@ export type Database = {
         };
         Returns: MessageRow;
       };
+      send_message_once: {
+        Args: {
+          p_conversation_id: string;
+          p_client_id: string;
+          p_body: string;
+          p_kind?: DbMessageKind;
+          p_media_url?: string;
+          p_media_name?: string;
+          p_code_language?: string;
+          p_reply_to?: string | null;
+        };
+        Returns: MessageRow;
+      };
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
       leave_conversation: { Args: { p_conversation_id: string }; Returns: undefined };
       conversation_inbox: { Args: { p_limit: number }; Returns: ConversationInboxRow[] };
@@ -2602,6 +2694,15 @@ export type Database = {
       };
       conversation_messages: {
         Args: { p_conversation_id: string; p_before?: string | null; p_limit?: number };
+        Returns: ConversationMessageRow[];
+      };
+      conversation_messages_page: {
+        Args: {
+          p_conversation_id: string;
+          p_before?: string | null;
+          p_before_id?: string | null;
+          p_limit?: number;
+        };
         Returns: ConversationMessageRow[];
       };
       post_interaction_state: {

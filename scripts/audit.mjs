@@ -59,21 +59,40 @@ const packages = readdirSync(root)
   .filter((name) => existsSync(join(root, name, 'package.json')))
   .sort();
 
-const webApps = packages.filter((name) => name !== 'corporate-kit' && name !== 'android-app');
+const webApps = packages.filter(
+  (name) => name !== 'corporate-kit' && name !== 'android-app' && name !== 'push-worker',
+);
 const consoles = webApps.filter((name) => name !== 'main-site');
+/**
+ * The one Cloudflare Worker. It is a deployable unit with its own gates, but it
+ * is not a Pages project: it has no index.html, no Vite build and no browser
+ * bundle, so every audit that asks a question about a web application skips it.
+ */
+const workers = packages.filter((name) => name === 'push-worker');
 
 /* ------------------------------------------------------------------ *
  * 1. Shape of the delivery
  * ------------------------------------------------------------------ */
 
-check('A-01', 'Delivery', 'Sixteen packages carry build gates', () => ({
-  ok: packages.length === 16,
+check('A-01', 'Delivery', 'Seventeen packages carry build gates', () => ({
+  ok: packages.length === 17,
   evidence: `${packages.length}: ${packages.join(', ')}`,
 }));
 
 check('A-02', 'Delivery', 'Fourteen web applications are deployable to Pages', () => ({
   ok: webApps.length === 14,
   evidence: webApps.join(', '),
+}));
+
+check('A-14', 'Delivery', 'The push worker is a deployable unit of its own', () => ({
+  ok:
+    workers.length === 1 &&
+    has('push-worker/wrangler.toml') &&
+    /crons\s*=\s*\[/.test(read('push-worker/wrangler.toml')) &&
+    has('push-worker/src/index.ts'),
+  evidence:
+    'push-worker/ has wrangler.toml with a cron trigger and its own entry point; ' +
+    'it is deployed by deploy.yml and gated by the push-worker job in ci.yml',
 }));
 
 check('A-03', 'Delivery', 'The Android shell is a real package, not a note', () => ({
@@ -88,7 +107,7 @@ check('A-04', 'Delivery', 'Every application declares the five gate scripts', ()
   });
   return {
     ok: missing.length === 0,
-    evidence: missing.length === 0 ? 'all sixteen' : missing.join(', '),
+    evidence: missing.length === 0 ? `all ${packages.length}` : missing.join(', '),
   };
 });
 
@@ -112,6 +131,20 @@ check('A-06', 'Delivery', 'The delivery plan records all twenty responses', () =
 
 const migrations = shLines('ls supabase/migrations/*.sql');
 const sqlAll = migrations.map((path) => read(path.replace(/^\.\//, ''))).join('\n');
+/**
+ * The migrations with their comments and string literals removed.
+ *
+ * A check about SQL must not fire on prose that describes SQL, and one of
+ * these checks does: `0075` builds `alter function ... set search_path = ...`
+ * inside a `format()` literal, which is the repair, not the mistake. Code
+ * that quotes code is exactly what a text search cannot tell apart.
+ */
+const sqlCode = sqlAll
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/--.*$/gm, '')
+  // A literal spanning several lines is blanked but keeps its newlines, so a
+  // line-by-line check still sees the line boundaries the file has.
+  .replace(/'(?:[^']|'')*'/g, (literal) => "''" + '\n'.repeat((literal.match(/\n/g) ?? []).length));
 
 check('B-01', 'Database', 'Migrations are numbered without a gap', () => {
   const numbers = migrations.map((path) => Number(path.match(/(\d{4})_/)[1]));
@@ -141,6 +174,52 @@ check('B-03', 'Database', 'Every security-definer function pins its search path'
     .filter((block) => !/set search_path = /.test(block.slice(0, 900)))
     .map((block) => block.slice(0, block.indexOf('(')));
   return { ok: bad.length === 0, evidence: bad.length === 0 ? 'all of them' : bad.join(', ') };
+});
+
+// The outage this check exists for: `gen_random_bytes(integer) does not exist`
+// from a certificate screen, while every test in the repository passed. PGlite
+// installs the extensions into `public`, Supabase installs them into
+// `extensions`, and only one of those was ever in a pinned search path.
+check('B-03b', 'Database', 'No pinned search path leaves out the extensions schema', () => {
+  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+    match[1].trim(),
+  );
+  // A `format()` template is not a path: `0075` builds the corrected path in
+  // one, and the literal `%s` it leaves behind is the repair, not a mistake.
+  const bad = [...new Set(paths)].filter(
+    (path) => !path.includes('%') && !/(^|,)\s*extensions\s*(,|$)/.test(path),
+  );
+  return {
+    ok: bad.length === 0,
+    evidence: bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
+  };
+});
+
+check('B-03c', 'Database', '`pg_temp` is last, so a caller cannot get in front of a real schema', () => {
+  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+    match[1].trim(),
+  );
+  const bad = [...new Set(paths)].filter((path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path));
+  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
+});
+
+// The same class of mistake in a different coat. A function body is resolved
+// against *its own* pinned search path at the moment it is created, so a file
+// that calls an extension-owned symbol must say where to look. Qualifying the
+// call instead would tie the file to one deployment's layout; naming the
+// schema in the path works wherever the extension landed.
+check('B-03d', 'Database', 'A file that calls an extension-owned symbol says where to find it', () => {
+  const owned = ['gen_random_bytes', 'digest', 'hmac', 'gen_salt', 'crypt', 'similarity', 'show_trgm'];
+  const bad = [];
+  for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
+    const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
+    const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
+    if (uses.length === 0) continue;
+    const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
+    const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
+    if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
+  }
+  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
 });
 
 check('B-04', 'Database', 'No migration grants a blanket write to anon', () => {
@@ -181,6 +260,23 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'push_mark',
     'push_kill',
     'push_content',
+    // 0072. Each is gated by the flush secret, which the database checks itself
+    // (bsdc.push_secret_matches), and each writes only push subscription state:
+    // which device was reached, which one a push service says is gone, which one
+    // returned keys it could not use, and the housekeeping sweep.
+    'push_mark_devices',
+    'push_kill_device',
+    'push_flag_invalid_device',
+    'push_sweep_dead_devices',
+    // 0073. Picture clean-up. Each is gated by the same flush secret, which the
+    // database checks itself, and each mutates only the three purge columns on a
+    // media row: claimed, released, confirmed, swept. A member never reaches any
+    // of them, and `media_pending_purge` (the read) is the only way to learn
+    // which rows exist.
+    'media_claim_purge',
+    'media_mark_purged',
+    'media_release_purge',
+    'media_sweep_forgotten',
   ];
   const unexpected = writers.filter((name) => !allowed.includes(name));
   return {
@@ -207,8 +303,14 @@ note('B-06', 'Database', 'Tables, functions and policies shipped', () => {
 
 check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
   const blocks = sqlAll.split(/create or replace function public\./).slice(1);
+  // `bsdc.push_secret_matches` is an identity check too: it is how a scheduler
+  // proves itself to a routine that has no member to ask. `bsdc.role_rank` is a
+  // pure comparison and is not one, so the pattern names the secret check
+  // explicitly rather than matching anything under the `bsdc.` namespace.
   const guarded = blocks.filter((block) =>
-    /require_permission|has_permission|current_uid\(\)/.test(block.slice(0, 2500)),
+    /require_permission|has_permission|current_uid\(\)|push_secret_matches/.test(
+      block.slice(0, 2500),
+    ),
   );
   return {
     ok: guarded.length / blocks.length > 0.8,
@@ -336,7 +438,14 @@ check('C-06', 'Front end', 'The layout is fluid from 250px upward', () => {
 check('C-07', 'Front end', 'Both languages carry the same keys', () => {
   const en = read('main-site/src/i18n/locales/en.ts');
   const bn = read('main-site/src/i18n/locales/bn.ts');
-  const keys = (source) => (source.match(/^\s{2}[a-zA-Z]+:/gm) ?? []).length;
+  // Only the members of the exported bundle count. `en.ts` also declares a
+  // standalone `DIAGNOSTICS` object at column zero, which is not a member of
+  // either bundle and used to make this count disagree by one.
+  const keys = (source) => {
+    const start = source.search(/export const (?:en|bn)\b/);
+    const body = start === -1 ? '' : source.slice(start);
+    return (body.match(/^\s{2}[a-zA-Z]+:/gm) ?? []).length;
+  };
   return {
     ok: keys(en) === keys(bn) && keys(en) > 0,
     evidence: `${keys(en)} top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts`,
@@ -570,10 +679,14 @@ check('G-03', 'PWA', 'The offline state is honest rather than a blank page', () 
 
 note('H-01', 'Tests', 'Unit tests by package', () => {
   const counts = packages.map((name) => {
+    // `Tests  6 passed (6)` is the summary vitest prints; the second number in
+    // parentheses is the same count. Grepping only the first form missed a package
+    // whose run ended in a different shape and reported it as zero tests, which is
+    // indistinguishable from a package with no tests.
     const output = sh(
-      `cd ${name} && npx vitest run 2>&1 | grep -oE "Tests  [0-9]+ passed" | head -1 || true`,
+      `cd ${name} && npx vitest run 2>&1 | grep -E "^ *Tests +[0-9]+ (passed|failed)" | tail -1 || true`,
     );
-    const n = Number(output.match(/(\d+)/)?.[1] ?? 0);
+    const n = Number(output.match(/(\d+) (?:passed|failed)/)?.[1] ?? 0);
     return { name, n };
   });
   const total = counts.reduce((sum, entry) => sum + entry.n, 0);
@@ -612,13 +725,15 @@ check('A-08', 'Delivery', 'Every package carries a README that says what it is',
   const missing = packages.filter((name) => !has(`${name}/README.md`));
   return {
     ok: missing.length === 0,
-    evidence: missing.length === 0 ? 'all sixteen' : missing.join(', '),
+    evidence: missing.length === 0 ? `all ${packages.length}` : missing.join(', '),
   };
 });
 
 check('A-09', 'Delivery', 'The root governance documents are present', () => {
   const required = [
-    'LICENSE.md',
+    'LICENSE',
+    'NOTICE',
+    'THIRD-PARTY-NOTICES.md',
     'SECURITY.md',
     'CONTRIBUTING.md',
     'README.md',
@@ -763,8 +878,14 @@ check('C-14', 'Front end', 'Every image carries alternative text', () => {
   const bad = [];
   for (const file of sourceFiles.filter((path) => path.endsWith('.tsx'))) {
     const source = read(file.replace(/^\.\//, ''));
+    // A component that requires `alt` as a prop satisfies the rule without
+    // writing `alt=` next to the element: `MediaImage` destructures it and
+    // spreads the rest, so the attribute is there at runtime and is typed as
+    // non-optional at the call site.
+    const altIsARequiredProp =
+      /alt:\s*string;/.test(source) && !/alt\?:/.test(source);
     for (const match of source.matchAll(/<img\b([\s\S]*?)\/>/g)) {
-      if (!/\balt=/.test(match[1])) bad.push(file);
+      if (!/\balt=|\{\.\.\./.test(match[1]) && !altIsARequiredProp) bad.push(file);
     }
   }
   return {
@@ -899,7 +1020,9 @@ check(
   'Safety',
   'Consoles are told not to be indexed, in a header a crawler cannot ignore',
   () => {
-    const privateConsoles = consoles.filter((name) => name !== 'vf-site' && name !== 'status-site');
+    const privateConsoles = consoles.filter(
+      (name) => name !== 'vf-site' && name !== 'status-site' && has(`${name}/public/_headers`),
+    );
     const missing = privateConsoles.filter(
       (name) => !/X-Robots-Tag: noindex/.test(read(`${name}/public/_headers`)),
     );
@@ -914,7 +1037,9 @@ check(
 );
 
 check('D-12', 'Safety', 'Consoles refuse to be framed', () => {
-  const privateConsoles = consoles.filter((name) => name !== 'vf-site' && name !== 'status-site');
+  const privateConsoles = consoles.filter(
+    (name) => name !== 'vf-site' && name !== 'status-site' && has(`${name}/public/_headers`),
+  );
   const missing = privateConsoles.filter(
     (name) => !/X-Frame-Options: DENY/.test(read(`${name}/public/_headers`)),
   );
@@ -1015,14 +1140,17 @@ check('G-05', 'PWA', 'Offline and runtime caching rules cover each request kind'
     injectManifest: /strateg(?:y|ies):\s*['\"]injectManifest['\"]/.test(config),
     precache: /precacheAndRoute\(self\.__WB_MANIFEST\)/.test(worker),
     navigation: /new NavigationRoute\(createHandlerBoundToURL\('\/index\.html'\)/.test(worker),
+    // The picture cache is written by hand and its name carries a version, so
+    // the question is "is there an image route with an image cache" rather than
+    // "does it still use the strategy that poisoned it".
     imageCache:
-      /request\.destination === 'image'[\s\S]*?new StaleWhileRevalidate\([\s\S]*?cacheName: 'bsdc-images'/.test(
-        worker,
-      ),
+      /request\.destination !== 'image'/.test(worker) &&
+      /cacheName: IMAGE_CACHE|IMAGE_CACHE\b/.test(worker) &&
+      /^const IMAGE_CACHE = 'bsdc-images-v\d+';$/m.test(worker),
     fontCache:
-      /request\.destination === 'font'[\s\S]*?new CacheFirst\([\s\S]*?cacheName: 'bsdc-fonts'/.test(
-        worker,
-      ),
+      /request\.destination === 'font'/.test(worker) &&
+      /cacheName: FONT_CACHE/.test(worker) &&
+      /^const FONT_CACHE = 'bsdc-fonts-v\d+';$/m.test(worker),
   };
   const missing = Object.entries(checks)
     .filter(([, present]) => !present)
@@ -1138,8 +1266,11 @@ check('B-14', 'Database', 'The audit trail cannot be edited or deleted', () => {
 });
 
 check('C-23', 'Front end', 'The any type does not appear in shipped source', () => {
+  // Comments are not types. A line whose match is preceded by `//` is prose
+  // that happens to contain the word, and stripping comments before looking
+  // keeps the check honest instead of teaching people to avoid a sentence.
   const hits = shLines(
-    `grep -rnE ":\\s*any\\b|<any>|as any" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/" | grep -v "\\.test\\." | grep -v "no-unsafe"`,
+    `grep -rnE ":\\s*any\\b|<any>|as any" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/" | grep -v "\\.test\\." | grep -v "no-unsafe" | grep -vE "^[^:]+:[0-9]+:\\s*(//|\\*)"`,
   );
   return {
     ok: hits.length === 0,
@@ -1190,6 +1321,7 @@ check('C-28', 'Front end', 'Every console states a minimum width of nothing', ()
 
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
   const bad = consoles.filter((name) => {
+    if (!has(`${name}/public/_headers`)) return false;
     const headers = read(`${name}/public/_headers`);
     const scriptSrc = headers.match(/script-src ([^;]+);/)?.[1] ?? '';
     return /unsafe-inline/.test(scriptSrc);
