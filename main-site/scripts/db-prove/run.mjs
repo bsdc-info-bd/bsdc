@@ -79,6 +79,7 @@ const HARNESSES = [
   ['t53.mjs', 'advertising charges respect one shared wallet and daily caps'],
   ['t54.mjs', 'accurate performance reports, private receipts and faithful certificate reprints'],
   ['t55.mjs', 'current corporate authority for campaigns, certificates and reports'],
+  ['t56.mjs', 'messenger retries, private drafts, safe replies and membership boundaries'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

@@ -458,6 +458,7 @@ export type ConversationMessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  client_id?: string | null;
   reactions: Record<string, number>;
   my_reactions: string[];
   read_by: string[];
@@ -520,6 +521,7 @@ export type MessageRow = {
   edited_at: string | null;
   deleted_at: string | null;
   created_at: string;
+  client_id: string | null;
 };
 
 export type ConversationInboxRow = {
@@ -2656,6 +2658,19 @@ export type Database = {
         };
         Returns: MessageRow;
       };
+      send_message_once: {
+        Args: {
+          p_conversation_id: string;
+          p_client_id: string;
+          p_body: string;
+          p_kind?: DbMessageKind;
+          p_media_url?: string;
+          p_media_name?: string;
+          p_code_language?: string;
+          p_reply_to?: string | null;
+        };
+        Returns: MessageRow;
+      };
       mark_conversation_read: { Args: { p_conversation_id: string }; Returns: undefined };
       leave_conversation: { Args: { p_conversation_id: string }; Returns: undefined };
       conversation_inbox: { Args: { p_limit: number }; Returns: ConversationInboxRow[] };
@@ -2679,6 +2694,15 @@ export type Database = {
       };
       conversation_messages: {
         Args: { p_conversation_id: string; p_before?: string | null; p_limit?: number };
+        Returns: ConversationMessageRow[];
+      };
+      conversation_messages_page: {
+        Args: {
+          p_conversation_id: string;
+          p_before?: string | null;
+          p_before_id?: string | null;
+          p_limit?: number;
+        };
         Returns: ConversationMessageRow[];
       };
       post_interaction_state: {

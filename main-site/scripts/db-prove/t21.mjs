@@ -78,7 +78,8 @@ async function checkRefused(db, uid, sql, label) {
 // ---------------------------------------------------------------------------
 // Before: the deployed database has no change feed and nowhere to react
 // ---------------------------------------------------------------------------
-const before = await makeDb({ skip: ['0051_'] });
+// The historical fixture omits 0051; 0082 requires the columns 0051 adds.
+const before = await makeDb({ skip: ['0051_', '0082_'] });
 console.log('--- BEFORE 0051 ---');
 const beforeTables = (
   await before.query(`

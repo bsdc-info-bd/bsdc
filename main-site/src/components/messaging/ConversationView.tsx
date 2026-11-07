@@ -9,11 +9,12 @@ import {
   Trash2,
   Archive,
   LogOut,
+  MoreHorizontal,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Alert,
@@ -31,6 +32,7 @@ import { useErrorToast } from '@/hooks/use-error-toast';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import { dayKey } from '@/lib/messaging/message-text';
 import {
+  compareMessageInstants,
   conversationName,
   type ConversationSummary,
   type Message,
@@ -66,6 +68,13 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
   const { t, i18n } = useTranslation();
   const language: Language = i18n.language === 'en' ? 'en' : 'bn';
   const navigate = useNavigate();
+  const location = useLocation();
+  const requestedMessage =
+    typeof (location.state as { messageId?: unknown } | null)?.messageId === 'string'
+      ? (location.state as { messageId: string }).messageId
+      : null;
+  const jumpRequest = requestedMessage === null ? null : `${location.key}:${requestedMessage}`;
+  const consumedJump = useRef<string | null>(null);
   const viewerUid = useAuthStore((state) => state.user?.uid ?? '');
   const conversation = useConversation(conversationId);
   const settings = useConversationSettings(conversationId);
@@ -74,55 +83,159 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
   const [draft, setDraft] = useState('');
   const draftLoaded = useRef(false);
+  const draftDirty = useRef(false);
+  const draftBeforeEdit = useRef('');
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<Message | null>(null);
   const [deleting, setDeleting] = useState<Message | null>(null);
   const [searching, setSearching] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actions = useRef<HTMLDivElement | null>(null);
+  const [jumping, setJumping] = useState<string | null>(null);
   const searchInput = useRef<HTMLInputElement | null>(null);
   const [searchText, setSearchText] = useState('');
   const [flash, setFlash] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [atBottom, setAtBottom] = useState(true);
-  const bottom = useRef<HTMLDivElement | null>(null);
   const scroller = useRef<HTMLDivElement | null>(null);
-  const firstReadMark = useRef<string | null>(null);
+  const [firstReadMark, setFirstReadMark] = useState<string | null>(null);
   const search = useMessageSearch(searchText, conversationId, searching);
 
   useEffect(() => {
     if (searching) searchInput.current?.focus();
   }, [searching]);
 
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const closeOnPointer = (event: PointerEvent) => {
+      if (!actions.current?.contains(event.target as Node)) setActionsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActionsOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnPointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnPointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [actionsOpen]);
+
   // The draft the member left behind on any device, loaded once.
   useEffect(() => {
     if (draftLoaded.current || conversation.state === null) return;
     draftLoaded.current = true;
-    if (conversation.state.draftBody.length > 0) setDraft(conversation.state.draftBody);
-    firstReadMark.current = conversation.state.lastReadAt;
+    if (!draftDirty.current && conversation.state.draftBody.length > 0)
+      setDraft(conversation.state.draftBody);
+    setFirstReadMark(conversation.state.lastReadAt);
   }, [conversation.state]);
 
   const lastMessageId = conversation.messages.at(-1)?.id ?? null;
   useEffect(() => {
-    if (!atBottom) return;
-    bottom.current?.scrollIntoView({ block: 'end' });
+    if (!atBottom || scroller.current === null) return;
+    scroller.current.scrollTop = scroller.current.scrollHeight;
   }, [lastMessageId, atBottom]);
 
-  // A thread on screen in a visible tab is read; a hidden tab is not.
+  // A visible thread is read only at its newest edge; scrolling through older
+  // history or leaving a background tab open must not clear unseen messages.
+  const lastIncomingId =
+    [...conversation.messages]
+      .reverse()
+      .find((message) => message.senderUid !== viewerUid && message.clientState === undefined)
+      ?.id ?? null;
+  const markRead = conversation.markRead;
   useEffect(() => {
     const mark = () => {
-      if (document.visibilityState !== 'visible') return;
-      const last = [...conversation.messages].reverse().find((m) => m.senderUid !== viewerUid);
-      if (last !== undefined) conversation.markRead(last.id);
+      if (
+        document.visibilityState === 'visible' &&
+        atBottom &&
+        !conversation.isLoading &&
+        !conversation.isError &&
+        conversation.state !== null &&
+        lastIncomingId !== null
+      )
+        markRead(lastIncomingId);
     };
     mark();
     document.addEventListener('visibilitychange', mark);
-    return () => document.removeEventListener('visibilitychange', mark);
-  }, [conversation, viewerUid]);
+    window.addEventListener('online', mark);
+    return () => {
+      document.removeEventListener('visibilitychange', mark);
+      window.removeEventListener('online', mark);
+    };
+  }, [
+    lastIncomingId,
+    atBottom,
+    markRead,
+    conversation.isLoading,
+    conversation.isError,
+    conversation.state,
+  ]);
 
-  function jump(messageId: string): void {
-    const element = document.getElementById(`message-${messageId}`);
-    element?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    setFlash(messageId);
-    window.setTimeout(() => setFlash((current) => (current === messageId ? null : current)), 1_600);
+  useEffect(() => {
+    if (jumping === null) return;
+    const element = document.getElementById(`message-${jumping}`);
+    if (element === null) return;
+    setAtBottom(false);
+    element.scrollIntoView({
+      block: 'center',
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+    setFlash(jumping);
+    setJumping(null);
+  }, [jumping, conversation.messages]);
+
+  useEffect(() => {
+    if (flash === null) return;
+    const timer = window.setTimeout(() => setFlash(null), 1_600);
+    return () => window.clearTimeout(timer);
+  }, [flash]);
+
+  const loadUntil = conversation.loadUntil;
+  const jump = useCallback(
+    async (messageId: string): Promise<void> => {
+      try {
+        const found = await loadUntil(messageId);
+        if (found) setJumping(messageId);
+        else toast.info(t('chat.messageNotLoaded'));
+      } catch (error) {
+        toast.error(t(dataErrorKey(error)));
+      }
+    },
+    [loadUntil, t],
+  );
+
+  // Saved-message and cross-conversation search links identify a line, not
+  // merely a room. Load enough history and scroll to the requested result.
+  useEffect(() => {
+    if (
+      requestedMessage === null ||
+      jumpRequest === null ||
+      consumedJump.current === jumpRequest ||
+      conversation.isLoading ||
+      conversation.isError
+    )
+      return;
+    consumedJump.current = jumpRequest;
+    void jump(requestedMessage);
+  }, [requestedMessage, jumpRequest, conversation.isLoading, conversation.isError, jump]);
+
+  async function loadPrevious(): Promise<void> {
+    const element = scroller.current;
+    const oldHeight = element?.scrollHeight ?? 0;
+    const oldTop = element?.scrollTop ?? 0;
+    try {
+      await conversation.loadOlder();
+      requestAnimationFrame(() => {
+        if (element !== null) element.scrollTop = oldTop + element.scrollHeight - oldHeight;
+      });
+    } catch (error) {
+      toast.error(t(dataErrorKey(error)));
+    }
+  }
+
+  function reportFailure(action: Promise<void>): void {
+    void action.catch((error: unknown) => toast.error(t(dataErrorKey(error))));
   }
 
   const title =
@@ -151,14 +264,15 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
   const pin = conversation.pins[0] ?? null;
   const unreadDividerId = useMemo(() => {
-    const mark = firstReadMark.current;
+    const mark = firstReadMark;
     if (mark === null) return null;
     return (
       conversation.messages.find(
-        (message) => message.createdAt > mark && message.senderUid !== viewerUid,
+        (message) =>
+          compareMessageInstants(message.createdAt, mark) > 0 && message.senderUid !== viewerUid,
       )?.id ?? null
     );
-  }, [conversation.messages, viewerUid]);
+  }, [conversation.messages, viewerUid, firstReadMark]);
 
   const statusLabel =
     conversation.status === 'live'
@@ -173,9 +287,13 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
     // Fills whatever height the page gives it: a thread route is the whole
     // viewport, and the fixed 75vh card this used to be left the composer
     // under the fold on a phone.
-    <div className="flex h-full min-h-0 flex-col overflow-hidden border-line bg-surface md:rounded-card md:border">
-      <header className="flex items-center gap-2 border-b border-line p-3">
-        <Link to={ROUTES.messages} aria-label={t('chat.backToInbox')}>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border-border bg-surface md:rounded-[24px] md:border md:shadow-raised">
+      <header className="relative z-20 flex shrink-0 items-center gap-2 border-b border-border bg-bg/95 px-2 py-2 sm:px-4">
+        <Link
+          to={ROUTES.messages}
+          aria-label={t('chat.backToInbox')}
+          className="fab-tap inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition-colors hover:bg-surface-2 hover:text-text"
+        >
           <ArrowLeft size={18} aria-hidden="true" />
         </Link>
         <Avatar
@@ -185,7 +303,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
         />
         <div className="min-w-0 flex-1">
           <h2 className="fab-truncate text-sm font-semibold">{title}</h2>
-          <p className="flex items-center gap-2 text-2xs text-muted">
+          <p className="flex items-center gap-1.5 overflow-hidden whitespace-nowrap text-2xs text-muted">
             <span
               className={cn(
                 'inline-flex h-2 w-2 rounded-full',
@@ -194,15 +312,12 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
               aria-hidden="true"
             />
             <span>{statusLabel}</span>
-            {conversation.latencyMs !== null ? (
-              <span>
-                {t('chat.latency', { ms: formatNumber(conversation.latencyMs, language) })}
-              </span>
-            ) : null}
-            {conversation.presentUids.length > 0 ? (
-              <span>{t('chat.here', { count: conversation.presentUids.length })}</span>
-            ) : null}
-            <span>{t('chat.memberCount', { count: conversation.members.length })}</span>
+            <span className="hidden sm:inline" aria-hidden="true">
+              ·
+            </span>
+            <span className="hidden sm:inline">
+              {t('chat.memberCount', { count: conversation.members.length })}
+            </span>
           </p>
         </div>
 
@@ -212,30 +327,71 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
           aria-expanded={searching}
           onClick={() => setSearching((open) => !open)}
         />
-        <IconButton
-          label={settings.state?.muted === true ? t('chat.unmute') : t('chat.mute')}
-          icon={settings.state?.muted === true ? <BellOff size={16} /> : <Bell size={16} />}
-          onClick={() => settings.setMuted(!(settings.state?.muted ?? false))}
-        />
-        <IconButton
-          label={
-            settings.state?.isPinned === true
-              ? t('chat.unpinConversation')
-              : t('chat.pinConversation')
-          }
-          icon={<Pin size={16} />}
-          onClick={() => settings.setPinned(!(settings.state?.isPinned ?? false))}
-        />
-        <IconButton
-          label={settings.state?.isArchived === true ? t('chat.unarchive') : t('chat.archive')}
-          icon={<Archive size={16} />}
-          onClick={() => settings.setArchived(!(settings.state?.isArchived ?? false))}
-        />
-        <IconButton
-          label={t('chat.leave')}
-          icon={<LogOut size={16} />}
-          onClick={() => setLeaving(true)}
-        />
+        <div ref={actions} className="relative shrink-0">
+          <IconButton
+            label={t('chat.conversationActions')}
+            icon={<MoreHorizontal size={20} />}
+            aria-haspopup="menu"
+            aria-expanded={actionsOpen}
+            onClick={() => setActionsOpen((open) => !open)}
+          />
+          {actionsOpen ? (
+            <div
+              role="menu"
+              className="motion-safe:animate-fade-up absolute end-0 top-full z-30 mt-1 w-52 rounded-2xl border border-border bg-bg p-1.5 text-sm shadow-raised"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+                onClick={() => {
+                  settings.setMuted(!(settings.state?.muted ?? false));
+                  setActionsOpen(false);
+                }}
+              >
+                {settings.state?.muted === true ? <Bell size={16} /> : <BellOff size={16} />}
+                {settings.state?.muted === true ? t('chat.unmute') : t('chat.mute')}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+                onClick={() => {
+                  settings.setPinned(!(settings.state?.isPinned ?? false));
+                  setActionsOpen(false);
+                }}
+              >
+                <Pin size={16} />
+                {settings.state?.isPinned === true
+                  ? t('chat.unpinConversation')
+                  : t('chat.pinConversation')}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+                onClick={() => {
+                  settings.setArchived(!(settings.state?.isArchived ?? false));
+                  setActionsOpen(false);
+                }}
+              >
+                <Archive size={16} />
+                {settings.state?.isArchived === true ? t('chat.unarchive') : t('chat.archive')}
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start text-danger hover:bg-surface-2"
+                onClick={() => {
+                  setLeaving(true);
+                  setActionsOpen(false);
+                }}
+              >
+                <LogOut size={16} /> {t('chat.leave')}
+              </button>
+            </div>
+          ) : null}
+        </div>
       </header>
 
       {searching ? (
@@ -263,7 +419,15 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
               {search.isLoading ? (
                 <li className="text-xs text-muted">{t('common.loading')}</li>
               ) : null}
-              {!search.isLoading && search.hits.length === 0 ? (
+              {search.isError ? (
+                <li role="alert" className="text-xs text-danger">
+                  {t('chat.searchFailed')}{' '}
+                  <button type="button" className="underline" onClick={search.retry}>
+                    {t('common.retry')}
+                  </button>
+                </li>
+              ) : null}
+              {!search.isLoading && !search.isError && search.hits.length === 0 ? (
                 <li className="text-xs text-muted">{t('chat.searchEmpty')}</li>
               ) : null}
               {search.hits.map((hit) => (
@@ -272,7 +436,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
                     type="button"
                     className="fab-tap block w-full rounded-lg px-2 py-1 text-start text-xs hover:bg-surface-2"
                     onClick={() => {
-                      jump(hit.messageId);
+                      void jump(hit.messageId);
                       setSearching(false);
                     }}
                   >
@@ -295,7 +459,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
           <button
             type="button"
             className="fab-tap fab-truncate flex-1 text-start"
-            onClick={() => jump(pin.messageId)}
+            onClick={() => void jump(pin.messageId)}
           >
             <span className="font-semibold">{t('chat.pinned')}</span>
             <span className="ms-2 text-muted">
@@ -307,8 +471,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             variant="ghost"
             size="sm"
             onClick={() => {
-              const message = conversation.messages.find((item) => item.id === pin.messageId);
-              if (message !== undefined) void conversation.pin(message.id);
+              reportFailure(conversation.pin(pin.messageId));
             }}
           >
             {t('chat.unpin')}
@@ -318,7 +481,8 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
       <div
         ref={scroller}
-        className="fab-scroll flex-1 overscroll-contain p-3"
+        data-message-scroller
+        className="fab-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface-2/40 px-3 py-4 sm:px-5"
         onScroll={(event) => {
           const element = event.currentTarget;
           setAtBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 80);
@@ -326,7 +490,12 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
       >
         {conversation.hasOlder && conversation.messages.length > 0 ? (
           <div className="mb-3 flex justify-center">
-            <Button variant="ghost" size="sm" onClick={conversation.loadOlder}>
+            <Button
+              variant="ghost"
+              size="sm"
+              loading={conversation.isLoadingOlder}
+              onClick={() => void loadPrevious()}
+            >
               {t('messages.loadOlder')}
             </Button>
           </div>
@@ -334,9 +503,16 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
 
         {conversation.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
 
-        {conversation.isError ? <Alert tone="danger" title={t('messages.threadFailed')} /> : null}
+        {conversation.isError ? (
+          <div className="space-y-2">
+            <Alert tone="danger" title={t('messages.threadFailed')} />
+            <Button variant="outline" size="sm" onClick={conversation.refresh}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        ) : null}
 
-        {!conversation.isLoading && conversation.messages.length === 0 ? (
+        {!conversation.isLoading && !conversation.isError && conversation.messages.length === 0 ? (
           <EmptyState
             icon={<Info size={22} />}
             title={t('messages.sayHello')}
@@ -345,13 +521,16 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
         ) : null}
 
         <ul className="flex flex-col gap-3">
-          {conversation.groups.map((group) => {
+          {conversation.groups.map((group, groupIndex) => {
             const mine = group.senderUid === viewerUid;
             return (
               <li key={`${group.senderUid ?? 'system'}-${group.startedAt}`}>
                 <ul className="flex flex-col gap-1">
                   {group.messages.map((message, index) => {
-                    const previous = group.messages[index - 1];
+                    const previous =
+                      index === 0
+                        ? conversation.groups[groupIndex - 1]?.messages.at(-1)
+                        : group.messages[index - 1];
                     const startsADay =
                       previous === undefined ||
                       dayKey(previous.createdAt) !== dayKey(message.createdAt);
@@ -378,28 +557,31 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
                           memberAvatar={memberAvatar}
                           flash={flash === message.id}
                           onReply={(target) => {
+                            if (editing !== null) setDraft(draftBeforeEdit.current);
                             setEditing(null);
                             setReplyTo(target);
                           }}
                           onEdit={(target) => {
+                            if (editing === null) draftBeforeEdit.current = draft;
                             setReplyTo(null);
                             setEditing(target);
                             setDraft(target.body);
                           }}
                           onDelete={(target) => setDeleting(target)}
                           onReact={(target, reaction) => {
-                            void conversation.react(target.id, reaction);
+                            reportFailure(conversation.react(target.id, reaction));
                           }}
                           onStar={(target) => {
-                            void conversation.star(target.id);
+                            reportFailure(conversation.star(target.id));
                           }}
                           onPin={(target) => {
-                            void conversation.pin(target.id);
+                            reportFailure(conversation.pin(target.id));
                           }}
-                          onJump={jump}
+                          onJump={(id) => void jump(id)}
                           onRetry={(target) => {
-                            void conversation.retry(target);
+                            reportFailure(conversation.retry(target));
                           }}
+                          onDiscard={conversation.discard}
                         />
                       </li>
                     );
@@ -409,7 +591,6 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             );
           })}
         </ul>
-        <div ref={bottom} />
       </div>
 
       {!atBottom ? (
@@ -421,7 +602,12 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             icon={<ArrowDown size={16} />}
             onClick={() => {
               setAtBottom(true);
-              bottom.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+              scroller.current?.scrollTo({
+                top: scroller.current.scrollHeight,
+                behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches
+                  ? 'auto'
+                  : 'smooth',
+              });
             }}
           />
         </div>
@@ -431,26 +617,39 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
         {typingNames.length > 0 ? t('messages.typing', { names: typingNames.join(', ') }) : ''}
       </p>
 
+      {conversation.draftSaveFailed ? (
+        <p
+          role="status"
+          className="flex items-center justify-between gap-2 border-t border-border px-3 py-2 text-xs text-danger"
+        >
+          <span>{t('messages.draftSaveFailed')}</span>
+          <button
+            type="button"
+            className="fab-tap shrink-0 font-semibold underline"
+            onClick={conversation.retryDraft}
+          >
+            {t('common.retry')}
+          </button>
+        </p>
+      ) : null}
+
       <MessageComposer
         draft={draft}
         onDraftChange={(value) => {
+          draftDirty.current = true;
           setDraft(value);
-          conversation.saveDraft(value);
+          if (editing === null) conversation.saveDraft(value);
         }}
         onSend={async (body, replyId) => {
           await conversation.send(body, { replyTo: replyId });
         }}
         onSendAttachment={async (input) => {
-          const { sendMessage } = await import('@/lib/messaging/message-repository');
-          await sendMessage({
-            conversationId,
-            body: input.body,
+          await conversation.send(input.body, {
             kind: input.kind,
             mediaUrl: input.mediaUrl,
             mediaName: input.mediaName,
             replyTo: replyTo?.id ?? null,
           });
-          setReplyTo(null);
         }}
         onTyping={conversation.signalTyping}
         replyTo={replyTo}
@@ -458,12 +657,13 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
         editing={editing}
         onCancelEdit={() => {
           setEditing(null);
-          setDraft('');
+          setDraft(draftBeforeEdit.current);
         }}
         onSaveEdit={async (body) => {
           if (editing !== null) await conversation.edit(editing.id, body);
         }}
         memberName={memberName}
+        disabled={conversation.isLoading || conversation.isError || conversation.state === null}
       />
 
       <Modal

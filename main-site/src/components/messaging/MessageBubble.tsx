@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { Avatar, Button } from '@/design-system';
 import { cn } from '@/lib/cn';
 import type { Language } from '@/i18n';
@@ -38,6 +39,7 @@ export interface MessageBubbleProps {
   onPin: (message: Message) => void;
   onJump: (messageId: string) => void;
   onRetry: (message: Message) => void;
+  onDiscard: (message: Message) => void;
 }
 
 const EMOJI_ONLY = /^(?:\p{Extended_Pictographic}|\p{Emoji_Modifier}|\uFE0F|\u200D|\s){1,12}$/u;
@@ -68,34 +70,65 @@ export function MessageBubble({
   onPin,
   onJump,
   onRetry,
+  onDiscard,
 }: MessageBubbleProps) {
   const { t, i18n } = useTranslation();
   const language: Language = i18n.language === 'en' ? 'en' : 'bn';
   const [picker, setPicker] = useState(false);
   const [menu, setMenu] = useState(false);
-  const wrapper = useRef<HTMLLIElement | null>(null);
+  const [placement, setPlacement] = useState({ down: false, left: true, maxHeight: 320 });
+  const wrapper = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!picker && !menu) return;
-    const close = (event: MouseEvent) => {
+    const close = (event: PointerEvent) => {
       if (!wrapper.current?.contains(event.target as Node)) {
         setPicker(false);
         setMenu(false);
       }
     };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPicker(false);
+        setMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', escape);
+    };
   }, [picker, menu]);
+
+  function placePopup(button: HTMLButtonElement, width: number): void {
+    const anchor = button.getBoundingClientRect();
+    const scroller = button.closest('[data-message-scroller]')?.getBoundingClientRect();
+    const top = Math.max(0, scroller?.top ?? 0);
+    const bottom = Math.min(window.innerHeight, scroller?.bottom ?? window.innerHeight);
+    const left = Math.max(0, scroller?.left ?? 0);
+    const right = Math.min(window.innerWidth, scroller?.right ?? window.innerWidth);
+    const above = Math.max(0, anchor.top - top - 4);
+    const below = Math.max(0, bottom - anchor.bottom - 4);
+    const spaceRight = right - anchor.left;
+    const spaceLeft = anchor.right - left;
+    const down = below >= above;
+    setPlacement({
+      down,
+      left: spaceRight >= width || spaceRight >= spaceLeft,
+      maxHeight: Math.floor(down ? below : above),
+    });
+  }
 
   const emojiOnly = message.body.length > 0 && EMOJI_ONLY.test(message.body.trim());
   const reactions = Object.entries(message.reactions).filter(([, total]) => total > 0);
 
   return (
-    <li
+    <div
       ref={wrapper}
       id={`message-${message.id}`}
       className={cn(
-        'group flex scroll-mt-24 gap-2 rounded-2xl transition-colors',
+        'group motion-safe:animate-fade-up flex scroll-mt-24 gap-2 rounded-2xl transition-colors',
         mine && 'flex-row-reverse',
         flash && 'bg-amber-200/40',
       )}
@@ -132,9 +165,9 @@ export function MessageBubble({
         <div className={cn('flex max-w-[52ch] items-end gap-1', mine && 'flex-row-reverse')}>
           <div
             className={cn(
-              'relative break-words rounded-2xl px-3 py-2 text-sm',
-              mine ? 'bg-green-700 text-white' : 'bg-surface-2 text-text',
-              emojiOnly && 'bg-transparent px-1 py-0 text-3xl',
+              'relative min-w-0 break-words rounded-2xl px-3.5 py-2.5 text-sm shadow-card [overflow-wrap:anywhere]',
+              mine ? 'rounded-tr-md bg-chat-outgoing text-white' : 'rounded-tl-md bg-bg text-text',
+              emojiOnly && 'bg-transparent px-1 py-0 text-3xl text-text shadow-none',
             )}
           >
             {message.replyTo !== null && message.deletedAt === null ? (
@@ -161,14 +194,24 @@ export function MessageBubble({
               ) : null}
               {mine ? (
                 message.clientState === 'failed' ? (
-                  <button
-                    type="button"
-                    onClick={() => onRetry(message)}
-                    className="fab-tap flex items-center gap-1 underline"
-                  >
+                  <span className="flex flex-wrap items-center gap-2">
                     <AlertCircle size={12} aria-hidden="true" />
-                    {t('chat.deliver.retry')}
-                  </button>
+                    <span>{t('chat.deliver.unconfirmed')}</span>
+                    <button
+                      type="button"
+                      onClick={() => onRetry(message)}
+                      className="fab-tap underline"
+                    >
+                      {t('chat.deliver.retry')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDiscard(message)}
+                      className="fab-tap underline"
+                    >
+                      {t('chat.deliver.discard')}
+                    </button>
+                  </span>
                 ) : message.clientState === 'pending' ? (
                   <Clock size={12} aria-label={t('chat.deliver.sending')} />
                 ) : message.readBy.length > 0 ? (
@@ -186,23 +229,30 @@ export function MessageBubble({
           </div>
 
           {/* The per-line actions. Revealed on hover, on focus and on tap. */}
-          <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+          <div
+            className={cn(
+              'flex shrink-0 items-center gap-0.5 transition-opacity sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100 [@media(hover:none)]:opacity-100',
+              message.clientState !== undefined && 'hidden',
+            )}
+          >
             <Button
               variant="ghost"
               size="sm"
+              className="hidden sm:inline-flex"
               aria-label={t('chat.reply')}
               onClick={() => onReply(message)}
             >
               <Reply size={13} aria-hidden="true" />
             </Button>
-            <div className="relative">
+            <div className="relative hidden sm:block">
               <Button
                 variant="ghost"
                 size="sm"
                 aria-haspopup="menu"
                 aria-expanded={picker}
                 aria-label={t('chat.emoji')}
-                onClick={() => {
+                onClick={(event) => {
+                  placePopup(event.currentTarget, 300);
                   setPicker((open) => !open);
                   setMenu(false);
                 }}
@@ -210,7 +260,13 @@ export function MessageBubble({
                 <Smile size={16} aria-hidden="true" />
               </Button>
               {picker ? (
-                <div className="absolute bottom-full z-20 mb-1 flex gap-1 rounded-full border border-line bg-surface p-1 shadow-lg">
+                <div
+                  className={cn(
+                    'absolute z-20 flex gap-1 rounded-full border border-border bg-bg p-1 shadow-raised',
+                    placement.down ? 'top-full mt-1' : 'bottom-full mb-1',
+                    placement.left ? 'left-0' : 'right-0',
+                  )}
+                >
                   {REACTION_CHOICES.map((reaction) => (
                     <button
                       key={reaction}
@@ -235,7 +291,8 @@ export function MessageBubble({
                 aria-haspopup="menu"
                 aria-expanded={menu}
                 aria-label={t('chat.more')}
-                onClick={() => {
+                onClick={(event) => {
+                  placePopup(event.currentTarget, 176);
                   setMenu((open) => !open);
                   setPicker(false);
                 }}
@@ -245,8 +302,51 @@ export function MessageBubble({
               {menu ? (
                 <ul
                   role="menu"
-                  className="absolute bottom-full end-0 z-20 mb-1 w-44 overflow-hidden rounded-xl border border-line bg-surface py-1 text-sm shadow-lg"
+                  className={cn(
+                    'motion-safe:animate-fade-up absolute z-20 w-44 overflow-y-auto rounded-xl border border-border bg-bg py-1 text-sm shadow-raised',
+                    placement.down ? 'top-full mt-1' : 'bottom-full mb-1',
+                    placement.left ? 'left-0' : 'right-0',
+                  )}
+                  style={{ maxHeight: placement.maxHeight }}
                 >
+                  {message.deletedAt === null ? (
+                    <li className="sm:hidden">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="fab-tap flex w-full items-center gap-2 px-3 py-1.5 text-start hover:bg-surface-2"
+                        onClick={() => {
+                          onReply(message);
+                          setMenu(false);
+                        }}
+                      >
+                        <Reply size={13} aria-hidden="true" /> {t('chat.reply')}
+                      </button>
+                    </li>
+                  ) : null}
+                  {message.deletedAt === null ? (
+                    <li className="border-b border-border p-1 sm:hidden">
+                      <div
+                        className="flex flex-wrap justify-center gap-1"
+                        aria-label={t('chat.emoji')}
+                      >
+                        {REACTION_CHOICES.map((reaction) => (
+                          <button
+                            key={reaction}
+                            type="button"
+                            className="fab-tap rounded-lg p-1 hover:bg-surface-2"
+                            aria-label={reaction}
+                            onClick={() => {
+                              onReact(message, reaction);
+                              setMenu(false);
+                            }}
+                          >
+                            {reaction}
+                          </button>
+                        ))}
+                      </div>
+                    </li>
+                  ) : null}
                   {message.deletedAt === null ? (
                     <li>
                       <button
@@ -254,10 +354,14 @@ export function MessageBubble({
                         role="menuitem"
                         className="fab-tap flex w-full items-center gap-2 px-3 py-1.5 text-start hover:bg-surface-2"
                         onClick={() => {
-                          void navigator.clipboard?.writeText(message.body).then(
-                            () => undefined,
-                            () => undefined,
-                          );
+                          if (navigator.clipboard === undefined) {
+                            toast.error(t('chat.copyUnavailable'));
+                          } else {
+                            void navigator.clipboard.writeText(message.body).then(
+                              () => toast.success(t('common.copied')),
+                              () => toast.error(t('chat.copyUnavailable')),
+                            );
+                          }
                           setMenu(false);
                         }}
                       >
@@ -361,6 +465,6 @@ export function MessageBubble({
           </span>
         ) : null}
       </div>
-    </li>
+    </div>
   );
 }

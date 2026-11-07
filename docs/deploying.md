@@ -105,7 +105,8 @@ is not a hypothetical: see the `citext` entry in
 
 ### The one secret it needs
 
-`SUPABASE_DB_URL`, and only in the `deploy` job. The `verify` job uses a
+`SUPABASE_DB_URL` is used by the Database production job and by the read-only
+member-site rollout gate in `deploy.yml`. The Database `verify` job uses a
 throwaway local database whose connection string is a literal in the
 workflow, printed on purpose so a failing run can be reproduced exactly.
 
@@ -187,6 +188,39 @@ Pages projects are created once, by hand in the dashboard or with
 `wrangler pages project create bsdc-<name>` (what the workflow itself does),
 and are listed in the matrix at the top of the workflow next to their
 folder. Adding an application means adding one line there.
+
+### Messenger database before the member-site bundle
+
+The repaired messenger requires migration **0082** and its exact ordered
+predecessors before the new main-site bundle is published. The Database and
+Deploy workflows otherwise start independently on a push to `main`. To avoid
+that race, the production member-site job waits up to 15 minutes for the
+read-only `scripts/wait-for-messenger-migration.mjs` gate: the full migration
+ledger must match this checkout and the messenger RPCs and column privileges
+must be present. It does not apply SQL. If the gate times out, check the
+Database workflow and rerun the member-site deployment after it succeeds.
+`SUPABASE_DB_URL` must point at the same project as `VITE_SUPABASE_URL`.
+Preview deployments do not use the production DB secret; use an already
+migrated staging project when testing the messenger in a preview.
+
+Before applying 0082, back up and rehearse on representative data. The
+migration restricts direct `conversation_members` reads to named non-draft
+columns. Older consumers using `select *` on that table must switch to named
+columns or `conversation_state`; check them and test the actual Supabase
+Realtime subscription after deployment. Typing and presence are currently
+public Realtime topics, not membership-authorized; see `docs/messenger.md`.
+The browser/DB proofs use mocked providers or disposable databases, not
+production Firebase, Realtime, or media.
+
+If the gate fails, the existing Pages bundle stays in place. After diagnosing
+and completing the Database workflow, rerun the member-site deployment for the
+same commit. If a frontend rollback is needed, roll back the Pages deployment
+and leave 0082 in place: the previous member bundle still has the legacy send
+and history RPCs available. Do not replay older SQL over 0082 or remove it while
+new or cached PWA clients may still call its RPCs; doing so can break retries
+or restore unsafe grants. Database rollback or backup restoration requires a
+separately rehearsed recovery plan and can lose messages created since the
+backup. Check other consumers of `conversation_members` before rolling back.
 
 ### One publisher, and it is the workflow
 
@@ -290,7 +324,7 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 
 | Secret                          | What it is                                                                                                            | Where to get it                                                                                                                                                           | Exact format                                                                                                                                                                                                                                                                                                                 | Needed by                               |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
-| `SUPABASE_DB_URL`               | Postgres connection used to apply migrations. Full superuser-equivalent access to the data.                           | Supabase dashboard → Project Settings → Database → Connection string → **Transaction pooler**, not _Direct connection_, then replace `[YOUR-PASSWORD]` with the real one. | `postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres` — the user is `postgres.PROJECTREF`, not `postgres`. No quotes, no trailing newline; URL-encode `@ : / ?` in the password. The direct `db.PROJECTREF.supabase.co` host resolves to IPv6 only and a GitHub runner cannot reach it. | `database.yml` (deploy job)             |
+| `SUPABASE_DB_URL`               | Postgres connection used to apply migrations and check the member-site rollout gate. Full superuser-equivalent access to the data.                           | Supabase dashboard → Project Settings → Database → Connection string → **Transaction pooler**, not _Direct connection_, then replace `[YOUR-PASSWORD]` with the real one. | `postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres` — the user is `postgres.PROJECTREF`, not `postgres`. No quotes, no trailing newline; URL-encode `@ : / ?` in the password. The direct `db.PROJECTREF.supabase.co` host resolves to IPv6 only and a GitHub runner cannot reach it. | `database.yml` (deploy job), `deploy.yml` (member-site gate) |
 | `CLOUDFLARE_API_TOKEN`          | Lets `wrangler` publish builds.                                                                                       | Cloudflare dashboard → My Profile → API Tokens → Create Token → template **Edit Cloudflare Workers**, or a custom token with _Account → Cloudflare Pages → Edit_.         | 40-character opaque string, e.g. `v1.0-aBc…`. Account-scoped, not zone-scoped.                                                                                                                                                                                                                                               | `deploy.yml`                            |
 | `CLOUDFLARE_ACCOUNT_ID`         | Which Cloudflare account to publish into.                                                                             | Cloudflare dashboard → Workers & Pages → right-hand sidebar, or the hex string in the dashboard URL.                                                                      | 32 lowercase hex characters.                                                                                                                                                                                                                                                                                                 | `deploy.yml`                            |
 | `VITE_SUPABASE_URL`             | REST/Realtime endpoint the browser calls. **Public by design.**                                                       | Supabase → Project Settings → API → Project URL.                                                                                                                          | `https://abcdefgh.supabase.co` — no trailing slash, no `/rest/v1`.                                                                                                                                                                                                                                                           | `deploy.yml`, `android.yml`             |

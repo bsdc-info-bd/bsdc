@@ -175,6 +175,19 @@ jobs:
             pages project create ${{ matrix.project }}
             --production-branch=main
 
+      # Database and Pages are separate workflows and can race on a main push.
+      # The member bundle needs migration 0082, so wait for the exact ordered
+      # ledger and required grants before publishing (never migrate here).
+      - name: Install Postgres client for the member-site rollout gate
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Wait for the messenger database migration
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node scripts/wait-for-messenger-migration.mjs
+
       # Firebase service accounts are not automatically Pages runtime bindings.
       # Both projects need server-only credentials to mint database access.
       # Never sync production credentials from pull requests/preview branches.

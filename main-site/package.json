@@ -21,7 +21,8 @@
     "db:prove": "node scripts/db-prove/run.mjs",
     "push:keys": "node scripts/vapid-keys.mjs",
     "test:browser": "npm run build && node scripts/browser/smoke.mjs",
-    "test:corporate-browser": "node scripts/browser/corporate-smoke.mjs"
+    "test:corporate-browser": "node scripts/browser/corporate-smoke.mjs",
+    "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

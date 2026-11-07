@@ -57,6 +57,8 @@ export interface Message {
    * never carry it.
    */
   clientState?: 'pending' | 'failed';
+  /** Idempotency key, used to reconcile a confirmed row with the outbox. */
+  clientId?: string;
 }
 
 /** The per-member state of one conversation. */
@@ -142,6 +144,23 @@ export function matchesFilter(
   }
 }
 
+// PostgREST and Realtime can spell the same instant differently (Z versus an
+// offset, or different fractional precision). Date.parse gives milliseconds;
+// retain Postgres' remaining microseconds so this order matches the SQL cursor.
+function instantParts(value: string): [number, number] {
+  const normalized = value.replace(/([+-]\d{2})$/, '$1:00');
+  const milliseconds = Date.parse(normalized);
+  const fraction = /[T ]\d{2}:\d{2}:\d{2}\.(\d+)/.exec(value)?.[1] ?? '';
+  return [milliseconds, Number(`${fraction}000000`.slice(3, 6))];
+}
+
+export function compareMessageInstants(a: string, b: string): number {
+  const [aMillis, aMicros] = instantParts(a);
+  const [bMillis, bMicros] = instantParts(b);
+  if (Number.isNaN(aMillis) || Number.isNaN(bMillis)) return a.localeCompare(b);
+  return aMillis - bMillis || aMicros - bMicros;
+}
+
 /**
  * Folds one live message into the list the thread is showing: an insert lands
  * in time order, an update or delete replaces the row in place. Returns the
@@ -153,7 +172,14 @@ export function upsertMessage(list: readonly Message[], incoming: Message): Mess
     let index = list.length;
     for (let i = list.length - 1; i >= 0; i -= 1) {
       const candidate = list[i];
-      if (candidate !== undefined && candidate.createdAt <= incoming.createdAt) {
+      const timeOrder =
+        candidate === undefined
+          ? 1
+          : compareMessageInstants(candidate.createdAt, incoming.createdAt);
+      if (
+        candidate !== undefined &&
+        (timeOrder < 0 || (timeOrder === 0 && candidate.id <= incoming.id))
+      ) {
         index = i + 1;
         break;
       }
@@ -172,9 +198,20 @@ export function upsertMessage(list: readonly Message[], incoming: Message): Mess
 export function sameMessage(a: Message, b: Message): boolean {
   return (
     a.body === b.body &&
+    a.senderUid === b.senderUid &&
+    a.kind === b.kind &&
+    a.mediaUrl === b.mediaUrl &&
+    a.mediaName === b.mediaName &&
+    a.codeLanguage === b.codeLanguage &&
+    a.replyTo === b.replyTo &&
+    a.replyBody === b.replyBody &&
+    a.replySender === b.replySender &&
+    a.clientState === b.clientState &&
+    a.clientId === b.clientId &&
+    JSON.stringify(a.author) === JSON.stringify(b.author) &&
     a.editedAt === b.editedAt &&
     a.deletedAt === b.deletedAt &&
-    a.readBy.length === b.readBy.length &&
+    a.readBy.join(',') === b.readBy.join(',') &&
     a.starred === b.starred &&
     a.pinned === b.pinned &&
     JSON.stringify(a.reactions) === JSON.stringify(b.reactions) &&

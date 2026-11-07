@@ -198,12 +198,18 @@ it are listed at the end.
 
 ## Transport note
 
-Messages, reactions, receipts, pins, member settings and the inbox ride
-**Supabase Realtime** (the Postgres change feed), because row level security —
-which is what keeps a private conversation private — is evaluated by Postgres
-for every event. Firebase Realtime Database remains in the app for presence
-(`src/lib/realtime/presence.ts`), but it is not the messenger's transport: the
-RTDB security rules are not in this repository and have never been deployed, so
-anything load-bearing placed there would be locked out in production. The
-messenger's typing and presence signals therefore use Realtime broadcast and
-presence on the same authorized socket as the data.
+Messages, reactions, receipts, pins, member settings and the inbox use
+**Supabase Realtime** Postgres Changes. Table row-level security is checked
+for inserts and updates; Supabase cannot check RLS on deletes, for which only
+primary keys are sent when RLS is enabled. Firebase Realtime Database remains
+in the app for other presence (`src/lib/realtime/presence.ts`), but it is not
+the messenger transport.
+
+**Typing and conversation presence are currently public Realtime broadcast and
+presence topics.** Table RLS does not protect those signals: a client that knows
+a conversation topic may observe or spoof them. Do not treat them as private
+or as proof of identity. Before claiming membership-private typing/presence,
+configure and test private-channel authorization and disable public Realtime
+access for the project, taking all other Realtime consumers into account. The
+live provider configuration and membership-revocation behavior have not been
+verified by the mocked browser or disposable-database tests.

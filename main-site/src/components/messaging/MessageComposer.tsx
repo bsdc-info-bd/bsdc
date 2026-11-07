@@ -2,7 +2,7 @@ import { FilePlus2, ImagePlus, Mic, Pause, Play, Send, Smile, Trash2, X } from '
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Button, IconButton, ProgressBar, TextareaField } from '@/design-system';
+import { IconButton, ProgressBar } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { useAuthStore } from '@/store/auth-store';
@@ -101,6 +101,16 @@ const PURPOSE: Record<AttachmentKind, 'comment-image' | 'chat-document' | 'voice
   audio: 'voice-note',
 };
 
+function sendErrorKey(error: unknown): string {
+  if (
+    error instanceof Error &&
+    error.name === 'MediaError' &&
+    error.message.startsWith('media.errors.')
+  )
+    return error.message;
+  return dataErrorKey(error);
+}
+
 interface SendingState {
   name: string;
   percent: number;
@@ -138,14 +148,22 @@ export function MessageComposer({
   const imageInput = useRef<HTMLInputElement | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const textarea = useRef<HTMLTextAreaElement | null>(null);
+  const submitLock = useRef(false);
 
   const voice = useVoiceRecorder((file) => {
     void uploadAndSend(file, 'audio');
   });
 
   useEffect(() => {
-    if (editing !== null) textarea.current?.focus();
-  }, [editing]);
+    if (editing !== null || replyTo !== null) textarea.current?.focus();
+  }, [editing, replyTo]);
+
+  useEffect(() => {
+    const input = textarea.current;
+    if (input === null) return;
+    input.style.height = 'auto';
+    input.style.height = `${Math.min(input.scrollHeight, 144)}px`;
+  }, [draft]);
 
   useEffect(() => {
     if (voice.errorKey !== null) {
@@ -160,6 +178,8 @@ export function MessageComposer({
   const recording = voice.state === 'recording' || voice.state === 'paused';
 
   async function uploadAndSend(file: File, kind: AttachmentKind): Promise<void> {
+    if (disabled || submitLock.current || editing !== null) return;
+    submitLock.current = true;
     setBusy(true);
     setSending({ name: file.name, percent: 0, kind });
     try {
@@ -183,26 +203,31 @@ export function MessageComposer({
       // swept in a day. Recording *after* would leave the file invisible for the
       // duration of a failed send, which is the case this exists to prevent.
       await recordIfSignedIn(result);
-      await onSendAttachment({
+      const delivery = onSendAttachment({
         body: draft.trim(),
         mediaUrl: result.url,
         mediaName: file.name,
         kind,
       });
+      // Once uploaded, the attachment is in the retryable outbox, so the
+      // caption and reply can be released without asking for a second upload.
       onDraftChange('');
       onCancelReply();
+      void delivery.catch((error: unknown) => toast.error(t(sendErrorKey(error))));
     } catch (error) {
-      toast.error(t(dataErrorKey(error)));
+      toast.error(t(sendErrorKey(error)));
     } finally {
       setSending(null);
       setBusy(false);
+      submitLock.current = false;
     }
   }
 
   async function submit(): Promise<void> {
     const body = draft.trim();
+    if (disabled || submitLock.current || body.length === 0 || body.length > MAX_LENGTH) return;
+    submitLock.current = true;
     if (editing !== null) {
-      if (body.length === 0) return;
       setBusy(true);
       try {
         await onSaveEdit(body);
@@ -211,24 +236,31 @@ export function MessageComposer({
         toast.error(t(dataErrorKey(error)));
       } finally {
         setBusy(false);
+        submitLock.current = false;
       }
       return;
     }
-    if (body.length === 0 || body.length > MAX_LENGTH) return;
-    setBusy(true);
+
+    // Hand the line to the outbox immediately; the member can write another
+    // while the network is slow. A failed line keeps its own Retry control.
     try {
-      await onSend(body, replyTo?.id ?? null);
+      const delivery = onSend(body, replyTo?.id ?? null);
       onDraftChange('');
       onCancelReply();
+      setTray(false);
+      void delivery.catch((error: unknown) => toast.error(t(dataErrorKey(error))));
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
     } finally {
-      setBusy(false);
+      // Ignore duplicate clicks or Enter events before React commits the clear.
+      queueMicrotask(() => {
+        submitLock.current = false;
+      });
     }
   }
 
   return (
-    <div className="border-t border-line bg-surface p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:p-3">
+    <div className="shrink-0 border-t border-border bg-surface p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-4 sm:pt-3">
       {editing !== null ? (
         <div className="mb-2 flex items-center gap-2 rounded-xl bg-surface-2 px-2 py-1 text-xs">
           <span className="font-semibold">{t('chat.editing')}</span>
@@ -268,14 +300,16 @@ export function MessageComposer({
       ) : null}
 
       {tray ? (
-        <div className="mb-2 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-2">
+        <div className="motion-safe:animate-fade-up mb-2 flex max-h-36 flex-wrap gap-1 overflow-y-auto rounded-2xl border border-border bg-bg p-2 shadow-card">
           {EMOJI.map((emoji) => (
             <button
               key={emoji}
               type="button"
               className="fab-tap rounded-lg px-1.5 py-1 text-lg hover:bg-surface-2"
               onClick={() => {
-                onDraftChange(`${draft}${emoji}`);
+                const start = textarea.current?.selectionStart ?? draft.length;
+                const end = textarea.current?.selectionEnd ?? start;
+                onDraftChange(`${draft.slice(0, start)}${emoji}${draft.slice(end)}`);
                 setTray(false);
                 textarea.current?.focus();
               }}
@@ -303,7 +337,7 @@ export function MessageComposer({
 
           {/* The meter is the only proof a microphone gives that it is hearing
               somebody; without it a member talks to a page and cannot tell. */}
-          <span aria-hidden="true" className="flex h-6 flex-1 items-center gap-0.5">
+          <span aria-hidden="true" className="hidden h-6 flex-1 items-center gap-0.5 sm:flex">
             {Array.from({ length: 18 }, (_, index) => {
               const threshold = (index + 1) / 18;
               return (
@@ -345,86 +379,112 @@ export function MessageComposer({
             size="sm"
             onClick={voice.cancel}
           />
-          <Button
-            size="sm"
-            iconStart={<Send size={14} />}
+          <IconButton
+            label={t('chat.voice.send')}
+            icon={<Send size={16} />}
+            variant="solid"
             disabled={voice.state === 'processing'}
             onClick={voice.stop}
-          >
-            {t('chat.voice.send')}
-          </Button>
+          />
         </div>
       ) : (
         <form
-          className="flex items-end gap-2"
+          className="rounded-2xl border border-border bg-bg p-1 shadow-card transition-[border-color,box-shadow] duration-200 focus-within:border-green-500 focus-within:shadow-raised"
           onSubmit={(event) => {
             event.preventDefault();
             void submit();
           }}
         >
-          <TextareaField
+          <label className="sr-only" htmlFor="message-composer">
+            {t('messages.composerLabel')}
+          </label>
+          <textarea
             ref={textarea}
-            label={t('messages.composerLabel')}
-            className="flex-1"
-            rows={2}
+            id="message-composer"
+            aria-describedby="message-composer-hint"
+            className="block min-h-[48px] max-h-36 w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-base leading-6 text-text outline-none placeholder:text-muted sm:text-sm"
+            rows={1}
             value={draft}
             maxLength={MAX_LENGTH}
             disabled={disabled || busy}
             placeholder={t('messages.composerPlaceholder')}
             onChange={(event) => {
               onDraftChange(event.target.value);
-              onTyping();
+              if (editing === null) onTyping();
             }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
+              if (
+                event.key === 'Enter' &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing &&
+                event.nativeEvent.keyCode !== 229 &&
+                !event.repeat
+              ) {
                 event.preventDefault();
                 void submit();
               }
               if (event.key === 'Escape') {
-                if (editing !== null) onCancelEdit();
+                if (tray) setTray(false);
+                else if (editing !== null) onCancelEdit();
                 else if (replyTo !== null) onCancelReply();
               }
             }}
           />
-
-          <div className="flex items-center gap-1">
-            <IconButton
-              label={t('chat.emojiHint')}
-              icon={<Smile size={16} />}
-              aria-expanded={tray}
-              disabled={busy}
-              onClick={() => setTray((open) => !open)}
-            />
-            <IconButton
-              label={t('chat.attachImage')}
-              icon={<ImagePlus size={16} />}
-              disabled={busy}
-              onClick={() => imageInput.current?.click()}
-            />
-            <IconButton
-              label={t('chat.attachFile')}
-              icon={<FilePlus2 size={16} />}
-              disabled={busy}
-              onClick={() => fileInput.current?.click()}
-            />
-            {voice.state === 'unsupported' ? (
+          <span id="message-composer-hint" className="sr-only">
+            {t('messages.composerHint')}
+          </span>
+          <div className="flex items-center justify-between gap-1 border-t border-border/60 pt-1">
+            <div className="flex items-center">
               <IconButton
-                label={t(voice.blockKey ?? 'chat.voice.failed')}
-                icon={<Mic size={16} />}
-                disabled
-              />
-            ) : (
-              <IconButton
-                label={t('chat.recordVoice')}
-                icon={<Mic size={16} />}
+                label={t('chat.emojiHint')}
+                icon={<Smile size={18} />}
+                size="sm"
+                aria-expanded={tray}
                 disabled={busy || disabled}
-                onClick={voice.start}
+                onClick={() => setTray((open) => !open)}
               />
-            )}
-            <Button type="submit" disabled={busy || draft.trim().length === 0}>
-              <Send size={16} />
-              <span className="fab-sr-only">{t('messages.send')}</span>
-            </Button>
+              <IconButton
+                label={t('chat.attachImage')}
+                icon={<ImagePlus size={18} />}
+                size="sm"
+                disabled={busy || disabled || editing !== null}
+                onClick={() => imageInput.current?.click()}
+              />
+              <IconButton
+                label={t('chat.attachFile')}
+                icon={<FilePlus2 size={18} />}
+                size="sm"
+                disabled={busy || disabled || editing !== null}
+                onClick={() => fileInput.current?.click()}
+              />
+              {voice.state === 'unsupported' ? (
+                <IconButton
+                  label={t(voice.blockKey ?? 'chat.voice.failed')}
+                  icon={<Mic size={18} />}
+                  size="sm"
+                  disabled
+                />
+              ) : (
+                <IconButton
+                  label={t('chat.recordVoice')}
+                  icon={<Mic size={18} />}
+                  size="sm"
+                  disabled={busy || disabled || editing !== null}
+                  onClick={voice.start}
+                />
+              )}
+            </div>
+            <button
+              type="submit"
+              aria-label={editing !== null ? t('chat.saveEdit') : t('messages.send')}
+              disabled={disabled || busy || draft.trim().length === 0}
+              className="fab-tap inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-chat-outgoing px-3 text-sm font-semibold text-white shadow-card transition-[transform,background-color,box-shadow] duration-200 hover:bg-chat-outgoing-hover hover:shadow-raised active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+            >
+              <Send size={17} aria-hidden="true" />
+              <span className="hidden sm:inline">
+                {editing !== null ? t('chat.saveEdit') : t('messages.send')}
+              </span>
+            </button>
           </div>
         </form>
       )}

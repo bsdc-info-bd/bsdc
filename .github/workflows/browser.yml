@@ -34,6 +34,8 @@ jobs:
       # Bundled Chromium is installed from npm. No paid device service or
       # production credentials; this does not validate provider integrations.
       - run: npm run test:browser
+      - name: Messenger interactions with mocked providers
+        run: npm run test:messenger-browser
       - uses: actions/upload-artifact@v4
         if: always()
         with:

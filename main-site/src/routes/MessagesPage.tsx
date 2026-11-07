@@ -5,12 +5,13 @@ import {
   Bookmark,
   Check,
   MessagesSquare,
+  MoreHorizontal,
   Pin,
   Plus,
   Search,
   UserPlus,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -58,7 +59,25 @@ interface InboxRowProps {
 /** One conversation in the list, with its own real settings writes. */
 function InboxRow({ conversation, name, active, language, state, onRead }: InboxRowProps) {
   const { t } = useTranslation();
-  const settings = useConversationSettings(conversation.id);
+  const settings = useConversationSettings(conversation.id, false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPlacement, setMenuPlacement] = useState({ up: false, maxHeight: 240 });
+  const row = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!row.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, [menuOpen]);
   // A refused pin, mute or archive has to be heard: the row is still on screen
   // either way, and a toggle that snaps back says nothing about why.
   useErrorToast(settings.errorKey, settings.dismissError);
@@ -67,13 +86,13 @@ function InboxRow({ conversation, name, active, language, state, onRead }: Inbox
   const archived = settings.state?.isArchived ?? state.archived;
 
   return (
-    <div className="group relative">
+    <div ref={row} className="group relative">
       <Link
         to={conversationPath(conversation.id)}
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'fab-tap flex items-center gap-2 rounded-xl border border-transparent p-2 pe-20 hover:bg-surface-2',
-          active && 'border-line bg-surface-2',
+          'fab-tap flex min-h-[70px] items-center gap-3 rounded-2xl border border-transparent p-3 pe-12 transition-[background-color,border-color,transform] duration-200 hover:bg-surface-2 active:scale-[0.99]',
+          active && 'border-green-700/20 bg-green-700/10',
         )}
       >
         <Avatar
@@ -105,31 +124,92 @@ function InboxRow({ conversation, name, active, language, state, onRead }: Inbox
         ) : null}
       </Link>
 
-      <div className="absolute end-1 top-1 flex gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+      <div className="absolute end-1 top-3 z-10">
         <IconButton
           size="sm"
-          label={t('chat.markRead')}
-          icon={<Check size={13} />}
-          onClick={onRead}
+          label={t('chat.inboxActions', { name })}
+          icon={<MoreHorizontal size={18} />}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={(event) => {
+            const anchor = event.currentTarget.getBoundingClientRect();
+            const bar = document.querySelector('.bsdc-app-bar')?.getBoundingClientRect();
+            const nav = document.querySelector('.bsdc-bottom-nav')?.getBoundingClientRect();
+            const aside = event.currentTarget.closest('aside');
+            const asideRect = aside?.getBoundingClientRect();
+            const clipped =
+              aside !== null &&
+              aside !== undefined &&
+              getComputedStyle(aside).overflowY !== 'visible';
+            const top = Math.max(bar?.bottom ?? 0, clipped ? (asideRect?.top ?? 0) : 0);
+            const navTop = nav && nav.height > 0 ? nav.top : window.innerHeight;
+            const bottom = Math.min(
+              navTop,
+              clipped ? (asideRect?.bottom ?? window.innerHeight) : window.innerHeight,
+            );
+            const above = Math.max(0, anchor.top - top - 4);
+            const below = Math.max(0, bottom - anchor.bottom - 4);
+            const up = above > below;
+            setMenuPlacement({ up, maxHeight: Math.floor(up ? above : below) });
+            setMenuOpen((open) => !open);
+          }}
         />
-        <IconButton
-          size="sm"
-          label={pinned ? t('chat.unpinConversation') : t('chat.pinConversation')}
-          icon={<Pin size={13} />}
-          onClick={() => settings.setPinned(!pinned)}
-        />
-        <IconButton
-          size="sm"
-          label={muted ? t('chat.unmute') : t('chat.mute')}
-          icon={muted ? <Bell size={13} /> : <BellOff size={13} />}
-          onClick={() => settings.setMuted(!muted)}
-        />
-        <IconButton
-          size="sm"
-          label={archived ? t('chat.unarchive') : t('chat.archive')}
-          icon={<Archive size={13} />}
-          onClick={() => settings.setArchived(!archived)}
-        />
+        {menuOpen ? (
+          <div
+            role="menu"
+            className={cn(
+              'motion-safe:animate-fade-up absolute end-0 z-30 w-52 overflow-y-auto rounded-2xl border border-border bg-bg p-1.5 text-sm shadow-raised',
+              menuPlacement.up ? 'bottom-full mb-1' : 'top-full mt-1',
+            )}
+            style={{ maxHeight: menuPlacement.maxHeight }}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+              onClick={() => {
+                onRead();
+                setMenuOpen(false);
+              }}
+            >
+              <Check size={15} /> {t('chat.markRead')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+              onClick={() => {
+                settings.setPinned(!pinned);
+                setMenuOpen(false);
+              }}
+            >
+              <Pin size={15} /> {pinned ? t('chat.unpinConversation') : t('chat.pinConversation')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+              onClick={() => {
+                settings.setMuted(!muted);
+                setMenuOpen(false);
+              }}
+            >
+              {muted ? <Bell size={15} /> : <BellOff size={15} />}{' '}
+              {muted ? t('chat.unmute') : t('chat.mute')}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="fab-tap flex w-full items-center gap-3 rounded-xl px-3 py-2 text-start hover:bg-surface-2"
+              onClick={() => {
+                settings.setArchived(!archived);
+                setMenuOpen(false);
+              }}
+            >
+              <Archive size={15} /> {archived ? t('chat.unarchive') : t('chat.archive')}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -138,8 +218,8 @@ function InboxRow({ conversation, name, active, language, state, onRead }: Inbox
 /**
  * Messenger. The list and the thread sit side by side from the medium
  * breakpoint up; a narrow screen shows one at a time. Everything on this
- * screen is delivered by the change feed — the page never polls while the
- * socket is joined.
+ * screen is delivered by the change feed, with periodic reconciliation to
+ * repair missed events.
  */
 export default function MessagesPage() {
   const { t, i18n } = useTranslation();
@@ -160,15 +240,19 @@ export default function MessagesPage() {
   const [username, setUsername] = useState('');
   const [groupTitle, setGroupTitle] = useState('');
   const [members, setMembers] = useState('');
+  const [starting, setStarting] = useState(false);
+  const startLock = useRef(false);
 
   const activeSummary = useMemo(
-    () => inbox.conversations.find((item) => item.id === activeId) ?? null,
-    [inbox.conversations, activeId],
+    () => inbox.allConversations.find((item) => item.id === activeId) ?? null,
+    [inbox.allConversations, activeId],
   );
 
   async function openDirect(): Promise<void> {
     const handle = username.trim().replace(/^@/, '');
-    if (handle.length === 0) return;
+    if (handle.length === 0 || startLock.current) return;
+    startLock.current = true;
+    setStarting(true);
     try {
       const conversationId = await start.openDirect(handle);
       setNewChat(false);
@@ -176,6 +260,9 @@ export default function MessagesPage() {
       navigate(conversationPath(conversationId));
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
+    } finally {
+      startLock.current = false;
+      setStarting(false);
     }
   }
 
@@ -185,7 +272,9 @@ export default function MessagesPage() {
       .split(',')
       .map((value) => value.trim().replace(/^@/, ''))
       .filter((value) => value.length > 0);
-    if (title.length === 0 || handles.length === 0) return;
+    if (title.length === 0 || handles.length === 0 || startLock.current) return;
+    startLock.current = true;
+    setStarting(true);
     try {
       const conversationId = await start.openGroup(title, handles);
       setNewChat(false);
@@ -194,6 +283,9 @@ export default function MessagesPage() {
       navigate(conversationPath(conversationId));
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
+    } finally {
+      startLock.current = false;
+      setStarting(false);
     }
   }
 
@@ -308,7 +400,18 @@ export default function MessagesPage() {
               {across.isLoading ? (
                 <p className="mt-2 text-xs text-muted">{t('common.loading')}</p>
               ) : null}
-              {!across.isLoading && crossSearch.trim().length >= 2 && across.hits.length === 0 ? (
+              {across.isError ? (
+                <p role="alert" className="mt-2 text-xs text-danger">
+                  {t('chat.searchFailed')}{' '}
+                  <button type="button" className="underline" onClick={across.retry}>
+                    {t('common.retry')}
+                  </button>
+                </p>
+              ) : null}
+              {!across.isLoading &&
+              !across.isError &&
+              crossSearch.trim().length >= 2 &&
+              across.hits.length === 0 ? (
                 <p className="mt-2 text-xs text-muted">{t('chat.noResults')}</p>
               ) : null}
               <ul className="mt-2">
@@ -316,6 +419,7 @@ export default function MessagesPage() {
                   <li key={hit.messageId}>
                     <Link
                       to={conversationPath(hit.conversationId)}
+                      state={{ messageId: hit.messageId }}
                       className="fab-tap block rounded-lg px-2 py-1 text-xs hover:bg-surface-2"
                     >
                       <span className="fab-truncate block">{hit.body}</span>
@@ -332,19 +436,38 @@ export default function MessagesPage() {
 
         <div
           className={cn(
-            'grid gap-4 md:grid-cols-[320px_1fr]',
+            'grid gap-4 md:grid-cols-[minmax(260px,320px)_minmax(0,1fr)]',
             threadOpen ? 'min-h-0 flex-1 md:px-6 md:pb-4' : 'mt-4',
           )}
         >
           <aside
             aria-label={t('messages.conversations')}
-            className={cn('min-w-0', threadOpen && 'hidden md:block md:min-h-0 md:overflow-y-auto')}
+            className={cn(
+              'min-w-0 rounded-2xl border border-border bg-bg p-1.5 shadow-card',
+              threadOpen && 'hidden md:block md:min-h-0 md:overflow-y-auto',
+            )}
           >
             {inbox.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
-            {inbox.isError ? <Alert tone="danger" title={t('messages.inboxFailed')} /> : null}
+            {inbox.isError ? (
+              <div className="space-y-2">
+                <Alert tone="danger" title={t('messages.inboxFailed')} />
+                <Button variant="outline" size="sm" onClick={inbox.refresh}>
+                  {t('common.retry')}
+                </Button>
+              </div>
+            ) : null}
 
             {showSaved ? (
-              saved.saved.length === 0 && !saved.isLoading ? (
+              saved.isLoading ? (
+                <PageSkeleton label={t('common.loading')} />
+              ) : saved.isError ? (
+                <div className="space-y-2">
+                  <Alert tone="danger" title={t('chat.savedFailed')} />
+                  <Button variant="outline" size="sm" onClick={saved.retry}>
+                    {t('common.retry')}
+                  </Button>
+                </div>
+              ) : saved.saved.length === 0 ? (
                 <EmptyState
                   icon={<Bookmark size={22} />}
                   title={t('chat.showSaved')}
@@ -356,6 +479,8 @@ export default function MessagesPage() {
                     <li key={item.messageId}>
                       <Link
                         to={conversationPath(item.conversationId)}
+                        state={{ messageId: item.messageId }}
+                        onClick={() => setShowSaved(false)}
                         className="fab-tap block rounded-xl border border-transparent p-2 text-xs hover:bg-surface-2"
                       >
                         <span className="fab-truncate block font-semibold">
@@ -395,7 +520,11 @@ export default function MessagesPage() {
                         active={conversation.id === activeId}
                         language={language}
                         state={state}
-                        onRead={() => inbox.markRead(conversation.id)}
+                        onRead={() => {
+                          void inbox
+                            .markRead(conversation.id)
+                            .catch((error: unknown) => toast.error(t(dataErrorKey(error))));
+                        }}
                       />
                     </li>
                   );
@@ -415,7 +544,11 @@ export default function MessagesPage() {
                 description={t('messages.pickBody')}
               />
             ) : (
-              <ConversationView conversationId={activeId} summary={activeSummary} />
+              <ConversationView
+                key={`${uid ?? ''}:${activeId}`}
+                conversationId={activeId}
+                summary={activeSummary}
+              />
             )}
           </section>
         </div>
@@ -431,7 +564,11 @@ export default function MessagesPage() {
             <Button variant="ghost" onClick={() => setNewChat(false)}>
               {t('common.cancel')}
             </Button>
-            <Button onClick={() => void openDirect()} disabled={username.trim().length === 0}>
+            <Button
+              onClick={() => void openDirect()}
+              loading={starting}
+              disabled={starting || username.trim().length === 0}
+            >
               <UserPlus size={15} aria-hidden="true" />
               {t('chat.start')}
             </Button>
@@ -460,7 +597,8 @@ export default function MessagesPage() {
           <Button
             variant="outline"
             onClick={() => void openGroup()}
-            disabled={groupTitle.trim().length === 0 || members.trim().length === 0}
+            loading={starting}
+            disabled={starting || groupTitle.trim().length === 0 || members.trim().length === 0}
           >
             <Archive size={15} aria-hidden="true" />
             {t('chat.startGroup')}

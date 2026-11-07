@@ -61,23 +61,35 @@ export function getSupabase(): BsdcSupabaseClient {
 }
 
 /**
- * Hands the Realtime socket a current Firebase ID token.
- *
- * supabase-js sets Realtime's token once, from the `accessToken` callback, and
- * never refreshes it — but a Firebase ID token expires after an hour and a
- * socket that is open all day outlives several of them. Postgres evaluates row
- * level security for every change event it publishes, so an expired token
- * silently stops delivering the member's own rows. Re-authenticating is cheap
- * and idempotent.
+ * Hands Realtime the current Firebase token. For account-scoped subscriptions,
+ * require that exact Firebase user throughout the async token refresh and
+ * setAuth. Swallowing a failure here could otherwise join with the previous
+ * account's cached socket token. Calls without an expected uid retain the
+ * best-effort behavior needed by anonymous diagnostics.
  */
-export async function ensureRealtimeAuth(): Promise<void> {
-  if (!isConfigured.supabase) return;
-  const supabase = getSupabase();
+export async function ensureRealtimeAuth(expectedUid?: string): Promise<void> {
+  if (!isConfigured.supabase) {
+    if (expectedUid !== undefined) throw new SupabaseNotConfiguredError();
+    return;
+  }
   try {
+    if (expectedUid !== undefined && !isConfigured.firebase) throw new Error('auth/required');
+    const auth =
+      expectedUid === undefined ? null : (await import('@/lib/firebase')).getFirebaseAuth();
+    const user = auth?.currentUser ?? null;
+    if (expectedUid !== undefined && user?.uid !== expectedUid) throw new Error('auth/required');
     const token = await currentAccessToken();
-    if (token !== null && token.length > 0) void supabase.realtime.setAuth(token);
-  } catch {
-    // A signed-out or offline member keeps the socket; the next call retries.
+    if (
+      expectedUid !== undefined &&
+      (token === null || token.length === 0 || auth?.currentUser !== user)
+    ) {
+      throw new Error('auth/required');
+    }
+    if (token !== null && token.length > 0) await getSupabase().realtime.setAuth(token);
+    if (expectedUid !== undefined && auth?.currentUser !== user) throw new Error('auth/required');
+  } catch (error) {
+    if (expectedUid !== undefined) throw error;
+    // Anonymous diagnostics and other best-effort callers can keep polling.
   }
 }
 

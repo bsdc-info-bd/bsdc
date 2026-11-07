@@ -2,6 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted Bengali subset; Latin text remains on the system/Inter stack.
+   Keeping the font local also makes Bangla legible when third-party fonts are
+   blocked or the installed PWA is offline. See public/fonts/README.md. */
+@font-face {
+  font-family: 'BSDC Bengali';
+  src: url('/fonts/noto-sans-bengali.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+0964-0965, U+0980-09FF, U+1CD0-1CFF, U+200C-200D, U+20B9, U+25CC, U+A8E0-A8FF,
+    U+11B00-11B09;
+}
+
 /* ---------------------------------------------------------------------------
    BSDC design tokens. Semantic names only — never use raw hex in components.
    --------------------------------------------------------------------------- */
@@ -26,6 +39,9 @@
   --bsdc-danger: #d9363e;
   --bsdc-warn: #e5a50a;
   --bsdc-online: #31a24c;
+  /* Message bubbles keep white text legible in both color schemes. */
+  --bsdc-chat-outgoing: #245d44;
+  --bsdc-chat-outgoing-hover: #194c36;
 
   --bsdc-ring: var(--bsdc-green-500);
   --bsdc-app-bar-h: 56px;

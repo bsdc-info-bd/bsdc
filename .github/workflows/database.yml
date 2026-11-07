@@ -23,6 +23,8 @@ on:
       - 'scripts/prove-corporate-permissions.sql'
       - 'scripts/prove-ad-wallet-concurrency.mjs'
       - 'scripts/prove-staff-provision-concurrency.mjs'
+      - 'scripts/prove-messenger-concurrency.mjs'
+      - 'scripts/wait-for-messenger-migration.mjs'
       - '.github/workflows/database.yml'
   pull_request:
     paths:
@@ -32,6 +34,8 @@ on:
       - 'scripts/prove-corporate-permissions.sql'
       - 'scripts/prove-ad-wallet-concurrency.mjs'
       - 'scripts/prove-staff-provision-concurrency.mjs'
+      - 'scripts/prove-messenger-concurrency.mjs'
+      - 'scripts/wait-for-messenger-migration.mjs'
       - '.github/workflows/database.yml'
   workflow_dispatch:
     inputs:
@@ -185,6 +189,34 @@ jobs:
           grep -Eq '^0 would be applied, [0-9]+ skipped' /tmp/ledger-after.log
           echo 'A no-op is skipped and an interrupted replay resumes from its anchor.'
 
+      - name: Prove the read-only member-site rollout gate
+        env:
+          BSDC_MESSENGER_WAIT_SECONDS: '0'
+        run: |
+          set -euo pipefail
+          node scripts/wait-for-messenger-migration.mjs --self-test
+          node scripts/wait-for-messenger-migration.mjs
+          checksum=$(psql "$SUPABASE_DB_URL" -t -A -v ON_ERROR_STOP=1 -c \
+            "select checksum from supabase_migrations.schema_migrations where version = '0082'")
+          test -n "$checksum"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = 'ci-gate-mismatch' where version = '0082'" > /dev/null
+          if node scripts/wait-for-messenger-migration.mjs; then
+            echo '::error::The gate accepted a mismatched migration checksum.'
+            exit 1
+          fi
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            "update supabase_migrations.schema_migrations set checksum = '$checksum' where version = '0082'" > /dev/null
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            'grant update on public.messages to authenticated' > /dev/null
+          if node scripts/wait-for-messenger-migration.mjs; then
+            echo '::error::The gate accepted unsafe message update privileges.'
+            exit 1
+          fi
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c \
+            'revoke update on public.messages from authenticated' > /dev/null
+          node scripts/wait-for-messenger-migration.mjs
+
       # A schema that applies is not the same as a schema that works. These
       # calls exercise the shapes every console depends on; a signature
       # change breaks this step before it breaks a deployment.
@@ -230,6 +262,11 @@ jobs:
         env:
           BSDC_THROWAWAY_DB: '1'
         run: node scripts/prove-staff-provision-concurrency.mjs
+
+      - name: Prove concurrent messenger delivery
+        env:
+          BSDC_THROWAWAY_DB: '1'
+        run: node scripts/prove-messenger-concurrency.mjs
 
       - name: Report what was built
         run: |
