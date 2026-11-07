@@ -22,14 +22,19 @@ export class DataError extends Error {
 }
 
 const FRIENDLY: Record<string, string> = {
-  '42501': 'Your role does not allow this action.',
   '23505': 'That value is already taken.',
   '23514': 'The value did not pass a database check.',
   PGRST301: 'Your session expired. Sign in again.',
 };
 
 export function toDataError(error: PostgrestError): DataError {
-  const friendly = FRIENDLY[error.code] ?? error.message ?? 'The request failed.';
+  let friendly = FRIENDLY[error.code] ?? error.message ?? 'The request failed.';
+  if (error.code === '42501') {
+    const required = /^Permission ([a-z][a-z0-9_.]*) is required$/i.exec(error.message ?? '');
+    friendly = required
+      ? `This account needs the ${required[1]} permission. Ask an owner to review its staff access.`
+      : 'The database denied this request (42501). Check the signed-in account and deployed database grants.';
+  }
   return new DataError(friendly, error.code ?? 'unknown', error.details ?? '');
 }
 

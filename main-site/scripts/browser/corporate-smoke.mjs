@@ -68,12 +68,15 @@ try {
   context.on('page', (opened) => opened.on('pageerror', (error) => errors.push(error.message)));
 
   const now = Math.floor(Date.now() / 1000);
-  const fakeJwt = [
+  const jwt = (claims) => [
     { alg: 'RS256', typ: 'JWT' },
     { iss: 'https://securetoken.google.com/browser-test', aud: 'browser-test', auth_time: now,
       iat: now, exp: now + 3600, sub: 'staff-demo', user_id: 'staff-demo',
-      email: 'staff@example.test', firebase: { sign_in_provider: 'password' } },
+      email: 'staff@example.test', firebase: { sign_in_provider: 'password' }, ...claims },
   ].map((part) => Buffer.from(JSON.stringify(part)).toString('base64url')).join('.') + '.fake';
+  const fakeJwt = jwt({});
+  const readyJwt = jwt({ role: 'authenticated', bsdc_role: 'member' });
+  let claimRepairs = 0;
   const receipt = { receipt_id: '12345678-1234-4234-8234-123456789abc', generated_at: '2026-11-07T12:00:00Z' };
   const calls = [];
   let allocated = null;
@@ -87,8 +90,19 @@ try {
   await context.route('**/*', async (route) => {
     const request = route.request();
     const url = request.url();
+    if (url === 'https://www.bsdc.info.bd/api/auth/claims') {
+      if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      assert.equal(request.headers().authorization, `Bearer ${fakeJwt}`);
+      assert.deepEqual(request.postDataJSON(), { uid: 'staff-demo', role: 'member', vendor: false, staff: false });
+      claimRepairs += 1;
+      return route.fulfill({ status: 200, headers, body: JSON.stringify({ claims: { role: 'authenticated' } }) });
+    }
     if (url.includes('identitytoolkit.googleapis.com') || url.includes('securetoken.googleapis.com')) {
       if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+      if (url.includes('securetoken.googleapis.com')) return route.fulfill({ status: 200, headers, body: JSON.stringify({
+        access_token: readyJwt, id_token: readyJwt, refresh_token: 'fake', expires_in: '3600',
+        token_type: 'Bearer', user_id: 'staff-demo', project_id: 'browser-test',
+      }) });
       if (url.includes('signInWithPassword')) return route.fulfill({ status: 200, headers, body: JSON.stringify({
         kind: 'identitytoolkit#VerifyPasswordResponse', localId: 'staff-demo', email: 'staff@example.test',
         displayName: 'Test Staff', idToken: fakeJwt, refreshToken: 'fake', expiresIn: '3600', registered: true,
@@ -103,11 +117,20 @@ try {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     const name = new URL(url).pathname.split('/').at(-1);
     const args = request.postDataJSON() ?? {};
+    const publicCalls = ['record_vital', 'verify_code', 'verify_performance_report'];
+    if (!publicCalls.includes(name) && request.headers().authorization !== `Bearer ${readyJwt}`) {
+      return route.fulfill({ status: 403, headers,
+        body: JSON.stringify({ code: '42501', message: `permission denied for ${name}`, details: '' }) });
+    }
     calls.push({ name, args });
     let response = [];
     if (name === 'record_vital') response = null;
+    // An effective admin can have an older profile role, e.g. a verified bootstrap owner.
     else if (name === 'staff_identity') response = [{ uid: 'staff-demo', display_name: 'Test Staff', avatar_url: null,
-      role: 'owner', status: 'active', rank: 7, onboarding_complete: true, created_at: '2024-01-01', last_seen_at: null }];
+      role: 'member', status: 'active', rank: 1, onboarding_complete: true, created_at: '2024-01-01', last_seen_at: null }];
+    else if (name === 'my_role') response = [{ role: 'admin', staff: true, bootstrap: true }];
+    else if (name === 'staff_setup_campaign') response = '12345678-1234-4234-8234-123456789abc';
+    else if (name === 'issue_certificate') response = 'BSDC-CT-4A7C21B9-1';
     else if (name === 'performance_vitals_overall' && reportSourceFails && args.p_days === 7) {
       return route.fulfill({ status: 503, headers, body: JSON.stringify({ code: 'TEST_UNAVAILABLE', message: 'Source unavailable' }) });
     } else if (name === 'performance_vitals_overall') response = [{ metric: 'LCP', samples: 5, p75: 900, p95: 1000 }];
@@ -133,8 +156,9 @@ try {
     else if (name === 'certificate_registry') response = [{ code: 'BSDC-CT-4A7C21B9-0', template_key: 'course-completion',
       recipient_name: 'Ayesha', subject: 'List summary only', issued_on: '2026-11-07', expires_on: null,
       status: 'revoked', revoke_reason: 'Incorrect record', verifications: 0 }];
-    else if (name === 'certificate_for_print') response = [{ code: args.p_code, template_key: 'course-completion',
-      recipient_name: 'Ayesha', body: 'Frozen issued wording from the registry.', issued_on: '2026-11-07', expires_on: null, status: 'revoked' }];
+    else if (name === 'certificate_for_print') response = args.p_code === 'BSDC-CT-4A7C21B9-1'
+      ? [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha Rahman', body: 'Template wording', issued_on: '2026-11-07', expires_on: null, status: 'issued' }]
+      : [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha', body: 'Frozen issued wording from the registry.', issued_on: '2026-11-07', expires_on: null, status: 'revoked' }];
     else if (name === 'notice_registry') {
       const row = { summary: 'Notice summary', body: 'The full notice body is here.', category: 'general', audience: 'public',
         priority: 'routine', pinned: false, requires_ack: false, expires_at: null, updated_at: '2026-01-01T00:00:00Z',
@@ -169,6 +193,9 @@ try {
   assert.equal(beacon.p_route, '/');
   assert(!Object.keys(beacon).some((key) => /uid|token|email|code/i.test(key)));
   console.log('PASS deployed console sends an anonymous, query-free field vital');
+  assert.equal(claimRepairs, 1, 'role-less Firebase token is repaired before staff RPCs');
+  await page.getByText('Test Staff (admin)', { exact: true }).waitFor();
+  console.log('PASS missing PostgREST claim is repaired and the effective admin role is shown');
   await page.getByText('Only 5 measurements; interpret cautiously.').waitFor();
   assert.equal(await page.getByText('unknown', { exact: true }).count(), 5);
   console.log('PASS small samples are not rated good');
@@ -238,8 +265,24 @@ try {
   await page.getByText('Every campaign').waitFor();
   assert.equal(await page.getByText('Some campaign data did not load').count(), 0);
   console.log('PASS campaign partial failure preserves working sections and retry recovers');
+  await page.getByLabel('Campaign name').fill('Browser permission campaign');
+  await page.getByLabel('Bid per thousand (৳)').fill('15');
+  await page.getByLabel('Total budget (৳)').fill('1000');
+  await page.getByRole('button', { name: 'Create campaign', exact: true }).click();
+  await page.getByText('Browser permission campaign is created. It is a draft.').waitFor();
+  assert(calls.some((call) => call.name === 'staff_setup_campaign' && call.args.p_name === 'Browser permission campaign'));
+  console.log('PASS authenticated admin creates a campaign');
 
   await login('certificate-site');
+  await page.getByLabel('Template', { exact: true }).first().selectOption('course-completion');
+  await page.getByLabel('Recipient name').fill('Ayesha Rahman');
+  await page.getByLabel('What it is for').fill('Course completion');
+  await page.getByRole('button', { name: 'Issue certificate', exact: true }).click();
+  await page.getByRole('heading', { name: 'Certificate issued' }).waitFor();
+  const issuedPdf = await saveDownload(page.getByRole('button', { name: 'Download PDF' }), 'issued-certificate.pdf');
+  assert(issuedPdf.includes(Buffer.from('Ayesha Rahman')));
+  assert(calls.some((call) => call.name === 'issue_certificate' && call.args.p_recipient_name === 'Ayesha Rahman'));
+  console.log('PASS authenticated admin issues and downloads a certificate');
   await page.getByRole('button', { name: 'Registry', exact: true }).click();
   await page.getByText('List summary only').waitFor();
   const cert = await saveDownload(page.getByRole('button', { name: 'PDF', exact: true }), 'certificate.pdf');
@@ -259,6 +302,7 @@ try {
   assert(draftPdf.includes(Buffer.from('DRAFT - NOT PUBLISHED')));
   console.log('PASS published notice is signed and draft is clearly unsigned');
 
+  assert(claimRepairs >= 4, 'each separate console repairs a role-less sign-in');
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');
 } catch (error) {
   if (page) {

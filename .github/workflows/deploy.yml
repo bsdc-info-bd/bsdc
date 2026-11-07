@@ -175,14 +175,16 @@ jobs:
             pages project create ${{ matrix.project }}
             --production-branch=main
 
-      # The rules secret is not automatically a Pages runtime binding. Profile
-      # bootstrap needs these three server-only values to mint database access.
+      # Firebase service accounts are not automatically Pages runtime bindings.
+      # Both projects need server-only credentials to mint database access.
       # Never sync production credentials from pull requests/preview branches.
-      - name: Prepare member authentication bindings
+      - name: Prepare Firebase authentication bindings
         if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+          FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
         run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
 
       - name: Configure production profile authentication
@@ -218,7 +220,7 @@ jobs:
             --branch=${{ github.head_ref || github.ref_name }}
             --commit-dirty=true
 
-      - name: Verify production profile bootstrap is configured
+      - name: Verify production member and corporate claim bindings
         if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           DEPLOYMENT_URL: ${{ steps.pages.outputs.deployment-url }}
@@ -230,7 +232,15 @@ jobs:
               let data = "";
               process.stdin.on("data", chunk => data += chunk);
               process.stdin.on("end", () => {
-                if (JSON.parse(data).ready !== true) process.exit(1);
+                const status = JSON.parse(data);
+                if (status.ready !== true) {
+                  console.error("::error::Member Firebase claims credentials are missing in Pages.");
+                  process.exit(1);
+                }
+                if (status.corporateReady !== true) {
+                  console.error("::error::Corporate Firebase claims credentials are missing in Pages. Configure FB2_PROJECT_ID, FB2_CLIENT_EMAIL and FB2_PRIVATE_KEY, or supply FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND.");
+                  process.exit(1);
+                }
               });'
 
       - name: Record where it went

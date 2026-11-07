@@ -8,9 +8,10 @@
  *               Supabase's third-party auth maps the request onto the
  *               `authenticated` Postgres role. It must never carry an
  *               application role again.
- *   bsdc_role — the application role (member … owner), read inside the
- *               database by `bsdc.current_role_name()`.
- *   staff     — true for moderator and above; read by `bsdc.is_staff()`.
+ *   bsdc_role — a cached application role (member … owner), not authority
+ *               to restore a demoted or deleted database profile.
+ *   staff     — a cached staff indicator; database authority uses the active
+ *               profile or verified bootstrap rank, not this flag.
  *   vendor    — true for marketplace vendors; read where selling is allowed.
  *
  * A third path exists for the first administrator of a deployment, whose
@@ -21,8 +22,8 @@
  * Two Firebase projects mint claims here: `bsdc-bd` (members and the Android
  * app) and `bsdc-second` (the thirteen consoles). They stay separate on
  * purpose, so each has its own service account and owner allowlist — an owner
- * in one project cannot mint claims in the other. A signed-in member may only
- * repair the least-privileged claim on their own account.
+ * in one project cannot mint claims in the other. A signed-in member may repair
+ * their own database-login claim without inventing an application role.
  */
 
 export const APP_ROLES = [
@@ -249,6 +250,15 @@ export function databaseAuthorityRole(
 ): AppRole | null {
   if (callerUid.length === 0 || input.uid !== callerUid || dbRole === null) return null;
   return input.role === dbRole ? dbRole : null;
+}
+
+/** A cached self-claim alone must not recreate an elevated database profile. */
+export function maySeedStaffProfile(
+  role: AppRole,
+  ownerAuthorized: boolean,
+  verifiedBootstrapRole: AppRole | null,
+): boolean {
+  return isStaffRole(role) && (ownerAuthorized || verifiedBootstrapRole !== null);
 }
 
 /**

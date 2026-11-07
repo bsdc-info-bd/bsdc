@@ -14,8 +14,8 @@ import { BodyError, readJsonObject } from '../../_body';
  *
  * Two projects are served by the one endpoint. The caller's own token chooses
  * which one: its audience names the project. Owners may assign claims for
- * their own project; an ordinary member may only bootstrap the least-
- * privileged claim for their own signed-in account. A member-project owner
+ * their own project; an ordinary member may only repair the login claim for
+ * their own account without inventing an application role. A member-project owner
  * cannot mint console claims and vice versa.
  *
  * Secrets (Cloudflare Pages encrypted environment variables):
@@ -34,6 +34,7 @@ import {
   credentialsFor,
   databaseAuthorityRole,
   isAppRole,
+  maySeedStaffProfile,
   ownersFor,
   selfBootstrapRole,
   targetFromAudience,
@@ -248,14 +249,12 @@ async function getAccessToken(credentials: ProjectCredentials): Promise<string> 
  * has no profile. The member site creates its own row on first sign-in; a staff
  * account is created in the Firebase console and had nothing to create one.
  *
- * Best-effort and never fatal. The claim is already true whether or not this
- * succeeds, and `provision_staff` in the console covers the same ground on the
- * next sign-in, so a database that is briefly unreachable must not turn a
- * successful sign-in into a failed one.
+ * Best-effort and never fatal. Only an explicitly authorized owner assignment
+ * or verified bootstrap owner may seed an elevated profile. Re-minting a stale
+ * signed claim by itself cannot recreate a deleted staff account.
  */
 async function seedStaffProfile(
   env: ClaimsRuntimeEnv,
-  credentials: { projectId: string },
   uid: string,
   email: string,
   displayName: string,
@@ -347,7 +346,14 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
     // list could have been arranged yet; privilege flags still follow the role.
     claims = buildClaims(birthRole);
   } else if (selfRole !== null) {
-    claims = buildClaims(selfRole);
+    // A signed application role can be stale after a demotion or deletion.
+    // When the token already reaches PostgREST, use its current database role;
+    // otherwise mint the least-privileged login claim first. A verified database
+    // promotion can be synchronized later, but an old token cannot perpetuate a
+    // staff flag in other Firebase services merely by requesting self-repair.
+    const currentRole =
+      tokenClaims['role'] === 'authenticated' ? await fetchCallerDbRole(env, idToken) : null;
+    claims = buildClaims(currentRole ?? 'member');
   } else {
     // Check whether Postgres (`my_role()`) already granted this caller the
     // requested rank (for instance an approved vendor or promoted moderator).
@@ -383,10 +389,9 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
   const displayName =
     (typeof tokenClaims['name'] === 'string' ? (tokenClaims['name'] as string) : '') ||
     (email.length > 0 ? (email.split('@')[0] ?? '') : '');
-  const provisioned =
-    claims.bsdc_role === undefined || claims.bsdc_role === 'member'
-      ? null
-      : await seedStaffProfile(env, credentials, input.uid, email, displayName, claims.bsdc_role);
+  const provisioned = maySeedStaffProfile(claims.bsdc_role, isOwner, birthRole)
+    ? await seedStaffProfile(env, input.uid, email, displayName, claims.bsdc_role)
+    : null;
 
   return json(
     {
@@ -403,5 +408,6 @@ export const onRequestPost: PagesFunction<ClaimsRuntimeEnv> = async (context) =>
 /** Deployment readiness only: never returns credentials or accepts role changes. */
 export const onRequestGet: PagesFunction<ClaimsRuntimeEnv> = ({ env, request }) => {
   const ready = credentialsFor(env, 'main') !== null;
-  return json({ ready }, ready ? 200 : 503, request.headers.get('origin'));
+  const corporateReady = credentialsFor(env, 'second') !== null;
+  return json({ ready, corporateReady }, ready ? 200 : 503, request.headers.get('origin'));
 };

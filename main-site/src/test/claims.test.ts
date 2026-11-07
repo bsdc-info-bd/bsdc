@@ -10,6 +10,7 @@ import {
   databaseAuthorityRole,
   isAppRole,
   isStaffRole,
+  maySeedStaffProfile,
   ownersFor,
   parseOwners,
   PG_AUTHENTICATED_ROLE,
@@ -32,6 +33,18 @@ const env: ClaimsEnv = {
   BSDC_OWNER_UIDS: 'owner-a, owner-b',
   BSDC2_OWNER_UIDS: 'console-owner',
 };
+
+describe('staff profile seeding', () => {
+  it('does not let a stale self-claim recreate a deleted staff profile', () => {
+    expect(maySeedStaffProfile('owner', false, null)).toBe(false);
+    expect(maySeedStaffProfile('admin', false, null)).toBe(false);
+  });
+  it('allows only explicit owner authorization or verified bootstrap authority', () => {
+    expect(maySeedStaffProfile('admin', true, null)).toBe(true);
+    expect(maySeedStaffProfile('owner', false, 'owner')).toBe(true);
+    expect(maySeedStaffProfile('member', true, 'owner')).toBe(false);
+  });
+});
 
 describe('buildClaims', () => {
   it('always puts "authenticated" in role, never an application role', () => {

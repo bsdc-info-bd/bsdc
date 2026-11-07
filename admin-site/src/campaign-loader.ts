@@ -18,7 +18,7 @@ export function campaignLoadMessage(endpoint: string, cause: unknown): string {
     return `${endpoint}: the database function is missing from the API schema. Deploy campaign migrations 0077–0079 and refresh the API schema cache, then retry.`;
   }
   if (cause instanceof DataError && cause.code === '42501') {
-    return `${endpoint}: your account needs the ads.manage permission. Ask an administrator to review your staff access.`;
+    return `${endpoint}: ${messageOf(cause)}`;
   }
   const code = cause instanceof DataError && cause.code !== 'unknown' ? ` (${cause.code})` : '';
   return `${endpoint}${code}: ${messageOf(cause)}`;

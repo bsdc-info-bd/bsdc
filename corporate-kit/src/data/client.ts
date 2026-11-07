@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { CorporateEnv } from './env';
+import { ensureCorporateDataAccess } from './data-access';
 
 /**
  * One Firebase app and one Supabase client per console. Identity comes from
@@ -56,8 +57,13 @@ export function getDb(env: CorporateEnv): SupabaseClient {
   if (supabase) return supabase;
   supabase = createClient(env.supabase.url, env.supabase.publishableKey, {
     accessToken: async () => {
-      const user = getCorporateAuth(env).currentUser;
-      return user ? user.getIdToken() : null;
+      const auth = getCorporateAuth(env);
+      const user = auth.currentUser;
+      if (!user) return null;
+      const token = await ensureCorporateDataAccess(env, user);
+      // Never send the previous account's token after a sign-out or switch.
+      if (auth.currentUser !== user) throw new Error('Your session changed. Sign in again.');
+      return token.token;
     },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { 'x-bsdc-app': env.appId } },

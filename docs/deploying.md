@@ -344,6 +344,10 @@ again, which is the point.
 | `FB_CLIENT_EMAIL`          | the claims function                                | Service-account address used to call Identity Toolkit.                                       | `firebase-adminsdk-xxxxx@bsdc-bd.iam.gserviceaccount.com`, from the service-account JSON you generate in Firebase console → Project settings → Service accounts → Generate new private key.                             | no         |
 | `FB_PRIVATE_KEY`           | the claims function                                | RSA private key of that service account. Mints custom claims; treat it like a root password. | The `private_key` field of that JSON, including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`. Literal `\n` escapes are accepted and unescaped by the function, so pasting the JSON string as-is works. | yes        |
 | `BSDC_OWNER_UIDS`          | the claims function                                | Allowlist of uids permitted to change anybody's role.                                        | Comma-separated Firebase uids, no spaces: `abc123…,def456…`                                                                                                                                                             | no         |
+| `FB2_PROJECT_ID`           | the claims function | Corporate Firebase project ID (the same project as `VITE_FB2_PROJECT_ID`). | `bsdc-second` | no |
+| `FB2_CLIENT_EMAIL`         | the claims function | Service-account email for the corporate Firebase project; required to repair console tokens. | From the `bsdc-second` service-account JSON. | no |
+| `FB2_PRIVATE_KEY`          | the claims function | Private RSA key for that corporate service account; never compile it into a browser bundle. | The JSON `private_key` field, stored as a Pages secret. | yes |
+| `BSDC2_OWNER_UIDS`         | the claims function | Corporate-project UID allowlist permitted to assign claims, if used. | Comma-separated corporate Firebase UIDs. | no |
 | `VITE_PUSH_VAPID_PUBLIC_KEY` | the build, and the service worker                | This site's own VAPID public key. Compiled into the bundle at build time, so it must be set **before** a deploy for push to be offered at all. | 87 characters of base64url, from `npm run push:keys`. Public by design: it is handed to every browser that subscribes. | no |
 | `PUSH_VAPID_PUBLIC_KEY`    | `functions/api/push/flush.ts`                      | The same key, as the `k=` half of the authorization header.                                  | Identical to the `VITE_` one.                                                                                                                                                                                           | no         |
 | `PUSH_VAPID_PRIVATE_KEY`   | the flush function                                 | Signs the VAPID token for every delivery. Never leaves Cloudflare.                           | 184 characters of base64url: a PKCS#8 DER P-256 private key, from `npm run push:keys`.                                                                                                                                  | yes        |
@@ -790,13 +794,13 @@ you are testing: Preview and Production are separate lists.
 
 ### A member action answers "You do not have permission to do that"
 
-That string is the client's translation of PostgREST's **42501**, and it is
-almost never about the caller's role. It means a statement the browser issued
-was refused by a *privilege* somewhere in the transaction — most often an
-AFTER trigger that maintains a counters column the caller may not write
-(migration 0039 made those triggers run as the table owner) or a row level
-security policy that reads a table the caller has no `SELECT` on (0040 granted
-`SELECT` on `public.blocks`, which the follow and comment policies consult).
+That string can translate PostgREST's **42501**. It may mean an explicit
+application-role check, an unauthenticated or expired session, a missing SQL
+grant, or a privilege failure inside the transaction. Inspect the original
+database message and the caller's current effective role rather than assuming
+one cause. Earlier examples included an AFTER trigger that maintains a counter
+the caller may not write (0039) and an RLS policy reading a table the caller
+could not `SELECT` (0040).
 The proof script asserts these paths statement by statement:
 
 ```bash
@@ -810,37 +814,84 @@ column-privilege write grant shows up the same way: 0042 re-issues the column
 revokes that earlier migrations wrote *after* a table-wide `GRANT UPDATE`, where
 they silently did nothing.
 
-### A console says the account "has no profile in the community database"
+### Corporate sign-in, database authority and permission failures
 
-This was a real, reported lockout, and the cause is worth knowing because it looks
-like a credentials problem and is not. The seven corporate consoles decide who is
-signed in by reading `public.profiles`. The member site creates that row for itself
-the first time somebody signs in there. A staff account is created in the **Firebase
-console**, which is the only way to make the first owner — so there was no code path
-anywhere that created its row, and every console answered an operator with a correct
-password and a correct `bsdc_role` claim that their account was empty.
+Corporate consoles sign in against the **second** Firebase project. PostgREST
+also needs `role: authenticated` in that project's Firebase ID token. The
+consoles now use `/api/auth/claims` on the member site to repair that claim for
+the signed-in UID, refresh the token and then ask `my_role()` for the effective
+database role. The claim chooses the database login role; it does not give a
+member staff privileges. If an old elevated token cannot yet query the database,
+self-repair first issues a member claim; an actual database staff role still
+works, and can be synchronized afterward. A stale signed role alone cannot
+renew Firebase's staff flag or recreate a staff profile. Campaigns, certificates
+and performance reports retain their own database permission checks.
 
-Migration `0074` closes it, in three parts:
+Apply migrations through **0081** and deploy both the member-site Pages Function
+and the updated console builds. `https://www.bsdc.info.bd/api/auth/claims` will
+then return `{"ready":true,"corporateReady":true}` if both sets of Firebase
+bindings are present. This is a **presence check only**; it does not prove that
+Firebase accepts the keys, that the token issuer is trusted by Supabase, that
+CORS works, or that a real administrator can sign in and run an action.
 
-| Routine | Who can call it | What it does |
-|---|---|---|
-| `provision_staff(p_display_name)` | any signed-in caller | Creates the caller's own row **from the role their verified token already carries**. It cannot grant a role it was not given, refuses a suspended account, invents no handle, and reconciles an existing row upward only. |
-| `staff_identity()` | any signed-in caller | One call returning row, role, rank, standing and last-seen, so the console gate cannot disagree with Postgres. |
-| `bootstrap_staff_identity(secret, uid, …)` | `anon`, gated by the flush secret | The first owner, before any staff token exists. `/api/auth/claims` calls it when it mints an elevated claim, so the claim and the row cannot drift. |
+The member site's Cloudflare Pages production environment needs
+`FB2_PROJECT_ID`, `FB2_CLIENT_EMAIL`, and `FB2_PRIVATE_KEY` for `bsdc-second`,
+in addition to the `FB_*` member-project bindings. They may be set in Pages
+settings. Alternatively, set the GitHub Actions secret
+`FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND` to the corporate project's service-account
+JSON; the production deploy validates it against `VITE_FB2_PROJECT_ID` and
+uploads the three server-only bindings. Never paste the key into chat or put it
+in `VITE_*` variables. If no GitHub corporate credential is provided, the deploy
+retains any existing Pages bindings. Its post-deploy check fails if they are
+missing; it does not roll back an already published deployment. Preview and
+production have separate runtime settings.
 
-If a console still refuses after `0074` is applied, the message now names which of
-the five things went wrong, and each has one cause:
+`bsdc.bootstrap_admins` is the **database** list of verified bootstrap email
+addresses. It defaults to the named main administrator; removing or changing
+an entry is a privileged operational decision. The claims endpoint also has
+its own `BSDC_BOOTSTRAP_OWNER_EMAILS` override. If using that override, ensure
+it and the database list reflect the same authorized people. Email must be
+verified by Firebase or an accepted provider; a matching unverified address
+is not enough. Firebase UIDs are project-specific: a member-project account
+and its corporate-project account are not automatically the same database UID.
 
-| Message | Cause | Fix |
-|---|---|---|
-| *email address and password do not match a staff account* | The account is not in `bsdc-second`. | Staff sign in against the **second** project. A member account at `bsdc.info.bd` will not open a console. |
-| *holds no staff role* | The account exists and has no role claim. | An owner gives it one: People screen, or `/api/auth/claims` for that uid. |
-| *suspended* | `profiles.status` is not `active`. | A manager lifts it — suspending is deliberate and never lapses on its own. |
-| *no profile … cannot create one* | `0074` is not applied to this database. | Run the migrations. This message is the fallback path and should not occur on a current deployment. |
-| *too many attempts* | Firebase is rate-limiting the address. | Wait; the lockout is Firebase's, not this platform's. |
+| Routine | Current behavior |
+|---|---|
+| `provision_staff(p_display_name)` | Creates the caller's own **member** profile, except for a verified database bootstrap administrator; preserves an existing role and refuses inactive profiles. |
+| `staff_identity()` + `my_role()` | Return the current profile and effective database authority; an inactive profile does not open a console. |
+| `bootstrap_staff_identity(secret, uid, …)` | Gated by the privileged flush secret. The claims endpoint calls it for authorized owner assignments or verified bootstrap operations, never for a stale self-repair claim alone. |
 
-The `VITE_FB2_*` variables are what point a console at `bsdc-second`; if they are
-missing the console reports the missing names before it tries to sign anybody in.
+**Compatibility:** staff who previously had only a Firebase staff claim and no
+active `public.profiles` staff role must be explicitly granted their correct
+role by an authorized owner. Their stale token alone no longer recreates or
+promotes a staff profile. If necessary, sign in once to create the ordinary
+profile, then have an owner grant the role to that **corporate Firebase UID** in
+the People screen. A demoted or suspended account remains demoted or suspended.
+A verified bootstrap owner is the narrowly scoped exception described above.
+
+Revoking an administrator also requires reviewing the separate
+`BSDC_OWNER_UIDS`/`BSDC2_OWNER_UIDS` and bootstrap-email allowlists. Database
+demotion takes effect immediately for database actions, but Firebase rules can
+still see a previously issued `staff` claim until that token/claim is updated
+or revoked. Follow the Firebase project's token-revocation procedure when an
+operator must lose Firebase-side access immediately.
+
+| Message | What to check |
+|---|---|
+| *email address and password do not match a staff account* | The account must exist in `bsdc-second`, not just the member project. |
+| *staff sign-in service could not prepare database access* | Check the `FB2_*` runtime bindings on the member-site Pages project, Firebase service-account permission, and its deployment. |
+| *database denied this request (42501)* | Check the authenticated token, current migrations, grants and profile status; 42501 does not by itself prove a missing application role. |
+| *needs the … permission* | A database permission check refused this action. An owner should review the **current database role**, not widen grants to everyone. |
+| *holds no staff role* | An owner should grant the correct role to the corporate UID, if authorized. |
+| *suspended* | A manager or owner must restore the profile deliberately. |
+| *no profile … cannot create one* | Check the migrations and database connection; the compatibility fallback cannot create a profile without `provision_staff`. |
+| *too many attempts* | Wait for Firebase's rate limit to expire. |
+
+After deployment, use a real corporate administrator account to create a draft
+campaign, issue and download a test certificate, and log into the performance
+console and create a report. Verify that an ordinary member and a suspended
+account are still refused. These require real credentials and services; mocked
+browser and disposable-database tests alone cannot verify the production setup.
 
 ### The Approvals tab counts work nobody can decide
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DataError } from '@kit';
+import { DataError, toDataError } from '@kit';
 import { campaignLoadMessage, settleCampaignWorkspace } from './campaign-loader';
 
 describe('the campaign workspace', () => {
@@ -19,10 +19,24 @@ describe('the campaign workspace', () => {
     }
   });
 
-  it('identifies a permission failure without claiming it is a migration issue', () => {
-    const message = campaignLoadMessage('campaign_owners', new DataError('no', '42501', ''));
-    expect(message).toContain('ads.manage');
-    expect(message).not.toContain('migration');
+  it('does not mistake a database grant failure for a missing application permission', () => {
+    const permission = toDataError({
+      code: '42501',
+      message: 'Permission ads.manage is required',
+      details: '',
+      hint: '',
+      name: 'PostgrestError',
+    } as unknown as Parameters<typeof toDataError>[0]);
+    const grant = toDataError({
+      code: '42501',
+      message: 'permission denied for function campaign_owners',
+      details: '',
+      hint: '',
+      name: 'PostgrestError',
+    } as unknown as Parameters<typeof toDataError>[0]);
+    expect(campaignLoadMessage('campaign_owners', permission)).toContain('ads.manage');
+    expect(campaignLoadMessage('campaign_owners', grant)).toContain('database grants');
+    expect(campaignLoadMessage('campaign_owners', grant)).not.toContain('ads.manage');
   });
 
   it('preserves other endpoints when the owner directory fails', async () => {

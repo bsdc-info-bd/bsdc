@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { getDb, signIn, signOut, watchUser, type User } from './client';
 import { missingConfig, type CorporateEnv } from './env';
+import { ensureCorporateDataAccess } from './data-access';
 import { messageOf, toDataError } from './rpc';
 import { roleRank } from '../domain/staff';
 
@@ -75,13 +76,13 @@ function displayNameSeed(user: User): string {
  * demoted operator could see a fully rendered console for a moment before every
  * panel refused them.
  */
-async function loadIdentity(env: CorporateEnv, user: User): Promise<StaffProfile> {
+export async function loadIdentity(env: CorporateEnv, user: User): Promise<StaffProfile> {
   const { data, error } = await getDb(env).rpc('staff_identity');
   if (error) {
-    // A deployment that predates 0074 answers 404 for a routine it does not have.
-    // Falling back to a table read keeps that deployment working, and the read is
-    // already covered by the same row level security.
-    return loadIdentityFromTable(env, user);
+    // Only an absent routine merits a compatibility fallback. Authentication,
+    // permission and network failures must never masquerade as a valid session.
+    if (missingRoutine(error.code)) return loadIdentityFromTable(env, user);
+    throw toDataError(error);
   }
   const rows = (Array.isArray(data) ? data : [data]) as IdentityRow[];
   const row = rows[0];
@@ -90,30 +91,16 @@ async function loadIdentity(env: CorporateEnv, user: User): Promise<StaffProfile
     // account has no profile in the community database", with no way forward.
     return provision(env, user);
   }
-  if (row.status !== 'active') {
-    throw new Error(
-      row.status === 'suspended'
-        ? signInMessage('suspended')
-        : `This account is ${row.status.replace('_', ' ')}. A manager or owner has to restore it before a console will open.`,
-    );
-  }
-  return {
-    uid: row.uid,
-    displayName: row.display_name,
-    role: row.role,
-    avatarUrl: row.avatar_url ?? '',
-    rank: row.rank,
-  };
+  return effectiveProfile(env, user, row);
 }
 
 /**
  * The first sign-in of an operator who has no row yet.
  *
- * `provision_staff` creates it from the role the token already carries — it
- * cannot grant more than that, which is why it is safe to call on every path.
- * A caller whose token says `member` gets a member row and is refused by the
- * console for lack of rank, which is a true answer; the old behaviour was to tell
- * a real owner that their account was empty.
+ * `provision_staff` creates an ordinary member row unless the verified email
+ * is on the database bootstrap list. Existing database roles are not changed;
+ * a stale signed staff claim is never enough to restore a deleted or demoted
+ * staff profile. An owner can explicitly grant staff access when appropriate.
  */
 async function provision(env: CorporateEnv, user: User): Promise<StaffProfile> {
   const { data, error } = await getDb(env).rpc('provision_staff', {
@@ -126,16 +113,7 @@ async function provision(env: CorporateEnv, user: User): Promise<StaffProfile> {
   const rows = (Array.isArray(data) ? data : [data]) as IdentityRow[];
   const row = rows[0];
   if (!row) throw new Error('The database did not return the profile it just created.');
-  if (row.status !== 'active') {
-    throw new Error('This account is not active, so a console cannot open.');
-  }
-  return {
-    uid: row.uid,
-    displayName: row.display_name,
-    role: row.role,
-    avatarUrl: row.avatar_url ?? '',
-    rank: row.rank,
-  };
+  return effectiveProfile(env, user, row);
 }
 
 /** 0074 is not applied: read the table, and say something useful when it is empty. */
@@ -151,21 +129,43 @@ async function loadIdentityFromTable(env: CorporateEnv, user: User): Promise<Sta
     'rank' | 'onboarding_complete' | 'created_at' | 'last_seen_at'
   > | null;
   if (!row) throw new Error(signInMessage('no-profile'));
+  return effectiveProfile(env, user, row);
+}
+
+/** The exact authority the database will enforce, including verified bootstrap owners. */
+async function effectiveProfile(
+  env: CorporateEnv,
+  user: User,
+  row: Pick<IdentityRow, 'uid' | 'display_name' | 'avatar_url' | 'role' | 'status'>,
+): Promise<StaffProfile> {
+  if (row.uid !== user.uid) throw new Error('The database returned a profile for another account.');
   if (row.status !== 'active') {
-    throw new Error('This account is not active, so a console cannot open.');
+    throw new Error(
+      row.status === 'suspended'
+        ? signInMessage('suspended')
+        : `This account is ${row.status.replace('_', ' ')}. A manager or owner has to restore it before a console will open.`,
+    );
+  }
+  const { data, error } = await getDb(env).rpc('my_role');
+  if (error && !missingRoutine(error.code)) throw toDataError(error);
+  const entries = Array.isArray(data) ? data : [data];
+  const result = entries[0] as { role?: unknown } | null | undefined;
+  const role = error ? row.role : result?.role;
+  if (typeof role !== 'string' || roleRank(role) === 0) {
+    throw new Error('The database could not confirm this account’s effective role.');
   }
   return {
     uid: row.uid,
     displayName: row.display_name,
-    role: row.role,
+    role,
     avatarUrl: row.avatar_url ?? '',
-    rank: 0,
+    rank: roleRank(role),
   };
 }
 
 /** True when the failure means the routine itself is absent, not that it refused. */
 function missingRoutine(code: string | undefined): boolean {
-  return code === 'PGRST202' || code === '42883' || code === 'PGRST301';
+  return code === 'PGRST202' || code === '42883';
 }
 
 export function SessionProvider({
@@ -183,22 +183,27 @@ export function SessionProvider({
   useEffect(() => {
     if (missing.length > 0) return undefined;
     let active = true;
+    let generation = 0;
     const stop = watchUser(env, (user) => {
+      const current = ++generation;
       if (!user) {
         if (active) setState({ status: 'anonymous' });
         return;
       }
       setState({ status: 'loading' });
-      loadIdentity(env, user)
+      void ensureCorporateDataAccess(env, user)
+        .then(() => loadIdentity(env, user))
         .then((profile) => {
-          if (active) setState({ status: 'authenticated', profile });
+          if (active && current === generation) setState({ status: 'authenticated', profile });
         })
         .catch((error: unknown) => {
-          if (active) setState({ status: 'error', message: messageOf(error) });
+          if (active && current === generation)
+            setState({ status: 'error', message: messageOf(error) });
         });
     });
     return () => {
       active = false;
+      generation += 1;
       stop();
     };
   }, [env, missing.length]);

@@ -20,14 +20,18 @@ on:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
+      - 'scripts/prove-corporate-permissions.sql'
       - 'scripts/prove-ad-wallet-concurrency.mjs'
+      - 'scripts/prove-staff-provision-concurrency.mjs'
       - '.github/workflows/database.yml'
   pull_request:
     paths:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
+      - 'scripts/prove-corporate-permissions.sql'
       - 'scripts/prove-ad-wallet-concurrency.mjs'
+      - 'scripts/prove-staff-provision-concurrency.mjs'
       - '.github/workflows/database.yml'
   workflow_dispatch:
     inputs:
@@ -218,6 +222,14 @@ jobs:
         env:
           BSDC_THROWAWAY_DB: '1'
         run: node scripts/prove-ad-wallet-concurrency.mjs
+
+      - name: Prove corporate permissions on PostgreSQL
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f scripts/prove-corporate-permissions.sql
+
+      - name: Prove concurrent corporate first sign-ins
+        env:
+          BSDC_THROWAWAY_DB: '1'
+        run: node scripts/prove-staff-provision-concurrency.mjs
 
       - name: Report what was built
         run: |
