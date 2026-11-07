@@ -31,6 +31,7 @@ import {
   type Forecast,
   type TrendPoint,
   type VitalRow,
+  type VitalOverall,
 } from '@kit';
 import {
   APPS,
@@ -49,25 +50,25 @@ import {
   windowLabel,
   type EdgeRow,
 } from './model';
+import { Reports } from './Reports';
 
 /**
  * The performance suite.
  *
- * Everything on these screens is a field measurement from somebody's actual
- * phone. There is no synthetic score anywhere in it, and no user column
- * behind it: the tables record what a route was like, never who was using
- * it.
+ * Measurements come from their respective recorded sources. Field vitals are
+ * anonymous; edge timings, error groups and build sizes have different scopes.
  */
 export function App(): ReactElement {
   return (
     <AppShell
       minRole="moderator"
-      note="Field measurements from real devices. Nothing here identifies a visitor."
+      note="Web Vitals are anonymous field measurements. Other panels describe recorded errors, edge calls and builds."
       tabs={[
         { id: 'vitals', label: 'Experience', render: () => <Vitals /> },
         { id: 'edge', label: 'Edge', render: () => <Edge /> },
         { id: 'errors', label: 'Errors', render: () => <Errors /> },
         { id: 'weight', label: 'Weight', render: () => <Weight /> },
+        { id: 'reports', label: 'Reports', render: () => <Reports /> },
       ]}
     />
   );
@@ -85,6 +86,7 @@ function download(filename: string, body: string, type: string): void {
 
 interface VitalsData {
   readonly summary: readonly VitalRow[];
+  readonly overall: readonly VitalOverall[];
   readonly trend: readonly TrendPoint[];
   readonly forecast: Forecast | null;
 }
@@ -95,12 +97,13 @@ async function loadVitals(
   app: string,
   metric: string,
 ): Promise<VitalsData> {
-  const [summary, trend, forecast] = await Promise.all([
+  const [summary, overall, trend, forecast] = await Promise.all([
     listRpc<VitalRow>(env, 'vitals_summary', { p_days: days, p_app: app }),
+    listRpc<VitalOverall>(env, 'performance_vitals_overall', { p_days: days, p_app: app }),
     listRpc<TrendPoint>(env, 'vitals_trend', { p_metric: metric, p_days: days, p_app: app }),
     listRpc<Forecast>(env, 'capacity_forecast', { p_days: days }),
   ]);
-  return { summary, trend, forecast: forecast[0] ?? null };
+  return { summary, overall, trend, forecast: forecast[0] ?? null };
 }
 
 function Vitals(): ReactElement {
@@ -127,11 +130,11 @@ function Vitals(): ReactElement {
       </Banner>
     );
 
-  const { summary, trend, forecast } = state.data;
-  const verdicts = overallVerdicts(summary);
+  const { summary, overall, trend, forecast } = state.data;
+  const verdicts = overallVerdicts(overall);
   const routes = routesByTraffic(summary);
   const filtered = route === '' ? summary : summary.filter((row) => row.route === route);
-  const bounds = trendBounds(trend);
+  const bounds = trendBounds(trend, chosen);
   const direction = trendDirection(trend);
   const line = sparkline(trend, 640, 64);
 
@@ -284,7 +287,10 @@ function Vitals(): ReactElement {
         )}
       </Card>
 
-      <Card title="Capacity">
+      <Card
+        title="Measurement-volume projection"
+        description="All apps; measurements are not visitors."
+      >
         <p>{forecastSentence(forecast)}</p>
       </Card>
     </div>
@@ -294,11 +300,12 @@ function Vitals(): ReactElement {
 function Edge(): ReactElement {
   const env = useCorporateEnv();
   const [days, setDays] = useState('7');
+  const [app, setApp] = useState('main-site');
   const load = useCallback(
-    () => listRpc<EdgeRow>(env, 'edge_latency', { p_days: Number(days) }),
-    [env, days],
+    () => listRpc<EdgeRow>(env, 'performance_edge_for_app', { p_days: Number(days), p_app: app }),
+    [env, days, app],
   );
-  const { state } = useAsync(load, [env, days]);
+  const { state } = useAsync(load, [env, days, app]);
 
   if (state.status === 'loading') return <Loading label="Reading edge timings." />;
   if (state.status === 'error')
@@ -311,14 +318,22 @@ function Edge(): ReactElement {
   return (
     <div className="kit-stack">
       <Card title="Pages Functions" description="Measured at the edge, not in a browser.">
-        <Select
-          label="Period"
-          value={days}
-          options={WINDOWS.map((option) => ({ value: option.value, label: option.label }))}
-          onChange={(event) => setDays(event.target.value)}
-        />
+        <div className="kit-grid kit-grid--2">
+          <Select
+            label="Period"
+            value={days}
+            options={WINDOWS.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(event) => setDays(event.target.value)}
+          />
+          <Select
+            label="Application"
+            value={app}
+            options={APPS.map((option) => ({ value: option.id, label: option.label }))}
+            onChange={(event) => setApp(event.target.value)}
+          />
+        </div>
         {state.data.length === 0 ? (
-          <Empty>No function has been called in this window.</Empty>
+          <Empty>No edge timings were recorded for this application in this window.</Empty>
         ) : (
           <Table caption="Edge latency" head={['Endpoint', 'Calls', 'p50', 'p95', 'Failing', '']}>
             {state.data.map((row) => (
@@ -393,7 +408,7 @@ function Errors(): ReactElement {
       )}
       <Card
         title="What is breaking in the browser"
-        description="Grouped by fingerprint: a hundred copies of one fault is one piece of work."
+        description="All apps, grouped by fingerprint. Faults are selected by last-seen date; occurrence totals cover their lifetime."
       >
         <div className="kit-grid">
           <Select
@@ -413,7 +428,7 @@ function Errors(): ReactElement {
           />
         </div>
         {rows.length === 0 ? (
-          <Empty>Nothing has failed in this window.</Empty>
+          <Empty>No recorded fault was last seen in this window.</Empty>
         ) : (
           <Table caption="Client errors" head={['Fault', 'Route', 'Rate', 'Total', 'Build', '']}>
             {rows.map((row) => (
@@ -473,7 +488,7 @@ function Weight(): ReactElement {
     <div className="kit-stack">
       <Card
         title="What the build weighs"
-        description="Recorded by continuous integration after every successful build, because a regression here becomes a regression in the field three weeks later."
+        description="Recorded by CI for successful main-branch builds when reporting is configured. This is total emitted JavaScript, including lazy chunks, not the initial download."
       >
         <Select
           label="Application"
@@ -487,7 +502,8 @@ function Weight(): ReactElement {
             title={bundleVerdict(latest)}
           >
             <p className="kit-small" style={{ margin: 0 }}>
-              {budgetShare(latest.bytes_gzip, latest.budget_gzip)} of initial JavaScript, gzipped.
+              {budgetShare(latest.bytes_gzip, latest.budget_gzip)} of total emitted JavaScript,
+              gzipped.
             </p>
           </Banner>
         )}

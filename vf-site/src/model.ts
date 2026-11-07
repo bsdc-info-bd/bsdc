@@ -81,3 +81,20 @@ export function pushRecent(recent: readonly string[], code: string, limit = 6): 
   if (normalised === '') return recent;
   return [normalised, ...recent.filter((item) => item !== normalised)].slice(0, limit);
 }
+
+/** Only UUIDs generated for report receipts are sent to the public RPC. */
+export function reportIdFromSearch(search: string): string {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  const id = (params.get('report') ?? '').toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id) ? id : '';
+}
+
+export interface VerifiedReport {
+  readonly receipt_id: string;
+  readonly app: string;
+  readonly days: number;
+  readonly title: string;
+  readonly sections: readonly string[];
+  readonly generated_at: string;
+  readonly sha256: string;
+}

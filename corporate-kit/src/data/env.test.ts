@@ -6,6 +6,7 @@ const blank: CorporateEnv = {
   appId: 'bsdc-config',
   appName: 'Configuration',
   siteUrl: 'https://www.bsdc.info.bd',
+  verificationUrl: 'https://vf.main.bsdc.info.bd',
   firebase: { apiKey: '', authDomain: '', projectId: '', appId: '', databaseURL: '' },
   supabase: { url: '', publishableKey: '' },
 };
@@ -43,6 +44,7 @@ describe('corporate environment', () => {
     expect(env.appId).toBe('bsdc-ip');
     expect(env.appName).toBe('IP intelligence');
     expect(env.siteUrl.startsWith('https://')).toBe(true);
+    expect(env.verificationUrl).toBe('https://vf.main.bsdc.info.bd');
   });
 });
 

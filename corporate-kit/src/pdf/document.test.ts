@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { PdfDocument, escapePdfText, hexToRgb, textWidth, toLatin, wrapText } from './document';
+import {
+  PdfDocument,
+  escapePdfText,
+  hexToRgb,
+  pdfText,
+  textWidth,
+  toLatin,
+  wrapText,
+} from './document';
+import { officialSignature } from './signature';
 import {
   BRAND_MARK,
   curvedCaption,
   guilloche,
   markGeometry,
   sealGeometry,
-  signatureStrokes,
   watermarkGeometry,
   wordmarkLayout,
 } from './ornament';
@@ -65,6 +73,20 @@ describe('typesetting arithmetic', () => {
     expect(lines.join(' ')).toBe('one two three four five six seven eight nine ten');
   });
 
+  it('does not mislabel the Indian rupee as Bangladeshi taka', () => {
+    expect(pdfText('₹ 100')).toBe('INR 100');
+    expect(pdfText('৳ 100')).toBe('৳ 100');
+  });
+
+  it('measures wide Helvetica glyphs accurately and wraps long unbroken words', () => {
+    expect(textWidth('WWWW', 10)).toBeCloseTo(37.76, 2);
+    expect(textWidth('iiii', 10)).toBeCloseTo(8.88, 2);
+    const word = 'W'.repeat(80);
+    const lines = wrapText(word, 10, 80);
+    expect(lines.join('')).toBe(word);
+    for (const line of lines) expect(textWidth(line, 10)).toBeLessThanOrEqual(80);
+  });
+
   it('reads a hexadecimal colour, and refuses nonsense instead of guessing', () => {
     expect(hexToRgb('#1b4332')).toEqual([27 / 255, 67 / 255, 50 / 255]);
     expect(hexToRgb('1b4332')).toEqual([27 / 255, 67 / 255, 50 / 255]);
@@ -99,12 +121,14 @@ describe('the page vocabulary', () => {
     expect(new TextDecoder().decode(doc.build())).toContain('1 0 0 1 10.00 20.00 Tm');
   });
 
-  it('draws a circle as an arc, filled or stroked, not as a polygon', () => {
+  it('draws a circle using PDF cubic curves, filled or stroked', () => {
     const doc = new PdfDocument('x', 'portrait');
     doc.circle({ x: 50, y: 50 }, 10, { fill: [1, 0, 0], stroke: [0, 0, 0], width: 1 });
     const content = new TextDecoder().decode(doc.build());
-    expect(content).toContain('50.00 50.00 10.00 0 360 arc f');
-    expect(content).toContain('50.00 50.00 10.00 0 360 arc S');
+    expect(content).not.toMatch(/\barc\b/);
+    expect(content).toContain('60.00 50.00 m');
+    expect(content).toContain('60.00 50.00 c h f');
+    expect(content).toContain('60.00 50.00 c h S');
   });
 
   it('starts a new page rather than printing past the margin', () => {
@@ -120,7 +144,9 @@ describe('the brand, drawn', () => {
   it('draws the mark as a filled square, an outline shield and a check', () => {
     const ops = markGeometry({ x: 0, y: 0, width: 64, height: 64 }, BRAND_MARK);
     expect(ops.length).toBeGreaterThanOrEqual(4);
-    expect(ops.join(' ')).toContain('64.00 64.00 re f');
+    expect(ops.join(' ')).toContain('W n');
+    // The check starts at y=32, dips to 27, and rises to 37 in PDF coordinates.
+    expect(ops.join(' ')).toContain('25.00 32.00 m 30.00 27.00 l 39.00 37.00 l');
     expect(ops.join(' ')).toMatch(/S$/);
   });
 
@@ -150,7 +176,8 @@ describe('a seal', () => {
   it('has four bands, and its rim is drawn over its field', () => {
     const ops = sealGeometry({ x: 100, y: 100 }, 30, { ink: [0, 0, 0], ring: [1, 1, 1] });
     expect(ops[0]).toContain('f');
-    expect(ops.join(' ')).toContain('30.00 0 360 arc');
+    expect(ops.join(' ')).not.toMatch(/\barc\b/);
+    expect(ops.join(' ')).toContain('130.00 100.00 m');
     // 60 milled rays, plus the field, rim and inner ring.
     expect(ops.length).toBe(63);
   });
@@ -205,46 +232,39 @@ describe('type on a circle', () => {
   });
 });
 
-describe('a signature', () => {
-  const box = { x: 100, y: 100, width: 160, height: 44 };
-
-  it('is the same stroke for the same name, every time', () => {
-    expect(signatureStrokes('Rizwan Rahim Chowdhury', box)).toEqual(
-      signatureStrokes('Rizwan Rahim Chowdhury', box),
-    );
+describe('the supplied signature', () => {
+  it('draws the cropped, transparent signature within its box', () => {
+    const ops = officialSignature({ x: 100, y: 100, width: 160, height: 44 });
+    expect(ops[0]).toBe('q');
+    expect(ops.at(-1)).toBe('Q');
+    expect(ops.join(' ')).toContain(' re');
+    expect(ops.length).toBeGreaterThan(3);
   });
 
-  it('is a different stroke for a different name', () => {
-    expect(signatureStrokes('Rizwan Rahim Chowdhury', box)).not.toEqual(
-      signatureStrokes('Nusrat Jahan', box),
-    );
+  it('does not draw for a zero-size box', () => {
+    expect(officialSignature({ x: 0, y: 0, width: 0, height: 40 })).toEqual([]);
+  });
+});
+
+describe('Bengali PDF text', () => {
+  it('keeps the original Bengali and emits shaped outlines with ActualText', () => {
+    const text = 'আয়েশা রহমান';
+    expect(pdfText(text)).toBe(text);
+    const doc = new PdfDocument('x');
+    doc.text(text, { size: 14 });
+    const output = stream(doc);
+    expect(output).toContain('/ActualText <FEFF');
+    expect(output).toContain(' c');
+    expect(textWidth(text, 14)).toBeGreaterThan(0);
   });
 
-  // The bug this exists for: a first draft linked points with straight
-  // segments, which looked like a mountain range. Handwriting is curves.
-  it('is drawn with curves and joins, not with straight segments', () => {
-    const ops = signatureStrokes('Rizwan Rahim Chowdhury', box).join(' ');
-    expect(ops).toContain(' c ');
-    expect(ops).toContain('1 J 1 j');
+  it('refuses an unsupported character rather than silently losing it', () => {
+    expect(() => pdfText('Unsupported 😀')).toThrow('U+1F600');
   });
 
-  it('stays inside the box it was given, roughly, and is ruled under', () => {
-    const ops = signatureStrokes('Ada Lovelace', box).join(' ');
-    const numbers = [...ops.matchAll(/(-?\d+\.\d{2}) (-?\d+\.\d{2})/g)].map((match) => ({
-      x: Number(match[1]),
-      y: Number(match[2]),
-    }));
-    expect(numbers.length).toBeGreaterThan(10);
-    // Generous bounds: a flourish may leave the box slightly, a stroke may not
-    // cross the page.
-    for (const point of numbers) {
-      expect(point.x).toBeGreaterThan(box.x - box.width * 0.5);
-      expect(point.x).toBeLessThan(box.x + box.width * 1.5);
-      expect(point.y).toBeGreaterThan(box.y - box.height);
-      expect(point.y).toBeLessThan(box.y + box.height);
-    }
-    // A rule under the name.
-    expect(ops).toContain('0.62 G');
+  it('splits long words only at grapheme boundaries', () => {
+    const word = 'বাংলাদেশ'.repeat(10);
+    expect(wrapText(word, 12, 80).join('')).toBe(word);
   });
 });
 

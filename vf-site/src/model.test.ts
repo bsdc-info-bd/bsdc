@@ -8,7 +8,15 @@ import {
   stateTone,
   type VerificationResult,
 } from '@kit';
-import { advice, codeFromSearch, pushRecent, readableDate, resultLines, shareUrl } from './model';
+import {
+  advice,
+  codeFromSearch,
+  pushRecent,
+  readableDate,
+  reportIdFromSearch,
+  resultLines,
+  shareUrl,
+} from './model';
 
 const code = (kind: string, body: string): string => `BSDC-${kind}-${body}-${cardCheckDigit(body)}`;
 
@@ -149,5 +157,13 @@ describe('the recent list on this device', () => {
 
   it('ignores an empty code', () => {
     expect(pushRecent([a], '   ')).toEqual([a]);
+  });
+});
+
+describe('report receipt links', () => {
+  it('accepts a UUID and rejects malformed input before an RPC', () => {
+    const id = '12345678-1234-4234-8234-123456789abc';
+    expect(reportIdFromSearch(`?report=${id}`)).toBe(id);
+    expect(reportIdFromSearch('?report=not-a-uuid')).toBe('');
   });
 });

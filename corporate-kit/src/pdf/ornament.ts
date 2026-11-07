@@ -1,4 +1,4 @@
-import type { Rgb } from './document';
+import { circlePath, type Rgb } from './document';
 
 /**
  * The brand, drawn rather than embedded.
@@ -49,20 +49,18 @@ export interface Box {
  * watermark on a printed certificate actually is.
  */
 export function watermarkGeometry(origin: Box, colour: Rgb, weight = 0.8): readonly string[] {
-  const unit = origin.width / 64;
+  const x = (v: number): string => (origin.x + (v * origin.width) / 64).toFixed(2);
+  const y = (v: number): string => (origin.y + origin.height - (v * origin.height) / 64).toFixed(2);
   const stroke = `${weight.toFixed(2)} w ${colour.map((part) => part.toFixed(3)).join(' ')} RG`;
+  // SVG coordinates grow down; PDF coordinates grow up. Transform every point,
+  // including the check's low point, rather than reflecting just the shield.
   const shield =
-    `${(origin.x + 32 * unit).toFixed(2)} ${(origin.y + origin.height - 10 * unit).toFixed(2)} m ` +
-    `${(origin.x + 12 * unit).toFixed(2)} ${(origin.y + origin.height - 19 * unit).toFixed(2)} l ` +
-    `${(origin.x + 12 * unit).toFixed(2)} ${(origin.y + origin.height - 36 * unit).toFixed(2)} l ` +
-    `${(origin.x + 32 * unit).toFixed(2)} ${(origin.y + origin.height - 56 * unit).toFixed(2)} l ` +
-    `${(origin.x + 52 * unit).toFixed(2)} ${(origin.y + origin.height - 36 * unit).toFixed(2)} l ` +
-    `${(origin.x + 52 * unit).toFixed(2)} ${(origin.y + origin.height - 19 * unit).toFixed(2)} l h`;
-  const check =
-    `${(origin.x + 23 * unit).toFixed(2)} ${(origin.y + origin.height - 33 * unit).toFixed(2)} m ` +
-    `${(origin.x + 30 * unit).toFixed(2)} ${(origin.y + origin.height - 26 * unit).toFixed(2)} l ` +
-    `${(origin.x + 42 * unit).toFixed(2)} ${(origin.y + origin.height - 41 * unit).toFixed(2)} l`;
-  return [`${stroke} 1 J 1 j ${shield} S`, `${stroke} ${check} S`];
+    `${x(32)} ${y(12)} m ${x(16)} ${y(20)} l ${x(16)} ${y(34)} l ` +
+    `${x(16)} ${y(45)} ${x(23.5)} ${y(51)} ${x(32)} ${y(53)} c ` +
+    `${x(40.5)} ${y(51)} ${x(48)} ${y(45)} ${x(48)} ${y(34)} c ` +
+    `${x(48)} ${y(20)} l h`;
+  const check = `${x(25)} ${y(32)} m ${x(30)} ${y(37)} l ${x(39)} ${y(27)} l`;
+  return [`${stroke} 1 J 1 j ${shield} S`, `${stroke} 1 J 1 j ${check} S`];
 }
 
 /**
@@ -76,35 +74,31 @@ export function watermarkGeometry(origin: Box, colour: Rgb, weight = 0.8): reado
  */
 export function markGeometry(origin: Box, colours: MarkColours): readonly string[] {
   const { x, y, width, height } = origin;
-  const unit = width / 64;
-  const rounded = (value: number): string => value.toFixed(2);
+  const n = (value: number): string => value.toFixed(2);
+  const px = (v: number): string => n(x + (v * width) / 64);
+  const py = (v: number): string => n(y + height - (v * height) / 64);
   const fill = (colour: Rgb): string => colour.map((part) => part.toFixed(3)).join(' ');
-
-  // The shield: from the top centre, out to the shoulders, down the sides and
-  // in to the point. Same proportions as the SVG's `translate(8 8)` group.
-  const shieldPath =
-    `${rounded(x + 32 * unit)} ${rounded(y + height - 12 * unit)} m ` +
-    `${rounded(x + 16 * unit)} ${rounded(y + height - 20 * unit)} l ` +
-    `${rounded(x + 16 * unit)} ${rounded(y + height - 34 * unit)} l ` +
-    `${rounded(x + 32 * unit)} ${rounded(y + height - 53 * unit)} l ` +
-    `${rounded(x + 48 * unit)} ${rounded(y + height - 34 * unit)} l ` +
-    `${rounded(x + 48 * unit)} ${rounded(y + height - 20 * unit)} l h`;
-
-  const checkPath =
-    `${rounded(x + 25 * unit)} ${rounded(y + height - 32 * unit)} m ` +
-    `${rounded(x + 30 * unit)} ${rounded(y + height - 27 * unit)} l ` +
-    `${rounded(x + 39 * unit)} ${rounded(y + height - 37 * unit)} l`;
-
+  // `rx=16` from brand/bsdc-logo.svg, clipped before filling both colour bands.
+  const k = 16 * 0.5522847498;
+  const rounded =
+    `${px(16)} ${py(0)} m ${px(48)} ${py(0)} l ` +
+    `${px(48 + k)} ${py(0)} ${px(64)} ${py(16 - k)} ${px(64)} ${py(16)} c ` +
+    `${px(64)} ${py(48)} l ${px(64)} ${py(48 + k)} ${px(48 + k)} ${py(64)} ${px(48)} ${py(64)} c ` +
+    `${px(16)} ${py(64)} l ${px(16 - k)} ${py(64)} ${px(0)} ${py(48 + k)} ${px(0)} ${py(48)} c ` +
+    `${px(0)} ${py(16)} l ${px(0)} ${py(16 - k)} ${px(16 - k)} ${py(0)} ${px(16)} ${py(0)} c h`;
+  const shield =
+    `${px(32)} ${py(12)} m ${px(16)} ${py(20)} l ${px(16)} ${py(34)} l ` +
+    `${px(16)} ${py(45)} ${px(23.5)} ${py(51)} ${px(32)} ${py(53)} c ` +
+    `${px(40.5)} ${py(51)} ${px(48)} ${py(45)} ${px(48)} ${py(34)} c ${px(48)} ${py(20)} l h`;
+  const check = `${px(25)} ${py(32)} m ${px(30)} ${py(37)} l ${px(39)} ${py(27)} l`;
+  const unit = width / 64;
   return [
-    // The rounded square, in two bands: the gradient, then the darker foot.
-    `${fill(colours.gradientStart)} rg ${rounded(x)} ${rounded(y)} ${rounded(width)} ` +
-      `${rounded(height)} re f`,
-    `${fill(colours.gradientEnd)} rg ${rounded(x)} ${rounded(y)} ${rounded(width)} ` +
-      `${rounded(height * 0.35)} re f`,
-    // The shield outline.
-    `1.6 w ${fill(colours.outline)} RG ${shieldPath} S`,
-    // The check.
-    `2 w ${fill(colours.check)} RG 1 J 1 j ${checkPath} S`,
+    `q ${rounded} W n`,
+    `${fill(colours.gradientStart)} rg ${n(x)} ${n(y)} ${n(width)} ${n(height)} re f`,
+    `${fill(colours.gradientEnd)} rg ${n(x)} ${n(y)} ${n(width)} ${n(height * 0.35)} re f`,
+    'Q',
+    `${n(3 * unit)} w ${fill(colours.outline)} RG 1 J 1 j ${shield} S`,
+    `${n(3.5 * unit)} w ${fill(colours.check)} RG 1 J 1 j ${check} S`,
   ];
 }
 
@@ -220,8 +214,7 @@ export function sealGeometry(
   const fill = (colour: Rgb): string => colour.map((part) => part.toFixed(3)).join(' ');
   const op = (weight: number, colour: Rgb, path: string, paint: 'S' | 'f'): string =>
     `${weight.toFixed(2)} w ${fill(colour)} RG ${path} ${paint}`;
-  const circle = (r: number): string =>
-    `${centre.x.toFixed(2)} ${centre.y.toFixed(2)} ${r.toFixed(2)} 0 360 arc`;
+  const circle = (r: number): string => circlePath(centre, r);
 
   const ops: string[] = [
     // The field, then the rim over it.
@@ -315,116 +308,4 @@ export function curvedCaption(
       size,
     };
   });
-}
-
-/**
- * A handwritten-looking signature, as a stroke.
- *
- * A certificate signed with a typed name looks like a form, so this draws a
- * plausible hand: a leading ascender, two or three bowls, a descender that
- * sweeps back under the name and a crossing stroke through the bowls — the
- * shape of a name written quickly with a pen that is not lifted.
- *
- * It is generated from the signatory's name, so one person always produces the
- * same signature and two people never share one, and it is decoration: the
- * code and the public desk are what prove the document. The curves are cubic
- * Béziers with control points derived from the seed, which is what makes them
- * read as handwriting rather than as a graph of noise.
- */
-export function signatureStrokes(
-  name: string,
-  origin: Box,
-  options: { readonly seed?: number } = {},
-): readonly string[] {
-  let seed = options.seed ?? 7;
-  for (const character of name) seed = (seed * 31 + (character.codePointAt(0) ?? 0)) % 100_003;
-  const next = (): number => {
-    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
-    return seed / 2_147_483_648;
-  };
-
-  // The baseline sits a fifth of the way up the box, and a bowl rises to twice
-  // its own radius above the baseline: the x-height is chosen so that the
-  // tallest bowl still lands inside the box rather than above it.
-  const baseY = origin.y + origin.height * 0.2;
-  const height = origin.height;
-  const width = origin.width;
-  const xHeight = height * 0.34;
-  const point = (x: number, y: number): string =>
-    `${(origin.x + x).toFixed(2)} ${(baseY + y).toFixed(2)}`;
-
-  /**
-   * A loop: an ellipse traced from the baseline, up to the x-height and back,
-   * using the cubic control constant that makes four segments a circle
-   * (0.5523). Approximating a bowl with straight segments is what makes a
-   * generated signature look like a mountain range.
-   */
-  const bowl = (centreX: number, radiusX: number, radiusY: number): string => {
-    const k = 0.5523;
-    const ry = radiusY;
-    const rx = radiusX;
-    // Start at the bottom of the ellipse and go clockwise.
-    return (
-      `${point(centreX, 0)} m ` +
-      `${point(centreX + rx * k, 0)} ${point(centreX + rx, ry * (1 - k))} ${point(centreX + rx, ry)} c ` +
-      `${point(centreX + rx, ry * (1 + k))} ${point(centreX + rx * k, ry * 2)} ${point(centreX, ry * 2)} c ` +
-      `${point(centreX - rx * k, ry * 2)} ${point(centreX - rx, ry * (1 + k))} ${point(centreX - rx, ry)} c ` +
-      `${point(centreX - rx, ry * (1 - k))} ${point(centreX - rx * k, 0)} ${point(centreX, 0)} c`
-    );
-  };
-
-  /** A single smooth stroke through two points, bowed by `bow`. */
-  const sweep = (
-    from: { x: number; y: number },
-    to: { x: number; y: number },
-    bow: number,
-  ): string => {
-    const midX = (from.x + to.x) / 2;
-    const midY = (from.y + to.y) / 2 + bow;
-    return (
-      `${point(from.x, from.y)} m ` +
-      `${point(midX, midY)} ${point(midX, midY)} ${point(to.x, to.y)} c`
-    );
-  };
-
-  const strokes: string[] = [];
-
-  // The capital: an ascender that leans, curves at the top of the stroke and
-  // comes back down to the baseline, which is how a written "R" or "N" starts.
-  const ascenderX = width * (0.1 + next() * 0.03);
-  strokes.push(
-    sweep({ x: 0, y: 0 }, { x: ascenderX, y: height * 0.34 }, height * 0.12) +
-      ` ${point(ascenderX + width * 0.02, height * 0.34)} m ` +
-      `${point(ascenderX + width * 0.05, height * 0.6)} ${point(ascenderX + width * 0.02, height * 0.05)} ` +
-      `${point(ascenderX + width * 0.04, 0)} c`,
-  );
-
-  // Two or three bowls, touching, each a real loop.
-  let x = ascenderX + width * 0.05;
-  const bowls = 2 + (next() > 0.45 ? 1 : 0);
-  for (let index = 0; index < bowls; index += 1) {
-    const rx = width * (0.048 + next() * 0.018);
-    const ry = xHeight * (0.92 + next() * 0.16);
-    strokes.push(bowl(x + rx, rx, ry));
-    x += rx * 2 + width * 0.008;
-  }
-
-  // The tail: down below the baseline, out to the right, and a flick back up
-  // through the bowls, which is the gesture that says "signed".
-  strokes.push(sweep({ x, y: 0 }, { x: x + width * 0.11, y: -height * 0.34 }, height * 0.16));
-  strokes.push(
-    sweep(
-      { x: x + width * 0.1, y: -height * 0.3 },
-      { x: x + width * 0.03, y: height * 0.28 },
-      width * 0.02,
-    ),
-  );
-
-  const ops: string[] = [
-    `1.15 w 0.07 g 0.07 G 1 J 1 j ${strokes.join(' ')} S`,
-    // A rule under it, the way a signature line is ruled.
-    `0.5 w 0.62 G ${origin.x.toFixed(2)} ${(baseY - 5).toFixed(2)} m ` +
-      `${(origin.x + width).toFixed(2)} ${(baseY - 5).toFixed(2)} l S`,
-  ];
-  return ops;
 }

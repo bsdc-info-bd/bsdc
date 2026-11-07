@@ -12,7 +12,6 @@ import {
   Table,
   TextArea,
   callRpc,
-  downloadPdf,
   formatDocCode,
   listRpc,
   messageOf,
@@ -36,7 +35,6 @@ import {
   type RegistryRow,
   type TemplateRow,
 } from './model';
-import { buildCertificatePdf, printFromTemplate } from './certificate-pdf';
 
 /**
  * The certificate generator. A certificate is issued once and never edited:
@@ -245,7 +243,7 @@ function IssuedCard({
   issued: IssuedCertificate;
   env: CorporateEnv;
 }): ReactElement {
-  const portal = env.siteUrl.replace('www.', 'vf.');
+  const portal = env.verificationUrl;
   const url = verificationUrl(portal, issued.code);
   const svg = useMemo(() => qrSvg(url), [url]);
 
@@ -266,24 +264,12 @@ function IssuedCard({
             {issued.recipientName} — issued {longDate(issued.issuedOn)}
           </p>
           <p className="kit-small kit-muted">{url}</p>
-          <Button
-            size="small"
-            onClick={() => {
-              const bytes = buildCertificatePdf(
-                printFromTemplate(issued.template, {
-                  code: issued.code,
-                  recipientName: issued.recipientName,
-                  body: issued.body,
-                  issuedOn: issued.issuedOn,
-                  expiresOn: issued.expiresOn,
-                  siteUrl: portal,
-                }),
-              );
-              downloadPdf(bytes, certificateFilename(issued.code, issued.recipientName));
-            }}
-          >
-            Download PDF
-          </Button>
+          <PrintCertificateButton
+            code={issued.code}
+            template={issued.template}
+            env={env}
+            label="Download PDF"
+          />
         </div>
       </div>
     </Card>
@@ -452,27 +438,12 @@ function Registry(): ReactElement {
                 <td className="kit-small">{row.verifications}</td>
                 <td>
                   <div className="kit-row">
-                    <Button
-                      size="small"
-                      variant="quiet"
-                      disabled={template === null}
-                      onClick={() => {
-                        if (!template) return;
-                        const bytes = buildCertificatePdf(
-                          printFromTemplate(template, {
-                            code: row.code,
-                            recipientName: row.recipient_name,
-                            body: row.subject,
-                            issuedOn: row.issued_on,
-                            expiresOn: row.expires_on,
-                            siteUrl: env.siteUrl.replace('www.', 'vf.'),
-                          }),
-                        );
-                        downloadPdf(bytes, certificateFilename(row.code, row.recipient_name));
-                      }}
-                    >
-                      PDF
-                    </Button>
+                    <PrintCertificateButton
+                      code={row.code}
+                      template={template}
+                      env={env}
+                      label="PDF"
+                    />
                     {row.status === 'issued' && <Revoke code={row.code} onRevoked={reload} />}
                   </div>
                 </td>
@@ -482,6 +453,84 @@ function Registry(): ReactElement {
         </Table>
       )}
     </div>
+  );
+}
+
+type PrintableCertificate = {
+  readonly code: string;
+  readonly template_key: string;
+  readonly recipient_name: string;
+  readonly body: string;
+  readonly issued_on: string;
+  readonly expires_on: string | null;
+  readonly status: 'issued' | 'revoked';
+};
+
+/** Always print the issued body from the registry, including on the first download. */
+function PrintCertificateButton({
+  code,
+  template,
+  env,
+  label,
+}: {
+  code: string;
+  template: TemplateRow | null;
+  env: CorporateEnv;
+  label: string;
+}): ReactElement {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const print = async (): Promise<void> => {
+    if (!template) return;
+    setBusy(true);
+    setError('');
+    try {
+      const records = await listRpc<PrintableCertificate>(env, 'certificate_for_print', {
+        p_code: code,
+      });
+      const record = records[0];
+      if (!record)
+        throw new Error('The issued certificate could not be found. Refresh the registry.');
+      if (record.template_key !== template.key)
+        throw new Error('The template changed. Refresh the registry and retry.');
+      const [certificate, pdf] = await Promise.all([
+        import('./certificate-pdf'),
+        import('@kit/pdf'),
+      ]);
+      const bytes = certificate.buildCertificatePdf(
+        certificate.printFromTemplate(template, {
+          code: record.code,
+          recipientName: record.recipient_name,
+          body: record.body,
+          issuedOn: record.issued_on,
+          expiresOn: record.expires_on,
+          status: record.status,
+          siteUrl: env.verificationUrl,
+        }),
+      );
+      pdf.downloadPdf(bytes, certificateFilename(record.code, record.recipient_name));
+    } catch (cause) {
+      setError(messageOf(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span>
+      <Button
+        size="small"
+        variant="quiet"
+        disabled={busy || template === null}
+        onClick={() => void print()}
+      >
+        {busy ? 'Preparing…' : label}
+      </Button>
+      {error !== '' && (
+        <span className="kit-error" role="alert">
+          {error}
+        </span>
+      )}
+    </span>
   );
 }
 

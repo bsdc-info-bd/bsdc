@@ -142,11 +142,20 @@ export interface VitalVerdict {
  * One sentence per metric, in plain words. A console that only shows numbers
  * leaves everybody to invent their own threshold in their head.
  */
-export function overallVerdicts(rows: readonly VitalRow[]): readonly VitalVerdict[] {
+/** An application-wide percentile calculated from raw observations in Postgres. */
+export interface VitalOverall {
+  readonly metric: string;
+  readonly samples: number;
+  readonly p75: number | null;
+  readonly p95: number | null;
+}
+
+export function overallVerdicts(rows: readonly VitalOverall[]): readonly VitalVerdict[] {
   return VITALS.map((metric) => {
-    const relevant = rows.filter((row) => row.metric === metric && row.p75 !== null);
-    const samples = relevant.reduce((sum, row) => sum + row.samples, 0);
-    if (samples === 0) {
+    const row = rows.find((item) => item.metric === metric);
+    const samples = row?.samples ?? 0;
+    const p75 = row?.p75 ?? null;
+    if (samples === 0 || p75 === null) {
       return {
         metric,
         p75: null,
@@ -155,17 +164,12 @@ export function overallVerdicts(rows: readonly VitalRow[]): readonly VitalVerdic
         sentence: `No ${VITAL_SPECS[metric].label.toLowerCase()} measurements arrived in this window.`,
       };
     }
-    // Sample-weighted, so a busy route counts for what it is worth.
-    const weighted = relevant.reduce((sum, row) => sum + (row.p75 ?? 0) * row.samples, 0) / samples;
-    const rating = rate(metric, weighted);
+    const rating: Rating = samples < MIN_SAMPLES ? 'unknown' : rate(metric, p75);
     const spec = VITAL_SPECS[metric];
-    const sentence =
-      rating === 'good'
-        ? `${spec.label} is ${formatVital(metric, weighted)} for three quarters of visits, inside the ${formatVital(metric, spec.good)} target.`
-        : rating === 'fair'
-          ? `${spec.label} is ${formatVital(metric, weighted)} for three quarters of visits; the target is ${formatVital(metric, spec.good)}.`
-          : `${spec.label} is ${formatVital(metric, weighted)} for three quarters of visits, past the ${formatVital(metric, spec.fair)} point where people leave.`;
-    return { metric, p75: Math.round(weighted * 1000) / 1000, samples, rating, sentence };
+    const evidence =
+      samples < MIN_SAMPLES ? `Only ${String(samples)} measurements; interpret cautiously. ` : '';
+    const sentence = `${evidence}${spec.label} p75 is ${formatVital(metric, p75)}; the target is ${formatVital(metric, spec.good)} or better.`;
+    return { metric, p75, samples, rating, sentence };
   });
 }
 
@@ -312,8 +316,8 @@ export function forecastSentence(forecast: Forecast | null): string {
     return 'There are not enough days of measurements to project anything yet.';
   }
   if (Math.abs(forecast.correlation) < 0.4) {
-    return `Traffic is averaging ${Math.round(forecast.daily_now)} measurements a day with no trend in it — the variation is noise, not growth.`;
+    return `Across all apps, the fitted number of performance measurements is ${Math.round(forecast.daily_now)} a day, with no reliable trend.`;
   }
   const direction = forecast.growth_per_day >= 0 ? 'rising' : 'falling';
-  return `Traffic is ${direction} by about ${Math.abs(forecast.growth_per_day).toFixed(1)} measurements a day; at this rate it reaches ${Math.round(forecast.daily_in_30)} a day in a month (${forecast.confidence}).`;
+  return `Across all apps, the fitted number of performance measurements is ${direction} by about ${Math.abs(forecast.growth_per_day).toFixed(1)} a day; the 30-day projection is ${Math.round(forecast.daily_in_30)} a day (${forecast.confidence}). Measurements are not visitor counts.`;
 }

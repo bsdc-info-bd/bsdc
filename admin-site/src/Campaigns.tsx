@@ -31,7 +31,6 @@ import {
   forecastEvents,
   money,
   needsAttention,
-  oldestFirst,
   percent,
   poishaToTaka,
   takaToPoisha,
@@ -44,6 +43,7 @@ import {
   type OwnerRow,
   type PlacementRow,
 } from './campaigns';
+import { settleCampaignWorkspace, type CampaignWorkspace } from './campaign-loader';
 
 const EMPTY_CREATIVE: CreativeDraft = {
   placement: 'feed',
@@ -78,14 +78,8 @@ export function Campaigns(): ReactElement {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [version, setVersion] = useState(0);
-  const [data, setData] = useState<{
-    search: string;
-    campaigns: CampaignRow[];
-    owners: readonly OwnerRow[];
-    inventory: readonly PlacementRow[];
-  } | null>(null);
+  const [data, setData] = useState<CampaignWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const reload = useCallback(() => setVersion((value) => value + 1), []);
 
   // Refresh without unmounting the controls: an acknowledgement must not
@@ -93,21 +87,16 @@ export function Campaigns(): ReactElement {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    setError(null);
-    Promise.all([
-      listRpc<CampaignRow>(env, 'campaign_book', { p_limit: 100 }),
-      listRpc<OwnerRow>(env, 'campaign_owners', { p_search: search, p_limit: 100 }),
-      listRpc<PlacementRow>(env, 'ad_inventory'),
-    ])
-      .then(([campaigns, owners, inventory]) => {
-        if (active) setData({ search, campaigns: oldestFirst(campaigns), owners, inventory });
-      })
-      .catch((cause: unknown) => {
-        if (active) setError(messageOf(cause));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    void settleCampaignWorkspace(search, {
+      campaigns: listRpc<CampaignRow>(env, 'campaign_book', { p_limit: 100 }),
+      owners: listRpc<OwnerRow>(env, 'campaign_owners', { p_search: search, p_limit: 100 }),
+      inventory: listRpc<PlacementRow>(env, 'ad_inventory'),
+    }).then((workspace) => {
+      if (active) {
+        setData(workspace);
+        setLoading(false);
+      }
+    });
     return () => {
       active = false;
     };
@@ -137,21 +126,32 @@ export function Campaigns(): ReactElement {
         </div>
       </Card>
       {loading ? <Loading label="Refreshing the campaign book." /> : null}
-      {error !== null ? (
-        <Banner tone="bad" title="The campaign book did not load">
-          <p className="kit-small">{error}</p>
-        </Banner>
-      ) : null}
-      {data !== null && data.search === search && error === null ? (
+      {data !== null && data.search === search ? (
         <>
-          <WalletCredit key={`wallet-${search}`} owners={data.owners} onChanged={reload} />
-          <Builder
-            key={`builder-${search}`}
-            owners={data.owners}
-            inventory={data.inventory}
-            onCreated={reload}
-          />
-          <Book campaigns={data.campaigns} onChanged={reload} />
+          {[data.campaigns, data.owners, data.inventory].some((section) => !section.ok) ? (
+            <Banner tone="bad" title="Some campaign data did not load">
+              <ul className="kit-small">
+                {[data.campaigns, data.owners, data.inventory].map((section, index) =>
+                  section.ok ? null : <li key={index}>{section.message}</li>,
+                )}
+              </ul>
+              <Button size="small" variant="quiet" disabled={loading} onClick={reload}>
+                Retry
+              </Button>
+            </Banner>
+          ) : null}
+          {data.owners.ok ? (
+            <WalletCredit key={`wallet-${search}`} owners={data.owners.data} onChanged={reload} />
+          ) : null}
+          {data.owners.ok && data.inventory.ok ? (
+            <Builder
+              key={`builder-${search}`}
+              owners={data.owners.data}
+              inventory={data.inventory.data}
+              onCreated={reload}
+            />
+          ) : null}
+          {data.campaigns.ok ? <Book campaigns={data.campaigns.data} onChanged={reload} /> : null}
         </>
       ) : null}
     </div>

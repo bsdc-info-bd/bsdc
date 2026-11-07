@@ -22,7 +22,7 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: (id: string) => (id.includes('node_modules') ? 'vendor' : undefined),
+        manualChunks: (id: string) => id.endsWith('/corporate-kit/src/pdf/index.ts') ? 'pdf-core' : undefined,
         entryFileNames: 'assets/index-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
       },

@@ -77,6 +77,7 @@ const HARNESSES = [
     'issuing an advertiser account: once, as the staff member, without printing a password',
   ],
   ['t53.mjs', 'advertising charges respect one shared wallet and daily caps'],
+  ['t54.mjs', 'accurate performance reports, private receipts and faithful certificate reprints'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

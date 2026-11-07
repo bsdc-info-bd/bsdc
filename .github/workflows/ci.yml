@@ -145,16 +145,16 @@ jobs:
             exit 1
           fi
 
-      # The size of a build is the cause of a field slowdown three weeks
-      # later, so it is recorded next to the field measurements rather than
-      # left in a log that expires. The step is skipped on forks and on any
-      # checkout without the secret, and it never fails the build: a
-      # bookkeeping outage must not block a release.
+      # Record total emitted JS gzip (including lazy chunks) for successful
+      # main-branch builds. A missing credential or an unavailable database is
+      # reported but does not block CI. Feature-branch builds are not production
+      # history, so they are deliberately excluded.
       - name: Record the bundle size
-        if: matrix.app == 'main-site' && github.event_name == 'push'
+        if: matrix.app != 'corporate-kit' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         shell: bash
         env:
+          APP_DIR: ${{ matrix.app }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
@@ -162,17 +162,35 @@ jobs:
             echo "No Supabase credentials on this checkout; size not recorded."
             exit 0
           fi
+          case "$APP_DIR" in
+            main-site) app=main-site ;;
+            admin-site) app=bsdc-admin ;;
+            certificate-site) app=bsdc-cert ;;
+            config-site) app=bsdc-config ;;
+            connect-site) app=bsdc-connect ;;
+            customize-site) app=bsdc-custom ;;
+            ip-site) app=bsdc-ip ;;
+            moderator-site) app=bsdc-mod ;;
+            notice-site) app=bsdc-notice ;;
+            performance-site) app=bsdc-perf ;;
+            status-site) app=bsdc-status ;;
+            users-admin-site) app=bsdc-uadmin ;;
+            users-moderator-site) app=bsdc-umod ;;
+            vf-site) app=bsdc-vf ;;
+            *) echo "No performance app ID for $APP_DIR; skipping."; exit 0 ;;
+          esac
           gzipped=0
           for file in dist/assets/*.js; do
             [ -f "$file" ] || continue
             gzipped=$((gzipped + $(gzip -c "$file" | wc -c)))
           done
+          if [ "$gzipped" -eq 0 ]; then echo "No built JS; skipping."; exit 0; fi
           curl --fail --silent --show-error \
             -X POST "$SUPABASE_URL/rest/v1/rpc/record_bundle_size" \
             -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
             -H "authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
             -H "content-type: application/json" \
-            -d "{\"p_app\":\"main-site\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
+            -d "{\"p_app\":\"${app}\",\"p_bytes_gzip\":${gzipped},\"p_commit_sha\":\"${GITHUB_SHA}\"}"
 
   # ---------------------------------------------------------------------------
   # The licence gate.

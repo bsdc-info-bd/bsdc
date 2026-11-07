@@ -1,20 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   cardCheckDigit,
-  escapePdfText,
   formatDocCode,
-  hexToRgb,
   isValidDocCode,
   normaliseDocCode,
   parseDocCode,
   qrMatrix,
   qrPath,
   qrSvg,
-  textWidth,
-  toLatin,
   verificationUrl,
-  wrapText,
 } from '@kit';
+import { escapePdfText, hexToRgb, textWidth, toLatin, wrapText } from '@kit/pdf';
 import {
   EMPTY_DRAFT,
   certificateFilename,
@@ -231,9 +227,28 @@ describe('the printed certificate', () => {
     expect(portrait).toContain('MediaBox [0 0 595.28 841.89]');
   });
 
-  it('survives a name the base-14 fonts cannot draw', () => {
+  it('rejects signer captions that cannot fit instead of printing through the frame', () => {
+    expect(() =>
+      buildCertificatePdf({ ...print, orientation: 'portrait', signatureName: 'W'.repeat(200) }),
+    ).toThrow('signer name is too long');
+    expect(() =>
+      buildCertificatePdf({ ...print, orientation: 'portrait', signatureTitle: 'W'.repeat(400) }),
+    ).toThrow('signer title is too long');
+  });
+
+  it('prints a Bengali name as shaped outlines rather than losing it', () => {
     const text = decode(buildCertificatePdf({ ...print, recipientName: 'আয়েশা রহমান' }));
     expect(text.startsWith('%PDF-1.4')).toBe(true);
+    expect(text).toContain('/ActualText <FEFF');
+  });
+
+  it('paginates long bodies without covering text with the proof panel', () => {
+    const body = Array.from({ length: 240 }, (_, index) => `word${String(index)}`).join(' ');
+    const text = decode(buildCertificatePdf({ ...print, body }));
+    expect(text.match(/\/Type \/Page\b/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(text).toContain('word0');
+    expect(text).toContain('word239');
+    expect(text).not.toMatch(/\barc\b/);
   });
 });
 

@@ -111,15 +111,18 @@ describe('what the numbers are allowed to claim', () => {
     expect(worstRoutes(rows, 'LCP', 2).map((row) => row.route)).toEqual(['/b', '/c']);
   });
 
-  it('weights the overall verdict by how many people met each route', () => {
-    const verdicts = overallVerdicts([
-      vital({ route: '/busy', p75: 1000, samples: 900 }),
-      vital({ route: '/quiet', p75: 9000, samples: 100 }),
-    ]);
+  it('uses the application-wide percentile supplied by the database', () => {
+    const verdicts = overallVerdicts([{ metric: 'LCP', p75: 1800, p95: 5000, samples: 1000 }]);
     const lcp = verdicts.find((verdict) => verdict.metric === 'LCP');
     expect(lcp?.p75).toBe(1800);
     expect(lcp?.rating).toBe('good');
     expect(lcp?.samples).toBe(1000);
+  });
+
+  it('flags a small sample rather than describing it as conclusive', () => {
+    const [first] = overallVerdicts([{ metric: 'LCP', p75: 3000, p95: 4000, samples: 3 }]);
+    expect(first?.sentence).toContain('interpret cautiously');
+    expect(first?.rating).toBe('unknown');
   });
 
   it('says plainly when nothing was measured rather than reporting a zero', () => {
@@ -132,7 +135,7 @@ describe('what the numbers are allowed to claim', () => {
 
   it('explains the verdict in words, including the target', () => {
     const [first] = overallVerdicts([vital({ p75: 5000 })]);
-    expect(first?.sentence).toContain('past the');
+    expect(first?.sentence).toContain('target');
     expect(VITAL_SPECS.LCP.meaning.length).toBeGreaterThan(10);
   });
 });
@@ -306,7 +309,7 @@ describe('capacity', () => {
         correlation: 0.2,
         confidence: 'there is no trend, only noise',
       }),
-    ).toContain('noise, not growth');
+    ).toContain('no reliable trend');
   });
 
   it('projects when the trend is consistent', () => {

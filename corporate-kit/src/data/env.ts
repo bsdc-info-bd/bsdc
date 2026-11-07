@@ -10,6 +10,8 @@ export type CorporateEnv = {
   readonly appId: string;
   readonly appName: string;
   readonly siteUrl: string;
+  /** Public verification portal, not derived from the main-site hostname. */
+  readonly verificationUrl: string;
   readonly firebase: {
     readonly apiKey: string;
     readonly authDomain: string;
@@ -39,6 +41,7 @@ export function readEnv(appId: string, appName: string): CorporateEnv {
     appId,
     appName,
     siteUrl: read('VITE_SITE_URL') || 'https://www.bsdc.info.bd',
+    verificationUrl: read('VITE_VERIFICATION_URL') || 'https://vf.main.bsdc.info.bd',
     firebase: {
       apiKey: read('VITE_FB2_API_KEY'),
       authDomain: read('VITE_FB2_AUTH_DOMAIN'),

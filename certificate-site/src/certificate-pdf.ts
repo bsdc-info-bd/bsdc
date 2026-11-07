@@ -5,27 +5,26 @@ import {
   guilloche,
   hexToRgb,
   markGeometry,
-  qrMatrix,
   SEAL_BANDS,
   sealGeometry,
-  signatureStrokes,
+  officialSignature,
   watermarkGeometry,
   textWidth,
-  toLatin,
-  verificationUrl,
+  pdfText,
   wordmarkLayout,
   wrapText,
   type Rgb,
-} from '@kit';
+} from '@kit/pdf';
+import { qrMatrix, verificationUrl } from '@kit';
 import { longDate, type TemplateRow } from './model';
 
 /**
  * The printed certificate.
  *
  * A certificate has one job beyond looking like itself: it has to be checkable
- * by somebody holding the paper. So every page carries the code in type, the
- * public desk in words, and a QR that resolves to it, and the layout reserves
- * that panel first — a long body may not push the proof off the sheet.
+ * by somebody holding the paper. Its final page carries the code in type, the
+ * public desk in words and a QR that resolves to it. The layout reserves that
+ * panel first, so a long body may not push the proof off the sheet.
  *
  * The rules the design keeps, because each one is the difference between a
  * document and a screenshot:
@@ -55,6 +54,7 @@ export type CertificatePrint = {
   readonly signatureName: string;
   readonly signatureTitle: string;
   readonly siteUrl: string;
+  readonly status?: 'issued' | 'revoked';
   /** The template's own key, printed small, so a reissue can find it. */
   readonly templateKey?: string;
 };
@@ -68,6 +68,7 @@ export function printFromTemplate(
     readonly issuedOn: string;
     readonly expiresOn: string | null;
     readonly siteUrl: string;
+    readonly status?: 'issued' | 'revoked';
   },
 ): CertificatePrint {
   return {
@@ -83,6 +84,7 @@ export function printFromTemplate(
     signatureTitle: template.signature_title,
     siteUrl: fields.siteUrl,
     templateKey: template.key,
+    status: fields.status ?? 'issued',
   };
 }
 
@@ -167,7 +169,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
 
     // 6. The document's own kind, top right, as a letterspaced caption with a
     //    rule beneath it: the one piece of furniture that names the page.
-    const caption = 'VERIFIED DOCUMENT';
+    const caption = print.status === 'revoked' ? 'REVOKED - CHECK REGISTRY' : 'BSDC CERTIFICATE';
     const captionWidth = textWidth(caption, 6.6, true) + caption.length * 1.2;
     doc.place(caption, width - 46 - captionWidth, height - 56, {
       size: 6.6,
@@ -182,13 +184,47 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
     );
   };
 
+  let page = 1;
   decorate();
+  const ensureTextSpace = (height: number): void => {
+    // Portrait puts the seal above the proof so its narrower footer remains
+    // readable; reserve a little extra room for it on every portrait page.
+    if (doc.y - height >= (landscape ? 210 : 232)) return;
+    doc.place(`Continued on page ${String(page + 1)}`, doc.margin, 40, { size: 7, grey: 0.45 });
+    doc.addPage();
+    page += 1;
+    decorate();
+    doc.place(`CONTINUED - PAGE ${String(page)}`, doc.margin, doc.height - 94, {
+      size: 7,
+      bold: true,
+      colour: accent,
+    });
+    doc.moveTo(doc.height - 110);
+  };
+  const writeText = (
+    value: string,
+    options: {
+      size: number;
+      bold?: boolean;
+      align?: 'left' | 'center' | 'right';
+      grey?: number;
+      colour?: Rgb;
+      tracking?: number;
+    },
+    measure = doc.contentWidth,
+  ): void => {
+    for (const line of wrapText(pdfText(value), options.size, measure, options.bold === true)) {
+      ensureTextSpace(options.size + 4);
+      doc.text(line, options);
+    }
+  };
 
   // ------------------------------------------------------------- the type ---
   // The type block is optically centred, not top-aligned: a landscape sheet
   // with all its words in the upper half reads as a letter that ran out.
   doc.space(landscape ? 86 : 52);
-  doc.colouredText(print.heading, accent, {
+  writeText(print.heading, {
+    colour: accent,
     size: landscape ? 30 : 26,
     bold: true,
     align: 'center',
@@ -199,16 +235,17 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
   // A short rule centred under the heading, in the accent, with the brand's
   // green beneath it: two weights of one gesture.
   const headingRuleWidth = Math.min(
-    textWidth(toLatin(print.heading), landscape ? 30 : 26, true) + 30,
+    textWidth(pdfText(print.heading), landscape ? 30 : 26, true) + 30,
     260,
   );
   const headingRuleInset = (doc.contentWidth - headingRuleWidth) / 2;
   doc.rule({ inset: Math.max(0, headingRuleInset), grey: 0.85 });
   doc.space(12);
 
-  doc.text('This is to certify that', { size: 10, grey: 0.42, align: 'center', tracking: 0.6 });
+  writeText('This is to certify that', { size: 10, grey: 0.42, align: 'center', tracking: 0.6 });
   doc.space(8);
-  doc.colouredText(print.recipientName, mark.ink, {
+  writeText(print.recipientName, {
+    colour: mark.ink,
     size: landscape ? 25 : 21,
     bold: true,
     align: 'center',
@@ -218,7 +255,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
   // The name's own rule: the width of the name plus a margin, which is how a
   // certificate sets a name apart from the sentence about it.
   const nameWidth = Math.min(
-    textWidth(toLatin(print.recipientName), landscape ? 25 : 21, true) + 56,
+    textWidth(pdfText(print.recipientName), landscape ? 25 : 21, true) + 56,
     doc.contentWidth,
   );
   doc.rule({ inset: Math.max(0, (doc.contentWidth - nameWidth) / 2), grey: 0.72 });
@@ -226,20 +263,18 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
 
   // The body, set to a measured measure: never wider than about 78 characters.
   const measure = Math.min(doc.contentWidth * 0.82, 420);
-  for (const line of wrapText(toLatin(print.body), 11.5, measure)) {
-    doc.text(line, { size: 11.5, align: 'center', grey: 0.16 });
-  }
+  writeText(print.body, { size: 11.5, align: 'center', grey: 0.16 }, measure);
 
   // -------------------------------------------------- dates and the seal ---
   doc.space(16);
-  doc.text(`Issued on ${longDate(print.issuedOn)}`, {
+  writeText(`Issued on ${longDate(print.issuedOn)}`, {
     size: 9.5,
     grey: 0.38,
     align: 'center',
     tracking: 0.3,
   });
   if (print.expiresOn !== null) {
-    doc.text(`Valid until ${longDate(print.expiresOn)}`, {
+    writeText(`Valid until ${longDate(print.expiresOn)}`, {
       size: 9.5,
       grey: 0.38,
       align: 'center',
@@ -247,11 +282,13 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
     });
   }
 
-  // The seal sits at the centre foot of the page, over the ornament. It says
-  // three things and nothing else: the organisation around the ring, the year
-  // it was founded, and the mark.
+  // On portrait sheets, lift the seal above the verification text: placing it
+  // between the QR and signature leaves too little horizontal room.
   const sealRadius = landscape ? 36 : 30;
-  const sealCentre = { x: doc.width / 2, y: doc.margin + sealRadius + 20 };
+  const sealCentre = {
+    x: doc.width / 2,
+    y: landscape ? doc.margin + sealRadius + 20 : doc.margin + 128,
+  };
   // A white field with an accent rim: an ink-filled seal is unreadable at print
   // size, because the caption and the milled edge are the same value.
   doc.circle(sealCentre, sealRadius, { fill: [1, 1, 1] });
@@ -268,7 +305,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
       mark,
     ),
   );
-  for (const glyph of curvedCaption('VERIFIED', sealCentre, sealRadius * SEAL_BANDS.caption, {
+  for (const glyph of curvedCaption('BSDC', sealCentre, sealRadius * SEAL_BANDS.caption, {
     half: 'top',
     size: 6.8,
   })) {
@@ -279,7 +316,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
       rotate: glyph.rotate,
     });
   }
-  for (const glyph of curvedCaption('BSDC 2024', sealCentre, sealRadius * SEAL_BANDS.caption, {
+  for (const glyph of curvedCaption('BSDC 2026', sealCentre, sealRadius * SEAL_BANDS.caption, {
     half: 'bottom',
     size: 6.2,
   })) {
@@ -292,9 +329,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
   }
 
   // ------------------------------------------------------ the signature ---
-  // A signature is a stroke, not a font: a typed name under a rule reads as a
-  // form, which is the impression a certificate exists to avoid. The box is
-  // wider than the name so the flourish has somewhere to go.
+  // The supplied signature is a cropped transparent source, not a fabricated stroke.
   const signatureWidth = Math.min(landscape ? 170 : 130, doc.width * 0.3);
   const signatureBox = {
     x: doc.width - doc.margin - signatureWidth - 8,
@@ -302,15 +337,40 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
     width: signatureWidth,
     height: 46,
   };
-  doc.ops(...signatureStrokes(print.signatureName, signatureBox));
-  doc.place(print.signatureName, signatureBox.x, signatureBox.y - 12, {
-    size: 9.5,
+  doc.ops(...officialSignature(signatureBox));
+  doc.line(
+    { x: signatureBox.x, y: signatureBox.y - 2 },
+    { x: signatureBox.x + signatureBox.width, y: signatureBox.y - 2 },
+    { colour: tint(accent, 0.55), width: 0.5 },
+  );
+  // Fit the template's signer caption into its own column; do not let a long
+  // name or title run through the page frame or into the neighbouring seal.
+  const captionWidth = doc.width - doc.margin - signatureBox.x;
+  const signer = pdfText(print.signatureName);
+  let signerSize = 9.5;
+  while (signerSize > 5 && textWidth(signer, signerSize, true) > captionWidth) signerSize -= 0.5;
+  if (textWidth(signer, signerSize, true) > captionWidth) {
+    throw new Error('The certificate signer name is too long to fit in the signature area.');
+  }
+  doc.place(signer, signatureBox.x, signatureBox.y - 12, {
+    size: signerSize,
     bold: true,
     colour: mark.ink,
   });
-  doc.place(print.signatureTitle, signatureBox.x, signatureBox.y - 23, {
-    size: 6.8,
-    grey: 0.45,
+  let titleSize = 6.8;
+  let titleLines = wrapText(pdfText(print.signatureTitle), titleSize, captionWidth);
+  while (titleLines.length > 2 && titleSize > 5) {
+    titleSize = Math.max(5, titleSize - 0.3);
+    titleLines = wrapText(pdfText(print.signatureTitle), titleSize, captionWidth);
+  }
+  if (titleLines.length > 2) {
+    throw new Error('The certificate signer title is too long to fit in the signature area.');
+  }
+  titleLines.forEach((line, index) => {
+    doc.place(line, signatureBox.x, signatureBox.y - 23 - index * (titleSize + 2), {
+      size: titleSize,
+      grey: 0.45,
+    });
   });
 
   // -------------------------------------------------- the verification ---
@@ -342,7 +402,7 @@ export function buildCertificatePdf(print: CertificatePrint): Uint8Array {
     size: 7.5,
     colour: [0.32, 0.36, 0.34] as Rgb,
   });
-  doc.place('This document is recorded in the BSDC registry.', textX, qrY + qrSize - 51, {
+  doc.place('Compare details with the BSDC registry.', textX, qrY + qrSize - 51, {
     size: 6.8,
     grey: 0.5,
   });

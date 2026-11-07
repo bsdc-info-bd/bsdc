@@ -4,15 +4,15 @@ import {
   guilloche,
   hexToRgb,
   markGeometry,
-  qrMatrix,
+  officialSignature,
   textWidth,
-  toLatin,
-  verificationUrl,
+  pdfText,
   watermarkGeometry,
   wordmarkLayout,
   wrapText,
   type Rgb,
-} from '@kit';
+} from '@kit/pdf';
+import { qrMatrix, verificationUrl } from '@kit';
 import { paragraphs, type NoticeRow } from './model';
 
 /**
@@ -43,6 +43,7 @@ export type NoticePrint = {
   readonly category: string;
   readonly audience: string;
   readonly priority: string;
+  readonly status: NoticeRow['status'];
   readonly publishedAt: string | null;
   readonly expiresAt: string | null;
   readonly siteUrl: string;
@@ -57,6 +58,7 @@ export function printFromRow(row: NoticeRow, siteUrl: string): NoticePrint {
     category: row.category,
     audience: row.audience,
     priority: row.priority,
+    status: row.status,
     publishedAt: row.publish_at,
     expiresAt: row.expires_at,
     siteUrl,
@@ -71,15 +73,17 @@ function stamp(iso: string | null): string {
   if (iso === null) return 'Not yet published';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return 'Not yet published';
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-    hour12: false,
-  }).format(date);
+  return (
+    new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'UTC',
+      hour12: false,
+    }).format(date) + ' UTC'
+  );
 }
 
 /** The one colour that says how urgent this is, and nothing else. */
@@ -98,6 +102,12 @@ export function buildNoticePdf(print: NoticePrint): Uint8Array {
   const accent = accentOf(print.priority);
   const mark = BRAND_MARK;
   const masthead = 104;
+  const unpublished = print.status === 'draft' || print.publishedAt === null;
+  const caption = unpublished
+    ? 'DRAFT - NOT PUBLISHED'
+    : print.status === 'archived'
+      ? 'ARCHIVED - CHECK REGISTRY'
+      : 'OFFICIAL NOTICE';
 
   /**
    * The foot of the page, measured once.
@@ -115,97 +125,122 @@ export function buildNoticePdf(print: NoticePrint): Uint8Array {
     datesTop: doc.margin + 76 + 44 + 64,
   };
 
-  // ------------------------------------------------------------ masthead ---
-  doc.rect(0, doc.height - masthead, doc.width, masthead, accent);
-  // A darker foot to the band, so it reads as printed stock rather than as a
-  // filled shape. Mixed towards black deliberately: `tint` only mixes towards
-  // white, and a negative amount is a colour that does not exist.
-  doc.rect(
-    0,
-    doc.height - masthead,
-    doc.width,
-    14,
-    accent.map((part) => part * 0.72) as unknown as Rgb,
-  );
+  const ribbonY = doc.height - masthead - 26;
+  let page = 1;
+  const decorate = (): void => {
+    // ------------------------------------------------------------ masthead ---
+    doc.rect(0, doc.height - masthead, doc.width, masthead, accent);
+    // A darker foot to the band, so it reads as printed stock rather than as a
+    // filled shape. Mixed towards black deliberately: `tint` only mixes towards
+    // white, and a negative amount is a colour that does not exist.
+    doc.rect(
+      0,
+      doc.height - masthead,
+      doc.width,
+      14,
+      accent.map((part) => part * 0.72) as unknown as Rgb,
+    );
 
-  const layout = wordmarkLayout({ x: 46, y: doc.height - 68, width: 0, height: 34 });
-  doc.ops(...markGeometry(layout.mark, { ...mark, check: [1, 1, 1] }));
-  doc.place(layout.title.text, layout.title.x, layout.title.y, {
-    size: layout.title.size,
-    bold: true,
-    colour: [1, 1, 1],
-  });
-  doc.place(layout.subtitle.text, layout.subtitle.x, layout.subtitle.y, {
-    size: layout.subtitle.size,
-    bold: true,
-    colour: [1, 1, 1],
-    tracking: 0.35,
-  });
+    const layout = wordmarkLayout({ x: 46, y: doc.height - 68, width: 0, height: 34 });
+    doc.ops(...markGeometry(layout.mark, { ...mark, check: [1, 1, 1] }));
+    doc.place(layout.title.text, layout.title.x, layout.title.y, {
+      size: layout.title.size,
+      bold: true,
+      colour: [1, 1, 1],
+    });
+    doc.place(layout.subtitle.text, layout.subtitle.x, layout.subtitle.y, {
+      size: layout.subtitle.size,
+      bold: true,
+      colour: [1, 1, 1],
+      tracking: 0.35,
+    });
 
-  // The document number, right-aligned in the band, in white.
-  const numberWidth = textWidth(print.code, 10.5, true);
-  doc.place(print.code, doc.width - 46 - numberWidth, doc.height - 46, {
-    size: 10.5,
-    bold: true,
-    colour: [1, 1, 1],
-  });
-  doc.place(
-    'OFFICIAL NOTICE',
-    doc.width - 46 - textWidth('OFFICIAL NOTICE', 6.8, true) - 8,
-    doc.height - 62,
-    {
+    // The document number, right-aligned in the band, in white.
+    const numberWidth = textWidth(print.code, 10.5, true);
+    doc.place(print.code, doc.width - 46 - numberWidth, doc.height - 46, {
+      size: 10.5,
+      bold: true,
+      colour: [1, 1, 1],
+    });
+    doc.place(caption, doc.width - 46 - textWidth(caption, 6.8, true) - 8, doc.height - 62, {
       size: 6.8,
       bold: true,
       colour: tint(accent, 0.82),
       tracking: 1.3,
-    },
-  );
+    });
 
-  // ------------------------------------------------------- the severity ---
-  // A ribbon in the accent, immediately under the band: the one line that says
-  // whether this notice must be acted on.
-  const ribbonY = doc.height - masthead - 26;
-  doc.rect(0, ribbonY, doc.width, 26, tint(accent, 0.9));
-  const ribbon =
-    `${print.category.toUpperCase()}   |   ${print.priority.toUpperCase()}   |   ` +
-    `${print.audience.toUpperCase()}`;
-  doc.place(ribbon, 46, ribbonY + 9, {
-    size: 7.2,
-    bold: true,
-    colour: accent,
-    tracking: 1.1,
-  });
+    // ------------------------------------------------------- the severity ---
+    // A ribbon in the accent, immediately under the band: the one line that says
+    // whether this notice must be acted on.
+    doc.rect(0, ribbonY, doc.width, 26, tint(accent, 0.9));
+    const ribbon =
+      `${print.category.toUpperCase()}   |   ${print.priority.toUpperCase()}   |   ` +
+      `${print.audience.toUpperCase()}`;
+    doc.place(ribbon, 46, ribbonY + 9, {
+      size: 7.2,
+      bold: true,
+      colour: accent,
+      tracking: 1.1,
+    });
 
-  // A faint watermark behind the body, drawn before any of the type so it sits
-  // under it: the notice's own mark, so a photocopy of this sheet is
-  // recognisably a copy of this document.
-  doc.ops(
-    ...watermarkGeometry(
-      { x: doc.width - 268, y: doc.height * 0.28, width: 220, height: 220 },
-      tint(accent, 0.945),
-      1,
-    ),
-  );
+    // A faint watermark behind the body, drawn before any of the type so it sits
+    // under it: the notice's own mark, so a photocopy of this sheet is
+    // recognisably a copy of this document.
+    doc.ops(
+      ...watermarkGeometry(
+        { x: doc.width - 268, y: doc.height * 0.28, width: 220, height: 220 },
+        tint(accent, 0.945),
+        1,
+      ),
+    );
+
+    if (page > 1) {
+      doc.place(`CONTINUED - PAGE ${String(page)}`, 46, ribbonY - 18, {
+        size: 7,
+        bold: true,
+        colour: accent,
+      });
+    }
+  };
+  decorate();
+
+  // Reserve the date and proof areas before laying out any content. Repeat the
+  // masthead on overflow pages; never paint the proof panel over body copy.
+  const ensureBodySpace = (height: number): void => {
+    if (doc.y - height >= FOOT.datesTop + 14) return;
+    doc.place(`Continued on page ${String(page + 1)}`, doc.margin, 40, { size: 7, grey: 0.45 });
+    doc.addPage();
+    page += 1;
+    decorate();
+    doc.moveTo(ribbonY - 32);
+  };
+  const writeBody = (
+    value: string,
+    size: number,
+    options: { bold?: boolean; colour?: Rgb; grey?: number } = {},
+  ): void => {
+    for (const line of wrapText(pdfText(value), size, doc.contentWidth, options.bold === true)) {
+      ensureBodySpace(size + 4);
+      doc.text(line, { size, ...options });
+    }
+  };
 
   // -------------------------------------------------------------- the type ---
   doc.moveTo(ribbonY - 30);
-  doc.colouredText(print.title, mark.ink, { size: 21, bold: true });
+  writeBody(print.title, 21, { bold: true, colour: mark.ink });
   doc.space(6);
   doc.rule({ grey: 0.8 });
   doc.space(10);
 
   if (print.summary !== '') {
-    doc.text(print.summary, { size: 11.5, grey: 0.28 });
+    writeBody(print.summary, 11.5, { grey: 0.28 });
     doc.space(10);
   }
 
   // A measured measure: the body column is narrower than the page, so a line
   // never runs wider than a reader can track back from.
-  const columnInset = 0;
   for (const block of paragraphs(print.body)) {
-    for (const line of wrapText(toLatin(block), 10.5, doc.contentWidth - columnInset)) {
-      doc.text(line, { size: 10.5, grey: 0.12 });
-    }
+    writeBody(block, 10.5, { grey: 0.12 });
     doc.space(7);
   }
 
@@ -255,7 +290,7 @@ export function buildNoticePdf(print: NoticePrint): Uint8Array {
     size: 7.6,
     colour: [0.3, 0.34, 0.32] as Rgb,
   });
-  doc.place('This notice is recorded in the BSDC registry.', textX, qrY + qrSize - 48, {
+  doc.place('Check status and details in the BSDC registry.', textX, qrY + qrSize - 48, {
     size: 7,
     grey: 0.5,
   });
@@ -263,6 +298,23 @@ export function buildNoticePdf(print: NoticePrint): Uint8Array {
     size: 6.6,
     grey: 0.55,
   });
+
+  // Do not sign a draft: publication is a separate, authorized action.
+  if (!unpublished) {
+    // The supplied transparent signature is placed separately from the QR and
+    // kept on white so the source's anti-aliased edge remains legible in print.
+    const signature = { x: doc.width - 180, y: 91, width: 125, height: 43 };
+    doc.ops(...officialSignature(signature));
+    doc.line(
+      { x: signature.x, y: signature.y - 2 },
+      { x: signature.x + signature.width, y: signature.y - 2 },
+      { colour: tint(accent, 0.55), width: 0.5 },
+    );
+    doc.place('Authorized BSDC signature', signature.x, signature.y - 13, {
+      size: 6.6,
+      colour: mark.ink,
+    });
+  }
 
   return doc.build();
 }

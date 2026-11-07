@@ -222,6 +222,9 @@ a {
 
 .kit-stack {
   display: grid;
+  /* Let wide tables scroll inside their wrappers, not widen the whole phone. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: var(--sp-4);
 }
 

@@ -1,17 +1,17 @@
 import type { QrMatrix } from './qr';
+import { supportsPdfCharacter, unicodeOperators, unicodeWidth, usesUnicode } from './unicode';
 
 /**
- * A small, dependency-free PDF 1.4 writer for printed corporate documents.
+ * A small PDF 1.4 writer for printed corporate documents.
  *
  * A certificate and a notice need text, rules, a frame, a block of body
  * copy and a QR code — not a layout engine. This draws those directly, is
  * pure (it returns bytes and never touches the DOM) and is therefore
  * testable line by line.
  *
- * The base-14 fonts a reader is guaranteed to have are Latin only, so a
- * printed document is written in English and says so; Bangla would need an
- * embedded OpenType font with its own shaping, which is a different
- * undertaking from this one.
+ * Latin text uses standard PDF fonts. Bengali and supported non-ASCII text
+ * use shaped Noto outlines and marked ActualText, so the printed content is
+ * not silently dropped when a name or notice contains Bengali.
  */
 
 export type Orientation = 'portrait' | 'landscape';
@@ -88,7 +88,7 @@ const ASCII_FALLBACK: Readonly<Record<string, string>> = {
   '\u2264': '<=',
   '\u2265': '>=',
   '\u00d7': 'x',
-  '\u20b9': 'BDT ',
+  '\u20b9': 'INR ',
   '\u00a3': 'GBP ',
   '\u20ac': 'EUR ',
 };
@@ -109,9 +109,53 @@ export function toLatin(value: string): string {
   return out.replace(/[ \t]+/g, ' ').trim();
 }
 
-/** Width of a string in points, using Helvetica's average advance. */
+/** Print-safe text without silently deleting unsupported characters. */
+export function pdfText(value: string): string {
+  let out = '';
+  for (const character of value) {
+    const replacement = ASCII_FALLBACK[character];
+    if (replacement !== undefined) {
+      out += replacement;
+    } else if (/\s/u.test(character)) {
+      out += ' ';
+    } else {
+      const code = character.codePointAt(0) ?? 0;
+      if (code >= 32 && code <= 126) out += character;
+      else if (supportsPdfCharacter(character)) out += character;
+      else
+        throw new Error(
+          `This PDF cannot print character U+${code.toString(16).toUpperCase()}. Remove or replace it before downloading.`,
+        );
+    }
+  }
+  return out.replace(/[ \t]+/g, ' ').trim();
+}
+
+// ASCII advance widths from Adobe's Core 14 AFM files; see fonts/README.md.
+// WinAnsi uses quotesingle and grave at 39 and 96 rather than Adobe Standard's
+// curly quotes. Accurate advances keep wide unbroken words inside the page.
+const HELVETICA = [
+  278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556,
+  556, 556, 556, 556, 556, 556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667,
+  611, 778, 722, 278, 500, 667, 556, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+  667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556, 556, 222, 222, 500,
+  222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584,
+] as const;
+const HELVETICA_BOLD = [
+  278, 333, 474, 556, 556, 889, 722, 238, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556,
+  556, 556, 556, 556, 556, 556, 556, 333, 333, 584, 584, 584, 611, 975, 722, 722, 722, 722, 667,
+  611, 778, 722, 278, 556, 722, 611, 833, 722, 778, 667, 778, 722, 667, 611, 722, 667, 944, 667,
+  667, 611, 333, 278, 333, 584, 556, 333, 556, 611, 556, 611, 556, 333, 611, 611, 278, 278, 556,
+  278, 889, 611, 611, 611, 611, 389, 556, 333, 611, 556, 778, 556, 556, 500, 389, 280, 389, 584,
+] as const;
+
+/** Width in points, using Helvetica AFM advances or the shaped Noto font. */
 export function textWidth(value: string, size: number, bold = false): number {
-  return value.length * size * (bold ? 0.56 : 0.5);
+  if (usesUnicode(value)) return unicodeWidth(value, size);
+  const widths = bold ? HELVETICA_BOLD : HELVETICA;
+  let units = 0;
+  for (const character of value) units += widths[character.charCodeAt(0) - 32] ?? 0;
+  return (units * size) / 1000;
 }
 
 /** Breaks a string onto as many lines as the given width needs. */
@@ -119,16 +163,25 @@ export function wrapText(value: string, size: number, maxWidth: number, bold = f
   const words = value.split(/\s+/).filter((word) => word.length > 0);
   const lines: string[] = [];
   let current = '';
+  const segmenter = new Intl.Segmenter('bn', { granularity: 'grapheme' });
   for (const word of words) {
-    const candidate = current.length === 0 ? word : `${current} ${word}`;
-    if (textWidth(candidate, size, bold) <= maxWidth || current.length === 0) {
+    const candidate = current === '' ? word : `${current} ${word}`;
+    if (textWidth(candidate, size, bold) <= maxWidth) {
       current = candidate;
-    } else {
-      lines.push(current);
-      current = word;
+      continue;
+    }
+    if (current !== '') lines.push(current);
+    current = '';
+    // Split an exceptionally long URL or word only at grapheme boundaries.
+    for (const part of segmenter.segment(word)) {
+      const next = current + part.segment;
+      if (current !== '' && textWidth(next, size, bold) > maxWidth) {
+        lines.push(current);
+        current = part.segment;
+      } else current = next;
     }
   }
-  if (current.length > 0) lines.push(current);
+  if (current !== '') lines.push(current);
   return lines;
 }
 
@@ -138,6 +191,23 @@ export function hexToRgb(hex: string): Rgb {
   if (!match) return [0, 0, 0];
   const value = Number.parseInt(match[1] ?? '000000', 16);
   return [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+}
+
+/** A circle path made from PDF cubic Béziers (PDF has no `arc` operator). */
+export function circlePath(
+  centre: { readonly x: number; readonly y: number },
+  radius: number,
+): string {
+  const { x, y } = centre;
+  const k = radius * 0.5522847498;
+  const n = (value: number): string => value.toFixed(2);
+  return [
+    `${n(x + radius)} ${n(y)} m`,
+    `${n(x + radius)} ${n(y + k)} ${n(x + k)} ${n(y + radius)} ${n(x)} ${n(y + radius)} c`,
+    `${n(x - k)} ${n(y + radius)} ${n(x - radius)} ${n(y + k)} ${n(x - radius)} ${n(y)} c`,
+    `${n(x - radius)} ${n(y - k)} ${n(x - k)} ${n(y - radius)} ${n(x)} ${n(y - radius)} c`,
+    `${n(x + k)} ${n(y - radius)} ${n(x + radius)} ${n(y - k)} ${n(x + radius)} ${n(y)} c h`,
+  ].join(' ');
 }
 
 /**
@@ -153,6 +223,7 @@ export class PdfDocument {
   private readonly pages: string[] = [];
   private current: string[] = [];
   private cursor: number;
+  private readonly unicodeUnits = new Set<number>();
 
   constructor(
     private readonly title: string,
@@ -213,6 +284,18 @@ export class PdfDocument {
     return `${(options.grey ?? 0).toFixed(2)} g`;
   }
 
+  private drawUnicode(
+    value: string,
+    size: number,
+    x: number,
+    y: number,
+    colour: Rgb,
+    rotate = 0,
+  ): void {
+    for (let i = 0; i < value.length; i += 1) this.unicodeUnits.add(value.charCodeAt(i));
+    this.current.push(...unicodeOperators(value, size, x, y, colour, rotate));
+  }
+
   /**
    * One run of type on one line.
    *
@@ -227,21 +310,25 @@ export class PdfDocument {
     options: TextOptions,
     y: number,
   ): void {
+    if (usesUnicode(line)) {
+      const colour = options.colour ?? [options.grey ?? 0, options.grey ?? 0, options.grey ?? 0];
+      this.drawUnicode(line, size, this.xAt(line, size, { ...options, tracking: 0 }), y, colour);
+      return;
+    }
     const font = bold ? '/F2' : '/F1';
     const tracking = options.tracking ?? 0;
-    const trackingOp = tracking === 0 ? '' : ` ${tracking.toFixed(2)} Tc`;
+    const trackingOp = ` ${tracking.toFixed(2)} Tc`;
     this.current.push(
       `BT ${font} ${String(size)} Tf${trackingOp} ${this.colourOp(options)} ` +
         `${this.xAt(line, size, options).toFixed(2)} ${y.toFixed(2)} Td ` +
-        `(${escapePdfText(line)}) Tj ET` +
-        (tracking === 0 ? '' : ' BT 0 Tc ET'),
+        `(${escapePdfText(line)}) Tj ET`,
     );
   }
 
   text(value: string, options: TextOptions = {}): this {
     const size = options.size ?? 10;
     const bold = options.bold === true;
-    const lines = wrapText(toLatin(value), size, this.contentWidth, bold);
+    const lines = wrapText(pdfText(value), size, this.contentWidth, bold);
 
     for (const line of lines) {
       this.ensure(size + 4);
@@ -263,11 +350,17 @@ export class PdfDocument {
    */
   place(value: string, x: number, y: number, options: PlaceOptions = {}): this {
     const size = options.size ?? 10;
+    const printable = pdfText(value);
+    if (usesUnicode(printable)) {
+      const colour = options.colour ?? [options.grey ?? 0, options.grey ?? 0, options.grey ?? 0];
+      this.drawUnicode(printable, size, x, y, colour, options.rotate);
+      return this;
+    }
     const font = options.bold === true ? '/F2' : '/F1';
     const colour = options.colour
       ? `${options.colour.map((part) => part.toFixed(3)).join(' ')} rg`
       : `${(options.grey ?? 0).toFixed(2)} g`;
-    const tracking = options.tracking === undefined ? '' : ` ${options.tracking.toFixed(2)} Tc`;
+    const tracking = ` ${(options.tracking ?? 0).toFixed(2)} Tc`;
     // Rotation is a transformation of the text matrix, so the angle is applied
     // inside `BT`/`ET` and cannot affect anything else on the page.
     const place =
@@ -280,7 +373,7 @@ export class PdfDocument {
           `${(-Math.sin(options.rotate)).toFixed(4)} ${Math.cos(options.rotate).toFixed(4)} ` +
           `${x.toFixed(2)} ${y.toFixed(2)} Tm`;
     this.current.push(
-      `BT ${font} ${size.toFixed(2)} Tf${tracking} ${colour} ${place} (${escapePdfText(toLatin(value))}) Tj ET`,
+      `BT ${font} ${size.toFixed(2)} Tf${tracking} ${colour} ${place} (${escapePdfText(printable)}) Tj ET`,
     );
     return this;
   }
@@ -314,7 +407,7 @@ export class PdfDocument {
     radius: number,
     options: { readonly fill?: Rgb; readonly stroke?: Rgb; readonly width?: number } = {},
   ): this {
-    const arc = `${centre.x.toFixed(2)} ${centre.y.toFixed(2)} ${radius.toFixed(2)} 0 360 arc`;
+    const arc = circlePath(centre, radius);
     if (options.stroke) {
       const colour = options.stroke.map((part) => part.toFixed(3)).join(' ');
       this.current.push(`${(options.width ?? 0.5).toFixed(2)} w ${colour} RG ${arc} S`);
@@ -349,13 +442,10 @@ export class PdfDocument {
   keyValue(key: string, value: string): this {
     this.ensure(16);
     this.cursor -= 16;
-    const right = this.width - this.margin - textWidth(toLatin(value), 10, true);
-    this.current.push(
-      `BT /F1 10 Tf 0.25 g ${this.margin.toFixed(2)} ${this.cursor.toFixed(2)} Td ` +
-        `(${escapePdfText(toLatin(key))}) Tj ET`,
-      `BT /F2 10 Tf 0 g ${right.toFixed(2)} ${this.cursor.toFixed(2)} Td ` +
-        `(${escapePdfText(toLatin(value))}) Tj ET`,
-    );
+    const printable = pdfText(value);
+    const right = this.width - this.margin - textWidth(printable, 10, true);
+    this.place(key, this.margin, this.cursor, { size: 10, grey: 0.25 });
+    this.place(printable, right, this.cursor, { size: 10, bold: true });
     return this;
   }
 
@@ -389,13 +479,7 @@ export class PdfDocument {
     for (let row = 0; row < matrix.size; row += 1) {
       for (let column = 0; column < matrix.size; column += 1) {
         if (matrix.modules[row]?.[column] !== true) continue;
-        this.rect(
-          x + column * module,
-          y + size - (row + 1) * module,
-          module + 0.2,
-          module + 0.2,
-          [0, 0, 0],
-        );
+        this.rect(x + column * module, y + size - (row + 1) * module, module, module, [0, 0, 0]);
       }
     }
     return this;
@@ -412,6 +496,8 @@ export class PdfDocument {
     const encoder = new TextEncoder();
     const objects: string[] = [];
     const kids = this.pages.map((_, index) => `${String(5 + index * 2)} 0 R`).join(' ');
+    const unicodeFontId = 5 + this.pages.length * 2;
+    const unicodeFont = this.unicodeUnits.size > 0 ? ` /F3 ${String(unicodeFontId)} 0 R` : '';
 
     objects.push('<< /Type /Catalog /Pages 2 0 R >>');
     objects.push(`<< /Type /Pages /Count ${String(this.pages.length)} /Kids [${kids}] >>`);
@@ -426,7 +512,7 @@ export class PdfDocument {
       const contentId = 6 + index * 2;
       objects.push(
         `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${this.width.toFixed(2)} ` +
-          `${this.height.toFixed(2)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> ` +
+          `${this.height.toFixed(2)}] /Resources << /Font << /F1 3 0 R /F2 4 0 R${unicodeFont} >> >> ` +
           `/Contents ${String(contentId)} 0 R >>`,
       );
       const stream = content.length > 0 ? content : '% empty';
@@ -434,6 +520,48 @@ export class PdfDocument {
         `<< /Length ${String(encoder.encode(stream).length)} >>\nstream\n${stream}\nendstream`,
       );
     });
+
+    if (this.unicodeUnits.size > 0) {
+      const descendantId = unicodeFontId + 1;
+      const cmapId = unicodeFontId + 2;
+      objects.push(
+        `<< /Type /Font /Subtype /Type0 /BaseFont /BSDC-Text /Encoding /Identity-H ` +
+          `/DescendantFonts [${String(descendantId)} 0 R] /ToUnicode ${String(cmapId)} 0 R >>`,
+        `<< /Type /Font /Subtype /CIDFontType2 /BaseFont /BSDC-Text ` +
+          `/CIDSystemInfo << /Registry (Adobe) /Ordering (Identity) /Supplement 0 >> ` +
+          `/FontDescriptor << /Type /FontDescriptor /FontName /BSDC-Text /Flags 4 ` +
+          `/FontBBox [0 -300 1000 1000] /ItalicAngle 0 /Ascent 800 /Descent -200 /CapHeight 700 /StemV 80 >> ` +
+          `/DW 1000 /CIDToGIDMap /Identity >>`,
+      );
+      const mappings = [...this.unicodeUnits]
+        .sort((a, b) => a - b)
+        .map((unit) => {
+          const code = unit.toString(16).padStart(4, '0').toUpperCase();
+          return `<${code}> <${code}>`;
+        });
+      const blocks: string[] = [];
+      for (let i = 0; i < mappings.length; i += 100) {
+        const chunk = mappings.slice(i, i + 100);
+        blocks.push(`${String(chunk.length)} beginbfchar\n${chunk.join('\n')}\nendbfchar`);
+      }
+      const cmap = [
+        '/CIDInit /ProcSet findresource begin',
+        '12 dict begin',
+        'begincmap',
+        '/CIDSystemInfo << /Registry (Adobe) /Ordering (UCS) /Supplement 0 >> def',
+        '/CMapName /BSDC-UCS def',
+        '/CMapType 2 def',
+        '1 begincodespacerange <0000> <FFFF> endcodespacerange',
+        ...blocks,
+        'endcmap',
+        'CMapName currentdict /CMap defineresource pop',
+        'end',
+        'end',
+      ].join('\n');
+      objects.push(
+        `<< /Length ${String(encoder.encode(cmap).length)} >>\nstream\n${cmap}\nendstream`,
+      );
+    }
 
     const infoId = objects.length + 1;
     objects.push(

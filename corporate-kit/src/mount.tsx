@@ -1,6 +1,7 @@
 import { StrictMode, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { readEnv } from './data/env';
+import { startCorporatePerformance } from './data/performance';
 import { SessionProvider } from './data/session';
 import './ui/styles.css';
 
@@ -18,6 +19,7 @@ export function mountConsole(
   const container = document.getElementById('root');
   if (!container) throw new Error('The page is missing its #root element.');
   const env = readEnv(appId, appName);
+  startCorporatePerformance(env);
   // Public pages write their own title in the HTML, where a crawler that does
   // not run scripts can still read it; staff consoles get a generated one.
   if (!options.keepTitle) document.title = `${appName} — BSDC`;

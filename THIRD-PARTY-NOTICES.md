@@ -55,6 +55,16 @@ report still passes but the reading above becomes wrong. The `--check` run is in
 continuous integration for exactly that reason: the day a strong-copyleft
 package appears, the gate fails and somebody reads the diff.
 
+## Document fonts and measurement tables
+
+The Bengali-capable PDF renderer bundles Noto Sans Bengali under the SIL Open
+Font License 1.1. Its source, hash and licence are in
+`corporate-kit/src/pdf/fonts/README.md` and `OFL.txt`. The same directory
+records the Adobe notice and redistribution terms for the adapted Helvetica
+advance-width tables used by the PDF layout. These are font assets and metrics,
+not additional npm packages in the inventory above. The renderer uses the MIT
+`fontkit` package; anonymous field measurements use Apache-2.0 `web-vitals`.
+
 ## Services
 
 The platform runs entirely on free tiers of third-party services — Supabase,

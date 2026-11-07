@@ -1,5 +1,5 @@
 import type { PostgrestError } from '@supabase/supabase-js';
-import { getDb } from './client';
+import { getDb, getPublicDb } from './client';
 import type { CorporateEnv } from './env';
 
 /**
@@ -40,6 +40,17 @@ export async function callRpc<T>(
   args: Record<string, unknown> = {},
 ): Promise<T> {
   const { data, error } = await getDb(env).rpc(name, args);
+  if (error) throw toDataError(error);
+  return data as T;
+}
+
+/** A public RPC must not depend on a staff Firebase session. */
+export async function callPublicRpc<T>(
+  env: CorporateEnv,
+  name: string,
+  args: Record<string, unknown> = {},
+): Promise<T> {
+  const { data, error } = await getPublicDb(env).rpc(name, args);
   if (error) throw toDataError(error);
   return data as T;
 }

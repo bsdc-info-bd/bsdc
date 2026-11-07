@@ -218,6 +218,46 @@ describe('the printed notice', () => {
       ),
     );
     expect(text).toContain('Not yet published');
+    expect(text).toContain('DRAFT - NOT PUBLISHED');
+    expect(text).not.toContain('Authorized BSDC signature');
+  });
+
+  it('marks archived notices and never signs one that was never published', () => {
+    const archived = decode(
+      buildNoticePdf(printFromRow(row({ status: 'archived' }), 'https://vf.main.bsdc.info.bd')),
+    );
+    expect(archived).toContain('ARCHIVED - CHECK REGISTRY');
+    const unpublished = decode(
+      buildNoticePdf(
+        printFromRow(
+          row({ status: 'published', publish_at: null }),
+          'https://vf.main.bsdc.info.bd',
+        ),
+      ),
+    );
+    expect(unpublished).toContain('DRAFT - NOT PUBLISHED');
+    expect(unpublished).not.toContain('Authorized BSDC signature');
+  });
+
+  it('repeats the masthead and preserves every word of a multi-page notice', () => {
+    const body = Array.from({ length: 900 }, (_, index) => `word${String(index)}`).join(' ');
+    const text = decode(
+      buildNoticePdf(printFromRow(row({ body }), 'https://vf.main.bsdc.info.bd')),
+    );
+    expect(text.match(/\/Type \/Page\b/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(text).toContain('word0');
+    expect(text).toContain('word899');
+    expect(text.match(/OFFICIAL NOTICE/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(text).toContain('Authorized BSDC signature');
+  });
+
+  it('preserves Bengali in printable shaped text', () => {
+    const text = decode(
+      buildNoticePdf(
+        printFromRow(row({ title: 'বাংলাদেশের নোটিশ' }), 'https://vf.main.bsdc.info.bd'),
+      ),
+    );
+    expect(text).toContain('/ActualText <FEFF');
   });
 
   it('builds a filename that still means something a year later', () => {
