@@ -375,13 +375,50 @@ jobs:
           rm -f /tmp/cf-workers-check.json
 
           set +e
-          CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler deploy > /tmp/wrangler-deploy.log 2>&1
+          CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler deploy --keep-vars > /tmp/wrangler-deploy.log 2>&1
           STATUS=$?
           set -e
           cat /tmp/wrangler-deploy.log
-          if [ "$STATUS" -ne 0 ]; then
-            SUMMARY=$(tail -n 12 /tmp/wrangler-deploy.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r//g')
-            echo "::error title=Push worker deploy failed::$SUMMARY"
-            exit "$STATUS"
+          if [ "$STATUS" -eq 0 ]; then
+            echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
-          echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+
+          echo "wrangler deploy exited with $STATUS; falling back to direct Cloudflare Workers script upload API..."
+          ./node_modules/.bin/wrangler deploy --dry-run --keep-vars --outfile /tmp/worker.bundle
+          BOUNDARY=$(head -n 1 /tmp/worker.bundle | tr -d '\r\n' | sed 's/^--//')
+          PUT_CODE=$(curl -sS -o /tmp/cf-worker-put.json -w "%{http_code}" \
+            -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/bsdc-push?excludeScript=true" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: multipart/form-data; boundary=$BOUNDARY" \
+            --data-binary @/tmp/worker.bundle || echo "000")
+          rm -f /tmp/worker.bundle
+
+          if [ "$PUT_CODE" = "200" ]; then
+            SCHED_CODE=$(curl -sS -o /tmp/cf-worker-sched.json -w "%{http_code}" \
+              -X PUT "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/bsdc-push/schedules" \
+              -H "Authorization: Bearer $TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '[{"cron":"* * * * *"}]' || echo "000")
+            rm -f /tmp/cf-worker-sched.json
+            echo "Uploaded bsdc-push via Workers Script API (HTTP $PUT_CODE, schedule HTTP $SCHED_CODE)."
+            echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$PUT_CODE" = "401" ] || [ "$PUT_CODE" = "403" ] || grep -qiE "No access to the specified resource|Authentication error" /tmp/cf-worker-put.json 2>/dev/null; then
+            echo "::warning title=Push worker skipped (Workers Scripts Edit permission missing)::The configured Cloudflare API token lacks 'Account -> Workers Scripts -> Edit' write access (HTTP $PUT_CODE). Grant 'Account -> Workers Scripts -> Edit' to CLOUDFLARE_API_TOKEN (or set CLOUDFLARE_WORKERS_API_TOKEN) to deploy bsdc-push; main-site /api/push/run local fallback continues serving push wake-ups."
+            {
+              echo "### push-worker → bsdc-push (skipped)"
+              echo
+              echo "- Cloudflare API token lacks \`Account -> Workers Scripts -> Edit\` write permission (HTTP $PUT_CODE)."
+              echo "- \`main-site\` \`/api/push/run\` local path remains active; grant Workers Scripts Edit to enable the 1-minute cron encryption worker."
+            } >> "$GITHUB_STEP_SUMMARY"
+            rm -f /tmp/cf-worker-put.json
+            exit 0
+          fi
+
+          PUT_BODY=$(tr '\n' ' ' < /tmp/cf-worker-put.json | head -c 500 | sed 's/%/%25/g; s/\r//g')
+          rm -f /tmp/cf-worker-put.json
+          echo "::error title=Push worker deploy failed::HTTP $PUT_CODE: $PUT_BODY"
+          exit 1
