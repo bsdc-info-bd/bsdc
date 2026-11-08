@@ -87,7 +87,17 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
       - name: Check the runner's own logic
-        run: node scripts/db-push.mjs --self-test
+        run: |
+          set +e
+          node scripts/db-push.mjs --self-test > /tmp/db-push-self-test.log 2>&1
+          status=$?
+          cat /tmp/db-push-self-test.log
+          if [ "$status" -ne 0 ]; then
+            detail=$(tail -c 1200 /tmp/db-push-self-test.log | tr '\n' ' ')
+            detail=${detail//'%'/'%25'}
+            echo "::error title=Migration runner self-test failed::${detail:-no diagnostic output}"
+          fi
+          exit "$status"
 
       - name: Show the plan
         run: node scripts/db-push.mjs --plan

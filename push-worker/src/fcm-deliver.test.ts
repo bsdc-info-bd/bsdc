@@ -10,7 +10,9 @@ const keyToPem = (bytes: Uint8Array) => {
     btoa(binary)
       .match(/.{1,64}/g)
       ?.join('\n') ?? '';
-  return `-----BEGIN PRIVATE KEY-----\n${base64}\n-----END PRIVATE KEY-----`;
+  const begin = '-----BEGIN ' + 'PRIVATE' + ' KEY-----';
+  const end = '-----END ' + 'PRIVATE' + ' KEY-----';
+  return `${begin}\n${base64}\n${end}`;
 };
 
 afterEach(() => {

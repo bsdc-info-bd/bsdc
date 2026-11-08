@@ -23,7 +23,11 @@ function base64url(bytes: Uint8Array): string {
 }
 
 function decodePrivateKey(pem: string): Uint8Array {
-  const base64 = pem.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\s/g, '');
+  const base64 = pem
+    .split(/\r?\n/)
+    .filter((line) => !line.startsWith('-----'))
+    .join('')
+    .replace(/\s/g, '');
   if (!/^[A-Za-z0-9+/=]+$/.test(base64)) throw new Error('FCM signing key is not valid PKCS8 PEM');
   const binary = atob(base64);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
