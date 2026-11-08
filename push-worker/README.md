@@ -6,6 +6,10 @@ A Cloudflare Worker, on the free plan, that wakes a device with the words alread
 encrypted into the push. It is the primary delivery path; `main-site/functions/api/push/flush.ts`
 is the fallback that sends an empty wake-up.
 
+## Native FCM progress
+
+Native FCM is now included in the worker's scheduled/manual run: it claims bounded device-notification pairs through `fcm_claim_pending`, sends via FCM HTTP v1, and acknowledges/retries or retires invalid tokens through `fcm_finish_delivery`. The claim uses expiring leases to tolerate overlapping runs and retry attempts are bounded. Deployment still requires applying the native device/queue migrations, configuring `FCM_SERVICE_ACCOUNT_JSON` as a Worker secret with least-privilege FCM send IAM, and completing Firebase/physical-device end-to-end verification. Never put the service-account JSON in Android or Git.
+
 ## What it does
 
 | Trigger | What happens |
@@ -28,7 +32,9 @@ is the fallback that sends an empty wake-up.
 src/index.ts          the engine: scheduled, queue, fetch; grouping; marking
 src/crypto.ts         RFC 8291: ECDH, HKDF, AES-128-GCM, the aes128gcm frame
 src/deliver.ts        the ES256 VAPID token and the POST to the push service
-src/notifications.ts  the words: per kind, per language, the summary
+src/notifications.ts  the Web Push words: per kind, per language, the summary
+src/fcm.ts            FCM HTTP v1 OAuth JWT, access-token caching and message send
+src/fcm-deliver.ts    leased FCM queue claim/send/ack/retry orchestration
 src/api.ts            the secret-gated RPC call, with a timeout
 src/env.ts            the bindings, read once, validated
 src/webcrypto.d.ts    the few Web Crypto types @cloudflare/workers-types omits
@@ -40,7 +46,7 @@ src/webcrypto.d.ts    the few Web Crypto types @cloudflare/workers-types omits
 npm ci
 npm run typecheck        # tsc --noEmit
 npm run lint             # prettier --check
-npm run test             # 55 tests, no account and no network
+npm run test             # 60 tests, including mocked FCM HTTP v1 dispatch, no live account or network
 npm run dev              # wrangler dev, locally
 npm run deploy           # wrangler deploy
 npm run tail             # follow the live log
@@ -57,6 +63,7 @@ npx wrangler secret put PUSH_FLUSH_SECRET      # >= 32 chars, same as bsdc.push_
 npx wrangler secret put PUSH_VAPID_PUBLIC_KEY
 npx wrangler secret put PUSH_VAPID_PRIVATE_KEY
 npx wrangler secret put PUSH_VAPID_SUBJECT
+npx wrangler secret put FCM_SERVICE_ACCOUNT_JSON  # optional until FCM is enabled; service-account JSON, never a VAPID key
 ```
 
 The VAPID pair and the flush secret come from `npm run push:keys` in `main-site/`.

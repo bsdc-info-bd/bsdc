@@ -1,0 +1,23 @@
+# BSDC Native Android (initial vertical-slice prototype)
+
+This is a checked-in Kotlin + Jetpack Compose application foundation for the requested native client. It uses application ID `bd.info.bsdc.app`, the BSDC public brand direction, Compose Material 3, a native bottom navigation shell, a live feed, server-backed post reactions, comments and member search/follow, a verification UI, inbox/profile entry points, and a create-post dialog.
+
+## Important status
+
+This remains an **early, non-release-ready app**. Email/password Firebase Authentication and the existing `/api/auth/claims` least-privilege bootstrap are implemented behind build-time Firebase public configuration. The home feed now reads BSDC's existing `feed_candidates` and `posts` PostgREST contracts, and authenticated like actions call `toggle_reaction`. Comments load from the RLS-protected comments relation, submit through the member's scoped insert permission, and use the existing comment-reaction RPC. The inbox and direct-message thread now use BSDC's inbox/message-page/read/send RPCs, with UUID idempotency keys reused on a retry of the same message and periodic message refresh (not realtime). Messaging supports the existing direct-conversation and plain-text flows only; it does not yet support realtime subscriptions, attachments, reactions, receipts, or offline queues. Native FCM token registration and Worker HTTP v1 fan-out now use a leased Supabase delivery queue with bounded retries and invalid-token removal. This still requires deployed service-account configuration and physical-device end-to-end verification; voice recognition and media upload are not wired. Verification now has an initial CameraX/ML Kit scanner, strict QR/manual payload parsing, and public Supabase RPC lookup, but this code has not been compiled or device-tested and the verification hostname/RPC contracts still need maintainer confirmation. Incoming approved BSDC links now map verification/search/profile routes where implemented; other main-site routes show an explicit native-not-yet-available screen with an intentional browser fallback. News links use a separate exact-host HTTPS WebView with file/content access and mixed content disabled and external navigations routed to Custom Tabs. The verification screen explicitly avoids claiming a successful result. Do not submit this build to Play as a finished BSDC service.
+
+The existing `android-app/` Capacitor workflow remains intact while the native client is developed and validated. This avoids breaking the currently documented wrapper/build before native parity and backend contracts exist. The native Gradle project is under `android-app/native/`; this makes the migration reviewable without pretending generated Capacitor files are native source.
+
+## Build
+
+Requires JDK 17 and Android SDK platform/build tools 35, plus Gradle 8.9 compatible with Android Gradle Plugin 8.7.3. From this directory:
+
+```sh
+gradle testDebugUnitTest assembleDebug
+```
+
+Open this directory as a Gradle project in Android Studio for IDE-managed Gradle setup. To enable Firebase Auth locally, provide the same public Firebase project values used by the site as environment variables `BSDC_FIREBASE_API_KEY`, `BSDC_FIREBASE_APP_ID`, `BSDC_FIREBASE_PROJECT_ID`, and `BSDC_FIREBASE_SENDER_ID`, sourced from an Android app registration for package `bd.info.bsdc.app`; do not reuse the website app ID without confirming it is the Android registration. Never put service-account credentials or privileged keys there. Provide `BSDC_SUPABASE_URL` and `BSDC_SUPABASE_PUBLISHABLE_KEY` as well for the feed; these are client publishable values, never a service-role key. With Firebase values absent, the app shows sign-in as unavailable rather than crashing. Generated `app/build`, `.gradle`, APK and AAB artifacts should not be committed. Release signing must be configured in protected CI secrets; no signing key is present in this repository.
+
+## Next production slices
+
+The live milestone list is [`PROGRESS.md`](./PROGRESS.md). Immediate blockers are: compile and run CI/device integration tests; finish pagination/offline and persisted interaction state; implement member profile, social actions and messaging; build the server-side FCM HTTP v1 pipeline; confirm the canonical verification hostname and connect QR lookup to a real verification API; implement voice search, publishing and a reviewed media migration; and complete signing, privacy, accessibility, performance, and Play Console acceptance. All main-site routes remain native or explicitly show an intentional browser fallback; only approved news content uses WebView.

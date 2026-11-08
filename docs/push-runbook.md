@@ -338,7 +338,7 @@ dead device; and the same browser asking again coming back to life.
 The Worker is proved the same way — offline, no Cloudflare account, no database:
 
 ```bash
-cd push-worker && npx vitest run      # 4 files, 55 tests
+cd push-worker && npm test      # 6 files, 60 tests, including mocked native FCM dispatch
 ```
 
 It covers the RFC 8291 encryption byte for byte against a known vector, the ES256
@@ -396,10 +396,13 @@ editor). Within the scheduler's interval the device should wake.
   is the primary path. The Pages Function sends an empty wake-up, which costs one
   extra request when a device wakes and is the path that keeps working when the
   Worker is not there. Both are shipped; neither is dead code.
-- **No Firebase Cloud Messaging.** `VITE_FIREBASE_VAPID_PUBLIC_KEY` is still in
-  `.env.example` because a deployment may already hold one, but it signs only for
-  Firebase's service, and this path signs for every push service directly. FCM
-  endpoints work with it — they are ordinary Web Push endpoints.
+- **Web Push remains separate from native FCM.** Browser notifications continue
+  through the RFC 8291/VAPID path described above. The native Android app uses
+  FCM HTTP v1 via the Worker and tables/RPCs in migrations 0083–0084. Native FCM
+  requires `FCM_SERVICE_ACCOUNT_JSON` as a protected Worker secret and the
+  Android Firebase registration for `bd.info.bsdc.app`; it is not configured by
+  `VITE_FIREBASE_VAPID_PUBLIC_KEY`. Until those deployment settings and a
+  physical-device test are complete, native push is not considered live.
 - **No OneSignal.** `VITE_ONESIGNAL_APP_ID` predates this and is not used.
 - **No per-kind filtering of push.** The switches in Settings → Notifications
   decide which notifications are written at all; push delivers what was written.

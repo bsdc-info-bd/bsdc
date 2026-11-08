@@ -47,6 +47,7 @@
 import { callRpc, DatabaseUnavailable, type DeviceRow } from './api';
 import { deliver, shouldRetry, type DeliveryKeys, type DeliveryOutcome } from './deliver';
 import { adminOrigins, vapidSubject, type Env } from './env';
+import { runFcmPush, type FcmRunStats } from './fcm-deliver';
 import {
   summarise,
   wordsFor,
@@ -326,19 +327,44 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
   return stats;
 }
 
+/** Run independent web-push and FCM queues together without one transport hiding the other's result. */
+type TransportResult<T> = { status: 'ok'; stats: T } | { status: 'error'; error: string };
+
+export async function runAllPush(
+  env: Env,
+  limit = 200,
+): Promise<{ web: TransportResult<RunStats>; fcm: TransportResult<FcmRunStats> }> {
+  const [web, fcm] = await Promise.allSettled([runPush(env, { limit }), runFcmPush(env, limit)]);
+  const safe = <T>(result: PromiseSettledResult<T>): TransportResult<T> =>
+    result.status === 'fulfilled'
+      ? { status: 'ok', stats: result.value }
+      : {
+          status: 'error',
+          error:
+            result.reason instanceof DatabaseUnavailable
+              ? `${result.reason.status} ${result.reason.message}`
+              : 'unexpected delivery error',
+        };
+  return { web: safe(web), fcm: safe(fcm) };
+}
+
 // -------------------------------------------------------------- the handler ---
 
 export default {
   /** The cron. Every minute, and it costs nothing when nothing is waiting. */
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
     ctx.waitUntil(
-      runPush(env)
+      runAllPush(env)
         .then((stats) => {
-          if (stats.waiting > 0) {
+          const active =
+            stats.web.status === 'error' ||
+            stats.fcm.status === 'error' ||
+            (stats.web.status === 'ok' && stats.web.stats.waiting > 0) ||
+            (stats.fcm.status === 'ok' && stats.fcm.stats.queued > 0);
+          if (active)
             console.warn(
-              `push run: waiting=${stats.waiting} devices=${stats.devices} sent=${stats.sent} dead=${stats.dead} invalid=${stats.invalid} unauthorized=${stats.unauthorized} retry=${stats.retry} failed=${stats.failed} marked=${stats.marked} ms=${stats.milliseconds} cron=${controller.cron}`,
+              `push run: web=${stats.web.status} fcm=${stats.fcm.status} cron=${controller.cron}`,
             );
-          }
         })
         .catch((error: unknown) => {
           // Awaited by `waitUntil`, so it reaches the Workers log. It carries a
@@ -358,9 +384,10 @@ export default {
           message.ack();
           continue;
         }
-        await runPush(env, {
-          ...(message.body.limit !== undefined ? { limit: message.body.limit } : {}),
-        });
+        const limit = message.body.limit ?? 200;
+        const results = await Promise.allSettled([runPush(env, { limit }), runFcmPush(env, limit)]);
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
         message.ack();
       } catch (error) {
         // `retry` puts it back on the queue with its own backoff. A message that
@@ -399,6 +426,7 @@ export default {
           worker: 'bsdc-push',
           status: keys === null ? 'unconfigured' : 'ok',
           vapid: keys !== null,
+          fcm: (env.FCM_SERVICE_ACCOUNT_JSON ?? '').trim().length > 0,
           secret: (env.PUSH_FLUSH_SECRET ?? '').trim().length >= 32,
           database: env.SUPABASE_URL.trim().length > 0 && env.SUPABASE_ANON_KEY.trim().length > 0,
           time: new Date().toISOString(),
@@ -419,11 +447,13 @@ export default {
         return json({ error: 'forbidden' }, 403);
       }
       try {
-        const stats = await runPush(env, {
-          ...(url.searchParams.get('limit')
-            ? { limit: Number(url.searchParams.get('limit')) }
-            : {}),
-        });
+        const combined = await runAllPush(
+          env,
+          url.searchParams.get('limit') ? Number(url.searchParams.get('limit')) : 200,
+        );
+        if (combined.web.status === 'error')
+          return json({ error: combined.web.error, fcm: combined.fcm }, 502);
+        const stats = { ...combined.web.stats, fcm: combined.fcm };
         return new Response(JSON.stringify(stats), {
           status: 200,
           headers: {

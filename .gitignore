@@ -28,6 +28,11 @@ google-services.local.json
 # android
 android-app/android/
 android-app/.gradle/
+android-app/native/.gradle/
+android-app/native/build/
+android-app/native/app/build/
+android-app/native/local.properties
+android-app/native/.idea/
 *.keystore
 *.jks
 *.apk

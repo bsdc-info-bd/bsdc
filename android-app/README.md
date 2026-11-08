@@ -1,5 +1,7 @@
 # BSDC for Android
 
+> **Native app development:** the initial Kotlin/Jetpack Compose prototype is in [`native/`](./native/README.md), with the repository-grounded migration/release plan in [`docs/android-native-plan.md`](../docs/android-native-plan.md). The native project is a UI prototype only; it is not yet wired to production accounts, backend data, QR verification, FCM, voice search or release signing. The existing Capacitor shell and CI remain unchanged during this staged migration.
+
 A Capacitor shell around `www.bsdc.info.bd`. It exists for three things the
 web cannot do well on Android — a launcher icon, delivered push
 notifications, and verified app links — and for nothing else. There is no
