@@ -101,7 +101,7 @@ describe('the cover control a project and an event share', () => {
     // cover on screen and had no button that did anything, because the ones
     // rendered asked for a file that had not been chosen yet.
     open({
-      previewUrl: 'https://res.cloudinary.com/bsdc/image/upload/published.jpg',
+      previewUrl: 'https://i.ibb.co/cover/published.webp',
       onRemoveExisting: () => undefined,
     });
 
@@ -114,7 +114,7 @@ describe('the cover control a project and an event share', () => {
     const onFileChange = vi.fn();
     const onRemoveExisting = vi.fn();
     const { rerender } = open({
-      previewUrl: 'https://res.cloudinary.com/bsdc/image/upload/published.jpg',
+      previewUrl: 'https://i.ibb.co/cover/published.webp',
       onRemoveExisting,
       onFileChange,
     });

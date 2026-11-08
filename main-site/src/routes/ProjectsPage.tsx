@@ -21,7 +21,6 @@ import {
 import { useMyProjects, useProjects } from '@/hooks/use-opportunities';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
-import { cloudinaryWide } from '@/lib/storage/upload';
 import { filterProjects } from '@/lib/opportunities/project-filters';
 import { projectEditPath, projectPath, ROUTES } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
@@ -188,9 +187,9 @@ export default function ProjectsPage() {
               >
                 {project.coverUrl.length > 0 ? (
                   <MediaImage
-                    src={cloudinaryWide(project.coverUrl, 960)}
-                    fallbackSrc={project.coverUrl}
+                    src={project.coverUrl}
                     alt={project.name}
+                    slotWidth={480}
                     loading="lazy"
                     decoding="async"
                     className="h-full w-full object-cover transition-transform duration-300 ease-app group-hover:scale-[1.02]"

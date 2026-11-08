@@ -1,7 +1,9 @@
 /**
  * Proof for 0056: legacy Supabase Storage remains locked to the owner of each
  * object, while the current upload client routes new bytes only to ImgBB or
- * Cloudinary. The bucket and policies remain useful for old rows created before
+ * Legacy Supabase Storage bucket (`media`) stays owner-scoped for historical
+ * rows; all new image bytes across BSDC upload exclusively to ImgBB through
+ * `/api/media/upload`. The bucket and policies remain useful for old rows created before
  * the external-host rule; they are not an upload destination anymore.
  *
  * These database checks prove that any object already in that bucket stays
@@ -143,8 +145,10 @@ const edgeMedia = readFileSync(EDGE_MEDIA_MODULE, 'utf8');
 const edgeUpload = readFileSync(EDGE_UPLOAD_ENDPOINT, 'utf8');
 
 check(
-  contract.includes("'project-cover'") && source.includes('api.cloudinary.com/v1_1/'),
-  'important covers have a Cloudinary-only route',
+  contract.includes("'project-cover'") &&
+    contract.includes("return 'imgbb'") &&
+    source.includes('/api/media/upload'),
+  'every image purpose including covers routes through /api/media/upload to ImgBB',
 );
 
 // One routing table, two readers. If the edge ever grew its own copy of

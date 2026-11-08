@@ -74,15 +74,15 @@ describe('post media reaches the permalink', () => {
     });
   });
 
-  it('keeps existing Cloudinary-hosted media URLs renderable', () => {
-    const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/legacy.png';
+  it('keeps stored media URLs renderable when thumb_url is empty', () => {
+    const url = 'https://i.ibb.co/full/post-asset.webp';
     const post = toPost(
       joinedPost({
         post_media: [
           {
-            media_id: 'legacy-cloudinary-asset',
+            media_id: 'stored-imgbb-asset',
             position: 0,
-            alt_text: 'Legacy Cloudinary image',
+            alt_text: 'Stored ImgBB image',
             media_assets: {
               url,
               thumb_url: '',
@@ -95,7 +95,7 @@ describe('post media reaches the permalink', () => {
     );
 
     expect(post.media).toHaveLength(1);
-    expect(post.media[0]).toMatchObject({ url, thumbUrl: '', altText: 'Legacy Cloudinary image' });
+    expect(post.media[0]).toMatchObject({ url, thumbUrl: '', altText: 'Stored ImgBB image' });
   });
 
   it('drops missing asset joins instead of producing a broken empty image source', () => {

@@ -58,13 +58,11 @@ export interface Probes {
     firebase: boolean;
     supabase: boolean;
     webPushKey: boolean;
-    cloudinary: boolean;
   };
 }
 
-/** A fixed sample picture on each host the platform serves from. */
+/** A fixed sample picture on the platform's image host (ImgBB). */
 export const SAMPLE_IMAGES = {
-  cloudinary: 'https://res.cloudinary.com/bsdc/image/upload/sample.jpg',
   imgbb: 'https://i.ibb.co/6P0b1cS/bsdc-sample.jpg',
 } as const;
 
@@ -192,8 +190,38 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
     );
   }
 
-  // Pictures. Two hosts, two questions: does it answer, and is the answer a
-  // picture? The second is the check that would have caught the reported bug.
+  // ImgBB edge upload readiness.
+  const providers = await timed(() =>
+    probes.api('/api/media/providers').catch(() => ({ status: 0, body: null })),
+  );
+  const providersBody = providers.value.body as { proxy?: unknown; imgbb?: unknown } | null;
+  if (
+    providers.value.status === 200 &&
+    providersBody?.proxy === true &&
+    providersBody?.imgbb === true
+  ) {
+    checks.push(
+      result(
+        'media.providers',
+        'Image upload service (ImgBB)',
+        'ok',
+        'The edge upload endpoint holds an active ImgBB API key.',
+        providers.ms,
+      ),
+    );
+  } else {
+    checks.push(
+      result(
+        'media.providers',
+        'Image upload service (ImgBB)',
+        'fail',
+        'IMGBB_API_KEY is missing from Cloudflare Pages runtime secrets, or /api/media/providers is unreachable.',
+        providers.ms,
+      ),
+    );
+  }
+
+  // Pictures on ImgBB: does the host answer, and is the answer a picture?
   for (const [id, url] of Object.entries(SAMPLE_IMAGES)) {
     const probe = await timed(() =>
       probes.image(url).catch(() => ({ ok: false, contentType: '' })),

@@ -31,7 +31,7 @@ const HARNESSES = [
   ['t25.mjs', 'the new endpoints refuse anonymous callers and serve members'],
   ['t26.mjs', 'anonymous callers lose the routines that demand a member, and nobody else does'],
   ['t27.mjs', 'the first owner has a door, and nobody else walks through it'],
-  ['t28.mjs', 'legacy Storage stays owner-scoped; new bytes go to ImgBB or Cloudinary'],
+  ['t28.mjs', 'legacy Storage stays owner-scoped; new bytes go exclusively to ImgBB'],
   ['t29.mjs', 'a voice note has a kind, and an archive is a write a member can make'],
   [
     't30.mjs',

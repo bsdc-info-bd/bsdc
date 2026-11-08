@@ -52,12 +52,10 @@ function preconnectDatabase(): void {
 preconnectDatabase();
 
 /**
- * Whether this browser will take the modern picture formats.
+ * Whether this browser can decode and encode modern picture formats.
  *
- * Every picture URL that reaches Cloudinary asks for `f_auto`, so Cloudinary
- * negotiates the format itself and this class is purely advisory: it exists so
- * the `<html>` element can say what the page is capable of before the first paint,
- * and so a stylesheet or a font can be chosen from it without a layout shift.
+ * Sets `data-image-format` on `<html>` before the first paint so feature-aware
+ * styles can avoid layout shift.
  */
 function markImageCapability(): void {
   if (typeof document === 'undefined') return;

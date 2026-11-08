@@ -41,7 +41,16 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
   useEffect(() => {
     // A new picture is a new load; the spinner should not claim the old one.
     setLoaded(false);
-  }, [position, current?.url]);
+    if (total < 2 || typeof Image === 'undefined') return;
+    for (const neighbor of [(position + 1) % total, (position - 1 + total) % total]) {
+      const candidate = items[neighbor]?.url ?? '';
+      if (candidate.length > 0) {
+        const preload = new Image();
+        preload.decoding = 'async';
+        preload.src = candidate;
+      }
+    }
+  }, [items, position, total, current?.url]);
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {

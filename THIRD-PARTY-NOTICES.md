@@ -68,7 +68,7 @@ not additional npm packages in the inventory above. The renderer uses the MIT
 ## Services
 
 The platform runs entirely on free tiers of third-party services — Supabase,
-Firebase, Cloudinary, ImgBB, Cloudflare Pages and Workers, OpenStreetMap. Their
+Firebase, ImgBB, Cloudflare Pages and Workers, OpenStreetMap. Their
 terms are their own and are not redistributed here. No paid service is required
 to run the whole platform at community scale; see `docs/deploying.md` for the
 exact free-tier limits each one is used within.

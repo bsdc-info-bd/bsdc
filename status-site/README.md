@@ -6,7 +6,7 @@
 - **Access**: Staff view (public-grade page)
 - **Delivered in**: Response 16 of the 20-response build plan
 
-Live status of the main site, all corporate apps and every dependency (Supabase, both Firebase projects, Cloudinary, imgbb, OneSignal, FCM, formsubmit), with incidents, 90-day uptime bars, maintenance notices and update subscriptions.
+Live status of the main site, all corporate apps and every dependency (Supabase, both Firebase projects, ImgBB, OneSignal, FCM, formsubmit), with incidents, 90-day uptime bars, maintenance notices and update subscriptions.
 
 ## Stack
 

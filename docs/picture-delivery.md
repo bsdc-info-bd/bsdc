@@ -93,7 +93,7 @@ repeating an address").
 
 `main-site/functions/media/i.ts` — `GET /media/i?u=<encoded url>`:
 
-- allowlist: `res.cloudinary.com`, `i.ibb.co`, `ibb.co` only;
+- allowlist: `i.ibb.co`, `ibb.co`, `i.ibb.co.com` only;
 - `https:` only, no port, no credentials, no document types;
 - 12 MB cap enforced on the bytes that actually arrive, not on `content-length`;
 - forwards only `image/*`, passes a provider's status through so the browser's own

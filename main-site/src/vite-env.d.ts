@@ -16,9 +16,7 @@ interface ImportMetaEnv {
   readonly VITE_FIREBASE_VAPID_PUBLIC_KEY?: string;
   readonly VITE_PUSH_VAPID_PUBLIC_KEY?: string;
   readonly VITE_ONESIGNAL_APP_ID?: string;
-  readonly VITE_CLOUDINARY_CLOUD_NAME?: string;
-  readonly VITE_CLOUDINARY_UNSIGNED_PRESET?: string;
-  readonly VITE_IMGBB_API_KEY?: string;
+  readonly VITE_BUILD_SHA?: string;
 }
 
 interface ImportMeta {

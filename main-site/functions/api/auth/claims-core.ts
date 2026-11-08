@@ -261,10 +261,45 @@ export function maySeedStaffProfile(
   return isStaffRole(role) && (ownerAuthorized || verifiedBootstrapRole !== null);
 }
 
+const BSDC_PAGES_PROJECTS: ReadonlySet<string> = new Set([
+  'bsdc',
+  'bsdc-admin',
+  'bsdc-mod',
+  'bsdc-moderator',
+  'bsdc-perf',
+  'bsdc-performance',
+  'bsdc-config',
+  'bsdc-uadmin',
+  'bsdc-users-admin',
+  'bsdc-umod',
+  'bsdc-users-moderator',
+  'bsdc-custom',
+  'bsdc-customize',
+  'bsdc-ip',
+  'bsdc-status',
+  'bsdc-connect',
+  'bsdc-cert',
+  'bsdc-certificate',
+  'bsdc-vf',
+  'bsdc-notice',
+]);
+
+function isBsdcPagesHost(host: string): boolean {
+  if (!host.endsWith('.pages.dev')) return false;
+  const label = host.slice(0, -'.pages.dev'.length);
+  const parts = label.split('.');
+  if (parts.length === 1) return BSDC_PAGES_PROJECTS.has(parts[0] ?? '');
+  if (parts.length === 2) {
+    return /^[a-z0-9-]+$/.test(parts[0] ?? '') && BSDC_PAGES_PROJECTS.has(parts[1] ?? '');
+  }
+  return false;
+}
+
 /**
- * Cross-origin headers allowing BSDC's sibling consoles (`*.bsdc.info.bd`) and
- * local development servers to mint their own `role: "authenticated"` claim
- * against `main-site`'s `/api/auth/claims` endpoint.
+ * Cross-origin headers allowing BSDC's sibling consoles (`*.bsdc.info.bd`,
+ * BSDC Cloudflare Pages console deployments) and local development servers to
+ * mint their own `role: "authenticated"` claim against `main-site`'s
+ * `/api/auth/claims` endpoint.
  */
 export function corsHeadersFor(origin: string | null): Record<string, string> {
   if (!origin) return {};
@@ -272,10 +307,12 @@ export function corsHeadersFor(origin: string | null): Record<string, string> {
     const parsed = new URL(origin);
     const host = parsed.hostname.toLowerCase();
     const isBsdc =
-      parsed.protocol === 'https:' && (host === 'bsdc.info.bd' || host.endsWith('.bsdc.info.bd'));
+      parsed.protocol === 'https:' &&
+      (host === 'bsdc.info.bd' || host.endsWith('.bsdc.info.bd') || isBsdcPagesHost(host));
     const isLocalDev =
+      parsed.protocol === 'http:' &&
       (host === 'localhost' || host === '127.0.0.1') &&
-      (parsed.port === '5173' || (Number(parsed.port) >= 5180 && Number(parsed.port) <= 5199));
+      parsed.port !== '';
     if (!isBsdc && !isLocalDev) return {};
     return {
       'access-control-allow-origin': parsed.origin,

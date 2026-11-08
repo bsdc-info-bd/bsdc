@@ -20,7 +20,6 @@ export const DEFAULT_FLAGS: Readonly<Record<string, boolean>> = {
   'auth.oauth.github': true,
   'auth.oauth.yahoo': true,
   'profile.public': true,
-  'media.cloudinary': true,
   'media.imgbb': true,
   'realtime.presence': true,
 };

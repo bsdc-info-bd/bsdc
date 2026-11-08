@@ -12,21 +12,17 @@
 name = "bsdc-push"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
+# Cron-driven worker: do not require an account-level `*.workers.dev` subdomain
+# registration during `wrangler deploy`.
+workers_dev = false
 # Web Crypto is available without a flag, but the flag makes the intent explicit
 # and keeps the behaviour stable if the default ever changes.
 compatibility_flags = ["nodejs_compat"]
 
-# The worker is stateless: nothing is stored here that is not in the database.
-# A short log retention keeps a deployment cheap and a payload out of long-term
-# storage. `wrangler tail` is how an operator watches it live.
-[observability]
-enabled = true
-head_sampling_rate = 1
-
 [vars]
 # The optional allowlist for the HTTP trigger's CORS answers. The site's own
 # origin, so an operator's browser can call /run from a staff console.
-ADMIN_ORIGINS = "https://www.bsdc.info.bd,https://admin.corporate.main.bsdc.info.bd"
+ADMIN_ORIGINS = "https://www.bsdc.info.bd,https://admin.bsdc.info.bd,https://admin.corporate.bsdc.info.bd,https://admin.corporate.main.bsdc.info.bd,https://bsdc-admin.pages.dev"
 VERBOSE = "0"
 
 # ---------------------------------------------------------------------------

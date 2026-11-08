@@ -30,7 +30,7 @@ await db.exec(`
     '${slug}', 'Meghna Timetable', 'Ferry times, kept current.',
     'The timetable everybody on the Meghna crossing keeps in their pocket.',
     'https://github.com/bsdc-info-bd/meghna', '',
-    'https://res.cloudinary.com/bsdc/image/upload/meghna-cover.jpg',
+    'https://i.ibb.co/projects/meghna-cover.webp',
     array['typescript'], 'MIT', false, '${owner}'
   );
 `);
@@ -39,8 +39,8 @@ await db.exec(`
 const assets = await db.query(`
   insert into public.media_assets (owner_uid, provider, kind, url, thumb_url, width, height, bytes, mime_type)
   values
-    ('${owner}', 'cloudinary', 'image', 'https://res.cloudinary.com/bsdc/image/upload/shot-one.jpg', '', 1600, 900, 20480, 'image/jpeg'),
-    ('${owner}', 'cloudinary', 'image', 'https://res.cloudinary.com/bsdc/image/upload/shot-two.jpg', '', 1600, 900, 20480, 'image/jpeg')
+    ('${owner}', 'imgbb', 'image', 'https://i.ibb.co/projects/shot-one.webp', '', 1600, 900, 20480, 'image/webp'),
+    ('${owner}', 'imgbb', 'image', 'https://i.ibb.co/projects/shot-two.webp', '', 1600, 900, 20480, 'image/webp')
   returning id
 `);
 const [shotOne, shotTwo] = assets.rows.map((row) => row.id);
@@ -74,7 +74,7 @@ const readBack = await asAnon(
 );
 if (
   readBack?.rows.length !== 2 ||
-  readBack.rows[0].url !== 'https://res.cloudinary.com/bsdc/image/upload/shot-one.jpg' ||
+  readBack.rows[0].url !== 'https://i.ibb.co/projects/shot-one.webp' ||
   Number(readBack.rows[1].position) !== 1
 ) {
   console.log('FAIL  the gallery is public and ordered', JSON.stringify(readBack?.rows));

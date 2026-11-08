@@ -24,7 +24,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 
 describe('a member with a picture', () => {
   it('renders it with the name as alternative text', () => {
-    render(<Avatar name="BSDC" src="https://res.cloudinary.com/dpemuwrpz/image/upload/x.png" />);
+    render(<Avatar name="BSDC" src="https://i.ibb.co/avatar/bsdc.webp" />);
     const image = screen.getByRole('img', { name: 'BSDC' });
     expect(image.tagName).toBe('IMG');
   });

@@ -72,7 +72,7 @@ function result(url: string): UploadResult {
   return {
     url,
     thumbUrl: `${url}?thumb`,
-    provider: 'cloudinary',
+    provider: 'imgbb',
     kind: 'image',
     bytes: 4096,
     mimeType: 'image/png',
@@ -121,7 +121,7 @@ beforeEach(() => {
   objectUrls.length = 0;
   revokedUrls.length = 0;
   latest.current = null;
-  uploadMedia.mockResolvedValue(result('https://res.cloudinary.com/bsdc/image/upload/cover.png'));
+  uploadMedia.mockResolvedValue(result('https://i.ibb.co/cover/cover.webp'));
   recordMediaAsset.mockResolvedValue({ id: 'asset-1' });
 });
 
@@ -240,7 +240,7 @@ describe('one cover picture, uploaded when the member commits', () => {
   it('reports progress while bytes move and is idle again afterwards', async () => {
     uploadMedia.mockImplementationOnce((_file, options) => {
       options.onProgress?.(42);
-      return Promise.resolve(result('https://res.cloudinary.com/bsdc/image/upload/cover.png'));
+      return Promise.resolve(result('https://i.ibb.co/cover/cover.webp'));
     });
     open();
     act(() => cover().choose(picture()));

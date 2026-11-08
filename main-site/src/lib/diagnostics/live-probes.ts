@@ -143,7 +143,6 @@ export function liveProbes(): Probes {
       firebase: isConfigured.firebase,
       supabase: isConfigured.supabase,
       webPushKey: isConfigured.push,
-      cloudinary: isConfigured.cloudinary,
     },
   };
 }

@@ -224,4 +224,40 @@ describe('claims endpoint staff authority', () => {
     const memberOnly = await onRequestGet(context({ ...both, FB2_PRIVATE_KEY: '' }, request));
     expect(await memberOnly.json()).toEqual({ ready: true, corporateReady: false });
   });
+
+  it('allows BSDC Cloudflare Pages console origins while rejecting third-party Pages hosts', async () => {
+    provider();
+    const token = signedToken({});
+    for (const allowedOrigin of [
+      'https://bsdc-admin.pages.dev',
+      'https://a1b2c3d4.bsdc-admin.pages.dev',
+      'https://bsdc-mod.pages.dev',
+      'https://admin.corporate.bsdc.info.bd',
+    ]) {
+      const request = new Request('https://bsdc.pages.dev/api/auth/claims', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${token}`,
+          'content-type': 'application/json',
+          origin: allowedOrigin,
+        },
+        body: JSON.stringify({ uid: 'staff-uid', role: 'member', vendor: false, staff: false }),
+      });
+      const response = await onRequestPost(context(env, request));
+      expect(response.status).toBe(200);
+      expect(response.headers.get('access-control-allow-origin')).toBe(allowedOrigin);
+    }
+
+    const rejected = new Request('https://bsdc.pages.dev/api/auth/claims', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        origin: 'https://evil-bsdc-admin.pages.dev',
+      },
+      body: JSON.stringify({ uid: 'staff-uid', role: 'member', vendor: false, staff: false }),
+    });
+    const response = await onRequestPost(context(env, rejected));
+    expect(response.headers.get('access-control-allow-origin')).toBeNull();
+  });
 });

@@ -4,15 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MessageComposer } from '@/components/messaging/MessageComposer';
 import { changeLanguage } from '@/i18n';
 
-vi.mock('@/hooks/use-voice-recorder', () => ({
-  useVoiceRecorder: () => ({
-    state: 'unsupported',
-    blockKey: 'chat.voice.noRecorder',
-    errorKey: null,
-    dismissError: vi.fn(),
-  }),
-}));
-
 function Harness({
   onSend,
   disabled = false,
@@ -65,18 +56,20 @@ describe('composer interaction', () => {
     expect(send).toHaveBeenCalledWith('First', null);
     expect(input).toHaveValue('');
     await Promise.resolve();
-    fireEvent.change(input, { target: { value: 'Second' } });
+    fireEvent.change(input, { key: 'Enter', target: { value: 'Second' } });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledTimes(2);
     expect(send).toHaveBeenLastCalledWith('Second', null);
   });
 
-  it('disables sending and attachments when the thread is unavailable', () => {
+  it('disables sending and image attachments when the thread is unavailable and omits voice/file buttons', () => {
     const send = vi.fn().mockResolvedValue(undefined);
     render(<Harness onSend={send} disabled />);
     expect(screen.getByLabelText('Write a message')).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Attach an image' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Attach a file' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /voice/i })).not.toBeInTheDocument();
     fireEvent.keyDown(screen.getByLabelText('Write a message'), { key: 'Enter' });
     expect(send).not.toHaveBeenCalled();
   });

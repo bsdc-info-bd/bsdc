@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IdTokenResult, User } from 'firebase/auth';
-import { ensureCorporateDataAccess, signedRole } from './data-access';
+import { claimsEndpoints, ensureCorporateDataAccess, signedRole } from './data-access';
 import type { CorporateEnv } from './env';
 
 const env: CorporateEnv = {
@@ -113,5 +113,38 @@ describe('corporate database access', () => {
         user(vi.fn().mockResolvedValue(token({}))),
       ),
     ).rejects.toThrow('must use HTTPS');
+  });
+
+  it('falls back across BSDC apex and Pages origins when www redirects or fails DNS', async () => {
+    expect(claimsEndpoints('https://www.bsdc.info.bd')).toEqual([
+      'https://www.bsdc.info.bd/api/auth/claims',
+      'https://bsdc.info.bd/api/auth/claims',
+      'https://bsdc.pages.dev/api/auth/claims',
+    ]);
+    const read = vi
+      .fn()
+      .mockResolvedValueOnce(token({}))
+      .mockResolvedValueOnce(token({ role: 'authenticated', bsdc_role: 'admin' }, 'refreshed'));
+    const fetcher = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(
+        new Response('<!doctype html>', { status: 200, headers: { 'content-type': 'text/html' } }),
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ claims: { role: 'authenticated' } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetcher);
+    await expect(ensureCorporateDataAccess(env, user(read))).resolves.toMatchObject({
+      token: 'refreshed',
+    });
+    expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
+      'https://www.bsdc.info.bd/api/auth/claims',
+      'https://bsdc.info.bd/api/auth/claims',
+      'https://bsdc.pages.dev/api/auth/claims',
+    ]);
   });
 });

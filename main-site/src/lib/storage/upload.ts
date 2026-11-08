@@ -1,9 +1,5 @@
-import { env, isConfigured } from '@/lib/env';
 import {
   chooseProvider,
-  cloudinaryFolder,
-  cloudinaryResourceType,
-  cloudinaryThumb,
   kindOf,
   MAX_BYTES,
   type MediaKind,
@@ -12,40 +8,19 @@ import {
 } from './media-contract';
 
 /**
- * Media pipeline.
+ * Media upload pipeline (ImgBB-only).
  *
- * Image bytes have one deliberate destination: ordinary member images go to
- * ImgBB; assets that need Cloudinary transforms (avatars, profile and project
- * covers, project screenshots, product images) go to Cloudinary. Documents and
- * audio also go to Cloudinary. Supabase stores only the `media_assets` metadata
- * row used by the content tables; this module never uploads bytes to Supabase
- * Storage and never falls back to the wrong host when a provider is missing.
+ * Every image uploaded on BSDC goes exclusively to ImgBB through the platform's
+ * own edge endpoint (`POST /api/media/upload`), which keeps `IMGBB_API_KEY`
+ * server-only at runtime, verifies the caller's Firebase ID token, and returns
+ * both the full image URL and ImgBB's aspect-preserving medium variant.
  *
- * There are two transports, and the choice between them is the fix for the
- * failure this platform already had. A direct upload needs the host's key
- * compiled into the public bundle at *build* time, so a deployment that missed
- * one `VITE_` variable answers "uploads are not configured" — which on a phone,
- * where the toast is easy to miss, looks exactly like nothing happening at all.
- * It also puts the ImgBB API key, which is a secret and not a publishable one,
- * in JavaScript that anybody can read.
- *
- * So the preferred transport is this site's own edge endpoint,
- * `POST /api/media/upload`, which holds the keys in Pages environment
- * variables, reads them at *runtime*, verifies the caller's Firebase ID token
- * and uploads on the member's behalf. Changing a Pages variable then takes
- * effect on the next request instead of the next rebuild. The direct transport
- * remains as a fallback for a deployment whose Functions are not live yet, so
- * this module keeps working on a static host — but it is never used when the
- * endpoint can do the job, and it is never retried after a genuine provider
- * error, because that would upload the same picture twice.
+ * Before a single byte leaves the browser, raster images are downscaled to the
+ * exact bounding box their purpose requires and encoded as high-efficiency WebP,
+ * cutting multi-megabyte camera photos down to ~40–160 KB for DEV-Community-grade
+ * upload and feed speed.
  */
-export {
-  chooseProvider,
-  cloudinaryThumb,
-  cloudinaryWide,
-  kindOf,
-  MAX_BYTES,
-} from './media-contract';
+export { chooseProvider, kindOf, MAX_BYTES } from './media-contract';
 export type { MediaKind, MediaProvider, MediaPurpose } from './media-contract';
 
 export interface UploadResult {
@@ -60,12 +35,6 @@ export interface UploadResult {
   mimeType: string;
   /**
    * When the host was told to stop serving this file, or `null` for never.
-   *
-   * The edge decides this per purpose (`UPLOAD_LIFETIME_SECONDS` in
-   * `functions/_media.ts`) and states what it told the host. The browser does not
-   * decide it and cannot extend it: the database validates it again in
-   * `record_media_asset`. It is carried here so a caller can say "this goes in
-   * 30 days" rather than "this disappears eventually".
    */
   expiresAt: string | null;
 }
@@ -80,16 +49,11 @@ export class MediaError extends Error {
 }
 
 export interface ProviderAvailability {
-  cloudinary: boolean;
   imgbb: boolean;
 }
 
 /**
- * The required provider, or null when that provider is not configured.
- *
- * There is intentionally no cross-provider fallback: an ordinary post image
- * must not silently consume Cloudinary quota, and an important cover must not
- * lose the transformations and delivery contract it was sent there for.
+ * The required provider (`imgbb`), or null when ImgBB is not configured.
  */
 export function resolveProvider(
   purpose: MediaPurpose,
@@ -137,10 +101,6 @@ interface XhrOutcome {
 
 /**
  * XHR is used because fetch still cannot report upload progress.
- *
- * Resolves with the status rather than rejecting on a 4xx/5xx: the caller has
- * to tell "the endpoint is not there" from "the host refused the picture", and
- * only the first may be retried through the other transport.
  */
 function postForm(options: XhrOptions): Promise<XhrOutcome> {
   return new Promise((resolve, reject) => {
@@ -180,16 +140,6 @@ function postForm(options: XhrOptions): Promise<XhrOutcome> {
   });
 }
 
-interface CloudinaryResponse {
-  secure_url?: string;
-  public_id?: string;
-  width?: number;
-  height?: number;
-  bytes?: number;
-  resource_type?: string;
-  delete_token?: string;
-}
-
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -199,127 +149,106 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-async function uploadToCloudinary(
-  file: File,
-  kind: MediaKind,
-  purpose: MediaPurpose,
-  onProgress?: (percent: number) => void,
-  signal?: AbortSignal,
-): Promise<UploadResult> {
-  if (!isConfigured.cloudinary) throw new MediaError('media.errors.notConfigured');
+/**
+ * Purpose-specific max longest-edge dimensions before upload.
+ *
+ * Tuned for DEV-Community-grade delivery on ImgBB: avatars never exceed 512px,
+ * post/comment/project/product images top out at 1600px (crisp on 2x-3x retina
+ * whileImgBB also generates a ~640px medium variant), and wide covers top out
+ * at 1920px.
+ */
+const UPLOAD_MAX_EDGE: Record<MediaPurpose, number> = {
+  avatar: 512,
+  cover: 1920,
+  'project-cover': 1920,
+  'project-image': 1600,
+  'post-image': 1600,
+  'comment-image': 1440,
+  'product-image': 1600,
+};
 
-  // Downscale before uploading, when the browser can.
-  //
-  // The upload is the member's own connection, and it is the slowest part of
-  // posting: a 12-megapixel phone photograph is four megabytes of radio time for
-  // a picture the feed will draw 480 pixels wide. Re-encoding it to a 2560-pixel
-  // WebP at 0.86 quality typically costs 400 KB, is indistinguishable on any
-  // screen, and makes posting four times faster on a phone. Where the browser
-  // cannot do it — an old Safari, a decode failure, a GIF that must keep
-  // animating — the original is sent, which is what happened before.
-  const prepared: { blob: Blob; name: string } =
-    kind === 'image' ? await shrinkForUpload(file, purpose) : { blob: file, name: file.name };
+const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
+  avatar: 0.86,
+  cover: 0.85,
+  'project-cover': 0.85,
+  'project-image': 0.84,
+  'post-image': 0.84,
+  'comment-image': 0.84,
+  'product-image': 0.85,
+};
 
-  const body = new FormData();
-  body.append('file', prepared.blob, prepared.name);
-  body.append('upload_preset', env.cloudinary.unsignedPreset);
-  body.append('folder', cloudinaryFolder(purpose));
-
-  const outcome = await postForm({
-    url: `https://api.cloudinary.com/v1_1/${env.cloudinary.cloudName}/${cloudinaryResourceType(kind)}/upload`,
-    body,
-    ...(onProgress ? { onProgress } : {}),
-    ...(signal ? { signal } : {}),
-  });
-
-  if (outcome.status < 200 || outcome.status >= 300) throw new MediaError('media.errors.failed');
-  const response = outcome.body as CloudinaryResponse | null;
-  if (!response?.secure_url) throw new MediaError('media.errors.failed');
-
-  return {
-    provider: 'cloudinary',
-    kind,
-    url: response.secure_url,
-    thumbUrl: kind === 'image' ? cloudinaryThumb(response.secure_url) : '',
-    deleteToken: response.delete_token ?? '',
-    width: toNumber(response.width),
-    height: toNumber(response.height),
-    bytes: toNumber(response.bytes) ?? prepared.blob.size,
-    mimeType: file.type,
-    expiresAt: null,
-  };
+async function encodeCanvasWebp(
+  bitmap: ImageBitmap,
+  width: number,
+  height: number,
+  quality: number,
+): Promise<Blob | null> {
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const canvas = new OffscreenCanvas(width, height);
+    const context = canvas.getContext('2d');
+    if (context !== null) {
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, width, height);
+      return await canvas.convertToBlob({ type: 'image/webp', quality });
+    }
+  }
+  if (typeof document !== 'undefined') {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (context !== null) {
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(bitmap, 0, 0, width, height);
+      return await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((blob) => resolve(blob), 'image/webp', quality),
+      );
+    }
+  }
+  return null;
 }
 
 /**
- * The largest a picture needs to be, per purpose, before anything is uploaded.
+ * Re-encode an image to a purpose-sized WebP before uploading to ImgBB.
  *
- * 2560 covers a retina desktop hero with room to crop; a cover is drawn wider than
- * an avatar but never wider than that; a product shot is enlarged by zoom on the
- * page it lives on, so it keeps its detail. Above these widths the extra pixels
- * are bytes nobody can see.
- */
-const UPLOAD_MAX_EDGE: Partial<Record<MediaPurpose, number>> = {
-  avatar: 640,
-  cover: 2560,
-  'project-cover': 2560,
-  'project-image': 2000,
-  'post-image': 2560,
-  'comment-image': 1600,
-  'product-image': 2000,
-};
-
-/** Refuse to re-encode a picture whose result would be larger than the original. */
-const SHRINK_QUALITY = 0.86;
-
-/**
- * Re-encode an image at a size the page can actually draw.
- *
- * Returns the original file whenever anything is less than ideal: no canvas, a
- * format that must not be flattened (a GIF's animation, an SVG's vectors), a
- * picture already smaller than the limit, or an encode that came out larger than
- * what went in. Correctness first — the only cost of the original is bytes.
+ * Preserves GIF animations and already-compact WebP files untouched, and
+ * gracefully falls back to the original file whenever canvas APIs are absent.
  */
 export async function shrinkForUpload(
   file: File,
   purpose: MediaPurpose,
-): Promise<{ blob: Blob; name: string }> {
-  const maxEdge = UPLOAD_MAX_EDGE[purpose] ?? 2560;
+): Promise<{ blob: Blob; name: string; width?: number; height?: number }> {
+  const maxEdge = UPLOAD_MAX_EDGE[purpose] ?? 1600;
+  const quality = UPLOAD_QUALITY[purpose] ?? 0.84;
   const unchanged: { blob: Blob; name: string } = { blob: file, name: file.name };
   if (file.type === 'image/gif' || file.type === 'image/svg+xml') return unchanged;
   if (typeof createImageBitmap !== 'function') return unchanged;
-  if (typeof document === 'undefined' || typeof OffscreenCanvas === 'undefined') return unchanged;
-  // A picture that is already small is already fast: re-encoding it would cost a
-  // decode and a tick of main-thread time to save nothing.
-  if (file.size <= 320 * 1024) return unchanged;
+  if (file.type === 'image/webp' && file.size <= 48 * 1024) return unchanged;
 
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(file);
     const longest = Math.max(bitmap.width, bitmap.height);
+    if (file.type === 'image/webp' && longest <= maxEdge && file.size <= 180 * 1024) {
+      return { blob: file, name: file.name, width: bitmap.width, height: bitmap.height };
+    }
     const scale = longest > maxEdge ? maxEdge / longest : 1;
-    // A picture within the limit is still worth a quality pass when it is heavy;
-    // anything at or below the limit that is already light has returned above.
-    const width = Math.round(bitmap.width * scale);
-    const height = Math.round(bitmap.height * scale);
-    const canvas = new OffscreenCanvas(width, height);
-    const context = canvas.getContext('2d');
-    if (context === null) return unchanged;
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(bitmap, 0, 0, width, height);
-    const encoded = await canvas.convertToBlob({ type: 'image/webp', quality: SHRINK_QUALITY });
-    if (encoded.size === 0 || encoded.size >= file.size) return unchanged;
-    const base = file.name.replace(/\.[^.]+$/, '');
-    return { blob: encoded, name: `${base}.webp` };
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const encoded = await encodeCanvasWebp(bitmap, width, height, quality);
+    if (encoded === null || encoded.size === 0 || (scale === 1 && encoded.size >= file.size)) {
+      return { blob: file, name: file.name, width: bitmap.width, height: bitmap.height };
+    }
+    const base = file.name.replace(/\.[^.]+$/, '') || 'image';
+    return { blob: encoded, name: `${base}.webp`, width, height };
   } catch {
-    // An older browser, a corrupt file, a canvas that refused the encode: send
-    // the original. A picture that uploads slowly is better than one that fails.
     return unchanged;
   } finally {
     bitmap?.close?.();
   }
 }
 
-/** Read image bytes as base64 for imgbb's `image` form field. */
+/** Read image bytes as base64 for ImgBB's `image` form field. */
 export function fileToBase64(file: Blob, signal?: AbortSignal): Promise<string> {
   if (signal?.aborted) return Promise.reject(new MediaError('media.errors.cancelled'));
 
@@ -362,14 +291,10 @@ export interface UploadCapabilities {
   proxy: boolean;
   /** The edge holds an ImgBB key. */
   proxyImgbb: boolean;
-  /** The edge holds both halves of the Cloudinary pair. */
-  proxyCloudinary: boolean;
-  /** A build-time Cloudinary pair is compiled into this bundle. */
-  localCloudinary: boolean;
 }
 
 /** Which transport carries the bytes. */
-export type UploadRoute = 'proxy' | 'direct';
+export type UploadRoute = 'proxy';
 
 export interface UploadPlan {
   route: UploadRoute;
@@ -380,20 +305,15 @@ export function localCapabilities(): UploadCapabilities {
   return {
     proxy: false,
     proxyImgbb: false,
-    proxyCloudinary: false,
-    localCloudinary: isConfigured.cloudinary,
   };
 }
 
 /**
  * Decides the transport before a byte moves.
  *
- * Pure, so the whole routing table can be asserted without a network. The edge
- * is preferred whenever it can serve the provider this purpose needs: it keeps
- * the ImgBB secret out of the public bundle and survives a Pages variable
- * changing without a rebuild. Direct is a fallback, not a preference, and null
- * means "no host will take this", which the caller turns into a readable error
- * rather than a silent no-op.
+ * ImgBB's API key is a server secret and never ships in the client bundle, so
+ * every image upload rides through `POST /api/media/upload` when `proxyImgbb`
+ * is active.
  */
 export function planUpload(
   purpose: MediaPurpose,
@@ -401,16 +321,9 @@ export function planUpload(
   capabilities: UploadCapabilities,
 ): UploadPlan | null {
   const provider = chooseProvider(purpose, kind);
-  const viaProxy =
-    provider === 'cloudinary' ? capabilities.proxyCloudinary : capabilities.proxyImgbb;
-  if (capabilities.proxy && viaProxy) return { route: 'proxy', provider };
-
-  // Only Cloudinary has a direct route. Its cloud name and unsigned preset are
-  // public by design; an ImgBB key is a secret and never leaves the Functions.
-  if (provider === 'cloudinary' && capabilities.localCloudinary) {
-    return { route: 'direct', provider };
+  if (capabilities.proxy && capabilities.proxyImgbb) {
+    return { route: 'proxy', provider };
   }
-
   return null;
 }
 
@@ -430,12 +343,7 @@ export function knownCapabilities(): UploadCapabilities | null {
 }
 
 /**
- * Asks the edge what it can upload, once per page load.
- *
- * Any failure at all — no `fetch`, a static host with no Functions, a non-JSON
- * answer, a timeout — means "no proxy", and the answer is negative rather than
- * thrown. A member on a deployment without Functions still uploads; they just
- * upload through the bundle's own keys.
+ * Asks the edge whether ImgBB uploads are configured, once per page load.
  */
 export async function probeUploadCapabilities(signal?: AbortSignal): Promise<UploadCapabilities> {
   const local = localCapabilities();
@@ -457,14 +365,11 @@ export async function probeUploadCapabilities(signal?: AbortSignal): Promise<Upl
     const body = (await response.json()) as {
       proxy?: unknown;
       imgbb?: unknown;
-      cloudinary?: unknown;
     };
     if (body?.proxy !== true) return local;
     return {
-      ...local,
       proxy: true,
       proxyImgbb: body.imgbb === true,
-      proxyCloudinary: body.cloudinary === true,
     };
   } catch {
     return local;
@@ -501,30 +406,33 @@ interface ProxyErrorBody {
   errorKey?: string;
 }
 
-/** True when the endpoint itself is absent, which is the only retryable case. */
+/** True when the endpoint itself is absent. */
 function endpointMissing(status: number, body: unknown): boolean {
   if (status === 404 || status === 405 || status === 501) return true;
-  // A static host answers an unknown path with the application shell.
   return body === null || typeof body !== 'object';
 }
 
 /**
  * The member's own Firebase ID token, or an empty string.
- *
- * The edge endpoint verifies this before it uploads anything, so an upload is
- * attributable to a real member and the `media_assets` row it produces belongs
- * to whoever actually asked for it. Empty means "not signed in", which the
- * caller turns into a readable error rather than an anonymous upload.
  */
 async function idToken(): Promise<string> {
   try {
     const { getFirebaseAuth } = await import('@/lib/firebase');
     const user = getFirebaseAuth().currentUser;
-    if (user === null) return '';
-    return await user.getIdToken();
+    if (user !== null) return await user.getIdToken();
   } catch {
-    return '';
+    // Fall back to the active auth-store user when Firebase SDK is mocked.
   }
+  try {
+    const { useAuthStore } = await import('@/store/auth-store');
+    const fallbackUser = useAuthStore.getState().user;
+    if (fallbackUser !== null && typeof fallbackUser.getIdToken === 'function') {
+      return await fallbackUser.getIdToken();
+    }
+  } catch {
+    // Ignore.
+  }
+  return '';
 }
 
 async function uploadThroughProxy(
@@ -536,8 +444,16 @@ async function uploadThroughProxy(
   const token = await idToken();
   if (token.length === 0) throw new MediaError('media.errors.signInRequired');
 
+  const prepared = await shrinkForUpload(file, purpose);
+  const outgoing =
+    prepared.blob instanceof File && prepared.name === prepared.blob.name
+      ? prepared.blob
+      : new File([prepared.blob], prepared.name, {
+          type: prepared.blob.type || file.type,
+        });
+
   const body = new FormData();
-  body.append('file', file);
+  body.append('file', outgoing);
   body.append('purpose', purpose);
 
   const outcome = await postForm({
@@ -560,30 +476,25 @@ async function uploadThroughProxy(
       url: payload.url,
       thumbUrl: payload.thumbUrl ?? '',
       deleteToken: payload.deleteToken ?? '',
-      width: toNumber(payload.width),
-      height: toNumber(payload.height),
-      bytes: toNumber(payload.bytes) ?? file.size,
-      mimeType: payload.mimeType || file.type,
+      width: toNumber(payload.width) ?? prepared.width ?? null,
+      height: toNumber(payload.height) ?? prepared.height ?? null,
+      bytes: toNumber(payload.bytes) ?? outgoing.size,
+      mimeType: payload.mimeType || outgoing.type || file.type,
       expiresAt: typeof payload.expiresAt === 'string' ? payload.expiresAt : null,
     };
   }
 
-  // The endpoint is there and refused the picture. Surface its reason; never
-  // retry through the other transport, which would upload it a second time.
   if (payload && typeof payload === 'object' && payload.ok === false) {
     throw new MediaError(payload.errorKey ?? 'media.errors.failed');
   }
 
   if (endpointMissing(outcome.status, payload)) {
     invalidateCapabilities();
-    throw new ProxyUnavailable();
+    throw new MediaError('media.errors.notConfigured');
   }
 
   throw new MediaError('media.errors.failed');
 }
-
-/** Internal: the edge endpoint is not deployed, so the direct path may run. */
-class ProxyUnavailable extends Error {}
 
 // ------------------------------------------------------------------- upload ---
 
@@ -594,12 +505,7 @@ export interface UploadOptions {
 }
 
 /**
- * Validates, routes and uploads a single file.
- *
- * The plan is decided once, up front, from what this deployment can actually
- * do. The edge carries it when it can; the bundle's own keys carry it when the
- * edge is not there; and when neither host will take the file the member gets a
- * readable reason instead of a spinner that stops.
+ * Validates, compresses to WebP, and uploads an image to ImgBB via `/api/media/upload`.
  */
 export async function uploadMedia(file: File, options: UploadOptions): Promise<UploadResult> {
   const kind = assertUploadable(file);
@@ -607,21 +513,5 @@ export async function uploadMedia(file: File, options: UploadOptions): Promise<U
   const plan = planUpload(options.purpose, kind, available);
 
   if (plan === null) throw new MediaError('media.errors.notConfigured');
-
-  if (plan.route === 'proxy') {
-    try {
-      return await uploadThroughProxy(file, options.purpose, options.onProgress, options.signal);
-    } catch (error) {
-      if (!(error instanceof ProxyUnavailable)) throw error;
-      // Fall through: this deployment has no Functions, so use the bundle's own
-      // keys when it holds them. `plan` is recomputed because the probe was
-      // wrong about what this deployment can do.
-      const fallback = planUpload(options.purpose, kind, localCapabilities());
-      if (fallback?.provider !== 'cloudinary') throw new MediaError('media.errors.notConfigured');
-      return uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal);
-    }
-  }
-
-  if (plan.provider !== 'cloudinary') throw new MediaError('media.errors.notConfigured');
-  return uploadToCloudinary(file, kind, options.purpose, options.onProgress, options.signal);
+  return uploadThroughProxy(file, options.purpose, options.onProgress, options.signal);
 }

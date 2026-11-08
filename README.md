@@ -53,8 +53,7 @@ to the same three databases.
   - `bsdc-bd` powers the main site and Android app.
   - `bsdc-second` powers every corporate/staff app.
 - **Firestore** — small runtime config and cache collections only.
-- **Cloudinary** — important images, profile pictures, chat PDFs, voice notes.
-- **imgbb** — all other user-uploaded images. No video uploads anywhere.
+- **ImgBB** — all user-uploaded images across BSDC (avatars, covers, posts, comments, chat images, projects, marketplace products), compressed client-side to WebP and uploaded via `/api/media/upload`. No video, voice, or generic file uploads.
 - **OpenStreetMap / Leaflet** — all maps, plus a direct "Open in Google Maps" link.
 
 ### Serverless

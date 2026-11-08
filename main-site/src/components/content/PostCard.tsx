@@ -108,7 +108,7 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
         </div>
 
         {placement === 'body' ? (
-          <MediaGallery items={gallery} label={galleryLabel} className="mt-3" />
+          <MediaGallery items={gallery} priority={priority} label={galleryLabel} className="mt-3" />
         ) : null}
 
         {/* Tags below the text, as hashtags, which is how a developer scans for a

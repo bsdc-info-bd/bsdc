@@ -86,35 +86,22 @@ describe('the home feed written for a reader without JavaScript', () => {
     expect(query).toContain('cover_url');
   });
 
-  it('preloads the picture above the fold, at the width the card will draw it', () => {
-    const cloud = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/feed.png';
-    const html = renderHomeFeedPreload([post({ cover_url: cloud })]);
+  it('preloads the picture above the fold with high priority', () => {
+    const imgbb = 'https://i.ibb.co/abc/feed.webp';
+    const html = renderHomeFeedPreload([post({ cover_url: imgbb })]);
     expect(html).toContain('rel="preload"');
     expect(html).toContain('as="image"');
     expect(html).toContain('fetchpriority="high"');
-    // A preload without a descriptor list asks for the wrong width and the card
-    // then asks again for the right one, which is two downloads for one picture.
-    expect(html).toContain('imagesrcset=');
-    expect(html).toContain(' 384w');
-    expect(html).toContain(' 1280w');
-    expect(html).toContain('imagesizes=');
-    expect(html).toContain('/image/upload/c_fill,g_auto,w_960,f_auto,q_auto/');
+    expect(html).toContain(`href="${imgbb}"`);
   });
 
   it('takes the first card that has a picture, not the first card', () => {
-    const cloud = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/second.png';
+    const imgbb = 'https://i.ibb.co/abc/second.webp';
     const html = renderHomeFeedPreload([
       post({ slug: 'no-art' }),
-      post({ slug: 'art', cover_url: cloud }),
+      post({ slug: 'art', cover_url: imgbb }),
     ]);
-    expect(html).toContain('second.png');
-  });
-
-  it('preloads a host it cannot resize without inventing a descriptor list', () => {
-    const imgbb = 'https://i.ibb.co/abc/feed.jpg';
-    const html = renderHomeFeedPreload([post({ cover_url: imgbb })]);
-    expect(html).toContain(`href="${imgbb}"`);
-    expect(html).not.toContain('imagesrcset');
+    expect(html).toContain('second.webp');
   });
 
   it('emits nothing when there is nothing worth preloading', () => {

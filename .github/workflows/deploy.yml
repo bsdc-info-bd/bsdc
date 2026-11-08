@@ -96,18 +96,13 @@ jobs:
           # Everything the browser needs must be compiled in here: the site is
           # built in this job and uploaded as static files, so a value that is
           # only set inside Cloudflare (or only in a developer's .env) never
-          # reaches the bundle. The upload keys were the omission that made
-          # production answer "Uploads are not configured for this deployment"
-          # for every avatar, cover and post image, and they are required
-          # rather than optional so the build stops instead of shipping a site
-          # whose media pipeline cannot work. The ImgBB key is deliberately not
-          # here: it is a secret, and anything compiled into the bundle is
-          # public. It lives in Cloudflare Pages as IMGBB_API_KEY and is read by
-          # the upload function at request time.
+          # reaches the bundle. All images are hosted exclusively on ImgBB; the
+          # ImgBB key is a secret and never ships in the bundle — it lives in
+          # Cloudflare Pages as IMGBB_API_KEY and is read by /api/media/upload
+          # at request time.
           BSDC_REQUIRED_ENV: >-
             VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
-            VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL,
-            VITE_CLOUDINARY_CLOUD_NAME,VITE_CLOUDINARY_UNSIGNED_PRESET
+            VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           VITE_FB_API_KEY: ${{ secrets.VITE_FB_API_KEY }}
@@ -117,11 +112,10 @@ jobs:
           VITE_FB_MSG_SENDER_ID: ${{ secrets.VITE_FB_MSG_SENDER_ID }}
           VITE_FB_APP_ID: ${{ secrets.VITE_FB_APP_ID }}
           VITE_FB_DATABASE_URL: ${{ secrets.VITE_FB_DATABASE_URL }}
-          VITE_CLOUDINARY_CLOUD_NAME: ${{ secrets.VITE_CLOUDINARY_CLOUD_NAME }}
-          VITE_CLOUDINARY_UNSIGNED_PRESET: ${{ secrets.VITE_CLOUDINARY_UNSIGNED_PRESET }}
           # Push and OneSignal are optional features: a missing value disables
           # them in the client, which is honest, so they are passed but not
           # required.
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
           VITE_FIREBASE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_FIREBASE_VAPID_PUBLIC_KEY }}
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_SITE_URL: https://www.bsdc.info.bd
@@ -198,6 +192,9 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
           VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
         run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
 
       - name: Configure production profile authentication
@@ -255,6 +252,16 @@ jobs:
                   process.exit(1);
                 }
               });'
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 20 \
+            "$DEPLOYMENT_URL/api/media/providers" | node -e '
+              let data = "";
+              process.stdin.on("data", chunk => data += chunk);
+              process.stdin.on("end", () => {
+                const status = JSON.parse(data);
+                if (status.imgbb !== true) {
+                  console.warn("::warning title=ImgBB key missing in Pages::Set IMGBB_API_KEY in GitHub Secrets or Cloudflare Pages project bsdc so image uploads succeed.");
+                }
+              });'
 
       - name: Record where it went
         if: steps.scope.outputs.run == 'true'
@@ -289,11 +296,15 @@ jobs:
     name: Push worker → bsdc-push
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment:
+      name: production
     defaults:
       run:
         working-directory: push-worker
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -302,7 +313,13 @@ jobs:
         id: changed
         shell: bash
         run: |
-          if git diff --quiet "HEAD~1" -- push-worker 2>/dev/null; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -z "${{ inputs.app }}" ] || [ "${{ inputs.app }}" = "push-worker" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The push worker did not change in this push."
           else
@@ -326,14 +343,45 @@ jobs:
 
       - name: Deploy
         if: steps.changed.outputs.run == 'true'
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: '3.114.17'
-          workingDirectory: push-worker
-          command: deploy
+        shell: bash
+        env:
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          TOKEN="${CLOUDFLARE_WORKERS_API_TOKEN:-$CLOUDFLARE_API_TOKEN}"
+          if [ -z "$TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "::warning title=Push worker skipped::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not configured; main-site /api/push/flush remains active."
+            echo "- push-worker → skipped (Cloudflare credentials not set)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
 
-      - name: Record where it went
-        if: steps.changed.outputs.run == 'true'
-        run: echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+          HTTP_CODE=$(curl -sS -o /tmp/cf-workers-check.json -w "%{http_code}" \
+            -H "Authorization: Bearer $TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" || echo "000")
+
+          if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "::warning title=Push worker skipped (Workers permission missing)::The configured Cloudflare API token only has Cloudflare Pages access (HTTP $HTTP_CODE on Workers API). Add 'Account -> Workers Scripts -> Edit' to CLOUDFLARE_API_TOKEN (or set CLOUDFLARE_WORKERS_API_TOKEN) to deploy bsdc-push; main-site /api/push/flush continues handling push wake-ups."
+            {
+              echo "### push-worker → bsdc-push (skipped)"
+              echo
+              echo "- Cloudflare API token lacks \`Account -> Workers Scripts -> Edit\` (HTTP $HTTP_CODE)."
+              echo "- \`main-site\` \`/api/push/flush\` remains active; grant Workers Scripts Edit to enable cron encryption worker."
+            } >> "$GITHUB_STEP_SUMMARY"
+            rm -f /tmp/cf-workers-check.json
+            exit 0
+          fi
+          rm -f /tmp/cf-workers-check.json
+
+          set +e
+          CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler deploy > /tmp/wrangler-deploy.log 2>&1
+          STATUS=$?
+          set -e
+          cat /tmp/wrangler-deploy.log
+          if [ "$STATUS" -ne 0 ]; then
+            SUMMARY=$(tail -n 12 /tmp/wrangler-deploy.log | tr '\n' ' ' | sed 's/%/%25/g; s/\r//g')
+            echo "::error title=Push worker deploy failed::$SUMMARY"
+            exit "$STATUS"
+          fi
+          echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"

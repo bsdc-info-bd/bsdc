@@ -19,12 +19,8 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 vi.mock('@/lib/env', () => ({
-  env: {
-    cloudinary: { cloudName: 'bsdctest', unsignedPreset: 'unsigned-test' },
-  },
-  // The gallery needs a database to record an upload in; the routing of the
-  // bytes is tested in lib/storage, not here.
-  isConfigured: { cloudinary: true, supabase: true },
+  env: {},
+  isConfigured: { supabase: true },
 }));
 
 // jsdom has no object URLs. The queue previews a chosen file from its local
@@ -93,7 +89,7 @@ describe('the project publishing wizard', () => {
     expect(screen.getByLabelText('create.fields.tech')).toBeInTheDocument();
   });
 
-  it('offers a real image file input for the Cloudinary cover step', () => {
+  it('offers a real image file input for the project cover step', () => {
     const onCoverFileChange = vi.fn();
     const { container } = renderStep(2, onCoverFileChange);
     const input = screen.getByLabelText('create.cover.choose');
