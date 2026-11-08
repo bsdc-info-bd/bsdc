@@ -9,7 +9,6 @@ import {
   MAX_RECOVERY_ATTEMPTS,
   planRecovery,
   proxyUrlFor,
-  stripDeliveryTransforms,
   withBust,
 } from './resilience';
 import {
@@ -19,17 +18,11 @@ import {
   MEDIA_MAX_AGE_SECONDS,
 } from './hosts';
 
-/**
- * The reported failure was "images load for a few minutes, then none of them do
- * until the cache is cleared". Every check below is one of the ways that used to
- * happen, expressed as an assertion so it cannot come back.
- */
-
 describe('the picture hosts the platform trusts', () => {
-  it('accepts exactly the hosts the platform uploads to', () => {
-    expect(isAllowedMediaHost('res.cloudinary.com')).toBe(true);
+  it('accepts exactly the ImgBB hosts the platform uploads to', () => {
     expect(isAllowedMediaHost('i.ibb.co')).toBe(true);
     expect(isAllowedMediaHost('ibb.co')).toBe(true);
+    expect(isAllowedMediaHost('i.ibb.co.com')).toBe(true);
   });
 
   it('accepts the OAuth avatar and map hosts by suffix, and nothing wider', () => {
@@ -42,18 +35,19 @@ describe('the picture hosts the platform trusts', () => {
 
   it('refuses empty, relative and lookalike hosts', () => {
     expect(isAllowedMediaHost('')).toBe(false);
-    expect(isAllowedMediaHost('evil-res.cloudinary.com')).toBe(false);
-    expect(isAllowedMediaHost('res.cloudinary.com.evil.test')).toBe(false);
+    expect(isAllowedMediaHost('evil-i.ibb.co')).toBe(false);
+    expect(isAllowedMediaHost('i.ibb.co.evil.test')).toBe(false);
   });
 
-  it('only repairs the hosts the platform holds credentials for', () => {
-    expect(isRepairableMediaHost('res.cloudinary.com')).toBe(true);
+  it('only repairs the ImgBB hosts the platform serves from', () => {
     expect(isRepairableMediaHost('i.ibb.co')).toBe(true);
+    expect(isRepairableMediaHost('ibb.co')).toBe(true);
+    expect(isRepairableMediaHost('i.ibb.co.com')).toBe(true);
     expect(isRepairableMediaHost('lh3.googleusercontent.com')).toBe(false);
   });
 
   it('recognises a document that is not a picture at all', () => {
-    expect(looksLikeDocument('https://res.cloudinary.com/x/raw/upload/report.pdf')).toBe(true);
+    expect(looksLikeDocument('https://i.ibb.co/x/report.pdf')).toBe(true);
     expect(looksLikeDocument('https://i.ibb.co/a/b.jpg')).toBe(false);
     expect(looksLikeDocument('https://i.ibb.co/a/b.jpg?x=1.pdf')).toBe(false);
   });
@@ -76,7 +70,7 @@ describe('naming what actually failed', () => {
   });
 
   it('knows an expired signature from a refusal', () => {
-    const signed = 'https://res.cloudinary.com/bsdc/image/upload/s--abc12345--/v1/a.jpg';
+    const signed = 'https://i.ibb.co/abc/photo.jpg?signature=abc12345';
     expect(isSignedUrl(signed)).toBe(true);
     expect(classifyImageFailure(403, signed)).toBe('expired');
     expect(classifyImageFailure(403, url)).toBe('forbidden');
@@ -165,7 +159,6 @@ describe('the recovery ladder', () => {
       const bare = recoveryRungs({ failure, hasFallback: false, canProxy: false });
       expect(full.at(-1)).toBe('give-up');
       expect(bare.at(-1)).toBe('give-up');
-      // A rung the call cannot perform is removed, not skipped over at runtime.
       expect(bare).not.toContain('fallback');
       expect(bare).not.toContain('proxy');
       expect(new Set(full).size).toBe(full.length);
@@ -189,8 +182,6 @@ describe('the recovery ladder', () => {
       if (state.settled) break;
     }
     expect(state.settled).toBe(true);
-    // Two addresses are visited twice at most — the original is retried, which
-    // is the point of a retry — but the ladder ends and stops.
     expect(seen.filter((url) => url === start).length).toBeLessThanOrEqual(2);
   });
 
@@ -230,28 +221,6 @@ describe('the URLs the ladder produces', () => {
     const url = new URL(proxyUrlFor(source), 'https://www.bsdc.info.bd');
     expect(url.pathname).toBe('/media/i');
     expect(url.searchParams.get('u')).toBe(source);
-  });
-
-  it('strips a Cloudinary transform but leaves a version segment alone', () => {
-    expect(
-      stripDeliveryTransforms('https://res.cloudinary.com/bsdc/image/upload/c_fill,w_256/a.jpg'),
-    ).toBe('https://res.cloudinary.com/bsdc/image/upload/a.jpg');
-    expect(
-      stripDeliveryTransforms('https://res.cloudinary.com/bsdc/image/upload/v1712/a.jpg'),
-    ).toBeNull();
-    expect(stripDeliveryTransforms('https://i.ibb.co/a/b.jpg')).toBeNull();
-  });
-
-  it('walks the transform before it gives up on a 404 thumbnail', () => {
-    const url = 'https://res.cloudinary.com/bsdc/image/upload/c_fill,w_256/post/a.jpg';
-    const state = initialRecoveryState(url);
-    const { plan } = advanceRecovery(state, {
-      failure: 'missing',
-      online: true,
-      fallbackUrl: stripDeliveryTransforms(url) ?? '',
-      canProxy: true,
-    });
-    expect(plan.step).toBe('fallback');
   });
 });
 

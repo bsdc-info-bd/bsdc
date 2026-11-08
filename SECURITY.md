@@ -12,14 +12,12 @@
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable (anon) key — RLS enforced |
 | `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key |
 | `VITE_ONESIGNAL_APP_ID` | OneSignal app id (manual admin broadcasts only) |
-| `VITE_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name |
-| `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary unsigned upload preset |
-| `IMGBB_API_KEY` | imgbb upload key. **Server secret only** (Pages Functions); never a `VITE_` build variable. |
+| `IMGBB_API_KEY` | ImgBB upload key for all BSDC images. **Server secret only** (Pages Functions); never a `VITE_` build variable. |
 
 ### Server-only (Cloudflare Pages encrypted environment variables ONLY)
 
 `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_DB_PASSWORD`, `SUPABASE_DB_HOST`,
-`SUPABASE_DB_USER`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`,
+`SUPABASE_DB_USER`, `IMGBB_API_KEY`,
 `ONESIGNAL_REST_API_KEY`, `FCM_SERVICE_ACCOUNT_JSON`, `CRON_SECRET`,
 `MASTER_PASSKEY`, `ADS_DASHBOARD_PASSKEY`, `BKASH_NUMBER`,
 `VENDOR_ORDER_EMAIL_ENDPOINT`, `ANDROID_KEYSTORE*`.
@@ -41,7 +39,7 @@ Credentials shared during authoring must be rotated before the commercial
 launch, then updated in Cloudflare Pages:
 
 - [ ] Rotate Supabase database password and service-role key
-- [ ] Rotate Cloudinary API key + secret, re-create the unsigned preset
+- [ ] Rotate `IMGBB_API_KEY` if ever exposed outside Cloudflare Pages encrypted secrets
 - [ ] Rotate the OneSignal REST API key
 - [ ] Re-issue the FCM service account JSON, delete the old key
 - [ ] Rotate `MASTER_PASSKEY` and `ADS_DASHBOARD_PASSKEY`

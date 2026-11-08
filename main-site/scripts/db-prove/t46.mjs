@@ -39,7 +39,7 @@ function check(condition, label, detail = '') {
   }
 }
 
-const db = await makeDb({ maxExclusive: '0074' });
+const db = await makeDb();
 
 await db.exec(`
   insert into bsdc.push_settings (name, value) values ('flush_secret', '${secret}')
@@ -122,9 +122,15 @@ check(plaintext.error !== null, 'a picture has to be https, so a downgrade canno
 
 const wrongHost = await asMember(
   ada,
-  `select public.record_media_asset('cloudinary', 'image', 'https://evil.test/a.jpg')`,
+  `select public.record_media_asset('imgbb', 'image', 'https://evil.test/a.jpg')`,
 );
-check(wrongHost.error === null, 'the function does not try to validate a host it does not own');
+check(wrongHost.error !== null, 'a non-ImgBB host URL cannot be recorded as an ImgBB asset');
+
+const retiredProvider = await asMember(
+  ada,
+  `select public.record_media_asset('external', 'image', 'https://i.ibb.co/abc123/ext.jpg')`,
+);
+check(retiredProvider.error !== null, 'only imgbb is accepted as a media provider');
 
 const signedOut = await asRole(
   'anon',

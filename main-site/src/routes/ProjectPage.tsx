@@ -31,7 +31,6 @@ import {
 } from '@/design-system';
 import { useProject, useProjectOwnerActions } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { cloudinaryWide } from '@/lib/storage/upload';
 import { profilePath, projectEditPath, projectPath, ROUTES, SITE } from '@/lib/site';
 import { isConfigured } from '@/lib/env';
 import { useAuthStore, selectIsSignedIn } from '@/store/auth-store';
@@ -141,9 +140,9 @@ export default function ProjectPage() {
             <div className="relative aspect-[16/7] w-full bg-gradient-to-br from-green-950 to-green-700">
               {project.coverUrl.length > 0 ? (
                 <MediaImage
-                  src={cloudinaryWide(project.coverUrl, 1440)}
-                  fallbackSrc={project.coverUrl}
+                  src={project.coverUrl}
                   alt={project.name}
+                  slotWidth={960}
                   loading="eager"
                   decoding="async"
                   className="h-full w-full object-cover"

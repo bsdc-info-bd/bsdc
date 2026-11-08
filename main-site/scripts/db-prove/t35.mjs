@@ -25,7 +25,7 @@ await db.exec(`
     '${slug}', 'Padma Monitor', 'River levels, measured openly.',
     'An open source river-level monitor built for the Padma and the people who live beside it.',
     'https://github.com/bsdc-info-bd/padma-monitor', '',
-    'https://res.cloudinary.com/bsdc/image/upload/padma-cover.jpg',
+    'https://i.ibb.co/projects/padma-cover.webp',
     array['rust', 'postgres'], 'Apache-2.0', true, '${owner}'
   );
 `);
@@ -39,7 +39,7 @@ const seo = await asAnon(
 if (
   seo?.rows[0]?.title === 'Padma Monitor — BSDC Projects' &&
   seo.rows[0]?.description === 'River levels, measured openly.' &&
-  seo.rows[0]?.image_url === 'https://res.cloudinary.com/bsdc/image/upload/padma-cover.jpg' &&
+  seo.rows[0]?.image_url === 'https://i.ibb.co/projects/padma-cover.webp' &&
   seo.rows[0]?.canonical === path &&
   seo.rows[0]?.robots === 'index' &&
   seo.rows[0]?.source === 'project'

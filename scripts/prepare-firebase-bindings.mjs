@@ -48,6 +48,38 @@ export function corporateBindingsFromCredential(raw, expectedProject) {
   };
 }
 
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
+  }
+  return '';
+}
+
+/**
+ * Optional runtime-only Pages Function bindings synced when present in CI.
+ * Empty values are omitted so existing Cloudflare Pages secrets are never overwritten.
+ */
+export function runtimeServiceBindings(source = process.env) {
+  const extra = {};
+  const imgbbKey = firstNonEmpty(source.IMGBB_API_KEY);
+  if (imgbbKey !== '') extra.IMGBB_API_KEY = imgbbKey;
+
+  const supabaseUrl = firstNonEmpty(source.SUPABASE_URL, source.VITE_SUPABASE_URL);
+  if (supabaseUrl !== '') extra.SUPABASE_URL = supabaseUrl;
+
+  const supabaseAnonKey = firstNonEmpty(
+    source.SUPABASE_ANON_KEY,
+    source.SUPABASE_PUBLISHABLE_KEY,
+    source.VITE_SUPABASE_PUBLISHABLE_KEY,
+  );
+  if (supabaseAnonKey !== '') extra.SUPABASE_ANON_KEY = supabaseAnonKey;
+
+  const flushSecret = firstNonEmpty(source.PUSH_FLUSH_SECRET);
+  if (flushSecret.length >= 32) extra.PUSH_FLUSH_SECRET = flushSecret;
+
+  return extra;
+}
+
 if (process.argv.includes('--self-test')) {
   const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
   const fixture = {
@@ -75,7 +107,21 @@ if (process.argv.includes('--self-test')) {
   assert.throws(() => corporateBindingsFromCredential(corporateValid, 'bsdc-bd'));
   assert.throws(() => corporateBindingsFromCredential(JSON.stringify({ ...corporate, client_email: 'wrong@example.com' }), 'bsdc-second'));
   assert.throws(() => corporateBindingsFromCredential(JSON.stringify({ ...corporate, private_key: 'not-a-key' }), 'bsdc-second'));
-  console.log('15 Firebase binding checks passed. No credentials printed.');
+  assert.deepEqual(runtimeServiceBindings({}), {});
+  assert.deepEqual(
+    runtimeServiceBindings({
+      IMGBB_API_KEY: 'imgbb-secret',
+      VITE_SUPABASE_URL: 'https://example.supabase.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'pub-key',
+      PUSH_FLUSH_SECRET: 'short',
+    }),
+    {
+      IMGBB_API_KEY: 'imgbb-secret',
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'pub-key',
+    },
+  );
+  console.log('17 Firebase and runtime binding checks passed. No credentials printed.');
 } else {
   try {
     const output = process.argv[2];
@@ -92,6 +138,7 @@ if (process.argv.includes('--self-test')) {
       // other bindings; the post-deploy readiness check verifies their presence.
       console.log('Corporate credential not supplied; checking existing Pages bindings after deployment.');
     }
+    Object.assign(bindings, runtimeServiceBindings(process.env));
     writeFileSync(output, JSON.stringify(bindings), { mode: 0o600, flag: 'wx' });
     console.log('Validated server-only Firebase bindings written to temporary storage.');
   } catch (error) {

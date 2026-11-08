@@ -109,11 +109,12 @@ working, wired-up features — never scaffolding for its own sake.
 - Realtime: `trackPresence()` with `onDisconnect`, visibility-aware away
   state, and `usePresence()` for watching another member — live on the
   profile page avatar.
-- Media pipeline: validation by MIME type and size, ImgBB for ordinary post,
-  comment, chat and other non-cover images (base64 request body), Cloudinary for
-  avatars, profile/project covers, product images, documents and voice notes,
-  XHR progress, Cloudinary transforms and a `media_assets` metadata row for
-  every upload. Supabase Storage is not used for new bytes.
+- Media pipeline: validation by MIME type and size, client-side WebP scaling,
+  ImgBB via `/api/media/upload` for every image across BSDC (avatars, covers,
+  posts, comments, chat images, projects, marketplace products), XHR progress,
+  responsive `srcset` using ImgBB's `medium` and full variants, and a
+  `media_assets` metadata row for every upload. Supabase Storage is not used for
+  new bytes.
 - Plugin registry: `feature_flags` with audience resolution, built-in
   defaults when the database is unreachable, and the `useFeatureFlag` hook.
 - Social graph repository (follow, unfollow, block, unblock) ready for

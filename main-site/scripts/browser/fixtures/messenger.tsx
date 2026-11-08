@@ -10,7 +10,14 @@ import { DEFAULT_CLAIMS, useAuthStore } from '../../../src/store/auth-store';
 import '../../../src/i18n';
 import '../../../src/styles/index.css';
 
-useAuthStore.getState().setSession({ uid: 'browser-alice', emailVerified: true } as User, DEFAULT_CLAIMS);
+useAuthStore.getState().setSession(
+  {
+    uid: 'browser-alice',
+    emailVerified: true,
+    getIdToken: () => Promise.resolve('browser-test-token'),
+  } as unknown as User,
+  DEFAULT_CLAIMS,
+);
 const router = createMemoryRouter([
   { element: <AppShell />, children: [
     { path: '/messages', element: <MessagesPage /> },

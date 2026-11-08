@@ -129,6 +129,8 @@ export function MediaGallery({
               <MediaImage
                 src={item.thumbUrl.length > 0 ? item.thumbUrl : item.url}
                 fallbackSrc={item.url}
+                variantSrc={item.thumbUrl}
+                fullWidth={item.width}
                 alt={item.altText}
                 width={item.width ?? undefined}
                 height={item.height ?? undefined}

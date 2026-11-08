@@ -130,32 +130,11 @@ export function renderHomeFeedPreload(posts: readonly HomeFeedPost[]): string {
   if (raw === '') return '';
   if (!/^https:\/\/[^\s"'<>]+$/.test(raw)) return '';
 
-  // Same ladder the cards use, so the preloaded candidate is one the card would
-  // actually have chosen.
-  const widths = [384, 640, 960, 1280];
-  const isCloudinary = raw.includes('res.cloudinary.com/');
-  const candidates = widths
-    .map((width) =>
-      isCloudinary
-        ? `${raw.replace('/image/upload/', `/image/upload/c_fill,g_auto,w_${width},f_auto,q_auto/`)} ${width}w`
-        : '',
-    )
-    .filter((candidate) => candidate !== '');
-
-  const href = isCloudinary
-    ? raw.replace('/image/upload/', '/image/upload/c_fill,g_auto,w_960,f_auto,q_auto/')
-    : raw;
   const attributes = [
     'rel="preload"',
     'as="image"',
-    `href="${escapeHtml(href)}"`,
+    `href="${escapeHtml(raw)}"`,
     'fetchpriority="high"',
-    ...(candidates.length > 0
-      ? [
-          `imagesrcset="${escapeHtml(candidates.join(', '))}"`,
-          'imagesizes="(min-width: 1024px) 640px, 100vw"',
-        ]
-      : []),
   ];
   return `<link ${attributes.join(' ')}>`;
 }

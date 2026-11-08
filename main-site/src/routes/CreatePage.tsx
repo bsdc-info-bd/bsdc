@@ -478,8 +478,7 @@ function EventForm({ value, onChange, errorFor, cover }: EventFormProps) {
         phone that means finding an image, hosting it somewhere else, copying
         the address and pasting it back — and the address could point at
         anything, including a host that later deletes it. The cover now travels
-        the same road a project's does, and the purpose is what puts it on
-        Cloudinary rather than a decision made here.
+        the same WebP-compressed ImgBB upload pipeline as project covers.
       */}
       <div className="sm:col-span-2">
         <CoverPicker

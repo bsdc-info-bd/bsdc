@@ -12,9 +12,9 @@ export interface AvatarUploaderProps {
 }
 
 /**
- * Avatar upload. Images for avatars always go to Cloudinary so the square,
- * face-aware transform is available, and the asset is recorded in Postgres
- * for moderation and quota accounting.
+ * Avatar upload. Raster images are scaled to 512px WebP client-side, uploaded
+ * to ImgBB via `/api/media/upload`, and recorded in Postgres for moderation
+ * and quota accounting.
  */
 export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderProps) {
   const { t } = useTranslation();

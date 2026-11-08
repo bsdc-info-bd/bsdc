@@ -43,16 +43,14 @@ describe('the arrangement a card shows', () => {
     });
   });
 
-  it('renders a stored Cloudinary image from its original when no thumbnail was saved', () => {
-    const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/post/legacy.png';
+  it('renders a stored image directly from its full URL when no separate medium variant was saved', () => {
+    const url = 'https://i.ibb.co/full/legacy.webp';
     render(
       <MediaGallery items={[{ ...item(0, 1200, 800), url, thumbUrl: '' }]} label="Pictures" />,
     );
-    // The picture is still the one that was saved; it is now asked for at the
-    // width the card draws rather than at the width it was uploaded at.
-    const drawn = screen.getByRole('img').getAttribute('src') ?? '';
-    expect(drawn).toContain('/v1/post/legacy.png');
-    expect(drawn).toMatch(/w_\d+/);
+    const drawn = screen.getByRole('img');
+    expect(drawn).toHaveAttribute('src', url);
+    expect(drawn).not.toHaveAttribute('srcset');
   });
 
   it('bleeds to the edges of the card when the picture is its header', () => {

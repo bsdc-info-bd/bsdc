@@ -337,9 +337,7 @@ secrets**. The workflows read them as `${{ secrets.NAME }}`.
 | `VITE_FB_APP_ID`                | Firebase web app id.                                                                                                  | Same panel.                                                                                                                                                               | `1:123456789012:web:0123456789abcdef012345`                                                                                                                                                                                                                                                                                  | same                                    |
 | `VITE_FB_DATABASE_URL`          | Realtime Database URL for `bsdc-bd`.                                                                                  | Firebase console → Realtime Database → the URL above the data tree.                                                                                                       | `https://bsdc-bd-default-rtdb.asia-southeast1.firebasedatabase.app` — region subdomain included, no trailing slash.                                                                                                                                                                                                          | same                                    |
 | `VITE_FB2_API_KEY` …            | The same five values for the **second** Firebase project, `bsdc-second`, which backs the thirteen corporate consoles. | Firebase console, `bsdc-second` project, same panels.                                                                                                                     | Same formats, `bsdc-second` everywhere `bsdc-bd` appears.                                                                                                                                                                                                                                                                    | `deploy.yml` (consoles)                 |
-| `VITE_CLOUDINARY_CLOUD_NAME`    | Cloudinary cloud for avatars, profile/project covers, product images, documents and voice notes. Supabase Storage is not on the upload path. | Cloudinary dashboard → Dashboard → **Cloud name**.                                                                                                                        | Lowercase cloud name, e.g. `bsdc`.                                                                                                                                                                                                                                                                                           | `deploy.yml` (main-site)                |
-| `VITE_CLOUDINARY_UNSIGNED_PRESET` | Cloudinary **unsigned** upload preset the browser uses.                                                            | Cloudinary dashboard → Settings → Upload → Upload presets → Add preset → Signing mode **Unsigned**.                                                                       | The preset's name, e.g. `bsdc_unsigned`. It is public by design; the preset itself must cap size and formats.                                                                                                                                                                                                                 | `deploy.yml` (main-site)                |
-| `IMGBB_API_KEY` (Pages server secret, **not** a build variable) | ImgBB key for ordinary member images (posts, comments, chat). It is a **secret**: it is read by the upload Function at request time and is never compiled into the site. | api.imgbb.com → **Get API key**. Set it under Cloudflare Pages → Settings → Environment variables, encrypted. | 32-character alphanumeric key. Rotate it if it was ever set as `VITE_IMGBB_API_KEY`. |
+| `IMGBB_API_KEY` (Pages server secret, **not** a build variable) | ImgBB key for all BSDC image uploads (avatars, covers, posts, comments, chat images, projects, marketplace products). Read by `/api/media/upload` at request time and never compiled into the client bundle. | api.imgbb.com → **Get API key**. Set as GitHub secret `IMGBB_API_KEY` (synced to Pages by `deploy.yml`) or directly under Cloudflare Pages → Settings → Environment variables, encrypted. | 32-character alphanumeric key. Rotate it if it was ever set as `VITE_IMGBB_API_KEY`. | `deploy.yml` (main-site Pages secret) |
 | `VITE_FIREBASE_VAPID_PUBLIC_KEY` | FCM web push public VAPID key. Optional: without it the browser never offers push.                                    | Firebase console → Project settings → Cloud Messaging → Web configuration → Web Push certificates.                                                                       | The key pair's public key, one line.                                                                                                                                                                                                                                                                                         | `deploy.yml` (main-site)                |
 | `VITE_ONESIGNAL_APP_ID`         | OneSignal app id, used only for manual admin broadcasts. Optional.                                                     | OneSignal dashboard → Settings → Keys & IDs.                                                                                                                              | UUID.                                                                                                                                                                                                                                                                                                                        | `deploy.yml` (main-site)                |
 | `ANDROID_GOOGLE_SERVICES_JSON`  | Firebase Android config. Required for push notifications and for any release build.                                   | Firebase console → Project settings → Your apps → Android app → download `google-services.json`.                                                                          | Either the file's text verbatim, or `base64 -w0 google-services.json`. The workflow accepts both.                                                                                                                                                                                                                            | `android.yml`                           |
@@ -372,9 +370,7 @@ again, which is the point.
 | `SUPABASE_ANON_KEY`        | the same functions                                 | Anonymous key for those server-side calls. Still subject to row level security.              | `sb_publishable_…` or a JWT.                                                                                                                                                                                            | yes        |
 | `SITE_URL`                 | sitemaps, RSS, canonical URLs                      | Absolute origin the generated XML should advertise.                                          | `https://www.bsdc.info.bd` — no trailing slash. Wrong value here silently produces a sitemap full of wrong links.                                                                                                       | no         |
 | `FB_PROJECT_ID`            | `functions/api/auth/claims.ts`, `functions/_member-token.ts` | Firebase project whose tokens are accepted, whose claims are minted, and whose members may upload. | `bsdc-bd`                                                                                                                                                                                                               | no         |
-| `IMGBB_API_KEY`            | `functions/api/media/upload.ts`                    | ImgBB key for ordinary member images: posts, comments, chat. Read at request time, so setting it needs no rebuild. **Preferred over the `VITE_` copy**, which publishes the same secret into the bundle. | 32-character alphanumeric key, from api.imgbb.com → **Get API key**.                                                                                                                                                    | yes        |
-| `CLOUDINARY_CLOUD_NAME`    | `functions/api/media/upload.ts`                    | Cloudinary cloud for avatars, profile and project covers, project screenshots, product images, PDFs and voice notes. | Lowercase cloud name, e.g. `bsdc`. Required together with the preset below.                                                                                                                                             | no         |
-| `CLOUDINARY_UNSIGNED_PRESET` | `functions/api/media/upload.ts`                  | The **unsigned** upload preset that accepts them.                                            | The preset's name, e.g. `bsdc_unsigned`. Public by design; the preset itself must cap size and formats.                                                                                                                 | no         |
+| `IMGBB_API_KEY`            | `functions/api/media/upload.ts`                    | ImgBB API key for all BSDC image uploads. Read at request time, so setting it needs no rebuild. Never compile into a `VITE_` bundle variable. | 32-character alphanumeric key, from api.imgbb.com → **Get API key**.                                                                                                                                                    | yes        |
 | `FB_CLIENT_EMAIL`          | the claims function                                | Service-account address used to call Identity Toolkit.                                       | `firebase-adminsdk-xxxxx@bsdc-bd.iam.gserviceaccount.com`, from the service-account JSON you generate in Firebase console → Project settings → Service accounts → Generate new private key.                             | no         |
 | `FB_PRIVATE_KEY`           | the claims function                                | RSA private key of that service account. Mints custom claims; treat it like a root password. | The `private_key` field of that JSON, including `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----`. Literal `\n` escapes are accepted and unescaped by the function, so pasting the JSON string as-is works. | yes        |
 | `BSDC_OWNER_UIDS`          | the claims function                                | Allowlist of uids permitted to change anybody's role.                                        | Comma-separated Firebase uids, no spaces: `abc123…,def456…`                                                                                                                                                             | no         |
@@ -569,15 +565,12 @@ all of its work."
 
 #### Image uploads no longer use Supabase Storage
 
-The uploader now uses Supabase only for each upload's metadata row
-in `public.media_assets`; image and document bytes go to their intended external
-hosts. Post, comment, chat and other ordinary images go to ImgBB as base64 in the
-`image` form field. Avatars, profile/project covers and product images go to
-Cloudinary; documents and voice notes also go there. Routing is strict: if the
-required host is not configured, upload fails visibly instead of silently
-sending a cover to ImgBB or an ordinary post image to Cloudinary. Video uploads
-are intentionally rejected; previously stored video messages can still be read.
-Required build-time settings remain in §5.1.
+The uploader uses Supabase only for each upload's metadata row in
+`public.media_assets`; all image bytes across BSDC (avatars, profile/project
+covers, posts, comments, chat images, project screenshots, marketplace products)
+are scaled and encoded to WebP in the browser and sent exclusively to ImgBB via
+`POST /api/media/upload`. Video, voice recording, and generic file uploads are
+not enabled.
 
 The storage notes and dashboard steps below are for older media rows whose
 `provider` is `supabase`. The new uploader never writes bytes there. If an old
@@ -780,43 +773,28 @@ itself — redeploy.
 
 ### Uploads answer "Uploads are not configured for this deployment"
 
-There are two transports, and which one is in use decides what to check. The
-site asks its own edge endpoint first — `GET /api/media/providers` — and only
-falls back to keys compiled into the bundle when that endpoint is absent or
-says it holds no key.
+All image uploads go through `POST /api/media/upload` after checking
+`GET /api/media/providers`.
 
-**Set the server-side variables. This is the fix that does not need a rebuild.**
-`IMGBB_API_KEY`, `CLOUDINARY_CLOUD_NAME` and `CLOUDINARY_UNSIGNED_PRESET` in
-Cloudflare Pages → Settings → Environment variables are read at *request* time
-by `functions/api/media/upload.ts`. Set them, and the next upload works — no
-redeploy, no hard reload, because nothing was compiled in. Cloudinary's pair
-must both be set: an unsigned upload without its preset is rejected by the API,
-so a half-configured host reports "not configured" rather than failing
-obscurely. `FB_PROJECT_ID` must also be set, or the endpoint cannot verify who
-is uploading and answers 401.
+**Set `IMGBB_API_KEY` on Cloudflare Pages (or as a GitHub Actions secret synced by `deploy.yml`).**
+`IMGBB_API_KEY` in Cloudflare Pages → Settings → Environment variables is read
+at *request* time by `functions/api/media/upload.ts`. Set it, and the next
+upload works immediately without rebuilding. `FB_PROJECT_ID` must also be set so
+the endpoint can verify the member's Firebase ID token.
 
 To see what the deployment currently believes:
 
 ```bash
 curl -s https://www.bsdc.info.bd/api/media/providers
-# {"proxy":true,"imgbb":true,"cloudinary":true}
+# {"proxy":true,"imgbb":true}
 ```
 
-`proxy:false`, or an HTML page instead of JSON, means the Functions are not
-deployed — the site is being served as static files only, and the bundle
-fallback below is the only transport available.
+`proxy:false`, or an HTML page instead of JSON, means Pages Functions are not
+deployed — the site is being served as static files only.
 
-**The bundle fallback** is `VITE_CLOUDINARY_CLOUD_NAME` and
-`VITE_CLOUDINARY_UNSIGNED_PRESET`. Those two are public by design, and they are
-compiled into the JavaScript at **build** time: setting them as Pages variables
-does nothing until the site is rebuilt. Check them in §5.1, re-run **Deploy**,
-then hard-reload.
-
-There is **no** bundle fallback for ImgBB. Its key is a secret, and anything in
-the JavaScript is readable by every visitor, so ordinary member images go
-through the edge or they do not go at all. If `VITE_IMGBB_API_KEY` was ever
-set as a GitHub secret, it has been published in every build since, so
-**rotate that ImgBB key** and delete the GitHub secret.
+There is **no** client-bundle fallback for ImgBB. Its API key is a secret, so
+all images upload through `/api/media/upload` or fail closed. If
+`VITE_IMGBB_API_KEY` was ever set publicly, rotate that ImgBB key immediately.
 
 ### A Pages Function reads an empty variable
 

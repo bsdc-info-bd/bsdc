@@ -3,9 +3,9 @@
   X-Frame-Options: SAMEORIGIN
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   Referrer-Policy: strict-origin-when-cross-origin
-  Permissions-Policy: camera=(self), microphone=(self), geolocation=(self), payment=()
+  Permissions-Policy: camera=(self), microphone=(), geolocation=(self), payment=()
   Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://res.cloudinary.com https://i.ibb.co https://*.ibb.co https://*.tile.openstreetmap.org https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.yimg.com; font-src 'self' data:; frame-src 'self' https://bsdc-bd.firebaseapp.com https://bsdc-bd.web.app; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://bsdc-bd.firebaseapp.com https://bsdc-bd.web.app https://*.googleapis.com https://api.cloudinary.com https://onesignal.com; media-src 'self' https://res.cloudinary.com https://i.ibb.co https://*.ibb.co; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; script-src 'self' 'wasm-unsafe-eval' https://www.gstatic.com https://apis.google.com https://cdn.onesignal.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ibb.co https://*.ibb.co https://i.ibb.co.com https://*.tile.openstreetmap.org https://*.googleusercontent.com https://avatars.githubusercontent.com https://*.yimg.com; font-src 'self' data:; frame-src 'self' https://bsdc-bd.firebaseapp.com https://bsdc-bd.web.app; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://bsdc-bd.firebaseapp.com https://bsdc-bd.web.app https://*.googleapis.com https://onesignal.com; media-src 'self' https://i.ibb.co https://*.ibb.co https://i.ibb.co.com; worker-src 'self'; manifest-src 'self'; form-action 'self'; upgrade-insecure-requests
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
@@ -19,13 +19,13 @@
 /index.html
   Cache-Control: no-cache
 
-# The media repair endpoint. A proxied picture is one origin's bytes served under
-# another's name, so the response says what it is and nothing else: no sniffing,
-# no referrer, and a day at the edge rather than an hour in the browser.
+# The media edge delivery & repair endpoint. ImgBB asset URLs are content-addressed,
+# so validated image bytes are cached for 7 days at the Cloudflare edge and in the
+# browser with stale-while-revalidate.
 /media/i
   X-Content-Type-Options: nosniff
   Referrer-Policy: no-referrer
-  Cache-Control: public, max-age=3600, s-maxage=86400
+  Cache-Control: public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable
 
 # Never cached: every one of these answers depends on who is asking.
 /api/*

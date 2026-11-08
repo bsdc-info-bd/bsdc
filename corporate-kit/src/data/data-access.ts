@@ -32,8 +32,16 @@ export class CorporateDataAccessError extends Error {
   }
 }
 
-/** Never send a Firebase bearer token to an insecure remote URL. */
-function claimsUrl(siteUrl: string): string {
+/**
+ * Never send a Firebase bearer token to an insecure remote URL.
+ *
+ * When the configured main-site address is BSDC's own domain (`www.bsdc.info.bd`
+ * or `bsdc.info.bd`), include the sibling apex/www host and BSDC's canonical
+ * Cloudflare Pages origin (`https://bsdc.pages.dev`) as explicit HTTPS fallbacks
+ * so a `www` <-> apex redirect or unpointed custom domain never blocks staff
+ * sign-in while `redirect: 'error'` remains enforced on every request.
+ */
+export function claimsEndpoints(siteUrl: string): string[] {
   let url: URL;
   try {
     url = new URL('/api/auth/claims', siteUrl);
@@ -42,7 +50,8 @@ function claimsUrl(siteUrl: string): string {
       'The main-site address for staff sign-in is not configured.',
     );
   }
-  const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+  const host = url.hostname.toLowerCase();
+  const local = host === 'localhost' || host === '127.0.0.1';
   if (
     (url.protocol !== 'https:' && !(local && url.protocol === 'http:')) ||
     url.username ||
@@ -50,32 +59,73 @@ function claimsUrl(siteUrl: string): string {
   ) {
     throw new CorporateDataAccessError('The main-site address for staff sign-in must use HTTPS.');
   }
-  return url.href;
+
+  const ordered = [url.href];
+  const isBsdcDomain =
+    url.protocol === 'https:' &&
+    (host === 'bsdc.info.bd' ||
+      host.endsWith('.bsdc.info.bd') ||
+      host === 'bsdc.pages.dev' ||
+      host.endsWith('.bsdc.pages.dev'));
+
+  if (isBsdcDomain) {
+    for (const candidate of [
+      'https://www.bsdc.info.bd/api/auth/claims',
+      'https://bsdc.info.bd/api/auth/claims',
+      'https://bsdc.pages.dev/api/auth/claims',
+    ]) {
+      if (!ordered.includes(candidate)) ordered.push(candidate);
+    }
+  }
+  return ordered;
+}
+
+function isSoftHtmlFallback(response: Response): boolean {
+  const type = response.headers?.get?.('content-type');
+  if (typeof type !== 'string' || type.trim() === '') return false;
+  return !type.toLowerCase().includes('json');
 }
 
 async function bootstrap(env: CorporateEnv, user: User): Promise<IdTokenResult> {
   const current = await user.getIdTokenResult();
   if (current.claims['role'] === 'authenticated') return current;
 
-  let response: Response;
-  try {
-    response = await fetch(claimsUrl(env.siteUrl), {
-      method: 'POST',
-      headers: { authorization: `Bearer ${current.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        uid: user.uid,
-        role: signedRole(current.claims),
-        // The server verifies the token and derives staff/vendor permissions;
-        // the browser must not request those flags or another account's role.
-        vendor: false,
-        staff: false,
-      }),
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'error',
-    });
-  } catch (error) {
-    if (error instanceof CorporateDataAccessError) throw error;
+  const endpoints = claimsEndpoints(env.siteUrl);
+  const payload = JSON.stringify({
+    uid: user.uid,
+    role: signedRole(current.claims),
+    // The server verifies the token and derives staff/vendor permissions;
+    // the browser must not request those flags or another account's role.
+    vendor: false,
+    staff: false,
+  });
+
+  let response: Response | null = null;
+  for (const endpoint of endpoints) {
+    try {
+      const candidate = await fetch(endpoint, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${current.token}`, 'content-type': 'application/json' },
+        body: payload,
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'error',
+      });
+      if (
+        candidate.status === 404 ||
+        candidate.status === 405 ||
+        (candidate.ok && isSoftHtmlFallback(candidate))
+      ) {
+        continue;
+      }
+      response = candidate;
+      break;
+    } catch (error) {
+      if (error instanceof CorporateDataAccessError) throw error;
+    }
+  }
+
+  if (response === null) {
     throw new CorporateDataAccessError(
       'The staff sign-in service could not be reached. Check the connection or the main-site deployment.',
     );

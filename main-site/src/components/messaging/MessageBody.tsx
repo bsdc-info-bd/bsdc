@@ -1,8 +1,9 @@
-import { FileText, Film, Image as ImageIcon, Mail, Music, Package, Paperclip } from 'lucide-react';
+import { Image as ImageIcon, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Lightbox } from '@/components/media/Lightbox';
+import { MediaImage } from '@/components/media/MediaImage';
 import { cn } from '@/lib/cn';
 import { attachmentKind, highlightMatches, parseMessageBody } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
@@ -14,22 +15,6 @@ export interface MessageBodyProps {
   highlight?: string;
   /** A bubble the viewer sent: links and code invert for contrast. */
   mine?: boolean;
-}
-
-function iconFor(kind: ReturnType<typeof attachmentKind>) {
-  switch (kind) {
-    case 'video':
-      return Film;
-    case 'audio':
-      return Music;
-    case 'pdf':
-    case 'document':
-      return FileText;
-    case 'archive':
-      return Package;
-    default:
-      return Paperclip;
-  }
 }
 
 function Marked({ text, query }: { text: string; query: string }) {
@@ -50,8 +35,8 @@ function Marked({ text, query }: { text: string; query: string }) {
 }
 
 /**
- * One message's content: text with links, mentions and code; an image in the
- * bubble; any other attachment as a card. Search hits are marked in place.
+ * One message's content: text with links, mentions and code, plus ImgBB image
+ * attachments that open full-size in the inline Lightbox.
  */
 export function MessageBody({ message, highlight = '', mine = false }: MessageBodyProps) {
   const { t } = useTranslation();
@@ -62,23 +47,14 @@ export function MessageBody({ message, highlight = '', mine = false }: MessageBo
   }
 
   const hasMedia = message.mediaUrl.length > 0;
-  // The row says what it is when it can: a voice note is stored as `audio`,
-  // which is more to be trusted than a filename a provider may have rewritten.
-  // Everything else is still read from the attachment itself.
-  const kind = !hasMedia
-    ? 'file'
-    : message.kind === 'audio' || message.kind === 'video'
-      ? message.kind
-      : attachmentKind(message.mediaName, message.mediaUrl);
-  const Icon = iconFor(kind);
+  const isImage =
+    hasMedia &&
+    (message.kind === 'image' || attachmentKind(message.mediaName, message.mediaUrl) === 'image');
 
   return (
     <span className="flex flex-col gap-2">
-      {hasMedia && kind === 'image' ? (
+      {isImage ? (
         <>
-          {/* A picture in a thread opens here, full size. It used to open in a
-              new tab, which on a phone means leaving the conversation, losing
-              the scroll position, and coming back to find it moved. */}
           <button
             type="button"
             onClick={() => setEnlarged(true)}
@@ -87,9 +63,10 @@ export function MessageBody({ message, highlight = '', mine = false }: MessageBo
               name: message.mediaName.length > 0 ? message.mediaName : t('chat.image'),
             })}
           >
-            <img
+            <MediaImage
               src={message.mediaUrl}
               alt={message.mediaName.length > 0 ? message.mediaName : t('chat.image')}
+              slotWidth={384}
               loading="lazy"
               decoding="async"
               className="max-h-72 w-full max-w-sm object-cover transition-transform duration-200 ease-app hover:scale-[1.01]"
@@ -114,46 +91,6 @@ export function MessageBody({ message, highlight = '', mine = false }: MessageBo
             />
           ) : null}
         </>
-      ) : null}
-
-      {hasMedia && kind === 'audio' ? (
-        <span
-          className={cn(
-            'flex max-w-xs flex-col gap-1 rounded-xl border px-2.5 py-2',
-            mine ? 'border-white/30 bg-white/10' : 'border-line bg-surface',
-          )}
-        >
-          <span className="flex items-center gap-1.5 text-2xs opacity-85">
-            <Music size={12} aria-hidden="true" />
-            <span className="fab-truncate">
-              {message.mediaName.length > 0 ? message.mediaName : t('chat.voiceNote')}
-            </span>
-          </span>
-          {/* Metadata only: a thread of voice notes must not download itself. */}
-          <audio controls preload="metadata" src={message.mediaUrl} className="h-9 w-full">
-            <track kind="captions" />
-          </audio>
-        </span>
-      ) : null}
-
-      {hasMedia && kind !== 'image' && kind !== 'audio' ? (
-        <a
-          href={message.mediaUrl}
-          target="_blank"
-          rel="noreferrer noopener"
-          download={message.mediaName.length > 0 ? message.mediaName : undefined}
-          aria-label={t('chat.download', {
-            name: message.mediaName.length > 0 ? message.mediaName : t('chat.file'),
-          })}
-          className={cn(
-            'fab-tap flex max-w-xs items-center gap-2 rounded-xl border px-3 py-2 text-sm',
-            mine ? 'border-white/30 bg-white/10' : 'border-line bg-surface',
-          )}
-        >
-          <Icon size={18} aria-hidden="true" />
-          <span className="fab-truncate">{message.mediaName || t('chat.file')}</span>
-          <span className="ms-auto text-2xs opacity-80">{t('chat.downloadShort')}</span>
-        </a>
       ) : null}
 
       {message.body.trim().length > 0 ? (
@@ -217,7 +154,7 @@ export function MessageBody({ message, highlight = '', mine = false }: MessageBo
         </span>
       ) : null}
 
-      {!hasMedia && message.body.trim().length === 0 && message.kind !== 'snippet' ? (
+      {!isImage && message.body.trim().length === 0 && message.kind !== 'snippet' ? (
         <span className="flex items-center gap-2 text-xs opacity-80">
           <ImageIcon size={14} aria-hidden="true" />
           {t('chat.emptyMessage')}

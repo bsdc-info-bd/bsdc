@@ -105,20 +105,12 @@ export function deletionRequest(
       if (parsed.port.length > 0) return null;
       if (parsed.username.length > 0 || parsed.password.length > 0) return null;
       const host = parsed.hostname.toLowerCase();
-      // ImgBB answers on i.ibb.co and ibb.co; anything else is not its endpoint.
-      if (host !== 'i.ibb.co' && host !== 'ibb.co') return null;
+      // ImgBB answers on i.ibb.co, ibb.co and i.ibb.co.com; anything else is not its endpoint.
+      if (host !== 'i.ibb.co' && host !== 'ibb.co' && host !== 'i.ibb.co.com') return null;
       return { url: parsed.toString(), method: 'GET' };
     } catch {
       return null;
     }
-  }
-
-  if (row.provider === 'cloudinary') {
-    // Cloudinary's delete API requires a signature the browser-side preset cannot
-    // produce, and doing it wrong deletes the wrong asset. Rather than guess, the
-    // platform relies on the preset's own scheduled deletion — which the upload
-    // path does not claim and `expiresAt` reports as null. Nothing to call.
-    return null;
   }
 
   return null;

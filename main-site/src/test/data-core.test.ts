@@ -1,13 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { DataAccessBootstrapError } from '@/lib/auth/data-access';
-import { cloudinaryConfigured } from '@/lib/env';
 import { DEFAULT_FLAGS, isFlagEnabled, type FeatureFlag } from '@/lib/data/feature-flags';
 import { fieldsToUpdate, onboardingInsert, rowToProfile } from '@/lib/profile/supabase-backend';
 import {
   assertUploadable,
   chooseProvider,
-  cloudinaryThumb,
-  cloudinaryWide,
   kindOf,
   MAX_BYTES,
   MediaError,
@@ -177,47 +174,27 @@ describe('profile write payloads', () => {
 describe('media routing', () => {
   it('classifies files by mime type', () => {
     expect(kindOf('image/png')).toBe('image');
-    expect(kindOf('application/pdf')).toBe('document');
-    expect(kindOf('audio/webm')).toBe('audio');
+    expect(kindOf('application/pdf')).toBeNull();
+    expect(kindOf('audio/webm')).toBeNull();
     expect(kindOf('application/x-msdownload')).toBeNull();
   });
 
-  it('puts every picture a feed draws on the host that can resize it', () => {
-    // The feed is where the pictures are. A host that serves the original is a
-    // host that makes twenty cards cost twenty originals, which is the slowness
-    // that was reported; only Cloudinary can be asked for the width a card shows.
-    expect(chooseProvider('avatar', 'image')).toBe('cloudinary');
-    expect(chooseProvider('cover', 'image')).toBe('cloudinary');
-    expect(chooseProvider('post-image', 'image')).toBe('cloudinary');
-    expect(chooseProvider('comment-image', 'image')).toBe('cloudinary');
-    expect(chooseProvider('chat-document', 'document')).toBe('cloudinary');
-    expect(chooseProvider('voice-note', 'audio')).toBe('cloudinary');
-  });
-
-  it('still uses imgbb where its capacity genuinely wins', () => {
-    // A chat attachment is drawn at one size in one place, and the edge caches
-    // the bytes on the way past, so the free-tier capacity is the better trade.
-    expect(chooseProvider('chat-document', 'image')).toBe('imgbb');
+  it('routes every image purpose exclusively to ImgBB', () => {
+    expect(chooseProvider('avatar', 'image')).toBe('imgbb');
+    expect(chooseProvider('cover', 'image')).toBe('imgbb');
+    expect(chooseProvider('project-cover', 'image')).toBe('imgbb');
+    expect(chooseProvider('project-image', 'image')).toBe('imgbb');
+    expect(chooseProvider('post-image', 'image')).toBe('imgbb');
+    expect(chooseProvider('comment-image', 'image')).toBe('imgbb');
+    expect(chooseProvider('product-image', 'image')).toBe('imgbb');
   });
 
   it('rejects unsupported, empty and oversized files', () => {
     expect(() => assertUploadable(file('application/x-msdownload', 10))).toThrow(MediaError);
+    expect(() => assertUploadable(file('application/pdf', 10))).toThrow(MediaError);
     expect(() => assertUploadable(file('image/png', 0))).toThrow(MediaError);
     expect(() => assertUploadable(file('image/png', MAX_BYTES.image + 1))).toThrow(MediaError);
     expect(assertUploadable(file('image/png', 1024))).toBe('image');
-  });
-
-  it('needs both halves of the Cloudinary configuration', () => {
-    expect(cloudinaryConfigured('bsdc', 'bsdc_unsigned')).toBe(true);
-    expect(cloudinaryConfigured('bsdc', '')).toBe(false);
-    expect(cloudinaryConfigured('', 'bsdc_unsigned')).toBe(false);
-    expect(cloudinaryConfigured('', '')).toBe(false);
-  });
-
-  it('builds Cloudinary delivery transforms', () => {
-    const url = 'https://res.cloudinary.com/bsdc/image/upload/v1/bsdc/avatar/a.png';
-    expect(cloudinaryThumb(url)).toContain('c_fill,g_auto:face,w_256,h_256,f_auto,q_auto');
-    expect(cloudinaryWide(url, 800)).toContain('w_800');
   });
 });
 

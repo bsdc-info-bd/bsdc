@@ -1,29 +1,22 @@
-import { FilePlus2, ImagePlus, Mic, Pause, Play, Send, Smile, Trash2, X } from 'lucide-react';
+import { ImagePlus, Send, Smile, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { IconButton, ProgressBar } from '@/design-system';
 import { cn } from '@/lib/cn';
-import { useVoiceRecorder } from '@/hooks/use-voice-recorder';
 import { useAuthStore } from '@/store/auth-store';
 import { isConfigured } from '@/lib/env';
 import type { UploadResult } from '@/lib/storage/upload';
 import { previewLine } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
-import { MAX_VOICE_MS, recordingProgress } from '@/lib/messaging/voice-recorder';
 import { dataErrorKey } from '@/lib/supabase/errors';
 
 /**
- * Records an uploaded file against the member who uploaded it.
+ * Records an uploaded image against the member who uploaded it.
  *
- * A failure here is not a failure to send. The bytes are already at the host and
+ * A failure here is not a failure to send. The bytes are already at ImgBB and
  * the message is about to reference them, so refusing to send would lose the
- * message and leave the file orphaned anyway. What is lost is the trail: the
- * expiry and the delete capability, which means that one file will sit on a
- * third party's disk until somebody deletes it by hand.
- *
- * Reported rather than swallowed, because it is the difference between a
- * conversation that cleans up after itself and one that does not.
+ * message and leave the image orphaned anyway.
  */
 async function recordIfSignedIn(result: UploadResult): Promise<void> {
   const ownerUid = useAuthStore.getState().user?.uid ?? '';
@@ -33,9 +26,7 @@ async function recordIfSignedIn(result: UploadResult): Promise<void> {
     const { recordMediaAsset } = await import('@/lib/data/media-repository');
     await recordMediaAsset(ownerUid, result);
   } catch {
-    // The message still sends. The file is unreachable by the sweeper, which is
-    // worth a line in a log and not worth losing what somebody said.
-    console.warn('a chat attachment was not recorded, so it cannot be swept later');
+    console.warn('a chat image attachment was not recorded, so it cannot be swept later');
   }
 }
 
@@ -67,8 +58,8 @@ const EMOJI = [
   '🤝',
 ];
 
-/** What can leave this composer as an attachment. */
-export type AttachmentKind = 'image' | 'file' | 'audio';
+/** What can leave this composer as an attachment: images only (hosted on ImgBB). */
+export type AttachmentKind = 'image';
 
 export interface AttachmentInput {
   body: string;
@@ -94,13 +85,6 @@ export interface MessageComposerProps {
 
 const MAX_LENGTH = 8_000;
 
-/** Which storage folder an attachment is filed in, by what it is. */
-const PURPOSE: Record<AttachmentKind, 'comment-image' | 'chat-document' | 'voice-note'> = {
-  image: 'comment-image',
-  file: 'chat-document',
-  audio: 'voice-note',
-};
-
 function sendErrorKey(error: unknown): string {
   if (
     error instanceof Error &&
@@ -114,18 +98,11 @@ function sendErrorKey(error: unknown): string {
 interface SendingState {
   name: string;
   percent: number;
-  kind: AttachmentKind;
 }
 
 /**
  * The composer: text with a draft that follows the member across devices,
- * attachments, a voice note, an emoji tray, and a reply or edit context bar.
- *
- * Everything that leaves this box says what it is doing while it does it. An
- * attachment shows a percentage, because a chat that appears to have swallowed
- * a picture is a chat the member will send the picture to twice; a recording
- * shows a clock and a level meter, because a microphone gives no other proof
- * that it is listening.
+ * image attachments hosted on ImgBB, an emoji tray, and a reply or edit context bar.
  */
 export function MessageComposer({
   draft,
@@ -146,13 +123,8 @@ export function MessageComposer({
   const [tray, setTray] = useState(false);
   const [sending, setSending] = useState<SendingState | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
-  const fileInput = useRef<HTMLInputElement | null>(null);
   const textarea = useRef<HTMLTextAreaElement | null>(null);
   const submitLock = useRef(false);
-
-  const voice = useVoiceRecorder((file) => {
-    void uploadAndSend(file, 'audio');
-  });
 
   useEffect(() => {
     if (editing !== null || replyTo !== null) textarea.current?.focus();
@@ -165,27 +137,15 @@ export function MessageComposer({
     input.style.height = `${Math.min(input.scrollHeight, 144)}px`;
   }, [draft]);
 
-  useEffect(() => {
-    if (voice.errorKey !== null) {
-      toast.error(t(voice.errorKey));
-      voice.dismissError();
-    }
-    // Only the key is tracked: dismissing it is the hook's own state change and
-    // must not run this effect a second time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voice.errorKey, t]);
-
-  const recording = voice.state === 'recording' || voice.state === 'paused';
-
-  async function uploadAndSend(file: File, kind: AttachmentKind): Promise<void> {
+  async function uploadAndSend(file: File): Promise<void> {
     if (disabled || submitLock.current || editing !== null) return;
     submitLock.current = true;
     setBusy(true);
-    setSending({ name: file.name, percent: 0, kind });
+    setSending({ name: file.name, percent: 0 });
     try {
       const { uploadMedia } = await import('@/lib/storage/upload');
       const result = await uploadMedia(file, {
-        purpose: PURPOSE[kind],
+        purpose: 'comment-image',
         onProgress: (percent) =>
           setSending((current) =>
             current === null ? current : { ...current, percent: Math.round(percent) },
@@ -193,24 +153,13 @@ export function MessageComposer({
       });
       setSending((current) => (current === null ? current : { ...current, percent: 100 }));
 
-      // The row first, then the message. `media_assets` is what the clean-up job
-      // reads to know a file exists and how long it was promised for, and a file
-      // with no row is a file nothing can ever delete — it is also a file whose
-      // expiry was never recorded, so ImgBB keeps it forever.
-      //
-      // Recording before sending is the safe order: an asset nobody attached yet
-      // is an orphan the sweeper can see, and if the message fails to send it is
-      // swept in a day. Recording *after* would leave the file invisible for the
-      // duration of a failed send, which is the case this exists to prevent.
       await recordIfSignedIn(result);
       const delivery = onSendAttachment({
         body: draft.trim(),
         mediaUrl: result.url,
         mediaName: file.name,
-        kind,
+        kind: 'image',
       });
-      // Once uploaded, the attachment is in the retryable outbox, so the
-      // caption and reply can be released without asking for a second upload.
       onDraftChange('');
       onCancelReply();
       void delivery.catch((error: unknown) => toast.error(t(sendErrorKey(error))));
@@ -241,8 +190,6 @@ export function MessageComposer({
       return;
     }
 
-    // Hand the line to the outbox immediately; the member can write another
-    // while the network is slow. A failed line keeps its own Retry control.
     try {
       const delivery = onSend(body, replyTo?.id ?? null);
       onDraftChange('');
@@ -252,7 +199,6 @@ export function MessageComposer({
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
     } finally {
-      // Ignore duplicate clicks or Enter events before React commits the clear.
       queueMicrotask(() => {
         submitLock.current = false;
       });
@@ -290,9 +236,7 @@ export function MessageComposer({
       {sending !== null ? (
         <div className="mb-2 rounded-xl border border-line bg-surface-2 px-3 py-2">
           <p className="mb-1 flex items-center justify-between gap-2 text-2xs text-muted">
-            <span className="fab-truncate">
-              {sending.kind === 'audio' ? t('chat.voice.sending') : t('chat.sendingAttachment')}
-            </span>
+            <span className="fab-truncate">{t('chat.sendingAttachment')}</span>
             <span className="tabular-nums">{sending.percent}%</span>
           </p>
           <ProgressBar value={sending.percent} label={t('chat.sendingAttachment')} />
@@ -320,174 +264,82 @@ export function MessageComposer({
         </div>
       ) : null}
 
-      {recording || voice.state === 'processing' ? (
-        <div
-          className="flex items-center gap-3 rounded-xl border border-danger/40 bg-danger/5 px-3 py-2"
-          role="status"
-          aria-live="polite"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              'h-2.5 w-2.5 shrink-0 rounded-full bg-danger',
-              voice.state === 'recording' && 'animate-pulse',
-            )}
-          />
-          <span className="text-sm font-semibold tabular-nums">{voice.label}</span>
-
-          {/* The meter is the only proof a microphone gives that it is hearing
-              somebody; without it a member talks to a page and cannot tell. */}
-          <span aria-hidden="true" className="hidden h-6 flex-1 items-center gap-0.5 sm:flex">
-            {Array.from({ length: 18 }, (_, index) => {
-              const threshold = (index + 1) / 18;
-              return (
-                <span
-                  key={index}
-                  className={cn(
-                    'w-full rounded-full transition-[height,background-color] duration-100 ease-app',
-                    voice.level >= threshold ? 'bg-danger' : 'bg-danger/20',
-                  )}
-                  style={{ height: `${Math.max(12, threshold * 100)}%` }}
-                />
-              );
-            })}
-          </span>
-
-          <span className="sr-only">{t('chat.voice.recording', { time: voice.label })}</span>
-
-          {voice.state === 'recording' ? (
-            <IconButton
-              label={t('chat.voice.pause')}
-              icon={<Pause size={16} />}
-              variant="outline"
-              size="sm"
-              onClick={voice.pause}
-            />
-          ) : voice.state === 'paused' ? (
-            <IconButton
-              label={t('chat.voice.resume')}
-              icon={<Play size={16} />}
-              variant="outline"
-              size="sm"
-              onClick={voice.resume}
-            />
-          ) : null}
-          <IconButton
-            label={t('chat.voice.discard')}
-            icon={<Trash2 size={16} />}
-            variant="outline"
-            size="sm"
-            onClick={voice.cancel}
-          />
-          <IconButton
-            label={t('chat.voice.send')}
-            icon={<Send size={16} />}
-            variant="solid"
-            disabled={voice.state === 'processing'}
-            onClick={voice.stop}
-          />
-        </div>
-      ) : (
-        <form
-          className="rounded-2xl border border-border bg-bg p-1 shadow-card transition-[border-color,box-shadow] duration-200 focus-within:border-green-500 focus-within:shadow-raised"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void submit();
+      <form
+        className="rounded-2xl border border-border bg-bg p-1 shadow-card transition-[border-color,box-shadow] duration-200 focus-within:border-green-500 focus-within:shadow-raised"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <label className="sr-only" htmlFor="message-composer">
+          {t('messages.composerLabel')}
+        </label>
+        <textarea
+          ref={textarea}
+          id="message-composer"
+          aria-describedby="message-composer-hint"
+          className="block min-h-[48px] max-h-36 w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-base leading-6 text-text outline-none placeholder:text-muted sm:text-sm"
+          rows={1}
+          value={draft}
+          maxLength={MAX_LENGTH}
+          disabled={disabled || busy}
+          placeholder={t('messages.composerPlaceholder')}
+          onChange={(event) => {
+            onDraftChange(event.target.value);
+            if (editing === null) onTyping();
           }}
-        >
-          <label className="sr-only" htmlFor="message-composer">
-            {t('messages.composerLabel')}
-          </label>
-          <textarea
-            ref={textarea}
-            id="message-composer"
-            aria-describedby="message-composer-hint"
-            className="block min-h-[48px] max-h-36 w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-base leading-6 text-text outline-none placeholder:text-muted sm:text-sm"
-            rows={1}
-            value={draft}
-            maxLength={MAX_LENGTH}
-            disabled={disabled || busy}
-            placeholder={t('messages.composerPlaceholder')}
-            onChange={(event) => {
-              onDraftChange(event.target.value);
-              if (editing === null) onTyping();
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === 'Enter' &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing &&
-                event.nativeEvent.keyCode !== 229 &&
-                !event.repeat
-              ) {
-                event.preventDefault();
-                void submit();
-              }
-              if (event.key === 'Escape') {
-                if (tray) setTray(false);
-                else if (editing !== null) onCancelEdit();
-                else if (replyTo !== null) onCancelReply();
-              }
-            }}
-          />
-          <span id="message-composer-hint" className="sr-only">
-            {t('messages.composerHint')}
-          </span>
-          <div className="flex items-center justify-between gap-1 border-t border-border/60 pt-1">
-            <div className="flex items-center">
-              <IconButton
-                label={t('chat.emojiHint')}
-                icon={<Smile size={18} />}
-                size="sm"
-                aria-expanded={tray}
-                disabled={busy || disabled}
-                onClick={() => setTray((open) => !open)}
-              />
-              <IconButton
-                label={t('chat.attachImage')}
-                icon={<ImagePlus size={18} />}
-                size="sm"
-                disabled={busy || disabled || editing !== null}
-                onClick={() => imageInput.current?.click()}
-              />
-              <IconButton
-                label={t('chat.attachFile')}
-                icon={<FilePlus2 size={18} />}
-                size="sm"
-                disabled={busy || disabled || editing !== null}
-                onClick={() => fileInput.current?.click()}
-              />
-              {voice.state === 'unsupported' ? (
-                <IconButton
-                  label={t(voice.blockKey ?? 'chat.voice.failed')}
-                  icon={<Mic size={18} />}
-                  size="sm"
-                  disabled
-                />
-              ) : (
-                <IconButton
-                  label={t('chat.recordVoice')}
-                  icon={<Mic size={18} />}
-                  size="sm"
-                  disabled={busy || disabled || editing !== null}
-                  onClick={voice.start}
-                />
-              )}
-            </div>
-            <button
-              type="submit"
-              aria-label={editing !== null ? t('chat.saveEdit') : t('messages.send')}
-              disabled={disabled || busy || draft.trim().length === 0}
-              className="fab-tap inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-chat-outgoing px-3 text-sm font-semibold text-white shadow-card transition-[transform,background-color,box-shadow] duration-200 hover:bg-chat-outgoing-hover hover:shadow-raised active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-            >
-              <Send size={17} aria-hidden="true" />
-              <span className="hidden sm:inline">
-                {editing !== null ? t('chat.saveEdit') : t('messages.send')}
-              </span>
-            </button>
+          onKeyDown={(event) => {
+            if (
+              event.key === 'Enter' &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing &&
+              event.nativeEvent.keyCode !== 229 &&
+              !event.repeat
+            ) {
+              event.preventDefault();
+              void submit();
+            }
+            if (event.key === 'Escape') {
+              if (tray) setTray(false);
+              else if (editing !== null) onCancelEdit();
+              else if (replyTo !== null) onCancelReply();
+            }
+          }}
+        />
+        <span id="message-composer-hint" className="sr-only">
+          {t('messages.composerHint')}
+        </span>
+        <div className="flex items-center justify-between gap-1 border-t border-border/60 pt-1">
+          <div className="flex items-center">
+            <IconButton
+              label={t('chat.emojiHint')}
+              icon={<Smile size={18} />}
+              size="sm"
+              aria-expanded={tray}
+              disabled={busy || disabled}
+              onClick={() => setTray((open) => !open)}
+            />
+            <IconButton
+              label={t('chat.attachImage')}
+              icon={<ImagePlus size={18} />}
+              size="sm"
+              disabled={busy || disabled || editing !== null}
+              onClick={() => imageInput.current?.click()}
+            />
           </div>
-        </form>
-      )}
+          <button
+            type="submit"
+            aria-label={editing !== null ? t('chat.saveEdit') : t('messages.send')}
+            disabled={disabled || busy || draft.trim().length === 0}
+            className="fab-tap inline-flex h-10 min-w-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-chat-outgoing px-3 text-sm font-semibold text-white shadow-card transition-[transform,background-color,box-shadow] duration-200 hover:bg-chat-outgoing-hover hover:shadow-raised active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+          >
+            <Send size={17} aria-hidden="true" />
+            <span className="hidden sm:inline">
+              {editing !== null ? t('chat.saveEdit') : t('messages.send')}
+            </span>
+          </button>
+        </div>
+      </form>
 
       <p
         className={cn(
@@ -495,40 +347,20 @@ export function MessageComposer({
           draft.length > MAX_LENGTH * 0.9 && 'text-danger',
         )}
       >
-        {recording
-          ? t('chat.voice.limit', { minutes: Math.round(MAX_VOICE_MS / 60_000) })
-          : draft.length > MAX_LENGTH * 0.8
-            ? t('chat.characterCount', { count: draft.length, max: MAX_LENGTH })
-            : ''}
+        {draft.length > MAX_LENGTH * 0.8
+          ? t('chat.characterCount', { count: draft.length, max: MAX_LENGTH })
+          : ''}
       </p>
-
-      {recording ? (
-        <ProgressBar
-          value={recordingProgress(voice.elapsedMs) * 100}
-          label={t('chat.voice.limitProgress')}
-          className="mt-1 bg-danger/15 [&>div]:bg-danger"
-        />
-      ) : null}
 
       <input
         ref={imageInput}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0];
           event.target.value = '';
-          if (file !== undefined) void uploadAndSend(file, 'image');
-        }}
-      />
-      <input
-        ref={fileInput}
-        type="file"
-        className="hidden"
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = '';
-          if (file !== undefined) void uploadAndSend(file, 'file');
+          if (file !== undefined) void uploadAndSend(file);
         }}
       />
     </div>

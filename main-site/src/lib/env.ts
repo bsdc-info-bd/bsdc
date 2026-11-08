@@ -5,8 +5,8 @@ import { z } from 'zod';
  *
  * Only VITE_* values are read here — they are designed to be shipped in the
  * client bundle. Server-only secrets (service-role keys, passkeys, REST API
- * keys) are never imported into the client; Pages Functions read them from
- * `context.env`. See ../../SECURITY.md.
+ * keys, ImgBB API key) are never imported into the client; Pages Functions read
+ * them from `context.env`. See ../../SECURITY.md.
  */
 const envSchema = z.object({
   siteUrl: z.string().url(),
@@ -31,7 +31,6 @@ const envSchema = z.object({
     webPushPublicKey: z.string(),
   }),
   oneSignalAppId: z.string(),
-  cloudinary: z.object({ cloudName: z.string(), unsignedPreset: z.string() }),
 });
 
 export type PublicEnv = z.infer<typeof envSchema>;
@@ -57,22 +56,9 @@ const raw: PublicEnv = {
     webPushPublicKey: import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '',
   },
   oneSignalAppId: import.meta.env.VITE_ONESIGNAL_APP_ID ?? '',
-  cloudinary: {
-    cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME ?? '',
-    unsignedPreset: import.meta.env.VITE_CLOUDINARY_UNSIGNED_PRESET ?? '',
-  },
 };
 
 export const env: PublicEnv = envSchema.parse(raw);
-
-/**
- * Both halves of the Cloudinary pair are needed: an unsigned upload without
- * its preset is rejected by the API, so a deployment that has only the cloud
- * name reports "not configured" instead of a generic upload failure.
- */
-export function cloudinaryConfigured(cloudName: string, preset: string): boolean {
-  return cloudName.length > 0 && preset.length > 0;
-}
 
 /** Service clients are only constructed when their configuration is present. */
 export const isConfigured = {
@@ -82,5 +68,4 @@ export const isConfigured = {
   // not one: it only signs for Firebase's own service.
   push: raw.push.webPushPublicKey.length > 0,
   oneSignal: raw.oneSignalAppId.length > 0,
-  cloudinary: cloudinaryConfigured(raw.cloudinary.cloudName, raw.cloudinary.unsignedPreset),
 } as const;

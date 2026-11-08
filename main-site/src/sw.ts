@@ -83,7 +83,7 @@ const VAPID_PUBLIC_KEY = import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '';
  * previous worker wrote, which is how a browser whose cache is already poisoned
  * is fixed without asking its owner to clear anything.
  */
-const IMAGE_CACHE = 'bsdc-images-v4';
+const IMAGE_CACHE = 'bsdc-images-v5';
 const FONT_CACHE = 'bsdc-fonts-v2';
 
 /** How long a stored picture is served without asking the network. */

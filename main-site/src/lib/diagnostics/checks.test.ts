@@ -17,7 +17,9 @@ function healthy(): Probes {
       Promise.resolve(
         path.startsWith('/api/health')
           ? { status: 200, body: { app: 'bsdc-main-site', status: 'ok' } }
-          : { status: 400, body: { error: 'bad request' } },
+          : path.startsWith('/api/media/providers')
+            ? { status: 200, body: { proxy: true, imgbb: true } }
+            : { status: 400, body: { error: 'bad request' } },
       ),
     token: () => Promise.resolve('a-token'),
     rpc: () => Promise.resolve({ ok: true }),
@@ -32,7 +34,7 @@ function healthy(): Probes {
       storage: true,
       online: true,
     },
-    config: { firebase: true, supabase: true, webPushKey: true, cloudinary: true },
+    config: { firebase: true, supabase: true, webPushKey: true },
   };
 }
 
@@ -47,9 +49,9 @@ describe('a deployment that works', () => {
     expect(summary.state).toBe('ok');
   });
 
-  it('checks pictures on both upload hosts, separately', async () => {
+  it('checks both ImgBB upload readiness and ImgBB image delivery', async () => {
     const checks = await runChecks(healthy());
-    expect(byId(checks, 'image.cloudinary')?.state).toBe('ok');
+    expect(byId(checks, 'media.providers')?.state).toBe('ok');
     expect(byId(checks, 'image.imgbb')?.state).toBe('ok');
   });
 
@@ -69,7 +71,7 @@ describe('a deployment that is missing its configuration', () => {
     const base = healthy();
     const checks = await runChecks({
       ...base,
-      config: { firebase: false, supabase: false, webPushKey: false, cloudinary: false },
+      config: { firebase: false, supabase: false, webPushKey: false },
     });
     expect(checks[0]?.id).toBe('config.supabase');
     expect(checks[0]?.state).toBe('fail');
@@ -105,8 +107,8 @@ describe('the picture failure that was reported', () => {
       ...base,
       image: () => Promise.reject(new Error('blocked')),
     });
-    expect(byId(checks, 'image.cloudinary')?.state).toBe('fail');
-    expect(byId(checks, 'image.cloudinary')?.detail).toContain('will not load');
+    expect(byId(checks, 'image.imgbb')?.state).toBe('fail');
+    expect(byId(checks, 'image.imgbb')?.detail).toContain('will not load');
   });
 
   it('warns rather than fails when the repair endpoint is absent', async () => {

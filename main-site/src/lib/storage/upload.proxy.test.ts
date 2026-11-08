@@ -8,13 +8,6 @@ import {
   type UploadCapabilities,
 } from './upload';
 
-vi.mock('@/lib/env', () => ({
-  env: {
-    cloudinary: { cloudName: 'bsdctest', unsignedPreset: 'unsigned-test' },
-  },
-  isConfigured: { cloudinary: true, supabase: true },
-}));
-
 const getIdToken = vi.fn(() => Promise.resolve('member-id-token'));
 
 vi.mock('@/lib/firebase', () => ({
@@ -32,11 +25,6 @@ interface Sent {
 
 const sent: Sent[] = [];
 
-/**
- * One scripted answer per URL substring, so a case can say "the endpoint is not
- * deployed" (404) separately from "the host refused the picture" (ok:false) —
- * the two must behave differently and a single canned 200 cannot prove that.
- */
 let answers: { match: string; status: number; body: unknown }[] = [];
 
 class FakeXMLHttpRequest {
@@ -79,13 +67,13 @@ const PROXY_OK = {
   ok: true,
   provider: 'imgbb',
   kind: 'image',
-  url: 'https://i.ibb.co/edge/picture.png',
-  thumbUrl: 'https://i.ibb.co/edge/thumb.png',
+  url: 'https://i.ibb.co/edge/picture.webp',
+  thumbUrl: 'https://i.ibb.co/edge/medium.webp',
   deleteToken: '',
   width: 4,
   height: 3,
   bytes: 4,
-  mimeType: 'image/png',
+  mimeType: 'image/webp',
 };
 
 const IMGBB_OK = {
@@ -102,15 +90,11 @@ const IMGBB_OK = {
 const EDGE_UP: UploadCapabilities = {
   proxy: true,
   proxyImgbb: true,
-  proxyCloudinary: true,
-  localCloudinary: true,
 };
 
 const EDGE_DOWN: UploadCapabilities = {
   proxy: false,
   proxyImgbb: false,
-  proxyCloudinary: false,
-  localCloudinary: true,
 };
 
 function picture(): File {
@@ -126,93 +110,31 @@ beforeEach(() => {
 });
 
 describe('choosing a transport', () => {
-  it('prefers the edge whenever the edge can carry that provider', () => {
-    // A post picture is drawn in the feed, so it goes to the host that can be
-    // asked for the width the card shows — and through the edge, which holds the
-    // key and hides it from the bundle.
-    expect(planUpload('post-image', 'image', EDGE_UP)).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
-    expect(planUpload('project-cover', 'image', EDGE_UP)).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
-    expect(planUpload('voice-note', 'audio', EDGE_UP)).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
+  it('routes every image purpose through the edge to ImgBB when configured', () => {
+    for (const purpose of [
+      'avatar',
+      'cover',
+      'project-cover',
+      'project-image',
+      'post-image',
+      'comment-image',
+      'product-image',
+    ] as const) {
+      expect(planUpload(purpose, 'image', EDGE_UP)).toEqual({
+        route: 'proxy',
+        provider: 'imgbb',
+      });
+    }
   });
 
-  it('still has a route for a post picture with the edge down', () => {
-    // Cloudinary's unsigned preset is the one credential that may live in the
-    // bundle, so a feed picture survives the edge being unreachable. Nothing is
-    // sent to ImgBB from the bundle: its key never ships.
-    expect(planUpload('post-image', 'image', EDGE_DOWN)).toEqual({
-      route: 'direct',
-      provider: 'cloudinary',
-    });
-  });
-
-  it('sends a chat attachment to ImgBB only through the edge', () => {
-    expect(planUpload('chat-document', 'image', EDGE_UP)).toEqual({
-      route: 'proxy',
-      provider: 'imgbb',
-    });
-    expect(planUpload('chat-document', 'image', EDGE_DOWN)).toBeNull();
-  });
-
-  it('falls back for the one provider the edge is missing, not for both', () => {
-    const imgbbOnly = { ...EDGE_UP, proxyCloudinary: false };
-    // A cover the edge cannot carry still goes to Cloudinary through the bundle,
-    // and never to ImgBB: the routing table does not bend to availability.
-    expect(planUpload('project-cover', 'image', imgbbOnly)).toEqual({
-      route: 'direct',
-      provider: 'cloudinary',
-    });
-    // The routing table does not bend to availability in the other direction
-    // either: a feed picture the edge cannot carry goes straight to Cloudinary.
-    expect(planUpload('post-image', 'image', imgbbOnly)).toEqual({
-      route: 'direct',
-      provider: 'cloudinary',
-    });
-  });
-
-  it('refuses rather than sending a cover to the wrong host', () => {
-    const noCloudinaryAnywhere = { ...EDGE_UP, proxyCloudinary: false, localCloudinary: false };
-    expect(planUpload('project-cover', 'image', noCloudinaryAnywhere)).toBeNull();
-    // A feed picture is on the same host for the same reason, so it is refused
-    // too. Sending it to ImgBB would upload a picture the feed then cannot size,
-    // which is a slower site that also looks worse.
-    expect(planUpload('post-image', 'image', noCloudinaryAnywhere)).toBeNull();
-  });
-
-  it('has nowhere to go when no host is configured at all', () => {
-    expect(
-      planUpload('post-image', 'image', {
-        proxy: false,
-        proxyImgbb: false,
-        proxyCloudinary: false,
-        localCloudinary: false,
-      }),
-    ).toBeNull();
-  });
-
-  it('believes the edge only when the edge says it is configured', () => {
-    // A live endpoint holding no ImgBB key cannot carry a chat attachment, and
-    // there is no bundle key to fall back to. The caller must be told.
-    expect(planUpload('chat-document', 'image', { ...EDGE_UP, proxyImgbb: false })).toBeNull();
-    // A feed picture is not affected by the missing ImgBB key: it does not want
-    // that host at all.
-    expect(planUpload('post-image', 'image', { ...EDGE_UP, proxyImgbb: false })).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
+  it('returns null when the edge endpoint or ImgBB key is unavailable', () => {
+    expect(planUpload('post-image', 'image', EDGE_DOWN)).toBeNull();
+    expect(planUpload('project-cover', 'image', { proxy: true, proxyImgbb: false })).toBeNull();
   });
 });
 
 describe('uploading through the edge', () => {
-  it('sends the member\u2019s token and the purpose, and never a host key', async () => {
+  it('sends the member token and purpose to /api/media/upload without exposing a host key', async () => {
     answers = [{ match: PROXY, status: 200, body: PROXY_OK }];
     const result = await uploadMedia(picture(), { purpose: 'post-image' });
 
@@ -222,13 +144,11 @@ describe('uploading through the edge', () => {
     const body = sent[0]?.body as FormData;
     expect(body.get('purpose')).toBe('post-image');
     expect(body.get('file')).toBeInstanceOf(File);
-    // The secret never leaves the bundle for the edge, and the edge is never
-    // told a key it already holds.
     expect(sent[0]?.url).not.toContain('bundle-imgbb-key');
     expect(result).toMatchObject({ provider: 'imgbb', url: PROXY_OK.url, width: 4, height: 3 });
   });
 
-  it('does not reach for a host directly once the edge has carried the file', async () => {
+  it('never contacts api.imgbb.com directly from the browser', async () => {
     answers = [{ match: PROXY, status: 200, body: PROXY_OK }];
     await uploadMedia(picture(), { purpose: 'post-image' });
     expect(sent.some((request) => request.url.includes('api.imgbb.com'))).toBe(false);
@@ -242,7 +162,7 @@ describe('uploading through the edge', () => {
     expect(sent).toHaveLength(0);
   });
 
-  it('surfaces the edge\u2019s own reason, and does not upload the file twice', async () => {
+  it('surfaces the edge error and does not upload the file twice', async () => {
     answers = [
       { match: PROXY, status: 413, body: { ok: false, errorKey: 'media.errors.tooLarge' } },
       { match: IMGBB, status: 200, body: IMGBB_OK },
@@ -253,54 +173,42 @@ describe('uploading through the edge', () => {
     );
     expect(error).toBeInstanceOf(MediaError);
     expect((error as MediaError).messageKey).toBe('media.errors.tooLarge');
-    // Exactly one attempt. A refusal from the host is not a reason to spend the
-    // member's data sending the same picture somewhere else.
     expect(sent).toHaveLength(1);
   });
 
-  it('refuses rather than sending a chat attachment to ImgBB from the bundle', async () => {
+  it('invalidates cached capabilities and refuses when /api/media/upload returns 404', async () => {
     answers = [
       { match: PROXY, status: 404, body: null },
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    await expect(uploadMedia(picture(), { purpose: 'chat-document' })).rejects.toMatchObject({
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
-    // The only request was the edge probe. ImgBB was never contacted directly,
-    // because the key that would authorise it is not in this bundle.
     expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
-  it('treats an application shell answer as a missing endpoint, not as a picture', async () => {
-    // A static host answers an unknown path with index.html: status 200 and a
-    // body that is not JSON. Reading that as a success would give the post an
-    // image whose src is a web page. With no edge, the picture is refused.
+  it('treats an application shell HTML answer as a missing endpoint, not as a picture', async () => {
     answers = [
       { match: PROXY, status: 200, body: null },
       { match: IMGBB, status: 200, body: IMGBB_OK },
     ];
 
-    await expect(uploadMedia(picture(), { purpose: 'chat-document' })).rejects.toMatchObject({
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
     expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
-  it('gives a readable reason when no transport is left', async () => {
-    setUploadCapabilities({
-      proxy: false,
-      proxyImgbb: false,
-      proxyCloudinary: false,
-      localCloudinary: false,
-    });
+  it('gives a readable reason when no transport is configured', async () => {
+    setUploadCapabilities(EDGE_DOWN);
     await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
     expect(sent).toHaveLength(0);
   });
 
-  it('still rejects a file no host would take, before any request', async () => {
+  it('rejects non-image files before any network request', async () => {
     const archive = new File([new Uint8Array([1, 2, 3])], 'app.exe', {
       type: 'application/x-msdownload',
     });
@@ -312,22 +220,21 @@ describe('uploading through the edge', () => {
 });
 
 describe('asking the deployment what it can do', () => {
-  it('reports both hosts when the endpoint is live and configured', async () => {
+  it('reports ImgBB when /api/media/providers is live and configured', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
         Promise.resolve(
-          new Response(JSON.stringify({ proxy: true, imgbb: true, cloudinary: true }), {
+          new Response(JSON.stringify({ proxy: true, imgbb: true }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           }),
         ),
       ),
     );
-    await expect(probeUploadCapabilities()).resolves.toMatchObject({
+    await expect(probeUploadCapabilities()).resolves.toEqual({
       proxy: true,
       proxyImgbb: true,
-      proxyCloudinary: true,
     });
   });
 
@@ -337,17 +244,15 @@ describe('asking the deployment what it can do', () => {
       vi.fn(() => Promise.resolve(new Response('not found', { status: 404 }))),
     );
     const capabilities = await probeUploadCapabilities();
-    expect(capabilities.proxy).toBe(false);
-    // Cloudinary's public pair is still available directly, so covers keep working.
-    expect(capabilities.localCloudinary).toBe(true);
+    expect(capabilities).toEqual({ proxy: false, proxyImgbb: false });
   });
 
-  it('answers "no edge" when the endpoint will not say it is configured', async () => {
+  it('answers "no edge" when the endpoint reports proxy: false', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
         Promise.resolve(
-          new Response(JSON.stringify({ proxy: false, imgbb: false, cloudinary: false }), {
+          new Response(JSON.stringify({ proxy: false, imgbb: false }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           }),
@@ -365,12 +270,12 @@ describe('asking the deployment what it can do', () => {
     expect((await probeUploadCapabilities()).proxy).toBe(false);
   });
 
-  it('never mistakes a half-configured edge for a working one', async () => {
+  it('never mistakes an edge missing IMGBB_API_KEY for a working upload pipeline', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() =>
         Promise.resolve(
-          new Response(JSON.stringify({ proxy: true, imgbb: false, cloudinary: true }), {
+          new Response(JSON.stringify({ proxy: true, imgbb: false }), {
             status: 200,
             headers: { 'content-type': 'application/json' },
           }),
@@ -378,22 +283,11 @@ describe('asking the deployment what it can do', () => {
       ),
     );
     const capabilities = await probeUploadCapabilities();
-    expect(capabilities).toMatchObject({
+    expect(capabilities).toEqual({
       proxy: true,
       proxyImgbb: false,
-      proxyCloudinary: true,
     });
-    // A cover and a feed picture both want Cloudinary, so both can ride an edge
-    // that holds the Cloudinary key. A chat attachment cannot: its host is the
-    // one the edge is missing.
-    expect(planUpload('project-cover', 'image', capabilities)).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
-    expect(planUpload('post-image', 'image', capabilities)).toEqual({
-      route: 'proxy',
-      provider: 'cloudinary',
-    });
-    expect(planUpload('chat-document', 'image', capabilities)).toBeNull();
+    expect(planUpload('project-cover', 'image', capabilities)).toBeNull();
+    expect(planUpload('post-image', 'image', capabilities)).toBeNull();
   });
 });

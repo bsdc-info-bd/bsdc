@@ -21,7 +21,6 @@ import { makeDb, MIGRATIONS_DIR } from './lib.mjs';
 const HERE = fileURLToPath(new URL('.', import.meta.url));
 const MIGRATION = join(MIGRATIONS_DIR, '0058_a_voice_note_is_not_a_document.sql');
 const COMPOSER = join(HERE, '..', '..', 'src', 'components', 'messaging', 'MessageComposer.tsx');
-const RECORDER = join(HERE, '..', '..', 'src', 'lib', 'messaging', 'voice-recorder.ts');
 
 const me = 'aaaaaaaa-1111-4111-8111-000000000001';
 const you = 'bbbbbbbb-2222-4222-8222-000000000002';
@@ -197,22 +196,10 @@ check(
 // ---------------------------------------------------- the client agrees ---
 const composer = readFileSync(COMPOSER, 'utf8');
 check(
-  /audio: 'voice-note'/.test(composer) &&
-    /export type AttachmentKind = 'image' \| 'file' \| 'audio'/.test(composer),
-  'the composer files a voice note under its own purpose',
-);
-check(
-  /useVoiceRecorder/.test(composer) && /voice\.level/.test(composer),
-  'and shows the member that the microphone is hearing them',
-);
-const recorder = readFileSync(RECORDER, 'utf8');
-check(
-  /NotAllowedError/.test(recorder) && /chat\.voice\.denied/.test(recorder),
-  'a refused permission is its own sentence, not a failed upload',
-);
-check(
-  /MAX_VOICE_MS/.test(recorder) && /isTypeSupported/.test(recorder),
-  'with a limit and a codec it checked first',
+  /export type AttachmentKind = 'image'/.test(composer) &&
+    !/useVoiceRecorder/.test(composer) &&
+    !/attachFile/.test(composer),
+  'the composer restricts messenger attachments to ImgBB images without voice or file uploads',
 );
 
 // ------------------------------------------------------------ twice over ---

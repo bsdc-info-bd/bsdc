@@ -5,8 +5,7 @@ import { BodyError, readBody } from '../../_body';
  * Uploads one file on a signed-in member's behalf, to the host that file's
  * purpose requires.
  *
- * Why this exists instead of letting the browser talk to ImgBB and Cloudinary
- * directly:
+ * Why this exists instead of letting the browser talk to ImgBB directly:
  *
  *   * The ImgBB API key is a secret. Compiled into a public bundle it is
  *     readable by anybody, and anybody can then spend this site's upload quota

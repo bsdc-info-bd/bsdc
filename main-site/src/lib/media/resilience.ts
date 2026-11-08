@@ -46,36 +46,12 @@ export type ImageFailure =
 
 export type RecoveryStep = 'retry' | 'retry-later' | 'bust' | 'proxy' | 'fallback' | 'give-up';
 
-/** A URL that carries a signature, an expiry or a provider transform path. */
+/** A URL that carries a signature or expiry query parameter. */
 const SIGNED_URL_PATTERN =
-  /(?:[?&](?:token|expires?|signature|sig|x-amz-signature|x-goog-signature|Policy|Key-Pair-Id|se|sp|sv)=)|\/upload\/[^/]*s--[A-Za-z0-9_-]{8,}--\//;
+  /[?&](?:token|expires?|signature|sig|x-amz-signature|x-goog-signature|Policy|Key-Pair-Id|se|sp|sv)=/;
 
 export function isSignedUrl(url: string): boolean {
   return SIGNED_URL_PATTERN.test(url);
-}
-
-/**
- * Cloudinary delivery URLs contain their transform in the path. A transform
- * that names an asset renamed or deleted by the provider answers 404 even
- * though the original may still exist, so the ladder strips the transform
- * before it gives up. This is the difference between "the thumbnail is gone"
- * and "the picture is gone", and those are not the same thing.
- */
-export function stripDeliveryTransforms(url: string): string | null {
-  const marker = '/upload/';
-  const at = url.indexOf(marker);
-  if (at < 0) return null;
-
-  const after = url.slice(at + marker.length);
-  const slash = after.indexOf('/');
-  if (slash <= 0) return null;
-
-  const transform = after.slice(0, slash);
-  // A version segment (`v1729`, `v1`) is not a transform: `v1712/asset.jpg` is
-  // the plain delivery URL and stripping it changes nothing about the asset.
-  if (transform.length === 0 || /^v\d+$/.test(transform)) return null;
-
-  return `${url.slice(0, at + marker.length)}${after.slice(slash + 1)}`;
 }
 
 /**

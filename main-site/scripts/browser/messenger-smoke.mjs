@@ -33,8 +33,6 @@ process.env.VITE_FB_API_KEY = '';
 process.env.VITE_FB_PROJECT_ID = '';
 process.env.VITE_SUPABASE_URL = 'https://messenger-api.invalid';
 process.env.VITE_SUPABASE_PUBLISHABLE_KEY = 'browser-test-public-key';
-process.env.VITE_CLOUDINARY_CLOUD_NAME = 'browser-test-cloud';
-process.env.VITE_CLOUDINARY_UNSIGNED_PRESET = 'browser-test-preset';
 const server = await createServer({
   root,
   server: { host: '0.0.0.0', port: 0, strictPort: false, allowedHosts: true },
@@ -81,16 +79,28 @@ const uploads = [];
 async function routeHandler(route) {
   const request = route.request();
   const url = new URL(request.url());
-  if (url.hostname === 'api.cloudinary.com') {
+  if (url.pathname === '/api/media/providers') {
+    return route.fulfill({ status: 200, headers, body: JSON.stringify({ proxy: true, imgbb: true }) });
+  }
+  if (url.pathname === '/api/media/upload') {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
     uploads.push(url.pathname);
     return route.fulfill({ status: 200, headers, body: JSON.stringify({
-      secure_url: 'https://res.cloudinary.com/browser-test-cloud/raw/upload/v1/notes.pdf',
-      bytes: 24, resource_type: 'raw',
+      ok: true,
+      provider: 'imgbb',
+      kind: 'image',
+      url: 'https://i.ibb.co/browser-test/photo.png',
+      thumbUrl: 'https://i.ibb.co/browser-test/photo-medium.png',
+      deleteToken: '',
+      width: 64,
+      height: 64,
+      bytes: 68,
+      mimeType: 'image/png',
     }) });
   }
-  if (url.pathname === '/api/media/providers') {
-    return route.fulfill({ status: 200, headers, body: JSON.stringify({ proxy: false }) });
+  if (url.hostname === 'i.ibb.co') {
+    const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
+    return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*', 'content-type': 'image/png' }, body: pixel });
   }
   if (url.hostname !== 'messenger-api.invalid') return route.continue();
   if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
@@ -318,12 +328,13 @@ try {
         assert.equal(await input.inputValue(), 'Caption should stay');
         assert(await input.isEnabled());
       });
-      await check('phone: a failed document send retries without uploading the file twice', async () => {
+      await check('phone: a failed image send retries without uploading the image twice', async () => {
         const beforeUploads = uploads.length;
         failNextAfterCommit = true;
-        await input.fill('Notes attached');
+        await input.fill('Photo attached');
+        const tinyPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64');
         await page.locator('input[type="file"]').last().setInputFiles({
-          name: 'notes.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 mock document'),
+          name: 'photo.png', mimeType: 'image/png', buffer: tinyPng,
         });
         const retry = page.getByRole('button', { name: 'Try again', exact: true });
         await retry.waitFor();
@@ -335,7 +346,7 @@ try {
           retry.click(),
         ]);
         await retry.waitFor({ state: 'detached' });
-        const attemptsForFile = attempts.filter((entry) => entry.p_media_name === 'notes.pdf');
+        const attemptsForFile = attempts.filter((entry) => entry.p_media_name === 'photo.png');
         assert.equal(attemptsForFile.length, 2);
         assert.equal(attemptsForFile[0].p_client_id, attemptsForFile[1].p_client_id);
         assert.equal(attemptsForFile[0].p_media_url, attemptsForFile[1].p_media_url);

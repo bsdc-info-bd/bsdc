@@ -105,7 +105,7 @@ await check(
 
 // Saving a picture: the column grant allows it, the write lands, the value
 // survives a fresh read — which is what the next sign-in performs.
-const avatar = 'https://res.cloudinary.com/bsdc/image/upload/v1/avatars/ada.jpg';
+const avatar = 'https://i.ibb.co/avatars/ada.webp';
 await check(
   db,
   `select has_column_privilege('authenticated', 'public.profiles', 'avatar_url', 'update')`,

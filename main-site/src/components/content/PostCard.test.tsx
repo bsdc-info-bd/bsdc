@@ -114,21 +114,20 @@ describe('a post in the feed', () => {
   it('marks only the first card’s picture as worth loading early', () => {
     const picture = {
       mediaId: 'm1',
-      url: 'https://res.cloudinary.com/bsdc/image/upload/v1/post/a.png',
-      thumbUrl: '',
+      url: 'https://i.ibb.co/full/a.webp',
+      thumbUrl: 'https://i.ibb.co/medium/a.webp',
       altText: 'A screenshot of the dashboard',
       position: 0,
       width: 1200,
       height: 800,
     };
     const { unmount } = renderCard(post({ media: [picture] }), true);
-    // A one-picture card puts the picture in the header, at high priority, and
-    // asks the host for the width the card draws rather than the original.
     const first = screen.getByRole('img', { name: 'A screenshot of the dashboard' });
     expect(first).toHaveAttribute('fetchpriority', 'high');
     expect(first).toHaveAttribute('loading', 'eager');
-    expect(first.getAttribute('src') ?? '').toMatch(/w_\d+/);
+    expect(first).toHaveAttribute('src', 'https://i.ibb.co/medium/a.webp');
     expect(first.getAttribute('srcset') ?? '').toContain(' 640w');
+    expect(first.getAttribute('srcset') ?? '').toContain(' 1200w');
     unmount();
 
     renderCard(post({ media: [picture] }), false);
