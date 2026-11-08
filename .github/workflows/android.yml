@@ -256,9 +256,16 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
+      - name: Install Gradle 8.9 with checksum verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://services.gradle.org/distributions/gradle-8.9-bin.zip'
+          curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 3 "$base" -o "$RUNNER_TEMP/gradle-8.9-bin.zip"
+          curl --fail --silent --show-error --location --retry 5 --retry-all-errors --retry-delay 3 "$base.sha256" -o "$RUNNER_TEMP/gradle-8.9-bin.zip.sha256"
+          (cd "$RUNNER_TEMP" && sha256sum -c gradle-8.9-bin.zip.sha256)
+          unzip -q "$RUNNER_TEMP/gradle-8.9-bin.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/gradle-8.9/bin" >> "$GITHUB_PATH"
       - uses: android-actions/setup-android@v3
       - name: Install Android SDK platform
         run: |

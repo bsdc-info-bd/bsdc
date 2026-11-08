@@ -23,6 +23,10 @@
 #   deploying.md            tells an operator what each secret has to look like,
 #                           including that a service-account key begins with that
 #                           header.
+#   push-worker/src/fcm.ts  parses PEM boundaries and therefore names the
+#                           standard private-key block; it contains no key.
+#   push-worker/src/fcm-deliver.test.ts constructs an ephemeral RSA key in a
+#                           test and formats it as PEM; no fixed key is stored.
 #   support.test.ts         a synthetic public VAPID value for a parser test.
 #   db-prove/*.mjs          a local-only sentinel flush secret in in-process
 #                           PGlite proofs, never used for a real delivery. The same
@@ -42,6 +46,8 @@ paths = [
   '''main-site/functions/api/auth/claims\.ts$''',
   '''main-site/functions/api/auth/claims-core\.ts$''',
   '''docs/deploying\.md$''',
+  '''push-worker/src/fcm\.ts$''',
+  '''push-worker/src/fcm-deliver\.test\.ts$''',
   '''main-site/src/lib/push/support\.test\.ts$''',
   '''main-site/scripts/db-prove/t3[0-9]\.mjs$''',
   '''main-site/scripts/db-prove/t4[0-9]\.mjs$''',

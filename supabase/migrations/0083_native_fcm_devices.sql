@@ -16,6 +16,9 @@ create table if not exists public.fcm_devices (
 create index if not exists fcm_devices_uid_idx on public.fcm_devices(uid, last_seen_at desc);
 alter table public.fcm_devices enable row level security;
 revoke all on public.fcm_devices from anon, authenticated;
+drop policy if exists fcm_devices_deny_direct_access on public.fcm_devices;
+create policy fcm_devices_deny_direct_access on public.fcm_devices
+  for all to anon, authenticated using (false) with check (false);
 
 drop trigger if exists fcm_devices_touch on public.fcm_devices;
 create trigger fcm_devices_touch before update on public.fcm_devices

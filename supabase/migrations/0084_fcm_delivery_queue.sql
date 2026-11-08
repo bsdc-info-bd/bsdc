@@ -16,6 +16,9 @@ create index if not exists fcm_attempts_due_idx on public.fcm_delivery_attempts(
   where delivered_at is null and failed_at is null;
 alter table public.fcm_delivery_attempts enable row level security;
 revoke all on public.fcm_delivery_attempts from anon, authenticated;
+drop policy if exists fcm_delivery_attempts_deny_direct_access on public.fcm_delivery_attempts;
+create policy fcm_delivery_attempts_deny_direct_access on public.fcm_delivery_attempts
+  for all to anon, authenticated using (false) with check (false);
 
 create or replace function public.fcm_claim_pending(p_secret text, p_limit integer default 200)
 returns table(
