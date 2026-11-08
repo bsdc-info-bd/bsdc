@@ -166,7 +166,7 @@ async function routeHandler(route) {
   } else if (name === 'conversation_members') {
     const target = url.searchParams.get('conversation_id')?.replace('eq.', '');
     if (request.method() === 'PATCH') {
-      if (failNextDraftWrite && Object.hasOwn(args, 'draft_body')) {
+      if (failNextDraftWrite && target === cid && args.draft_body === 'Please save this draft') {
         failNextDraftWrite = false;
         return route.fulfill({ status: 503, headers, body: JSON.stringify({ code: '08006', message: 'mock draft write failed' }) });
       }
@@ -388,6 +388,7 @@ try {
       });
       await check('phone: failed draft saving is visible and retryable', async () => {
         const composer = page.getByLabel('Write a message');
+        await composer.waitFor();
         failNextDraftWrite = true;
         await composer.fill('Please save this draft');
         const warning = page.getByRole('status').filter({ hasText: 'Draft not saved' });
