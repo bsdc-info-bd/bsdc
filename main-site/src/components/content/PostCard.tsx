@@ -34,11 +34,39 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const when = post.publishedAt ?? post.createdAt;
+  /**
+   * A post's pictures, or its cover when it has no pictures yet.
+   *
+   * `cover_url` was uploaded, stored, preloaded in the home page's `<head>` at
+   * `fetchpriority="high"` — and never drawn, because only `media` rows were
+   * rendered. So every visit to the feed downloaded a full-size cover that no
+   * element displayed, on the same connection the visible pictures were waiting
+   * for, and an author who set a cover saw it nowhere. One image, one place.
+   */
   const gallery = toGalleryItems(post.media);
+  const cover = post.coverUrl.trim();
+  const pictures =
+    gallery.length > 0
+      ? gallery
+      : /^https:\/\//.test(cover)
+        ? [
+            {
+              id: `cover-${post.id}`,
+              url: cover,
+              thumbUrl: cover,
+              // The title is what the picture illustrates, and a decorative
+              // empty alt would make the cover invisible to a screen reader on a
+              // card whose only picture it is.
+              altText: post.title.trim(),
+              width: null,
+              height: null,
+            },
+          ]
+        : [];
   // One picture is the card's header and goes first, edge to edge; a set of
   // them is content, and stays in the body where a grid does not fight the
   // title for attention.
-  const placement = placementFor(gallery);
+  const placement = placementFor(pictures);
   const galleryLabel = t('media.gallery.postImages');
 
   return (
@@ -50,7 +78,7 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
     >
       {placement === 'header' ? (
         <div className="overflow-hidden rounded-t-card">
-          <MediaGallery items={gallery} flush priority={priority} label={galleryLabel} />
+          <MediaGallery items={pictures} flush priority={priority} label={galleryLabel} />
         </div>
       ) : null}
 
@@ -108,7 +136,12 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
         </div>
 
         {placement === 'body' ? (
-          <MediaGallery items={gallery} priority={priority} label={galleryLabel} className="mt-3" />
+          <MediaGallery
+            items={pictures}
+            priority={priority}
+            label={galleryLabel}
+            className="mt-3"
+          />
         ) : null}
 
         {/* Tags below the text, as hashtags, which is how a developer scans for a

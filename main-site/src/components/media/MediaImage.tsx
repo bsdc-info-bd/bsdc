@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type ImgHTMLAttributes } from
 import { useTranslation } from 'react-i18next';
 import { useOnlineStatus } from '@/hooks/use-online-status';
 import { cn } from '@/lib/cn';
+import { isRepairableMediaHost } from '@/lib/media/hosts';
 import { responsiveSource, type ResponsiveSource } from '@/lib/media/optimise';
 import {
   advanceRecovery,
@@ -40,6 +41,22 @@ export interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement
 
 /** Longest single retry delay in the recovery ladder. */
 const MAX_DELAY_MS = 5_000;
+
+/**
+ * The ImgBB host of an address, or null when it is not one this edge can fetch.
+ *
+ * Relative addresses are never proxied: they are already same-origin, so there
+ * is no CORS, referrer or hotlink problem for the proxy to solve.
+ */
+function hostOf(url: string): string | null {
+  try {
+    const parsed = new URL(url, 'https://bsdc.info.bd');
+    if (!/^https?:$/.test(parsed.protocol)) return null;
+    return isRepairableMediaHost(parsed.hostname) ? parsed.hostname : null;
+  } catch {
+    return null;
+  }
+}
 
 interface Painting {
   url: string;
@@ -103,7 +120,16 @@ export function MediaImage({
         : mediumUrl.length > 0 && mediumUrl !== primary
           ? mediumUrl
           : '';
-  const canProxy = allowProxy && primary.length > 0;
+  /**
+   * The proxy can only fetch what its allowlist names.
+   *
+   * `/media/i` answers 400 for anything that is not on an ImgBB host, so asking
+   * it to repair a Google avatar or a legacy Cloudinary row spent four rungs of
+   * the ladder on four guaranteed failures — four extra requests per picture, per
+   * page, on the connection every other picture was sharing. A host this
+   * platform cannot repair gets the rungs that can work and nothing else.
+   */
+  const canProxy = allowProxy && primary.length > 0 && hostOf(primary) !== null;
 
   const machine = useRef<RecoveryState>(initialRecoveryState(primary));
   const failures = useRef(0);
@@ -280,6 +306,11 @@ export function MediaImage({
       src={painting.url}
       alt={alt}
       className={cn(!loaded && 'bg-surface-2', className)}
+      // Lazy unless the caller says otherwise. Every `<img>` in a feed used to be
+      // eager, so opening a twenty-post page started twenty downloads at once on
+      // the connection the first one needed. The caller still wins: a hero image
+      // passes `loading="eager"` and is loaded immediately.
+      loading={imageProps.loading ?? 'lazy'}
       onError={handleError}
       onLoad={handleLoad}
       data-attempt={painting.attempt}

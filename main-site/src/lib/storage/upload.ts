@@ -330,12 +330,27 @@ export function planUpload(
 const PROVIDERS_ENDPOINT = '/api/media/providers';
 const UPLOAD_ENDPOINT = '/api/media/upload';
 
+/**
+ * How long an answer from `/api/media/providers` is believed.
+ *
+ * The answer used to be believed for the life of the tab, and that was a bug
+ * with a support ticket attached. A probe that failed once — a phone that was
+ * offline for the half-second it ran, a captive portal, a cold edge — cached
+ * "this deployment cannot upload" in memory, and every upload for the rest of
+ * the session said "uploads are not configured for this deployment" even though
+ * `IMGBB_API_KEY` was set and the endpoint was working. Fixing the deployment
+ * could not fix the tab.
+ */
+const CAPABILITY_TTL_MS = 60_000;
+
 let cachedCapabilities: UploadCapabilities | null = null;
+let cachedAt = 0;
 let probeInFlight: Promise<UploadCapabilities> | null = null;
 
 /** Fixes what the deployment can do — used by tests and by a startup warm-up. */
 export function setUploadCapabilities(capabilities: UploadCapabilities | null): void {
   cachedCapabilities = capabilities;
+  cachedAt = Date.now();
 }
 
 export function knownCapabilities(): UploadCapabilities | null {
@@ -379,20 +394,51 @@ export async function probeUploadCapabilities(signal?: AbortSignal): Promise<Upl
   }
 }
 
+/**
+ * What the last probe said, if it said anything recently.
+ *
+ * Exported for the diagnostics screen and for tests. **Nothing decides whether
+ * an upload may be attempted from this.** The endpoint is the authority: it is
+ * the thing that holds the key, and it is the only thing that can say whether
+ * the key works. A pre-flight that can veto an upload is a second source of
+ * truth about a secret the browser cannot see, and it is exactly how a correctly
+ * configured deployment came to tell its members that uploads were not
+ * configured.
+ */
 async function capabilities(signal?: AbortSignal): Promise<UploadCapabilities> {
-  if (cachedCapabilities) return cachedCapabilities;
-  probeInFlight ??= probeUploadCapabilities(signal).then((result) => {
-    cachedCapabilities = result;
-    probeInFlight = null;
-    return result;
-  });
+  if (cachedCapabilities !== null && Date.now() - cachedAt < CAPABILITY_TTL_MS) {
+    return cachedCapabilities;
+  }
+  probeInFlight ??= probeUploadCapabilities(signal)
+    .then((result) => {
+      cachedCapabilities = result;
+      cachedAt = Date.now();
+      probeInFlight = null;
+      return result;
+    })
+    .catch(() => {
+      probeInFlight = null;
+      return localCapabilities();
+    });
   return probeInFlight;
 }
 
 /** Forgets a probe that turned out to be wrong, so the next upload re-asks. */
 function invalidateCapabilities(): void {
   cachedCapabilities = null;
+  cachedAt = 0;
   probeInFlight = null;
+}
+
+/**
+ * Warms the connection and the probe, without ever blocking an upload.
+ *
+ * Runs while the browser is idle so that the first member to attach a picture
+ * does not pay for the question — but its answer is a hint, and a hint that is
+ * wrong must never become a refusal. See `capabilities` above.
+ */
+export function warmUploadCapabilities(): void {
+  void capabilities().catch(() => undefined);
 }
 
 // -------------------------------------------------------------------- proxy ---
@@ -406,9 +452,22 @@ interface ProxyErrorBody {
   errorKey?: string;
 }
 
-/** True when the endpoint itself is absent. */
+/**
+ * True when the endpoint itself is absent, as opposed to broken.
+ *
+ * The distinction is the difference between a message that is true and one that
+ * sends a member (and an administrator) after the wrong thing:
+ *
+ *   - `404`/`405`/`501` — nothing is published at this address. The Pages
+ *     Functions were not deployed with the site.
+ *   - `200` with no JSON — the single-page app's own shell answered, which is
+ *     what this deployment does for any address no Function claims.
+ *   - anything else without a body — the endpoint exists and failed (a 500, a
+ *     proxy's 502). That is `failed`, not `notConfigured`.
+ */
 function endpointMissing(status: number, body: unknown): boolean {
   if (status === 404 || status === 405 || status === 501) return true;
+  if (status >= 400) return false;
   return body === null || typeof body !== 'object';
 }
 
@@ -435,6 +494,30 @@ async function idToken(): Promise<string> {
   return '';
 }
 
+/**
+ * One attempt at the endpoint, or two when the first was a transport failure.
+ *
+ * A dropped connection on a train is not a refusal, and the difference matters:
+ * the first is worth one silent retry (the browser has already paid for the
+ * connection), the second must be shown to the member. A retry is only ever made
+ * when *no* answer arrived — never after a 4xx, which would send the same bytes
+ * twice for a request the server has already judged.
+ */
+async function postWithRetry(options: XhrOptions): Promise<XhrOutcome> {
+  try {
+    return await postForm(options);
+  } catch (error) {
+    const key = error instanceof MediaError ? error.messageKey : '';
+    // Only a transport failure is retried: no answer arrived, so nothing was
+    // judged. A 4xx is a judgement, and repeating it sends the same bytes twice.
+    const abandoned = (): boolean => options.signal?.aborted === true;
+    if (key !== 'media.errors.failed' || abandoned()) throw error;
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    if (abandoned()) throw new MediaError('media.errors.cancelled');
+    return await postForm(options);
+  }
+}
+
 async function uploadThroughProxy(
   file: File,
   purpose: MediaPurpose,
@@ -456,7 +539,7 @@ async function uploadThroughProxy(
   body.append('file', outgoing);
   body.append('purpose', purpose);
 
-  const outcome = await postForm({
+  const outcome = await postWithRetry({
     url: UPLOAD_ENDPOINT,
     body,
     headers: { authorization: `Bearer ${token}` },
@@ -506,12 +589,34 @@ export interface UploadOptions {
 
 /**
  * Validates, compresses to WebP, and uploads an image to ImgBB via `/api/media/upload`.
+ *
+ * ## Why this does not ask permission first
+ *
+ * It used to: `await capabilities()`, then `planUpload(...)`, then refuse with
+ * `media.errors.notConfigured` — "Uploads are not configured for this
+ * deployment" — if the pre-flight had not said yes. Every one of these is a way
+ * for that pre-flight to say no while the deployment is perfectly configured:
+ *
+ *   - the probe request failed and the browser cached the failure for the tab;
+ *   - the probe ran before the member signed in and something answered early;
+ *   - a service worker, an extension, an in-app browser or a captive portal
+ *     answered `/api/media/providers` with something that is not JSON;
+ *   - the edge was cold and the 8-second deadline expired;
+ *   - the key was added to Cloudflare *after* this tab was opened.
+ *
+ * The endpoint holds the key. It is the only thing that can answer the question,
+ * and it answers it by either uploading the file or naming the reason it will
+ * not. So the file is validated locally (type, size, emptiness — all free) and
+ * then sent. A refusal from the server is still a refusal, with the server's own
+ * reason, and it is still shown in the member's language.
  */
 export async function uploadMedia(file: File, options: UploadOptions): Promise<UploadResult> {
-  const kind = assertUploadable(file);
-  const available = await capabilities(options.signal);
-  const plan = planUpload(options.purpose, kind, available);
+  // Cheap, local, and the only checks that can be made without the network.
+  assertUploadable(file);
 
-  if (plan === null) throw new MediaError('media.errors.notConfigured');
+  // Warm the probe so `/api/media/providers` is in flight (or answered) by the
+  // time the response comes back — useful evidence, never a gate.
+  warmUploadCapabilities();
+
   return uploadThroughProxy(file, options.purpose, options.onProgress, options.signal);
 }

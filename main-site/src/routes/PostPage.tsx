@@ -3,6 +3,7 @@ import { Check, Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { MediaImage } from '@/components/media/MediaImage';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { CommentThread } from '@/components/interactions/CommentThread';
 import { MediaGallery } from '@/components/media/MediaGallery';
@@ -287,10 +288,18 @@ export default function PostPage() {
           ) : null}
 
           {post.coverUrl.length > 0 ? (
-            <img
+            // The post's own picture, drawn by the same element as every other
+            // picture on the platform. A plain `<img>` here meant the one image
+            // a reader came for had no retry, no verification that the bytes it
+            // painted were a picture, no designed empty state, and no route
+            // through the edge when the host refused it — while a 48px avatar
+            // beside it had all four.
+            <MediaImage
               src={post.coverUrl}
-              alt=""
-              loading="lazy"
+              alt={post.title}
+              slotWidth={960}
+              loading="eager"
+              decoding="async"
               className="mt-5 w-full rounded-card object-cover"
             />
           ) : null}

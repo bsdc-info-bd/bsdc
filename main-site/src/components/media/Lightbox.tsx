@@ -224,6 +224,10 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
                 alt=""
                 loading="lazy"
                 decoding="async"
+                // Same referrer policy as every other picture: the host is never
+                // told where the request came from, so a hotlink rule at the
+                // picture host cannot break the strip.
+                referrerPolicy="no-referrer"
                 className="h-full w-full object-cover"
               />
             </button>

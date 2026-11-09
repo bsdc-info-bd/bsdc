@@ -66,16 +66,39 @@ beforeEach(() => {
 });
 
 describe('provider transport', () => {
-  it('never sends any image directly to ImgBB or Supabase from the client bundle when the edge is down', async () => {
+  it('never sends any image directly to ImgBB or Supabase, whatever the probe says', async () => {
+    // The probe reporting "the edge is down" is not permission to bypass it.
+    // The browser has no key, so there is nowhere else an upload can legally
+    // go — and a probe that is wrong (it was, in production) must not turn a
+    // working deployment into "uploads are not configured".
     setUploadCapabilities({ proxy: false, proxyImgbb: false });
     const file = new File([new Uint8Array([0, 1, 2, 255])], 'post.png', {
       type: 'image/png',
     });
 
-    await expect(uploadMedia(file, { purpose: 'post-image' })).rejects.toMatchObject({
-      messageKey: 'media.errors.notConfigured',
-    });
-    expect(requests).toHaveLength(0);
+    const result = await uploadMedia(file, { purpose: 'post-image' });
+
+    expect(requests.map((request) => request.url)).toEqual(['/api/media/upload']);
+    expect(result.provider).toBe('imgbb');
+    expect(requests.some((request) => /imgbb|supabase/.test(request.url))).toBe(false);
+  });
+
+  it('reports "not configured" only when the endpoint itself says so', async () => {
+    const file = new File([new Uint8Array([0, 1, 2, 255])], 'post.png', { type: 'image/png' });
+    const fake = FakeXMLHttpRequest as unknown as { prototype: Record<string, unknown> };
+    const original = fake.prototype['send'] as (body: XMLHttpRequestBodyInit | null) => void;
+    fake.prototype['send'] = function (this: FakeXMLHttpRequest) {
+      this.status = 503;
+      this.response = { ok: false, errorKey: 'media.errors.notConfigured' };
+      queueMicrotask(() => this.onload?.());
+    };
+    try {
+      await expect(uploadMedia(file, { purpose: 'post-image' })).rejects.toMatchObject({
+        messageKey: 'media.errors.notConfigured',
+      });
+    } finally {
+      fake.prototype['send'] = original;
+    }
   });
 
   it('sends both feed images and project covers exclusively through /api/media/upload to ImgBB', async () => {

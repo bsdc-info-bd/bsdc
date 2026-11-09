@@ -53,7 +53,7 @@ to the same three databases.
   - `bsdc-bd` powers the main site and Android app.
   - `bsdc-second` powers every corporate/staff app.
 - **Firestore** — small runtime config and cache collections only.
-- **ImgBB** — all user-uploaded images across BSDC (avatars, covers, posts, comments, chat images, projects, marketplace products), compressed client-side to WebP and uploaded via `/api/media/upload`. No video, voice, or generic file uploads.
+- **ImgBB** — all user-uploaded images across BSDC (avatars, covers, posts, comments, chat images, projects, marketplace products), compressed client-side to WebP and uploaded via `/api/media/upload`. No video, voice, or generic file uploads, and no second image host. The full pipeline, its failure modes and the commands that verify a live deployment are in [`docs/upload-pipeline.md`](./docs/upload-pipeline.md).
 - **OpenStreetMap / Leaflet** — all maps, plus a direct "Open in Google Maps" link.
 
 ### Serverless
@@ -116,6 +116,12 @@ The reusable detailed execution brief is [the BSDC master implementation prompt]
 Whole-platform local gate results and remaining release blockers are in
 [release readiness](./docs/release-readiness.md). Run `node scripts/release-check.mjs --install`
 to reproduce the package checks.
+
+Images have their own history and their own verification:
+[`docs/picture-delivery.md`](./docs/picture-delivery.md) records why pictures
+stopped loading and what makes that impossible, and
+`node scripts/verify-media.mjs https://www.bsdc.info.bd` asks a live deployment
+whether it can accept a picture and serve one back.
 Actual Chromium public-browser results are in [browser acceptance](./docs/browser-acceptance.md).
 Run `cd main-site && npm run test:browser` on Node 22+ for desktop/mobile-emulation smoke tests.
 Production/browser verification remains separate from local build and SQL proofs.

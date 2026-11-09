@@ -27,6 +27,9 @@ const sent: Sent[] = [];
 
 let answers: { match: string; status: number; body: unknown }[] = [];
 
+/** How many upcoming requests should fail at the transport level. */
+let transportFailures = 0;
+
 class FakeXMLHttpRequest {
   upload: { onprogress: ((event: ProgressEvent<EventTarget>) => void) | null } = {
     onprogress: null,
@@ -52,6 +55,11 @@ class FakeXMLHttpRequest {
   send(body: XMLHttpRequestBodyInit | null) {
     this.record.body = body;
     sent.push(this.record);
+    if (transportFailures > 0) {
+      transportFailures -= 1;
+      queueMicrotask(() => this.onerror?.());
+      return;
+    }
     const answer = answers.find((candidate) => this.record.url.includes(candidate.match));
     this.status = answer?.status ?? 200;
     this.response = answer?.body ?? null;
@@ -104,6 +112,7 @@ function picture(): File {
 beforeEach(() => {
   sent.length = 0;
   answers = [];
+  transportFailures = 0;
   getIdToken.mockClear();
   vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest as unknown as typeof XMLHttpRequest);
   setUploadCapabilities(EDGE_UP);
@@ -188,6 +197,16 @@ describe('uploading through the edge', () => {
     expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
+  it('reports a broken endpoint as a failure, not as an unconfigured one', async () => {
+    // A 500 from a function that exists must not tell the member the deployment
+    // is unconfigured: the fix for one is "retry", and for the other it is "ask
+    // an administrator", and only one of them is true at a time.
+    answers = [{ match: PROXY, status: 500, body: null }];
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.failed',
+    });
+  });
+
   it('treats an application shell HTML answer as a missing endpoint, not as a picture', async () => {
     answers = [
       { match: PROXY, status: 200, body: null },
@@ -200,12 +219,53 @@ describe('uploading through the edge', () => {
     expect(sent.map((request) => request.url)).toEqual([PROXY]);
   });
 
-  it('gives a readable reason when no transport is configured', async () => {
+  it('still asks the endpoint when the pre-flight said no, because the probe is a hint', async () => {
+    // This is the reported production bug, in one test. `IMGBB_API_KEY` was set
+    // in Cloudflare and `/api/media/upload` worked; the *probe* had failed once
+    // (a cold edge, a captive portal, a service worker) and the answer was
+    // cached for the life of the tab. Every upload then said "UPLOADS ARE NOT
+    // CONFIGURED FOR THIS DEPLOYMENT" without ever asking the endpoint that
+    // holds the key. The probe must never be able to veto an upload.
     setUploadCapabilities(EDGE_DOWN);
+    answers = [{ match: PROXY, status: 200, body: PROXY_OK }];
+
+    const result = await uploadMedia(picture(), { purpose: 'post-image' });
+
+    expect(result.url).toBe(PROXY_OK.url);
+    expect(sent.map((request) => request.url)).toEqual([PROXY]);
+  });
+
+  it('believes the endpoint rather than the probe when the endpoint says the key is missing', async () => {
+    setUploadCapabilities(EDGE_UP);
+    answers = [
+      { match: PROXY, status: 503, body: { ok: false, errorKey: 'media.errors.notConfigured' } },
+    ];
     await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
       messageKey: 'media.errors.notConfigured',
     });
-    expect(sent).toHaveLength(0);
+  });
+
+  it('retries once when no answer arrived at all', async () => {
+    // A dropped connection on a train is not a refusal: one silent retry is
+    // worth it, because the browser has already paid for the connection.
+    answers = [{ match: PROXY, status: 200, body: PROXY_OK }];
+    transportFailures = 1;
+
+    const result = await uploadMedia(picture(), { purpose: 'post-image' });
+
+    expect(result.url).toBe(PROXY_OK.url);
+    expect(sent).toHaveLength(2);
+  });
+
+  it('never retries a refusal, which would send the same bytes twice', async () => {
+    answers = [
+      { match: PROXY, status: 413, body: { ok: false, errorKey: 'media.errors.tooLarge' } },
+    ];
+
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.tooLarge',
+    });
+    expect(sent).toHaveLength(1);
   });
 
   it('rejects non-image files before any network request', async () => {

@@ -259,9 +259,26 @@ jobs:
               process.stdin.on("end", () => {
                 const status = JSON.parse(data);
                 if (status.imgbb !== true) {
-                  console.warn("::warning title=ImgBB key missing in Pages::Set IMGBB_API_KEY in GitHub Secrets or Cloudflare Pages project bsdc so image uploads succeed.");
+                  console.warn("::warning title=ImgBB key missing in Pages::Set IMGBB_API_KEY in Cloudflare Pages project bsdc (Production AND Preview) so image uploads succeed.");
                 }
               });'
+
+          # The upload endpoint must exist. A deployment whose Pages Functions
+          # were not uploaded answers an anonymous POST with 404 or with the app
+          # shell, and every member then sees "uploads are not available" while
+          # the key sits correctly in Cloudflare. 401 + a JSON errorKey is the
+          # only correct answer, and it is the only way to tell the two apart
+          # from outside.
+          UPLOAD_CODE=$(curl -sS -o /tmp/bsdc-upload-check.json -w "%{http_code}" \
+            -X POST -H "content-type: application/json" --data '{}' \
+            "$DEPLOYMENT_URL/api/media/upload" || echo "000")
+          if [ "$UPLOAD_CODE" != "401" ]; then
+            echo "::error title=Upload endpoint missing::POST $DEPLOYMENT_URL/api/media/upload answered HTTP $UPLOAD_CODE instead of 401. The Pages Functions were not deployed with this site; uploads cannot work."
+            cat /tmp/bsdc-upload-check.json || true
+            exit 1
+          fi
+          rm -f /tmp/bsdc-upload-check.json
+          echo "Upload endpoint is deployed and refusing anonymous callers, as it should."
 
       - name: Record where it went
         if: steps.scope.outputs.run == 'true'

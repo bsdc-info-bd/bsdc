@@ -35,7 +35,7 @@ import { BodyError, readBody } from '../../_body';
  * call, and the identity of the service behind this endpoint is not advertised.
  */
 import { isMediaPurpose } from '../../../src/lib/storage/media-contract';
-import { reject, sendToHost, type MediaEnv } from '../../_media';
+import { HostError, reject, rejectBytes, sendToHost, type MediaEnv } from '../../_media';
 import { memberOf } from '../../_member-token';
 
 interface UploadEnv extends MediaEnv {
@@ -87,12 +87,28 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   const refused = reject(file, purpose, context.env);
   if (refused !== null) return failure(refused.errorKey, refused.status);
 
+  // And refused on the evidence rather than the label: a declared image type
+  // over bytes that are not an image is still not an image. The bytes are read
+  // once here and handed on, so the signature check costs no extra copy.
+  let bytes: Uint8Array;
   try {
-    const result = await sendToHost(file, purpose, context.env);
-    return json({ ok: true, ...result }, 200);
+    bytes = new Uint8Array(await file.arrayBuffer());
   } catch {
+    return failure('media.errors.empty', 400);
+  }
+  const notAnImage = rejectBytes(bytes);
+  if (notAnImage !== null) return failure(notAnImage.errorKey, notAnImage.status);
+
+  try {
+    const result = await sendToHost(file, purpose, context.env, bytes);
+    return json({ ok: true, ...result }, 200);
+  } catch (error) {
     // The host refused or was unreachable. Which host, and what it said, stays
-    // here; the member gets the same readable failure either way.
+    // here; the member gets a readable reason either way. A refused credential
+    // is reported as `notConfigured` rather than as a generic failure, because
+    // the two need different things done about them and only one of them is
+    // worth asking the member to retry.
+    if (error instanceof HostError) return failure(error.errorKey, error.status);
     return failure('media.errors.failed', 502);
   }
 };
