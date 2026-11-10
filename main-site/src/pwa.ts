@@ -1,28 +1,32 @@
 import { registerSW } from 'virtual:pwa-register';
 import { toast } from 'sonner';
+import {
+  IMAGE_CACHE_NAME,
+  isStaleImageCacheName,
+  MANAGED_CACHE_PREFIXES,
+} from '@/lib/media/cache-names';
 import i18n from './i18n';
 
 /**
  * The version of the picture cache this build expects.
  *
- * It must match `IMAGE_CACHE` in `src/sw.ts`. When a worker is updated, this
- * string changes with it, and the code below deletes every picture cache that
- * does not match — from the page, immediately, without waiting for the member to
- * accept an update prompt.
+ * It is not a literal, and that is the fix. It used to be one — `bsdc-images-v4`
+ * in this file against `bsdc-images-v5` in `src/sw.ts` — so the repair routine
+ * below deleted the running worker's *live* cache on every fresh browser, and
+ * kept doing it on every load wherever `localStorage` was blocked. Pictures were
+ * fetched twice and the cache never stayed warm. One constant, in
+ * `lib/media/cache-names`, imported by both.
  *
- * That is the fix for browsers that are *already* broken. A member who saw "all
- * images stopped loading and clearing the cache fixed it" has a cache full of
- * poison. The worker that would clean it up is waiting behind a "reload to
- * update" toast the member may never press. So the page does it: on load, once
- * per version, every stale picture cache is dropped.
+ * That is still the fix for browsers that are *already* broken. A member who saw
+ * "all images stopped loading and clearing the cache fixed it" has a cache full
+ * of poison. The worker that would clean it up may be waiting behind an update
+ * prompt the member never presses, so the page does it too: on load, once per
+ * version, every stale picture cache is dropped.
  */
-export const IMAGE_CACHE_VERSION = 'bsdc-images-v4';
+export const IMAGE_CACHE_VERSION = IMAGE_CACHE_NAME;
 
 /** Where the page remembers which version it has already healed. */
 const HEAL_KEY = 'bsdc.media.healed';
-
-/** Every cache prefix this worker owns; anything else belongs to someone else. */
-const MANAGED_PREFIXES = ['bsdc-images', 'bsdc-fonts'];
 
 function cacheStorageAvailable(): boolean {
   // A private window in some browsers throws on `caches` rather than returning
@@ -40,12 +44,15 @@ export async function healMediaCaches(current = IMAGE_CACHE_VERSION): Promise<st
   if (!cacheStorageAvailable()) return [];
   try {
     const names = await caches.keys();
-    const stale = names.filter((name) => {
-      if (!MANAGED_PREFIXES.some((prefix) => name.startsWith(prefix))) return false;
-      // A font cache is content-addressed by a filename that changes with the
-      // build, so it never needs healing; only the picture cache does.
-      return name.startsWith('bsdc-images') && name !== current;
-    });
+    const stale = names.filter(
+      (name) =>
+        // Nothing this platform does not own is ever deleted.
+        MANAGED_CACHE_PREFIXES.some((prefix) => name.startsWith(prefix)) &&
+        // A font cache is content-addressed by a filename that changes with the
+        // build, so it never needs healing; only the picture cache does.
+        isStaleImageCacheName(name) &&
+        name !== current,
+    );
     await Promise.all(stale.map((name) => caches.delete(name)));
     return stale;
   } catch {

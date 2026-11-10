@@ -577,7 +577,8 @@ export const en = {
       failed: 'The upload failed. Please try again.',
       recordFailed:
         'The image was uploaded but could not be attached to your post. Please try again.',
-      notConfigured: 'Uploads are not configured for this deployment.',
+      notConfigured:
+        'Picture uploads are unavailable right now. Please try again in a moment — if it keeps happening, contact support.',
       signInRequired: 'Sign in to upload. Your session has expired; reload the page and try again.',
       tooMany: 'That is as many pictures as one post can hold.',
       cancelled: 'The upload was cancelled.',

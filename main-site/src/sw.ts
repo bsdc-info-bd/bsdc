@@ -60,14 +60,13 @@ import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
 
 import {
-  deliveredHeaders,
-  isFresh,
-  isStorableImage,
-  isUsableWhenStale,
-  MIN_IMAGE_BYTES,
-  stampStored,
-} from '@/lib/media/cache-policy';
+  FONT_CACHE_NAME,
+  IMAGE_CACHE_NAME,
+  isStaleFontCacheName,
+  isStaleImageCacheName,
+} from '@/lib/media/cache-names';
 import { isAllowedMediaHost, MEDIA_MAX_AGE_SECONDS, MEDIA_PROXY_PATH } from '@/lib/media/hosts';
+import { handleManagedImage } from '@/lib/media/image-strategy';
 import { parsePushContent, summarize, type PushContent } from '@/lib/notifications/copy';
 import { urlBase64ToUint8Array } from '@/lib/push/webpush';
 
@@ -79,12 +78,12 @@ const BADGE = '/icons/maskable-512.png';
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '';
 
 /**
- * The name carries the version on purpose. Bumping it abandons every entry the
- * previous worker wrote, which is how a browser whose cache is already poisoned
- * is fixed without asking its owner to clear anything.
+ * The names live in `lib/media/cache-names`, because the page deletes what it
+ * does not recognise and a second copy of a version string is how the page ends
+ * up deleting the worker's live cache. See that file for the bug.
  */
-const IMAGE_CACHE = 'bsdc-images-v5';
-const FONT_CACHE = 'bsdc-fonts-v2';
+const IMAGE_CACHE = IMAGE_CACHE_NAME;
+const FONT_CACHE = FONT_CACHE_NAME;
 
 /** How long a stored picture is served without asking the network. */
 const IMAGE_TRUST_MS = MEDIA_MAX_AGE_SECONDS * 1000;
@@ -153,127 +152,30 @@ function isManagedImage(request: Request): boolean {
   }
 }
 
-async function putVerified(cacheName: string, request: Request, response: Response): Promise<void> {
-  try {
-    const cache = await caches.open(cacheName);
-    // A body read twice needs a clone; the original is what the page receives.
-    const body = await response.clone().blob();
-    if (body.size < MIN_IMAGE_BYTES) {
-      // A body that claimed a length and then delivered nothing is a stub, and a
-      // stub is how a "successful" response poisons a cache.
-      await cache.delete(request);
-      return;
-    }
-    await cache.put(request, new Response(body, { status: 200, headers: stampStored(response) }));
-    // Enforce the entry ceiling without waiting for an expiration sweep: the
-    // Cache API has no eviction of its own, and a phone that has scrolled a
-    // feed for an hour should not be holding a thousand decoded JPEGs.
-    const keys = await cache.keys();
-    if (keys.length > IMAGE_CACHE_ENTRIES) {
-      const excess = keys.length - IMAGE_CACHE_ENTRIES;
-      for (const key of keys.slice(0, excess)) await cache.delete(key);
-    }
-  } catch {
-    // Quota, a locked profile, a private window that forbids Cache writes: the
-    // picture still paints from the network response. A failed cache write is
-    // never a failed picture.
-  }
-}
-
-/** The response as the page sees it: the worker's own bookkeeping removed. */
-function asDelivered(stored: Response): Response {
-  return new Response(stored.body, {
-    status: stored.status,
-    statusText: stored.statusText,
-    headers: deliveredHeaders(stored),
-  });
-}
-
-/** The network, with a deadline, so a stalled connection does not hang a tile. */
-async function networkWithDeadline(request: Request): Promise<Response | null> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), IMAGE_NETWORK_TIMEOUT_MS);
-  try {
-    const response = await fetch(request, {
-      signal: controller.signal,
-      // The worker is the cache. Asking the HTTP cache as well would let a
-      // poisoned disk entry survive the eviction above.
-      cache: 'no-store',
-      credentials: 'omit',
-      referrerPolicy: 'no-referrer',
-    });
-    return response;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 /**
- * The picture strategy.
+ * The picture strategy itself lives in `lib/media/image-strategy.ts`.
  *
- * Fresh entry: serve it and revalidate quietly. That is the fast path and the
- * common one.
- *
- * Stale entry: ask the network first, because a stale entry is a body this
- * worker cannot vouch for. If the network answers with something unstorable,
- * the stale body is still better than nothing while it is inside twice the trust
- * window; past that it is deleted, because a picture that has not been
- * confirmable for two weeks is a picture that is gone.
- *
- * No entry: network, store if verifiable, and otherwise let the request fail to
- * the page, where `MediaImage` runs its ladder.
+ * It was in this file, where nothing could import it without Workbox and a
+ * service-worker global, so its rules — when to store, when to revalidate, what
+ * to do with a refusal — were asserted only by reading them. Every one of them
+ * was wrong in production. The worker now supplies the numbers; the module makes
+ * the decisions, and `image-strategy.test.ts` makes them on a fake cache and a
+ * fake network.
  */
-async function handleImage(event: FetchEvent, request: Request): Promise<Response> {
-  const cache = await caches.open(IMAGE_CACHE);
-  const cached = await cache.match(request);
-
-  if (cached && isFresh(cached, IMAGE_TRUST_MS)) {
-    // Fresh: answer immediately, and let the network correct the entry in the
-    // background. `waitUntil` keeps the worker alive for the revalidation, so a
-    // slow host cannot leave a half-finished request behind.
-    event.waitUntil(
-      (async () => {
-        const fresh = await networkWithDeadline(request);
-        if (fresh !== null && isStorableImage(fresh)) {
-          await putVerified(IMAGE_CACHE, request, fresh);
-        }
-      })(),
-    );
-    return asDelivered(cached);
-  }
-
-  const response = await networkWithDeadline(request);
-
-  if (response !== null && isStorableImage(response)) {
-    await putVerified(IMAGE_CACHE, request, response.clone());
-    return response;
-  }
-
-  if (cached && isUsableWhenStale(cached, IMAGE_TRUST_MS)) {
-    // Unconfirmable right now (the host is down, the member is on a train) but
-    // recently good. A stale picture beats an empty tile.
-    return asDelivered(cached);
-  }
-
-  if (cached) await cache.delete(request);
-
-  if (response !== null) {
-    // A real answer the worker will not store: an HTML error page, a 403 from an
-    // expired signature. It goes to the page unchanged, and the page's ladder
-    // decides what to do about it.
-    return response;
-  }
-
-  return new Response('', { status: 504, statusText: 'Gateway Timeout' });
+function handleImage(request: Request): Promise<Response> {
+  return handleManagedImage(request, {
+    cacheName: IMAGE_CACHE,
+    trustMs: IMAGE_TRUST_MS,
+    networkTimeoutMs: IMAGE_NETWORK_TIMEOUT_MS,
+    maxEntries: IMAGE_CACHE_ENTRIES,
+  });
 }
 
 self.addEventListener('fetch', (event: FetchEvent) => {
   const request = event.request;
   if (request.method !== 'GET') return;
   if (!isManagedImage(request)) return;
-  event.respondWith(handleImage(event, request));
+  event.respondWith(handleImage(request));
 });
 
 // ------------------------------------------------------------------- cache ---
@@ -293,12 +195,7 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (asked === 'SKIP_WAITING') {
     event.waitUntil(
       (async () => {
-        const names = await caches.keys();
-        await Promise.all(
-          names
-            .filter((name) => name.startsWith('bsdc-images') && name !== IMAGE_CACHE)
-            .map((name) => caches.delete(name)),
-        );
+        await purgeStaleCaches();
         await self.skipWaiting();
       })(),
     );
@@ -308,19 +205,40 @@ self.addEventListener('message', (event: ExtendableMessageEvent) => {
   }
 });
 
+/**
+ * Delete every cache an older worker wrote, at install time.
+ *
+ * `install` runs while the new worker is still *waiting* — before it activates,
+ * and therefore before a member has been asked to reload anything. That timing
+ * is the whole point: the worker that poisoned a browser's picture cache is the
+ * one still serving it, and a cleanup that only happens on activation waits for
+ * a prompt nobody presses. Caches are shared across workers, so the waiting
+ * worker can reclaim them, and the old worker's next `cache.match` simply misses
+ * and goes to the network.
+ *
+ * Nothing that belongs to another application on this origin is touched.
+ */
+async function purgeStaleCaches(): Promise<string[]> {
+  try {
+    const names = await caches.keys();
+    const stale = names.filter((name) => isStaleImageCacheName(name) || isStaleFontCacheName(name));
+    await Promise.all(stale.map((name) => caches.delete(name)));
+    return stale;
+  } catch {
+    // Storage forbidden, or an implementation that throws on `keys()`. The
+    // picture still loads; it just is not cached here.
+    return [];
+  }
+}
+
+self.addEventListener('install', (event: ExtendableEvent) => {
+  event.waitUntil(purgeStaleCaches());
+});
+
 self.addEventListener('activate', (event: ExtendableEvent) => {
   event.waitUntil(
     (async () => {
-      const names = await caches.keys();
-      await Promise.all(
-        names
-          .filter(
-            (name) =>
-              (name.startsWith('bsdc-images') && name !== IMAGE_CACHE) ||
-              (name.startsWith('bsdc-fonts') && name !== FONT_CACHE),
-          )
-          .map((name) => caches.delete(name)),
-      );
+      await purgeStaleCaches();
       await self.clients.claim();
     })(),
   );

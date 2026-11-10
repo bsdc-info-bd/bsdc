@@ -92,3 +92,36 @@ export function deliveredHeaders(response: Response): Headers {
   headers.delete(STORED_AT_HEADER);
   return headers;
 }
+
+// ------------------------------------------------------- the bytes, not the label ---
+
+/**
+ * The signature check itself lives in `image-signature.ts`, which the edge media
+ * proxy imports too: that file compiles against the Workers types, where
+ * `Response` is not the DOM's `Response`, so the check cannot live next to the
+ * `Response` rules below. Re-exported here so the worker has one import.
+ */
+export { IMAGE_SNIFF_BYTES, looksLikeImageBytes } from './image-signature';
+
+/**
+ * The headers an answer must carry when it is *not* being stored.
+ *
+ * This is the second half of the reported bug, and the half nobody looked for.
+ * A 429 from a picture host is an ordinary cacheable response: it carries a
+ * `cache-control` and the browser's HTTP cache dutifully remembers it, per URL,
+ * for as long as the header says. The picture then stays broken after the host
+ * has recovered, and clearing the cache is what "fixes" it.
+ *
+ * So an answer the worker refuses to vouch for is an answer the browser is told
+ * not to remember. `expires` and `etag` go too: a stale ETag invites a
+ * conditional request that re-validates the same wrong answer.
+ */
+export function uncachedHeaders(response: Response): Headers {
+  const headers = new Headers(response.headers);
+  headers.set('cache-control', 'no-store, no-cache, must-revalidate');
+  headers.delete('expires');
+  headers.delete('etag');
+  headers.delete('last-modified');
+  headers.delete('age');
+  return headers;
+}

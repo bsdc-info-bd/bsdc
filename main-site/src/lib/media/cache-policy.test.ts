@@ -4,10 +4,12 @@ import {
   isFresh,
   isStorableImage,
   isUsableWhenStale,
+  looksLikeImageBytes,
   MIN_IMAGE_BYTES,
   stampStored,
   STORED_AT_HEADER,
   storedAt,
+  uncachedHeaders,
 } from './cache-policy';
 
 /**
@@ -115,5 +117,69 @@ describe('how long a stored picture is trusted', () => {
     const headers = deliveredHeaders(stamped(1_000));
     expect(headers.get(STORED_AT_HEADER)).toBeNull();
     expect(headers.get('content-type')).toContain('image/');
+  });
+});
+
+describe('the bytes decide, not the header', () => {
+  const bytes = (...values: number[]): Uint8Array => new Uint8Array(values);
+
+  it('recognises the signature of every format this platform stores', () => {
+    expect(looksLikeImageBytes(bytes(0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10))).toBe(true); // JPEG
+    expect(looksLikeImageBytes(bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a))).toBe(true); // PNG
+    expect(looksLikeImageBytes(bytes(0x47, 0x49, 0x46, 0x38, 0x39, 0x61))).toBe(true); // GIF89a
+    expect(
+      looksLikeImageBytes(
+        bytes(0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50),
+      ),
+    ).toBe(true); // WebP
+    expect(
+      looksLikeImageBytes(
+        bytes(0x00, 0x00, 0x00, 0x1c, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66),
+      ),
+    ).toBe(true); // AVIF
+    expect(
+      looksLikeImageBytes(new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg">')),
+    ).toBe(true);
+  });
+
+  it('refuses an HTML error page wearing an image content type', () => {
+    // This is the body a rate-limited host returns with 200 and
+    // `content-type: image/jpeg`. The old worker stored it as the picture.
+    expect(looksLikeImageBytes(new TextEncoder().encode('<!doctype html><html>too many'))).toBe(
+      false,
+    );
+    expect(looksLikeImageBytes(new TextEncoder().encode('{"error":"rate limited"}'))).toBe(false);
+    expect(looksLikeImageBytes(new TextEncoder().encode('Too Many Requests'))).toBe(false);
+  });
+
+  it('refuses an empty or truncated body rather than guessing', () => {
+    expect(looksLikeImageBytes(new Uint8Array())).toBe(false);
+    expect(looksLikeImageBytes(bytes(0x89, 0x50))).toBe(false);
+  });
+});
+
+describe('an answer that is not the picture is never remembered', () => {
+  it('strips every header that could make a cache keep a failure', () => {
+    const failed = new Response('nope', {
+      status: 429,
+      headers: {
+        'content-type': 'text/html',
+        'cache-control': 'public, max-age=86400, immutable',
+        expires: 'Thu, 01 Jan 2099 00:00:00 GMT',
+        etag: '"abc"',
+        'last-modified': 'Thu, 01 Jan 2026 00:00:00 GMT',
+        age: '30',
+      },
+    });
+
+    const headers = uncachedHeaders(failed);
+
+    expect(headers.get('cache-control')).toContain('no-store');
+    expect(headers.get('expires')).toBeNull();
+    expect(headers.get('etag')).toBeNull();
+    expect(headers.get('last-modified')).toBeNull();
+    expect(headers.get('age')).toBeNull();
+    // The reason it was refused is still readable to whoever reads the response.
+    expect(headers.get('content-type')).toBe('text/html');
   });
 });

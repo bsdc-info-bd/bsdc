@@ -111,6 +111,23 @@ describe('a post in the feed', () => {
     expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Hello Bangladesh');
   });
 
+  it('draws the cover when a post has a cover and no picture rows', () => {
+    // The home page preloads this URL at `fetchpriority="high"`. Before this,
+    // nothing on the page drew it: every visit downloaded a full-size cover that
+    // no element displayed, and an author who set a cover saw it nowhere.
+    renderCard(
+      post({ coverUrl: 'https://i.ibb.co/abc/cover.webp', media: [], title: 'With a cover' }),
+    );
+    const image = screen.getByRole('img', { name: 'With a cover' });
+    expect(image).toHaveAttribute('src', 'https://i.ibb.co/abc/cover.webp');
+    expect(image).toHaveAttribute('loading', 'lazy');
+  });
+
+  it('never lets a non-https cover become an image source', () => {
+    renderCard(post({ coverUrl: 'javascript:alert(1)', media: [] }));
+    expect(document.querySelector('img')).toBeNull();
+  });
+
   it('marks only the first card’s picture as worth loading early', () => {
     const picture = {
       mediaId: 'm1',

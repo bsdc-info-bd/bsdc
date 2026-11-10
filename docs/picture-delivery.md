@@ -49,7 +49,9 @@ Two smaller holes made it worse:
 | Served from cache only inside a **7-day** trust window | `isFresh` |
 | Outside it, the network is asked **first** | `handleImage` |
 | A stale entry is served only while the host is unreachable, and only for twice the window | `isUsableWhenStale` |
-| The cache name carries a version, so a worker update abandons every poisoned entry | `bsdc-images-v4` |
+| Only a body whose **first bytes are an image signature** is stored | `putVerified` → `looksLikeImageBytes` |
+| An answer the worker refuses to store is returned `no-store`, so the browser's HTTP cache cannot remember a failure as the picture | `handleImage` → `uncachedHeaders` |
+| The cache name carries a version, so a worker update abandons every poisoned entry | `bsdc-images-v6` (`lib/media/cache-names.ts`) |
 
 The check that would have caught the original bug on its first day is this one:
 
@@ -96,9 +98,14 @@ repeating an address").
 - allowlist: `i.ibb.co`, `ibb.co`, `i.ibb.co.com` only;
 - `https:` only, no port, no credentials, no document types;
 - 12 MB cap enforced on the bytes that actually arrive, not on `content-length`;
-- forwards only `image/*`, passes a provider's status through so the browser's own
-  ladder classifies it;
-- cached a day at the edge, an hour in the browser.
+- forwards only what is `image/*` **and** whose first bytes are an image
+  signature, passes a provider's status through so the browser's own ladder
+  classifies it;
+- 7 days at the edge and in the browser for verified bytes, `no-store` for every
+  refusal — there is deliberately no `_headers` rule for `/media/i`, because a
+  rule cannot be scoped by status: the 7-day `immutable` meant for the bytes also
+  covers the 502s and 504s, and a week-long `immutable` on a 502 is a week of a
+  broken picture.
 
 It is the last rung before the empty tile, and the reason a hotlink or CORS change
 at a picture host can no longer break the site.
@@ -116,7 +123,7 @@ message. It contains no token, no address and nothing about the account.
 1. **Open `/system-check`.** Every line should be `pass`. A `fail` on
    `image.imgbb` with `text/html` is the original bug, still live at that host.
 2. **Open DevTools → Application → Cache Storage.** There should be
-   `bsdc-images-v4`, and no older `bsdc-images-*`. If there are older ones, the
+   `bsdc-images-v6`, and no older `bsdc-images-*`. If there are older ones, the
    page's heal has not run — check that the deployment serves this build.
 3. **Open DevTools → Network, filter to Img, and reload twice.** The second load
    should be served from the service worker (`(ServiceWorker)` in the Size
@@ -140,3 +147,68 @@ message. It contains no token, no address and nothing about the account.
 `node scripts/db-prove/run.mjs` is unrelated to pictures and must still pass; the
 whole gate is `cd main-site && npm run typecheck && npm run lint && npm run test
 && npm run build`.
+
+## Second pass — 2026-11-08
+
+The first pass fixed the worker. This pass fixes the four things around it that
+kept the reported symptoms alive, all of them found by reading the deployed path
+end to end rather than the module that was suspected.
+
+### 1. The page was deleting the worker's live cache
+
+`src/sw.ts` named the picture cache `bsdc-images-v5`; `src/pwa.ts` believed the
+current name was `bsdc-images-v4` and deleted every picture cache that did not
+match. So on every fresh browser — and on **every** load wherever `localStorage`
+was blocked, which includes private windows — the page deleted the cache the
+running worker was writing to. Pictures were fetched twice, the cache never
+stayed warm, and the repair routine was itself part of the slowness.
+
+Two constants that must be equal are one constant. Both files now import
+`src/lib/media/cache-names.ts`, and `cache-names.test.ts` reads both sources to
+prove neither has gone back to writing a literal.
+
+### 2. The worker never actually cached a single ImgBB image
+
+A `<img src="https://i.ibb.co/…">` produces a `no-cors` request. A `no-cors`
+fetch can only deliver an **opaque** response: status 0, no readable headers, no
+readable body. `isStorableImage` refuses opaque responses — correctly — so the
+picture cache was never written for any real uploaded image, and every paint paid
+for a full download through the worker.
+
+The worker now asks for a readable answer first (`mode: 'cors'`; ImgBB serves its
+images with `access-control-allow-origin: *`), verifies the bytes, and stores
+them. If a host does not allow the read, it falls back to the plain opaque fetch
+the element would have made anyway: the picture still paints, it simply is not
+cached. **A cache miss is never worth a broken image.**
+
+### 3. A temporary failure could be remembered as the picture, for a week
+
+Two paths did this at once:
+
+- `_headers` declared `Cache-Control: public, max-age=604800, immutable` for
+  `/media/i`. A `_headers` rule applies to *every* status from that path, so the
+  endpoint's 502s and 504s were cached for a week in the member's browser. The
+  rule is gone; the endpoint sets its own headers.
+- The worker passed a non-storable answer straight through, headers included. A
+  `429` from a picture host is an ordinary cacheable response. The worker now
+  returns it with `no-store`, no `expires` and no `etag`.
+
+Also gone: the fresh-hit background revalidation. It used `cache: 'no-store'`, so
+every visit to the feed re-downloaded every image on it while the visible images
+waited on the same connection.
+
+### 4. `MediaImage` proxies only what the edge can actually fetch
+
+`/media/i` answers 400 for any host that is not ImgBB. Every Google avatar and
+every legacy row spent four ladder rungs on four guaranteed failures. The proxy
+rung is now only offered when `isRepairableMediaHost` agrees, and images are
+`loading="lazy"` by default, so a twenty-post feed no longer starts twenty
+downloads on a phone connection to draw the first one.
+
+### Regression tests added
+
+| File | What it pins |
+| --- | --- |
+| `src/lib/media/cache-names.test.ts` | One cache name, versioned, and neither file hard-codes a literal. |
+| `src/lib/media/cache-policy.test.ts` | A JPEG/PNG/GIF/WebP/AVIF/SVG signature is accepted; an HTML error page is not; a refused answer loses every header that could make it cacheable. |
+| `functions/media/proxy.test.ts` | (unchanged allowlist rules) — the endpoint now also refuses bytes that are not a picture. |

@@ -19,13 +19,16 @@
 /index.html
   Cache-Control: no-cache
 
-# The media edge delivery & repair endpoint. ImgBB asset URLs are content-addressed,
-# so validated image bytes are cached for 7 days at the Cloudflare edge and in the
-# browser with stale-while-revalidate.
-/media/i
-  X-Content-Type-Options: nosniff
-  Referrer-Policy: no-referrer
-  Cache-Control: public, max-age=604800, s-maxage=604800, stale-while-revalidate=86400, immutable
+# Deliberately no rule for /media/i.
+#
+# A `_headers` rule cannot be scoped by status: it declares one caching policy
+# for a path, and the 7-day `immutable` that used to be declared here was meant
+# for the verified image bytes. On any deployment that also applies `_headers`
+# to Function responses, that policy then covered the 502s and 504s the endpoint
+# returns when ImgBB is briefly unreachable — one bad minute remembered as the
+# picture, for a week, until the member cleared their cache. The endpoint sets
+# its own headers instead: immutable for verified bytes, `no-store` for
+# everything else. See functions/media/i.ts.
 
 # Never cached: every one of these answers depends on who is asking.
 /api/*

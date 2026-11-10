@@ -55,6 +55,11 @@ package-lock.json
 
 # Local release gate logs
 .release-check/
+.release-check-final/
+
+# Wrangler's local state (miniflare storage, dev vars), created by `wrangler
+# pages dev`. Never committed: it holds local-only bindings.
+.wrangler/
 
 # Browser smoke evidence
 main-site/.browser-evidence/

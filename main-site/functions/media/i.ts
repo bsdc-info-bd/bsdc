@@ -6,6 +6,7 @@
  * browser cache headers. This eliminates hotlink/CORS/ISP throttling issues and
  * caches heavy historical images at the nearest Cloudflare edge location.
  */
+import { looksLikeImageBytes } from '../../src/lib/media/image-signature';
 import { isRepairableMediaHost, looksLikeDocument } from '../../src/lib/media/hosts';
 
 interface MediaEnv {
@@ -140,6 +141,14 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
       offset += chunk.byteLength;
     }
 
+    // The bytes, not the label. A host answering an image URL with a 200 and an
+    // HTML rate-limit page under `content-type: image/jpeg` would otherwise be
+    // handed on — and cached here for a week, and in the member's browser for a
+    // week — as the picture. That is the shape of "the images stopped loading".
+    if (!looksLikeImageBytes(body.subarray(0, 32))) {
+      return problem(502, 'the source is not a picture');
+    }
+
     const ttl = clampTtl(
       upstream.headers.get('cache-control')?.match(/max-age=(\d+)/)?.[1] ?? null,
     );
@@ -150,6 +159,10 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
         'content-type': type,
         'content-length': String(received),
         'cache-control': `public, max-age=${Math.min(ttl, BROWSER_TTL_SECONDS)}, s-maxage=${ttl}, stale-while-revalidate=86400, immutable`,
+        // The bytes are the same for every encoding, but the negotiation is
+        // real: a cache that ignores it can hand a WebP-only client a format it
+        // did not ask for.
+        vary: 'accept',
         'x-content-type-options': 'nosniff',
         'cross-origin-resource-policy': 'cross-origin',
         'access-control-allow-origin': '*',

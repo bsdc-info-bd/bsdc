@@ -6,6 +6,7 @@
  * ImgBB's aspect-preserving `medium` (~640px) and full `image` URLs so feed
  * cards, post views, avatars, and covers render rapidly at the right resolution.
  */
+import { IMAGE_SNIFF_BYTES, looksLikeImageBytes } from '../src/lib/media/image-signature';
 import {
   chooseProvider,
   kindOf,
@@ -69,6 +70,27 @@ export function reject(file: File, purpose: MediaPurpose, env: MediaEnv): MediaF
   return null;
 }
 
+/**
+ * Whether the file's own bytes are a picture.
+ *
+ * `reject()` checks the type the browser *said* the file was. That is a claim,
+ * and it costs one line to send a ZIP with `content-type: image/png` — which
+ * then spends this deployment's upload quota and puts a file in a picture
+ * account. The first bytes are the evidence, and the same check already guards
+ * the read path (`functions/media/i.ts`) and the worker's cache, so the three
+ * cannot disagree about what a picture is.
+ *
+ * A refusal is `media.errors.unsupported`, the same sentence the member would
+ * have read had the browser refused it, because from their point of view the
+ * same thing happened.
+ */
+export function rejectBytes(bytes: Uint8Array): MediaFailure | null {
+  if (!looksLikeImageBytes(bytes.subarray(0, IMAGE_SNIFF_BYTES))) {
+    return { errorKey: 'media.errors.unsupported', status: 415 };
+  }
+  return null;
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const CHUNK = 0x8000;
@@ -118,6 +140,23 @@ interface ImgbbVariant {
   mime?: string;
 }
 
+/**
+ * A refusal that knows why, so the endpoint can answer in the member's language.
+ *
+ * Which host said no, and what it said, stays inside this function: the member
+ * reads an i18n key, never a provider's error text, and the identity of the
+ * service behind the endpoint is not advertised to a caller.
+ */
+export class HostError extends Error {
+  constructor(
+    public readonly errorKey: string,
+    public readonly status: number,
+  ) {
+    super(errorKey);
+    this.name = 'HostError';
+  }
+}
+
 interface ImgbbResponse {
   data?: {
     url?: string;
@@ -141,27 +180,91 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
+/**
+ * How long one ImgBB upload may take before the edge gives up on it.
+ *
+ * A Pages Function has a wall-clock budget of its own, and a request that hangs
+ * against the host until the platform kills it answers the member with a 5xx and
+ * no explanation. Answering first, with a reason, is better.
+ */
+const UPSTREAM_TIMEOUT_MS = 25_000;
+
+/** Upload attempts, including the first. A 5xx or a timeout is retried once. */
+const UPSTREAM_ATTEMPTS = 2;
+
+/** Statuses worth trying again: the host is busy or restarting, not refusing. */
+function retryable(status: number): boolean {
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+/**
+ * Whether ImgBB's own words name the credential.
+ *
+ * ImgBB answers an invalid or expired key with a 400 whose body carries a
+ * message about the API key. That is a deployment problem, and it is the one
+ * case where the member should be told "not available right now" rather than
+ * "the upload failed" — the first is true for everybody until an administrator
+ * acts, and the second invites a retry that cannot work.
+ */
+function keyWasRefused(status: number, body: string): boolean {
+  if (status === 401 || status === 403) return true;
+  return /invalid.{0,20}(api)?\s*key|api key|key.{0,10}(invalid|expired|missing)/i.test(body);
+}
+
 async function sendToImgbb(
   file: File,
   key: string,
   purpose: MediaPurpose,
+  bytes: Uint8Array | undefined,
   now = Date.now(),
 ): Promise<EdgeUploadResult> {
-  const base64 = bytesToBase64(new Uint8Array(await file.arrayBuffer()));
+  const base64 = bytesToBase64(bytes ?? new Uint8Array(await file.arrayBuffer()));
   const body = new FormData();
   body.append('image', base64);
   const lifetime = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
   if (lifetime > 0) body.append('expiration', String(lifetime));
 
-  const response = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`, {
-    method: 'POST',
-    body,
-  });
-  if (!response.ok) throw new Error('imgbb-refused');
+  const endpoint = `https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`;
 
-  const payload = (await response.json()) as ImgbbResponse;
+  let response: Response | null = null;
+  let text = '';
+  for (let attempt = 1; attempt <= UPSTREAM_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+    try {
+      // Rebuilt each attempt: a FormData body can be re-sent, a consumed
+      // Request cannot, and the bytes are the same bytes.
+      response = await fetch(endpoint, { method: 'POST', body, signal: controller.signal });
+      text = await response.text();
+    } catch {
+      response = null;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (response !== null && !retryable(response.status)) break;
+    if (attempt < UPSTREAM_ATTEMPTS) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+  }
+
+  if (response === null) throw new HostError('media.errors.failed', 504);
+  if (!response.ok) {
+    if (keyWasRefused(response.status, text)) {
+      throw new HostError('media.errors.notConfigured', 503);
+    }
+    if (response.status === 413) throw new HostError('media.errors.tooLarge', 413);
+    throw new HostError('media.errors.failed', 502);
+  }
+
+  let payload: ImgbbResponse;
+  try {
+    payload = JSON.parse(text) as ImgbbResponse;
+  } catch {
+    throw new HostError('media.errors.failed', 502);
+  }
   const fullUrl = payload.data?.image?.url ?? payload.data?.display_url ?? payload.data?.url ?? '';
-  if (fullUrl.length === 0) throw new Error('imgbb-answered-without-a-url');
+  if (fullUrl.length === 0) throw new HostError('media.errors.failed', 502);
 
   // ImgBB's `thumb` is a 180x180 square crop suited only for small avatars;
   // `medium` (~640px wide) preserves aspect ratio for feed cards and previews.
@@ -191,10 +294,13 @@ export async function sendToHost(
   file: File,
   purpose: MediaPurpose,
   env: MediaEnv,
+  /** The bytes, when the caller already read them to check the signature. */
+  bytes?: Uint8Array,
 ): Promise<EdgeUploadResult> {
   const kind = kindOf(file.type);
-  if (kind === null) throw new Error('unsupported');
+  if (kind === null) throw new HostError('media.errors.unsupported', 415);
 
   const credentials = credentialsOf(env);
-  return sendToImgbb(file, credentials.imgbbKey, purpose);
+  if (!hasImgbb(credentials)) throw new HostError('media.errors.notConfigured', 503);
+  return sendToImgbb(file, credentials.imgbbKey, purpose, bytes);
 }

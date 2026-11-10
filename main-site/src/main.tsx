@@ -10,7 +10,7 @@ import './i18n';
 import './styles/index.css';
 import { isConfigured } from './lib/env';
 import { startPerformanceReporting } from './lib/perf/collect';
-import { healMediaCachesOnce, registerServiceWorker } from './pwa';
+import { registerServiceWorker } from './pwa';
 
 /**
  * The connection to the database is opened before React asks for anything.
@@ -104,34 +104,28 @@ createRoot(container).render(
   </StrictMode>,
 );
 
+// `registerServiceWorker` heals the picture cache itself, once per build, before
+// it registers anything. Calling `healMediaCachesOnce` here as well raced it:
+// two calls passed the marker check together and both deleted, which is how a
+// cache that was still being written went missing.
 registerServiceWorker();
 
-/**
- * Drop a picture cache left behind by an older worker, before React paints
- * anything.
- *
- * This runs on the page rather than inside the worker because the worker that
- * wrote the bad cache is the one being replaced, and it is waiting behind an
- * update prompt. A member who has been clearing their whole cache for months
- * should not have to press anything for pictures to work again.
- */
-void healMediaCachesOnce();
-
 // Ask the deployment what it can upload through, once, while the browser is
-// idle. The first member to attach a picture should not pay for that question
-// with a visible delay, and a deployment whose Functions are not live learns it
-// here rather than at the moment somebody presses publish.
-const warmUploadCapabilities = () => {
+// idle — so the first member to attach a picture does not pay for the question.
+//
+// It is only a question. The answer is recorded for the diagnostics screen and
+// is never used to decide whether an upload may be attempted; that decision
+// belongs to the endpoint, which is the only thing that can see the key. See
+// `uploadMedia` in lib/storage/upload.ts.
+const warmUpload = () => {
   void import('./lib/storage/upload')
-    .then(({ probeUploadCapabilities, setUploadCapabilities }) =>
-      probeUploadCapabilities().then((capabilities) => setUploadCapabilities(capabilities)),
-    )
+    .then(({ warmUploadCapabilities }) => warmUploadCapabilities())
     .catch(() => undefined);
 };
 if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(warmUploadCapabilities, { timeout: 5_000 });
+  requestIdleCallback(warmUpload, { timeout: 5_000 });
 } else {
-  setTimeout(warmUploadCapabilities, 1_500);
+  setTimeout(warmUpload, 1_500);
 }
 
 // Field measurement. It reports on pages, never on people, and it is sent
