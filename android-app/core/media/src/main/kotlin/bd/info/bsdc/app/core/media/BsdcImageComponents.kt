@@ -39,7 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
-import bd.info.bsdc.app.core.designsystem.shimmerBrush
+import bd.info.bsdc.app.core.designsystem.bsdcShimmerPlaceholder
 import bd.info.bsdc.app.core.model.BsdcHosts
 import coil3.ImageLoader
 import coil3.compose.SubcomposeAsyncImage
@@ -86,7 +86,7 @@ fun BsdcImgbbImage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(shimmerBrush()),
+                    .bsdcShimmerPlaceholder(),
             )
         },
         error = {
