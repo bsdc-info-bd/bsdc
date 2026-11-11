@@ -11,10 +11,12 @@ export function RequireGuest() {
   const { t } = useTranslation();
   const status = useAuthStore((state) => state.status);
   const profileLoaded = useAuthStore((state) => state.profileLoaded);
+  const redirectResolving = useAuthStore((state) => state.redirectResolving);
   const profile = useProfileStore((state) => state.profile);
   const [params] = useSearchParams();
 
-  if (status === 'initializing') return <PageSkeleton label={t('common.loading')} />;
+  if (status === 'initializing' || redirectResolving)
+    return <PageSkeleton label={t('common.loading')} />;
   if (status === 'authenticated') {
     if (!profileLoaded) return <PageSkeleton label={t('common.loading')} />;
     const destination = sanitizeRedirect(

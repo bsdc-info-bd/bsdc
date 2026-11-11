@@ -46,10 +46,11 @@ function YahooMark() {
 /** Google, GitHub and Yahoo — the exact provider set approved for BSDC. */
 export function OAuthButtons({ remember, disabled = false, onError }: OAuthButtonsProps) {
   const { t } = useTranslation();
+  const redirectResolving = useAuthStore((state) => state.redirectResolving);
   const [pending, setPending] = useState<OAuthProviderId | null>(null);
 
   async function start(id: OAuthProviderId) {
-    if (pending) return;
+    if (pending || redirectResolving) return;
     useAuthStore.getState().setRedirectError(null);
     setPending(id);
     try {
@@ -84,7 +85,9 @@ export function OAuthButtons({ remember, disabled = false, onError }: OAuthButto
             block
             iconStart={provider.icon}
             loading={pending === provider.id}
-            disabled={disabled || (pending !== null && pending !== provider.id)}
+            disabled={
+              disabled || redirectResolving || (pending !== null && pending !== provider.id)
+            }
             onClick={() => void start(provider.id)}
           >
             {provider.label}

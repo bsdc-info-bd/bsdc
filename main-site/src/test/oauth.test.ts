@@ -3,7 +3,8 @@ import type * as FirebaseModule from '@/lib/firebase';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FirebaseError } from 'firebase/app';
 import { GithubAuthProvider, GoogleAuthProvider, OAuthProvider } from 'firebase/auth';
-import { signInWithProvider } from '@/lib/auth/auth-service';
+import { oauthFlowFor, signInWithProvider } from '@/lib/auth/auth-service';
+import { clearPendingOAuthRedirect, hasPendingOAuthRedirect } from '@/lib/auth/oauth-state';
 import { authErrorKey, shouldFallbackToRedirect } from '@/lib/auth/errors';
 
 const mocks = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ vi.mock('@/lib/firebase', async (original) => ({
 }));
 beforeEach(() => {
   vi.clearAllMocks();
+  clearPendingOAuthRedirect();
   mocks.persistence.mockResolvedValue(undefined);
   mocks.popup.mockResolvedValue({ user: { uid: 'member' } });
   mocks.redirect.mockResolvedValue(undefined);
@@ -76,6 +78,29 @@ describe('OAuth providers', () => {
     await expect(signInWithProvider('github')).rejects.toMatchObject({
       code: 'auth/unauthorized-domain',
     });
+  });
+
+  it('marks a pending redirect marker on redirect fallback and skips pre-popup persistence await when remember=true', async () => {
+    mocks.popup.mockRejectedValue(new FirebaseError('auth/popup-blocked', 'blocked'));
+    await expect(signInWithProvider('google', true)).resolves.toBeNull();
+    expect(hasPendingOAuthRedirect()).toBe(true);
+    expect(mocks.redirect).toHaveBeenCalledOnce();
+    clearPendingOAuthRedirect();
+  });
+
+  it('uses redirect on mobile only when authDomain is same-origin or inside an in-app webview', () => {
+    const phone = {
+      width: 390,
+      touch: true,
+      userAgent: 'Mozilla/5.0 (iPhone)',
+      inApp: false,
+      standalone: false,
+    };
+    expect(oauthFlowFor(phone, 'bsdc-bd.firebaseapp.com', 'www.bsdc.info.bd')).toBe('popup');
+    expect(oauthFlowFor(phone, 'www.bsdc.info.bd', 'www.bsdc.info.bd')).toBe('redirect');
+    expect(
+      oauthFlowFor({ ...phone, inApp: true }, 'bsdc-bd.firebaseapp.com', 'www.bsdc.info.bd'),
+    ).toBe('redirect');
   });
 
   it.each([

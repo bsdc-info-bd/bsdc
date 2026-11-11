@@ -100,6 +100,17 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
         </div>
       ) : null}
 
+      {feed.onlyOwnByPreferences ? (
+        <Alert tone="info" title={t('feed.filteredOthersTitle')}>
+          <p className="mt-1 text-sm">{t('feed.filteredOthersBody')}</p>
+          <div className="mt-2">
+            <LinkButton to={ROUTES.settings} variant="secondary" size="sm">
+              {t('feed.empty.filtered.action')}
+            </LinkButton>
+          </div>
+        </Alert>
+      ) : null}
+
       {feed.posts.map((post, index) => (
         <div key={post.id} ref={feed.observe(post.id)}>
           {/* The first card is the page's LCP element, so its picture is the one

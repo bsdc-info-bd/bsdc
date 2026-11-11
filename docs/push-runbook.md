@@ -219,18 +219,20 @@ npx wrangler login            # or: export CLOUDFLARE_API_TOKEN=…
 npx wrangler deploy
 ```
 
-The first deploy writes down the address it printed —
-`https://bsdc-push.<account>.workers.dev`.
+The first deploy binds the custom domain `https://push.api.bsdc.info.bd`
+configured in `push-worker/wrangler.toml` (alongside `*.workers.dev` if enabled).
 
-Six secrets, each one set once and never committed:
+Required & optional secrets (set automatically by `deploy.yml` when present in
+GitHub Actions secrets, or manually via `npx wrangler secret put`):
 
 ```bash
-npx wrangler secret put SUPABASE_URL             # https://<ref>.supabase.co
-npx wrangler secret put SUPABASE_ANON_KEY        # the anon key, NOT the service key
-npx wrangler secret put PUSH_FLUSH_SECRET        # the same string as step 2 above
-npx wrangler secret put PUSH_VAPID_PUBLIC_KEY    # the k= half
-npx wrangler secret put PUSH_VAPID_PRIVATE_KEY   # signing only, never leaves the worker
-npx wrangler secret put PUSH_VAPID_SUBJECT       # mailto:hello@bsdc.info.bd
+npx wrangler secret put SUPABASE_URL                     # https://<ref>.supabase.co
+npx wrangler secret put SUPABASE_ANON_KEY                # the anon key, NOT the service key
+npx wrangler secret put PUSH_FLUSH_SECRET                # the same string as step 2 above
+npx wrangler secret put PUSH_VAPID_PUBLIC_KEY            # the k= half (Web Push)
+npx wrangler secret put PUSH_VAPID_PRIVATE_KEY           # Web Push signing key
+npx wrangler secret put PUSH_VAPID_SUBJECT               # mailto:admin@bsdc.info.bd
+npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_BSDC_BD # enables FCM HTTP v1 delivery
 ```
 
 `SUPABASE_ANON_KEY` is enough because every database call the Worker makes is a
@@ -241,12 +243,12 @@ security — the same rule every Pages Function here follows.
 Check it:
 
 ```bash
-curl -s https://bsdc-push.<account>.workers.dev/health
-# {"worker":"bsdc-push","status":"ok","vapid":true,"secret":true,"database":true,…}
+curl -s https://push.api.bsdc.info.bd/health
+# {"worker":"bsdc-push","status":"ok","vapid":true,"fcm":true,"secret":true,"database":true,…}
 ```
 
-`"status":"unconfigured"` means a secret is missing, and which one is in the same
-line. `status` is `ok` only when the VAPID pair is present; `secret` and
+`"status":"unconfigured"` means both VAPID keys and FCM credentials are missing.
+`status` is `ok` when either `vapid` or `fcm` is configured; `secret` and
 `database` say whether the other half is.
 
 ### 5.2 Point the site at it
@@ -255,7 +257,7 @@ Cloudflare Pages → main-site → Settings → Environment variables (productio
 
 | Variable | Value |
 | --- | --- |
-| `PUSH_WORKER_URL` | `https://bsdc-push.<account>.workers.dev` |
+| `PUSH_WORKER_URL` | `https://push.api.bsdc.info.bd` |
 | `PUSH_DISABLE_LOCAL_FALLBACK` | leave unset. Set to `1` only if you want a Worker outage to be visible rather than silently degraded. |
 
 With `PUSH_WORKER_URL` set, `POST /api/push/run` forwards to the Worker and
@@ -396,10 +398,13 @@ editor). Within the scheduler's interval the device should wake.
   is the primary path. The Pages Function sends an empty wake-up, which costs one
   extra request when a device wakes and is the path that keeps working when the
   Worker is not there. Both are shipped; neither is dead code.
-- **No Firebase Cloud Messaging.** `VITE_FIREBASE_VAPID_PUBLIC_KEY` is still in
-  `.env.example` because a deployment may already hold one, but it signs only for
-  Firebase's service, and this path signs for every push service directly. FCM
-  endpoints work with it — they are ordinary Web Push endpoints.
+- **Firebase Cloud Messaging (FCM HTTP v1) alongside Web Push.**
+  `VITE_FIREBASE_VAPID_PUBLIC_KEY` (FCM Web Push) and `public.fcm_tokens`
+  (Android app + FCM web fallback when `VITE_PUSH_VAPID_PUBLIC_KEY` is not set)
+  are delivered by `push-worker/` using `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` over
+  FCM HTTP v1 (`https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send`),
+  while RFC 8291 Web Push remains primary whenever `VITE_PUSH_VAPID_PUBLIC_KEY`
+  is present.
 - **No OneSignal.** `VITE_ONESIGNAL_APP_ID` predates this and is not used.
 - **No per-kind filtering of push.** The switches in Settings → Notifications
   decide which notifications are written at all; push delivers what was written.

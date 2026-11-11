@@ -12,6 +12,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setSession = useAuthStore((state) => state.setSession);
   const setUnavailable = useAuthStore((state) => state.setUnavailable);
   const setRedirectError = useAuthStore((state) => state.setRedirectError);
+  const setRedirectResolving = useAuthStore((state) => state.setRedirectResolving);
   const setProfileLoaded = useAuthStore((state) => state.setProfileLoaded);
   const setProfile = useProfileStore((state) => state.setProfile);
   const setProfileError = useProfileStore((state) => state.setError);
@@ -31,6 +32,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         stop = startAuthListener({
           onSession: setSession,
           onRedirectError: setRedirectError,
+          onRedirectResolving: setRedirectResolving,
           onProfile: setProfile,
           onProfileError: setProfileError,
           onProfileSettled: () => setProfileLoaded(true),
@@ -44,7 +46,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       stop?.();
     };
-  }, [setSession, setRedirectError, setUnavailable, setProfile, setProfileError, setProfileLoaded]);
+  }, [
+    setSession,
+    setRedirectError,
+    setRedirectResolving,
+    setUnavailable,
+    setProfile,
+    setProfileError,
+    setProfileLoaded,
+  ]);
 
   return <>{children}</>;
 }

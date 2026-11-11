@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { env } from '@/lib/env';
+import { effectivePushVapidConfig, env, isConfigured } from '@/lib/env';
 import {
   PUSH_BLOCK_KEYS,
   describePushEnvironment,
@@ -29,6 +29,7 @@ import { useAuthStore } from '@/store/auth-store';
 // hook runs in the settings page and in the notifications page, neither of which
 // should drag the SDK along for a member who never touches push.
 const repository = () => import('@/lib/push/push-repository');
+const fcmClient = () => import('@/lib/push/fcm');
 
 export type PushPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
@@ -55,15 +56,40 @@ async function currentSubscription(): Promise<PushSubscription | null> {
   return registration.pushManager.getSubscription();
 }
 
-async function subscribeHere(): Promise<PushSubscription | null> {
+async function subscribeHere(publicKey: string): Promise<PushSubscription | null> {
   const navigation = globalThis.navigator;
   const registration = await navigation.serviceWorker.ready;
   const existing = await registration.pushManager.getSubscription();
   if (existing !== null) return existing;
   return registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(env.push.webPushPublicKey),
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
+}
+
+async function registerCurrentBrowser(uid: string, language: string): Promise<boolean> {
+  const config = effectivePushVapidConfig(env.push);
+  if (config === null) return false;
+  const store = await repository();
+
+  if (config.mode === 'webpush') {
+    const subscription = await subscribeHere(config.publicKey);
+    if (subscription === null) return false;
+    await store.registerPushSubscription(subscription, language, globalThis.navigator.userAgent);
+    return true;
+  }
+
+  // FCM Web Push mode (when VITE_PUSH_VAPID_PUBLIC_KEY is unset and
+  // VITE_FIREBASE_VAPID_PUBLIC_KEY is configured).
+  const fcm = await fcmClient();
+  const token = await fcm.getFcmBrowserToken(config.publicKey);
+  if (token === null) return false;
+  const lang: 'bn' | 'en' = language === 'en' ? 'en' : 'bn';
+  const hash = await store.registerFcmToken(token, 'web', globalThis.navigator.userAgent, lang);
+  if (hash.length > 0 && isConfigured.firebase) {
+    void fcm.syncFcmTokenToFirestore(uid, hash, 'web', lang);
+  }
+  return true;
 }
 
 export function usePush(): PushControl {
@@ -78,17 +104,19 @@ export function usePush(): PushControl {
   // One silent re-registration per page load, per member.
   const refreshedFor = useRef<string | null>(null);
 
+  const pushConfig = effectivePushVapidConfig(env.push);
+  const activeKey = pushConfig?.publicKey ?? '';
   const supported = block === 'ok';
 
   const devicesQuery = useQuery({
     queryKey: ['push-devices', uid],
-    queryFn: async () => (await repository()).fetchMyPushDevices(),
+    queryFn: async () => (await repository()).fetchAllPushDevices(),
     enabled: uid !== null && supported,
     staleTime: 60_000,
   });
 
   useEffect(() => {
-    const described = describePushEnvironment(readPushEnvironment(env.push.webPushPublicKey));
+    const described = describePushEnvironment(readPushEnvironment(activeKey));
     setBlock(described.block);
     if (!described.supported) {
       setPermission('unsupported');
@@ -103,19 +131,17 @@ export function usePush(): PushControl {
 
     void (async () => {
       try {
-        const subscription = await subscribeHere();
-        if (subscription === null) return;
-        await (
-          await repository()
-        ).registerPushSubscription(subscription, i18n.language, globalThis.navigator.userAgent);
-        await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
+        const registered = await registerCurrentBrowser(uid, i18n.language);
+        if (registered) {
+          await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
+        }
       } catch {
         // A key that rotated while the site was closed and a permission that was
         // withdrawn both land here. The member is not told: nothing was asked of
         // them, and the button is still there when they want it.
       }
     })();
-  }, [uid, i18n.language, queryClient]);
+  }, [uid, i18n.language, queryClient, activeKey]);
 
   const enable = useCallback(async () => {
     if (uid === null || block !== 'ok') {
@@ -130,14 +156,11 @@ export function usePush(): PushControl {
         setErrorKey('push.errors.permissionDenied');
         return;
       }
-      const subscription = await subscribeHere();
-      if (subscription === null) {
+      const registered = await registerCurrentBrowser(uid, i18n.language);
+      if (!registered) {
         setErrorKey('push.errors.failed');
         return;
       }
-      await (
-        await repository()
-      ).registerPushSubscription(subscription, i18n.language, globalThis.navigator.userAgent);
       refreshedFor.current = uid;
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
@@ -155,11 +178,28 @@ export function usePush(): PushControl {
       // Reading only: a "turn off" that had to subscribe first would be a
       // permission prompt on the way out.
       const subscription = block === 'ok' ? await currentSubscription().catch(() => null) : null;
-      const endpoints = new Set<string>(devicesQuery.data?.map((device) => device.endpoint) ?? []);
+      const store = await repository();
+      const endpoints = new Set<string>();
+      const fcmHashes = new Set<string>();
+      for (const device of devicesQuery.data ?? []) {
+        if (device.endpoint.startsWith(store.FCM_DEVICE_PREFIX)) {
+          fcmHashes.add(device.endpoint.slice(store.FCM_DEVICE_PREFIX.length));
+        } else {
+          endpoints.add(device.endpoint);
+        }
+      }
       if (subscription !== null) endpoints.add(subscription.endpoint);
 
-      const store = await repository();
       for (const endpoint of endpoints) await store.unregisterPushSubscription(endpoint);
+      for (const hash of fcmHashes) {
+        await store.forgetFcmDevice(hash);
+        if (isConfigured.firebase) {
+          void fcmClient().then((fcm) => fcm.removeFcmTokenFromFirestore(uid, hash));
+        }
+      }
+      if (pushConfig?.mode === 'fcm') {
+        await (await fcmClient()).deleteFcmBrowserToken();
+      }
       if (subscription !== null) await subscription.unsubscribe();
 
       setErrorKey(null);
@@ -169,20 +209,32 @@ export function usePush(): PushControl {
     } finally {
       setBusy(false);
     }
-  }, [uid, block, devicesQuery.data, queryClient]);
+  }, [uid, block, devicesQuery.data, queryClient, pushConfig?.mode]);
 
   const removeDevice = useCallback(
     async (endpoint: string) => {
       if (uid === null) return;
       setBusy(true);
       try {
-        await (await repository()).unregisterPushSubscription(endpoint);
-        // A device this browser owns is unsubscribed as well, so the browser
-        // does not immediately re-register the row that was just removed.
-        if (block === 'ok') {
-          const here = await currentSubscription().catch(() => null);
-          if (here !== null && here.endpoint === endpoint)
-            await here.unsubscribe().catch(() => false);
+        const store = await repository();
+        if (endpoint.startsWith(store.FCM_DEVICE_PREFIX)) {
+          const hash = endpoint.slice(store.FCM_DEVICE_PREFIX.length);
+          await store.forgetFcmDevice(hash);
+          if (isConfigured.firebase) {
+            void fcmClient().then((fcm) => fcm.removeFcmTokenFromFirestore(uid, hash));
+          }
+          if (pushConfig?.mode === 'fcm') {
+            await (await fcmClient()).deleteFcmBrowserToken();
+          }
+        } else {
+          await store.unregisterPushSubscription(endpoint);
+          // A device this browser owns is unsubscribed as well, so the browser
+          // does not immediately re-register the row that was just removed.
+          if (block === 'ok') {
+            const here = await currentSubscription().catch(() => null);
+            if (here !== null && here.endpoint === endpoint)
+              await here.unsubscribe().catch(() => false);
+          }
         }
         await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
       } catch (error) {
@@ -191,7 +243,7 @@ export function usePush(): PushControl {
         setBusy(false);
       }
     },
-    [uid, block, queryClient],
+    [uid, block, queryClient, pushConfig?.mode],
   );
 
   const dismissError = useCallback(() => setErrorKey(null), []);

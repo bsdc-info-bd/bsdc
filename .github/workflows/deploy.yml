@@ -195,6 +195,10 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
+          PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
+          PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
         run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
 
       - name: Configure production profile authentication
@@ -358,6 +362,20 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: npm run test
 
+      - name: Prepare push-worker runtime secrets
+        if: steps.changed.outputs.run == 'true'
+        working-directory: .
+        env:
+          FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+          VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
+          PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
+          PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
+        run: node scripts/prepare-firebase-bindings.mjs --push-worker "$RUNNER_TEMP/bsdc-push-bindings.json"
+
       - name: Deploy
         if: steps.changed.outputs.run == 'true'
         shell: bash
@@ -397,6 +415,9 @@ jobs:
           set -e
           cat /tmp/wrangler-deploy.log
           if [ "$STATUS" -eq 0 ]; then
+            if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
+              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json" || true
+            fi
             echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
@@ -418,6 +439,9 @@ jobs:
               -H "Content-Type: application/json" \
               -d '[{"cron":"* * * * *"}]' || echo "000")
             rm -f /tmp/cf-worker-sched.json
+            if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
+              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json" || true
+            fi
             echo "Uploaded bsdc-push via Workers Script API (HTTP $PUT_CODE, schedule HTTP $SCHED_CODE)."
             echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -439,3 +463,7 @@ jobs:
           rm -f /tmp/cf-worker-put.json
           echo "::error title=Push worker deploy failed::HTTP $PUT_CODE: $PUT_BODY"
           exit 1
+
+      - name: Remove temporary push-worker bindings
+        if: always()
+        run: rm -f "$RUNNER_TEMP/bsdc-push-bindings.json"

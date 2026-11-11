@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Tabs, type TabItem } from '@/design-system';
 import { useFeed } from '@/hooks/use-feed';
@@ -19,6 +19,9 @@ export interface FeedTabsProps {
 export function FeedTabs({ signedIn = true }: FeedTabsProps) {
   const { t } = useTranslation();
   const [active, setActive] = useState<FeedAlgorithm>('ranked');
+  useEffect(() => {
+    if (!signedIn && active === 'following') setActive('ranked');
+  }, [signedIn, active]);
   const feed = useFeed(active);
   const algorithms = signedIn ? ALGORITHMS : ALGORITHMS.filter((item) => item !== 'following');
 

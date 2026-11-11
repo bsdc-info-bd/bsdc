@@ -268,6 +268,11 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'push_kill_device',
     'push_flag_invalid_device',
     'push_sweep_dead_devices',
+    // 0085. FCM device delivery equivalents, gated by the same flush secret.
+    'fcm_mark_devices',
+    'fcm_kill_device',
+    'fcm_flag_invalid_device',
+    'fcm_sweep_dead_devices',
     // 0073. Picture clean-up. Each is gated by the same flush secret, which the
     // database checks itself, and each mutates only the three purge columns on a
     // media row: claimed, released, confirmed, swept. A member never reaches any

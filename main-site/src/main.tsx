@@ -10,6 +10,7 @@ import './i18n';
 import './styles/index.css';
 import { isConfigured } from './lib/env';
 import { startPerformanceReporting } from './lib/perf/collect';
+import { registerQueryClient } from './lib/query-client';
 import { registerServiceWorker } from './pwa';
 
 /**
@@ -84,6 +85,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+registerQueryClient(queryClient);
 
 const container = document.getElementById('root');
 if (!container) {

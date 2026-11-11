@@ -119,7 +119,7 @@ export default function ProfilePage() {
   const handle = (params['handle'] ?? '').replace(/^@/, '').toLowerCase();
 
   const { data, isPending, isError } = useQuery({
-    queryKey: ['profile', handle],
+    queryKey: ['profile', currentUser?.uid ?? 'anon', handle],
     queryFn: () => fetchProfileByUsername(handle),
     enabled: handle.length > 0 && isConfigured.firebase,
     staleTime: 60_000,
@@ -137,7 +137,7 @@ export default function ProfilePage() {
 
   // Published posts by this member, loaded once the profile is known.
   const { data: posts } = useQuery({
-    queryKey: ['author-posts', data?.uid ?? ''],
+    queryKey: ['author-posts', currentUser?.uid ?? 'anon', data?.uid ?? ''],
     queryFn: async () => {
       const { fetchPostsByAuthor } = await import('@/lib/content/post-repository');
       return fetchPostsByAuthor(data?.uid ?? '', { limit: 20 });

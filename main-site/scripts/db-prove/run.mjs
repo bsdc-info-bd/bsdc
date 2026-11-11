@@ -80,6 +80,7 @@ const HARNESSES = [
   ['t54.mjs', 'accurate performance reports, private receipts and faithful certificate reprints'],
   ['t55.mjs', 'current corporate authority for campaigns, certificates and reports'],
   ['t56.mjs', 'messenger retries, private drafts, safe replies and membership boundaries'],
+  ['t57.mjs', '0085: push re-wake on repeated activity, follower post alerts, feed_new_count and FCM tokens'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

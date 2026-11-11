@@ -71,9 +71,16 @@ function isKind(value: string): value is PushKind {
  * with no language cannot be translated.
  */
 export function parsePushContent(payload: unknown): PushContent[] {
-  if (!Array.isArray(payload)) return [];
+  const list = Array.isArray(payload)
+    ? payload
+    : payload !== null &&
+        typeof payload === 'object' &&
+        Array.isArray((payload as { notifications?: unknown }).notifications)
+      ? (payload as { notifications: unknown[] }).notifications
+      : null;
+  if (list === null) return [];
   const out: PushContent[] = [];
-  for (const entry of payload) {
+  for (const entry of list) {
     if (entry === null || typeof entry !== 'object') continue;
     const row = entry as Partial<ContentRow>;
     if (typeof row.id !== 'string' || row.id.length === 0) continue;

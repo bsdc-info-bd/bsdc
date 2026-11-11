@@ -19,10 +19,16 @@ workers_dev = false
 # and keeps the behaviour stable if the default ever changes.
 compatibility_flags = ["nodejs_compat"]
 
+# Custom domain bound directly to this worker for /run and /health checks.
+routes = [
+  { pattern = "push.api.bsdc.info.bd", custom_domain = true }
+]
+
 [vars]
 # The optional allowlist for the HTTP trigger's CORS answers. The site's own
 # origin, so an operator's browser can call /run from a staff console.
 ADMIN_ORIGINS = "https://www.bsdc.info.bd,https://admin.bsdc.info.bd,https://admin.corporate.bsdc.info.bd,https://admin.corporate.main.bsdc.info.bd,https://bsdc-admin.pages.dev"
+SITE_URL = "https://www.bsdc.info.bd"
 VERBOSE = "0"
 
 # ---------------------------------------------------------------------------
@@ -60,6 +66,7 @@ crons = ["* * * * *"]
 #   npx wrangler secret put PUSH_VAPID_PRIVATE_KEY
 #   npx wrangler secret put PUSH_VAPID_PUBLIC_KEY
 #   npx wrangler secret put PUSH_VAPID_SUBJECT
+#   npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_BSDC_BD   (optional, enables FCM HTTP v1)
 #
 # The VAPID pair and the flush secret come from `npm run push:keys` in
 # `main-site/`, which prints exactly where each value goes. The flush secret must

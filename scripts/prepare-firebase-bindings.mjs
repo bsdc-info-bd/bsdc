@@ -77,7 +77,64 @@ export function runtimeServiceBindings(source = process.env) {
   const flushSecret = firstNonEmpty(source.PUSH_FLUSH_SECRET);
   if (flushSecret.length >= 32) extra.PUSH_FLUSH_SECRET = flushSecret;
 
+  const pushWorkerUrl = firstNonEmpty(source.PUSH_WORKER_URL);
+  if (pushWorkerUrl.startsWith('https://')) extra.PUSH_WORKER_URL = pushWorkerUrl;
+
+  const pushPublicKey = firstNonEmpty(
+    source.PUSH_VAPID_PUBLIC_KEY,
+    source.VITE_PUSH_VAPID_PUBLIC_KEY,
+  );
+  if (pushPublicKey !== '') extra.PUSH_VAPID_PUBLIC_KEY = pushPublicKey;
+
+  const pushPrivateKey = firstNonEmpty(source.PUSH_VAPID_PRIVATE_KEY);
+  if (pushPrivateKey !== '') extra.PUSH_VAPID_PRIVATE_KEY = pushPrivateKey;
+
+  const pushSubject = firstNonEmpty(source.PUSH_VAPID_SUBJECT);
+  if (pushSubject !== '') extra.PUSH_VAPID_SUBJECT = pushSubject;
+
   return extra;
+}
+
+/**
+ * Runtime bindings for the standalone `bsdc-push` Cloudflare Worker. Empty
+ * values are omitted so existing Cloudflare Worker secrets are preserved.
+ */
+export function pushWorkerBindings(source = process.env) {
+  const out = {};
+  const supabaseUrl = firstNonEmpty(source.SUPABASE_URL, source.VITE_SUPABASE_URL);
+  if (supabaseUrl !== '') out.SUPABASE_URL = supabaseUrl;
+
+  const supabaseAnonKey = firstNonEmpty(
+    source.SUPABASE_ANON_KEY,
+    source.SUPABASE_PUBLISHABLE_KEY,
+    source.VITE_SUPABASE_PUBLISHABLE_KEY,
+  );
+  if (supabaseAnonKey !== '') out.SUPABASE_ANON_KEY = supabaseAnonKey;
+
+  const flushSecret = firstNonEmpty(source.PUSH_FLUSH_SECRET);
+  if (flushSecret.length >= 32) out.PUSH_FLUSH_SECRET = flushSecret;
+
+  const pushPublicKey = firstNonEmpty(
+    source.PUSH_VAPID_PUBLIC_KEY,
+    source.VITE_PUSH_VAPID_PUBLIC_KEY,
+  );
+  if (pushPublicKey !== '') out.PUSH_VAPID_PUBLIC_KEY = pushPublicKey;
+
+  const pushPrivateKey = firstNonEmpty(source.PUSH_VAPID_PRIVATE_KEY);
+  if (pushPrivateKey !== '') out.PUSH_VAPID_PRIVATE_KEY = pushPrivateKey;
+
+  const pushSubject = firstNonEmpty(source.PUSH_VAPID_SUBJECT);
+  if (pushSubject !== '') out.PUSH_VAPID_SUBJECT = pushSubject;
+
+  const rawServiceAccount = firstNonEmpty(source.FIREBASE_SERVICE_ACCOUNT_BSDC_BD);
+  if (rawServiceAccount !== '') {
+    const fb = bindingsFromCredential(
+      rawServiceAccount,
+      firstNonEmpty(source.VITE_FB_PROJECT_ID, 'bsdc-bd'),
+    );
+    Object.assign(out, fb);
+  }
+  return out;
 }
 
 if (process.argv.includes('--self-test')) {
@@ -114,14 +171,42 @@ if (process.argv.includes('--self-test')) {
       VITE_SUPABASE_URL: 'https://example.supabase.co',
       VITE_SUPABASE_PUBLISHABLE_KEY: 'pub-key',
       PUSH_FLUSH_SECRET: 'short',
+      PUSH_WORKER_URL: 'https://push.api.bsdc.info.bd',
     }),
     {
       IMGBB_API_KEY: 'imgbb-secret',
       SUPABASE_URL: 'https://example.supabase.co',
       SUPABASE_ANON_KEY: 'pub-key',
+      PUSH_WORKER_URL: 'https://push.api.bsdc.info.bd',
     },
   );
-  console.log('17 Firebase and runtime binding checks passed. No credentials printed.');
+  assert.deepEqual(pushWorkerBindings({}), {});
+  assert.deepEqual(
+    pushWorkerBindings({
+      VITE_SUPABASE_URL: 'https://example.supabase.co',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'pub-key',
+      FIREBASE_SERVICE_ACCOUNT_BSDC_BD: valid,
+    }),
+    {
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'pub-key',
+      FB_PROJECT_ID: fixture.project_id,
+      FB_CLIENT_EMAIL: fixture.client_email,
+      FB_PRIVATE_KEY: fixture.private_key,
+    },
+  );
+  console.log('19 Firebase and runtime binding checks passed. No credentials printed.');
+} else if (process.argv.includes('--push-worker')) {
+  try {
+    const output = process.argv.slice(2).find((arg) => !arg.startsWith('--'));
+    if (!output) throw new Error('A temporary output path is required.');
+    const bindings = pushWorkerBindings(process.env);
+    writeFileSync(output, JSON.stringify(bindings), { mode: 0o600, flag: 'wx' });
+    console.log(`Prepared ${Object.keys(bindings).length} non-empty push-worker binding(s).`);
+  } catch (error) {
+    console.error(`::error::${error.message}`);
+    process.exitCode = 1;
+  }
 } else {
   try {
     const output = process.argv[2];

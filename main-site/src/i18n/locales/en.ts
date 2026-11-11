@@ -396,6 +396,8 @@ export const en = {
         'This browser is blocking storage, so the session cannot be kept. Turn off private browsing for this site, or open it in your own browser instead of another app.',
       browserUnsupported:
         'This browser cannot open the sign-in window. We are taking you to the provider instead — if nothing happens, open the site in your own browser rather than inside another app.',
+      redirectLost:
+        'Your browser or in-app view blocked the sign-in redirect session. Please open www.bsdc.info.bd in Chrome or Safari, allow site cookies/storage, or sign in with your email and password.',
       verificationNotSent:
         'Your account was created, but the verification email did not go out. You can send it again from the banner at the top of any screen.',
       usernameTaken: 'That username is already taken.',
@@ -1155,6 +1157,9 @@ export const en = {
         action: 'Open feed settings',
       },
     },
+    filteredOthersTitle: 'Only your own posts match your feed settings',
+    filteredOthersBody:
+      'Posts from other members are hidden by your feed language, muted tag or Following filter.',
     preferences: {
       title: 'Feed preferences',
       description: 'Control what reaches you and in which order.',

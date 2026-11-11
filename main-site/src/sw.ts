@@ -67,7 +67,14 @@ import {
 } from '@/lib/media/cache-names';
 import { isAllowedMediaHost, MEDIA_MAX_AGE_SECONDS, MEDIA_PROXY_PATH } from '@/lib/media/hosts';
 import { handleManagedImage } from '@/lib/media/image-strategy';
-import { parsePushContent, summarize, type PushContent } from '@/lib/notifications/copy';
+import {
+  notificationBody,
+  notificationTag,
+  notificationTitle,
+  parsePushContent,
+  summarize,
+  type PushContent,
+} from '@/lib/notifications/copy';
 import { urlBase64ToUint8Array } from '@/lib/push/webpush';
 
 declare let self: ServiceWorkerGlobalScope;
@@ -251,22 +258,97 @@ interface ContentAnswer {
   items: PushContent[];
 }
 
-/** A payload, when one was sent. Notification-shaped, and bounded. */
-interface PushPayload {
+/** A payload, when one was sent. Supports RFC 8291 JSON and FCM shapes. */
+interface RawPushPayload {
   title?: unknown;
   body?: unknown;
   url?: unknown;
   icon?: unknown;
   tag?: unknown;
+  notification?: {
+    title?: unknown;
+    body?: unknown;
+    icon?: unknown;
+    tag?: unknown;
+    click_action?: unknown;
+  };
+  data?: {
+    title?: unknown;
+    body?: unknown;
+    url?: unknown;
+    path?: unknown;
+    link?: unknown;
+    icon?: unknown;
+    tag?: unknown;
+  };
+  fcmOptions?: {
+    link?: unknown;
+  };
 }
 
-function readPayload(event: PushEvent): PushPayload | null {
+interface NormalizedPushPayload {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+  icon: string;
+}
+
+function normalizeTargetPath(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return '/notifications';
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed.slice(0, 300);
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.origin === self.location.origin) {
+      return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 300);
+    }
+  } catch {
+    // Invalid URL; fall back safely.
+  }
+  return '/notifications';
+}
+
+function readPayload(event: PushEvent): NormalizedPushPayload | null {
   const data = event.data;
   if (data === null || typeof data === 'undefined') return null;
   try {
     const parsed = data.json() as unknown;
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    return parsed as PushPayload;
+    const raw = parsed as RawPushPayload;
+    const title =
+      payloadText(raw.title, 120) ||
+      payloadText(raw.notification?.title, 120) ||
+      payloadText(raw.data?.title, 120);
+    if (title.length === 0) return null;
+
+    const body =
+      payloadText(raw.body, 240) ||
+      payloadText(raw.notification?.body, 240) ||
+      payloadText(raw.data?.body, 240);
+    const rawUrl =
+      payloadText(raw.url, 500) ||
+      payloadText(raw.data?.url, 500) ||
+      payloadText(raw.data?.path, 500) ||
+      payloadText(raw.data?.link, 500) ||
+      payloadText(raw.fcmOptions?.link, 500) ||
+      payloadText(raw.notification?.click_action, 500);
+    const tag =
+      payloadText(raw.tag, 80) ||
+      payloadText(raw.data?.tag, 80) ||
+      payloadText(raw.notification?.tag, 80);
+    const icon =
+      payloadText(raw.icon, 500) ||
+      payloadText(raw.data?.icon, 500) ||
+      payloadText(raw.notification?.icon, 500);
+
+    return {
+      title,
+      body,
+      url: normalizeTargetPath(rawUrl),
+      tag,
+      icon,
+    };
   } catch {
     // A payload that is not JSON is not a payload this worker understands. The
     // empty-body path is still correct, so it is used instead.
@@ -322,19 +404,14 @@ async function show(
 
 async function handlePush(event: PushEvent): Promise<void> {
   const payload = readPayload(event);
-  const title = payloadText(payload?.title, 120);
-  const body = payloadText(payload?.body, 240);
-
-  if (title.length > 0) {
-    // The push carried words of its own. Nothing is asked of the network: a
-    // notification should not depend on a request that may fail.
-    const url = payloadText(payload?.url, 300);
+  if (payload !== null) {
+    // The push carried words of its own (RFC 8291 worker or FCM HTTP v1).
     await show(
-      title,
-      body,
-      url.startsWith('/') ? url : '/notifications',
-      payloadText(payload?.tag, 80) || `bsdc-push-${Date.now()}`,
-      payloadText(payload?.icon, 500),
+      payload.title,
+      payload.body,
+      payload.url,
+      payload.tag || `bsdc-push-${Date.now()}`,
+      payload.icon,
     );
     return;
   }
@@ -351,6 +428,19 @@ async function handlePush(event: PushEvent): Promise<void> {
   const summary = summarize(answer.items);
   if (summary !== null) {
     await show(summary.title, summary.body, summary.url, `bsdc-summary-${Date.now()}`);
+    return;
+  }
+
+  if (answer.items.length > 0) {
+    for (const item of answer.items) {
+      await show(
+        notificationTitle(item),
+        notificationBody(item),
+        item.url,
+        notificationTag(item),
+        item.actorAvatar,
+      );
+    }
     return;
   }
 

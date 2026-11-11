@@ -1,9 +1,15 @@
 import { getRedirectResult, onAuthStateChanged, onIdTokenChanged, type User } from 'firebase/auth';
 import { getFirebaseAuth } from '@/lib/firebase';
+import { clearQueryCache } from '@/lib/query-client';
 import { bootstrapDisplayName, ensureProfile, fetchProfile } from '@/lib/profile/profile-service';
 import { ensureDataAccess } from '@/lib/auth/data-access';
 import { syncRoleWithDatabase } from '@/lib/auth/db-role';
 import { authErrorKey } from '@/lib/auth/errors';
+import {
+  clearPendingOAuthRedirect,
+  consumePendingOAuthRedirect,
+  hasPendingOAuthRedirect,
+} from '@/lib/auth/oauth-state';
 import { readClaims } from '@/lib/auth/session-claims';
 import { DEFAULT_CLAIMS, type SessionClaims } from '@/store/auth-store';
 import type { Profile } from '@/lib/profile/profile-service';
@@ -57,6 +63,7 @@ export interface SessionHandlers {
   onProfileError: (message: string) => void;
   onProfileSettled: () => void;
   onRedirectError: (messageKey: string) => void;
+  onRedirectResolving?: (resolving: boolean) => void;
 }
 
 /**
@@ -71,11 +78,29 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
   // Whose profile is on screen. A failed read may keep it, but never for a
   // different member: switching accounts clears it first.
   let publishedUid: string | null = null;
+  // Tracks the last signed-in member so switching accounts or signing out
+  // clears cached React Query results and stale Supabase auth tokens.
+  let lastSessionUid: string | null = null;
 
-  // Completes an OAuth redirect started because a popup was blocked.
-  void getRedirectResult(auth).catch((error: unknown) => {
-    if (active) handlers.onRedirectError(authErrorKey(error));
-  });
+  if (hasPendingOAuthRedirect()) handlers.onRedirectResolving?.(true);
+
+  // Completes an OAuth redirect started on mobile/webview or after popup block.
+  void getRedirectResult(auth)
+    .then((result) => {
+      if (!active) return;
+      if (result?.user) {
+        clearPendingOAuthRedirect();
+      } else if (!auth.currentUser && consumePendingOAuthRedirect() !== null) {
+        handlers.onRedirectError('auth.errors.redirectLost');
+      }
+    })
+    .catch((error: unknown) => {
+      clearPendingOAuthRedirect();
+      if (active) handlers.onRedirectError(authErrorKey(error));
+    })
+    .finally(() => {
+      if (active) handlers.onRedirectResolving?.(false);
+    });
 
   const channel =
     typeof BroadcastChannel === 'function' ? new BroadcastChannel(AUTH_CHANNEL) : null;
@@ -85,7 +110,15 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
     const currentGeneration = ++generation;
     readyUser = null;
     const isCurrent = () => active && generation === currentGeneration && auth.currentUser === user;
-    channel?.postMessage({ type: 'session', uid: user?.uid ?? null });
+    const nextUid = user?.uid ?? null;
+    if (lastSessionUid !== null && nextUid !== lastSessionUid) {
+      clearQueryCache();
+      void import('@/lib/supabase/client')
+        .then(({ resetSupabase }) => resetSupabase())
+        .catch(() => undefined);
+    }
+    lastSessionUid = nextUid;
+    channel?.postMessage({ type: 'session', uid: nextUid });
 
     if (!user) {
       handlers.onSession(null, DEFAULT_CLAIMS);
@@ -93,6 +126,9 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
       publishedUid = null;
       return;
     }
+
+    clearPendingOAuthRedirect();
+    handlers.onRedirectResolving?.(false);
 
     if (publishedUid !== null && publishedUid !== user.uid) {
       // Somebody else's face comes off the screen before theirs is fetched.

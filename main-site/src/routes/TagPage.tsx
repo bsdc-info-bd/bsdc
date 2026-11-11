@@ -9,15 +9,17 @@ import { TrendingTags } from '@/components/feed/FeedRail';
 import { isConfigured } from '@/lib/env';
 import { formatNumber } from '@/lib/format';
 import { SITE } from '@/lib/site';
+import { useAuthStore } from '@/store/auth-store';
 
 export default function TagPage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const params = useParams();
   const slug = (params['slug'] ?? '').toLowerCase();
 
   const { data, isPending } = useQuery({
-    queryKey: ['tag', slug],
+    queryKey: ['tag', uid ?? 'anon', slug],
     queryFn: async () => {
       const module = await import('@/lib/content/post-repository');
       const [tag, posts] = await Promise.all([module.fetchTag(slug), module.fetchPostsByTag(slug)]);

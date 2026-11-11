@@ -41,7 +41,7 @@ export default function PostPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['post', slug],
+    queryKey: ['post', user?.uid ?? 'anon', slug],
     queryFn: async () => {
       const { fetchPostBySlug } = await import('@/lib/content/post-repository');
       return fetchPostBySlug(slug);
@@ -60,7 +60,7 @@ export default function PostPage() {
     onSuccess: () => {
       setConfirmingDelete(false);
       toast.success(t('post.movedToTrash'));
-      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       navigate(ROUTES.trash);
     },
@@ -92,7 +92,7 @@ export default function PostPage() {
     },
     onSuccess: () => {
       toast.success(t('trash.restored'));
-      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
     onError: (error) => {
@@ -125,7 +125,7 @@ export default function PostPage() {
       await castPollVote(postId, optionId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      await queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       await queryClient.invalidateQueries({ queryKey: ['poll-vote', postId] });
     },
   });

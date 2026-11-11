@@ -647,6 +647,17 @@ export type PushDeviceRow = {
   state: 'live' | 'invalid' | 'dead';
 };
 
+/** One row of `my_fcm_devices()` (0085). */
+export type FcmDeviceRow = {
+  token_hash: string;
+  platform: 'web' | 'android' | 'ios';
+  user_agent: string;
+  language: string;
+  created_at: string;
+  last_used_at: string | null;
+  state: 'live' | 'invalid' | 'dead';
+};
+
 export type EventRow = {
   id: string;
   slug: string;
@@ -2282,6 +2293,18 @@ export type Database = {
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
       my_push_devices: { Args: Record<string, never>; Returns: PushDeviceRow[] };
       forget_push_device: { Args: { p_endpoint: string }; Returns: undefined };
+      register_fcm_token: {
+        Args: {
+          p_token: string;
+          p_platform?: string;
+          p_user_agent?: string;
+          p_language?: string;
+        };
+        Returns: string;
+      };
+      forget_fcm_token: { Args: { p_token: string }; Returns: undefined };
+      forget_fcm_device: { Args: { p_token_hash: string }; Returns: undefined };
+      my_fcm_devices: { Args: Record<string, never>; Returns: FcmDeviceRow[] };
       /** 0073. Records an upload, validating the promise the host was given. */
       record_media_asset: {
         Args: {

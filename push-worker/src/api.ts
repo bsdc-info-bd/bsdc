@@ -31,6 +31,22 @@ export interface DeviceRow {
   created_at: string;
 }
 
+export interface FcmDeviceRow {
+  notification_id: string;
+  uid: string;
+  token: string;
+  platform: 'web' | 'android' | 'ios';
+  language: string;
+  kind: string;
+  body: string;
+  actor_name: string;
+  actor_avatar: string;
+  url: string;
+  post_id: string | null;
+  conversation_id: string | null;
+  created_at: string;
+}
+
 /**
  * The headers PostgREST wants.
  *
