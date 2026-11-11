@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -26,7 +25,6 @@ import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.QrCodeScanner
@@ -74,19 +72,14 @@ import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.common.DocCodeChecksum
 import bd.info.bsdc.app.core.database.BsdcDatabaseMappers
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
-import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
-import bd.info.bsdc.app.core.designsystem.BsdcCodeTextStyle
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcPalette
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
-import bd.info.bsdc.app.core.media.BsdcImgbbImage
-import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
@@ -100,6 +93,8 @@ import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
 import bd.info.bsdc.app.core.sync.SyncScheduler
 import bd.info.bsdc.app.di.BsdcAppContainer
+import bd.info.bsdc.app.feature.feed.FeedScreen
+import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
@@ -143,7 +138,8 @@ fun BsdcAppShell(
     var guestBrowsing by rememberSaveable { mutableStateOf(false) }
     var showAuthModal by rememberSaveable { mutableStateOf(false) }
     var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
-    var lightboxImage by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
 
     LaunchedEffect(onboardingSeen, permissionCoordinator.allGranted, authState.gate) {
         if (!onboardingSeen && !permissionCoordinator.allGranted && authState.gate != AuthGateState.INITIALIZING) {
@@ -156,19 +152,39 @@ fun BsdcAppShell(
         when (incomingDestination) {
             is LinkDestination.NativeRoute -> {
                 val p = incomingDestination.path
-                selectedTab = when {
+                when {
+                    p.startsWith("/p/") -> {
+                        guestBrowsing = true
+                        selectedTab = MainTab.HOME
+                        activeDetailPost = null
+                        activeDetailSlug = p.removePrefix("/p/").trim('/')
+                    }
                     p.startsWith("/verify") -> {
                         guestBrowsing = true
-                        MainTab.VERIFY
+                        activeDetailSlug = null
+                        selectedTab = MainTab.VERIFY
                     }
-                    p.startsWith("/compose") || p.startsWith("/create") -> MainTab.CREATE
-                    p.startsWith("/messages") -> MainTab.MESSAGES
-                    p != "/" -> MainTab.EXPLORE
-                    else -> MainTab.HOME
+                    p.startsWith("/compose") || p.startsWith("/create") -> {
+                        activeDetailSlug = null
+                        selectedTab = MainTab.CREATE
+                    }
+                    p.startsWith("/messages") -> {
+                        activeDetailSlug = null
+                        selectedTab = MainTab.MESSAGES
+                    }
+                    p != "/" -> {
+                        activeDetailSlug = null
+                        selectedTab = MainTab.EXPLORE
+                    }
+                    else -> {
+                        activeDetailSlug = null
+                        selectedTab = MainTab.HOME
+                    }
                 }
             }
             is LinkDestination.NewsReader -> {
                 guestBrowsing = true
+                activeDetailSlug = null
                 selectedTab = MainTab.EXPLORE
             }
             is LinkDestination.ExternalBrowser -> openInCustomTab(context, incomingDestination.url)
@@ -218,6 +234,21 @@ fun BsdcAppShell(
                 onContinueAsGuest = {
                     showAuthModal = false
                     guestBrowsing = true
+                },
+            )
+            return
+        }
+        activeDetailSlug != null -> {
+            PostDetailScreen(
+                postSlugOrId = activeDetailSlug!!,
+                initialPost = activeDetailPost,
+                repository = container.feedRepository,
+                imageLoader = container.imageLoader,
+                viewerUid = authState.session?.uid,
+                language = language,
+                onBack = {
+                    activeDetailSlug = null
+                    activeDetailPost = null
                 },
             )
             return
@@ -337,18 +368,15 @@ fun BsdcAppShell(
                 )
 
                 when (selectedTab) {
-                    MainTab.HOME -> HomeFoundationTab(
+                    MainTab.HOME -> FeedScreen(
+                        repository = container.feedRepository,
+                        imageLoader = container.imageLoader,
+                        viewerUid = authState.session?.uid,
                         language = language,
-                        authState = authState,
-                        cachedPosts = cachedPosts,
-                        syncSettings = syncSettings,
-                        container = container,
-                        incomingDestination = incomingDestination,
-                        onOpenLightbox = { url, alt -> lightboxImage = url to alt },
-                        onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
-                        onSignInClick = { showAuthModal = true },
-                        onJumpVerify = { selectedTab = MainTab.VERIFY },
-                        onJumpExplore = { selectedTab = MainTab.EXPLORE },
+                        onOpenPost = { post ->
+                            activeDetailPost = post
+                            activeDetailSlug = post.slug.ifBlank { post.id }
+                        },
                     )
                     MainTab.VERIFY -> VerifyChecksumSandboxTab(language = language)
                     MainTab.CREATE -> CreateFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
@@ -383,188 +411,6 @@ fun BsdcAppShell(
             language = language,
             onDismiss = { showPermissionSheet = false },
         )
-    }
-
-    lightboxImage?.let { (url, caption) ->
-        BsdcMediaLightboxDialog(
-            fullUrl = url,
-            caption = caption,
-            imageLoader = container.imageLoader,
-            onDismiss = { lightboxImage = null },
-        )
-    }
-}
-
-@Composable
-private fun HomeFoundationTab(
-    language: AppLanguage,
-    authState: AuthStateSnapshot,
-    cachedPosts: List<FeedPost>,
-    syncSettings: OfflineSyncSettings,
-    container: BsdcAppContainer,
-    incomingDestination: LinkDestination,
-    onOpenLightbox: (String, String) -> Unit,
-    onTriggerSync: () -> Unit,
-    onSignInClick: () -> Unit,
-    onJumpVerify: () -> Unit,
-    onJumpExplore: () -> Unit,
-) {
-    val bn = language == AppLanguage.BN
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        val profile = authState.profile
-        if (profile != null && authState.session != null) {
-            item {
-                BsdcCard(elevated = true) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        BsdcAvatarCircle(initials = profile.displayName, online = true, size = 48.dp)
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(text = profile.displayName, style = MaterialTheme.typography.titleLarge)
-                            Text(
-                                text = "@${profile.username} · ${authState.session?.claims?.role?.wireValue ?: "member"}",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = BsdcThemeTokens.colors.mutedText,
-                            )
-                        }
-                        BsdcBadge(
-                            label = if (authState.session?.claims?.postgresAuthenticated == true) {
-                                if (bn) "JWT সক্রিয়" else "DB Authenticated"
-                            } else {
-                                if (bn) "সিঙ্ক হচ্ছে" else "Syncing"
-                            },
-                            tone = BsdcTone.OK,
-                        )
-                    }
-                    if (profile.bio.isNotBlank()) {
-                        Text(text = profile.bio, style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-            }
-        } else {
-            item {
-                BsdcStatusBanner(
-                    title = if (bn) "BSDC সদস্য হিসেবে সাইন ইন করুন" else "Sign in to your BSDC account",
-                    body = if (bn) {
-                        "ভিজিটর মোডে যাচাইকরণ টুল খোলা আছে; পোস্ট, মেসেঞ্জার ও প্রোফাইল ব্যবহারের জন্য সাইন ইন করুন।"
-                    } else {
-                        "Public verification works as a guest. Sign in with Email, Google, or GitHub to post, chat, and sync bookmarks."
-                    },
-                    tone = BsdcTone.INFO,
-                    actionLabel = if (bn) "সাইন ইন" else "Sign In",
-                    onAction = onSignInClick,
-                )
-            }
-        }
-
-        item {
-            BsdcStatusBanner(
-                title = if (bn) "BSDC নেটিভ অ্যান্ড্রয়েড · ধাপ ৩ সক্রিয়" else "BSDC Native Android · Phase 3 Active",
-                body = if (bn) {
-                    "Room অফলাইন ফিড ক্যাশ (${BanglaDigitFormatter.formatCount(cachedPosts.size.toLong(), language)} টি পোস্ট), স্মার্ট WorkManager প্রিফেচ ও ImgBB মিডিয়া পাইপলাইন সক্রিয়।"
-                } else {
-                    "Room offline feed store (${cachedPosts.size} cached posts), WorkManager smart sync (${syncSettings.policy.wireValue}), and ImgBB-only Coil media pipeline active."
-                },
-                tone = BsdcTone.OK,
-                actionLabel = if (bn) "সিঙ্ক" else "Sync Now",
-                onAction = onTriggerSync,
-            )
-        }
-
-        if (cachedPosts.isNotEmpty()) {
-            items(cachedPosts.take(5).size) { idx ->
-                val post = cachedPosts[idx]
-                BsdcCard {
-                    Text(
-                        text = post.title.ifBlank { post.excerpt.take(80) },
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    if (post.excerpt.isNotBlank()) {
-                        Text(
-                            text = post.excerpt,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = BsdcThemeTokens.colors.mutedText,
-                            maxLines = 2,
-                        )
-                    }
-                    post.media.firstOrNull()?.let { media ->
-                        BsdcImgbbImage(
-                            fullUrl = media.url,
-                            thumbUrl = media.thumbUrl,
-                            contentDescription = media.altText.ifBlank { post.title },
-                            imageLoader = container.imageLoader,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp),
-                            onTapOpenLightbox = { onOpenLightbox(media.url, media.altText.ifBlank { post.title }) },
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            BsdcCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    BsdcBadge(label = BuildConfig.APPLICATION_ID, tone = BsdcTone.INFO)
-                    BsdcBadge(
-                        label = "v${BuildConfig.VERSION_NAME} (#${BanglaDigitFormatter.formatCount(BuildConfig.VERSION_CODE.toLong(), language)})",
-                        tone = BsdcTone.OK,
-                    )
-                }
-                Text(
-                    text = if (bn) "আর্কিটেকচার কনট্র্যাক্ট সারসংক্ষেপ" else "Verified Platform Contracts",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = if (bn) {
-                        "• মিডিয়া: শুধু ImgBB ইমেজ (কোনো Cloudinary বা অডিও রেকর্ড স্টোরেজ নেই)\n• পুশ: FCM HTTP v1 (${BuildConfig.PUSH_WORKER_ORIGIN})\n• ভয়েস: শুধু ভয়েস সার্চ\n• এডমিন প্যানেল সম্পূর্ণ বাদ দেওয়া হয়েছে"
-                    } else {
-                        "• Media: ImgBB images only (zero Cloudinary, zero voice-note audio storage)\n• Push: FCM HTTP v1 (${BuildConfig.PUSH_WORKER_ORIGIN})\n• Voice: Dedicated to Voice Search\n• Admin consoles excluded by design"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BsdcThemeTokens.colors.mutedText,
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BsdcButton(
-                        label = if (bn) "ডিপ-লিংক ও থিম টেস্ট" else "Test Router & Theme",
-                        onClick = onJumpExplore,
-                        leadingIcon = Icons.Rounded.Link,
-                    )
-                    BsdcButton(
-                        label = if (bn) "যাচাই" else "Verify",
-                        onClick = onJumpVerify,
-                        secondary = true,
-                    )
-                }
-            }
-        }
-
-        item {
-            val destLabel = when (incomingDestination) {
-                is LinkDestination.NativeRoute -> "NativeRoute -> ${incomingDestination.path}"
-                is LinkDestination.NewsReader -> "NewsReader WebView -> ${incomingDestination.url}"
-                is LinkDestination.AdminWebOnly -> "Blocked Admin Web-Only -> ${incomingDestination.path}"
-                is LinkDestination.ExternalBrowser -> "Custom Tab -> ${incomingDestination.url}"
-                is LinkDestination.Ignored -> "Ignored -> ${incomingDestination.reason}"
-            }
-            BsdcCard(elevated = true) {
-                Text(
-                    text = if (bn) "সর্বশেষ অ্যাপ লিংক রাউটিং" else "Active Intent Resolution",
-                    style = MaterialTheme.typography.titleMedium,
-                )
-                Text(text = destLabel, style = BsdcCodeTextStyle)
-            }
-        }
     }
 }
 

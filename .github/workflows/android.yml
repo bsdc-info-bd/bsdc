@@ -128,6 +128,7 @@ jobs:
             :core:media:testDebugUnitTest \
             :core:database:testDebugUnitTest \
             :core:sync:testDebugUnitTest \
+            :feature:feed:testDebugUnitTest \
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug 2>&1 | tee /tmp/gradle.out || status=$?
@@ -195,6 +196,7 @@ jobs:
             :core:media:testReleaseUnitTest \
             :core:database:testReleaseUnitTest \
             :core:sync:testReleaseUnitTest \
+            :feature:feed:testReleaseUnitTest \
             :app:testReleaseUnitTest \
             :app:lintRelease \
             :app:assembleRelease \
