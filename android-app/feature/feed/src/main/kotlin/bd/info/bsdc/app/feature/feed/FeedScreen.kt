@@ -247,7 +247,7 @@ fun FeedScreen(
                         val countStr = BanglaDigitFormatter.formatCount(newPostsAvailable.toLong(), language)
                         Text(
                             text = if (language == AppLanguage.BN) {
-                                "$countStrটি নতুন পোস্ট — রিফ্রেশ করুন"
+                                "${countStr}টি নতুন পোস্ট — রিফ্রেশ করুন"
                             } else {
                                 "$countStr new posts — tap to load"
                             },
@@ -909,7 +909,7 @@ fun FeedPollWidget(
         }
         val totalFormatted = BanglaDigitFormatter.formatCount(totalVotes.toLong(), language)
         Text(
-            text = if (language == AppLanguage.BN) "$totalFormattedটি ভোট" else "$totalFormatted total votes",
+            text = if (language == AppLanguage.BN) "${totalFormatted}টি ভোট" else "$totalFormatted total votes",
             style = MaterialTheme.typography.labelSmall,
             color = tokens.mutedText,
         )
