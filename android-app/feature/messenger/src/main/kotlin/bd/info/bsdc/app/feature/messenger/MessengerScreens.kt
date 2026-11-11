@@ -1593,69 +1593,79 @@ private fun RichMessageBody(
     onTapMention: (String) -> Unit,
 ) {
     val segments = remember(body) { MessengerEngine.parseMessageBody(body) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        var inlineGroup = mutableListOf<MessengerEngine.BodySegment>()
-        fun flushInline() {
-            if (inlineGroup.isEmpty()) return
-            val snapshot = inlineGroup.toList()
-            inlineGroup.clear()
-            val text = buildAnnotatedString {
-                snapshot.forEach { seg ->
-                    when (seg.type) {
-                        MessengerEngine.SegmentType.TEXT -> append(seg.value)
-                        MessengerEngine.SegmentType.LINK -> {
-                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium)) {
-                                append(seg.value)
-                            }
-                        }
-                        MessengerEngine.SegmentType.MENTION -> {
-                            withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)) {
-                                append(seg.value)
-                            }
-                        }
-                        MessengerEngine.SegmentType.CODE -> {}
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val blocks = remember(segments) {
+        buildList<List<MessengerEngine.BodySegment>> {
+            val inlineBuf = mutableListOf<MessengerEngine.BodySegment>()
+            for (seg in segments) {
+                if (seg.type == MessengerEngine.SegmentType.CODE) {
+                    if (inlineBuf.isNotEmpty()) {
+                        add(inlineBuf.toList())
+                        inlineBuf.clear()
                     }
+                    add(listOf(seg))
+                } else {
+                    inlineBuf.add(seg)
                 }
             }
-            val firstLink = snapshot.firstOrNull { it.type == MessengerEngine.SegmentType.LINK }
-            val firstMention = snapshot.firstOrNull { it.type == MessengerEngine.SegmentType.MENTION }
-            Text(
-                text = text,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = when {
-                    firstLink != null -> Modifier.clickable { onTapUrl(firstLink.metadata) }
-                    firstMention != null -> Modifier.clickable { onTapMention(firstMention.metadata) }
-                    else -> Modifier
-                },
-            )
+            if (inlineBuf.isNotEmpty()) add(inlineBuf.toList())
         }
+    }
 
-        segments.forEach { seg ->
-            if (seg.type == MessengerEngine.SegmentType.CODE) {
-                flushInline()
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        blocks.forEach { block ->
+            val first = block.firstOrNull()
+            if (first != null && first.type == MessengerEngine.SegmentType.CODE) {
                 Surface(
                     shape = RoundedCornerShape(10.dp),
                     color = MaterialTheme.colorScheme.surface,
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
-                        if (seg.metadata.isNotBlank()) {
+                        if (first.metadata.isNotBlank()) {
                             Text(
-                                text = seg.metadata.uppercase(),
+                                text = first.metadata.uppercase(),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
+                                color = primaryColor,
                             )
                         }
                         Text(
-                            text = seg.value,
+                            text = first.value,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                         )
                     }
                 }
-            } else {
-                inlineGroup.add(seg)
+            } else if (block.isNotEmpty()) {
+                val text = buildAnnotatedString {
+                    block.forEach { seg ->
+                        when (seg.type) {
+                            MessengerEngine.SegmentType.TEXT -> append(seg.value)
+                            MessengerEngine.SegmentType.LINK -> {
+                                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.Medium)) {
+                                    append(seg.value)
+                                }
+                            }
+                            MessengerEngine.SegmentType.MENTION -> {
+                                withStyle(SpanStyle(color = primaryColor, fontWeight = FontWeight.SemiBold)) {
+                                    append(seg.value)
+                                }
+                            }
+                            MessengerEngine.SegmentType.CODE -> {}
+                        }
+                    }
+                }
+                val firstLink = block.firstOrNull { it.type == MessengerEngine.SegmentType.LINK }
+                val firstMention = block.firstOrNull { it.type == MessengerEngine.SegmentType.MENTION }
+                Text(
+                    text = text,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = when {
+                        firstLink != null -> Modifier.clickable { onTapUrl(firstLink.metadata) }
+                        firstMention != null -> Modifier.clickable { onTapMention(firstMention.metadata) }
+                        else -> Modifier
+                    },
+                )
             }
         }
-        flushInline()
     }
 }
 
