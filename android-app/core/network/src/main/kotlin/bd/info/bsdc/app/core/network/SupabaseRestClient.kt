@@ -52,8 +52,12 @@ class SupabaseRestClient(
     private val tokenProvider: suspend () -> String?,
 ) {
     private val json = BsdcHttpClientFactory.sharedJson
+    val backendConfig: BsdcBackendConfig
+        get() = config
     private val baseRestUrl: String
         get() = config.supabaseUrl.trim().trimEnd('/') + "/rest/v1"
+
+    suspend fun currentToken(): String? = tokenProvider()
 
     private fun ensureConfigured() {
         if (!config.isSupabaseConfigured) {

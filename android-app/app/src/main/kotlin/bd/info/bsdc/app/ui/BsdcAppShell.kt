@@ -97,6 +97,7 @@ import bd.info.bsdc.app.feature.compose.CreateHubMode
 import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
+import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
@@ -404,7 +405,24 @@ fun BsdcAppShell(
                             selectedTab = MainTab.HOME
                         },
                     )
-                    MainTab.MESSAGES -> MessagesFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
+                    MainTab.MESSAGES -> {
+                        val deepConversationId = (incomingDestination as? LinkDestination.NativeRoute)
+                            ?.path
+                            ?.takeIf { it.startsWith("/messages/") }
+                            ?.removePrefix("/messages/")
+                            ?.trim('/')
+                            ?.takeIf { it.isNotBlank() }
+                        MessengerRootScreen(
+                            viewerUid = authState.session?.uid,
+                            repository = container.messengerRepository,
+                            realtimeTransport = container.messengerRealtimeTransport,
+                            mediaRepository = container.mediaRepository,
+                            imageLoader = container.imageLoader,
+                            language = language,
+                            initialConversationId = deepConversationId,
+                            onSignInRequired = { showAuthModal = true },
+                        )
+                    }
                     MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
                         language = language,
                         themeMode = themeMode,
@@ -522,34 +540,6 @@ private fun VerifyChecksumSandboxTab(language: AppLanguage) {
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun MessagesFoundationTab(
-    language: AppLanguage,
-    authState: AuthStateSnapshot,
-    onSignInClick: () -> Unit,
-) {
-    val bn = language == AppLanguage.BN
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            BsdcEmptyState(
-                icon = Icons.Rounded.ChatBubbleOutline,
-                title = if (bn) "রিয়েল-টাইম মেসেঞ্জার (ধাপ ৬)" else "Real-Time Messenger (Phase 6)",
-                subtitle = if (bn) {
-                    "Supabase Realtime ও RTDB-ভিত্তিক চ্যাট, টাইপিং, রিপ্লাই এবং ImgBB ছবি শেয়ার (কোনো ভয়েস নোট রেকর্ডিং ছাড়াই)।"
-                } else {
-                    "Supabase Realtime + RTDB live threads, typing indicators, replies, code snippets, and ImgBB image attachments (zero audio recording)."
-                },
-                actionLabel = if (authState.session == null) (if (bn) "সাইন ইন করুন" else "Sign In") else null,
-                onAction = if (authState.session == null) onSignInClick else null,
-            )
         }
     }
 }

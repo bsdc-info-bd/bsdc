@@ -14,6 +14,8 @@ import bd.info.bsdc.app.core.sync.FeedPrefetchService
 import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
 import bd.info.bsdc.app.feature.compose.ComposeRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
+import bd.info.bsdc.app.feature.messenger.MessengerRepository
+import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
 import coil3.ImageLoader
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -128,6 +130,20 @@ class BsdcAppContainer(appContext: Context) {
 
     val composeRepository: ComposeRepository by lazy {
         ComposeRepository(
+            supabase = supabaseRestClient,
+            database = database,
+        )
+    }
+
+    val messengerRealtimeTransport: SupabaseRealtimeTransport by lazy {
+        SupabaseRealtimeTransport(
+            okHttpClient = okHttpClient,
+            supabase = supabaseRestClient,
+        )
+    }
+
+    val messengerRepository: MessengerRepository by lazy {
+        MessengerRepository(
             supabase = supabaseRestClient,
             database = database,
         )
