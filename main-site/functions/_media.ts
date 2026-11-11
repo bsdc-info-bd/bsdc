@@ -9,6 +9,7 @@
 import { IMAGE_SNIFF_BYTES, looksLikeImageBytes } from '../src/lib/media/image-signature';
 import {
   chooseProvider,
+  effectiveMimeType,
   kindOf,
   MAX_BYTES,
   type MediaKind,
@@ -58,7 +59,7 @@ export interface MediaFailure {
 }
 
 export function reject(file: File, purpose: MediaPurpose, env: MediaEnv): MediaFailure | null {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (kind === null) return { errorKey: 'media.errors.unsupported', status: 415 };
   if (file.size === 0) return { errorKey: 'media.errors.empty', status: 400 };
   if (file.size > MAX_BYTES[kind]) return { errorKey: 'media.errors.tooLarge', status: 413 };
@@ -211,6 +212,21 @@ function keyWasRefused(status: number, body: string): boolean {
   return /invalid.{0,20}(api)?\s*key|api key|key.{0,10}(invalid|expired|missing)/i.test(body);
 }
 
+function ensureHttpsUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol.startsWith('http')) {
+      parsed.protocol = 'https:';
+      return parsed.toString();
+    }
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
 async function sendToImgbb(
   file: File,
   key: string,
@@ -219,10 +235,7 @@ async function sendToImgbb(
   now = Date.now(),
 ): Promise<EdgeUploadResult> {
   const base64 = bytesToBase64(bytes ?? new Uint8Array(await file.arrayBuffer()));
-  const body = new FormData();
-  body.append('image', base64);
   const lifetime = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
-  if (lifetime > 0) body.append('expiration', String(lifetime));
 
   const endpoint = `https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`;
 
@@ -232,8 +245,11 @@ async function sendToImgbb(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
     try {
-      // Rebuilt each attempt: a FormData body can be re-sent, a consumed
-      // Request cannot, and the bytes are the same bytes.
+      // Rebuilt on every attempt so a retry never reuses a consumed multipart
+      // body stream in Workers/undici.
+      const body = new FormData();
+      body.append('image', base64);
+      if (lifetime > 0) body.append('expiration', String(lifetime));
       response = await fetch(endpoint, { method: 'POST', body, signal: controller.signal });
       text = await response.text();
     } catch {
@@ -263,15 +279,18 @@ async function sendToImgbb(
   } catch {
     throw new HostError('media.errors.failed', 502);
   }
-  const fullUrl = payload.data?.image?.url ?? payload.data?.display_url ?? payload.data?.url ?? '';
+  const rawFullUrl =
+    payload.data?.image?.url ?? payload.data?.display_url ?? payload.data?.url ?? '';
+  const fullUrl = ensureHttpsUrl(rawFullUrl);
   if (fullUrl.length === 0) throw new HostError('media.errors.failed', 502);
 
   // ImgBB's `thumb` is a 180x180 square crop suited only for small avatars;
   // `medium` (~640px wide) preserves aspect ratio for feed cards and previews.
-  const thumbUrl =
+  const rawThumbUrl =
     purpose === 'avatar'
       ? (payload.data?.thumb?.url ?? payload.data?.medium?.url ?? fullUrl)
       : (payload.data?.medium?.url ?? payload.data?.display_url ?? fullUrl);
+  const thumbUrl = ensureHttpsUrl(rawThumbUrl) || fullUrl;
 
   return {
     provider: 'imgbb',
@@ -282,7 +301,7 @@ async function sendToImgbb(
     width: toNumber(payload.data?.width) ?? toNumber(payload.data?.image?.width),
     height: toNumber(payload.data?.height) ?? toNumber(payload.data?.image?.height),
     bytes: toNumber(payload.data?.size) ?? file.size,
-    mimeType: payload.data?.image?.mime ?? file.type,
+    mimeType: payload.data?.image?.mime ?? (effectiveMimeType(file) || file.type),
     expiresAt: expiresAtFor(purpose, now),
   };
 }
@@ -297,7 +316,7 @@ export async function sendToHost(
   /** The bytes, when the caller already read them to check the signature. */
   bytes?: Uint8Array,
 ): Promise<EdgeUploadResult> {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (kind === null) throw new HostError('media.errors.unsupported', 415);
 
   const credentials = credentialsOf(env);

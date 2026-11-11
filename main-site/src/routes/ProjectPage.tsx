@@ -66,9 +66,17 @@ export default function ProjectPage() {
 
   if (!isConfigured.supabase) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('data.errors.notConfigured')} />
-      </div>
+      <>
+        <Seo
+          title={t('projects.metaTitle')}
+          description={t('projects.notFoundBody')}
+          path={projectPath(slug)}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('data.errors.notConfigured')} />
+        </div>
+      </>
     );
   }
 
@@ -76,27 +84,43 @@ export default function ProjectPage() {
 
   if (detail.isError) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('projects.failed')} />
-      </div>
+      <>
+        <Seo
+          title={t('projects.metaTitle')}
+          description={t('projects.failed')}
+          path={projectPath(slug)}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('projects.failed')} />
+        </div>
+      </>
     );
   }
 
   const project = detail.project;
   if (!project) {
     return (
-      <div className="fab-container py-10">
-        <EmptyState
-          icon={<Rocket size={30} />}
-          title={t('projects.notFoundTitle')}
+      <>
+        <Seo
+          title={`${t('projects.notFoundTitle')} — ${t('common.brand')}`}
           description={t('projects.notFoundBody')}
-          action={
-            <LinkButton to={ROUTES.projects} variant="secondary" size="sm">
-              {t('projects.backToDirectory')}
-            </LinkButton>
-          }
+          path={projectPath(slug)}
+          noindex
         />
-      </div>
+        <div className="fab-container py-10">
+          <EmptyState
+            icon={<Rocket size={30} />}
+            title={t('projects.notFoundTitle')}
+            description={t('projects.notFoundBody')}
+            action={
+              <LinkButton to={ROUTES.projects} variant="secondary" size="sm">
+                {t('projects.backToDirectory')}
+              </LinkButton>
+            }
+          />
+        </div>
+      </>
     );
   }
 
@@ -117,6 +141,9 @@ export default function ProjectPage() {
             name: project.name,
             description: project.description,
             url: `${SITE.url}${path}`,
+            dateCreated: project.createdAt,
+            dateModified: project.updatedAt,
+            ...(project.coverUrl.length > 0 ? { image: project.coverUrl } : {}),
             ...(project.repoUrl.length > 0 ? { codeRepository: project.repoUrl } : {}),
             ...(project.tech.length > 0 ? { programmingLanguage: project.tech } : {}),
             ...(project.license.length > 0 ? { license: project.license } : {}),

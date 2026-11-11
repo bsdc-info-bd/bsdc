@@ -1,7 +1,13 @@
 import { Helmet } from 'react-helmet-async';
 import { useTranslation } from 'react-i18next';
 import { SITE } from '@/lib/site';
-import { canonicalPath, clipText, isPrivatePath } from '@/lib/seo/engine';
+import {
+  alternateLangUrl,
+  canonicalPath,
+  clipText,
+  isPrivatePath,
+  pruneJsonLd,
+} from '@/lib/seo/engine';
 
 export interface SeoProps {
   title: string;
@@ -17,6 +23,11 @@ export interface SeoProps {
 
 function absoluteUrl(path: string): string {
   return new URL(path, SITE.url).toString();
+}
+
+function sanitizeGraphNode(node: Record<string, unknown>): Record<string, unknown> {
+  const rest = Object.fromEntries(Object.entries(node).filter(([key]) => key !== '@context'));
+  return pruneJsonLd(rest);
 }
 
 /**
@@ -41,6 +52,10 @@ export function Seo({
   const canonical = absoluteUrl(canonicalPath(path));
   const imageUrl = absoluteUrl(image);
   const withheld = noindex || isPrivatePath(path);
+  const clippedTitle = clipText(title, 70);
+  const clippedDescription = clipText(description, 180);
+
+  const extraNodes = jsonLd.map(sanitizeGraphNode).filter((node) => Object.keys(node).length > 0);
 
   const graph: Record<string, unknown>[] = [
     {
@@ -69,28 +84,28 @@ export function Seo({
         'query-input': 'required name=search_term_string',
       },
     },
-    ...jsonLd,
+    ...extraNodes,
   ];
 
   return (
     <Helmet prioritizeSeoTags>
       <html lang={language} />
-      <title>{clipText(title, 70)}</title>
-      <meta name="description" content={clipText(description, 180)} />
+      <title>{clippedTitle}</title>
+      <meta name="description" content={clippedDescription} />
       <link rel="canonical" href={canonical} />
       <meta
         name="robots"
         content={withheld ? 'noindex,nofollow' : 'index,follow,max-image-preview:large'}
       />
 
-      <link rel="alternate" hrefLang="bn" href={`${canonical}?lang=bn`} />
-      <link rel="alternate" hrefLang="en" href={`${canonical}?lang=en`} />
+      <link rel="alternate" hrefLang="bn" href={alternateLangUrl(canonical, 'bn')} />
+      <link rel="alternate" hrefLang="en" href={alternateLangUrl(canonical, 'en')} />
       <link rel="alternate" hrefLang="x-default" href={canonical} />
 
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:type" content={type} />
-      <meta property="og:title" content={clipText(title, 70)} />
-      <meta property="og:description" content={description} />
+      <meta property="og:title" content={clippedTitle} />
+      <meta property="og:description" content={clippedDescription} />
       <meta property="og:url" content={canonical} />
       <meta property="og:image" content={imageUrl} />
       <meta property="og:image:width" content="1200" />
@@ -99,8 +114,8 @@ export function Seo({
       <meta property="og:locale:alternate" content={language === 'bn' ? 'en_US' : 'bn_BD'} />
 
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:title" content={title} />
-      <meta name="twitter:description" content={description} />
+      <meta name="twitter:title" content={clippedTitle} />
+      <meta name="twitter:description" content={clippedDescription} />
       <meta name="twitter:image" content={imageUrl} />
 
       <script type="application/ld+json">

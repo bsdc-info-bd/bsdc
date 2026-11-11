@@ -15,7 +15,7 @@ import {
 import { usePlayground } from '@/hooks/use-opportunities';
 import { type SketchLanguage } from '@/lib/opportunities/opportunity-types';
 import { formatRelativeTime } from '@/lib/format';
-import { ROUTES } from '@/lib/site';
+import { ROUTES, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -67,6 +67,22 @@ export default function PlaygroundPage() {
         title={t('playground.metaTitle')}
         description={t('playground.metaDescription')}
         path={ROUTES.playground}
+        jsonLd={[
+          {
+            '@type': 'WebApplication',
+            name: t('playground.title'),
+            description: t('playground.metaDescription'),
+            url: `${SITE.url}${ROUTES.playground}`,
+            applicationCategory: 'DeveloperApplication',
+            operatingSystem: 'Any',
+            offers: {
+              '@type': 'Offer',
+              price: '0',
+              priceCurrency: 'BDT',
+            },
+            publisher: { '@id': `${SITE.url}/#organization` },
+          },
+        ]}
       />
 
       <div className="fab-container py-6 sm:py-10">

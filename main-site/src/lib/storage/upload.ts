@@ -1,5 +1,6 @@
 import {
   chooseProvider,
+  effectiveMimeType,
   kindOf,
   MAX_BYTES,
   type MediaKind,
@@ -78,7 +79,7 @@ export async function readImageSize(file: Blob): Promise<{ width: number; height
 }
 
 export function assertUploadable(file: File): MediaKind {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (!kind) throw new MediaError('media.errors.unsupported');
   if (file.size > MAX_BYTES[kind]) throw new MediaError('media.errors.tooLarge');
   if (file.size === 0) throw new MediaError('media.errors.empty');
@@ -220,16 +221,17 @@ export async function shrinkForUpload(
 ): Promise<{ blob: Blob; name: string; width?: number; height?: number }> {
   const maxEdge = UPLOAD_MAX_EDGE[purpose] ?? 1600;
   const quality = UPLOAD_QUALITY[purpose] ?? 0.84;
+  const mime = effectiveMimeType(file);
   const unchanged: { blob: Blob; name: string } = { blob: file, name: file.name };
-  if (file.type === 'image/gif' || file.type === 'image/svg+xml') return unchanged;
+  if (mime === 'image/gif' || mime === 'image/svg+xml') return unchanged;
   if (typeof createImageBitmap !== 'function') return unchanged;
-  if (file.type === 'image/webp' && file.size <= 48 * 1024) return unchanged;
+  if (mime === 'image/webp' && file.size <= 48 * 1024) return unchanged;
 
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(file);
     const longest = Math.max(bitmap.width, bitmap.height);
-    if (file.type === 'image/webp' && longest <= maxEdge && file.size <= 180 * 1024) {
+    if (mime === 'image/webp' && longest <= maxEdge && file.size <= 180 * 1024) {
       return { blob: file, name: file.name, width: bitmap.width, height: bitmap.height };
     }
     const scale = longest > maxEdge ? maxEdge / longest : 1;
@@ -527,12 +529,15 @@ async function uploadThroughProxy(
   const token = await idToken();
   if (token.length === 0) throw new MediaError('media.errors.signInRequired');
 
+  const normalizedType = effectiveMimeType(file);
   const prepared = await shrinkForUpload(file, purpose);
   const outgoing =
-    prepared.blob instanceof File && prepared.name === prepared.blob.name
+    prepared.blob instanceof File &&
+    prepared.name === prepared.blob.name &&
+    prepared.blob.type === normalizedType
       ? prepared.blob
       : new File([prepared.blob], prepared.name, {
-          type: prepared.blob.type || file.type,
+          type: prepared.blob.type || normalizedType,
         });
 
   const body = new FormData();

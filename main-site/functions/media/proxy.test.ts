@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { parseSource } from './i';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { onRequestGet, parseSource } from './i';
 
 /**
  * The edge delivery & repair endpoint (`/media/i`) only fetches verified image
@@ -45,5 +45,51 @@ describe('which URLs the repair endpoint will fetch', () => {
   it('refuses a hostname that tries to traverse', () => {
     expect(parseSource('https://i.ibb.co/../a.jpg')).not.toBeNull();
     expect(parseSource('https://i.ibb.co../a.jpg')).toBeNull();
+  });
+});
+
+describe('edge media proxy safeguards', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('blocks redirects to non-ImgBB hosts instead of following them', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(null, {
+        status: 302,
+        headers: { location: 'https://169.254.169.254/latest/meta-data/' },
+      }),
+    );
+
+    const res = await onRequestGet({
+      request: new Request(
+        'https://www.bsdc.info.bd/media/i?u=https%3A%2F%2Fi.ibb.co%2Fabc%2Fpic.png',
+      ),
+      env: {},
+    } as Parameters<typeof onRequestGet>[0]);
+
+    expect(res.status).toBe(502);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('sandboxes forwarded SVG images and accepts SVGs with XML prologs', async () => {
+    const svg =
+      '<?xml version="1.0" encoding="UTF-8"?><!-- metadata padding over 64 bytes for sniffing check --><svg xmlns="http://www.w3.org/2000/svg"></svg>';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(svg, {
+        status: 200,
+        headers: { 'content-type': 'image/svg+xml' },
+      }),
+    );
+
+    const res = await onRequestGet({
+      request: new Request(
+        'https://www.bsdc.info.bd/media/i?u=https%3A%2F%2Fi.ibb.co%2Fabc%2Fpic.svg',
+      ),
+      env: {},
+    } as Parameters<typeof onRequestGet>[0]);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-security-policy')).toContain('sandbox');
   });
 });

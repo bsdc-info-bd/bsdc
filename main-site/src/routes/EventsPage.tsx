@@ -42,8 +42,11 @@ export default function EventsPage() {
         jsonLd={calendar.events.slice(0, 20).map((event) => ({
           '@type': 'Event',
           name: event.title,
+          url: `${SITE.url}${eventPath(event.slug)}`,
           startDate: event.startsAt,
           endDate: event.endsAt,
+          eventStatus: 'https://schema.org/EventScheduled',
+          ...(event.coverUrl.trim().length > 0 ? { image: event.coverUrl.trim() } : {}),
           eventAttendanceMode:
             event.mode === 'online'
               ? 'https://schema.org/OnlineEventAttendanceMode'
@@ -52,7 +55,7 @@ export default function EventsPage() {
                 : 'https://schema.org/OfflineEventAttendanceMode',
           location:
             event.mode === 'online'
-              ? { '@type': 'VirtualLocation', url: `${SITE.url}${ROUTES.events}` }
+              ? { '@type': 'VirtualLocation', url: `${SITE.url}${eventPath(event.slug)}` }
               : { '@type': 'Place', name: event.venue, address: event.city },
           organizer: { '@type': 'Organization', name: SITE.shortName, url: SITE.url },
         }))}

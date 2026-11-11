@@ -102,8 +102,10 @@ function download(filename: string, body: string, type: string): void {
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function Severity({ checks }: { checks: ReturnType<typeof seoChecks> }): ReactElement {

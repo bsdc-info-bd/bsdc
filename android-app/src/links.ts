@@ -38,8 +38,12 @@ export function resolveLink(raw: string): Opening {
   try {
     url = new URL(value);
   } catch {
-    // A bare path can only have come from inside the app.
-    if (value.startsWith('/')) return { kind: 'in-app', path: value };
+    // A bare path can only have come from inside the app; protocol-relative or
+    // backslash-prefixed paths (`//evil.com`, `/\evil.com`) are refused so an
+    // intent can never pivot into another origin.
+    if (value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/\\')) {
+      return { kind: 'in-app', path: value };
+    }
     return { kind: 'ignore', reason: 'That is not an address the app can open.' };
   }
 

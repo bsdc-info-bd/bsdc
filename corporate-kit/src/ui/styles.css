@@ -192,14 +192,22 @@ a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgb(255 255 255 / 16%);
-  color: #fff;
+  background: color-mix(in srgb, var(--c-brand-ink) 14%, transparent);
+  border-color: color-mix(in srgb, var(--c-brand-ink) 35%, transparent);
+  color: var(--c-brand-ink);
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 
-/* A console on a phone is used one-handed, standing up, in a hurry. */
+/* A console on a phone is used one-handed, standing up, in a hurry. Unstick the
+   wrapped navigation header on narrow viewports so it cannot pin half the screen. */
+@media (max-width: 48rem) {
+  .kit-header {
+    position: static;
+  }
+}
+
 @media (max-width: 40rem) {
   .kit-who > span:not(.kit-avatar) {
     display: none;

@@ -97,11 +97,19 @@ export default function CheckoutPage() {
 
   if (!isSignedIn) {
     return (
-      <div className="fab-container max-w-2xl py-10">
-        <Alert tone="info" title={t('checkout.signInTitle')}>
-          <p>{t('checkout.signInBody')}</p>
-        </Alert>
-      </div>
+      <>
+        <Seo
+          title={t('checkout.metaTitle')}
+          description={t('checkout.metaDescription')}
+          path={ROUTES.checkout}
+          noindex
+        />
+        <div className="fab-container max-w-2xl py-10">
+          <Alert tone="info" title={t('checkout.signInTitle')}>
+            <p>{t('checkout.signInBody')}</p>
+          </Alert>
+        </div>
+      </>
     );
   }
 

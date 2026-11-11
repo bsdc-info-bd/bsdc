@@ -42,6 +42,25 @@ export interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement
 /** Longest single retry delay in the recovery ladder. */
 const MAX_DELAY_MS = 5_000;
 
+function normalizeMediaSrc(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (
+      parsed.protocol !== 'https:' &&
+      parsed.protocol.startsWith('http') &&
+      isRepairableMediaHost(parsed.hostname)
+    ) {
+      parsed.protocol = 'https:';
+      return parsed.toString();
+    }
+  } catch {
+    return trimmed;
+  }
+  return trimmed;
+}
+
 /**
  * The ImgBB host of an address, or null when it is not one this edge can fetch.
  *
@@ -95,12 +114,17 @@ export function MediaImage({
   const { t } = useTranslation();
   const online = useOnlineStatus();
 
-  const rawPrimary = src.length > 0 ? src : fallbackSrc;
-  const rawFallback = fallbackSrc.length > 0 && fallbackSrc !== rawPrimary ? fallbackSrc : '';
+  const cleanSrc = normalizeMediaSrc(src);
+  const cleanFallback = normalizeMediaSrc(fallbackSrc);
+  const cleanVariant = normalizeMediaSrc(variantSrc);
+
+  const rawPrimary = cleanSrc.length > 0 ? cleanSrc : cleanFallback;
+  const rawFallback = cleanFallback.length > 0 && cleanFallback !== rawPrimary ? cleanFallback : '';
 
   const slot = typeof slotWidth === 'number' && slotWidth > 0 ? slotWidth : 0;
   const fullUrl = rawFallback.length > 0 ? rawFallback : rawPrimary;
-  const mediumUrl = variantSrc.length > 0 ? variantSrc : rawPrimary !== fullUrl ? rawPrimary : '';
+  const mediumUrl =
+    cleanVariant.length > 0 ? cleanVariant : rawPrimary !== fullUrl ? rawPrimary : '';
 
   const responsive: ResponsiveSource | null =
     slot > 0 && mediumUrl.length > 0 && mediumUrl !== fullUrl
@@ -133,6 +157,7 @@ export function MediaImage({
 
   const machine = useRef<RecoveryState>(initialRecoveryState(primary));
   const failures = useRef(0);
+  const offlineFailure = useRef(false);
   const upgradedLegacyThumb = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextKey = useRef(1);
@@ -159,6 +184,7 @@ export function MediaImage({
     clearTimer();
     machine.current = initialRecoveryState(primary);
     failures.current = 0;
+    offlineFailure.current = false;
     upgradedLegacyThumb.current = false;
     nextKey.current += 1;
     setPainting({ url: primary, attempt: 0, key: nextKey.current });
@@ -198,15 +224,19 @@ export function MediaImage({
 
       if (plan.step === 'give-up') {
         if (plan.offline) {
+          offlineFailure.current = true;
           setOfflineTile(true);
+          setGaveUp(true);
           onFailure?.();
           return;
         }
+        offlineFailure.current = false;
         setGaveUp(true);
         onFailure?.();
         return;
       }
 
+      offlineFailure.current = false;
       setOfflineTile(false);
       paint(next, plan.delayMs);
     },
@@ -214,14 +244,19 @@ export function MediaImage({
   );
 
   useEffect(() => {
-    if (!online || failures.current === 0 || gaveUp) return;
+    if (!online || !offlineFailure.current || primary.length === 0) return;
+    offlineFailure.current = false;
+    failures.current = 0;
+    const busted = withBust(primary, `online-${Date.now().toString(36)}`);
     machine.current = {
       ...initialRecoveryState(primary),
-      url: withBust(primary, `online-${Date.now().toString(36)}`),
+      url: busted,
     };
     setOfflineTile(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online]);
+    setGaveUp(false);
+    setLoaded(false);
+    paint(machine.current, 0);
+  }, [online, paint, primary]);
 
   const observeElement = useCallback((node: HTMLImageElement | null) => {
     if (node !== null && node.complete && node.naturalWidth > 0) {

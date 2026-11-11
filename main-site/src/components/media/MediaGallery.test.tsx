@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MediaGallery, type GalleryItem } from './MediaGallery';
+import { MediaImage } from './MediaImage';
 import type { PostMediaItem } from '@/lib/content/post-repository';
 import { toGalleryItems } from '@/lib/media/gallery-items';
 import type * as I18nModule from 'react-i18next';
@@ -240,5 +241,43 @@ describe('a post row becomes a gallery item', () => {
         height: null,
       },
     ]);
+  });
+});
+
+describe('MediaImage protocol upgrade and reconnect recovery', () => {
+  it('upgrades plain HTTP ImgBB URLs to HTTPS immediately', () => {
+    render(<MediaImage src="http://i.ibb.co/legacy/pic.jpg" alt="Legacy photo" />);
+    expect(screen.getByRole('img', { name: 'Legacy photo' })).toHaveAttribute(
+      'src',
+      'https://i.ibb.co/legacy/pic.jpg',
+    );
+  });
+
+  it('shows the offline placeholder when offline and retries automatically on reconnect', () => {
+    const onLineSpy = vi.spyOn(navigator, 'onLine', 'get');
+    onLineSpy.mockReturnValue(false);
+
+    try {
+      render(<MediaImage src="https://i.ibb.co/offline/pic.jpg" alt="Reconnect photo" />);
+      const initialImg = screen.getByRole('img', { name: 'Reconnect photo' });
+      expect(initialImg.tagName).toBe('IMG');
+
+      fireEvent.error(initialImg);
+      expect(screen.getByRole('img', { name: 'Reconnect photo' }).tagName).toBe('SPAN');
+      expect(screen.getByText('media.gallery.imageOffline')).toBeInTheDocument();
+
+      onLineSpy.mockReturnValue(true);
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+
+      const retriedImg = screen.getByRole('img', { name: 'Reconnect photo' });
+      expect(retriedImg.tagName).toBe('IMG');
+      expect(retriedImg.getAttribute('src')).toMatch(
+        /^https:\/\/i\.ibb\.co\/offline\/pic\.jpg\?bsdc_r=online-/,
+      );
+    } finally {
+      onLineSpy.mockRestore();
+    }
   });
 });

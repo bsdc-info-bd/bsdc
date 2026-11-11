@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BSDC Shield Mark (icon only)
+  Derived from brand/bsdc-logo.svg. Used for favicons, PWA icons, Android launcher.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BSDC">
+  <defs>
+    <linearGradient id="bsdcShieldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2D6A4F"/>
+      <stop offset="1" stop-color="#1B4332"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bsdcShieldGrad)"/>
+  <path d="M32 12 16 20v14c0 11 7.5 17 16 19 8.5-2 16-8 16-19V20L32 12z" fill="none" stroke="#52B788" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M25 32l5 5 9-10" fill="none" stroke="#FFFFFF" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

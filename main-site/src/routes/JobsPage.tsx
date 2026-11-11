@@ -60,19 +60,23 @@ export default function JobsPage() {
         title={t('jobs.metaTitle')}
         description={t('jobs.metaDescription')}
         path={ROUTES.jobs}
-        jsonLd={board.jobs.slice(0, 20).map((job) => ({
-          '@type': 'JobPosting',
-          title: job.title,
-          hiringOrganization: { '@type': 'Organization', name: job.company },
-          employmentType: job.jobType.toUpperCase(),
-          jobLocationType: job.workMode === 'remote' ? 'TELECOMMUTE' : undefined,
-          ...(job.publishedAt !== null ? { datePosted: job.publishedAt } : {}),
-          jobLocation: {
-            '@type': 'Place',
-            address: { '@type': 'PostalAddress', addressLocality: job.city, addressCountry: 'BD' },
+        jsonLd={[
+          {
+            '@type': 'CollectionPage',
+            name: t('jobs.title'),
+            description: t('jobs.metaDescription'),
+            url: `${SITE.url}${ROUTES.jobs}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              itemListElement: board.jobs.slice(0, 20).map((job, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                url: `${SITE.url}${jobPath(job.slug)}`,
+                name: `${job.title} — ${job.company}`,
+              })),
+            },
           },
-          url: `${SITE.url}${jobPath(job.slug)}`,
-        }))}
+        ]}
       />
 
       <div className="fab-container py-6 sm:py-10">

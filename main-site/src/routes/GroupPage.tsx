@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Avatar,
@@ -42,13 +43,21 @@ export default function GroupPage() {
 
   if (detail.isError || group === null) {
     return (
-      <div className="fab-container py-10">
-        <EmptyState
-          icon={<Users size={22} />}
-          title={t('groups.notFoundTitle')}
+      <>
+        <Seo
+          title={`${t('groups.notFoundTitle')} — ${t('common.brand')}`}
           description={t('groups.notFoundBody')}
+          path={groupPath(slug)}
+          noindex
         />
-      </div>
+        <div className="fab-container py-10">
+          <EmptyState
+            icon={<Users size={22} />}
+            title={t('groups.notFoundTitle')}
+            description={t('groups.notFoundBody')}
+          />
+        </div>
+      </>
     );
   }
 
@@ -179,26 +188,52 @@ export default function GroupPage() {
     });
   }
 
+  const isNoindex = group.privacy !== 'public' || group.isArchived;
+  const groupImage =
+    group.coverUrl.trim().length > 0
+      ? group.coverUrl.trim()
+      : group.avatarUrl.trim().length > 0
+        ? group.avatarUrl.trim()
+        : '';
+
   return (
     <>
       <Seo
         title={`${group.name} — ${t('common.brand')}`}
         description={group.description.length > 0 ? group.description : t('groups.metaDescription')}
         path={groupPath(group.slug)}
-        noindex={group.privacy !== 'public'}
-        jsonLd={[
-          {
-            '@type': 'Organization',
-            name: group.name,
-            description: group.description,
-            url: `${SITE.url}${groupPath(group.slug)}`,
-          },
-        ]}
+        {...(groupImage.length > 0 ? { image: groupImage } : {})}
+        noindex={isNoindex}
+        jsonLd={
+          isNoindex
+            ? []
+            : [
+                {
+                  '@type': 'Organization',
+                  name: group.name,
+                  description: group.description,
+                  url: `${SITE.url}${groupPath(group.slug)}`,
+                  ...(groupImage.length > 0 ? { image: groupImage } : {}),
+                },
+              ]
+        }
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <Card>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <Card padded={false} className="overflow-hidden">
+          {group.coverUrl.trim().length > 0 ? (
+            <div className="aspect-[16/5] w-full bg-surface-2">
+              <MediaImage
+                src={group.coverUrl}
+                alt={group.name}
+                slotWidth={960}
+                loading="eager"
+                decoding="async"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:p-6">
             <Avatar src={group.avatarUrl} name={group.name} size="xl" />
             <div className="min-w-0 flex-1">
               <h1 className="fab-truncate text-2xl">{group.name}</h1>

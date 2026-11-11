@@ -19,10 +19,15 @@ import {
 } from './hosts';
 
 describe('the picture hosts the platform trusts', () => {
-  it('accepts exactly the ImgBB hosts the platform uploads to', () => {
+  it('accepts the ImgBB hosts the platform uploads and delivers from', () => {
     expect(isAllowedMediaHost('i.ibb.co')).toBe(true);
     expect(isAllowedMediaHost('ibb.co')).toBe(true);
     expect(isAllowedMediaHost('i.ibb.co.com')).toBe(true);
+    expect(isAllowedMediaHost('ibb.co.com')).toBe(true);
+    expect(isAllowedMediaHost('image.ibb.co')).toBe(true);
+    expect(isAllowedMediaHost('preview.ibb.co')).toBe(true);
+    expect(isAllowedMediaHost('thumb.ibb.co')).toBe(true);
+    expect(isAllowedMediaHost('i2.ibb.co')).toBe(true);
   });
 
   it('accepts the OAuth avatar and map hosts by suffix, and nothing wider', () => {
@@ -43,6 +48,8 @@ describe('the picture hosts the platform trusts', () => {
     expect(isRepairableMediaHost('i.ibb.co')).toBe(true);
     expect(isRepairableMediaHost('ibb.co')).toBe(true);
     expect(isRepairableMediaHost('i.ibb.co.com')).toBe(true);
+    expect(isRepairableMediaHost('image.ibb.co')).toBe(true);
+    expect(isRepairableMediaHost('i3.ibb.co')).toBe(true);
     expect(isRepairableMediaHost('lh3.googleusercontent.com')).toBe(false);
   });
 

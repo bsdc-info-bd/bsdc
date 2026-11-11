@@ -1,7 +1,8 @@
-import { Boxes } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Boxes, Upload, X } from 'lucide-react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -10,6 +11,7 @@ import {
   Card,
   EmptyState,
   PageSkeleton,
+  ProgressBar,
   SectionHeading,
   Switch,
   TagInput,
@@ -17,11 +19,13 @@ import {
   TextareaField,
 } from '@/design-system';
 import { useVendorProducts, useVendorShop } from '@/hooks/use-vendor';
+import { isConfigured } from '@/lib/env';
 import { formatNumber } from '@/lib/format';
 import { formatMoney } from '@/lib/market/market-types';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { slugify, validateDraft, type ProductDraft } from '@/lib/vendor/vendor-types';
+import { useAuthStore } from '@/store/auth-store';
 
 const EMPTY: ProductDraft = {
   slug: '',
@@ -39,10 +43,14 @@ const EMPTY: ProductDraft = {
 export default function VendorProductsPage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const { shop } = useVendorShop();
   const { products, isLoading, create, publish, restock, isSaving } = useVendorProducts();
   const [draft, setDraft] = useState<ProductDraft>(EMPTY);
   const [taka, setTaka] = useState('');
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const uploadInputId = useId();
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const problems = useMemo(() => validateDraft(draft), [draft]);
   const problemFor = (field: keyof ProductDraft): string | undefined => {
@@ -66,6 +74,48 @@ export default function VendorProductsPage() {
     setTaka(value);
     const parsed = Number.parseFloat(value);
     patch({ price: Number.isFinite(parsed) ? Math.round(parsed * 100) : -1 });
+  }
+
+  async function onUploadImages(files: FileList | null): Promise<void> {
+    if (!files || files.length === 0) return;
+    if (!uid) {
+      toast.error(t('media.errors.signInRequired'));
+      return;
+    }
+    setUploadProgress(0);
+    try {
+      const { uploadMedia, MediaError } = await import('@/lib/storage/upload');
+      const { recordMediaAsset } = await import('@/lib/data/media-repository');
+      const added: string[] = [];
+      for (const file of Array.from(files)) {
+        const result = await uploadMedia(file, {
+          purpose: 'product-image',
+          onProgress: setUploadProgress,
+        }).catch((error: unknown) => {
+          throw error instanceof MediaError ? error : new Error('media.errors.failed');
+        });
+        if (isConfigured.supabase) {
+          const row = await recordMediaAsset(uid, result);
+          if (row === null) throw new Error('media.errors.recordFailed');
+        }
+        added.push(result.url);
+      }
+      if (added.length > 0) {
+        setDraft((current) => ({
+          ...current,
+          images: [...new Set([...current.images, ...added])].slice(0, 8),
+        }));
+        toast.success(t('media.uploaded'));
+      }
+    } catch (error) {
+      const key =
+        error instanceof Error && error.message.startsWith('media.')
+          ? error.message
+          : 'media.errors.failed';
+      toast.error(t(key));
+    } finally {
+      setUploadProgress(null);
+    }
   }
 
   async function submit(): Promise<void> {
@@ -191,7 +241,71 @@ export default function VendorProductsPage() {
                 patch({ description: event.target.value });
               }}
             />
-            <div className="mt-3">
+            <div className="mt-3 grid gap-3">
+              <div>
+                <input
+                  ref={uploadInputRef}
+                  id={uploadInputId}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+                  className="sr-only"
+                  onChange={(event) => {
+                    void onUploadImages(event.target.files);
+                    event.target.value = '';
+                  }}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    iconStart={<Upload size={16} />}
+                    disabled={uploadProgress !== null || draft.images.length >= 8}
+                    onClick={() => uploadInputRef.current?.click()}
+                  >
+                    {uploadProgress === null ? t('media.upload') : t('media.uploading')}
+                  </Button>
+                  <span className="text-xs text-muted">{t('media.hint')}</span>
+                </div>
+                {uploadProgress !== null ? (
+                  <ProgressBar
+                    value={uploadProgress}
+                    label={t('media.uploading')}
+                    className="mt-2"
+                  />
+                ) : null}
+                {draft.images.length > 0 ? (
+                  <ul className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    {draft.images.map((url, index) => (
+                      <li
+                        key={url}
+                        className="relative aspect-square overflow-hidden rounded-lg border border-border bg-surface-2"
+                      >
+                        <MediaImage
+                          src={url}
+                          alt={draft.title || t('vendor.products.fieldImages')}
+                          slotWidth={160}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          aria-label={t('media.remove')}
+                          onClick={() => {
+                            patch({
+                              images: draft.images.filter((_, itemIndex) => itemIndex !== index),
+                            });
+                          }}
+                          className="absolute end-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-green-950/75 text-white hover:bg-danger"
+                        >
+                          <X size={12} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+
               <TagInput
                 label={t('vendor.products.fieldImages')}
                 value={draft.images}
@@ -200,7 +314,7 @@ export default function VendorProductsPage() {
                 }}
               />
               {problemFor('images') !== undefined ? (
-                <p className="mt-1 text-xs text-danger">{problemFor('images')}</p>
+                <p className="text-xs text-danger">{problemFor('images')}</p>
               ) : null}
             </div>
 

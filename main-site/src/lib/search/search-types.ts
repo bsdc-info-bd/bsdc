@@ -1,4 +1,12 @@
-import { coursePath, groupPath, postPath, profilePath, projectPath } from '@/lib/site';
+import {
+  coursePath,
+  groupPath,
+  jobPath,
+  postPath,
+  profilePath,
+  projectPath,
+  ROUTES,
+} from '@/lib/site';
 import type { SearchKind } from '@/lib/supabase/types';
 
 export type { SearchKind };
@@ -88,7 +96,7 @@ export function resultPath(result: SearchResult): string {
     case 'course':
       return coursePath(result.slug);
     case 'job':
-      return '/jobs';
+      return result.slug.length > 0 ? jobPath(result.slug) : ROUTES.jobs;
     case 'project':
       return projectPath(result.slug);
   }

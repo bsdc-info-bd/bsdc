@@ -224,6 +224,16 @@ export default function CreatePage() {
   });
 
   function submit() {
+    if (kind === 'project') {
+      if (screenshots.pending.length > 0) {
+        toast.info(t('compose.mediaPending', { count: screenshots.pending.length }));
+        return;
+      }
+      if (screenshots.failed.length > 0) {
+        toast.error(t('compose.mediaFailed', { count: screenshots.failed.length }));
+        return;
+      }
+    }
     const found = validateCreateDraft(kind, draft);
     setIssues(found);
     if (found.length > 0) {

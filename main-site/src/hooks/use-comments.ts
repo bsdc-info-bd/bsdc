@@ -30,6 +30,7 @@ export function useComments(postId: string): UseCommentsResult {
   const query = useQuery({
     queryKey,
     queryFn: async () => (await repository()).fetchComments(postId, uid),
+    enabled: postId.length > 0,
     staleTime: 20_000,
   });
 

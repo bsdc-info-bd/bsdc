@@ -86,7 +86,10 @@ function matchesPattern(pattern: string, pathname: string): boolean {
   const want = segmentsOf(pattern);
   const have = segmentsOf(pathname);
   if (want.length !== have.length) return false;
-  return want.every((segment, index) => isParam(segment) || segment === have[index]);
+  return want.every(
+    (segment, index) =>
+      isParam(segment) || segment.toLowerCase() === (have[index] ?? '').toLowerCase(),
+  );
 }
 
 /**
@@ -115,4 +118,44 @@ export function matchAppRoute(pathname: string): RouteMatch | null {
     if (handle.length > 0) return { kind: 'handle', handle };
   }
   return null;
+}
+
+const NOINDEX_PREFIXES: readonly string[] = [
+  '/messages',
+  '/settings',
+  '/notifications',
+  '/bookmarks',
+  '/trash',
+  '/history',
+  '/ads',
+  '/vendor',
+  '/checkout',
+  '/cart',
+  '/orders',
+  '/compose',
+  '/create',
+  '/onboarding',
+  '/admin',
+  '/offline',
+  '/api',
+  '/auth',
+  '/search',
+  '/system-check',
+];
+
+/**
+ * True when an edge request hits a private, utility, or parameterised noindex
+ * route that has no prerendered HTML file and would otherwise inherit the home
+ * shell's `index,follow` metadata.
+ */
+export function isEdgeNoindexPath(pathname: string): boolean {
+  const normalised = pathname.length > 1 ? pathname.toLowerCase().replace(/\/+$/, '') : '/';
+  if (
+    NOINDEX_PREFIXES.some((prefix) => normalised === prefix || normalised.startsWith(`${prefix}/`))
+  ) {
+    return true;
+  }
+  if (/^\/[^/]+\/[^/]+\/edit$/.test(normalised)) return true;
+  if (/^\/verify\/[^/]+$/.test(normalised)) return true;
+  return false;
 }

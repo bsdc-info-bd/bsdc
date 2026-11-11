@@ -24,6 +24,7 @@ const JWKS_URL =
 export interface MemberEnv {
   /** The Firebase project whose members this deployment serves. */
   FB_PROJECT_ID?: string;
+  VITE_FB_PROJECT_ID?: string;
 }
 
 export interface VerifiedMember {
@@ -134,7 +135,7 @@ export async function verifyMember(
 
 /** The member behind a request, or null when the caller is not signed in. */
 export async function memberOf(request: Request, env: MemberEnv): Promise<VerifiedMember | null> {
-  const projectId = env.FB_PROJECT_ID ?? '';
+  const projectId = (env.FB_PROJECT_ID ?? env.VITE_FB_PROJECT_ID ?? '').trim();
   const token = bearerToken(request);
   if (token.length === 0) return null;
   return verifyMember(token, projectId);

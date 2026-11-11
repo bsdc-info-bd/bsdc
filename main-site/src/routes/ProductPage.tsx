@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MarkdownView } from '@/components/content/MarkdownView';
+import { MediaGallery } from '@/components/media/MediaGallery';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -78,13 +79,21 @@ export default function ProductPage() {
 
   if (detail.isError || product === null) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('shop.productNotFound')}>
-          <Link to={ROUTES.shop} className="fab-link">
-            {t('shop.backToShop')}
-          </Link>
-        </Alert>
-      </div>
+      <>
+        <Seo
+          title={`${t('shop.productNotFound')} — ${t('shop.title')}`}
+          description={t('shop.metaDescription')}
+          path={slug ? productPath(slug) : ROUTES.shop}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('shop.productNotFound')}>
+            <Link to={ROUTES.shop} className="fab-link">
+              {t('shop.backToShop')}
+            </Link>
+          </Alert>
+        </div>
+      </>
     );
   }
 
@@ -92,17 +101,19 @@ export default function ProductPage() {
   const average = averageRating(product.rating_sum, product.rating_count);
   const available = isPurchasable({ stock: product.stock, isDigital: product.is_digital });
 
+  const productUrl = new URL(productPath(product.slug), SITE.url).toString();
+  const productImages = product.images.slice(0, 5).filter((img) => img.trim().length > 0);
   const jsonLd = {
-    '@context': 'https://schema.org',
     '@type': 'Product',
     name: product.title,
     description: product.summary,
     sku: product.slug,
-    image: product.images.slice(0, 5),
-    url: new URL(productPath(product.slug), SITE.url).toString(),
+    image: productImages,
+    url: productUrl,
     brand: { '@type': 'Brand', name: detail.shop?.name ?? SITE.shortName },
     offers: {
       '@type': 'Offer',
+      url: productUrl,
       price: (product.price / 100).toFixed(2),
       priceCurrency: product.currency,
       availability: available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
@@ -125,6 +136,7 @@ export default function ProductPage() {
         title={`${product.title} — ${t('shop.title')}`}
         description={product.summary.length > 0 ? product.summary : t('shop.metaDescription')}
         path={productPath(product.slug)}
+        {...(productImages[0] ? { image: productImages[0] } : {})}
         jsonLd={[jsonLd]}
       />
 
@@ -133,6 +145,22 @@ export default function ProductPage() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div>
+            {productImages.length > 0 ? (
+              <MediaGallery
+                items={productImages.map((url, index) => ({
+                  id: `${product.id}-${String(index)}`,
+                  url,
+                  thumbUrl: url,
+                  altText: product.title,
+                  width: null,
+                  height: null,
+                }))}
+                label={product.title}
+                priority
+                className="mb-4"
+              />
+            ) : null}
+
             {product.description.length > 0 ? (
               <Card>
                 <MarkdownView markdown={product.description} />

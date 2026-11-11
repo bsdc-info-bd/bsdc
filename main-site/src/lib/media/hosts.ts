@@ -16,7 +16,17 @@
  *   *.googleusercontent.com           Google profile pictures after OAuth sign-in
  *   *.tile.openstreetmap.org          map tiles for location fields
  */
-const EXACT_HOSTS: readonly string[] = ['i.ibb.co', 'ibb.co', 'i.ibb.co.com'];
+const EXACT_HOSTS: readonly string[] = [
+  'i.ibb.co',
+  'ibb.co',
+  'i.ibb.co.com',
+  'ibb.co.com',
+  'image.ibb.co',
+  'preview.ibb.co',
+  'thumb.ibb.co',
+];
+
+const IMGBB_NUMBERED_SUBDOMAIN = /^i\d+\.ibb\.co(?:\.com)?$/;
 
 const SUFFIX_HOSTS: readonly string[] = [
   'googleusercontent.com',
@@ -29,7 +39,7 @@ const SUFFIX_HOSTS: readonly string[] = [
 export function isAllowedMediaHost(hostname: string): boolean {
   const host = hostname.trim().toLowerCase();
   if (host.length === 0) return false;
-  if (EXACT_HOSTS.includes(host)) return true;
+  if (EXACT_HOSTS.includes(host) || IMGBB_NUMBERED_SUBDOMAIN.test(host)) return true;
   return SUFFIX_HOSTS.some((suffix) => host === suffix || host.endsWith(`.${suffix}`));
 }
 
@@ -54,5 +64,5 @@ export const MEDIA_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 /** Hosts that BSDC uploads to and permits `/media/i` to fetch and edge-cache. */
 export function isRepairableMediaHost(hostname: string): boolean {
   const host = hostname.trim().toLowerCase();
-  return host === 'i.ibb.co' || host === 'ibb.co' || host === 'i.ibb.co.com';
+  return EXACT_HOSTS.includes(host) || IMGBB_NUMBERED_SUBDOMAIN.test(host);
 }

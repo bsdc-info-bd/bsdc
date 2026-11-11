@@ -17,7 +17,7 @@ import {
 import { useSearch, useTrendingSearches } from '@/hooks/use-search';
 import { highlight, resultPath, SEARCH_KINDS, type SearchKind } from '@/lib/search/search-types';
 import { formatNumber } from '@/lib/format';
-import { ROUTES } from '@/lib/site';
+import { ROUTES, SITE } from '@/lib/site';
 
 /** Global search across everything the member is allowed to see. */
 export default function SearchPage() {
@@ -108,6 +108,14 @@ export default function SearchPage() {
         description={t('search.metaDescription')}
         path={ROUTES.search}
         noindex
+        jsonLd={[
+          {
+            '@type': 'SearchResultsPage',
+            name: t('search.title'),
+            url: `${SITE.url}${ROUTES.search}`,
+            isPartOf: { '@id': `${SITE.url}/#website` },
+          },
+        ]}
       />
 
       <div className="fab-container max-w-3xl py-6 sm:py-10">
@@ -147,14 +155,13 @@ export default function SearchPage() {
             <ul className="mt-2 flex flex-wrap gap-1">
               {trending.terms.map((item) => (
                 <li key={item.term}>
-                  <button
-                    type="button"
+                  <Chip
                     onClick={() => {
                       setInput(item.term);
                     }}
                   >
-                    <Chip>{item.term}</Chip>
-                  </button>
+                    {item.term}
+                  </Chip>
                 </li>
               ))}
             </ul>

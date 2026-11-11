@@ -33,6 +33,8 @@ describe('which links the app renders itself', () => {
     expect(resolveLink('http://www.bsdc.info.bd/').kind).toBe('ignore');
     expect(resolveLink('javascript:alert(1)').kind).toBe('ignore');
     expect(resolveLink('file:///etc/passwd').kind).toBe('ignore');
+    expect(resolveLink('//evil.com/phish').kind).toBe('ignore');
+    expect(resolveLink('/\\evil.com/phish').kind).toBe('ignore');
     expect(resolveLink('').kind).toBe('ignore');
     expect(resolveLink('not a url').kind).toBe('ignore');
   });

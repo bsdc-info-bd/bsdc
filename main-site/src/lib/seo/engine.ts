@@ -57,6 +57,17 @@ export function absoluteUrl(path: string, origin: string = SITE.url): string {
   return canonical === '/' ? `${base}/` : `${base}${canonical}`;
 }
 
+/** Builds a query-safe `hreflang` URL so `?q=...` canonicals append `&lang=` rather than `?lang=`. */
+export function alternateLangUrl(canonical: string, lang: 'bn' | 'en'): string {
+  try {
+    const parsed = new URL(canonical);
+    parsed.searchParams.set('lang', lang);
+    return parsed.toString();
+  } catch {
+    return `${canonical}${canonical.includes('?') ? '&' : '?'}lang=${lang}`;
+  }
+}
+
 /**
  * True when this path must never reach an index, whatever a page says.
  *
@@ -284,8 +295,18 @@ export function pruneJsonLd(node: Record<string, unknown>): Record<string, unkno
   for (const [key, value] of Object.entries(node)) {
     if (value === null || value === undefined || value === '') continue;
     if (Array.isArray(value)) {
-      if (value.length === 0) continue;
-      out[key] = value;
+      const cleaned: unknown[] = [];
+      for (const entry of value) {
+        if (entry === null || entry === undefined || entry === '') continue;
+        if (typeof entry === 'object' && !Array.isArray(entry)) {
+          const prunedItem = pruneJsonLd(entry as Record<string, unknown>);
+          if (Object.keys(prunedItem).length > 0) cleaned.push(prunedItem);
+        } else {
+          cleaned.push(entry);
+        }
+      }
+      if (cleaned.length === 0) continue;
+      out[key] = cleaned;
       continue;
     }
     if (typeof value === 'object') {
@@ -328,8 +349,8 @@ export function headTags(meta: PageMeta, origin: string = SITE.url): string {
     `<meta name="description" content="${escapeHtml(meta.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     `<meta name="robots" content="${meta.robots}" />`,
-    `<link rel="alternate" hreflang="bn" href="${escapeHtml(`${canonical}?lang=bn`)}" />`,
-    `<link rel="alternate" hreflang="en" href="${escapeHtml(`${canonical}?lang=en`)}" />`,
+    `<link rel="alternate" hreflang="bn" href="${escapeHtml(alternateLangUrl(canonical, 'bn'))}" />`,
+    `<link rel="alternate" hreflang="en" href="${escapeHtml(alternateLangUrl(canonical, 'en'))}" />`,
     `<link rel="alternate" hreflang="x-default" href="${escapeHtml(canonical)}" />`,
     `<meta property="og:site_name" content="${escapeHtml(SITE.name)}" />`,
     `<meta property="og:type" content="${escapeHtml(meta.type)}" />`,

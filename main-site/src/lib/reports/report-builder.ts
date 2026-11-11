@@ -101,7 +101,7 @@ export function downloadPdf(bytes: Uint8Array, filename: string): void {
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 /** The same, for a CSV export of the underlying rows. */
@@ -114,5 +114,5 @@ export function downloadCsv(csv: string, filename: string): void {
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

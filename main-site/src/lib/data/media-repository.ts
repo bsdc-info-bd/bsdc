@@ -21,53 +21,99 @@ const DISPLAY_COLUMNS =
  * failure to record is thrown rather than swallowed: a caller that cannot record
  * should tell the member, not pretend the picture is safely stored.
  */
+function buildAssetRow(id: string, ownerUid: string, result: UploadResult): MediaAssetRow {
+  return {
+    id,
+    owner_uid: ownerUid,
+    provider: result.provider,
+    kind: result.kind,
+    url: result.url,
+    thumb_url: result.thumbUrl,
+    width: result.width,
+    height: result.height,
+    bytes: result.bytes,
+    mime_type: result.mimeType,
+    checksum: '',
+    created_at: new Date().toISOString(),
+  };
+}
+
+function coerceRpcAsset(
+  data: unknown,
+  ownerUid: string,
+  result: UploadResult,
+): MediaAssetRow | null {
+  if (typeof data === 'string') {
+    const id = data.trim();
+    return id.length > 0 ? buildAssetRow(id, ownerUid, result) : null;
+  }
+  const row = Array.isArray(data) ? (data[0] as unknown) : data;
+  if (row !== null && typeof row === 'object' && 'id' in row) {
+    const record = row as Partial<MediaAssetRow>;
+    if (typeof record.id === 'string' && record.id.trim().length > 0) {
+      if (typeof record.url === 'string' && record.url.length > 0) {
+        return {
+          ...buildAssetRow(record.id.trim(), ownerUid, result),
+          ...record,
+          id: record.id.trim(),
+        };
+      }
+      return buildAssetRow(record.id.trim(), ownerUid, result);
+    }
+  }
+  return null;
+}
+
+function isMissingRpcError(error: { code?: string; message?: string }): boolean {
+  return error.code === 'PGRST202' || error.code === '42883';
+}
+
 export async function recordMediaAsset(
   ownerUid: string,
   result: UploadResult,
 ): Promise<MediaAssetRow | null> {
-  const { data, error } = await getSupabase()
-    .rpc('record_media_asset', {
-      p_provider: result.provider,
-      p_kind: result.kind,
-      p_url: result.url,
-      p_thumb_url: result.thumbUrl,
-      p_delete_token: result.deleteToken,
-      p_width: result.width,
-      p_height: result.height,
-      p_bytes: result.bytes,
-      p_mime_type: result.mimeType,
-      p_expires_at: result.expiresAt,
+  const { data, error } = await getSupabase().rpc('record_media_asset', {
+    p_provider: result.provider,
+    p_kind: result.kind,
+    p_url: result.url,
+    p_thumb_url: result.thumbUrl,
+    p_delete_token: result.deleteToken,
+    p_width: result.width,
+    p_height: result.height,
+    p_bytes: result.bytes,
+    p_mime_type: result.mimeType,
+    p_expires_at: result.expiresAt,
+  });
+
+  if (error) {
+    // A deployment that has not applied 0073 has no such function. Fall back
+    // to a direct table insert only when the RPC itself does not exist; real
+    // validation or auth refusals (22023, 42501, 54000) must surface clearly.
+    if (!isMissingRpcError(error)) throw toDataError(error);
+  } else if (data !== null) {
+    const coerced = coerceRpcAsset(data, ownerUid, result);
+    if (coerced !== null) return coerced;
+  }
+
+  const { data: fallback, error: fallbackError } = await getSupabase()
+    .from('media_assets')
+    .insert({
+      owner_uid: ownerUid,
+      provider: result.provider,
+      kind: result.kind,
+      url: result.url,
+      thumb_url: result.thumbUrl,
+      delete_token: result.deleteToken,
+      width: result.width,
+      height: result.height,
+      bytes: result.bytes,
+      mime_type: result.mimeType,
+      checksum: '',
     })
     .select(DISPLAY_COLUMNS)
     .maybeSingle();
-
-  if (error) throw toDataError(error);
-  // A deployment that has not applied 0073 has no such function. The upload itself
-  // succeeded, so the picture works; what is missing is the trail, and saying so
-  // is better than reporting an upload as failed when the bytes are already at the
-  // host.
-  if (data === null) {
-    const { data: fallback, error: fallbackError } = await getSupabase()
-      .from('media_assets')
-      .insert({
-        owner_uid: ownerUid,
-        provider: result.provider,
-        kind: result.kind,
-        url: result.url,
-        thumb_url: result.thumbUrl,
-        delete_token: result.deleteToken,
-        width: result.width,
-        height: result.height,
-        bytes: result.bytes,
-        mime_type: result.mimeType,
-        checksum: '',
-      })
-      .select(DISPLAY_COLUMNS)
-      .maybeSingle();
-    if (fallbackError) throw toDataError(fallbackError);
-    return fallback;
-  }
-  return data;
+  if (fallbackError) throw toDataError(fallbackError);
+  return fallback;
 }
 
 export async function listMediaAssets(ownerUid: string, limit = 50): Promise<MediaAssetRow[]> {

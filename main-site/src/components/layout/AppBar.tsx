@@ -133,7 +133,11 @@ export function AppBar() {
               <CartLink />
             </div>
           ) : null}
-          {signedIn ? <MessagesLink /> : null}
+          {signedIn ? (
+            <div className="hidden min-[360px]:block">
+              <MessagesLink />
+            </div>
+          ) : null}
           {signedIn ? (
             <div className="hidden sm:block">
               <NotificationBell />
@@ -144,7 +148,7 @@ export function AppBar() {
             icon={<Search size={20} />}
             onClick={() => setCommandPaletteOpen(true)}
           />
-          <ThemeToggle />
+          <ThemeToggle className="hidden sm:inline-flex" />
           <LanguageToggle className="hidden sm:inline-flex" />
           <AccountMenu />
         </div>
@@ -155,7 +159,8 @@ export function AppBar() {
         title={t('a11y.primaryNavigation')}
         closeLabel={t('common.close')}
       >
-        <div className="mb-2 sm:hidden">
+        <div className="mb-2 flex items-center gap-2 sm:hidden">
+          <ThemeToggle />
           <LanguageToggle />
         </div>
         <nav aria-label={t('a11y.primaryNavigation')}>

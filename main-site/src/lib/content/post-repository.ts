@@ -373,9 +373,23 @@ export async function savePost(
   let postSlug = slug;
 
   if (postId) {
+    // Preserve the original publication timestamp when editing an already-published
+    // post instead of resetting it to now on every edit.
+    const { data: existing, error: existingError } = await supabase
+      .from('posts')
+      .select('published_at')
+      .eq('id', postId)
+      .maybeSingle();
+    if (existingError) throw toDataError(existingError);
+
+    const updatePayload = {
+      ...payload,
+      published_at:
+        status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null,
+    };
     const { data, error } = await supabase
       .from('posts')
-      .update(payload)
+      .update(updatePayload)
       .eq('id', postId)
       .select('id, slug')
       .maybeSingle();

@@ -28,7 +28,6 @@ export default function VerifyCertificatePage() {
   const credential =
     certificate !== null && !certificate.revoked
       ? {
-          '@context': 'https://schema.org',
           '@type': 'EducationalOccupationalCredential',
           name: certificate.courseTitle,
           credentialCategory: 'certificate',

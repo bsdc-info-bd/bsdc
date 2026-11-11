@@ -148,9 +148,17 @@ export default function ProfilePage() {
 
   if (!isConfigured.firebase) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('auth.errors.notConfigured')} />
-      </div>
+      <>
+        <Seo
+          title={`${t('profile.notFoundTitle')} — ${t('common.brand')}`}
+          description={t('profile.notFoundBody')}
+          path={handle ? profilePath(handle) : '/'}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('auth.errors.notConfigured')} />
+        </div>
+      </>
     );
   }
 
@@ -229,6 +237,10 @@ export default function ProfilePage() {
     },
   ];
 
+  const profileCanonical = `${SITE.url}${profilePath(profile.username)}`;
+  const profileAvatar = profile.avatarUrl.trim();
+  const profileWebsite = profile.website.trim();
+
   return (
     <>
       <Seo
@@ -240,21 +252,28 @@ export default function ProfilePage() {
         }
         path={profilePath(profile.username)}
         type="profile"
+        {...(profileAvatar.length > 0 ? { image: profileAvatar } : {})}
         noindex={!profile.privacy.discoverable}
-        jsonLd={[
-          {
-            '@type': 'ProfilePage',
-            url: `${SITE.url}${profilePath(profile.username)}`,
-            mainEntity: {
-              '@type': 'Person',
-              name: profile.displayName,
-              alternateName: profile.username,
-              description: profile.bio,
-              knowsAbout: profile.skills,
-              ...(profile.website.length > 0 ? { url: profile.website } : {}),
-            },
-          },
-        ]}
+        jsonLd={
+          profile.privacy.discoverable
+            ? [
+                {
+                  '@type': 'ProfilePage',
+                  url: profileCanonical,
+                  mainEntity: {
+                    '@type': 'Person',
+                    name: profile.displayName,
+                    alternateName: profile.username,
+                    description: profile.bio,
+                    url: profileCanonical,
+                    ...(profileAvatar.length > 0 ? { image: profileAvatar } : {}),
+                    knowsAbout: profile.skills,
+                    ...(profileWebsite.length > 0 ? { sameAs: [profileWebsite] } : {}),
+                  },
+                },
+              ]
+            : []
+        }
       />
 
       <div className="fab-container py-6 sm:py-10">

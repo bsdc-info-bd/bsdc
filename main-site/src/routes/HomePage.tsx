@@ -116,10 +116,11 @@ export default function HomePage() {
           </>
         }
       >
-        <SectionHeading title={t('home.feedTitle')} description={t('home.feedBody')} />
-        <h2 id="public-feed" className="fab-sr-only">
-          {t('home.feedTitle')}
-        </h2>
+        <SectionHeading
+          headingId="public-feed-heading"
+          title={t('home.feedTitle')}
+          description={t('home.feedBody')}
+        />
         <div className="mt-4">
           <FeedTabs signedIn={false} />
         </div>
@@ -138,10 +139,7 @@ export default function HomePage() {
       )}
 
       <section className="fab-container pb-8" aria-labelledby="pillars">
-        <SectionHeading title={t('home.pillarsTitle')} />
-        <h2 id="pillars" className="fab-sr-only">
-          {t('home.pillarsTitle')}
-        </h2>
+        <SectionHeading headingId="pillars" title={t('home.pillarsTitle')} />
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {PILLARS.map((pillar) => (
             <Card as="li" key={pillar} interactive>
@@ -156,10 +154,11 @@ export default function HomePage() {
       </section>
 
       <section className="fab-container pb-10" aria-labelledby="ecosystem">
-        <SectionHeading title={t('home.ecosystemTitle')} description={t('home.ecosystemBody')} />
-        <h2 id="ecosystem" className="fab-sr-only">
-          {t('home.ecosystemTitle')}
-        </h2>
+        <SectionHeading
+          headingId="ecosystem"
+          title={t('home.ecosystemTitle')}
+          description={t('home.ecosystemBody')}
+        />
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {ECOSYSTEM_LINKS.map((link) => (
             <Card as="li" key={link.href} padded={false} className="p-3">

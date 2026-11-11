@@ -1,6 +1,9 @@
 import { Command } from 'cmdk';
 import {
   BookOpen,
+  Briefcase,
+  FileText,
+  FolderGit2,
   Github,
   Home,
   Info,
@@ -22,7 +25,16 @@ import { Kbd } from '@/design-system';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { useSearchSuggestions } from '@/hooks/use-search';
 import { changeLanguage } from '@/i18n';
-import { coursePath, groupPath, profilePath, ROUTES, SITE } from '@/lib/site';
+import {
+  coursePath,
+  groupPath,
+  jobPath,
+  postPath,
+  profilePath,
+  projectPath,
+  ROUTES,
+  SITE,
+} from '@/lib/site';
 import type { SearchSuggestion } from '@/lib/search/search-types';
 import { useThemeStore } from '@/store/theme-store';
 import { useUiStore } from '@/store/ui-store';
@@ -151,15 +163,37 @@ export function CommandPalette() {
   ];
 
   function suggestionPath(suggestion: SearchSuggestion): string {
-    if (suggestion.kind === 'person') return profilePath(suggestion.slug);
-    if (suggestion.kind === 'group') return groupPath(suggestion.slug);
-    return coursePath(suggestion.slug);
+    switch (suggestion.kind) {
+      case 'person':
+        return profilePath(suggestion.slug);
+      case 'group':
+        return groupPath(suggestion.slug);
+      case 'course':
+        return coursePath(suggestion.slug);
+      case 'post':
+        return postPath(suggestion.slug);
+      case 'job':
+        return suggestion.slug.length > 0 ? jobPath(suggestion.slug) : ROUTES.jobs;
+      case 'project':
+        return projectPath(suggestion.slug);
+    }
   }
 
   function suggestionIcon(kind: SearchSuggestion['kind']): ReactNode {
-    if (kind === 'person') return <User size={16} />;
-    if (kind === 'group') return <Users size={16} />;
-    return <BookOpen size={16} />;
+    switch (kind) {
+      case 'person':
+        return <User size={16} />;
+      case 'group':
+        return <Users size={16} />;
+      case 'course':
+        return <BookOpen size={16} />;
+      case 'post':
+        return <FileText size={16} />;
+      case 'job':
+        return <Briefcase size={16} />;
+      case 'project':
+        return <FolderGit2 size={16} />;
+    }
   }
 
   // Live suggestions come from the database; the row policies there decide

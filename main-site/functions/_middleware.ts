@@ -1,4 +1,5 @@
 import {
+  escapeHtml,
   HOME_FEED_SELECTOR,
   homeFeedQuery,
   renderHomeFeed,
@@ -6,7 +7,7 @@ import {
   renderHomeFeedPreload,
   type HomeFeedPost,
 } from '../src/lib/seo/home-feed';
-import { matchAppRoute } from '../src/lib/seo/app-routes';
+import { isEdgeNoindexPath, matchAppRoute } from '../src/lib/seo/app-routes';
 import { resolveSupabasePublic, rpc, siteOrigin, supabaseAnonHeaders, type RpcEnv } from './_rpc';
 
 /**
@@ -38,6 +39,7 @@ interface SeoRow {
   canonical: string;
   robots: string;
   source: string;
+  updated_at?: string | null;
 }
 
 interface RedirectRow {
@@ -97,6 +99,129 @@ class SetAttribute {
   element(element: Element): void {
     element.setAttribute(this.name, this.value);
   }
+}
+
+class RemoveElement {
+  element(element: Element): void {
+    element.remove();
+  }
+}
+
+function edgeAlternateLangUrl(canonical: string, lang: 'bn' | 'en'): string {
+  try {
+    const parsed = new URL(canonical);
+    parsed.searchParams.set('lang', lang);
+    return parsed.toString();
+  } catch {
+    return `${canonical}${canonical.includes('?') ? '&' : '?'}lang=${lang}`;
+  }
+}
+
+function ogTypeForPath(seoPath: string): 'article' | 'profile' | 'website' {
+  if (seoPath.startsWith('/p/') || seoPath.startsWith('/learn/')) return 'article';
+  if (seoPath.startsWith('/@')) return 'profile';
+  return 'website';
+}
+
+function edgeRecordJsonLd(
+  seoPath: string,
+  meta: SeoRow,
+  canonical: string,
+  image: string,
+  origin: string,
+): string {
+  const base = origin.replace(/\/+$/, '');
+  let entityType = 'WebPage';
+  if (seoPath.startsWith('/p/')) entityType = 'Article';
+  else if (seoPath.startsWith('/projects/')) entityType = 'SoftwareSourceCode';
+  else if (seoPath.startsWith('/tag/') || seoPath.startsWith('/g/')) entityType = 'CollectionPage';
+  else if (seoPath.startsWith('/@')) entityType = 'ProfilePage';
+
+  const modified =
+    typeof meta.updated_at === 'string' && meta.updated_at.trim().length > 0
+      ? { dateModified: meta.updated_at.trim() }
+      : {};
+
+  const node: Record<string, unknown> =
+    entityType === 'ProfilePage'
+      ? {
+          '@type': 'ProfilePage',
+          url: canonical,
+          mainEntity: {
+            '@type': 'Person',
+            name: meta.title,
+            description: meta.description,
+            url: canonical,
+            image,
+          },
+        }
+      : entityType === 'Article'
+        ? {
+            '@type': 'Article',
+            headline: meta.title,
+            description: meta.description,
+            url: canonical,
+            image,
+            ...modified,
+            mainEntityOfPage: { '@type': 'WebPage', '@id': canonical },
+            publisher: { '@id': `${base}/#organization` },
+          }
+        : {
+            '@type': entityType,
+            name: meta.title,
+            description: meta.description,
+            url: canonical,
+            image,
+            ...(entityType === 'SoftwareSourceCode' ? modified : {}),
+          };
+
+  const graph = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': `${base}/#organization`,
+        name: 'Bangladesh Software Development Community',
+        alternateName: 'BSDC',
+        url: `${base}/`,
+        logo: `${base}/icons/icon-512.png`,
+      },
+      {
+        '@type': 'WebSite',
+        '@id': `${base}/#website`,
+        url: `${base}/`,
+        name: 'Bangladesh Software Development Community',
+        publisher: { '@id': `${base}/#organization` },
+      },
+      node,
+    ],
+  };
+
+  return `<script type="application/ld+json">${JSON.stringify(graph).replace(/</g, '\\u003c')}</script>`;
+}
+
+function edgeRecordShell(meta: SeoRow, origin: string): string {
+  const base = origin.replace(/\/+$/, '');
+  const sections = [
+    ['/', 'Home'],
+    ['/shop', 'Marketplace'],
+    ['/jobs', 'Jobs'],
+    ['/freelance', 'Freelance'],
+    ['/projects', 'Projects'],
+    ['/learn', 'Learning'],
+    ['/groups', 'Groups'],
+    ['/events', 'Events'],
+  ]
+    .map(([href, label]) => `<li><a href="${base}${href}">${label}</a></li>`)
+    .join('');
+
+  return [
+    '<article>',
+    `<h1>${escapeHtml(meta.title)}</h1>`,
+    `<p>${escapeHtml(meta.description)}</p>`,
+    '</article>',
+    `<nav aria-label="Sections"><ul>${sections}</ul></nav>`,
+  ].join('');
 }
 
 /** The newest public posts, as the anonymous visitor would read them. */
@@ -200,6 +325,35 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
   const route = matchAppRoute(pathname);
   if (route === null) return answerNotFound(response);
 
+  const origin = siteOrigin(context.env, context.request);
+
+  if (route.kind === 'static' && context.request.method === 'GET' && pathname !== route.path) {
+    return Response.redirect(`${origin}${route.path}${url.search}`, 301);
+  }
+
+  // 2b. Private, editor, search, and verification-code routes without their own
+  // prerendered file fall back to `dist/index.html`, which carries the home
+  // page's `index,follow` meta. Mark them `noindex,nofollow` right at the edge.
+  if (isEdgeNoindexPath(pathname)) {
+    const noindexUrl = `${origin}${pathname}`;
+    return new HTMLRewriter()
+      .on('meta[name="robots"]', new SetAttribute('content', 'noindex,nofollow'))
+      .on('link[rel="canonical"]', new SetAttribute('href', noindexUrl))
+      .on('meta[property="og:url"]', new SetAttribute('content', noindexUrl))
+      .on(
+        'link[rel="alternate"][hreflang="bn"]',
+        new SetAttribute('href', edgeAlternateLangUrl(noindexUrl, 'bn')),
+      )
+      .on(
+        'link[rel="alternate"][hreflang="en"]',
+        new SetAttribute('href', edgeAlternateLangUrl(noindexUrl, 'en')),
+      )
+      .on('link[rel="alternate"][hreflang="x-default"]', new SetAttribute('href', noindexUrl))
+      .on('script[type="application/ld+json"]', new RemoveElement())
+      .on('div[data-prerender="true"]', new ReplaceInner(''))
+      .transform(response);
+  }
+
   // 3. Does the page it is about to serve know what it is about?
   let seoPath: string | null = null;
   if (route.kind === 'handle') seoPath = `/@${route.handle}`;
@@ -210,18 +364,22 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
   const meta = Array.isArray(rows) ? rows[0] : null;
   if (!meta) return response;
 
-  const origin = siteOrigin(context.env, context.request);
   const canonical = `${origin}${meta.canonical === '' ? seoPath : meta.canonical}`;
+  const rawImage = meta.image_url.trim();
   const image =
-    meta.image_url === ''
+    rawImage === ''
       ? `${origin}/og/og-image.png`
-      : meta.image_url.startsWith('http')
-        ? meta.image_url
-        : `${origin}${meta.image_url}`;
+      : rawImage.startsWith('https://')
+        ? rawImage
+        : /^http:\/\//i.test(rawImage)
+          ? rawImage.replace(/^http:\/\//i, 'https://')
+          : `${origin}${rawImage.startsWith('/') ? rawImage : `/${rawImage}`}`;
+  const isNoindex = meta.robots === 'noindex' || meta.source === 'missing';
 
-  const described = new HTMLRewriter()
+  let rewriter = new HTMLRewriter()
     .on('title', new SetText(meta.title))
     .on('meta[name="description"]', new SetAttribute('content', meta.description))
+    .on('meta[property="og:type"]', new SetAttribute('content', ogTypeForPath(seoPath)))
     .on('meta[property="og:title"]', new SetAttribute('content', meta.title))
     .on('meta[property="og:description"]', new SetAttribute('content', meta.description))
     .on('meta[property="og:url"]', new SetAttribute('content', canonical))
@@ -233,27 +391,62 @@ export const onRequest: PagesFunction<RpcEnv> = async (context) => {
       'meta[name="robots"]',
       new SetAttribute(
         'content',
-        meta.robots === 'noindex' ? 'noindex,nofollow' : 'index,follow,max-image-preview:large',
+        isNoindex ? 'noindex,nofollow' : 'index,follow,max-image-preview:large',
       ),
     )
     .on('link[rel="canonical"]', new SetAttribute('href', canonical))
-    .transform(response);
+    .on(
+      'link[rel="alternate"][hreflang="bn"]',
+      new SetAttribute('href', edgeAlternateLangUrl(canonical, 'bn')),
+    )
+    .on(
+      'link[rel="alternate"][hreflang="en"]',
+      new SetAttribute('href', edgeAlternateLangUrl(canonical, 'en')),
+    )
+    .on('link[rel="alternate"][hreflang="x-default"]', new SetAttribute('href', canonical))
+    .on('script[type="application/ld+json"]', new RemoveElement())
+    .on(
+      'div[data-prerender="true"]',
+      new ReplaceInner(isNoindex ? '' : edgeRecordShell(meta, origin)),
+    );
+
+  if (!isNoindex) {
+    rewriter = rewriter.on(
+      'head',
+      new AppendHtml(edgeRecordJsonLd(seoPath, meta, canonical, image, origin)),
+    );
+  }
+
+  const described = rewriter.transform(response);
 
   // A record that was looked up and is not there is answered with 404, the same
   // as an address no route claims, so the status tells a crawler the truth.
-  return meta.source === 'missing' ? withStatus(described, 404) : described;
+  return meta.source === 'missing' ? withStatus(described, 404, 'no-store') : described;
 };
 
 /** The shell's own not-found view, with a 404 status and a noindex directive. */
 function answerNotFound(response: Response): Response {
+  const title = 'Page not found — BSDC';
+  const description = 'The page you requested does not exist on BSDC.';
   const rewritten = new HTMLRewriter()
-    .on('title', new SetText('Page not found — BSDC'))
+    .on('title', new SetText(title))
+    .on('meta[name="description"]', new SetAttribute('content', description))
+    .on('meta[property="og:title"]', new SetAttribute('content', title))
+    .on('meta[property="og:description"]', new SetAttribute('content', description))
+    .on('meta[name="twitter:title"]', new SetAttribute('content', title))
+    .on('meta[name="twitter:description"]', new SetAttribute('content', description))
     .on('meta[name="robots"]', new SetAttribute('content', 'noindex,nofollow'))
+    .on('link[rel="canonical"]', new RemoveElement())
+    .on('link[rel="alternate"][hreflang]', new RemoveElement())
+    .on('meta[property="og:url"]', new RemoveElement())
+    .on('script[type="application/ld+json"]', new RemoveElement())
+    .on('div[data-prerender="true"]', new ReplaceInner('<h1>Page not found</h1>'))
     .transform(response);
-  return withStatus(rewritten, 404);
+  return withStatus(rewritten, 404, 'no-store');
 }
 
-function withStatus(response: Response, status: number): Response {
+function withStatus(response: Response, status: number, cacheControl?: string): Response {
   const headers = new Headers(response.headers);
+  if (cacheControl) headers.set('cache-control', cacheControl);
   return new Response(response.body, { status, headers });
 }

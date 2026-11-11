@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MarkdownView } from '@/components/content/MarkdownView';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   AccordionItem,
@@ -91,24 +92,32 @@ export default function CoursePage() {
 
   if (course.isError || course.course === null) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('learn.notFound')}>
-          <Link to={ROUTES.learn} className="fab-link">
-            {t('learn.backToCatalog')}
-          </Link>
-        </Alert>
-      </div>
+      <>
+        <Seo
+          title={`${t('learn.notFound')} — ${t('learn.title')}`}
+          description={t('learn.metaDescription')}
+          path={slug ? coursePath(slug) : ROUTES.learn}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('learn.notFound')}>
+            <Link to={ROUTES.learn} className="fab-link">
+              {t('learn.backToCatalog')}
+            </Link>
+          </Alert>
+        </div>
+      </>
     );
   }
 
   const record = course.course;
   const courseJsonLd = {
-    '@context': 'https://schema.org',
     '@type': 'Course',
     name: record.title,
     description: record.summary,
     inLanguage: record.language,
     url: new URL(coursePath(record.slug), SITE.url).toString(),
+    ...(record.cover_url.trim().length > 0 ? { image: record.cover_url.trim() } : {}),
     educationalLevel: record.level,
     timeRequired: `PT${String(Math.max(record.duration_minutes, 1))}M`,
     provider: { '@type': 'Organization', name: SITE.name, url: SITE.url },
@@ -128,6 +137,7 @@ export default function CoursePage() {
         description={record.summary.length > 0 ? record.summary : t('learn.metaDescription')}
         path={coursePath(record.slug)}
         type="article"
+        {...(record.cover_url.trim().length > 0 ? { image: record.cover_url.trim() } : {})}
         jsonLd={[courseJsonLd]}
       />
 
@@ -156,6 +166,19 @@ export default function CoursePage() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[2fr_1fr]">
           <div>
+            {record.cover_url.trim().length > 0 ? (
+              <div className="mb-4 aspect-[16/7] overflow-hidden rounded-card bg-surface-2">
+                <MediaImage
+                  src={record.cover_url.trim()}
+                  alt={record.title}
+                  slotWidth={840}
+                  loading="eager"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+
             {record.description.length > 0 ? (
               <Card>
                 <MarkdownView markdown={record.description} />

@@ -35,12 +35,13 @@ export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderP
         throw error instanceof MediaError ? error : new Error('media.errors.failed');
       });
 
-      onUploaded(result.url);
-
       if (isConfigured.supabase) {
         const { recordMediaAsset } = await import('@/lib/data/media-repository');
-        await recordMediaAsset(uid, result).catch(() => undefined);
+        const row = await recordMediaAsset(uid, result);
+        if (row === null) throw new Error('media.errors.recordFailed');
       }
+
+      onUploaded(result.url);
     } catch (error) {
       const key =
         error instanceof Error && error.message.startsWith('media.')

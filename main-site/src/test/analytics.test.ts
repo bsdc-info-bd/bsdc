@@ -107,11 +107,13 @@ describe('export helpers', () => {
       [
         ['plain', 'has,comma'],
         ['has "quote"', 'line\nbreak'],
+        ['cr\ronly', 'ok'],
       ],
     );
     expect(csv).toContain('"has,comma"');
     expect(csv).toContain('"has ""quote"""');
-    expect(csv.split('\r\n')).toHaveLength(3);
+    expect(csv).toContain('"cr\ronly"');
+    expect(csv.split('\r\n')).toHaveLength(4);
   });
 
   it('builds a filesystem-safe report name', () => {

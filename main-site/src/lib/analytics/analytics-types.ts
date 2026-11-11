@@ -162,7 +162,7 @@ export function poishaToString(poisha: number): string {
 export function toCsv(columns: readonly string[], rows: readonly (string | number)[][]): string {
   const cell = (value: string | number): string => {
     const text = String(value);
-    return /[",\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   return [columns.map(cell).join(','), ...rows.map((row) => row.map(cell).join(','))].join('\r\n');
 }

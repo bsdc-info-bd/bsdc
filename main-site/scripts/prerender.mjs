@@ -49,6 +49,16 @@ export function absoluteUrl(path, origin = SITE_URL) {
   return path === '/' ? `${base}/` : `${base}${path}`;
 }
 
+export function alternateLangUrl(canonical, lang) {
+  try {
+    const parsed = new URL(canonical);
+    parsed.searchParams.set('lang', lang);
+    return parsed.toString();
+  } catch {
+    return `${canonical}${canonical.includes('?') ? '&' : '?'}lang=${lang}`;
+  }
+}
+
 /** The head of one page: identical in shape to `headTags()` in the engine. */
 export function renderHead(route, origin = SITE_URL) {
   const canonical = absoluteUrl(route.path, origin);
@@ -58,8 +68,8 @@ export function renderHead(route, origin = SITE_URL) {
     `<meta name="description" content="${escapeHtml(route.description)}" />`,
     `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
     `<meta name="robots" content="index,follow,max-image-preview:large" />`,
-    `<link rel="alternate" hreflang="bn" href="${escapeHtml(`${canonical}?lang=bn`)}" />`,
-    `<link rel="alternate" hreflang="en" href="${escapeHtml(`${canonical}?lang=en`)}" />`,
+    `<link rel="alternate" hreflang="bn" href="${escapeHtml(alternateLangUrl(canonical, 'bn'))}" />`,
+    `<link rel="alternate" hreflang="en" href="${escapeHtml(alternateLangUrl(canonical, 'en'))}" />`,
     `<link rel="alternate" hreflang="x-default" href="${escapeHtml(canonical)}" />`,
     `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}" />`,
     `<meta property="og:type" content="${escapeHtml(route.type)}" />`,
@@ -159,7 +169,7 @@ export function renderPage(template, route, routes, origin = SITE_URL) {
   return stripTemplateHead(template)
     .replace('</head>', `  ${head}\n  </head>`)
     .replace(
-      /<div id="root">[\s\S]*?<\/div>/i,
+      /<div id="root">(?:<div[^>]*><\/div>)?<\/div>/i,
       `<div id="root">${renderShell(route, routes)}</div>`,
     );
 }

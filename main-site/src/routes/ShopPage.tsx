@@ -2,6 +2,7 @@ import { Heart, ShoppingBag, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AdSlot } from '@/components/ads/AdSlot';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -36,7 +37,6 @@ export default function ShopPage() {
   const catalog = useShopCatalog();
 
   const itemList = {
-    '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: t('shop.title'),
     itemListElement: catalog.products.slice(0, 20).map((product, index) => ({
@@ -132,6 +132,21 @@ export default function ShopPage() {
             const rating = averageRating(product.ratingSum, product.ratingCount);
             return (
               <Card as="li" key={product.id} className="flex flex-col">
+                {product.imageUrl.trim().length > 0 ? (
+                  <Link
+                    to={productPath(product.slug)}
+                    className="-mx-3 -mt-3 mb-3 block aspect-[16/10] overflow-hidden rounded-t-card bg-surface-2 sm:-mx-4 sm:-mt-4"
+                  >
+                    <MediaImage
+                      src={product.imageUrl}
+                      alt={product.title}
+                      slotWidth={360}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-cover"
+                    />
+                  </Link>
+                ) : null}
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="min-w-0 text-base font-semibold">
                     <Link to={productPath(product.slug)} className="fab-link">

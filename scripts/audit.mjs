@@ -1136,21 +1136,24 @@ check('G-04', 'PWA', 'The manifest describes an installable application', () => 
 check('G-05', 'PWA', 'Offline and runtime caching rules cover each request kind', () => {
   const config = read('main-site/vite.config.ts');
   const worker = read('main-site/src/sw.ts');
+  const cacheNames = read('main-site/src/lib/media/cache-names.ts');
   const checks = {
     injectManifest: /strateg(?:y|ies):\s*['\"]injectManifest['\"]/.test(config),
     precache: /precacheAndRoute\(self\.__WB_MANIFEST\)/.test(worker),
     navigation: /new NavigationRoute\(createHandlerBoundToURL\('\/index\.html'\)/.test(worker),
     // The picture cache is written by hand and its name carries a version, so
     // the question is "is there an image route with an image cache" rather than
-    // "does it still use the strategy that poisoned it".
+    // "does it still use the strategy that poisoned it". Cache names live in
+    // cache-names.ts so the page and worker share a single source of truth.
     imageCache:
       /request\.destination !== 'image'/.test(worker) &&
-      /cacheName: IMAGE_CACHE|IMAGE_CACHE\b/.test(worker) &&
-      /^const IMAGE_CACHE = 'bsdc-images-v\d+';$/m.test(worker),
+      /IMAGE_CACHE_NAME/.test(worker) &&
+      /export const IMAGE_CACHE_NAME = 'bsdc-images-v\d+';/.test(cacheNames),
     fontCache:
       /request\.destination === 'font'/.test(worker) &&
+      /FONT_CACHE_NAME/.test(worker) &&
       /cacheName: FONT_CACHE/.test(worker) &&
-      /^const FONT_CACHE = 'bsdc-fonts-v\d+';$/m.test(worker),
+      /export const FONT_CACHE_NAME = 'bsdc-fonts-v\d+';/.test(cacheNames),
   };
   const missing = Object.entries(checks)
     .filter(([, present]) => !present)

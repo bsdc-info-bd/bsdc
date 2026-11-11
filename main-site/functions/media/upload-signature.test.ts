@@ -17,12 +17,19 @@ function bytesOf(value: number[] | string): Uint8Array {
 }
 
 describe('the bytes a file actually carries', () => {
-  it('accepts a real JPEG, PNG, GIF, WebP and AVIF', () => {
+  it('accepts a real JPEG, PNG, GIF, WebP, AVIF, and SVG with an XML prolog', () => {
     expect(rejectBytes(bytesOf([0xff, 0xd8, 0xff, 0xe0]))).toBeNull();
     expect(rejectBytes(bytesOf([0x89, 0x50, 0x4e, 0x47, 0x0d]))).toBeNull();
     expect(rejectBytes(bytesOf('GIF89a......'))).toBeNull();
     expect(rejectBytes(bytesOf('RIFF....WEBP'))).toBeNull();
     expect(rejectBytes(bytesOf('\u0000\u0000\u0000\u001cftypavif'))).toBeNull();
+    expect(
+      rejectBytes(
+        bytesOf(
+          '<?xml version="1.0" encoding="UTF-8" standalone="no"?><!-- long comment header --><svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        ),
+      ),
+    ).toBeNull();
   });
 
   it('refuses an HTML page wearing an image content type', () => {

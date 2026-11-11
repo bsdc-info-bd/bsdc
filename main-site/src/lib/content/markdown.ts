@@ -94,11 +94,17 @@ marked.use({
   async: false,
 });
 
-/** Converts mentions and hashtags into real links before markdown runs. */
+/** Converts mentions and hashtags into real links before markdown runs, skipping code blocks and inline code. */
 function linkEntities(markdown: string): string {
-  return markdown
-    .replace(/(^|[\s(])@([a-z0-9_]{3,24})\b/g, '$1[@$2](/@$2)')
-    .replace(/(^|[\s(])#([a-z0-9][a-z0-9-]{1,31})\b/g, '$1[#$2](/tag/$2)');
+  const linkProse = (segment: string): string =>
+    segment
+      .replace(/(^|[\s(])@([a-z0-9_]{3,24})\b/g, '$1[@$2](/@$2)')
+      .replace(/(^|[\s(])#([a-z0-9][a-z0-9-]{1,31})\b/g, '$1[#$2](/tag/$2)');
+
+  // Split out fenced code blocks (``` or ~~~) and inline code spans (`...`) so
+  // decorators like `@Component` or CSS `#ff0000` inside code are preserved verbatim.
+  const parts = markdown.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g);
+  return parts.map((part, index) => (index % 2 === 1 ? part : linkProse(part))).join('');
 }
 
 /** Markdown to sanitised HTML. Never returns script-bearing output. */

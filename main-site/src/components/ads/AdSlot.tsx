@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next';
+import { MediaImage } from '@/components/media/MediaImage';
 import { useAdSlot } from '@/hooks/use-ads';
 import type { AdPlacement } from '@/lib/ads/ads-types';
 import { cn } from '@/lib/cn';
+import { safeExternalUrl } from '@/lib/listings/listing-schema';
 
 export interface AdSlotProps {
   placement: AdPlacement;
@@ -18,6 +20,8 @@ export function AdSlot({ placement, className }: AdSlotProps) {
   const { ad, ref, onClick } = useAdSlot(placement);
 
   if (ad === null) return null;
+  const href = safeExternalUrl(ad.targetUrl);
+  if (href === null) return null;
 
   return (
     <aside
@@ -29,16 +33,17 @@ export function AdSlot({ placement, className }: AdSlotProps) {
         {t('ads.sponsored')}
       </p>
       <a
-        href={ad.targetUrl}
+        href={href}
         target="_blank"
         rel="noopener noreferrer nofollow sponsored"
         onClick={onClick}
         className="mt-2 block rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-700"
       >
         {ad.imageUrl.length > 0 ? (
-          <img
+          <MediaImage
             src={ad.imageUrl}
             alt=""
+            slotWidth={384}
             loading="lazy"
             decoding="async"
             className="mb-2 h-32 w-full rounded-card object-cover"

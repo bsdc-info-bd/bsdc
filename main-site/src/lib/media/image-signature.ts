@@ -61,8 +61,8 @@ function isSvg(bytes: Uint8Array): boolean {
   return trimmed.startsWith('<?xml') && withoutBom.toLowerCase().includes('<svg');
 }
 
-/** How many leading bytes the check needs to be certain. */
-export const IMAGE_SNIFF_BYTES = 64;
+/** How many leading bytes the check reads (covers binary signatures and XML-prolog SVGs). */
+export const IMAGE_SNIFF_BYTES = 256;
 
 /**
  * Whether these bytes are a picture this platform will store or forward.
