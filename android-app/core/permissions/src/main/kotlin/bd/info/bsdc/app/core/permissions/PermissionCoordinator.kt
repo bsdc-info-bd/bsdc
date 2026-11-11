@@ -63,9 +63,9 @@ class PermissionCoordinator internal constructor(
                     false
                 }
                 next[kind] = PermissionStateMachine.evaluate(
-                    granted = granted,
-                    shouldShowRationale = rationale,
-                    hasRequestedBefore = asked.contains(kind),
+                    granted,
+                    rationale,
+                    asked.contains(kind),
                 )
             }
             states = next
