@@ -153,16 +153,24 @@ try {
     else if (name === 'certificate_templates') response = [{ key: 'course-completion', name: 'Course', purpose: 'Learning',
       heading: 'Certificate of Completion', body_template: 'Template wording', accent: '#1b4332', orientation: 'portrait',
       signature_name: 'Chief Executive Officer', signature_title: 'Bangladesh Software Development Community', is_active: true }];
-    else if (name === 'certificate_registry') response = [{ code: 'BSDC-CT-4A7C21B9-0', template_key: 'course-completion',
+    else if (name === 'certificate_registry' || name === 'certificate_registry_v2') response = [{ code: 'BSDC-CT-4A7C21B9-0', template_key: 'course-completion',
       recipient_name: 'Ayesha', subject: 'List summary only', issued_on: '2026-11-07', expires_on: null,
-      status: 'revoked', revoke_reason: 'Incorrect record', verifications: 0 }];
+      status: 'revoked', revoke_reason: 'Incorrect record', verifications: 0, revision: 1, updated_at: '2026-11-07T00:00:00Z' }];
+    else if (name === 'admin_telemetry_snapshot') response = [{
+      pending_reports: 2, pending_shops: 1, pending_campaigns: 1, active_notices: 2,
+      issued_certificates: 14, revoked_certificates: 1, open_incidents: 0,
+      vitals_good_pct: 92, vitals_samples_24h: 48, errors_24h: 0, audit_events_24h: 11,
+      recent_audit_buckets: [],
+    }];
+    else if (name === 'list_admin_macros') response = [];
+    else if (name === 'admin_cli_audit_query') response = [];
     else if (name === 'certificate_for_print') response = args.p_code === 'BSDC-CT-4A7C21B9-1'
       ? [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha Rahman', body: 'Template wording', issued_on: '2026-11-07', expires_on: null, status: 'issued' }]
       : [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha', body: 'Frozen issued wording from the registry.', issued_on: '2026-11-07', expires_on: null, status: 'revoked' }];
     else if (name === 'notice_registry') {
       const row = { summary: 'Notice summary', body: 'The full notice body is here.', category: 'general', audience: 'public',
         priority: 'routine', pinned: false, requires_ack: false, expires_at: null, updated_at: '2026-01-01T00:00:00Z',
-        acknowledgements: 0, staff_total: 0 };
+        acknowledgements: 0, staff_total: 0, version: 1 };
       response = [
         { ...row, id: 'published', code: 'BSDC-NT-91B2C3D4-5', title: 'Published notice', status: 'published', publish_at: '2026-01-01T00:00:00Z' },
         { ...row, id: 'draft', code: 'BSDC-NT-91B2C3D4-5', title: 'Draft notice', status: 'draft', publish_at: null },
@@ -194,7 +202,8 @@ try {
   assert(!Object.keys(beacon).some((key) => /uid|token|email|code/i.test(key)));
   console.log('PASS deployed console sends an anonymous, query-free field vital');
   assert.equal(claimRepairs, 1, 'role-less Firebase token is repaired before staff RPCs');
-  await page.getByText('Test Staff (admin)', { exact: true }).waitFor();
+  await page.getByText('Test Staff', { exact: true }).waitFor();
+  await page.locator('.kit-role-chip', { hasText: 'admin' }).waitFor();
   console.log('PASS missing PostgREST claim is repaired and the effective admin role is shown');
   await page.getByText('Only 5 measurements; interpret cautiously.').waitFor();
   assert.equal(await page.getByText('unknown', { exact: true }).count(), 5);
@@ -273,6 +282,17 @@ try {
   assert(calls.some((call) => call.name === 'staff_setup_campaign' && call.args.p_name === 'Browser permission campaign'));
   console.log('PASS authenticated admin creates a campaign');
 
+  await page.getByRole('button', { name: 'CLI Terminal', exact: true }).click();
+  await page.getByLabel('CLI command input').fill('telemetry');
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
+  await page.getByText('issued_certificates', { exact: false }).waitFor();
+  assert(calls.some((call) => call.name === 'admin_telemetry_snapshot'));
+  await page.getByRole('button', { name: 'Bulk Workbench', exact: true }).click();
+  await page.setViewportSize({ width: 375, height: 812 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'admin-site overflows 375px viewport');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  console.log('PASS admin CLI executes audited telemetry RPC, Bulk Workbench renders, and layout fits 375px mobile');
+
   await login('certificate-site');
   await page.getByLabel('Template', { exact: true }).first().selectOption('course-completion');
   await page.getByLabel('Recipient name').fill('Ayesha Rahman');
@@ -285,12 +305,16 @@ try {
   console.log('PASS authenticated admin issues and downloads a certificate');
   await page.getByRole('button', { name: 'Registry', exact: true }).click();
   await page.getByText('List summary only').waitFor();
+  assert(calls.some((call) => call.name === 'certificate_registry_v2'));
   const cert = await saveDownload(page.getByRole('button', { name: 'PDF', exact: true }), 'certificate.pdf');
   assert(cert.includes(Buffer.from('Frozen issued wording from the registry.')));
   assert(!cert.includes(Buffer.from('List summary only')));
   assert(cert.includes(Buffer.from('REVOKED - CHECK REGISTRY')));
   assert(cert.includes(Buffer.from('vf.main.bsdc.info.bd')));
-  console.log('PASS revoked certificate reprint uses frozen body and verification portal');
+  await page.setViewportSize({ width: 375, height: 812 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'certificate-site overflows 375px viewport');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  console.log('PASS revoked certificate reprint uses frozen body and verification portal and fits 375px mobile');
 
   await login('notice-site');
   const published = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Published notice', exact: true }) });
@@ -300,7 +324,10 @@ try {
   assert(publishedPdf.includes(Buffer.from('Authorized BSDC signature')));
   assert(!draftPdf.includes(Buffer.from('Authorized BSDC signature')));
   assert(draftPdf.includes(Buffer.from('DRAFT - NOT PUBLISHED')));
-  console.log('PASS published notice is signed and draft is clearly unsigned');
+  await page.setViewportSize({ width: 375, height: 812 });
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'notice-site overflows 375px viewport');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  console.log('PASS published notice is signed, draft is clearly unsigned, and layout fits 375px mobile');
 
   assert(claimRepairs >= 4, 'each separate console repairs a role-less sign-in');
   assert.deepEqual(errors, [], 'No uncaught browser exceptions');

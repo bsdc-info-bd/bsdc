@@ -416,7 +416,7 @@ function SignInForm({ note }: { readonly note: string | undefined }): ReactEleme
           }}
         >
           <Field
-            label="Corporate email"
+            label="Email address"
             type="email"
             autoComplete="username"
             required
@@ -436,7 +436,7 @@ function SignInForm({ note }: { readonly note: string | undefined }): ReactEleme
             }}
           />
           <Button type="submit" disabled={busy || email === '' || password === ''}>
-            {busy ? 'Authenticating' : 'Authenticate'}
+            {busy ? 'Signing in' : 'Sign in'}
           </Button>
         </form>
       </Card>

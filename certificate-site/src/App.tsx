@@ -6,6 +6,7 @@ import {
   BulkBar,
   Button,
   Card,
+  DataError,
   Drawer,
   Empty,
   Field,
@@ -64,7 +65,7 @@ export function App(): ReactElement {
       note="Every issuance, live amendment, reissue, restoration, and revocation writes an immutable revision trail."
       tabs={[
         { id: 'issue', label: 'Issue', render: () => <Issue /> },
-        { id: 'registry', label: 'Registry & Edit', render: () => <Registry /> },
+        { id: 'registry', label: 'Registry', render: () => <Registry /> },
         { id: 'templates', label: 'Template Studio', render: () => <TemplatesTab /> },
       ]}
     />
@@ -425,16 +426,25 @@ function Registry(): ReactElement {
 
   const [inspectRow, setInspectRow] = useState<RegistryRow | null>(null);
 
-  const load = useCallback(
-    () =>
-      listRpc<RegistryRow>(env, 'certificate_registry_v2', {
+  const load = useCallback(async () => {
+    try {
+      return await listRpc<RegistryRow>(env, 'certificate_registry_v2', {
         p_search: search,
         p_status: statusFilter,
         p_template: templateFilter,
         p_limit: 250,
-      }),
-    [env, search, statusFilter, templateFilter],
-  );
+      });
+    } catch (cause) {
+      if (cause instanceof DataError && cause.code === 'PGRST202') {
+        return listRpc<RegistryRow>(env, 'certificate_registry', {
+          p_search: search,
+          p_status: statusFilter,
+          p_limit: 200,
+        });
+      }
+      throw cause;
+    }
+  }, [env, search, statusFilter, templateFilter]);
   const { state, reload } = useAsync(load, [env, search, statusFilter, templateFilter]);
 
   const toggle = (code: string): void => {
