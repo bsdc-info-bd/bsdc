@@ -18,12 +18,89 @@ export type RegistryRow = {
   readonly template_key: string;
   readonly recipient_name: string;
   readonly subject: string;
+  readonly body?: string | undefined;
+  readonly recipient_uid?: string | null | undefined;
   readonly issued_on: string;
   readonly expires_on: string | null;
   readonly status: 'issued' | 'revoked';
   readonly revoke_reason: string;
+  readonly revision?: number | undefined;
+  readonly updated_at?: string | undefined;
+  readonly edit_reason?: string | undefined;
+  readonly superseded_by?: string | null | undefined;
   readonly verifications: number;
 };
+
+export type CertificateRevisionRow = {
+  readonly id: string;
+  readonly revision: number;
+  readonly template_key: string;
+  readonly recipient_uid: string | null;
+  readonly recipient_name: string;
+  readonly subject: string;
+  readonly body: string;
+  readonly issued_on: string;
+  readonly expires_on: string | null;
+  readonly status: 'issued' | 'revoked';
+  readonly edited_by: string | null;
+  readonly reason: string;
+  readonly created_at: string;
+};
+
+export type EditCertificateDraft = {
+  readonly recipientName: string;
+  readonly subject: string;
+  readonly body: string;
+  readonly recipientUid: string;
+  readonly issuedOn: string;
+  readonly expiresOn: string;
+  readonly reason: string;
+};
+
+export type TemplateDraft = {
+  readonly key: string;
+  readonly name: string;
+  readonly purpose: string;
+  readonly heading: string;
+  readonly bodyTemplate: string;
+  readonly accent: string;
+  readonly orientation: 'landscape' | 'portrait';
+  readonly signatureName: string;
+  readonly signatureTitle: string;
+  readonly isActive: boolean;
+};
+
+export function editCertificateProblems(draft: EditCertificateDraft): readonly string[] {
+  const problems: string[] = [];
+  if (draft.recipientName.trim().length < 2)
+    problems.push('Recipient name must be at least 2 characters.');
+  if (draft.subject.trim().length < 2) problems.push('Subject must be at least 2 characters.');
+  if (!DATE.test(draft.issuedOn))
+    problems.push('Issue date must be a valid YYYY-MM-DD calendar date.');
+  if (draft.expiresOn !== '' && !DATE.test(draft.expiresOn)) {
+    problems.push('Expiry date must be YYYY-MM-DD or left blank.');
+  }
+  if (DATE.test(draft.issuedOn) && DATE.test(draft.expiresOn) && draft.expiresOn < draft.issuedOn) {
+    problems.push('Expiry date cannot be earlier than the issue date.');
+  }
+  if (draft.reason.trim().length < 3) {
+    problems.push('Provide an audit reason (minimum 3 characters) for editing or reissuing.');
+  }
+  return problems;
+}
+
+export function templateDraftProblems(draft: TemplateDraft): readonly string[] {
+  const problems: string[] = [];
+  if (!/^[a-z][a-z0-9_-]{2,40}$/.test(draft.key.trim().toLowerCase())) {
+    problems.push('Key must be 3-41 lowercase letters, digits, hyphens, or underscores.');
+  }
+  if (draft.name.trim().length < 2) problems.push('Template name is required.');
+  if (draft.heading.trim().length < 2) problems.push('Certificate heading is required.');
+  if (!/^#[0-9a-f]{6}$/i.test(draft.accent.trim())) {
+    problems.push('Accent must be a 6-digit hex color like #0F766E.');
+  }
+  return problems;
+}
 
 export type IssueDraft = {
   readonly templateKey: string;

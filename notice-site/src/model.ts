@@ -21,6 +21,36 @@ export type NoticeRow = {
   readonly updated_at: string;
   readonly acknowledgements: number;
   readonly staff_total: number;
+  readonly version?: number | undefined;
+};
+
+export type NoticeRevisionRow = {
+  readonly id: string;
+  readonly version: number;
+  readonly title: string;
+  readonly summary: string;
+  readonly body: string;
+  readonly category: string;
+  readonly audience: NoticeAudience;
+  readonly priority: NoticePriority;
+  readonly status: NoticeStatus;
+  readonly pinned: boolean;
+  readonly requires_ack: boolean;
+  readonly publish_at: string | null;
+  readonly expires_at: string | null;
+  readonly edited_by: string | null;
+  readonly edit_note: string;
+  readonly created_at: string;
+};
+
+export type NoticeAckRosterRow = {
+  readonly uid: string;
+  readonly staff_no: string;
+  readonly display_name: string;
+  readonly department: string;
+  readonly role: string;
+  readonly acknowledged: boolean;
+  readonly acknowledged_at: string | null;
 };
 
 export type NoticeDraft = {
@@ -32,7 +62,9 @@ export type NoticeDraft = {
   readonly priority: NoticePriority;
   readonly pinned: boolean;
   readonly requiresAck: boolean;
+  readonly publishAt: string;
   readonly expiresAt: string;
+  readonly editNote: string;
 };
 
 export const EMPTY_DRAFT: NoticeDraft = {
@@ -44,7 +76,9 @@ export const EMPTY_DRAFT: NoticeDraft = {
   priority: 'routine',
   pinned: false,
   requiresAck: false,
+  publishAt: '',
   expiresAt: '',
+  editNote: '',
 };
 
 export const AUDIENCES: readonly NoticeAudience[] = ['public', 'members', 'staff'];
@@ -106,7 +140,26 @@ export function rowToDraft(row: NoticeRow): NoticeDraft {
     priority: row.priority,
     pinned: row.pinned,
     requiresAck: row.requires_ack,
+    publishAt: row.publish_at === null ? '' : row.publish_at.slice(0, 16),
     expiresAt: row.expires_at === null ? '' : row.expires_at.slice(0, 16),
+    editNote: '',
+  };
+}
+
+export function noticeRevisionArgs(id: string | null, draft: NoticeDraft): Record<string, unknown> {
+  return {
+    p_id: id,
+    p_title: draft.title.trim(),
+    p_summary: draft.summary.trim(),
+    p_body: draft.body.trim(),
+    p_category: draft.category.trim() === '' ? 'general' : draft.category.trim().toLowerCase(),
+    p_audience: draft.audience,
+    p_priority: draft.priority,
+    p_pinned: draft.pinned,
+    p_requires_ack: draft.requiresAck,
+    p_publish_at: draft.publishAt === '' ? null : new Date(draft.publishAt).toISOString(),
+    p_expires_at: draft.expiresAt === '' ? null : new Date(draft.expiresAt).toISOString(),
+    p_edit_note: draft.editNote.trim(),
   };
 }
 
@@ -198,4 +251,25 @@ export function noticeFilename(code: string, title: string): string {
     .slice(0, 40);
   const safe = normaliseDocCode(code).replace(/[^A-Z0-9-]/g, '');
   return slug === '' ? `${safe}.pdf` : `${safe}-${slug}.pdf`;
+}
+
+export function filterNotices(
+  rows: readonly NoticeRow[],
+  search: string,
+  stateFilter: string,
+  audienceFilter: string,
+  now = new Date(),
+): readonly NoticeRow[] {
+  const q = search.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (stateFilter !== 'all' && liveState(row, now) !== stateFilter) return false;
+    if (audienceFilter !== 'all' && row.audience !== audienceFilter) return false;
+    if (q === '') return true;
+    return (
+      row.title.toLowerCase().includes(q) ||
+      row.code.toLowerCase().includes(q) ||
+      row.summary.toLowerCase().includes(q) ||
+      row.category.toLowerCase().includes(q)
+    );
+  });
 }

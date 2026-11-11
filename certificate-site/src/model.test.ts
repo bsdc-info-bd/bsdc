@@ -16,11 +16,13 @@ import {
   certificateFilename,
   draftProblems,
   draftToArgs,
+  editCertificateProblems,
   fillTemplate,
   longDate,
   parseBatch,
   registryState,
   resolvedBody,
+  templateDraftProblems,
   type RegistryRow,
   type TemplateRow,
 } from './model';
@@ -300,5 +302,41 @@ describe('the verification QR', () => {
     expect(qrPath(matrix).match(/M/g)).toHaveLength(dark);
     const svg = qrSvg(url, { quietZone: 4 });
     expect(svg).toContain(`viewBox="0 0 ${matrix.size + 8} ${matrix.size + 8}"`);
+  });
+});
+
+describe('live certificate editing and template studio validation', () => {
+  it('enforces audit reason and date consistency when amending an issued certificate', () => {
+    const validEdit = {
+      recipientName: 'Ayesha Rahman',
+      subject: 'Frontend Track',
+      body: 'Body copy',
+      recipientUid: '',
+      issuedOn: '2026-03-10',
+      expiresOn: '',
+      reason: 'Typo fixed per identity card',
+    };
+    expect(editCertificateProblems(validEdit)).toEqual([]);
+    expect(editCertificateProblems({ ...validEdit, reason: 'ok' })[0]).toContain('minimum 3');
+    expect(editCertificateProblems({ ...validEdit, expiresOn: '2026-03-01' })[0]).toContain(
+      'cannot be earlier',
+    );
+  });
+
+  it('validates custom template studio slugs and hex colors', () => {
+    const draft = {
+      key: 'mentor-2026',
+      name: 'Mentor Recognition',
+      purpose: 'Recognizes mentors',
+      heading: 'Certificate of Mentorship',
+      bodyTemplate: 'Awarded to {recipient}',
+      accent: '#0f766e',
+      orientation: 'landscape' as const,
+      signatureName: 'Director',
+      signatureTitle: 'BSDC',
+      isActive: true,
+    };
+    expect(templateDraftProblems(draft)).toEqual([]);
+    expect(templateDraftProblems({ ...draft, key: 'Bad Key!', accent: 'red' }).length).toBe(2);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactElement } from 'react';
+import { Suspense, lazy, useCallback, useMemo, useState, type ReactElement } from 'react';
 import {
   AppShell,
   BRAND_TOKENS,
@@ -63,29 +63,62 @@ import {
   type ThemeDraft,
 } from './model';
 
+const LazyCliConsole = lazy(() => import('./CliConsole'));
+const LazyBulkWorkbench = lazy(() => import('./BulkWorkbench'));
+
 /**
- * The SEO centre and the branding studio.
- *
- * Both halves work the same way: the console shows what the site is
- * currently saying, the editor changes it, and the database re-checks every
- * rule before the change lands. Nothing here is advisory — a title that is
- * too long is cut by Postgres, and a palette that cannot be read is refused
- * by Postgres.
+ * Central BSDC Admin Console:
+ * - Overview & Live Cross-Portal Telemetry + Audit Inspector Drawer
+ * - Interactive Audited Corporate CLI (lazy-loaded)
+ * - Bulk Governance Workbench
+ * - Approvals, Campaigns, SEO Pages, Redirects, Sitemap, and Branding
  */
 export function App(): ReactElement {
+  const [tabId, setTabId] = useState('overview');
+
   return (
     <AppShell
       minRole="manager"
-      note="Changes here reach every visitor and every crawler."
+      activeTabId={tabId}
+      onTabChange={setTabId}
+      note="Zero-trust central admin, audited CLI, approvals, SEO & branding."
+      commandActions={[
+        {
+          id: 'cmd:cli',
+          label: 'Open Interactive Admin CLI',
+          section: 'Terminal',
+          hint: 'Run telemetry, audit, cert, notice, and macro commands',
+          onSelect: () => setTabId('cli'),
+        },
+        {
+          id: 'cmd:bulk',
+          label: 'Open Bulk Governance Workbench',
+          section: 'Batch',
+          hint: 'Batch decide shops, campaigns, redirects, or SEO overrides',
+          onSelect: () => setTabId('bulk'),
+        },
+      ]}
       tabs={[
-        // The overview first: it is the one screen that says whether anything
-        // needs a person at all, and it is where an operator lands by default.
         { id: 'overview', label: 'Overview', render: () => <Overview /> },
-        // Approvals next: it is the only tab with work that is waiting on a
-        // person, and a queue nobody opens is a queue that grows.
+        {
+          id: 'cli',
+          label: 'CLI Terminal',
+          render: () => (
+            <Suspense fallback={<Loading label="Loading CLI runtime." />}>
+              <LazyCliConsole />
+            </Suspense>
+          ),
+        },
+        {
+          id: 'bulk',
+          label: 'Bulk Workbench',
+          render: () => (
+            <Suspense fallback={<Loading label="Loading Bulk Workbench." />}>
+              <LazyBulkWorkbench />
+            </Suspense>
+          ),
+        },
         { id: 'approvals', label: 'Approvals', render: () => <Approvals /> },
-        // Campaigns after approvals: staff set one up from here, and approve it
-        // a tab to the left. The builder and the queue are one workflow.
         { id: 'campaigns', label: 'Campaigns', render: () => <Campaigns /> },
         { id: 'pages', label: 'Pages', render: () => <Pages /> },
         { id: 'redirects', label: 'Redirects', render: () => <Redirects /> },

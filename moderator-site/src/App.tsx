@@ -4,6 +4,7 @@ import {
   AppShell,
   Badge,
   Banner,
+  BulkBar,
   Button,
   Card,
   Empty,
@@ -75,8 +76,36 @@ function Queue(): ReactElement {
   const { state, reload } = useAsync(load, [env, status]);
   const [openId, setOpenId] = useState('');
   const [decision, setDecision] = useState<Decision>(EMPTY_DECISION);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<string>(ACTIONS[0]?.id ?? 'dismiss');
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkFeedback, setBulkFeedback] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  const toggle = (id: string): void => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const runBulk = (): void => {
+    if (selected.length === 0) return;
+    setBusy(true);
+    setError('');
+    setBulkFeedback('');
+    void callRpc<number>(env, 'bulk_moderation_resolve', {
+      p_report_ids: selected,
+      p_action: bulkAction,
+      p_reason: bulkReason.trim(),
+    })
+      .then((count) => {
+        setBulkFeedback(`Resolved ${count} report(s) with "${bulkAction}".`);
+        setSelected([]);
+        setBulkReason('');
+        reload();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setBusy(false));
+  };
 
   const claim = (id: string): void => {
     setBusy(true);
@@ -158,10 +187,20 @@ function Queue(): ReactElement {
         ) : (
           <Table
             caption="Reports"
-            head={['Report', 'Waiting', 'Corroboration', 'State', 'Decision']}
+            head={['', 'Report', 'Waiting', 'Corroboration', 'State', 'Decision']}
           >
             {rows.map((row) => (
               <tr key={row.id}>
+                <td>
+                  {(row.status === 'open' || row.status === 'claimed') && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select report ${row.id}`}
+                      checked={selected.includes(row.id)}
+                      onChange={() => toggle(row.id)}
+                    />
+                  )}
+                </td>
                 <td>
                   <strong>{reportTitle(row)}</strong>
                   <br />
@@ -245,6 +284,34 @@ function Queue(): ReactElement {
           </Table>
         )}
       </Card>
+
+      {bulkFeedback !== '' && (
+        <Banner tone="ok" title="Bulk Moderation Complete">
+          <p className="kit-small">{bulkFeedback}</p>
+        </Banner>
+      )}
+
+      <BulkBar selectedCount={selected.length} onClear={() => setSelected([])}>
+        <Select
+          label="Action"
+          value={bulkAction}
+          options={ACTIONS.map((a) => ({ value: a.id, label: a.label }))}
+          onChange={(e) => setBulkAction(e.target.value)}
+        />
+        <TextArea
+          label="Shared Reason (shown to reporter/author)"
+          rows={1}
+          value={bulkReason}
+          onChange={(e) => setBulkReason(e.target.value)}
+        />
+        <Button
+          size="small"
+          disabled={busy || decisionProblems(bulkAction, bulkReason).length > 0}
+          onClick={runBulk}
+        >
+          {busy ? 'Applying' : 'Resolve Selected'}
+        </Button>
+      </BulkBar>
     </div>
   );
 }

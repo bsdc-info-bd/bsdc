@@ -140,9 +140,21 @@ function Vitals(): ReactElement {
   const direction = trendDirection(trend);
   const line = sparkline(trend, 640, 64);
 
+  const downloadVitals = (): void => {
+    download(`vitals-${app}-${days}d.csv`, summaryCsv(summary), 'text/csv');
+  };
+
   return (
     <div className="kit-stack">
-      <Card title="Window" description={coverageSentence(summary)}>
+      <Card
+        title="Window"
+        description={coverageSentence(summary)}
+        actions={
+          <Button size="small" variant="quiet" onClick={downloadVitals}>
+            Export CSV
+          </Button>
+        }
+      >
         <div className="kit-grid">
           <Select
             label="Period"

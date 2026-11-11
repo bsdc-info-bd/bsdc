@@ -271,27 +271,37 @@ function Composer({ page, onChanged }: { page: PageRow; onChanged: () => void })
       title={`Composing: ${page.title}`}
       description="Sections appear on the page in this order."
       actions={
-        page.status === 'published' ? (
-          <Button
-            variant="quiet"
-            size="small"
-            onClick={() => {
-              setStatus('draft');
-            }}
+        <div className="kit-row">
+          <a
+            href={`${env.siteUrl}/${page.slug}`}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="kit-btn kit-btn--quiet kit-btn--small"
           >
-            Unpublish
-          </Button>
-        ) : (
-          <Button
-            size="small"
-            disabled={blockers.length > 0}
-            onClick={() => {
-              setStatus('published');
-            }}
-          >
-            Publish
-          </Button>
-        )
+            Preview /{page.slug}
+          </a>
+          {page.status === 'published' ? (
+            <Button
+              variant="quiet"
+              size="small"
+              onClick={() => {
+                setStatus('draft');
+              }}
+            >
+              Unpublish
+            </Button>
+          ) : (
+            <Button
+              size="small"
+              disabled={blockers.length > 0}
+              onClick={() => {
+                setStatus('published');
+              }}
+            >
+              Publish
+            </Button>
+          )}
+        </div>
       }
     >
       {error !== '' && (

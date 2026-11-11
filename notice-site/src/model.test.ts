@@ -6,9 +6,11 @@ import {
   audienceLabel,
   draftProblems,
   draftToRow,
+  filterNotices,
   liveState,
   liveStateTone,
   noticeFilename,
+  noticeRevisionArgs,
   paragraphs,
   rowToDraft,
   scheduleSummary,
@@ -263,5 +265,36 @@ describe('the printed notice', () => {
   it('builds a filename that still means something a year later', () => {
     expect(noticeFilename(code, 'Office closed for Eid')).toBe(`${code}-office-closed-for-eid.pdf`);
     expect(noticeFilename(code, '')).toBe(`${code}.pdf`);
+  });
+});
+
+describe('notice filtering and revisioned save payload', () => {
+  it('filters notices by search query, live state, and audience', () => {
+    const items = [
+      row({ id: 'live-pub', title: 'Eid Schedule', audience: 'public' }),
+      row({
+        id: 'draft-staff',
+        title: 'Staff Rota',
+        audience: 'staff',
+        status: 'draft',
+        publish_at: null,
+      }),
+    ];
+    expect(filterNotices(items, 'eid', 'all', 'all', now).map((r) => r.id)).toEqual(['live-pub']);
+    expect(filterNotices(items, '', 'draft', 'staff', now).map((r) => r.id)).toEqual([
+      'draft-staff',
+    ]);
+  });
+
+  it('builds complete save_notice_with_revision parameters', () => {
+    const args = noticeRevisionArgs('n1', {
+      ...EMPTY_DRAFT,
+      title: 'Policy Update',
+      summary: 'Summary line',
+      body: 'Full official notice text body.',
+      editNote: 'Clarified effective date',
+    });
+    expect(args['p_id']).toBe('n1');
+    expect(args['p_edit_note']).toBe('Clarified effective date');
   });
 });
