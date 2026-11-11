@@ -31,12 +31,15 @@ class MainActivity : AppCompatActivity() {
 
         resolveIncomingIntent(intent)
 
+        val container = (application as BsdcApplication).container
+
         setContent {
             BsdcTheme(
                 themeMode = themeMode,
                 language = appLanguage,
             ) {
                 BsdcAppShell(
+                    container = container,
                     incomingDestination = activeDestination,
                     language = appLanguage,
                     themeMode = themeMode,

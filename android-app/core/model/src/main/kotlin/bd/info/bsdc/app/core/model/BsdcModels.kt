@@ -256,3 +256,135 @@ enum class PermissionGrantState {
     SHOW_RATIONALE,
     PERMANENTLY_DENIED_OPEN_SETTINGS,
 }
+
+@Serializable
+enum class BsdcRole(val wireValue: String) {
+    @SerialName("member")
+    MEMBER("member"),
+
+    @SerialName("creator")
+    CREATOR("creator"),
+
+    @SerialName("vendor")
+    VENDOR("vendor"),
+
+    @SerialName("moderator")
+    MODERATOR("moderator"),
+
+    @SerialName("manager")
+    MANAGER("manager"),
+
+    @SerialName("admin")
+    ADMIN("admin"),
+
+    @SerialName("owner")
+    OWNER("owner");
+
+    companion object {
+        @JvmStatic
+        fun fromWire(value: String?): BsdcRole =
+            entries.firstOrNull { it.wireValue.equals(value?.trim(), ignoreCase = true) } ?: MEMBER
+    }
+}
+
+@Serializable
+data class SessionClaims(
+    val role: BsdcRole = BsdcRole.MEMBER,
+    val vendor: Boolean = false,
+    val staff: Boolean = false,
+    val postgresAuthenticated: Boolean = false,
+)
+
+@Serializable
+data class NotificationPrefs(
+    val followers: Boolean = true,
+    val comments: Boolean = true,
+    val mentions: Boolean = true,
+    val messages: Boolean = true,
+    val digest: Boolean = true,
+)
+
+@Serializable
+data class PrivacyPrefs(
+    val discoverable: Boolean = true,
+    val showActivity: Boolean = true,
+    val showEmail: Boolean = false,
+)
+
+@Serializable
+data class MemberProfile(
+    val uid: String,
+    val username: String = "",
+    @SerialName("display_name") val displayName: String = "Member",
+    val bio: String = "",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    @SerialName("cover_url") val coverUrl: String = "",
+    val location: String = "",
+    val website: String = "",
+    val skills: List<String> = emptyList(),
+    val interests: List<String> = emptyList(),
+    val language: AppLanguage = AppLanguage.BN,
+    @SerialName("onboarding_complete") val onboardingComplete: Boolean = false,
+    val notifications: NotificationPrefs = NotificationPrefs(),
+    val privacy: PrivacyPrefs = PrivacyPrefs(),
+    @SerialName("followers_count") val followersCount: Int = 0,
+    @SerialName("following_count") val followingCount: Int = 0,
+    @SerialName("posts_count") val postsCount: Int = 0,
+    val reputation: Int = 0,
+    val verified: Boolean = false,
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("updated_at") val updatedAt: String = "",
+) {
+    val hasClaimedHandle: Boolean get() = username.trim().isNotEmpty()
+}
+
+data class ProfileDraft(
+    val username: String,
+    val displayName: String,
+    val bio: String = "",
+    val avatarUrl: String = "",
+    val coverUrl: String = "",
+    val location: String = "",
+    val website: String = "",
+    val skills: List<String> = emptyList(),
+    val interests: List<String> = emptyList(),
+    val language: AppLanguage = AppLanguage.BN,
+    val onboardingComplete: Boolean = true,
+)
+
+data class ProfileStats(
+    val followers: Int = 0,
+    val following: Int = 0,
+    val posts: Int = 0,
+    val reputation: Int = 0,
+)
+
+data class BsdcUserSession(
+    val uid: String,
+    val email: String,
+    val emailVerified: Boolean,
+    val displayName: String,
+    val photoUrl: String,
+    val isPasswordProvider: Boolean,
+    val claims: SessionClaims,
+)
+
+data class BsdcBackendConfig(
+    val supabaseUrl: String,
+    val supabasePublishableKey: String,
+    val siteUrl: String = BsdcHosts.SITE_ORIGIN,
+    val vfUrl: String = BsdcHosts.VF_ORIGIN,
+    val pushWorkerUrl: String = BsdcHosts.PUSH_WORKER_ORIGIN,
+    val firebaseWebClientId: String = "",
+) {
+    val isSupabaseConfigured: Boolean
+        get() = supabaseUrl.isNotBlank() && supabasePublishableKey.isNotBlank()
+}
+
+@Serializable
+data class ReverseGeoResult(
+    val place: String = "",
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+)
+

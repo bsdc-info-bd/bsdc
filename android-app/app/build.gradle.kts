@@ -40,6 +40,13 @@ android {
         buildConfigField("String", "VF_ORIGIN", "\"https://vf.main.bsdc.info.bd\"")
         buildConfigField("String", "NEWS_ORIGIN", "\"https://news.bsdc.info.bd\"")
         buildConfigField("String", "PUSH_WORKER_ORIGIN", "\"https://push.api.bsdc.info.bd\"")
+
+        val supabaseUrl = (System.getenv("ANDROID_SUPABASE_URL") ?: "").replace("\"", "")
+        val supabaseKey = (System.getenv("ANDROID_SUPABASE_PUBLISHABLE_KEY") ?: "").replace("\"", "")
+        val googleWebClientId = (System.getenv("ANDROID_GOOGLE_WEB_CLIENT_ID") ?: "").replace("\"", "")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+        buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
     signingConfigs {
@@ -103,6 +110,10 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:common"))
     implementation(project(":core:designsystem"))
+    implementation(project(":core:permissions"))
+    implementation(project(":core:network"))
+    implementation(project(":core:auth"))
+    implementation(project(":feature:onboarding"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

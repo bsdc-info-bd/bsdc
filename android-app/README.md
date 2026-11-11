@@ -15,6 +15,10 @@ Zero Capacitor, zero Flutter, zero web wrappers, zero Cloudinary, zero legacy VA
   - `BanglaDigitFormatter.java` (`০–৯` localization)
   - `AppVersionResolver.java` (tag/CI version computation)
 - `:core:designsystem` — Exact BSDC light/dark emerald color system matching `main-site/src/styles/base.css`, vector shield mark matching `Logo.tsx`, reduced-motion physics, shimmer skeletons, and reusable Compose primitives.
+- `:core:permissions` — Play-Store-compliant runtime permission state machine (`PermissionStateMachine.java`), DataStore request tracking, `PermissionCoordinator`, persistent non-blocking readiness banner, and Android Settings fallback sheet (`POST_NOTIFICATIONS`, `LOCATION`, `CAMERA`, `RECORD_AUDIO` exclusively for Voice Search).
+- `:core:network` — Ktor OkHttp client (`BsdcHttpClientFactory`), PostgREST + RPC client (`SupabaseRestClient`), 2-decimal city rounding (`GeoCoordinatePrivacy.java`), fault-tolerant `ProfileRowCoercer`, and `BsdcPlatformApi` (`/api/auth/claims`, `/api/geo/reverse`, `profiles`, `claim_username`).
+- `:core:auth` — Firebase Auth (`Email/Password`, Credential Manager `Google`, `GitHub OAuth`), single-flight JWT `role = "authenticated"` bootstrap (`DataAccessBootstrapManager`), password scorer & username/claims validators (`AuthDomainValidators.java`), and atomic sign-out.
+- `:feature:onboarding` — Bilingual Sign In / Sign Up (4-bar strength bar) / Password Reset / Email Verification gate + 4-step Profile & Device Readiness onboarding wizard with one-tap approximate city lookup.
 
 ## Building & Signing (GitHub Actions / Android Studio)
 
@@ -22,7 +26,7 @@ Zero Capacitor, zero Flutter, zero web wrappers, zero Cloudinary, zero legacy VA
 - **Debug APK & Unit Tests:**
   ```bash
   node scripts/prepare-firebase.mjs
-  gradle :core:common:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+  gradle test testDebugUnitTest :app:lintDebug :app:assembleDebug
   ```
 - **Signed Release APK & Play Store AAB:**
   Requires real `ANDROID_GOOGLE_SERVICES_JSON` and signing keystore variables (`BSDC_KEYSTORE_PATH`, `BSDC_KEYSTORE_PASSWORD`, `BSDC_KEY_ALIAS`, `BSDC_KEY_PASSWORD`):

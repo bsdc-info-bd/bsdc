@@ -1,0 +1,471 @@
+package bd.info.bsdc.app.feature.onboarding
+
+import android.app.Activity
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Email
+import androidx.compose.material.icons.rounded.Lock
+import androidx.compose.material.icons.rounded.MarkEmailRead
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Visibility
+import androidx.compose.material.icons.rounded.VisibilityOff
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.auth.AuthDomainValidators
+import bd.info.bsdc.app.core.auth.AuthRepository
+import bd.info.bsdc.app.core.auth.AuthStateSnapshot
+import bd.info.bsdc.app.core.designsystem.BsdcButton
+import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcShieldMark
+import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
+import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
+import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.model.AppLanguage
+import kotlinx.coroutines.launch
+
+private enum class AuthFlowMode {
+    SIGN_IN,
+    SIGN_UP,
+    RESET_PASSWORD,
+}
+
+@Composable
+fun BsdcAuthScreen(
+    authState: AuthStateSnapshot,
+    authRepository: AuthRepository,
+    language: AppLanguage,
+    onContinueAsGuest: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
+    val bn = language == AppLanguage.BN
+    val context = LocalContext.current
+    val activity = context as? Activity
+    val scope = rememberCoroutineScope()
+
+    var mode by rememberSaveable { mutableStateOf(AuthFlowMode.SIGN_IN) }
+    var displayName by rememberSaveable { mutableStateOf("") }
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
+    val passwordScore = remember(password) { AuthDomainValidators.scorePassword(password) }
+    val canSubmitEmail = AuthDomainValidators.isEmailValid(email) && when (mode) {
+        AuthFlowMode.SIGN_IN -> password.length >= 6
+        AuthFlowMode.SIGN_UP -> displayName.trim().length >= 2 && password.length >= 8
+        AuthFlowMode.RESET_PASSWORD -> true
+    }
+
+    fun submitEmailForm() {
+        if (!canSubmitEmail || authState.isBusy) return
+        scope.launch {
+            when (mode) {
+                AuthFlowMode.SIGN_IN -> authRepository.signInWithEmail(email, password, language)
+                AuthFlowMode.SIGN_UP -> authRepository.signUpWithEmail(email, password, displayName, language)
+                AuthFlowMode.RESET_PASSWORD -> authRepository.sendPasswordReset(email, language)
+            }
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        BsdcShieldMark(size = 64.dp)
+        Text(
+            text = if (bn) "BSDC কমিউনিটিতে স্বাগতম" else "Welcome to BSDC",
+            style = MaterialTheme.typography.headlineLarge,
+        )
+        Text(
+            text = if (bn) {
+                "বাংলাদেশ সফটওয়্যার ডেভেলপমেন্ট কমিউনিটি — সদস্য, যাচাই, মেসেঞ্জার ও মার্কেটপ্লেস।"
+            } else {
+                "Bangladesh Software Development Community — member network, verification, messenger & marketplace."
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = BsdcThemeTokens.colors.mutedText,
+        )
+
+        authState.errorMessage?.takeIf { it.isNotBlank() }?.let { err ->
+            BsdcStatusBanner(
+                title = if (bn) "প্রমাণীকরণ বার্তা" else "Authentication notice",
+                body = err,
+                tone = BsdcTone.BAD,
+            )
+        }
+        authState.infoMessage?.takeIf { it.isNotBlank() }?.let { info ->
+            BsdcStatusBanner(
+                title = if (bn) "সম্পন্ন" else "Sent",
+                body = info,
+                tone = BsdcTone.OK,
+            )
+        }
+
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            SegmentedButton(
+                selected = mode == AuthFlowMode.SIGN_IN,
+                onClick = {
+                    authRepository.clearMessages()
+                    mode = AuthFlowMode.SIGN_IN
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                label = { Text(if (bn) "সাইন ইন" else "Sign In") },
+            )
+            SegmentedButton(
+                selected = mode == AuthFlowMode.SIGN_UP,
+                onClick = {
+                    authRepository.clearMessages()
+                    mode = AuthFlowMode.SIGN_UP
+                },
+                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                label = { Text(if (bn) "নতুন অ্যাকাউন্ট" else "Create Account") },
+            )
+        }
+
+        BsdcCard(elevated = true) {
+            AnimatedContent(
+                targetState = mode,
+                transitionSpec = {
+                    fadeIn(tween(220)) togetherWith fadeOut(tween(180))
+                },
+                label = "auth_mode_transition",
+            ) { currentMode ->
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (currentMode == AuthFlowMode.SIGN_UP) {
+                        OutlinedTextField(
+                            value = displayName,
+                            onValueChange = { displayName = it.take(60) },
+                            label = { Text(if (bn) "পূর্ণ নাম" else "Full name") },
+                            leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text(if (bn) "ইমেইল ঠিকানা" else "Email address") },
+                        leadingIcon = { Icon(Icons.Rounded.Email, contentDescription = null) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email,
+                            imeAction = if (currentMode == AuthFlowMode.RESET_PASSWORD) {
+                                ImeAction.Done
+                            } else {
+                                ImeAction.Next
+                            },
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = { if (currentMode == AuthFlowMode.RESET_PASSWORD) submitEmailForm() },
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    if (currentMode != AuthFlowMode.RESET_PASSWORD) {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            label = { Text(if (bn) "পাসওয়ার্ড" else "Password") },
+                            leadingIcon = { Icon(Icons.Rounded.Lock, contentDescription = null) },
+                            trailingIcon = {
+                                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                    Icon(
+                                        imageVector = if (passwordVisible) {
+                                            Icons.Rounded.VisibilityOff
+                                        } else {
+                                            Icons.Rounded.Visibility
+                                        },
+                                        contentDescription = null,
+                                    )
+                                }
+                            },
+                            visualTransformation = if (passwordVisible) {
+                                VisualTransformation.None
+                            } else {
+                                PasswordVisualTransformation()
+                            },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password,
+                                imeAction = ImeAction.Done,
+                            ),
+                            keyboardActions = KeyboardActions(onDone = { submitEmailForm() }),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+
+                    if (currentMode == AuthFlowMode.SIGN_UP && password.isNotEmpty()) {
+                        PasswordStrengthBar(score = passwordScore, language = language)
+                    }
+
+                    BsdcButton(
+                        label = when {
+                            authState.isBusy && bn -> "অপেক্ষা করুন…"
+                            authState.isBusy -> "Please wait…"
+                            currentMode == AuthFlowMode.SIGN_IN && bn -> "সাইন ইন করুন"
+                            currentMode == AuthFlowMode.SIGN_IN -> "Sign In with Email"
+                            currentMode == AuthFlowMode.SIGN_UP && bn -> "অ্যাকাউন্ট তৈরি করুন"
+                            currentMode == AuthFlowMode.SIGN_UP -> "Create BSDC Account"
+                            bn -> "রিসেট লিংক পাঠান"
+                            else -> "Send Password Reset Link"
+                        },
+                        enabled = canSubmitEmail && !authState.isBusy,
+                        onClick = ::submitEmailForm,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        TextButton(
+                            onClick = {
+                                authRepository.clearMessages()
+                                mode = if (currentMode == AuthFlowMode.RESET_PASSWORD) {
+                                    AuthFlowMode.SIGN_IN
+                                } else {
+                                    AuthFlowMode.RESET_PASSWORD
+                                }
+                            },
+                        ) {
+                            Text(
+                                text = if (currentMode == AuthFlowMode.RESET_PASSWORD) {
+                                    if (bn) "সাইন ইনে ফিরুন" else "Back to Sign In"
+                                } else {
+                                    if (bn) "পাসওয়ার্ড ভুলে গেছেন?" else "Forgot password?"
+                                },
+                            )
+                        }
+                        if (onContinueAsGuest != null) {
+                            TextButton(onClick = onContinueAsGuest) {
+                                Text(if (bn) "ভিজিটর হিসেবে দেখুন" else "Browse public verification")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            HorizontalDivider(modifier = Modifier.weight(1f))
+            Text(
+                text = if (bn) "অথবা চালিয়ে যান" else "Or continue with",
+                style = MaterialTheme.typography.labelLarge,
+                color = BsdcThemeTokens.colors.mutedText,
+            )
+            HorizontalDivider(modifier = Modifier.weight(1f))
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            BsdcButton(
+                label = "Google",
+                secondary = true,
+                enabled = !authState.isBusy && activity != null,
+                onClick = {
+                    if (activity != null) {
+                        scope.launch { authRepository.signInWithGoogle(activity, language) }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+            BsdcButton(
+                label = "GitHub",
+                leadingIcon = Icons.Rounded.Code,
+                secondary = true,
+                enabled = !authState.isBusy && activity != null,
+                onClick = {
+                    if (activity != null) {
+                        scope.launch { authRepository.signInWithGitHub(activity, language) }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun PasswordStrengthBar(
+    score: Int,
+    language: AppLanguage,
+) {
+    val bn = language == AppLanguage.BN
+    val activeColor by animateColorAsState(
+        targetValue = when {
+            score <= 1 -> BsdcThemeTokens.colors.danger
+            score == 2 -> BsdcThemeTokens.colors.warn
+            else -> BsdcThemeTokens.colors.brandStrong
+        },
+        label = "password_strength_color",
+    )
+    val label = when {
+        bn && score <= 1 -> "দুর্বল পাসওয়ার্ড"
+        bn && score == 2 -> "মাঝারি পাসওয়ার্ড"
+        bn && score == 3 -> "ভালো পাসওয়ার্ড"
+        bn -> "শক্তিশালী পাসওয়ার্ড"
+        score <= 1 -> "Weak password"
+        score == 2 -> "Fair password"
+        score == 3 -> "Good password"
+        else -> "Strong password"
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            for (segment in 1..4) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(
+                            if (score >= segment) activeColor else BsdcThemeTokens.colors.border,
+                        ),
+                )
+            }
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = activeColor,
+        )
+    }
+}
+
+@Composable
+fun VerifyEmailGateScreen(
+    email: String,
+    authState: AuthStateSnapshot,
+    authRepository: AuthRepository,
+    language: AppLanguage,
+    modifier: Modifier = Modifier,
+) {
+    val bn = language == AppLanguage.BN
+    val scope = rememberCoroutineScope()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        BsdcCard(elevated = true) {
+            Icon(
+                imageVector = Icons.Rounded.MarkEmailRead,
+                contentDescription = null,
+                tint = BsdcThemeTokens.colors.brandStrong,
+                modifier = Modifier.size(48.dp),
+            )
+            Text(
+                text = if (bn) "আপনার ইমেইল যাচাই করুন" else "Verify your email address",
+                style = MaterialTheme.typography.headlineMedium,
+            )
+            Text(
+                text = if (bn) {
+                    "আমরা $email ঠিকানায় একটি যাচাইকরণ লিংক পাঠিয়েছি। ইনবক্স বা স্প্যাম ফোল্ডার থেকে লিংকে ক্লিক করে নিচের বাটনে চাপুন।"
+                } else {
+                    "We sent a verification link to $email. Open it from your inbox (or spam folder), then tap below to enter BSDC."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = BsdcThemeTokens.colors.mutedText,
+            )
+
+            authState.infoMessage?.let {
+                BsdcStatusBanner(
+                    title = if (bn) "তথ্য" else "Update",
+                    body = it,
+                    tone = BsdcTone.INFO,
+                )
+            }
+            authState.errorMessage?.let {
+                BsdcStatusBanner(
+                    title = if (bn) "সমস্যা" else "Error",
+                    body = it,
+                    tone = BsdcTone.BAD,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            BsdcButton(
+                label = if (bn) "আমি যাচাই করেছি — চালিয়ে যান" else "I've verified my email",
+                enabled = !authState.isBusy,
+                onClick = { scope.launch { authRepository.reloadVerificationStatus(language) } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            BsdcButton(
+                label = if (bn) "লিংক পুনরায় পাঠান" else "Resend verification email",
+                secondary = true,
+                enabled = !authState.isBusy,
+                onClick = { scope.launch { authRepository.resendEmailVerification(language) } },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            TextButton(
+                onClick = { scope.launch { authRepository.atomicSignOut() } },
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+            ) {
+                Text(if (bn) "অন্য অ্যাকাউন্ট ব্যবহার করুন" else "Sign out & switch account")
+            }
+        }
+    }
+}

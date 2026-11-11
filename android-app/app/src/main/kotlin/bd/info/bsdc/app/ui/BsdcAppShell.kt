@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -19,15 +20,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.QrCodeScanner
+import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -40,13 +45,17 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,13 +64,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.R
+import bd.info.bsdc.app.core.auth.AuthGateState
+import bd.info.bsdc.app.core.auth.AuthStateSnapshot
 import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.common.DocCodeChecksum
+import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
 import bd.info.bsdc.app.core.designsystem.BsdcButton
@@ -76,6 +88,15 @@ import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.ParsedDocCode
 import bd.info.bsdc.app.core.model.ThemeMode
+import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
+import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
+import bd.info.bsdc.app.core.permissions.PersistentPermissionReadinessBanner
+import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
+import bd.info.bsdc.app.di.BsdcAppContainer
+import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
+import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
+import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
+import kotlinx.coroutines.launch
 
 private enum class MainTab(
     val titleRes: Int,
@@ -91,6 +112,7 @@ private enum class MainTab(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BsdcAppShell(
+    container: BsdcAppContainer,
     incomingDestination: LinkDestination,
     language: AppLanguage,
     themeMode: ThemeMode,
@@ -98,25 +120,96 @@ fun BsdcAppShell(
     onChangeTheme: (ThemeMode) -> Unit,
     onRouteEvaluated: (LinkDestination) -> Unit,
 ) {
-    var selectedTab by remember { mutableStateOf(MainTab.HOME) }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val useRail = LocalConfiguration.current.screenWidthDp >= 600
+
+    val authState by container.authRepository.state.collectAsStateWithLifecycle()
+    val permissionCoordinator = rememberPermissionCoordinator()
+    val permissionStore = remember(context) { PermissionPreferencesStore(context.applicationContext) }
+    val onboardingSeen by permissionStore.onboardingSeenFlow().collectAsState(initial = true)
+
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.HOME) }
+    var guestBrowsing by rememberSaveable { mutableStateOf(false) }
+    var showAuthModal by rememberSaveable { mutableStateOf(false) }
+    var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(onboardingSeen, permissionCoordinator.allGranted, authState.gate) {
+        if (!onboardingSeen && !permissionCoordinator.allGranted && authState.gate != AuthGateState.INITIALIZING) {
+            showPermissionSheet = true
+            permissionStore.markOnboardingSeen()
+        }
+    }
 
     LaunchedEffect(incomingDestination) {
         when (incomingDestination) {
             is LinkDestination.NativeRoute -> {
                 val p = incomingDestination.path
                 selectedTab = when {
-                    p.startsWith("/verify") -> MainTab.VERIFY
+                    p.startsWith("/verify") -> {
+                        guestBrowsing = true
+                        MainTab.VERIFY
+                    }
                     p.startsWith("/compose") || p.startsWith("/create") -> MainTab.CREATE
                     p.startsWith("/messages") -> MainTab.MESSAGES
                     p != "/" -> MainTab.EXPLORE
                     else -> MainTab.HOME
                 }
             }
-            is LinkDestination.NewsReader -> selectedTab = MainTab.EXPLORE
+            is LinkDestination.NewsReader -> {
+                guestBrowsing = true
+                selectedTab = MainTab.EXPLORE
+            }
             is LinkDestination.ExternalBrowser -> openInCustomTab(context, incomingDestination.url)
             else -> Unit
+        }
+    }
+
+    // Clear explicit auth overlay automatically once user completes authentication
+    LaunchedEffect(authState.gate) {
+        if (authState.gate == AuthGateState.READY) {
+            showAuthModal = false
+        }
+    }
+
+    when {
+        authState.gate == AuthGateState.INITIALIZING -> {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+            return
+        }
+        authState.gate == AuthGateState.NEEDS_EMAIL_VERIFICATION -> {
+            VerifyEmailGateScreen(
+                email = authState.session?.email.orEmpty(),
+                authState = authState,
+                authRepository = container.authRepository,
+                language = language,
+            )
+            return
+        }
+        authState.gate == AuthGateState.NEEDS_ONBOARDING -> {
+            OnboardingWizardScreen(
+                authState = authState,
+                authRepository = container.authRepository,
+                platformApi = container.platformApi,
+                permissionCoordinator = permissionCoordinator,
+                language = language,
+                onLanguageSelected = onChangeLanguage,
+            )
+            return
+        }
+        (authState.gate == AuthGateState.SIGNED_OUT && !guestBrowsing) || showAuthModal -> {
+            BsdcAuthScreen(
+                authState = authState,
+                authRepository = container.authRepository,
+                language = language,
+                onContinueAsGuest = {
+                    showAuthModal = false
+                    guestBrowsing = true
+                },
+            )
+            return
         }
     }
 
@@ -133,6 +226,17 @@ fun BsdcAppShell(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showPermissionSheet = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Security,
+                            contentDescription = "Permissions",
+                            tint = if (permissionCoordinator.allGranted) {
+                                BsdcThemeTokens.colors.brandStrong
+                            } else {
+                                BsdcThemeTokens.colors.warn
+                            },
+                        )
+                    }
                     IconButton(
                         onClick = {
                             val next = if (language == AppLanguage.BN) AppLanguage.EN else AppLanguage.BN
@@ -143,6 +247,25 @@ fun BsdcAppShell(
                             imageVector = Icons.Rounded.Language,
                             contentDescription = language.nativeLabel,
                         )
+                    }
+                    if (authState.gate == AuthGateState.READY) {
+                        IconButton(
+                            onClick = {
+                                scope.launch { container.authRepository.atomicSignOut() }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Logout,
+                                contentDescription = if (language == AppLanguage.BN) "সাইন আউট" else "Sign out",
+                            )
+                        }
+                    } else {
+                        IconButton(onClick = { showAuthModal = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.AccountCircle,
+                                contentDescription = if (language == AppLanguage.BN) "সাইন ইন" else "Sign in",
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -190,34 +313,56 @@ fun BsdcAppShell(
                 }
             }
 
-            when (selectedTab) {
-                MainTab.HOME -> HomeFoundationTab(
+            Column(modifier = Modifier.fillMaxSize()) {
+                PersistentPermissionReadinessBanner(
+                    coordinator = permissionCoordinator,
                     language = language,
-                    incomingDestination = incomingDestination,
-                    onJumpVerify = { selectedTab = MainTab.VERIFY },
-                    onJumpExplore = { selectedTab = MainTab.EXPLORE },
+                    onOpenSheet = { showPermissionSheet = true },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
-                MainTab.VERIFY -> VerifyChecksumSandboxTab(language = language)
-                MainTab.CREATE -> CreateFoundationTab(language = language)
-                MainTab.MESSAGES -> MessagesFoundationTab(language = language)
-                MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
-                    language = language,
-                    themeMode = themeMode,
-                    incomingDestination = incomingDestination,
-                    onChangeTheme = onChangeTheme,
-                    onChangeLanguage = onChangeLanguage,
-                    onTestRoute = { url -> onRouteEvaluated(AppLinkUriRouter.resolveLink(url)) },
-                    onOpenExternal = { url -> openInCustomTab(context, url) },
-                )
+
+                when (selectedTab) {
+                    MainTab.HOME -> HomeFoundationTab(
+                        language = language,
+                        authState = authState,
+                        incomingDestination = incomingDestination,
+                        onSignInClick = { showAuthModal = true },
+                        onJumpVerify = { selectedTab = MainTab.VERIFY },
+                        onJumpExplore = { selectedTab = MainTab.EXPLORE },
+                    )
+                    MainTab.VERIFY -> VerifyChecksumSandboxTab(language = language)
+                    MainTab.CREATE -> CreateFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
+                    MainTab.MESSAGES -> MessagesFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
+                    MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
+                        language = language,
+                        themeMode = themeMode,
+                        incomingDestination = incomingDestination,
+                        onChangeTheme = onChangeTheme,
+                        onChangeLanguage = onChangeLanguage,
+                        onOpenPermissionSheet = { showPermissionSheet = true },
+                        onTestRoute = { url -> onRouteEvaluated(AppLinkUriRouter.resolveLink(url)) },
+                        onOpenExternal = { url -> openInCustomTab(context, url) },
+                    )
+                }
             }
         }
+    }
+
+    if (showPermissionSheet) {
+        PermissionReadinessModalSheet(
+            coordinator = permissionCoordinator,
+            language = language,
+            onDismiss = { showPermissionSheet = false },
+        )
     }
 }
 
 @Composable
 private fun HomeFoundationTab(
     language: AppLanguage,
+    authState: AuthStateSnapshot,
     incomingDestination: LinkDestination,
+    onSignInClick: () -> Unit,
     onJumpVerify: () -> Unit,
     onJumpExplore: () -> Unit,
 ) {
@@ -227,13 +372,60 @@ private fun HomeFoundationTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        val profile = authState.profile
+        if (profile != null && authState.session != null) {
+            item {
+                BsdcCard(elevated = true) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        BsdcAvatarCircle(initials = profile.displayName, online = true, size = 48.dp)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(text = profile.displayName, style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                text = "@${profile.username} · ${authState.session?.claims?.role?.wireValue ?: "member"}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = BsdcThemeTokens.colors.mutedText,
+                            )
+                        }
+                        BsdcBadge(
+                            label = if (authState.session?.claims?.postgresAuthenticated == true) {
+                                if (bn) "JWT সক্রিয়" else "DB Authenticated"
+                            } else {
+                                if (bn) "সিঙ্ক হচ্ছে" else "Syncing"
+                            },
+                            tone = BsdcTone.OK,
+                        )
+                    }
+                    if (profile.bio.isNotBlank()) {
+                        Text(text = profile.bio, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+        } else {
+            item {
+                BsdcStatusBanner(
+                    title = if (bn) "BSDC সদস্য হিসেবে সাইন ইন করুন" else "Sign in to your BSDC account",
+                    body = if (bn) {
+                        "ভিজিটর মোডে যাচাইকরণ টুল খোলা আছে; পোস্ট, মেসেঞ্জার ও প্রোফাইল ব্যবহারের জন্য সাইন ইন করুন।"
+                    } else {
+                        "Public verification works as a guest. Sign in with Email, Google, or GitHub to post, chat, and sync bookmarks."
+                    },
+                    tone = BsdcTone.INFO,
+                    actionLabel = if (bn) "সাইন ইন" else "Sign In",
+                    onAction = onSignInClick,
+                )
+            }
+        }
+
         item {
             BsdcStatusBanner(
-                title = if (bn) "BSDC নেটিভ অ্যান্ড্রয়েড · ধাপ ১ সক্রিয়" else "BSDC Native Android · Phase 1 Active",
+                title = if (bn) "BSDC নেটিভ অ্যান্ড্রয়েড · ধাপ ২ সক্রিয়" else "BSDC Native Android · Phase 2 Active",
                 body = if (bn) {
-                    "সম্পূর্ণ Kotlin + Java 21 + Jetpack Compose ভিত্তি, ডিপ লিংক রাউটার এবং অফলাইন চেকসাম ইঞ্জিন প্রস্তুত।"
+                    "Firebase Auth + /api/auth/claims JWT, Supabase প্রোফাইল অনবোর্ডিং এবং Play-Store-সম্মত অনুমতি সমন্বয় সক্রিয়।"
                 } else {
-                    "Pure Kotlin + Java 21 + Jetpack Compose core, verified App Link router, and native check-digit engine active."
+                    "Firebase Auth + /api/auth/claims JWT bootstrap, Supabase profile onboarding, and Play-Store-compliant permission readiness are active."
                 },
                 tone = BsdcTone.OK,
                 actionLabel = if (bn) "যাচাই" else "Verify",
@@ -385,7 +577,11 @@ private fun VerifyChecksumSandboxTab(language: AppLanguage) {
 }
 
 @Composable
-private fun CreateFoundationTab(language: AppLanguage) {
+private fun CreateFoundationTab(
+    language: AppLanguage,
+    authState: AuthStateSnapshot,
+    onSignInClick: () -> Unit,
+) {
     val bn = language == AppLanguage.BN
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -401,13 +597,19 @@ private fun CreateFoundationTab(language: AppLanguage) {
                 } else {
                     "Post, Article, Question, Poll, Code Snippet composers and ImgBB multi-image crop/upload activate in Phase 3 & Phase 5."
                 },
+                actionLabel = if (authState.session == null) (if (bn) "সাইন ইন করুন" else "Sign In") else null,
+                onAction = if (authState.session == null) onSignInClick else null,
             )
         }
     }
 }
 
 @Composable
-private fun MessagesFoundationTab(language: AppLanguage) {
+private fun MessagesFoundationTab(
+    language: AppLanguage,
+    authState: AuthStateSnapshot,
+    onSignInClick: () -> Unit,
+) {
     val bn = language == AppLanguage.BN
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -423,6 +625,8 @@ private fun MessagesFoundationTab(language: AppLanguage) {
                 } else {
                     "Supabase Realtime + RTDB live threads, typing indicators, replies, code snippets, and ImgBB image attachments (zero audio recording)."
                 },
+                actionLabel = if (authState.session == null) (if (bn) "সাইন ইন করুন" else "Sign In") else null,
+                onAction = if (authState.session == null) onSignInClick else null,
             )
         }
     }
@@ -436,6 +640,7 @@ private fun ExploreRouterAndSettingsTab(
     incomingDestination: LinkDestination,
     onChangeTheme: (ThemeMode) -> Unit,
     onChangeLanguage: (AppLanguage) -> Unit,
+    onOpenPermissionSheet: () -> Unit,
     onTestRoute: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
 ) {
@@ -450,7 +655,7 @@ private fun ExploreRouterAndSettingsTab(
         item {
             BsdcCard {
                 Text(
-                    text = if (bn) "থিম ও ভাষা পছন্দ" else "Theme & Language",
+                    text = if (bn) "থিম, ভাষা ও অনুমতি সেটিংস" else "Theme, Language & Permissions",
                     style = MaterialTheme.typography.titleLarge,
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -468,6 +673,9 @@ private fun ExploreRouterAndSettingsTab(
                             label = { Text(lang.nativeLabel) },
                         )
                     }
+                }
+                TextButton(onClick = onOpenPermissionSheet) {
+                    Text(if (bn) "ডিভাইস অনুমতি অবস্থা দেখুন" else "Manage Device Permissions")
                 }
             }
         }
