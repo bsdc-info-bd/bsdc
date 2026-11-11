@@ -417,4 +417,24 @@ describe('messenger delivery', () => {
       }),
     );
   });
+
+  it('restores initialDraft synchronously across room switches even before conversation_state loads', async () => {
+    mocks.fetchConversationState.mockImplementation(() => new Promise(() => undefined));
+    const { Wrapper } = makeWrapper();
+    const first = renderHook(() => useConversation('fast-switch-room'), { wrapper: Wrapper });
+    expect(first.result.current.state).toBeNull();
+    vi.useFakeTimers();
+    act(() => first.result.current.saveDraft('Draft before state loads'));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(900);
+    });
+    expect(mocks.updateConversationSettings).toHaveBeenLastCalledWith('fast-switch-room', 'alice', {
+      draft_body: 'Draft before state loads',
+    });
+    first.unmount();
+
+    const returned = renderHook(() => useConversation('fast-switch-room'), { wrapper: Wrapper });
+    expect(returned.result.current.state).toBeNull();
+    expect(returned.result.current.initialDraft).toBe('Draft before state loads');
+  });
 });

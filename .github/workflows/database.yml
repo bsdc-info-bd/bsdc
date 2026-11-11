@@ -84,7 +84,17 @@ jobs:
           node-version: 20
 
       - name: Install the Postgres client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              echo "apt-get install failed (attempt $attempt); retrying..." >&2
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
+          fi
+          command -v psql >/dev/null 2>&1
+          psql --version
 
       - name: Check the runner's own logic
         run: node scripts/db-push.mjs --self-test
@@ -297,7 +307,17 @@ jobs:
           node-version: 20
 
       - name: Install the Postgres client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              echo "apt-get install failed (attempt $attempt); retrying..." >&2
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
+          fi
+          command -v psql >/dev/null 2>&1
+          psql --version
 
       # Reaching the database is the step that fails on a first deployment,
       # and the reason is never in the error: a direct Supabase host has no
