@@ -1,6 +1,6 @@
-package bd.info.bsdc.app.feature.compose
+package bd.info.bsdc.app.feature.compose;
 
-import org.junit.Test
+import org.junit.Test;
 
 import java.util.List;
 
