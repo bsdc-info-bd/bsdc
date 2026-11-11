@@ -23,6 +23,7 @@ Zero Capacitor, zero Flutter, zero web wrappers, zero Cloudinary, zero legacy VA
 - `:core:sync` — WorkManager smart offline feed prefetcher (`OfflineSyncPolicy.java`, `OfflineSyncPreferencesStore`, `FeedPrefetchService`, `FeedAutoSyncWorker`, `SyncScheduler`) + outbox message flush (`send_message_once`).
 - `:feature:onboarding` — Bilingual Sign In / Sign Up (4-bar strength bar) / Password Reset / Email Verification gate + 4-step Profile & Device Readiness onboarding wizard with one-tap approximate city lookup.
 - `:feature:feed` — Native Home Feed (`FeedRankingEngine.java` 4-stage parity with `main-site`), horizontal algorithm/format tabs (`For You`, `Following`, `Latest`, `Questions`, `Polls`, `Snippets`), Trash Bin recovery sheet, pull-to-refresh, new-post badge, animated 5-reaction spring dock (`ReactionDock`), interactive Poll voting, Markdown & copyable syntax-highlighted code snippets, native `PostDetailScreen` with nested threaded Comments (`depth <= 3`), accepted-answer toggle, Follow/Block/Report abuse modal, and offline Room/Bookmark integration.
+- `:feature:compose` — Rich bilingual Post/Article/Question/Poll/Snippet Composer & Unified Directory Hub (`ComposerValidationEngine.java`, live Markdown preview, Room draft auto-save/resume, ImgBB multi-photo uploader with progress & retry, curated tag autocomplete & `#tag`/`@mention` extraction, plus Event, Job, Freelance Gig, Open-Source Project w/ screenshots, and Community Group creation).
 
 ## Building & Signing (GitHub Actions / Android Studio)
 

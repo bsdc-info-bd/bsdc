@@ -12,6 +12,7 @@ import bd.info.bsdc.app.core.network.BsdcPlatformApi
 import bd.info.bsdc.app.core.network.SupabaseRestClient
 import bd.info.bsdc.app.core.sync.FeedPrefetchService
 import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
+import bd.info.bsdc.app.feature.compose.ComposeRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
 import coil3.ImageLoader
 import com.google.firebase.FirebaseApp
@@ -120,6 +121,13 @@ class BsdcAppContainer(appContext: Context) {
 
     val feedRepository: FeedRepository by lazy {
         FeedRepository(
+            supabase = supabaseRestClient,
+            database = database,
+        )
+    }
+
+    val composeRepository: ComposeRepository by lazy {
+        ComposeRepository(
             supabase = supabaseRestClient,
             database = database,
         )

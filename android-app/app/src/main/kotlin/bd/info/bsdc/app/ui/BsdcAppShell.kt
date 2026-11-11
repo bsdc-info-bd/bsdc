@@ -93,6 +93,8 @@ import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
 import bd.info.bsdc.app.core.sync.SyncScheduler
 import bd.info.bsdc.app.di.BsdcAppContainer
+import bd.info.bsdc.app.feature.compose.CreateHubMode
+import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
@@ -379,7 +381,29 @@ fun BsdcAppShell(
                         },
                     )
                     MainTab.VERIFY -> VerifyChecksumSandboxTab(language = language)
-                    MainTab.CREATE -> CreateFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
+                    MainTab.CREATE -> CreateHubScreen(
+                        viewerUid = authState.session?.uid,
+                        composeRepository = container.composeRepository,
+                        mediaRepository = container.mediaRepository,
+                        imageLoader = container.imageLoader,
+                        language = language,
+                        initialMode = if (incomingDestination is LinkDestination.NativeRoute &&
+                            incomingDestination.path.startsWith("/create")
+                        ) {
+                            CreateHubMode.EVENT
+                        } else {
+                            CreateHubMode.POST
+                        },
+                        onSignInRequired = { showAuthModal = true },
+                        onPostPublished = { res ->
+                            activeDetailPost = null
+                            activeDetailSlug = res.slug.ifBlank { res.id }
+                            selectedTab = MainTab.HOME
+                        },
+                        onDirectoryCreated = { _, _ ->
+                            selectedTab = MainTab.HOME
+                        },
+                    )
                     MainTab.MESSAGES -> MessagesFoundationTab(language = language, authState = authState, onSignInClick = { showAuthModal = true })
                     MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
                         language = language,
@@ -498,34 +522,6 @@ private fun VerifyChecksumSandboxTab(language: AppLanguage) {
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun CreateFoundationTab(
-    language: AppLanguage,
-    authState: AuthStateSnapshot,
-    onSignInClick: () -> Unit,
-) {
-    val bn = language == AppLanguage.BN
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            BsdcEmptyState(
-                icon = Icons.Rounded.AddCircleOutline,
-                title = if (bn) "কন্টেন্ট ও ডিরেক্টরি কম্পোজার (ধাপ ৫)" else "Rich Composer & ImgBB Pipeline (Phase 5)",
-                subtitle = if (bn) {
-                    "পোস্ট, আর্টিকেল, প্রশ্ন, পোল, কোড স্নিপেট এবং ImgBB ইমেজ আপলোড এখানে সক্রিয় হবে।"
-                } else {
-                    "Post, Article, Question, Poll, Code Snippet composers and ImgBB multi-image crop/upload activate in Phase 3 & Phase 5."
-                },
-                actionLabel = if (authState.session == null) (if (bn) "সাইন ইন করুন" else "Sign In") else null,
-                onAction = if (authState.session == null) onSignInClick else null,
-            )
         }
     }
 }

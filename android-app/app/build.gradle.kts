@@ -118,6 +118,7 @@ dependencies {
     implementation(project(":core:sync"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:feed"))
+    implementation(project(":feature:compose"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
