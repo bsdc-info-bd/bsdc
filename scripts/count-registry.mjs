@@ -154,11 +154,18 @@ const kitRules = walk(join(root, 'corporate-kit/src'))
     ].map((match) => `${relative(root, path)}:${match[1]}`),
   );
 
-const androidRules = walk(join(root, 'android-app/src'))
-  .filter((path) => path.endsWith('.ts') && !path.includes('.test.'))
+const androidRules = walk(join(root, 'android-app'))
+  .filter(
+    (path) =>
+      (path.endsWith('.kt') || path.endsWith('.java')) &&
+      path.includes('/src/main/') &&
+      !path.includes('/build/'),
+  )
   .flatMap((path) =>
     [
-      ...readFileSync(path, 'utf8').matchAll(/^export (?:async function|function|const) (\w+)/gm),
+      ...readFileSync(path, 'utf8').matchAll(
+        /^\s*(?:public\s+static\s+\S+\s+|fun\s+|enum\s+class\s+|sealed\s+interface\s+|data\s+class\s+)(\w+)/gm,
+      ),
     ].map((match) => `${relative(root, path)}:${match[1]}`),
   );
 

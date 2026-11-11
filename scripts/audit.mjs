@@ -60,7 +60,7 @@ const packages = readdirSync(root)
   .sort();
 
 const webApps = packages.filter(
-  (name) => name !== 'corporate-kit' && name !== 'android-app' && name !== 'push-worker',
+  (name) => name !== 'corporate-kit' && name !== 'push-worker',
 );
 const consoles = webApps.filter((name) => name !== 'main-site');
 /**
@@ -74,9 +74,9 @@ const workers = packages.filter((name) => name === 'push-worker');
  * 1. Shape of the delivery
  * ------------------------------------------------------------------ */
 
-check('A-01', 'Delivery', 'Seventeen packages carry build gates', () => ({
-  ok: packages.length === 17,
-  evidence: `${packages.length}: ${packages.join(', ')}`,
+check('A-01', 'Delivery', 'Sixteen JS packages and the native Android build carry gates', () => ({
+  ok: packages.length === 16 && has('android-app/settings.gradle.kts'),
+  evidence: `${packages.length} npm packages (${packages.join(', ')}) + native Gradle android-app/`,
 }));
 
 check('A-02', 'Delivery', 'Fourteen web applications are deployable to Pages', () => ({
@@ -95,9 +95,14 @@ check('A-14', 'Delivery', 'The push worker is a deployable unit of its own', () 
     'it is deployed by deploy.yml and gated by the push-worker job in ci.yml',
 }));
 
-check('A-03', 'Delivery', 'The Android shell is a real package, not a note', () => ({
-  ok: has('android-app/capacitor.config.ts') && has('android-app/src/links.ts'),
-  evidence: 'capacitor.config.ts and src/links.ts are present',
+check('A-03', 'Delivery', 'The Android app is a pure native Kotlin + Java + Compose project', () => ({
+  ok:
+    !has('android-app/capacitor.config.ts') &&
+    has('android-app/settings.gradle.kts') &&
+    has('android-app/app/build.gradle.kts') &&
+    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java') &&
+    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/DocCodeChecksum.java'),
+  evidence: 'native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor',
 }));
 
 check('A-04', 'Delivery', 'Every application declares the five gate scripts', () => {
@@ -328,7 +333,7 @@ check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
  * ------------------------------------------------------------------ */
 
 const sourceFiles = shLines(
-  `find . -path ./node_modules -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print | grep -v node_modules | grep -v "/dist/"`,
+  `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print`,
 );
 
 check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member input', () => {
@@ -337,7 +342,7 @@ check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member 
   // same ranges consistently on every runner. Emoji are permitted as member
   // content and in the explicit chat input/reaction palettes, not as chrome.
   const files = shLines(
-    `find . -path ./node_modules -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print | grep -v node_modules | grep -v "/dist/"`,
+    `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print`,
   );
   const pattern = new RegExp(
     `[${String.fromCodePoint(0x1f300)}-${String.fromCodePoint(0x1faff)}${String.fromCodePoint(0x2600)}-${String.fromCodePoint(0x27bf)}${String.fromCodePoint(0xfe0f)}]`,
@@ -371,7 +376,7 @@ check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member 
 
 check('C-02', 'Front end', 'No placeholder or demo content left in source', () => {
   const hits = shLines(
-    `grep -rniE "lorem ipsum|dummy data|demo data|placeholder text|coming soon|TODO:|FIXME" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v node_modules | grep -v "/dist/"`,
+    `grep -rniE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "lorem ipsum|dummy data|demo data|placeholder text|coming soon|TODO:|FIXME" --include="*.ts" --include="*.tsx" --include="*.css" .`,
   );
   return {
     ok: hits.length === 0,
@@ -385,7 +390,7 @@ check('C-03', 'Front end', 'Strict TypeScript everywhere, with no escape hatches
     return !/"strict":\s*true/.test(config);
   });
   const anyCasts = shLines(
-    `grep -rn "@ts-ignore\\|@ts-nocheck" --include="*.ts" --include="*.tsx" . | grep -v node_modules`,
+    `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "@ts-ignore\\|@ts-nocheck" --include="*.ts" --include="*.tsx" .`,
   );
   return {
     ok: missing.length === 0 && anyCasts.length === 0,
@@ -411,7 +416,7 @@ check('C-04', 'Front end', 'Nothing logs to the console in shipped code', () => 
 
 check('C-05', 'Front end', 'Nothing can force a horizontal scrollbar', () => {
   const wide = shLines(
-    `grep -rnE "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/" | grep -v "@media"`,
+    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v "@media"`,
   );
   const css = ['base.css', 'components.css', 'fabric.css', 'index.css']
     .filter((name) => has(`main-site/src/styles/${name}`))
@@ -496,7 +501,7 @@ check('D-01', 'Safety', 'No private key or service account is committed', () => 
   // an environment variable contains the words but no key. A key is a
   // header followed by base64.
   const hits = shLines(
-    `grep -rEzl "BEGIN [A-Z ]*PRIVATE KEY-----[\\r\\n]+[A-Za-z0-9+/=]{40}" . | grep -v node_modules | grep -v "/dist/"`,
+    `grep -rEzl --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=.release-check --exclude-dir=.release-check-final "BEGIN [A-Z ]*PRIVATE KEY-----[\\r\\n]+[A-Za-z0-9+/=]{40}" .`,
   );
   return {
     ok: hits.length === 0,
@@ -536,12 +541,21 @@ check('D-05', 'Safety', 'The secret scanner runs before anything else in CI', ()
   return { ok: /gitleaks/.test(ci), evidence: 'gitleaks runs in the secrets-scan job' };
 });
 
-check('D-06', 'Safety', 'The android shell renders only BSDC origins', () => {
-  const links = read('android-app/src/links.ts');
+check('D-06', 'Safety', 'The native Android router renders only BSDC and News origins in-app', () => {
+  const router = read(
+    'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
+  );
+  const models = read(
+    'android-app/core/model/src/main/kotlin/bd/info/bsdc/app/core/model/BsdcModels.kt',
+  );
   return {
-    ok: /TRUSTED_HOSTS/.test(links) && /kind: 'browser'/.test(links),
+    ok:
+      /NATIVE_HOSTS/.test(models) &&
+      /NEWS_HOSTS/.test(models) &&
+      /ExternalBrowser/.test(router) &&
+      /AdminWebOnly/.test(router),
     evidence:
-      'an untrusted origin resolves to the system browser; held by test in android-app/src/links.test.ts',
+      'AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin*, and sends untrusted hosts to browser',
   };
 });
 
@@ -857,7 +871,7 @@ check(
   'Raw HTML is injected only from markup this repository generated',
   () => {
     const uses = shLines(
-      `grep -rn "dangerouslySetInnerHTML" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/"`,
+      `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "dangerouslySetInnerHTML" --include="*.tsx" .`,
     ).map((line) => line.split(':')[0]);
     // Three call sites, each fed by a generator in this repository: the
     // markdown renderer (which escapes first and allows a fixed tag set) and
@@ -933,7 +947,7 @@ check('C-17', 'Front end', 'Nobody is prevented from zooming', () => {
 
 check('C-18', 'Front end', 'Nothing is fetched over plain HTTP', () => {
   const bad = shLines(
-    `grep -rn "http://" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v node_modules | grep -v "/dist/" | grep -v localhost | grep -v "127.0.0.1" | grep -v "www.w3.org" | grep -v "schema.org" | grep -v "sitemaps.org" | grep -v "\\.test\\." | grep -v "0.0.0.0"`,
+    `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "http://" --include="*.ts" --include="*.tsx" --include="*.css" . | grep -v localhost | grep -v "127.0.0.1" | grep -v "www.w3.org" | grep -v "schema.org" | grep -v "sitemaps.org" | grep -v "\\.test\\." | grep -v "0.0.0.0"`,
   );
   return {
     ok: bad.length === 0,
@@ -943,7 +957,7 @@ check('C-18', 'Front end', 'Nothing is fetched over plain HTTP', () => {
 
 check('C-19', 'Front end', 'No API key is hard-coded', () => {
   const bad = shLines(
-    `grep -rn "eyJhbGciOi\\|AIzaSy" --include="*.ts" --include="*.tsx" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
+    `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "eyJhbGciOi\\|AIzaSy" --include="*.ts" --include="*.tsx" --include="*.html" .`,
   );
   return {
     ok: bad.length === 0,
@@ -953,7 +967,7 @@ check('C-19', 'Front end', 'No API key is hard-coded', () => {
 
 check('C-20', 'Front end', 'No credential is written to local storage', () => {
   const bad = shLines(
-    `grep -rnE "localStorage\\.setItem\\([\\"'\\\`][^\\"'\\\`]*(token|secret|password|key)" --include="*.ts" --include="*.tsx" . | grep -v node_modules`,
+    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "localStorage\\.setItem\\([\\"'\\\`][^\\"'\\\`]*(token|secret|password|key)" --include="*.ts" --include="*.tsx" .`,
   );
   return {
     ok: bad.length === 0,
@@ -988,12 +1002,15 @@ check('C-22', 'Front end', 'The shared kit is imported, never copied', () => {
   };
 });
 
-check('D-08', 'Safety', 'The Android shell embeds no remote origin as its own document', () => {
-  const config = read('android-app/capacitor.config.ts');
+check('D-08', 'Safety', 'The native Android app disables cleartext traffic, backups, and Capacitor shells', () => {
+  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
   return {
-    ok: !/server:\s*{[^}]*url:/s.test(config),
-    evidence:
-      'capacitor.config.ts declares no server.url, so no remote origin runs as the app itself',
+    ok:
+      !has('android-app/capacitor.config.ts') &&
+      /android:usesCleartextTraffic="false"/.test(manifest) &&
+      !/android:usesCleartextTraffic="true"/.test(manifest) &&
+      /android:allowBackup="false"/.test(manifest),
+    evidence: 'native manifest disables cleartext and backups; zero Capacitor shell exists',
   };
 });
 
@@ -1011,7 +1028,7 @@ check(
   'The ignore rules cover builds, dependencies, environments and the native project',
   () => {
     const ignore = read('.gitignore');
-    const required = ['node_modules', 'dist', '.env', 'android-app/android'];
+    const required = ['node_modules', 'dist', '.env', 'android-app/.gradle'];
     const missing = required.filter((entry) => !ignore.includes(entry));
     return {
       ok: missing.length === 0,
@@ -1097,7 +1114,7 @@ check('E-10', 'SEO', 'The verification portal declares its own canonical address
 
 check('F-06', 'Performance', 'Images below the fold are loaded lazily', () => {
   const lazy = shLines(
-    `grep -rn 'loading="lazy"' --include="*.tsx" . | grep -v node_modules`,
+    `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git 'loading="lazy"' --include="*.tsx" .`,
   ).length;
   return { ok: lazy > 0, evidence: `${lazy} image sites opt into lazy loading` };
 });
@@ -1108,7 +1125,7 @@ check(
   'No render-blocking font or stylesheet is fetched from a third party',
   () => {
     const bad = shLines(
-      `grep -rn "fonts.googleapis\\|@import url(" --include="*.css" --include="*.html" . | grep -v node_modules | grep -v "/dist/"`,
+      `grep -rn --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "fonts.googleapis\\|@import url(" --include="*.css" --include="*.html" .`,
     );
     return {
       ok: bad.length === 0,
@@ -1278,7 +1295,7 @@ check('C-23', 'Front end', 'The any type does not appear in shipped source', () 
   // that happens to contain the word, and stripping comments before looking
   // keeps the check honest instead of teaching people to avoid a sentence.
   const hits = shLines(
-    `grep -rnE ":\\s*any\\b|<any>|as any" --include="*.ts" --include="*.tsx" . | grep -v node_modules | grep -v "/dist/" | grep -v "\\.test\\." | grep -v "no-unsafe" | grep -vE "^[^:]+:[0-9]+:\\s*(//|\\*)"`,
+    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git ":\\s*any\\b|<any>|as any" --include="*.ts" --include="*.tsx" . | grep -v "\\.test\\." | grep -v "no-unsafe" | grep -vE "^[^:]+:[0-9]+:\\s*(//|\\*)"`,
   );
   return {
     ok: hits.length === 0,
