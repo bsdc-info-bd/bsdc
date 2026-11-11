@@ -125,6 +125,9 @@ jobs:
             :core:permissions:testDebugUnitTest \
             :core:network:testDebugUnitTest \
             :core:auth:testDebugUnitTest \
+            :core:media:testDebugUnitTest \
+            :core:database:testDebugUnitTest \
+            :core:sync:testDebugUnitTest \
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug 2>&1 | tee /tmp/gradle.out || status=$?
@@ -189,6 +192,9 @@ jobs:
             :core:permissions:testReleaseUnitTest \
             :core:network:testReleaseUnitTest \
             :core:auth:testReleaseUnitTest \
+            :core:media:testReleaseUnitTest \
+            :core:database:testReleaseUnitTest \
+            :core:sync:testReleaseUnitTest \
             :app:testReleaseUnitTest \
             :app:lintRelease \
             :app:assembleRelease \

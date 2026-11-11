@@ -4,10 +4,15 @@ import android.content.Context
 import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.core.auth.AuthRepository
 import bd.info.bsdc.app.core.auth.DataAccessBootstrapManager
+import bd.info.bsdc.app.core.database.BsdcDatabase
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.BsdcBackendConfig
 import bd.info.bsdc.app.core.network.BsdcHttpClientFactory
 import bd.info.bsdc.app.core.network.BsdcPlatformApi
 import bd.info.bsdc.app.core.network.SupabaseRestClient
+import bd.info.bsdc.app.core.sync.FeedPrefetchService
+import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
+import coil3.ImageLoader
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import io.ktor.client.HttpClient
@@ -42,7 +47,6 @@ class BsdcAppContainer(appContext: Context) {
         FirebaseAuth.getInstance()
     }
 
-    // Break circular reference between SupabaseRestClient tokenProvider and DataAccessBootstrapManager
     private lateinit var bootstrapManagerRef: DataAccessBootstrapManager
 
     val supabaseRestClient: SupabaseRestClient by lazy {
@@ -69,7 +73,6 @@ class BsdcAppContainer(appContext: Context) {
     }
 
     val authRepository: AuthRepository by lazy {
-        // Ensure bootstrap manager is initialized so SupabaseRestClient tokenProvider is wired
         dataAccessBootstrapManager
         AuthRepository(
             appContext = appContext,
@@ -77,6 +80,40 @@ class BsdcAppContainer(appContext: Context) {
             firebaseAuth = firebaseAuth,
             platformApi = platformApi,
             bootstrapManager = dataAccessBootstrapManager,
+        )
+    }
+
+    val database: BsdcDatabase by lazy {
+        BsdcDatabase.getInstance(appContext)
+    }
+
+    val mediaRepository: BsdcMediaRepository by lazy {
+        dataAccessBootstrapManager
+        BsdcMediaRepository(
+            context = appContext,
+            config = backendConfig,
+            okHttpClient = okHttpClient,
+            firebaseAuth = firebaseAuth,
+            bootstrapManager = dataAccessBootstrapManager,
+            supabase = supabaseRestClient,
+        )
+    }
+
+    val imageLoader: ImageLoader by lazy {
+        mediaRepository.createImageLoader(maxCacheMb = 150)
+    }
+
+    val syncPrefsStore: OfflineSyncPreferencesStore by lazy {
+        OfflineSyncPreferencesStore(appContext)
+    }
+
+    val feedPrefetchService: FeedPrefetchService by lazy {
+        FeedPrefetchService(
+            context = appContext,
+            supabase = supabaseRestClient,
+            database = database,
+            imageLoader = imageLoader,
+            prefsStore = syncPrefsStore,
         )
     }
 }

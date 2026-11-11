@@ -388,3 +388,84 @@ data class ReverseGeoResult(
     val longitude: Double = 0.0,
 )
 
+@Serializable
+data class MediaUploadResult(
+    val provider: String = "imgbb",
+    val kind: String = "image",
+    val url: String,
+    val thumbUrl: String = "",
+    val deleteToken: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+    val bytes: Long = 0L,
+    val mimeType: String = "image/webp",
+    val expiresAt: String? = null,
+    val assetId: String? = null,
+)
+
+@Serializable
+data class PostAuthorSummary(
+    val uid: String,
+    val username: String = "",
+    val displayName: String = "Member",
+    val avatarUrl: String = "",
+)
+
+@Serializable
+data class PostMediaModel(
+    val mediaId: String,
+    val url: String,
+    val thumbUrl: String = "",
+    val altText: String = "",
+    val position: Int = 0,
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Serializable
+data class PollOptionModel(
+    val id: String,
+    val label: String,
+    val votes: Int = 0,
+    val position: Int = 0,
+)
+
+@Serializable
+data class FeedPost(
+    val id: String,
+    val slug: String = "",
+    val kind: PostKind = PostKind.POST,
+    val title: String = "",
+    val body: String = "",
+    val excerpt: String = "",
+    val coverUrl: String = "",
+    val code: String = "",
+    val codeLanguage: String = "",
+    val language: AppLanguage = AppLanguage.BN,
+    val readingTime: Int = 1,
+    val views: Int = 0,
+    val likes: Int = 0,
+    val comments: Int = 0,
+    val isSensitive: Boolean = false,
+    val allowComments: Boolean = true,
+    val publishedAt: String = "",
+    val createdAt: String = "",
+    val author: PostAuthorSummary? = null,
+    val tags: List<String> = emptyList(),
+    val media: List<PostMediaModel> = emptyList(),
+    val poll: List<PollOptionModel> = emptyList(),
+)
+
+enum class SyncNetworkPolicy(val wireValue: String) {
+    WIFI_ONLY("wifi_only"),
+    WIFI_AND_CELLULAR("wifi_and_cellular"),
+    OFF("off");
+
+    companion object {
+        @JvmStatic
+        fun fromWire(raw: String?): SyncNetworkPolicy =
+            entries.firstOrNull { it.wireValue.equals(raw?.trim(), ignoreCase = true) } ?: WIFI_ONLY
+    }
+}
+
+

@@ -73,6 +73,7 @@ import bd.info.bsdc.app.core.auth.AuthStateSnapshot
 import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.common.DocCodeChecksum
+import bd.info.bsdc.app.core.database.BsdcDatabaseMappers
 import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
@@ -84,14 +85,20 @@ import bd.info.bsdc.app.core.designsystem.BsdcPalette
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.ParsedDocCode
+import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
 import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
 import bd.info.bsdc.app.core.permissions.PersistentPermissionReadinessBanner
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
+import bd.info.bsdc.app.core.sync.OfflineSyncSettings
+import bd.info.bsdc.app.core.sync.SyncScheduler
 import bd.info.bsdc.app.di.BsdcAppContainer
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
@@ -125,6 +132,9 @@ fun BsdcAppShell(
     val useRail = LocalConfiguration.current.screenWidthDp >= 600
 
     val authState by container.authRepository.state.collectAsStateWithLifecycle()
+    val syncSettings by container.syncPrefsStore.settingsFlow().collectAsState(initial = OfflineSyncSettings())
+    val cachedEntities by container.database.postDao().observeFeed("latest").collectAsState(initial = emptyList())
+    val cachedPosts = remember(cachedEntities) { cachedEntities.map { BsdcDatabaseMappers.toDomain(it) } }
     val permissionCoordinator = rememberPermissionCoordinator()
     val permissionStore = remember(context) { PermissionPreferencesStore(context.applicationContext) }
     val onboardingSeen by permissionStore.onboardingSeenFlow().collectAsState(initial = true)
@@ -133,6 +143,7 @@ fun BsdcAppShell(
     var guestBrowsing by rememberSaveable { mutableStateOf(false) }
     var showAuthModal by rememberSaveable { mutableStateOf(false) }
     var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
+    var lightboxImage by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(onboardingSeen, permissionCoordinator.allGranted, authState.gate) {
         if (!onboardingSeen && !permissionCoordinator.allGranted && authState.gate != AuthGateState.INITIALIZING) {
@@ -251,7 +262,11 @@ fun BsdcAppShell(
                     if (authState.gate == AuthGateState.READY) {
                         IconButton(
                             onClick = {
-                                scope.launch { container.authRepository.atomicSignOut() }
+                                scope.launch {
+                                    container.authRepository.atomicSignOut {
+                                        container.database.wipeUserScopedTables()
+                                    }
+                                }
                             },
                         ) {
                             Icon(
@@ -325,7 +340,12 @@ fun BsdcAppShell(
                     MainTab.HOME -> HomeFoundationTab(
                         language = language,
                         authState = authState,
+                        cachedPosts = cachedPosts,
+                        syncSettings = syncSettings,
+                        container = container,
                         incomingDestination = incomingDestination,
+                        onOpenLightbox = { url, alt -> lightboxImage = url to alt },
+                        onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
                         onSignInClick = { showAuthModal = true },
                         onJumpVerify = { selectedTab = MainTab.VERIFY },
                         onJumpExplore = { selectedTab = MainTab.EXPLORE },
@@ -336,9 +356,18 @@ fun BsdcAppShell(
                     MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
                         language = language,
                         themeMode = themeMode,
+                        syncSettings = syncSettings,
+                        cachedPostCount = cachedPosts.size,
                         incomingDestination = incomingDestination,
                         onChangeTheme = onChangeTheme,
                         onChangeLanguage = onChangeLanguage,
+                        onChangeSyncPolicy = { policy ->
+                            scope.launch {
+                                container.syncPrefsStore.setNetworkPolicy(policy)
+                                SyncScheduler.applyPeriodicPolicy(context, policy)
+                            }
+                        },
+                        onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
                         onOpenPermissionSheet = { showPermissionSheet = true },
                         onTestRoute = { url -> onRouteEvaluated(AppLinkUriRouter.resolveLink(url)) },
                         onOpenExternal = { url -> openInCustomTab(context, url) },
@@ -355,13 +384,27 @@ fun BsdcAppShell(
             onDismiss = { showPermissionSheet = false },
         )
     }
+
+    lightboxImage?.let { (url, caption) ->
+        BsdcMediaLightboxDialog(
+            fullUrl = url,
+            caption = caption,
+            imageLoader = container.imageLoader,
+            onDismiss = { lightboxImage = null },
+        )
+    }
 }
 
 @Composable
 private fun HomeFoundationTab(
     language: AppLanguage,
     authState: AuthStateSnapshot,
+    cachedPosts: List<FeedPost>,
+    syncSettings: OfflineSyncSettings,
+    container: BsdcAppContainer,
     incomingDestination: LinkDestination,
+    onOpenLightbox: (String, String) -> Unit,
+    onTriggerSync: () -> Unit,
     onSignInClick: () -> Unit,
     onJumpVerify: () -> Unit,
     onJumpExplore: () -> Unit,
@@ -421,16 +464,48 @@ private fun HomeFoundationTab(
 
         item {
             BsdcStatusBanner(
-                title = if (bn) "BSDC নেটিভ অ্যান্ড্রয়েড · ধাপ ২ সক্রিয়" else "BSDC Native Android · Phase 2 Active",
+                title = if (bn) "BSDC নেটিভ অ্যান্ড্রয়েড · ধাপ ৩ সক্রিয়" else "BSDC Native Android · Phase 3 Active",
                 body = if (bn) {
-                    "Firebase Auth + /api/auth/claims JWT, Supabase প্রোফাইল অনবোর্ডিং এবং Play-Store-সম্মত অনুমতি সমন্বয় সক্রিয়।"
+                    "Room অফলাইন ফিড ক্যাশ (${BanglaDigitFormatter.formatCount(cachedPosts.size.toLong(), language)} টি পোস্ট), স্মার্ট WorkManager প্রিফেচ ও ImgBB মিডিয়া পাইপলাইন সক্রিয়।"
                 } else {
-                    "Firebase Auth + /api/auth/claims JWT bootstrap, Supabase profile onboarding, and Play-Store-compliant permission readiness are active."
+                    "Room offline feed store (${cachedPosts.size} cached posts), WorkManager smart sync (${syncSettings.policy.wireValue}), and ImgBB-only Coil media pipeline active."
                 },
                 tone = BsdcTone.OK,
-                actionLabel = if (bn) "যাচাই" else "Verify",
-                onAction = onJumpVerify,
+                actionLabel = if (bn) "সিঙ্ক" else "Sync Now",
+                onAction = onTriggerSync,
             )
+        }
+
+        if (cachedPosts.isNotEmpty()) {
+            items(cachedPosts.take(5).size) { idx ->
+                val post = cachedPosts[idx]
+                BsdcCard {
+                    Text(
+                        text = post.title.ifBlank { post.excerpt.take(80) },
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    if (post.excerpt.isNotBlank()) {
+                        Text(
+                            text = post.excerpt,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = BsdcThemeTokens.colors.mutedText,
+                            maxLines = 2,
+                        )
+                    }
+                    post.media.firstOrNull()?.let { media ->
+                        BsdcImgbbImage(
+                            fullUrl = media.url,
+                            thumbUrl = media.thumbUrl,
+                            contentDescription = media.altText.ifBlank { post.title },
+                            imageLoader = container.imageLoader,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            onTapOpenLightbox = { onOpenLightbox(media.url, media.altText.ifBlank { post.title }) },
+                        )
+                    }
+                }
+            }
         }
 
         item {
@@ -464,6 +539,11 @@ private fun HomeFoundationTab(
                         label = if (bn) "ডিপ-লিংক ও থিম টেস্ট" else "Test Router & Theme",
                         onClick = onJumpExplore,
                         leadingIcon = Icons.Rounded.Link,
+                    )
+                    BsdcButton(
+                        label = if (bn) "যাচাই" else "Verify",
+                        onClick = onJumpVerify,
+                        secondary = true,
                     )
                 }
             }
@@ -637,9 +717,13 @@ private fun MessagesFoundationTab(
 private fun ExploreRouterAndSettingsTab(
     language: AppLanguage,
     themeMode: ThemeMode,
+    syncSettings: OfflineSyncSettings,
+    cachedPostCount: Int,
     incomingDestination: LinkDestination,
     onChangeTheme: (ThemeMode) -> Unit,
     onChangeLanguage: (AppLanguage) -> Unit,
+    onChangeSyncPolicy: (SyncNetworkPolicy) -> Unit,
+    onTriggerSync: () -> Unit,
     onOpenPermissionSheet: () -> Unit,
     onTestRoute: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
@@ -652,6 +736,45 @@ private fun ExploreRouterAndSettingsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            BsdcCard {
+                Text(
+                    text = if (bn) "অফলাইন অটো-সিঙ্ক ও মিডিয়া ক্যাশ" else "Smart Offline Auto-Sync & ImgBB Cache",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                Text(
+                    text = if (bn) {
+                        "সংরক্ষিত পোস্ট: ${BanglaDigitFormatter.formatCount(cachedPostCount.toLong(), language)} টি · সর্বোচ্চ ImgBB ক্যাশ: ${syncSettings.maxCacheMb} MB"
+                    } else {
+                        "Cached offline posts: $cachedPostCount · ImgBB disk cap: ${syncSettings.maxCacheMb} MB"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = BsdcThemeTokens.colors.mutedText,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SyncNetworkPolicy.entries.forEach { policy ->
+                        FilterChip(
+                            selected = syncSettings.policy == policy,
+                            onClick = { onChangeSyncPolicy(policy) },
+                            label = {
+                                Text(
+                                    when (policy) {
+                                        SyncNetworkPolicy.WIFI_ONLY -> if (bn) "শুধু Wi-Fi" else "Wi-Fi Only"
+                                        SyncNetworkPolicy.WIFI_AND_CELLULAR -> if (bn) "Wi-Fi + ডেটা" else "Wi-Fi + Cellular"
+                                        SyncNetworkPolicy.OFF -> if (bn) "বন্ধ" else "Off"
+                                    },
+                                )
+                            },
+                        )
+                    }
+                }
+                BsdcButton(
+                    label = if (bn) "এখনই অফলাইন ফিড সিঙ্ক করুন" else "Sync Offline Feed Now",
+                    secondary = true,
+                    onClick = onTriggerSync,
+                )
+            }
+        }
         item {
             BsdcCard {
                 Text(
