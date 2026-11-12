@@ -598,9 +598,10 @@ fun BsdcAppShell(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
 
+                val reducedMotion = BsdcThemeTokens.reducedMotion
                 AnimatedContent(
                     targetState = selectedTab,
-                    transitionSpec = { BsdcMotionSpecs.tabTransition(BsdcThemeTokens.reducedMotion) },
+                    transitionSpec = { BsdcMotionSpecs.tabTransition(reducedMotion) },
                     label = "mainTabTransition",
                 ) { tab ->
                 when (tab) {
