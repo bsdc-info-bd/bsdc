@@ -244,37 +244,10 @@ jobs:
             exit "$status"
           fi
 
-      - name: Verify APK signature, release BuildConfig & print SHA-256 fingerprint
+      - name: Verify APK signature, release BuildConfig & print SHA-1 / SHA-256 fingerprints
         if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
-        run: |
-          bc="android-app/app/build/generated/source/buildConfig/release/bd/info/bsdc/app/BuildConfig.java"
-          test -f "$bc" || { echo "::error::Release BuildConfig.java not found"; exit 1; }
-          grep -qE 'SUPABASE_URL = "https://[^"]+"' "$bc" || { echo "::error::Release BuildConfig.SUPABASE_URL is empty"; exit 1; }
-          grep -qE 'SUPABASE_PUBLISHABLE_KEY = "[^"]+"' "$bc" || { echo "::error::Release BuildConfig.SUPABASE_PUBLISHABLE_KEY is empty"; exit 1; }
-          if grep -qE 'GOOGLE_WEB_CLIENT_ID = "[^"]+"' "$bc"; then
-            google_client_status="configured"
-          else
-            google_client_status="unset"
-          fi
-          apk=$(find android-app/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -1)
-          test -f "$apk" || { echo "::error::Signed release APK not found under android-app/app/build/outputs/apk/release"; exit 1; }
-          apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          test -x "$apksigner" || { echo "::error::apksigner not found under $ANDROID_HOME/build-tools"; exit 1; }
-          "$apksigner" verify --verbose --print-certs "$apk" > /tmp/apksigner.out 2>&1 || {
-            echo "::error::apksigner verify failed: $(tr '\n' ' ' < /tmp/apksigner.out | head -c 1200)"
-            exit 1
-          }
-          cat /tmp/apksigner.out
-          fingerprint=$(grep -i 'SHA-256 digest' /tmp/apksigner.out | head -1 | awk '{print $NF}' | tr 'a-z' 'A-Z' | sed 's/../&:/g; s/:$//')
-          test -n "$fingerprint" || { echo "::error::Could not parse SHA-256 fingerprint from apksigner output"; exit 1; }
-          {
-            echo '## Native Release Signed'
-            echo
-            echo "- Certificate SHA-256: \`$fingerprint\`"
-            echo '- `BuildConfig.SUPABASE_URL` & `BuildConfig.SUPABASE_PUBLISHABLE_KEY`: verified non-empty'
-            echo "- \`BuildConfig.GOOGLE_WEB_CLIENT_ID\`: $google_client_status"
-            echo '- Confirm `ANDROID_CERT_FINGERPRINT` matches on `main-site` and `vf-site` for Android App Links.'
-          } >> "$GITHUB_STEP_SUMMARY"
+        working-directory: android-app
+        run: node scripts/verify-release-apk.mjs
 
       - name: Upload release artifacts (APK, Play Store AAB, R8 mapping)
         if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release

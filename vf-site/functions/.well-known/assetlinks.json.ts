@@ -12,21 +12,25 @@ interface Env {
 const FINGERPRINT = /^([0-9A-F]{2}:){31}[0-9A-F]{2}$/;
 
 export function onRequestGet(context: { readonly env: Env }): Response {
-  const raw = (context.env.ANDROID_CERT_FINGERPRINT ?? '').trim().toUpperCase();
+  const fingerprints = (context.env.ANDROID_CERT_FINGERPRINT ?? '')
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim().toUpperCase())
+    .filter((entry) => FINGERPRINT.test(entry));
   const packageName = (context.env.ANDROID_APP_ID ?? 'bd.info.bsdc.app').trim();
 
-  const statements = FINGERPRINT.test(raw)
-    ? [
-        {
-          relation: ['delegate_permission/common.handle_all_urls'],
-          target: {
-            namespace: 'android_app',
-            package_name: packageName,
-            sha256_cert_fingerprints: [raw],
+  const statements =
+    fingerprints.length > 0
+      ? [
+          {
+            relation: ['delegate_permission/common.handle_all_urls'],
+            target: {
+              namespace: 'android_app',
+              package_name: packageName,
+              sha256_cert_fingerprints: Array.from(new Set(fingerprints)),
+            },
           },
-        },
-      ]
-    : [];
+        ]
+      : [];
 
   return new Response(JSON.stringify(statements, null, 2), {
     headers: {
