@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -302,6 +303,7 @@ export async function toggleMessageReaction(
     .returns<ToggleMessageReactionRow[]>();
   if (error) throw toDataError(error);
   const row = data?.[0];
+  if (row?.reacted) wakePushDelivery();
   return {
     reacted: row?.reacted ?? false,
     reaction: row?.reaction ?? reaction,
@@ -394,6 +396,7 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
     })
     .returns<MessageRow>();
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return toMessage({ ...data, profiles: null });
 }
 
@@ -470,6 +473,7 @@ export async function createGroupConversation(
     p_members: [...members],
   });
   if (error) throw toDataError(error);
+  if (typeof data === 'string' && data.length > 0) wakePushDelivery();
   return typeof data === 'string' ? data : '';
 }
 

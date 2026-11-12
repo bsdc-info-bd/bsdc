@@ -21,12 +21,36 @@ public final class PushNotificationRouterTest {
             PushNotificationRouter.resolveChannelId("comment", "/p/slug-1", null)
         );
         assertEquals(
+            PushNotificationRouter.CHANNEL_SOCIAL,
+            PushNotificationRouter.resolveChannelId("project_star", "/projects/demo", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_SOCIAL,
+            PushNotificationRouter.resolveChannelId("poll_vote", "/p/slug-1", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_SOCIAL,
+            PushNotificationRouter.resolveChannelId("comment_reaction", "/p/slug-1", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_SOCIAL,
+            PushNotificationRouter.resolveChannelId("answer_accepted", "/p/slug-1", null)
+        );
+        assertEquals(
             PushNotificationRouter.CHANNEL_ORDERS,
             PushNotificationRouter.resolveChannelId("order", "/orders/123", null)
         );
         assertEquals(
+            PushNotificationRouter.CHANNEL_ORDERS,
+            PushNotificationRouter.resolveChannelId("review", "/shop", null)
+        );
+        assertEquals(
             PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
             PushNotificationRouter.resolveChannelId("certificate", "/verify", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
+            PushNotificationRouter.resolveChannelId("gig_proposal", "/freelance", null)
         );
         assertEquals(
             PushNotificationRouter.CHANNEL_GENERAL,

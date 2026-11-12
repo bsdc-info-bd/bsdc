@@ -6,6 +6,7 @@ import bd.info.bsdc.app.core.database.BsdcDatabase
 import bd.info.bsdc.app.core.network.SupabaseRestClient
 import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
 import bd.info.bsdc.app.core.push.PushChannelManager
+import bd.info.bsdc.app.core.push.PushRegistrationSyncWorker
 import bd.info.bsdc.app.core.push.PushRuntimeDependencies
 import bd.info.bsdc.app.core.sync.BsdcSyncProvider
 import bd.info.bsdc.app.core.sync.FeedPrefetchService
@@ -27,6 +28,7 @@ class BsdcApplication : Application(), BsdcSyncProvider, PushRuntimeDependencies
         super.onCreate()
         container = BsdcAppContainer(applicationContext)
         PushChannelManager.ensureChannels(applicationContext)
+        PushRegistrationSyncWorker.enqueuePeriodic(applicationContext)
 
         appScope.launch {
             val settings = container.syncPrefsStore.getSettings()

@@ -19,11 +19,21 @@ export type PushKind =
   | 'comment'
   | 'reply'
   | 'mention'
+  | 'mention_group'
   | 'bookmark'
   | 'share'
   | 'post_published'
   | 'moderation'
-  | 'message';
+  | 'message'
+  | 'order'
+  | 'review'
+  | 'payout'
+  | 'course'
+  | 'job'
+  | 'event'
+  | 'certificate'
+  | 'group_invite'
+  | 'feedback';
 
 export interface PushContent {
   id: string;
@@ -54,11 +64,21 @@ const KINDS: readonly PushKind[] = [
   'comment',
   'reply',
   'mention',
+  'mention_group',
   'bookmark',
   'share',
   'post_published',
   'moderation',
   'message',
+  'order',
+  'review',
+  'payout',
+  'course',
+  'job',
+  'event',
+  'certificate',
+  'group_invite',
+  'feedback',
 ];
 
 function isKind(value: string): value is PushKind {
@@ -106,11 +126,21 @@ const TITLES: Record<PushKind, { bn: string; en: string }> = {
   comment: { bn: 'নতুন মন্তব্য', en: 'New comment' },
   reply: { bn: 'নতুন উত্তর', en: 'New reply' },
   mention: { bn: 'আপনাকে উল্লেখ করা হয়েছে', en: 'You were mentioned' },
+  mention_group: { bn: 'গ্রুপে আপনাকে উল্লেখ করা হয়েছে', en: 'Mentioned in group' },
   bookmark: { bn: 'সংরক্ষণ করা হয়েছে', en: 'Saved by someone' },
   share: { bn: 'শেয়ার হয়েছে', en: 'Shared' },
   post_published: { bn: 'নতুন পোস্ট', en: 'New post' },
   moderation: { bn: 'মডারেশন', en: 'Moderation' },
   message: { bn: 'নতুন বার্তা', en: 'New message' },
+  order: { bn: 'অর্ডার আপডেট', en: 'Order update' },
+  review: { bn: 'নতুন রিভিউ', en: 'New review' },
+  payout: { bn: 'পেমেন্ট আপডেট', en: 'Payout update' },
+  course: { bn: 'কোর্স আপডেট', en: 'Course update' },
+  job: { bn: 'নতুন চাকরির খবর', en: 'New opportunity' },
+  event: { bn: 'ইভেন্ট আপডেট', en: 'Event update' },
+  certificate: { bn: 'সার্টিফিকেট প্রস্তুত', en: 'Certificate ready' },
+  group_invite: { bn: 'গ্রুপ আমন্ত্রণ', en: 'Group invitation' },
+  feedback: { bn: 'মতামত আপডেট', en: 'Feedback update' },
 };
 
 export function notificationTitle(content: PushContent): string {

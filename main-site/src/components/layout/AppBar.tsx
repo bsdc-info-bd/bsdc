@@ -138,11 +138,7 @@ export function AppBar() {
               <MessagesLink />
             </div>
           ) : null}
-          {signedIn ? (
-            <div className="hidden sm:block">
-              <NotificationBell />
-            </div>
-          ) : null}
+          {signedIn ? <NotificationBell /> : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
             icon={<Search size={20} />}

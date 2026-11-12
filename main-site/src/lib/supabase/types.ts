@@ -301,11 +301,21 @@ export type DbNotificationKind =
   | 'comment'
   | 'reply'
   | 'mention'
+  | 'mention_group'
   | 'bookmark'
   | 'share'
   | 'post_published'
   | 'message'
-  | 'moderation';
+  | 'moderation'
+  | 'order'
+  | 'review'
+  | 'payout'
+  | 'course'
+  | 'job'
+  | 'event'
+  | 'certificate'
+  | 'group_invite'
+  | 'feedback';
 
 export type NotificationRow = {
   id: string;

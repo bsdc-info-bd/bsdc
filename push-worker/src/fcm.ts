@@ -104,6 +104,10 @@ export interface FcmSendRequest {
   words: PushWords;
   siteUrl: string;
   urgency?: 'normal' | 'high';
+  notificationId?: string;
+  actorName?: string;
+  conversationId?: string;
+  postId?: string;
   accessToken?: string;
   fetcher?: typeof fetch;
 }
@@ -114,6 +118,15 @@ export type AndroidChannelId =
   | 'bsdc_orders'
   | 'bsdc_verify_alerts'
   | 'bsdc_general';
+
+/** Infers domain kind from a collapse tag (`bsdc-<kind>-<topic>`). */
+export function inferKindFromTag(tag: string): string {
+  const lower = tag.toLowerCase();
+  if (!lower.startsWith('bsdc-')) return 'general';
+  const rest = lower.slice(5);
+  const dash = rest.indexOf('-');
+  return dash > 0 ? rest.slice(0, dash) : rest || 'general';
+}
 
 /** Maps push tag & topic to the exact Android O+ NotificationChannel created by the native app. */
 export function resolveAndroidChannelId(words: Pick<PushWords, 'tag' | 'url'>): AndroidChannelId {
@@ -147,7 +160,8 @@ export function resolveAndroidChannelId(words: Pick<PushWords, 'tag' | 'url'>): 
     tag.startsWith('bsdc-bookmark-') ||
     tag.startsWith('bsdc-share-') ||
     tag.startsWith('bsdc-post_published-') ||
-    tag.startsWith('bsdc-group_invite-')
+    tag.startsWith('bsdc-group_invite-') ||
+    tag.startsWith('bsdc-feedback-')
   ) {
     return 'bsdc_social';
   }
@@ -164,57 +178,74 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
   }
 
   const base = request.siteUrl.replace(/\/+$/, '');
-  const urgency = request.urgency ?? 'normal';
+  const urgency = request.platform === 'android' ? 'high' : (request.urgency ?? 'normal');
   const link = `${base}${request.words.url}`;
   const channelId = resolveAndroidChannelId(request.words);
+  const resolvedKind = request.words.kind ?? inferKindFromTag(request.words.tag);
+  const resolvedConversationId = request.conversationId ?? request.words.conversationId ?? '';
 
-  const message = {
-    token: request.token,
-    notification: {
-      title: request.words.title,
-      body: request.words.body,
-    },
-    data: {
-      url: request.words.url,
-      path: request.words.url,
-      tag: request.words.tag,
-      title: request.words.title,
-      body: request.words.body,
-      icon: '/icons/icon-192.png',
-      kind: request.words.topic,
-      channel_id: channelId,
-    },
-    webpush: {
-      headers: { Urgency: urgency },
-      notification: {
-        title: request.words.title,
-        body: request.words.body,
-        icon: `${base}/icons/icon-192.png`,
-        badge: `${base}/icons/maskable-512.png`,
-        tag: request.words.tag,
-      },
-      fcm_options: { link },
-    },
-    android: {
-      priority: urgency === 'high' ? 'HIGH' : 'NORMAL',
-      notification: {
-        title: request.words.title,
-        body: request.words.body,
-        tag: request.words.tag,
-        channel_id: channelId,
-        click_action: 'OPEN_URL',
-      },
-    },
-    apns: {
-      payload: {
-        aps: {
-          alert: { title: request.words.title, body: request.words.body },
-          'thread-id': request.words.topic,
-          sound: 'default',
-        },
-      },
-    },
+  const data: Record<string, string> = {
+    url: request.words.url,
+    path: request.words.url,
+    tag: request.words.tag,
+    topic: request.words.topic,
+    title: request.words.title,
+    body: request.words.body,
+    icon: '/icons/icon-192.png',
+    kind: resolvedKind,
+    channel_id: channelId,
+    sent_at: String(Date.now()),
   };
+  if (request.notificationId) data.notification_id = request.notificationId;
+  if (request.actorName) data.actor_name = request.actorName;
+  if (resolvedConversationId) data.conversation_id = resolvedConversationId;
+  if (request.postId) data.post_id = request.postId;
+
+  // CRITICAL: Android tokens MUST receive a pure data-only HIGH priority payload
+  // without top-level `notification` or `android.notification` blocks. When an
+  // FCM payload carries a `notification` block, Android intercepts it in the
+  // system tray whenever the app is killed or backgrounded, bypassing
+  // `BsdcFirebaseMessagingService.onMessageReceived`, inline Messenger reply
+  // actions, live PushEventBus refreshes, and custom channel/lockscreen rules.
+  const message =
+    request.platform === 'android'
+      ? {
+          token: request.token,
+          data,
+          android: {
+            priority: 'HIGH',
+            ttl: '86400s',
+            direct_boot_ok: true,
+          },
+        }
+      : {
+          token: request.token,
+          notification: {
+            title: request.words.title,
+            body: request.words.body,
+          },
+          data,
+          webpush: {
+            headers: { Urgency: urgency },
+            notification: {
+              title: request.words.title,
+              body: request.words.body,
+              icon: `${base}/icons/icon-192.png`,
+              badge: `${base}/icons/maskable-512.png`,
+              tag: request.words.tag,
+            },
+            fcm_options: { link },
+          },
+          apns: {
+            payload: {
+              aps: {
+                alert: { title: request.words.title, body: request.words.body },
+                'thread-id': request.words.topic,
+                sound: 'default',
+              },
+            },
+          },
+        };
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);

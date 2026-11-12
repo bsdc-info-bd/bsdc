@@ -30,6 +30,7 @@ dependencies {
     api(project(":core:database"))
 
     implementation(libs.androidx.core.ktx)
+    api(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.coroutines.play.services)

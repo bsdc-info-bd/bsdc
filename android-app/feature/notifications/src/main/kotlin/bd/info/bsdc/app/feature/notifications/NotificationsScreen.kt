@@ -54,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
@@ -66,6 +68,7 @@ import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.NotificationPrefs
 import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
+import bd.info.bsdc.app.core.push.PushEventBus
 import bd.info.bsdc.app.core.push.RegisteredFcmDevice
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -82,6 +85,7 @@ fun NotificationsScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onNavigatePath: (String) -> Unit,
+    liveRefreshNonce: Int = 0,
 ) {
     val bn = language == AppLanguage.BN
     val scope = rememberCoroutineScope()
@@ -96,7 +100,20 @@ fun NotificationsScreen(
     var showPrefsSheet by remember { mutableStateOf(false) }
     var refreshNonce by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(viewerUid, refreshNonce) {
+    LaunchedEffect(viewerUid) {
+        if (viewerUid.isNullOrBlank()) return@LaunchedEffect
+        PushEventBus.events.collect {
+            refreshNonce++
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (!viewerUid.isNullOrBlank()) {
+            refreshNonce++
+        }
+    }
+
+    LaunchedEffect(viewerUid, refreshNonce, liveRefreshNonce) {
         if (viewerUid.isNullOrBlank()) return@LaunchedEffect
         refreshing = true
         runCatching { repository.fetchInbox() }

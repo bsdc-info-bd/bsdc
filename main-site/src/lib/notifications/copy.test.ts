@@ -104,6 +104,13 @@ describe('the words', () => {
     expect(notificationTitle(content({ kind: 'message', language: 'bn' }))).toBe('নতুন বার্তা');
     expect(notificationTitle(content({ kind: 'message', language: 'en' }))).toBe('New message');
     expect(notificationTitle(content({ kind: 'follow', language: 'en' }))).toBe('New follower');
+    expect(notificationTitle(content({ kind: 'order', language: 'en' }))).toBe('Order update');
+    expect(notificationTitle(content({ kind: 'certificate', language: 'bn' }))).toBe(
+      'সার্টিফিকেট প্রস্তুত',
+    );
+    expect(notificationTitle(content({ kind: 'feedback', language: 'en' }))).toBe(
+      'Feedback update',
+    );
   });
 
   it('says what happened, and who did it when nothing else is known', () => {

@@ -236,6 +236,7 @@ class FeedPrefetchService(
         val pending = database.outboxMessageDao().listFlushable()
         if (pending.isEmpty()) return
 
+        var sentAny = false
         for (item in pending) {
             database.outboxMessageDao().updateStatus(item.clientMessageId, "SENDING", item.retryCount)
             val params = buildJsonObject {
@@ -252,10 +253,14 @@ class FeedPrefetchService(
                 supabase.rpcText("send_message_once", params, requireAuth = true)
             }
             if (result.isSuccess) {
+                sentAny = true
                 database.outboxMessageDao().remove(item.clientMessageId)
             } else {
                 database.outboxMessageDao().updateStatus(item.clientMessageId, "FAILED", item.retryCount + 1)
             }
+        }
+        if (sentAny) {
+            supabase.wakePushDelivery("outbox-flush")
         }
     }
 

@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /**
  * Pure Java 21 deterministic helpers for notification inbox categorization,
- * localized summary labels, and safe route target resolution.
+ * localized summary labels across all 20 notification kinds, and safe deep-link routing.
  */
 public final class NotificationsFilterEngine {
 
@@ -20,7 +20,7 @@ public final class NotificationsFilterEngine {
         if ("message".equals(k)) return CategoryFilter.MESSAGES;
         if ("moderation".equals(k) || "order".equals(k) || "review".equals(k)
             || "payout".equals(k) || "certificate".equals(k) || "course".equals(k)
-            || "job".equals(k) || "event".equals(k)) {
+            || "job".equals(k) || "event".equals(k) || "gig_proposal".equals(k)) {
             return CategoryFilter.ALERTS;
         }
         return CategoryFilter.SOCIAL;
@@ -49,8 +49,17 @@ public final class NotificationsFilterEngine {
             case "bookmark" -> bn ? actor + " আপনার পোস্ট বুকমার্ক করেছেন" : actor + " saved your post";
             case "post_published" -> bn ? actor + " নতুন পোস্ট প্রকাশ করেছেন" : actor + " published a post";
             case "order" -> bn ? "অর্ডারের আপডেট" : "Order update";
+            case "review" -> bn ? actor + " আপনার পণ্যে রিভিউ দিয়েছেন" : actor + " reviewed your product";
             case "payout" -> bn ? "পেমেন্ট সম্পন্ন" : "Payout processed";
             case "certificate" -> bn ? "আপনার সার্টিফিকেট প্রস্তুত" : "Certificate ready";
+            case "course" -> bn ? "কোর্সের নতুন আপডেট" : "Course update";
+            case "job" -> bn ? "চাকরির আবেদনের আপডেট" : "Job update";
+            case "event" -> bn ? "ইভেন্টের নতুন আপডেট" : "Event update";
+            case "gig_proposal" -> bn ? actor + " একটি প্রস্তাব পাঠিয়েছেন" : actor + " sent a proposal";
+            case "project_star" -> bn ? actor + " আপনার প্রজেক্টে স্টার দিয়েছেন" : actor + " starred your project";
+            case "poll_vote" -> bn ? actor + " আপনার ভোটে অংশ নিয়েছেন" : actor + " voted on your poll";
+            case "comment_reaction" -> bn ? actor + " আপনার মন্তব্যে প্রতিক্রিয়া জানিয়েছেন" : actor + " reacted to your comment";
+            case "answer_accepted" -> bn ? "আপনার উত্তরটি গৃহীত হয়েছে" : "Your answer was accepted";
             case "moderation" -> bn ? "মডারেশন বিজ্ঞপ্তি" : "Moderation update";
             case "group_invite" -> bn ? actor + " আপনাকে গ্রুপে আমন্ত্রণ জানিয়েছেন" : actor + " invited you to a group";
             default -> bn ? actor + " একটি কার্যকলাপ করেছেন" : actor + " interacted with you";

@@ -143,7 +143,9 @@ class MarketRepository(
                     },
                     requireAuth = true,
                 )
-                supabase.decode<List<PlacedOrderDto>>(raw)
+                val placed = supabase.decode<List<PlacedOrderDto>>(raw)
+                if (placed.isNotEmpty()) supabase.wakePushDelivery("order-placed")
+                placed
             }
         }
 
@@ -168,6 +170,7 @@ class MarketRepository(
                 },
                 requireAuth = true,
             )
+            supabase.wakePushDelivery("order-cancelled")
             Unit
         }
     }
@@ -202,6 +205,7 @@ class MarketRepository(
                 },
                 requireAuth = true,
             )
+            supabase.wakePushDelivery("order-advanced")
             Unit
         }
     }

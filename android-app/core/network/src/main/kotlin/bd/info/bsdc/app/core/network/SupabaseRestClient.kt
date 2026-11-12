@@ -18,6 +18,12 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
@@ -52,12 +58,47 @@ class SupabaseRestClient(
     private val tokenProvider: suspend () -> String?,
 ) {
     private val json = BsdcHttpClientFactory.sharedJson
+    private val wakeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val wakeLock = Any()
+    private var pendingWakeJob: Job? = null
     val backendConfig: BsdcBackendConfig
         get() = config
     private val baseRestUrl: String
         get() = config.supabaseUrl.trim().trimEnd('/') + "/rest/v1"
 
     suspend fun currentToken(): String? = tokenProvider()
+
+    suspend fun wakePushNow(reason: String = "mutation"): Boolean {
+        val siteOrigin = config.siteUrl.trim().trimEnd('/')
+        if (siteOrigin.isEmpty()) return false
+        val token = runCatching { tokenProvider() }.getOrNull()
+        if (token.isNullOrBlank()) return false
+        return runCatching {
+            val payload = buildJsonObject { put("reason", reason.take(64)) }
+            val response = httpClient.post("$siteOrigin/api/push/wake") {
+                header("Authorization", "Bearer $token")
+                contentType(ContentType.Application.Json)
+                setBody(payload.toString())
+            }
+            response.status.isSuccess()
+        }.getOrDefault(false)
+    }
+
+    /**
+     * Best-effort debounced trigger for `/api/push/wake` so recipient devices receive
+     * high-priority FCM/Web Push notifications within ~1s after a member write.
+     */
+    fun wakePushDelivery(reason: String = "mutation") {
+        val siteOrigin = config.siteUrl.trim().trimEnd('/')
+        if (siteOrigin.isEmpty()) return
+        synchronized(wakeLock) {
+            pendingWakeJob?.cancel()
+            pendingWakeJob = wakeScope.launch {
+                delay(750L)
+                wakePushNow(reason)
+            }
+        }
+    }
 
     private fun ensureConfigured() {
         if (!config.isSupabaseConfigured) {

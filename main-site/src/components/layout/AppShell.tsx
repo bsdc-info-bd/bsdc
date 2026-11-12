@@ -4,6 +4,7 @@ import { Toaster } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { chromeFor } from '@/lib/layout/chrome';
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey';
+import { useNotificationRealtime } from '@/hooks/use-notification-realtime';
 import { usePublishPresence } from '@/hooks/use-presence';
 import { useSystemThemeSync } from '@/hooks/use-system-theme-sync';
 import { AppBar } from './AppBar';
@@ -26,6 +27,7 @@ import { SkipLink } from './SkipLink';
  */
 export function AppShell() {
   useCommandPaletteHotkey();
+  useNotificationRealtime();
   usePublishPresence();
   useSystemThemeSync();
   const chrome = chromeFor(useLocation().pathname);

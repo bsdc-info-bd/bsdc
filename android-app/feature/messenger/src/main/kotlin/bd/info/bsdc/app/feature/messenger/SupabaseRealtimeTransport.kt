@@ -59,6 +59,11 @@ class SupabaseRealtimeTransport(
         fun onStatusChanged(status: LiveChannelStatus)
     }
 
+    interface NotificationStreamListener {
+        fun onNotificationChange()
+        fun onStatusChanged(status: LiveChannelStatus)
+    }
+
     interface ChannelHandle {
         fun signalTyping(typing: Boolean)
         fun close()
@@ -380,6 +385,18 @@ class SupabaseRealtimeTransport(
                                 if (!closed) connect()
                             }
                         }
+
+                        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                            heartbeatJob?.cancel()
+                            if (closed) return
+                            listener.onStatusChanged(LiveChannelStatus.RECONNECTING)
+                            reconnectAttempt++
+                            val backoff = (2_000L * reconnectAttempt).coerceAtMost(30_000L)
+                            scope.launch {
+                                delay(backoff)
+                                if (!closed) connect()
+                            }
+                        }
                     },
                 )
             }
@@ -389,6 +406,153 @@ class SupabaseRealtimeTransport(
         return {
             closed = true
             heartbeatJob?.cancel()
+            socket?.close(1000, "closed")
+            socket = null
+        }
+    }
+
+    /**
+     * Subscribes to Supabase Realtime `public.notifications` changes for `viewerUid`,
+     * automatically refreshing Firebase JWT tokens and reconnecting on socket drops.
+     */
+    fun joinNotificationStream(
+        viewerUid: String,
+        listener: NotificationStreamListener,
+    ): () -> Unit {
+        val config = supabase.backendConfig
+        if (!config.isSupabaseConfigured) {
+            listener.onStatusChanged(LiveChannelStatus.OFFLINE)
+            return {}
+        }
+
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val topic = "realtime:notifications:$viewerUid"
+        var socket: WebSocket? = null
+        var heartbeatJob: Job? = null
+        var authRefreshJob: Job? = null
+        var reconnectAttempt = 0
+        var closed = false
+
+        fun connect() {
+            if (closed) return
+            listener.onStatusChanged(
+                if (reconnectAttempt == 0) LiveChannelStatus.CONNECTING else LiveChannelStatus.RECONNECTING
+            )
+            scope.launch {
+                val token = runCatching { supabase.currentToken() }.getOrNull().orEmpty()
+                val wsBase = config.supabaseUrl.trim().trimEnd('/')
+                    .replaceFirst("https://", "wss://")
+                    .replaceFirst("http://", "ws://")
+                val wsUrl = "$wsBase/realtime/v1/websocket?apikey=${config.supabasePublishableKey}&vsn=1.0.0"
+
+                fun scheduleReconnect(status: LiveChannelStatus) {
+                    if (closed) return
+                    listener.onStatusChanged(status)
+                    reconnectAttempt++
+                    val backoff = (2_000L * reconnectAttempt).coerceAtMost(30_000L)
+                    scope.launch {
+                        delay(backoff)
+                        if (!closed) connect()
+                    }
+                }
+
+                socket?.cancel()
+                socket = okHttpClient.newWebSocket(
+                    Request.Builder().url(wsUrl).build(),
+                    object : WebSocketListener() {
+                        override fun onOpen(webSocket: WebSocket, response: Response) {
+                            if (closed) {
+                                webSocket.close(1000, "closed")
+                                return
+                            }
+                            reconnectAttempt = 0
+                            val join = buildJsonObject {
+                                put("topic", topic)
+                                put("event", "phx_join")
+                                put("ref", refSeq.getAndIncrement().toString())
+                                putJsonObject("payload") {
+                                    if (token.isNotBlank()) put("access_token", token)
+                                    putJsonObject("config") {
+                                        putJsonArray("postgres_changes") {
+                                            add(buildJsonObject {
+                                                put("event", "*")
+                                                put("schema", "public")
+                                                put("table", "notifications")
+                                                put("filter", "uid=eq.$viewerUid")
+                                            })
+                                        }
+                                    }
+                                }
+                            }
+                            webSocket.send(join.toString())
+
+                            heartbeatJob?.cancel()
+                            heartbeatJob = scope.launch {
+                                while (isActive && !closed) {
+                                    delay(25_000L)
+                                    val hb = buildJsonObject {
+                                        put("topic", "phoenix")
+                                        put("event", "heartbeat")
+                                        put("ref", refSeq.getAndIncrement().toString())
+                                        putJsonObject("payload") {}
+                                    }
+                                    webSocket.send(hb.toString())
+                                }
+                            }
+
+                            authRefreshJob?.cancel()
+                            authRefreshJob = scope.launch {
+                                while (isActive && !closed) {
+                                    delay(45L * 60_000L)
+                                    val nextToken = runCatching { supabase.currentToken() }.getOrNull().orEmpty()
+                                    if (nextToken.isNotBlank()) {
+                                        val authMsg = buildJsonObject {
+                                            put("topic", topic)
+                                            put("event", "access_token")
+                                            put("ref", refSeq.getAndIncrement().toString())
+                                            putJsonObject("payload") {
+                                                put("access_token", nextToken)
+                                            }
+                                        }
+                                        webSocket.send(authMsg.toString())
+                                    }
+                                }
+                            }
+                        }
+
+                        override fun onMessage(webSocket: WebSocket, text: String) {
+                            val root = runCatching { json.parseToJsonElement(text).jsonObject }.getOrNull()
+                                ?: return
+                            val event = root["event"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                            if (event == "phx_reply") {
+                                val st = (root["payload"] as? JsonObject)?.get("status")?.jsonPrimitive?.contentOrNull
+                                if (st == "ok") listener.onStatusChanged(LiveChannelStatus.LIVE)
+                            } else if (event == "postgres_changes") {
+                                listener.onNotificationChange()
+                            }
+                        }
+
+                        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+                            heartbeatJob?.cancel()
+                            authRefreshJob?.cancel()
+                            scheduleReconnect(LiveChannelStatus.OFFLINE)
+                        }
+
+                        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+                            heartbeatJob?.cancel()
+                            authRefreshJob?.cancel()
+                            scheduleReconnect(LiveChannelStatus.RECONNECTING)
+                        }
+                    },
+                )
+            }
+        }
+
+        connect()
+        return {
+            closed = true
+            heartbeatJob?.cancel()
+            authRefreshJob?.cancel()
             socket?.close(1000, "closed")
             socket = null
         }

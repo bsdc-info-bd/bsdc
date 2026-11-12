@@ -67,8 +67,35 @@ async function subscribeHere(publicKey: string): Promise<PushSubscription | null
   });
 }
 
-async function registerCurrentBrowser(uid: string, language: string): Promise<boolean> {
-  const config = effectivePushVapidConfig(env.push);
+async function fetchRuntimeVapidConfig(): Promise<{
+  mode: 'webpush' | 'fcm';
+  publicKey: string;
+} | null> {
+  const staticConfig = effectivePushVapidConfig(env.push);
+  if (staticConfig !== null) return staticConfig;
+  if (typeof fetch !== 'function') return null;
+  try {
+    const response = await fetch('/api/push/config', { cache: 'no-store' });
+    if (!response.ok) return null;
+    const payload = (await response.json()) as { enabled?: unknown; vapidPublicKey?: unknown };
+    if (
+      payload.enabled === true &&
+      typeof payload.vapidPublicKey === 'string' &&
+      payload.vapidPublicKey.trim().length > 0
+    ) {
+      return { mode: 'webpush', publicKey: payload.vapidPublicKey.trim() };
+    }
+  } catch {
+    // Ignore when /api/push/config is unreachable (e.g. offline or standalone preview).
+  }
+  return null;
+}
+
+async function registerCurrentBrowser(
+  uid: string,
+  language: string,
+  config: { mode: 'webpush' | 'fcm'; publicKey: string } | null,
+): Promise<boolean> {
   if (config === null) return false;
   const store = await repository();
 
@@ -85,7 +112,7 @@ async function registerCurrentBrowser(uid: string, language: string): Promise<bo
   const token = await fcm.getFcmBrowserToken(config.publicKey);
   if (token === null) return false;
   const lang: 'bn' | 'en' = language === 'en' ? 'en' : 'bn';
-  const hash = await store.registerFcmToken(token, 'web', globalThis.navigator.userAgent, lang);
+  const hash = await store.registerFcmToken(token, 'web', lang, globalThis.navigator.userAgent);
   if (hash.length > 0 && isConfigured.firebase) {
     void fcm.syncFcmTokenToFirestore(uid, hash, 'web', lang);
   }
@@ -104,7 +131,16 @@ export function usePush(): PushControl {
   // One silent re-registration per page load, per member.
   const refreshedFor = useRef<string | null>(null);
 
-  const pushConfig = effectivePushVapidConfig(env.push);
+  const staticConfig = effectivePushVapidConfig(env.push);
+  const runtimeQuery = useQuery({
+    queryKey: ['push-runtime-config'],
+    queryFn: fetchRuntimeVapidConfig,
+    enabled: staticConfig === null,
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+
+  const pushConfig = staticConfig ?? runtimeQuery.data ?? null;
   const activeKey = pushConfig?.publicKey ?? '';
   const supported = block === 'ok';
 
@@ -131,7 +167,7 @@ export function usePush(): PushControl {
 
     void (async () => {
       try {
-        const registered = await registerCurrentBrowser(uid, i18n.language);
+        const registered = await registerCurrentBrowser(uid, i18n.language, pushConfig);
         if (registered) {
           await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
         }
@@ -141,7 +177,7 @@ export function usePush(): PushControl {
         // them, and the button is still there when they want it.
       }
     })();
-  }, [uid, i18n.language, queryClient, activeKey]);
+  }, [uid, i18n.language, queryClient, activeKey, pushConfig]);
 
   const enable = useCallback(async () => {
     if (uid === null || block !== 'ok') {
@@ -156,7 +192,7 @@ export function usePush(): PushControl {
         setErrorKey('push.errors.permissionDenied');
         return;
       }
-      const registered = await registerCurrentBrowser(uid, i18n.language);
+      const registered = await registerCurrentBrowser(uid, i18n.language, pushConfig);
       if (!registered) {
         setErrorKey('push.errors.failed');
         return;
@@ -169,7 +205,7 @@ export function usePush(): PushControl {
     } finally {
       setBusy(false);
     }
-  }, [uid, block, i18n.language, queryClient]);
+  }, [uid, block, i18n.language, queryClient, pushConfig]);
 
   const disable = useCallback(async () => {
     if (uid === null) return;

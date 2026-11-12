@@ -144,7 +144,7 @@ jobs:
           # Push and OneSignal are optional features: a missing value disables
           # them in the client, which is honest, so they are passed but not
           # required.
-          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY || secrets.PUSH_VAPID_PUBLIC_KEY }}
           VITE_FIREBASE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_FIREBASE_VAPID_PUBLIC_KEY }}
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_SITE_URL: https://www.bsdc.info.bd
@@ -226,7 +226,8 @@ jobs:
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
           BSDC_IMGBB_API_KEY: ${{ secrets.BSDC_IMGBB_API_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
-          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
+          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL || 'https://push.api.bsdc.info.bd' }}
+          PUSH_VAPID_PUBLIC_KEY: ${{ secrets.PUSH_VAPID_PUBLIC_KEY }}
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
           PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
           PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
@@ -317,6 +318,27 @@ jobs:
           fi
           rm -f /tmp/bsdc-upload-check.json
           echo "Upload endpoint is deployed and refusing anonymous callers, as it should."
+
+          curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 20 \
+            "$DEPLOYMENT_URL/api/push/config" | node -e '
+              let data = "";
+              process.stdin.on("data", chunk => data += chunk);
+              process.stdin.on("end", () => {
+                const cfg = JSON.parse(data);
+                if (typeof cfg.enabled !== "boolean") {
+                  console.error("::error::/api/push/config returned an unexpected payload.");
+                  process.exit(1);
+                }
+                console.log("Verified: /api/push/config responded cleanly (enabled=" + cfg.enabled + ").");
+              });'
+          WAKE_CODE=$(curl -sS -o /tmp/bsdc-wake-check.json -w "%{http_code}" \
+            -X POST -H "content-type: application/json" --data '{}' \
+            "$DEPLOYMENT_URL/api/push/wake" || echo "000")
+          rm -f /tmp/bsdc-wake-check.json
+          if [ "$WAKE_CODE" != "401" ]; then
+            echo "::error title=Push wake endpoint check failed::POST $DEPLOYMENT_URL/api/push/wake answered HTTP $WAKE_CODE instead of 401."
+            exit 1
+          fi
 
       - name: Record where it went
         if: steps.scope.outputs.run == 'true'
@@ -411,6 +433,7 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          PUSH_VAPID_PUBLIC_KEY: ${{ secrets.PUSH_VAPID_PUBLIC_KEY }}
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
           PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
           PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
@@ -456,7 +479,7 @@ jobs:
           cat /tmp/wrangler-deploy.log
           if [ "$STATUS" -eq 0 ]; then
             if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
-              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json" || true
+              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json"
             fi
             echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -480,7 +503,7 @@ jobs:
               -d '[{"cron":"* * * * *"}]' || echo "000")
             rm -f /tmp/cf-worker-sched.json
             if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
-              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json" || true
+              CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json"
             fi
             echo "Uploaded bsdc-push via Workers Script API (HTTP $PUT_CODE, schedule HTTP $SCHED_CODE)."
             echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
@@ -503,6 +526,23 @@ jobs:
           rm -f /tmp/cf-worker-put.json
           echo "::error title=Push worker deploy failed::HTTP $PUT_CODE: $PUT_BODY"
           exit 1
+
+      - name: Verify push-worker health
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          HEALTH_URL="${PUSH_WORKER_HEALTH_URL:-https://push.api.bsdc.info.bd/health}"
+          if curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 15 "$HEALTH_URL" -o /tmp/push-health.json; then
+            node -e '
+              const fs = require("node:fs");
+              const h = JSON.parse(fs.readFileSync("/tmp/push-health.json", "utf8"));
+              console.log("bsdc-push /health:", JSON.stringify(h));
+              if (h.status !== "ok") process.exit(1);
+            '
+            rm -f /tmp/push-health.json
+          else
+            echo "::warning title=push-worker health probe unreachable::Could not verify $HEALTH_URL (if worker deploy was skipped due to token scopes, Pages fallback remains active)."
+          fi
 
       - name: Remove temporary push-worker bindings
         if: always()

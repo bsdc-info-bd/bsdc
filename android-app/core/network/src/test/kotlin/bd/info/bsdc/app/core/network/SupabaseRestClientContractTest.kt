@@ -96,4 +96,24 @@ class SupabaseRestClientContractTest {
             assertEquals("Supabase is not configured in this build", err.message)
         }
     }
+
+    @Test
+    fun wakePushNowPostsBearerTokenToSiteApiPushWake() = runTest {
+        server.enqueue(MockResponse().setResponseCode(202).setBody("{\"ok\":true}"))
+        val baseUrl = server.url("/").toString().trimEnd('/')
+        val config = BsdcBackendConfig(
+            supabaseUrl = baseUrl,
+            supabasePublishableKey = "sb_publishable_example_key",
+            siteUrl = baseUrl,
+        )
+        val client = SupabaseRestClient(config, BsdcHttpClientFactory.createKtorClient()) { "firebase-jwt-wake" }
+
+        val ok = client.wakePushNow("comment")
+
+        assertEquals(true, ok)
+        val recorded = server.takeRequest()
+        assertEquals("POST", recorded.method)
+        assertEquals("/api/push/wake", recorded.path)
+        assertEquals("Bearer firebase-jwt-wake", recorded.getHeader("Authorization"))
+    }
 }

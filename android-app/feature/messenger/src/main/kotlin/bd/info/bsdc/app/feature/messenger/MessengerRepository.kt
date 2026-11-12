@@ -565,6 +565,7 @@ class MessengerRepository(
         return runCatching {
             supabase.rpcText("send_message_once", params, requireAuth = true)
             database.outboxMessageDao().remove(entity.clientMessageId)
+            supabase.wakePushDelivery("message")
             true
         }.onFailure {
             database.outboxMessageDao().updateStatus(
@@ -607,6 +608,7 @@ class MessengerRepository(
             },
             requireAuth = true,
         )
+        supabase.wakePushDelivery("message-reaction")
     }
 
     suspend fun togglePin(messageId: String): Boolean = withContext(Dispatchers.IO) {

@@ -112,13 +112,40 @@ public final class AppLinkUriRouter {
                 case "message":
                     return routeNativePath("/messages/" + id);
                 case "post":
+                case "comment":
+                case "reply":
+                case "reaction":
+                case "mention":
+                case "bookmark":
+                case "share":
+                case "post_published":
+                case "poll_vote":
+                case "comment_reaction":
+                case "answer_accepted":
                     return routeNativePath("/p/" + id);
                 case "follow":
                     return routeNativePath("/@" + id);
                 case "order":
+                case "review":
+                case "payout":
                     return routeNativePath("/orders");
                 case "certificate":
                     return routeNativePath("/verify/" + id);
+                case "course":
+                    return routeNativePath("/courses");
+                case "job":
+                    return routeNativePath("/jobs");
+                case "event":
+                    return routeNativePath("/events");
+                case "gig_proposal":
+                    return routeNativePath("/freelance");
+                case "project_star":
+                    return routeNativePath("/projects");
+                case "group_invite":
+                case "mention_group":
+                    return routeNativePath("/groups");
+                case "moderation":
+                    return routeNativePath("/notifications");
                 default:
                     break;
             }

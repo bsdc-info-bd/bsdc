@@ -205,6 +205,7 @@ class DiscoverRepository(
                 },
                 requireAuth = true,
             )
+            supabase.wakePushDelivery("group-join")
             runCatching { supabase.decode<String>(raw) }.getOrDefault(raw.trim('"'))
         }
     }
@@ -241,6 +242,7 @@ class DiscoverRepository(
                 },
                 requireAuth = true,
             )
+            if (status != "not_going") supabase.wakePushDelivery("event-rsvp")
             raw.trim().toIntOrNull() ?: 0
         }
     }
@@ -275,6 +277,7 @@ class DiscoverRepository(
                     },
                     requireAuth = true,
                 )
+                supabase.wakePushDelivery("job-apply")
                 Unit
             }
         }
@@ -311,6 +314,7 @@ class DiscoverRepository(
                 },
                 requireAuth = true,
             )
+            supabase.wakePushDelivery("gig-proposal")
             Unit
         }
     }
@@ -336,7 +340,9 @@ class DiscoverRepository(
                 params = buildJsonObject { put("p_project_id", projectId) },
                 requireAuth = true,
             )
-            raw.trim().equals("true", ignoreCase = true)
+            val starred = raw.trim().equals("true", ignoreCase = true)
+            if (starred) supabase.wakePushDelivery("project-star")
+            starred
         }
     }
 
@@ -674,6 +680,7 @@ class DiscoverRepository(
                         prefer = "resolution=ignore-duplicates,return=minimal",
                         requireAuth = true,
                     )
+                    supabase.wakePushDelivery("follow")
                     true
                 }
             }

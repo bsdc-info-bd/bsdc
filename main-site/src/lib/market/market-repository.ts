@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -238,6 +239,7 @@ export async function placeOrder(
     })
     .returns<PlacedOrderRow[]>();
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return (data ?? []).map((row) => ({
     orderId: row.order_id,
     code: row.code,
@@ -298,6 +300,7 @@ export async function cancelOrder(orderId: string, reason = ''): Promise<void> {
     p_reason: reason,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function submitReview(productId: string, rating: number, body = ''): Promise<string> {
@@ -307,6 +310,7 @@ export async function submitReview(productId: string, rating: number, body = '')
     p_body: body,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return typeof data === 'string' ? data : '';
 }
 

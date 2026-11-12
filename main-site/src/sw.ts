@@ -203,16 +203,30 @@ async function show(
   });
 }
 
+async function notifyOpenClients(url: string, tag: string): Promise<void> {
+  try {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const client of clients) {
+      client.postMessage({ type: 'bsdc:notification', url, tag });
+    }
+  } catch {
+    // Client messaging is best-effort alongside showing the OS notification.
+  }
+}
+
 async function handlePush(event: PushEvent): Promise<void> {
   const payload = readPayload(event);
   if (payload !== null) {
-    await show(
-      payload.title,
-      payload.body,
-      payload.url,
-      payload.tag || `bsdc-push-${Date.now()}`,
-      payload.icon,
-    );
+    await Promise.all([
+      show(
+        payload.title,
+        payload.body,
+        payload.url,
+        payload.tag || `bsdc-push-${Date.now()}`,
+        payload.icon,
+      ),
+      notifyOpenClients(payload.url, payload.tag),
+    ]);
     return;
   }
 
@@ -225,7 +239,10 @@ async function handlePush(event: PushEvent): Promise<void> {
 
   const summary = summarize(answer.items);
   if (summary !== null) {
-    await show(summary.title, summary.body, summary.url, `bsdc-summary-${Date.now()}`);
+    await Promise.all([
+      show(summary.title, summary.body, summary.url, `bsdc-summary-${Date.now()}`),
+      notifyOpenClients(summary.url, 'bsdc-summary'),
+    ]);
     return;
   }
 
@@ -239,17 +256,21 @@ async function handlePush(event: PushEvent): Promise<void> {
         item.actorAvatar,
       );
     }
+    await notifyOpenClients(answer.items[0]!.url, notificationTag(answer.items[0]!));
     return;
   }
 
-  await show(
-    language() === 'en' ? 'BSDC' : 'বিএসডিসি',
-    language() === 'en'
-      ? 'Something new is waiting for you.'
-      : 'আপনার জন্য নতুন কিছু অপেক্ষা করছে।',
-    '/notifications',
-    `bsdc-wake-${Date.now()}`,
-  );
+  await Promise.all([
+    show(
+      language() === 'en' ? 'BSDC' : 'বিএসডিসি',
+      language() === 'en'
+        ? 'Something new is waiting for you.'
+        : 'আপনার জন্য নতুন কিছু অপেক্ষা করছে।',
+      '/notifications',
+      `bsdc-wake-${Date.now()}`,
+    ),
+    notifyOpenClients('/notifications', 'bsdc-wake'),
+  ]);
 }
 
 self.addEventListener('push', (event: PushEvent) => {
@@ -315,11 +336,23 @@ self.addEventListener('pushsubscriptionchange', (event: Event) => {
   change.waitUntil(
     (async () => {
       if (change.newSubscription) return;
-      if (VAPID_PUBLIC_KEY.length === 0) return;
+      let publicKey = VAPID_PUBLIC_KEY;
+      if (publicKey.length === 0) {
+        try {
+          const res = await fetch('/api/push/config', { cache: 'no-store' });
+          if (res.ok) {
+            const cfg = (await res.json()) as { vapidPublicKey?: unknown };
+            if (typeof cfg.vapidPublicKey === 'string') publicKey = cfg.vapidPublicKey.trim();
+          }
+        } catch {
+          return;
+        }
+      }
+      if (publicKey.length === 0) return;
       try {
         await self.registration.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
         });
       } catch {
         // Permission may be revoked while closed; app handles re-opt-in when opened.

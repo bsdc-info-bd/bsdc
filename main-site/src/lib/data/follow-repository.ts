@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type { FollowSuggestionRow } from '@/lib/supabase/types';
@@ -26,6 +27,7 @@ export async function follow(followerUid: string, followeeUid: string): Promise<
     .from('follows')
     .insert({ follower_uid: followerUid, followee_uid: followeeUid });
   if (error && error.code !== '23505') throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function unfollow(followerUid: string, followeeUid: string): Promise<void> {

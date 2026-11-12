@@ -399,6 +399,7 @@ class FeedRepository(
             val kind = ReactionKind.entries.firstOrNull {
                 it.wireName.equals(row?.reaction, ignoreCase = true)
             } ?: reaction
+            if (row?.reacted == true) supabase.wakePushDelivery("reaction")
             Triple(row?.reacted == true, kind, row?.total ?: 0)
         }
 
@@ -410,6 +411,7 @@ class FeedRepository(
         )
         val bookmarked = raw.trim().equals("true", ignoreCase = true)
         if (bookmarked) {
+            supabase.wakePushDelivery("bookmark")
             database.bookmarkDao().upsert(
                 BookmarkEntity(
                     postId = post.id,
@@ -438,6 +440,7 @@ class FeedRepository(
             },
             requireAuth = true,
         )
+        supabase.wakePushDelivery("poll-vote")
     }
 
     suspend fun recordShare(postId: String, channel: String = "native") = withContext(Dispatchers.IO) {
@@ -450,6 +453,7 @@ class FeedRepository(
                 },
                 requireAuth = false,
             )
+            supabase.wakePushDelivery("share")
         }
     }
 
@@ -530,6 +534,7 @@ class FeedRepository(
             requireAuth = true,
         )
         val row = json.decodeFromString<List<CommentJoinedDto>>(raw).first()
+        supabase.wakePushDelivery("comment")
         FeedComment(
             id = row.id,
             postId = row.postId,
@@ -560,6 +565,7 @@ class FeedRepository(
             requireAuth = true,
         )
         val row = json.decodeFromString<List<ToggleCommentReactionDto>>(raw).firstOrNull()
+        if (row?.reacted == true) supabase.wakePushDelivery("comment-reaction")
         (row?.reacted == true) to (row?.total ?: 0)
     }
 
@@ -569,7 +575,9 @@ class FeedRepository(
             buildJsonObject { put("p_comment_id", commentId) },
             requireAuth = true,
         )
-        raw.trim().equals("true", ignoreCase = true)
+        val accepted = raw.trim().equals("true", ignoreCase = true)
+        if (accepted) supabase.wakePushDelivery("answer-accepted")
+        accepted
     }
 
     suspend fun movePostToTrash(postId: String) = withContext(Dispatchers.IO) {
@@ -632,6 +640,7 @@ class FeedRepository(
             prefer = "resolution=ignore-duplicates,return=minimal",
             requireAuth = true,
         )
+        supabase.wakePushDelivery("follow")
     }
 
     suspend fun blockUser(blockerUid: String, blockedUid: String) = withContext(Dispatchers.IO) {
@@ -666,6 +675,7 @@ class FeedRepository(
             prefer = "return=minimal",
             requireAuth = true,
         )
+        supabase.wakePushDelivery("report")
     }
 
     private fun decodeJoinedPosts(raw: String): List<FeedPost> {

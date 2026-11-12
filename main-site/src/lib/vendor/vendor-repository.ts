@@ -1,4 +1,5 @@
 import type { OrderStatus } from '@/lib/market/market-types';
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -179,6 +180,7 @@ export async function advanceOrder(
     p_note: note,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return data;
 }
 
@@ -188,6 +190,7 @@ export async function markOrderPaid(orderId: string, reference = ''): Promise<vo
     p_reference: reference,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function createProduct(shopId: string, draft: ProductDraft): Promise<string> {
@@ -236,6 +239,7 @@ export async function requestPayout(accountId: string, amount: number): Promise<
     p_amount: amount,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return data;
 }
 

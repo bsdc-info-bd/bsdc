@@ -51,13 +51,25 @@ public final class PushNotificationRouter {
             return CHANNEL_ORDERS;
         }
         if ("moderation".equals(k) || "certificate".equals(k) || "course".equals(k)
-            || "job".equals(k) || "event".equals(k) || u.startsWith("/verify")) {
+            || "job".equals(k) || "event".equals(k) || "gig_proposal".equals(k)
+            || k.startsWith("bsdc-moderation-") || k.startsWith("bsdc-certificate-")
+            || k.startsWith("bsdc-course-") || k.startsWith("bsdc-job-")
+            || k.startsWith("bsdc-event-") || k.startsWith("bsdc-gig_proposal-")
+            || u.startsWith("/verify")) {
             return CHANNEL_VERIFY_ALERTS;
         }
         if ("follow".equals(k) || "reaction".equals(k) || "comment".equals(k) || "reply".equals(k)
             || "mention".equals(k) || "mention_group".equals(k) || "bookmark".equals(k)
             || "share".equals(k) || "post_published".equals(k) || "group_invite".equals(k)
-            || k.startsWith("p-")) {
+            || "project_star".equals(k) || "poll_vote".equals(k)
+            || "comment_reaction".equals(k) || "answer_accepted".equals(k)
+            || k.startsWith("p-") || k.startsWith("bsdc-follow-") || k.startsWith("bsdc-reaction-")
+            || k.startsWith("bsdc-comment-") || k.startsWith("bsdc-reply-")
+            || k.startsWith("bsdc-mention-") || k.startsWith("bsdc-mention_group-")
+            || k.startsWith("bsdc-bookmark-") || k.startsWith("bsdc-share-")
+            || k.startsWith("bsdc-post_published-") || k.startsWith("bsdc-group_invite-")
+            || k.startsWith("bsdc-project_star-") || k.startsWith("bsdc-poll_vote-")
+            || k.startsWith("bsdc-comment_reaction-") || k.startsWith("bsdc-answer_accepted-")) {
             return CHANNEL_SOCIAL;
         }
         return CHANNEL_GENERAL;

@@ -57,7 +57,8 @@ class NotificationReplyReceiver : BroadcastReceiver() {
                 db.outboxMessageDao().upsert(entity)
 
                 val sent = runCatching {
-                    deps.provideSupabaseRestClient().rpcText(
+                    val supabase = deps.provideSupabaseRestClient()
+                    supabase.rpcText(
                         functionName = "send_message_once",
                         params = buildJsonObject {
                             put("p_conversation_id", conversationId)
@@ -72,6 +73,7 @@ class NotificationReplyReceiver : BroadcastReceiver() {
                         requireAuth = true,
                     )
                     db.outboxMessageDao().remove(clientId)
+                    supabase.wakePushDelivery("inline-reply")
                 }
                 if (sent.isFailure) {
                     db.outboxMessageDao().updateStatus(clientId, "FAILED", 1)
@@ -84,13 +86,13 @@ class NotificationReplyReceiver : BroadcastReceiver() {
                             Manifest.permission.POST_NOTIFICATIONS,
                         ) == PackageManager.PERMISSION_GRANTED
                     if (canNotify) {
-                        val icon = context.applicationInfo.icon.takeIf { it != 0 }
-                            ?: android.R.drawable.ic_dialog_info
                         val ack = NotificationCompat.Builder(
                             context,
                             PushNotificationRouter.CHANNEL_MESSENGER,
                         )
-                            .setSmallIcon(icon)
+                            .setSmallIcon(R.drawable.ic_stat_bsdc)
+                            .setColor(ContextCompat.getColor(context, R.color.bsdc_notification_accent))
+                            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                             .setContentText(
                                 if (sent.isSuccess) "Sent: $replyText" else "Queued offline: $replyText",
                             )

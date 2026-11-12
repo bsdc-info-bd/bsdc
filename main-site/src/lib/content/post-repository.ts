@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type { PollOptionRow, PostRow, TagRow } from '@/lib/supabase/types';
@@ -419,6 +420,7 @@ export async function savePost(
   await syncMedia(postId, draft);
   await syncMentions(postId, body);
   if (draft.kind === 'poll') await syncPoll(postId, draft.pollOptions);
+  if (status === 'published') wakePushDelivery();
 
   return { id: postId, slug: postSlug };
 }

@@ -20,8 +20,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 /**
- * Handles FCM HTTP v1 pushes across all 5 Android O+ channels with MessagingStyle
- * grouping, RemoteInput inline lock-screen replies, and safe OPEN_URL routing.
+ * Handles FCM HTTP v1 pure-data HIGH-priority pushes across all 5 Android O+
+ * channels with MessagingStyle grouping, RemoteInput inline lock-screen replies,
+ * monochrome status bar iconography, public lockscreen visibility, and live
+ * in-process PushEventBus broadcasting even across Doze / backgrounded states.
  */
 class BsdcFirebaseMessagingService : FirebaseMessagingService() {
 
@@ -29,16 +31,23 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onNewToken(token: String) {
         super.onNewToken(token)
-        val deps = applicationContext as? PushRuntimeDependencies ?: return
-        val uid = runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull() ?: return
+        val deps = applicationContext as? PushRuntimeDependencies
+        val uid = runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
+        if (deps == null || uid.isNullOrBlank()) {
+            PushRegistrationSyncWorker.enqueueImmediate(applicationContext)
+            return
+        }
         serviceScope.launch {
-            runCatching {
+            val res = runCatching {
                 val lang = if (resources.configuration.locales[0]?.language == "en") {
                     AppLanguage.EN
                 } else {
                     AppLanguage.BN
                 }
                 deps.providePushRegistrationManager().registerRawToken(uid, token, lang)
+            }
+            if (res.isFailure) {
+                PushRegistrationSyncWorker.enqueueImmediate(applicationContext)
             }
         }
     }
@@ -47,15 +56,9 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
         super.onMessageReceived(message)
         PushChannelManager.ensureChannels(applicationContext)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) return
-        }
-
         val data = message.data
+        if (data.isEmpty() && message.notification == null) return
+
         val title = data["title"]?.takeIf { it.isNotBlank() }
             ?: message.notification?.title?.takeIf { it.isNotBlank() }
             ?: "BSDC"
@@ -71,6 +74,28 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
             relativePath,
             data[PushNotificationRouter.EXTRA_CONVERSATION_ID],
         )
+        val notificationIdPayload = data["notification_id"]?.takeIf { it.isNotBlank() }
+
+        PushEventBus.emit(
+            PushArrivalEvent(
+                kind = kind,
+                path = relativePath,
+                channelId = channelId,
+                conversationId = conversationId,
+                notificationId = notificationIdPayload,
+                title = title,
+                body = body,
+            ),
+        )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!granted) return
+        }
+
         val notifId = PushNotificationRouter.stableNotificationId(tag, channelId, conversationId)
 
         val launchIntent = (packageManager.getLaunchIntentForPackage(packageName) ?: Intent()).apply {
@@ -87,13 +112,27 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val smallIcon = applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.ic_dialog_info
+        val category = when (channelId) {
+            PushNotificationRouter.CHANNEL_MESSENGER -> NotificationCompat.CATEGORY_MESSAGE
+            PushNotificationRouter.CHANNEL_SOCIAL -> NotificationCompat.CATEGORY_SOCIAL
+            PushNotificationRouter.CHANNEL_ORDERS,
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS -> NotificationCompat.CATEGORY_STATUS
+            else -> NotificationCompat.CATEGORY_RECOMMENDATION
+        }
+
         val builder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(smallIcon)
+            .setSmallIcon(R.drawable.ic_stat_bsdc)
+            .setColor(ContextCompat.getColor(this, R.color.bsdc_notification_accent))
             .setContentTitle(title)
             .setContentText(body)
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setOnlyAlertOnce(false)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
+            .setCategory(category)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setPriority(
                 if (channelId == PushNotificationRouter.CHANNEL_MESSENGER ||
                     channelId == PushNotificationRouter.CHANNEL_VERIFY_ALERTS ||

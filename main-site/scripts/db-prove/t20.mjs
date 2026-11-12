@@ -97,8 +97,8 @@ const restore = (db, uid, table, id) =>
 // ---------------------------------------------------------------------------
 // Before: what a delete does today
 // ---------------------------------------------------------------------------
-// 0068 and 0085 depend on deleted_at from 0050; omit them only in this historical pre-trash fixture.
-const before = await makeDb({ skip: ['0050_', '0052_', '0053_', '0068_', '0085_'] });
+// 0068, 0085, and 0088 depend on deleted_at from 0050; omit them only in this historical pre-trash fixture.
+const before = await makeDb({ skip: ['0050_', '0052_', '0053_', '0068_', '0085_', '0088_'] });
 await before.exec(`
   insert into public.profiles (uid, display_name, username) values
     ('${ada}', 'Ada Lovelace', 'ada'),

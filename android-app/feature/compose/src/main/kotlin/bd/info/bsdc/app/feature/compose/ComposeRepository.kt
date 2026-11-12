@@ -245,6 +245,9 @@ class ComposeRepository(
             syncPollOptions(resolvedPostId, draft.pollOptions)
         }
         database.pendingDraftDao().remove(draft.localDraftId)
+        if (publish) {
+            supabase.wakePushDelivery("post-published")
+        }
         PublishedResult(id = resolvedPostId, slug = postSlug)
     }
 
@@ -365,6 +368,7 @@ class ComposeRepository(
             prefer = "return=representation",
             requireAuth = true,
         )
+        supabase.wakePushDelivery("event-created")
         json.decodeFromString<List<SlugResponseDto>>(raw).firstOrNull()?.slug.orEmpty()
     }
 
@@ -398,6 +402,7 @@ class ComposeRepository(
             prefer = "return=representation",
             requireAuth = true,
         )
+        supabase.wakePushDelivery("job-created")
         json.decodeFromString<List<SlugResponseDto>>(raw).firstOrNull()?.slug.orEmpty()
     }
 
@@ -426,6 +431,7 @@ class ComposeRepository(
             prefer = "return=representation",
             requireAuth = true,
         )
+        supabase.wakePushDelivery("gig-created")
         json.decodeFromString<List<SlugResponseDto>>(raw).firstOrNull()?.slug.orEmpty()
     }
 
@@ -473,6 +479,7 @@ class ComposeRepository(
                 supabase.postJson("project_media", payload, prefer = "return=minimal", requireAuth = true)
             }
         }
+        supabase.wakePushDelivery("project-created")
         created.slug
     }
 
@@ -489,6 +496,7 @@ class ComposeRepository(
             },
             requireAuth = true,
         )
+        supabase.wakePushDelivery("group-created")
         slug
     }
 

@@ -175,13 +175,59 @@ export function toSource(
   };
 }
 
+export interface PlannedPush<T extends DeviceRow | FcmDeviceRow> {
+  words: NonNullable<ReturnType<typeof summarise>>;
+  rows: T[];
+}
+
+/**
+ * Groups pending rows per device by topic (`c-<conv>`, `p-<post>`, `n-<id>`).
+ * Up to 4 distinct topics stay separate so a direct message keeps its thread
+ * URL, messenger channel, and inline reply action instead of being swallowed
+ * into a low-priority generic summary beside a post like or reaction. Five or
+ * more topics collapse cleanly into a single digest notification.
+ */
+export function planDeviceDeliveries<
+  T extends Pick<
+    DeviceRow,
+    'notification_id' | 'kind' | 'actor_name' | 'body' | 'url' | 'conversation_id' | 'post_id'
+  >,
+>(rows: readonly T[], language: 'bn' | 'en'): PlannedPush<T & DeviceRow>[] {
+  if (rows.length === 0) return [];
+  const byTopic = new Map<string, { rows: T[]; sources: NotificationSource[] }>();
+  for (const row of rows) {
+    const src = toSource(row, language);
+    const topic = wordsFor(src).topic;
+    const bucket = byTopic.get(topic);
+    if (bucket === undefined) {
+      byTopic.set(topic, { rows: [row], sources: [src] });
+    } else {
+      bucket.rows.push(row);
+      bucket.sources.push(src);
+    }
+  }
+
+  if (byTopic.size <= 4) {
+    const out: PlannedPush<T & DeviceRow>[] = [];
+    for (const bucket of byTopic.values()) {
+      const words = summarise(bucket.sources, language);
+      if (words !== null) out.push({ words, rows: bucket.rows as (T & DeviceRow)[] });
+    }
+    return out;
+  }
+
+  const allSources = rows.map((row) => toSource(row, language));
+  const summary = summarise(allSources, language);
+  return summary === null ? [] : [{ words: summary, rows: rows as (T & DeviceRow)[] }];
+}
+
 /**
  * The engine.
  *
  * One run reads what is pending for Web Push (`push_pending_devices`) and
- * Firebase Cloud Messaging (`fcm_pending_devices`), groups per device, sends one
- * push per device carrying either the single notification or a summary, and
- * marks what was delivered.
+ * Firebase Cloud Messaging (`fcm_pending_devices`), groups per device by topic,
+ * sends encrypted Web Push and high-priority FCM notifications, and marks what
+ * was delivered.
  */
 export async function runPush(env: Env, options: { limit?: number } = {}): Promise<RunStats> {
   const started = Date.now();
@@ -230,62 +276,58 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
         const first = deviceRows[0];
         if (first === undefined) return;
         const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
-
-        const sources = deviceRows.map((row) => toSource(row, language));
-        const words =
-          sources.length > 1
-            ? summarise(sources, language)
-            : sources[0] !== undefined
-              ? wordsFor(sources[0])
-              : null;
-        if (words === null) {
+        const plans = planDeviceDeliveries(deviceRows, language);
+        if (plans.length === 0) {
           stats.skipped += deviceRows.length;
           return;
         }
 
-        const payload = {
-          title: words.title,
-          body: words.body,
-          url: words.url,
-          tag: words.tag,
-          icon: '/icons/icon-192.png',
-          badge: '/icons/maskable-512.png',
-          ts: Date.now(),
-        };
+        for (const plan of plans) {
+          const { words } = plan;
+          const payload = {
+            title: words.title,
+            body: words.body,
+            url: words.url,
+            tag: words.tag,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/maskable-512.png',
+            ts: Date.now(),
+          };
 
-        const outcome: DeliveryOutcome = await deliver({
-          target: { endpoint, p256dh: first.p256dh ?? '', auth: first.auth ?? '' },
-          keys,
-          payload,
-          topic: words.topic,
-          urgency: sources.length > 1 ? 'normal' : 'high',
-        });
+          const outcome: DeliveryOutcome = await deliver({
+            target: { endpoint, p256dh: first.p256dh ?? '', auth: first.auth ?? '' },
+            keys,
+            payload,
+            topic: words.topic,
+            urgency: plans.length > 1 ? 'normal' : 'high',
+          });
 
-        switch (outcome) {
-          case 'sent':
-            stats.sent += 1;
-            for (const row of deviceRows) reached.add(row.notification_id);
-            break;
-          case 'dead':
-            stats.dead += 1;
-            dead.add(endpoint);
-            break;
-          case 'invalid':
-            stats.invalid += 1;
-            invalid.add(endpoint);
-            break;
-          case 'unauthorized':
-            stats.unauthorized += 1;
-            break;
-          case 'retry':
-            stats.retry += 1;
-            break;
-          default:
-            stats.failed += 1;
-            break;
+          switch (outcome) {
+            case 'sent':
+              stats.sent += 1;
+              for (const row of plan.rows) reached.add(row.notification_id);
+              break;
+            case 'dead':
+              stats.dead += 1;
+              dead.add(endpoint);
+              return;
+            case 'invalid':
+              stats.invalid += 1;
+              invalid.add(endpoint);
+              return;
+            case 'unauthorized':
+              stats.unauthorized += 1;
+              break;
+            case 'retry':
+              stats.retry += 1;
+              break;
+            default:
+              stats.failed += 1;
+              break;
+          }
+
+          if (shouldRetry(outcome)) return;
         }
-
-        if (shouldRetry(outcome)) return;
       });
 
       await Promise.all(
@@ -364,53 +406,59 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
         const first = deviceRows[0];
         if (first === undefined) return;
         const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
-        const sources = deviceRows.map((row) => toSource(row, language));
-        const words =
-          sources.length > 1
-            ? summarise(sources, language)
-            : sources[0] !== undefined
-              ? wordsFor(sources[0])
-              : null;
-        if (words === null) {
+        const plans = planDeviceDeliveries(deviceRows, language);
+        if (plans.length === 0) {
           stats.skipped += deviceRows.length;
           return;
         }
 
-        const outcome =
-          accessToken === undefined
-            ? ('unauthorized' as const)
-            : await sendFcmNotification({
-                credentials: fcm,
-                token,
-                platform: first.platform,
-                words,
-                siteUrl,
-                urgency: sources.length > 1 ? 'normal' : 'high',
-                accessToken,
-              });
+        for (const plan of plans) {
+          const newest = plan.rows[plan.rows.length - 1] ?? first;
+          const outcome =
+            accessToken === undefined
+              ? ('unauthorized' as const)
+              : await sendFcmNotification({
+                  credentials: fcm,
+                  token,
+                  platform: first.platform,
+                  words: plan.words,
+                  siteUrl,
+                  urgency:
+                    first.platform === 'android' ? 'high' : plans.length > 1 ? 'normal' : 'high',
+                  notificationId: newest.notification_id,
+                  actorName: newest.actor_name,
+                  ...(plan.words.conversationId
+                    ? { conversationId: plan.words.conversationId }
+                    : newest.conversation_id
+                      ? { conversationId: newest.conversation_id }
+                      : {}),
+                  ...(newest.post_id ? { postId: newest.post_id } : {}),
+                  accessToken,
+                });
 
-        switch (outcome) {
-          case 'sent':
-            stats.sent += 1;
-            for (const row of deviceRows) fcmReached.add(row.notification_id);
-            break;
-          case 'dead':
-            stats.dead += 1;
-            fcmDead.add(token);
-            break;
-          case 'invalid':
-            stats.invalid += 1;
-            fcmInvalid.add(token);
-            break;
-          case 'unauthorized':
-            stats.unauthorized += 1;
-            break;
-          case 'retry':
-            stats.retry += 1;
-            break;
-          default:
-            stats.failed += 1;
-            break;
+          switch (outcome) {
+            case 'sent':
+              stats.sent += 1;
+              for (const row of plan.rows) fcmReached.add(row.notification_id);
+              break;
+            case 'dead':
+              stats.dead += 1;
+              fcmDead.add(token);
+              return;
+            case 'invalid':
+              stats.invalid += 1;
+              fcmInvalid.add(token);
+              return;
+            case 'unauthorized':
+              stats.unauthorized += 1;
+              return;
+            case 'retry':
+              stats.retry += 1;
+              break;
+            default:
+              stats.failed += 1;
+              break;
+          }
         }
       });
 

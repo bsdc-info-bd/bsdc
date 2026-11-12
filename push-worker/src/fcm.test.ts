@@ -8,7 +8,7 @@ import {
   resolveAndroidChannelId,
   sendFcmNotification,
 } from './fcm';
-import worker from './index';
+import worker, { planDeviceDeliveries } from './index';
 
 async function rsaKeyPair(): Promise<{ pem: string; publicKey: CryptoKey }> {
   const pair = (await crypto.subtle.generateKey(
@@ -150,7 +150,7 @@ describe('FCM HTTP v1 delivery', () => {
     expect(classifyFcmError(503, '')).toBe('retry');
   });
 
-  it('posts FCM v1 message payload with deep link and Android/WebPush metadata', async () => {
+  it('posts pure data-only HIGH-priority FCM v1 message payload for Android devices', async () => {
     const sent: { url: string; body: Record<string, unknown> }[] = [];
     const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       sent.push({
@@ -165,14 +165,18 @@ describe('FCM HTTP v1 delivery', () => {
       token: 'fcm-token-0123456789abcdefghijk',
       platform: 'android',
       words: {
-        title: 'New message · BSDC',
+        title: 'Rafiq · BSDC',
         body: 'Hello world',
         url: '/messages/c1',
         tag: 'bsdc-message-c1',
         topic: 'c-c1',
+        kind: 'message',
+        conversationId: 'c1',
       },
       siteUrl: 'https://www.bsdc.info.bd',
-      urgency: 'high',
+      urgency: 'normal',
+      notificationId: 'notif-1',
+      actorName: 'Rafiq',
       accessToken: 'cached-token',
       fetcher,
     });
@@ -181,15 +185,28 @@ describe('FCM HTTP v1 delivery', () => {
     expect(sent[0]?.url).toBe('https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send');
     const msg = sent[0]?.body['message'] as Record<string, unknown>;
     expect(msg['token']).toBe('fcm-token-0123456789abcdefghijk');
-    expect((msg['webpush'] as { fcm_options?: { link?: string } }).fcm_options?.link).toBe(
-      'https://www.bsdc.info.bd/messages/c1',
-    );
-    expect((msg['data'] as { path?: string; channel_id?: string }).path).toBe('/messages/c1');
-    expect((msg['data'] as { channel_id?: string }).channel_id).toBe('bsdc_messenger');
-    expect(
-      (msg['android'] as { notification?: { channel_id?: string } }).notification?.channel_id,
-    ).toBe('bsdc_messenger');
+    // Must omit top-level notification & android.notification so Android invokes onMessageReceived when killed/locked
+    expect(msg['notification']).toBeUndefined();
+    expect(msg['webpush']).toBeUndefined();
+    const androidCfg = msg['android'] as {
+      priority?: string;
+      ttl?: string;
+      direct_boot_ok?: boolean;
+      notification?: unknown;
+    };
+    expect(androidCfg.priority).toBe('HIGH');
+    expect(androidCfg.ttl).toBe('86400s');
+    expect(androidCfg.direct_boot_ok).toBe(true);
+    expect(androidCfg.notification).toBeUndefined();
+
+    const data = msg['data'] as Record<string, string>;
+    expect(data['path']).toBe('/messages/c1');
+    expect(data['kind']).toBe('message');
+    expect(data['conversation_id']).toBe('c1');
+    expect(data['channel_id']).toBe('bsdc_messenger');
+    expect(data['notification_id']).toBe('notif-1');
     expect(resolveAndroidChannelId({ tag: 'bsdc-comment-p1', url: '/p/p1' })).toBe('bsdc_social');
+    expect(resolveAndroidChannelId({ tag: 'bsdc-feedback-p1', url: '/p/p1' })).toBe('bsdc_social');
     expect(resolveAndroidChannelId({ tag: 'bsdc-order-o1', url: '/orders/o1' })).toBe(
       'bsdc_orders',
     );
@@ -199,6 +216,76 @@ describe('FCM HTTP v1 delivery', () => {
     expect(resolveAndroidChannelId({ tag: 'bsdc-summary', url: '/notifications' })).toBe(
       'bsdc_general',
     );
+  });
+
+  it('posts WebPush notification wrapper for web FCM registrations', async () => {
+    const sent: { body: Record<string, unknown> }[] = [];
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push({ body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown> });
+      return new Response(JSON.stringify({ name: 'projects/bsdc-bd/messages/2' }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    const outcome = await sendFcmNotification({
+      credentials: fcmCredentials(baseEnv())!,
+      token: 'web-fcm-token-0123456789abcdefghijk',
+      platform: 'web',
+      words: {
+        title: 'New message · BSDC',
+        body: 'Ping',
+        url: '/messages/c1',
+        tag: 'bsdc-message-c1',
+        topic: 'c-c1',
+        kind: 'message',
+      },
+      siteUrl: 'https://www.bsdc.info.bd',
+      urgency: 'high',
+      accessToken: 'cached-token',
+      fetcher,
+    });
+
+    expect(outcome).toBe('sent');
+    const msg = sent[0]?.body['message'] as Record<string, unknown>;
+    expect(msg['notification']).toBeDefined();
+    expect((msg['webpush'] as { fcm_options?: { link?: string } }).fcm_options?.link).toBe(
+      'https://www.bsdc.info.bd/messages/c1',
+    );
+    expect((msg['data'] as { kind?: string }).kind).toBe('message');
+  });
+
+  it('keeps distinct topics separate up to 4 threads and summarises at 5+', () => {
+    const mkRow = (id: string, kind: string, extra: Record<string, string | null> = {}) => ({
+      notification_id: id,
+      kind,
+      actor_name: 'Karim',
+      body: 'Check this out',
+      url: extra['url'] ?? `/p/${id}`,
+      conversation_id: extra['conversation_id'] ?? null,
+      post_id: extra['post_id'] ?? null,
+    });
+    const separate = planDeviceDeliveries(
+      [
+        mkRow('n1', 'message', { conversation_id: 'c1', url: '/messages/c1' }),
+        mkRow('n2', 'comment', { post_id: 'p1', url: '/p/p1' }),
+      ],
+      'en',
+    );
+    expect(separate).toHaveLength(2);
+    expect(separate[0]?.words.url).toBe('/messages/c1');
+    expect(separate[0]?.words.kind).toBe('message');
+    expect(separate[1]?.words.url).toBe('/p/p1');
+
+    const summarised = planDeviceDeliveries(
+      [
+        mkRow('n1', 'message', { conversation_id: 'c1', url: '/messages/c1' }),
+        mkRow('n2', 'comment', { post_id: 'p1', url: '/p/p1' }),
+        mkRow('n3', 'reaction', { post_id: 'p2', url: '/p/p2' }),
+        mkRow('n4', 'follow', { url: '/u/karim' }),
+        mkRow('n5', 'order', { url: '/orders/o1' }),
+      ],
+      'en',
+    );
+    expect(summarised).toHaveLength(1);
+    expect(summarised[0]?.words.tag).toBe('bsdc-summary');
   });
 
   it('delivers pending FCM devices end-to-end inside run /health even without VAPID', async () => {

@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -199,6 +200,7 @@ export async function joinGroup(groupId: string, message = ''): Promise<JoinStat
     p_message: message,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return (data as JoinStatus | null) ?? 'pending';
 }
 
@@ -218,6 +220,7 @@ export async function decideJoinRequest(
     p_approve: approve,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function setGroupRole(groupId: string, uid: string, role: GroupRole): Promise<void> {
@@ -276,6 +279,7 @@ export async function rsvpEvent(eventId: string, status: RsvpStatus): Promise<nu
     p_status: status,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return typeof data === 'number' ? data : 0;
 }
 
@@ -332,5 +336,6 @@ export async function fetchPages(limit = 40): Promise<CommunityPage[]> {
 export async function togglePageFollow(pageId: string): Promise<boolean> {
   const { data, error } = await getSupabase().rpc('toggle_page_follow', { p_page_id: pageId });
   if (error) throw toDataError(error);
+  if (data === true) wakePushDelivery();
   return data === true;
 }

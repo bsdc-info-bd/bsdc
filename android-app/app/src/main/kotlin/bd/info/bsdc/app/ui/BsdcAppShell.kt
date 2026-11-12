@@ -40,9 +40,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -56,6 +58,8 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.R
@@ -70,14 +74,18 @@ import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
+import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.NotificationPrefs
+import bd.info.bsdc.app.core.model.PermissionGrantState
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
 import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
 import bd.info.bsdc.app.core.permissions.PersistentPermissionReadinessBanner
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
+import bd.info.bsdc.app.core.push.PushEventBus
+import bd.info.bsdc.app.core.push.PushRegistrationSyncWorker
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
 import bd.info.bsdc.app.core.sync.SyncScheduler
 import bd.info.bsdc.app.di.BsdcAppContainer
@@ -89,7 +97,9 @@ import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.MarketHubScreen
+import bd.info.bsdc.app.feature.messenger.LiveChannelStatus
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
+import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
 import bd.info.bsdc.app.feature.news.NewsReaderScreen
 import bd.info.bsdc.app.feature.news.SystemDiagnosticsAndSettingsScreen
 import bd.info.bsdc.app.feature.notifications.NotificationsScreen
@@ -144,7 +154,8 @@ fun BsdcAppShell(
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
-    var unreadNotifications by remember { mutableStateOf(0) }
+    var unreadNotifications by remember { mutableIntStateOf(0) }
+    var notificationsLiveNonce by remember { mutableIntStateOf(0) }
     var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
 
@@ -257,16 +268,63 @@ fun BsdcAppShell(
     }
 
     // Clear explicit auth overlay automatically, register FCM token, and refresh unread badge
-    LaunchedEffect(authState.gate, authState.session?.uid, language) {
+    val notifPermGranted = permissionCoordinator.states[DevicePermissionKind.NOTIFICATIONS] == PermissionGrantState.GRANTED
+    LaunchedEffect(authState.gate, authState.session?.uid, language, notifPermGranted) {
         if (authState.gate == AuthGateState.READY) {
             showAuthModal = false
             val uid = authState.session?.uid
             if (!uid.isNullOrBlank()) {
                 container.pushRegistrationManager.registerCurrentDevice(uid, language)
+                if (notifPermGranted) {
+                    PushRegistrationSyncWorker.enqueueImmediate(context)
+                }
                 unreadNotifications = container.notificationsRepository.fetchUnreadCount()
             }
         } else if (authState.gate == AuthGateState.SIGNED_OUT) {
             unreadNotifications = 0
+        }
+    }
+
+    // Real-time Supabase WebSocket notification stream + live foreground FCM event bus
+    val readyUid = authState.session?.uid?.takeIf { authState.gate == AuthGateState.READY && it.isNotBlank() }
+    DisposableEffect(readyUid) {
+        if (readyUid == null) {
+            onDispose { }
+        } else {
+            val stop = container.messengerRealtimeTransport.joinNotificationStream(
+                viewerUid = readyUid,
+                listener = object : SupabaseRealtimeTransport.NotificationStreamListener {
+                    override fun onNotificationChange() {
+                        notificationsLiveNonce++
+                        scope.launch {
+                            unreadNotifications = container.notificationsRepository.fetchUnreadCount()
+                        }
+                    }
+
+                    override fun onStatusChanged(status: LiveChannelStatus) = Unit
+                },
+            )
+            onDispose { stop() }
+        }
+    }
+
+    LaunchedEffect(readyUid) {
+        if (readyUid == null) return@LaunchedEffect
+        PushEventBus.events.collect {
+            notificationsLiveNonce++
+            unreadNotifications = container.notificationsRepository.fetchUnreadCount()
+        }
+    }
+
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        if (readyUid != null) {
+            notificationsLiveNonce++
+            scope.launch {
+                unreadNotifications = container.notificationsRepository.fetchUnreadCount()
+            }
+            if (notifPermGranted) {
+                PushRegistrationSyncWorker.enqueueImmediate(context)
+            }
         }
     }
 
@@ -352,6 +410,7 @@ fun BsdcAppShell(
                     showNotificationsScreen = false
                     onRouteEvaluated(LinkDestination.NativeRoute(destPath))
                 },
+                liveRefreshNonce = notificationsLiveNonce,
             )
             return
         }

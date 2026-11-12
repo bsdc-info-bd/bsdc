@@ -32,7 +32,8 @@ export type NotificationKind =
   | 'event'
   | 'certificate'
   | 'mention_group'
-  | 'group_invite';
+  | 'group_invite'
+  | 'feedback';
 
 export interface PushWords {
   title: string;
@@ -41,6 +42,10 @@ export interface PushWords {
   tag: string;
   /** A conversation, a post, a thread: what a later push may replace. */
   topic: string;
+  /** Real domain notification kind preserved for native clients & analytics. */
+  kind?: NotificationKind;
+  /** Conversation ID when this notification belongs to a Messenger thread. */
+  conversationId?: string;
 }
 
 export interface NotificationSource {
@@ -133,6 +138,7 @@ const NAMES: Record<NotificationKind, { bn: string; en: string }> = {
   certificate: { bn: 'সার্টিফিকেট', en: 'Certificate' },
   mention_group: { bn: 'গ্রুপে উল্লেখ', en: 'Group mention' },
   group_invite: { bn: 'গ্রুপ আমন্ত্রণ', en: 'Group invitation' },
+  feedback: { bn: 'মতামত', en: 'Feedback' },
 };
 
 /** The words for one notification, in one language. */
@@ -140,7 +146,8 @@ export function wordsFor(source: NotificationSource): PushWords {
   const name = cleanName(source.actorName, source.language === 'en' ? 'Someone' : 'কেউ একজন');
   const preview = cleanPreview(source.preview);
   const url = safePath(source.url);
-  const label = NAMES[source.kind][source.language];
+  const meta = NAMES[source.kind] ?? NAMES.moderation;
+  const label = meta[source.language];
   const en = source.language === 'en';
 
   /** A body made of the name, the verb and what was said. */
@@ -233,6 +240,17 @@ export function wordsFor(source: NotificationSource): PushWords {
     case 'group_invite':
       body = said({ bn: 'আপনাকে একটি গ্রুপে আমন্ত্রণ জানিয়েছেন', en: 'invited you to a group' });
       break;
+    case 'feedback':
+      body =
+        preview.length > 0
+          ? preview
+          : en
+            ? 'New feedback or report update'
+            : 'নতুন মতামত বা রিপোর্ট আপডেট';
+      break;
+    default:
+      body = preview.length > 0 ? preview : label;
+      break;
   }
 
   // The collapse key: a conversation collapses to one row, so ten messages do
@@ -245,43 +263,88 @@ export function wordsFor(source: NotificationSource): PushWords {
         : `n-${source.id}`;
 
   return {
-    title: `${label} · BSDC`,
+    title:
+      source.kind === 'message' && cleanName(source.actorName, '').length > 0
+        ? `${name} · BSDC`
+        : `${label} · BSDC`,
     body: body.length > 0 ? body : label,
     url,
-    tag: `bsdc-${source.kind}-${source.conversationId ?? source.postId ?? source.id}`,
+    tag: `bsdc-${source.kind}-${topicBase}`,
     topic: topicBase,
+    kind: source.kind,
+    ...(source.conversationId !== undefined && source.conversationId.length > 0
+      ? { conversationId: source.conversationId }
+      : {}),
   };
 }
 
-/** One sentence for several things at once, for a device that slept all day. */
+/**
+ * Summarises several notifications that arrived while the device was quiet.
+ *
+ * A member who opens their phone after an hour does not want eleven banners on
+ * their lock screen: they want one line telling them who was most active and
+ * how many others are waiting inside.
+ */
 export function summarise(
-  items: readonly NotificationSource[],
+  sources: readonly NotificationSource[],
   language: 'bn' | 'en',
 ): PushWords | null {
-  if (items.length === 0) return null;
-  const en = language === 'en';
-  if (items.length === 1) {
-    const only = items[0];
-    return only === undefined ? null : wordsFor(only);
+  if (sources.length === 0) return null;
+  if (sources.length === 1 && sources[0] !== undefined) return wordsFor(sources[0]);
+
+  const count = sources.length;
+  const newest = sources[sources.length - 1];
+
+  // If every queued row belongs to the same Messenger thread, keep the thread URL,
+  // conversationId, kind, and topic intact so tapping or replying still opens that chat.
+  const firstConversationId = sources[0]?.conversationId;
+  const sameThread =
+    typeof firstConversationId === 'string' &&
+    firstConversationId.length > 0 &&
+    sources.every((s) => s.conversationId === firstConversationId && s.kind === 'message');
+  if (sameThread && newest !== undefined) {
+    const sender = cleanName(newest.actorName, language === 'en' ? 'New messages' : 'নতুন বার্তা');
+    const latestPreview = cleanPreview(newest.preview);
+    const title =
+      language === 'en'
+        ? `${sender} (${count} messages) · BSDC`
+        : `${sender} (${toBanglaDigits(count)}টি বার্তা) · BSDC`;
+    const body =
+      latestPreview.length > 0
+        ? latestPreview
+        : language === 'en'
+          ? `${count} unread messages`
+          : `${toBanglaDigits(count)}টি নতুন বার্তা`;
+    return {
+      title,
+      body,
+      url: safePath(newest.url || `/messages/${firstConversationId}`),
+      tag: `bsdc-message-c-${firstConversationId}`,
+      topic: `c-${firstConversationId}`,
+      kind: 'message',
+      conversationId: firstConversationId,
+    };
   }
 
-  const names = [...new Set(items.map((item) => cleanName(item.actorName, '')))].filter(
-    (name) => name.length > 0,
-  );
-  const first = names[0] ?? (en ? 'Someone' : 'কেউ একজন');
-  const others = Math.max(0, names.length - 1);
-  const count = items.length;
+  const names = [
+    ...new Set(sources.map((source) => cleanName(source.actorName, '')).filter(Boolean)),
+  ];
+  const lead = names[0] ?? (language === 'en' ? 'Someone' : 'কেউ একজন');
+  const others = count - 1;
 
-  const title = en
-    ? `${count} new notifications · BSDC`
-    : `${toBanglaDigits(count)}টি নতুন বিজ্ঞপ্তি · বিএসডিসি`;
-  const body = en
-    ? others > 0
-      ? `${first} and ${others} others were active while you were away`
-      : `${first} was active while you were away`
-    : others > 0
-      ? `${first} এবং আরও ${toBanglaDigits(others)} জন আপনার অনুপস্থিতিতে সক্রিয় ছিলেন`
-      : `${first} আপনার অনুপস্থিতিতে সক্রিয় ছিলেন`;
+  const title =
+    language === 'en'
+      ? `${count} new notifications · BSDC`
+      : `${toBanglaDigits(count)}টি নতুন বিজ্ঞপ্তি · BSDC`;
+
+  const body =
+    language === 'en'
+      ? others === 1
+        ? `${lead} and 1 other`
+        : `${lead} and ${others} others`
+      : others === 1
+        ? `${lead} এবং আরও ১ জন`
+        : `${lead} এবং আরও ${toBanglaDigits(others)} জন`;
 
   return {
     title,

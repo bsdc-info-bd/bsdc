@@ -1,11 +1,14 @@
 package bd.info.bsdc.app.core.push
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 
 object PushChannelManager {
+
+    private const val BSDC_ACCENT_COLOR = 0xFF15803D.toInt()
 
     fun ensureChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -19,6 +22,9 @@ object PushChannelManager {
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "Direct and group chat messages (রিয়েল-টাইম মেসেঞ্জার বার্তা)"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableLights(true)
+                lightColor = BSDC_ACCENT_COLOR
                 enableVibration(true)
                 setShowBadge(true)
             },
@@ -27,7 +33,11 @@ object PushChannelManager {
                 "Community & Replies",
                 NotificationManager.IMPORTANCE_DEFAULT,
             ).apply {
-                description = "Comments, reactions, mentions, and followers (মন্তব্য, প্রতিক্রিয়া ও মেনশন)"
+                description = "Comments, reactions, mentions, polls, and followers (মন্তব্য, প্রতিক্রিয়া ও মেনশন)"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableLights(true)
+                lightColor = BSDC_ACCENT_COLOR
+                enableVibration(true)
                 setShowBadge(true)
             },
             NotificationChannel(
@@ -36,6 +46,9 @@ object PushChannelManager {
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
                 description = "Order updates, seller reviews, and vendor payouts (অর্ডার ও পেমেন্ট)"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableLights(true)
+                lightColor = BSDC_ACCENT_COLOR
                 enableVibration(true)
                 setShowBadge(true)
             },
@@ -44,7 +57,10 @@ object PushChannelManager {
                 "Verification & Notices",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "Document verification, certificates, courses, events, and jobs"
+                description = "Document verification, certificates, courses, events, proposals, and jobs"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                enableLights(true)
+                lightColor = BSDC_ACCENT_COLOR
                 enableVibration(true)
                 setShowBadge(true)
             },
@@ -54,6 +70,7 @@ object PushChannelManager {
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
                 description = "Summarized community digests and platform updates"
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 setShowBadge(false)
             },
         )
