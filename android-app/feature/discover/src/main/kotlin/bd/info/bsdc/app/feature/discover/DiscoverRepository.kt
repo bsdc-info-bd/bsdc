@@ -2,8 +2,14 @@ package bd.info.bsdc.app.feature.discover
 
 import bd.info.bsdc.app.core.database.BsdcDatabase
 import bd.info.bsdc.app.core.database.SavedSearchEntity
+import bd.info.bsdc.app.core.media.ImgbbUrlAllowlist
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.MemberProfile
+import bd.info.bsdc.app.core.model.PollOptionModel
+import bd.info.bsdc.app.core.model.PostAuthorSummary
+import bd.info.bsdc.app.core.model.PostKind
+import bd.info.bsdc.app.core.model.PostMediaModel
 import bd.info.bsdc.app.core.network.BsdcPlatformApi
 import bd.info.bsdc.app.core.network.ProfileRowCoercer
 import bd.info.bsdc.app.core.network.ProfileRowDto
@@ -11,14 +17,78 @@ import bd.info.bsdc.app.core.network.SupabaseRestClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+
+@Serializable
+private data class MemberPostAuthorDto(
+    val uid: String = "",
+    val username: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+)
+
+@Serializable
+private data class MemberPostTagDto(
+    @SerialName("tag_slug") val tagSlug: String = "",
+)
+
+@Serializable
+private data class MemberMediaAssetDto(
+    val url: String = "",
+    @SerialName("thumb_url") val thumbUrl: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+)
+
+@Serializable
+private data class MemberPostMediaDto(
+    @SerialName("media_id") val mediaId: String = "",
+    val position: Int = 0,
+    @SerialName("alt_text") val altText: String = "",
+    @SerialName("media_assets") val mediaAssets: MemberMediaAssetDto? = null,
+)
+
+@Serializable
+private data class MemberPollOptionDto(
+    val id: String = "",
+    val label: String = "",
+    val votes: Int = 0,
+    val position: Int = 0,
+)
+
+@Serializable
+private data class MemberPostJoinedDto(
+    val id: String = "",
+    val slug: String = "",
+    val kind: String = "post",
+    val title: String = "",
+    val body: String = "",
+    val excerpt: String = "",
+    @SerialName("cover_url") val coverUrl: String = "",
+    val code: String = "",
+    @SerialName("code_language") val codeLanguage: String = "",
+    val language: String = "bn",
+    @SerialName("reading_time") val readingTime: Int = 1,
+    @SerialName("views_count") val viewsCount: Int = 0,
+    @SerialName("likes_count") val likesCount: Int = 0,
+    @SerialName("comments_count") val commentsCount: Int = 0,
+    @SerialName("is_sensitive") val isSensitive: Boolean = false,
+    @SerialName("allow_comments") val allowComments: Boolean = true,
+    @SerialName("published_at") val publishedAt: String? = null,
+    @SerialName("created_at") val createdAt: String = "",
+    val profiles: MemberPostAuthorDto? = null,
+    @SerialName("post_tags") val postTags: List<MemberPostTagDto>? = null,
+    @SerialName("post_media") val postMedia: List<MemberPostMediaDto>? = null,
+    @SerialName("poll_options") val pollOptions: List<MemberPollOptionDto>? = null,
+)
 
 class DiscoverRepository(
     private val supabase: SupabaseRestClient,
@@ -426,6 +496,80 @@ class DiscoverRepository(
             }
         }
 
+    suspend fun fetchMemberPosts(uid: String, limit: Int = 20): Result<List<FeedPost>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "posts",
+                    queryPairs = listOf(
+                        "select" to "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))",
+                        "author_uid" to "eq.$uid",
+                        "status" to "eq.published",
+                        "deleted_at" to "is.null",
+                        "order" to "published_at.desc.nullslast",
+                        "limit" to limit.toString(),
+                    ),
+                    requireAuth = false,
+                )
+                supabase.decode<List<MemberPostJoinedDto>>(raw)
+                    .filter { it.id.isNotBlank() }
+                    .map { dto ->
+                        val kind = PostKind.entries.firstOrNull {
+                            it.name.equals(dto.kind, ignoreCase = true)
+                        } ?: PostKind.POST
+                        val media = dto.postMedia.orEmpty()
+                            .sortedBy { it.position }
+                            .mapNotNull { item ->
+                                val url = ImgbbUrlAllowlist.normalizeImageUrl(item.mediaAssets?.url.orEmpty())
+                                if (url.isEmpty()) return@mapNotNull null
+                                val thumb = ImgbbUrlAllowlist.normalizeImageUrl(item.mediaAssets?.thumbUrl.orEmpty()).ifEmpty { url }
+                                PostMediaModel(
+                                    mediaId = item.mediaId,
+                                    url = url,
+                                    thumbUrl = thumb,
+                                    altText = item.altText,
+                                    position = item.position,
+                                    width = item.mediaAssets?.width,
+                                    height = item.mediaAssets?.height,
+                                )
+                            }
+                        FeedPost(
+                            id = dto.id,
+                            slug = dto.slug,
+                            kind = kind,
+                            title = dto.title,
+                            body = dto.body,
+                            excerpt = dto.excerpt,
+                            coverUrl = ImgbbUrlAllowlist.normalizeImageUrl(dto.coverUrl),
+                            code = dto.code,
+                            codeLanguage = dto.codeLanguage,
+                            language = if (dto.language == "en") AppLanguage.EN else AppLanguage.BN,
+                            readingTime = dto.readingTime.coerceAtLeast(1),
+                            views = dto.viewsCount.coerceAtLeast(0),
+                            likes = dto.likesCount.coerceAtLeast(0),
+                            comments = dto.commentsCount.coerceAtLeast(0),
+                            isSensitive = dto.isSensitive,
+                            allowComments = dto.allowComments,
+                            publishedAt = dto.publishedAt.orEmpty(),
+                            createdAt = dto.createdAt,
+                            author = dto.profiles?.takeIf { it.uid.isNotBlank() }?.let { prof ->
+                                PostAuthorSummary(
+                                    uid = prof.uid,
+                                    username = prof.username.orEmpty(),
+                                    displayName = prof.displayName?.ifBlank { "Member" } ?: "Member",
+                                    avatarUrl = prof.avatarUrl.orEmpty(),
+                                )
+                            },
+                            tags = dto.postTags.orEmpty().map { it.tagSlug }.filter { it.isNotBlank() },
+                            media = media,
+                            poll = dto.pollOptions.orEmpty().sortedBy { it.position }.map { opt ->
+                                PollOptionModel(opt.id, opt.label, opt.votes.coerceAtLeast(0), opt.position)
+                            },
+                        )
+                    }
+            }
+        }
+
     suspend fun updateOwnProfile(
         uid: String,
         displayName: String,
@@ -433,6 +577,10 @@ class DiscoverRepository(
         location: String,
         website: String,
         skills: List<String>,
+        interests: List<String>? = null,
+        avatarUrl: String? = null,
+        coverUrl: String? = null,
+        language: AppLanguage? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val safeWeb = DiscoverSearchEngine.safeHttpUrlOrEmpty(website)
@@ -442,6 +590,41 @@ class DiscoverRepository(
                 put("location", location.trim().take(80))
                 put("website", safeWeb)
                 put("skills", buildJsonArray { skills.take(15).forEach { add(JsonPrimitive(it.trim())) } })
+                if (interests != null) {
+                    put("interests", buildJsonArray { interests.take(15).forEach { add(JsonPrimitive(it.trim())) } })
+                }
+                if (avatarUrl != null) {
+                    put("avatar_url", ImgbbUrlAllowlist.normalizeImageUrl(avatarUrl))
+                }
+                if (coverUrl != null) {
+                    put("cover_url", ImgbbUrlAllowlist.normalizeImageUrl(coverUrl))
+                }
+                if (language != null) {
+                    put("language", language.tag)
+                }
+            }
+            supabase.patchJson(
+                table = "profiles",
+                body = body,
+                queryPairs = listOf("uid" to "eq.$uid"),
+            )
+            Unit
+        }
+    }
+
+    suspend fun updateProfilePhoto(
+        uid: String,
+        avatarUrl: String? = null,
+        coverUrl: String? = null,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val body = buildJsonObject {
+                if (avatarUrl != null) {
+                    put("avatar_url", ImgbbUrlAllowlist.normalizeImageUrl(avatarUrl))
+                }
+                if (coverUrl != null) {
+                    put("cover_url", ImgbbUrlAllowlist.normalizeImageUrl(coverUrl))
+                }
             }
             supabase.patchJson(
                 table = "profiles",

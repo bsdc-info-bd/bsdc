@@ -1,20 +1,26 @@
 package bd.info.bsdc.app.core.designsystem
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -25,14 +31,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -42,6 +51,31 @@ enum class BsdcTone {
     WARN,
     BAD,
     INFO,
+}
+
+fun bsdcInitialsOf(displayName: String, fallback: String = "B"): String {
+    val parts = displayName.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
+    val joined = parts.mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
+    return joined.ifEmpty { fallback.take(2).uppercase() }
+}
+
+@Composable
+fun BsdcResponsiveContainer(
+    modifier: Modifier = Modifier,
+    maxWidth: Dp = 780.dp,
+    content: @Composable BoxScope.() -> Unit,
+) {
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = maxWidth),
+            content = content,
+        )
+    }
 }
 
 @Composable
@@ -109,27 +143,154 @@ private fun ButtonContent(
         )
         Spacer(Modifier.width(8.dp))
     }
-    Text(text = label, style = MaterialTheme.typography.labelLarge)
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable
 fun BsdcCard(
     modifier: Modifier = Modifier,
     elevated: Boolean = false,
+    onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = BsdcThemeTokens.colors
-    Surface(
+    val reducedMotion = BsdcThemeTokens.reducedMotion
+    val cardColor = if (elevated) colors.surfaceElevated else MaterialTheme.colorScheme.surfaceVariant
+    val animMod = if (reducedMotion) Modifier else Modifier.animateContentSize(
+        animationSpec = tween(durationMillis = 220, easing = BsdcMotionSpecs.SmoothDecelerateEasing),
+    )
+
+    if (onClick != null) {
+        val interactionSource = remember { MutableInteractionSource() }
+        Surface(
+            onClick = onClick,
+            interactionSource = interactionSource,
+            modifier = modifier
+                .fillMaxWidth()
+                .pressBounceScale(interactionSource)
+                .then(animMod),
+            shape = RoundedCornerShape(20.dp),
+            color = cardColor,
+            tonalElevation = if (elevated) 2.dp else 0.dp,
+            border = BorderStroke(1.dp, colors.border),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+        }
+    } else {
+        Surface(
+            modifier = modifier
+                .fillMaxWidth()
+                .then(animMod),
+            shape = RoundedCornerShape(20.dp),
+            color = cardColor,
+            tonalElevation = if (elevated) 2.dp else 0.dp,
+            border = BorderStroke(1.dp, colors.border),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                content = content,
+            )
+        }
+    }
+}
+
+@Composable
+fun BsdcSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    Row(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        color = if (elevated) colors.surfaceElevated else MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(1.dp, colors.border),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = BsdcThemeTokens.colors.mutedText,
+                )
+            }
+        }
+        if (!actionLabel.isNullOrBlank() && onAction != null) {
+            TextButton(onClick = onAction) {
+                Text(actionLabel)
+            }
+        }
+    }
+}
+
+@Composable
+fun BsdcMetricTile(
+    label: String,
+    value: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    tone: BsdcTone = BsdcTone.NEUTRAL,
+) {
+    val ext = BsdcThemeTokens.colors
+    val tint = when (tone) {
+        BsdcTone.OK -> ext.brandStrong
+        BsdcTone.INFO -> ext.accentBlue
+        BsdcTone.WARN -> ext.warn
+        BsdcTone.BAD -> ext.danger
+        BsdcTone.NEUTRAL -> MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        color = ext.surfaceElevated.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, ext.border),
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            content = content,
-        )
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = tint,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = ext.mutedText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+            )
+        }
     }
 }
 
@@ -157,6 +318,8 @@ fun BsdcBadge(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = fg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -198,11 +361,13 @@ fun BsdcStatusBanner(
                     style = MaterialTheme.typography.titleMedium,
                     color = fg,
                 )
-                Text(
-                    text = body,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                if (body.isNotBlank()) {
+                    Text(
+                        text = body,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
             }
             if (actionLabel != null && onAction != null) {
                 BsdcButton(label = actionLabel, onClick = onAction, secondary = true)
@@ -219,25 +384,39 @@ fun BsdcAvatarCircle(
     modifier: Modifier = Modifier,
 ) {
     val ext = BsdcThemeTokens.colors
+    val displayInitials = remember(initials) { bsdcInitialsOf(initials) }
+    val textStyle = when {
+        size <= 30.dp -> MaterialTheme.typography.labelSmall
+        size <= 50.dp -> MaterialTheme.typography.titleMedium
+        else -> MaterialTheme.typography.headlineSmall
+    }
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            ext.brandSoft,
+            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+        ),
+    )
     Box(modifier = modifier.size(size)) {
         Box(
             modifier = Modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(ext.brandSoft),
+                .background(gradient)
+                .border(1.dp, ext.border, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = initials.take(2).uppercase(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                text = displayInitials,
+                style = textStyle.copy(fontWeight = FontWeight.Bold),
                 color = ext.brandStrong,
+                maxLines = 1,
             )
         }
         if (online) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .size(size * 0.28f)
+                    .size((size * 0.28f).coerceAtLeast(10.dp))
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.background)
                     .padding(2.dp)
@@ -245,6 +424,60 @@ fun BsdcAvatarCircle(
                     .background(ext.online),
             )
         }
+    }
+}
+
+@Composable
+fun BsdcFeedSkeletonCard(modifier: Modifier = Modifier) {
+    BsdcCard(modifier = modifier) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .bsdcShimmerPlaceholder(),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .width(140.dp)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .bsdcShimmerPlaceholder(),
+                )
+                Box(
+                    modifier = Modifier
+                        .width(96.dp)
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .bsdcShimmerPlaceholder(),
+                )
+            }
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.85f)
+                .height(18.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .bsdcShimmerPlaceholder(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(14.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .bsdcShimmerPlaceholder(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .bsdcShimmerPlaceholder(),
+        )
     }
 }
 
@@ -261,13 +494,13 @@ fun BsdcEmptyState(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 12.dp),
+                .padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Box(
                 modifier = Modifier
-                    .size(56.dp)
+                    .size(60.dp)
                     .clip(CircleShape)
                     .background(BsdcThemeTokens.colors.brandSoft),
                 contentAlignment = Alignment.Center,
@@ -276,7 +509,7 @@ fun BsdcEmptyState(
                     imageVector = icon,
                     contentDescription = null,
                     tint = BsdcThemeTokens.colors.brandStrong,
-                    modifier = Modifier.size(28.dp),
+                    modifier = Modifier.size(30.dp),
                 )
             }
             Text(text = title, style = MaterialTheme.typography.titleLarge)

@@ -30,7 +30,13 @@ public final class ImgbbUrlAllowlist {
 
     private static final Set<String> SUFFIX_HOSTS = Set.of(
         "googleusercontent.com",
+        "ggpht.com",
         "firebasestorage.app",
+        "firebasestorage.googleapis.com",
+        "gravatar.com",
+        "wp.com",
+        "githubusercontent.com",
+        "dicebear.com",
         "tile.openstreetmap.org",
         "yimg.com",
         "avatars.githubusercontent.com"
@@ -81,6 +87,35 @@ public final class ImgbbUrlAllowlist {
             URI uri = URI.create(trimmed);
             String host = uri.getHost();
             return isAllowedImageHost(host);
+        } catch (IllegalArgumentException ex) {
+            return false;
+        }
+    }
+
+    /**
+     * Normalizes an avatar or media URL for rendering: trims whitespace and
+     * upgrades legacy plain-HTTP links on allowlisted hosts to HTTPS.
+     */
+    public static String normalizeImageUrl(String rawUrl) {
+        if (rawUrl == null) return "";
+        String trimmed = rawUrl.trim();
+        if (trimmed.isEmpty()) return "";
+        String candidate = trimmed.regionMatches(true, 0, "http://", 0, 7)
+            ? "https://" + trimmed.substring(7)
+            : trimmed;
+        return isAllowedImageUrl(candidate) ? candidate : "";
+    }
+
+    /**
+     * Returns true only when the URL belongs to an ImgBB host that BSDC's
+     * `/media/i` edge repair endpoint can safely proxy and cache.
+     */
+    public static boolean isRepairableImageUrl(String rawUrl) {
+        String normalized = normalizeImageUrl(rawUrl);
+        if (normalized.isEmpty()) return false;
+        try {
+            URI uri = URI.create(normalized);
+            return isRepairableImgbbHost(uri.getHost());
         } catch (IllegalArgumentException ex) {
             return false;
         }

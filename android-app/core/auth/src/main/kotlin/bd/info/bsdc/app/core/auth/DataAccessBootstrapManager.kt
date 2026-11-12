@@ -21,13 +21,27 @@ class DataAccessBootstrapManager(
 ) {
     private val mutex = Mutex()
 
-    suspend fun ensureDataAccess(user: FirebaseUser): Pair<String, SessionClaims> = mutex.withLock {
-        val currentResult = user.getIdToken(false).await()
+    suspend fun ensureDataAccess(
+        user: FirebaseUser,
+        forceRefresh: Boolean = false,
+    ): Pair<String, SessionClaims> = mutex.withLock {
+        val currentResult = user.getIdToken(forceRefresh).await()
         val initialClaims = AuthDomainValidators.parseSessionClaims(currentResult.claims)
         val initialToken = currentResult.token
+        val expMs = currentResult.expirationTimestamp * 1000L
+        val expiringSoon = expMs > 0L && expMs <= System.currentTimeMillis() + 60_000L
 
-        if (initialClaims.postgresAuthenticated && !initialToken.isNullOrBlank()) {
+        if (initialClaims.postgresAuthenticated && !initialToken.isNullOrBlank() && !expiringSoon && !forceRefresh) {
             return@withLock initialToken to initialClaims
+        }
+
+        if (initialClaims.postgresAuthenticated && (expiringSoon || forceRefresh)) {
+            val refreshed = user.getIdToken(true).await()
+            val refreshedClaims = AuthDomainValidators.parseSessionClaims(refreshed.claims)
+            val refreshedToken = refreshed.token
+            if (refreshedClaims.postgresAuthenticated && !refreshedToken.isNullOrBlank()) {
+                return@withLock refreshedToken to refreshedClaims
+            }
         }
 
         val freshToken = initialToken ?: user.getIdToken(true).await().token

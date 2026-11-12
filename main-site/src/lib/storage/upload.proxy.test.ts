@@ -8,10 +8,12 @@ import {
   type UploadCapabilities,
 } from './upload';
 
-const getIdToken = vi.fn(() => Promise.resolve('member-id-token'));
+const getIdToken = vi.fn((_forceRefresh?: boolean) => Promise.resolve('member-id-token'));
 
 vi.mock('@/lib/firebase', () => ({
-  getFirebaseAuth: () => ({ currentUser: { getIdToken: () => getIdToken() } }),
+  getFirebaseAuth: () => ({
+    currentUser: { getIdToken: (forceRefresh?: boolean) => getIdToken(forceRefresh) },
+  }),
 }));
 
 const PROXY = '/api/media/upload';
@@ -25,7 +27,7 @@ interface Sent {
 
 const sent: Sent[] = [];
 
-let answers: { match: string; status: number; body: unknown }[] = [];
+let answers: { match: string; status: number; body: unknown; once?: boolean }[] = [];
 
 /** How many upcoming requests should fail at the transport level. */
 let transportFailures = 0;
@@ -60,7 +62,11 @@ class FakeXMLHttpRequest {
       queueMicrotask(() => this.onerror?.());
       return;
     }
-    const answer = answers.find((candidate) => this.record.url.includes(candidate.match));
+    const answerIndex = answers.findIndex((candidate) => this.record.url.includes(candidate.match));
+    const answer = answerIndex >= 0 ? answers[answerIndex] : undefined;
+    if (answer?.once && answerIndex >= 0) {
+      answers.splice(answerIndex, 1);
+    }
     this.status = answer?.status ?? 200;
     this.response = answer?.body ?? null;
     queueMicrotask(() => this.onload?.());
@@ -169,6 +175,38 @@ describe('uploading through the edge', () => {
       messageKey: 'media.errors.signInRequired',
     });
     expect(sent).toHaveLength(0);
+  });
+
+  it('force-refreshes the Firebase token and retries once when /api/media/upload returns 401', async () => {
+    getIdToken
+      .mockResolvedValueOnce('stale-member-token')
+      .mockResolvedValueOnce('fresh-member-token');
+    answers = [
+      {
+        match: PROXY,
+        status: 401,
+        body: { ok: false, errorKey: 'media.errors.signInRequired' },
+        once: true,
+      },
+      { match: PROXY, status: 200, body: PROXY_OK },
+    ];
+    const result = await uploadMedia(picture(), { purpose: 'post-image' });
+    expect(result.url).toBe(PROXY_OK.url);
+    expect(sent).toHaveLength(2);
+    expect(sent[0]?.headers['authorization']).toBe('Bearer stale-member-token');
+    expect(sent[1]?.headers['authorization']).toBe('Bearer fresh-member-token');
+    expect(getIdToken).toHaveBeenNthCalledWith(1, false);
+    expect(getIdToken).toHaveBeenNthCalledWith(2, true);
+  });
+
+  it('surfaces signInRequired after a single force-refresh retry if 401 persists', async () => {
+    answers = [
+      { match: PROXY, status: 401, body: { ok: false, errorKey: 'media.errors.signInRequired' } },
+    ];
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.signInRequired',
+    });
+    expect(sent).toHaveLength(2);
   });
 
   it('surfaces the edge error and does not upload the file twice', async () => {

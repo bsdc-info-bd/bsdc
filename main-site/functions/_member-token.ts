@@ -21,6 +21,9 @@
 const JWKS_URL =
   'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 
+/** Canonical member Firebase project when no runtime override is bound. */
+const DEFAULT_MEMBER_PROJECT_ID = 'bsdc-bd';
+
 export interface MemberEnv {
   /** The Firebase project whose members this deployment serves. */
   FB_PROJECT_ID?: string;
@@ -48,10 +51,11 @@ function decodeSegment(segment: string): Record<string, unknown> {
   return JSON.parse(new TextDecoder().decode(base64UrlToBytes(segment))) as Record<string, unknown>;
 }
 
-/** Reads the `Authorization: Bearer …` header, or an empty string. */
+/** Reads the `Authorization: Bearer …` header (case-insensitive), or an empty string. */
 export function bearerToken(request: Request): string {
-  const authorization = request.headers.get('authorization') ?? '';
-  return authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : '';
+  const authorization = (request.headers.get('authorization') ?? '').trim();
+  const match = /^bearer\s+(.+)$/i.exec(authorization);
+  return match?.[1]?.trim() ?? '';
 }
 
 /** The project a token claims, read without trusting it. Verification follows. */
@@ -64,6 +68,22 @@ export function peekAudience(token: string): string {
   } catch {
     return '';
   }
+}
+
+async function fetchJwkByKid(kid: string): Promise<JsonWebKey | null> {
+  const findKey = async (url: string): Promise<JsonWebKey | null> => {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const jwks = (await response.json()) as { keys?: JsonWebKey[] };
+    return (
+      (jwks.keys ?? []).find((candidate) => (candidate as { kid?: string }).kid === kid) ?? null
+    );
+  };
+
+  const cached = await findKey(JWKS_URL);
+  if (cached !== null) return cached;
+  // Google rotates signing certs periodically; bypass stale CDN caches once on miss.
+  return await findKey(`${JWKS_URL}?t=${Date.now()}`);
 }
 
 /**
@@ -87,12 +107,8 @@ export async function verifyMember(
     const header = decodeSegment(headerPart);
     const payload = decodeSegment(payloadPart);
 
-    const response = await fetch(JWKS_URL);
-    if (!response.ok) return null;
-    const jwks = (await response.json()) as { keys?: JsonWebKey[] };
-
     const kid = typeof header['kid'] === 'string' ? header['kid'] : '';
-    const jwk = (jwks.keys ?? []).find((candidate) => (candidate as { kid?: string }).kid === kid);
+    const jwk = await fetchJwkByKid(kid);
     if (!jwk) return null;
 
     const key = await crypto.subtle.importKey(
@@ -113,8 +129,8 @@ export async function verifyMember(
 
     const now = Math.floor(Date.now() / 1000);
     const expiry = typeof payload['exp'] === 'number' ? payload['exp'] : 0;
-    // A small clock skew allowance; the token is otherwise rejected outright.
-    if (expiry + 30 < now) return null;
+    // Allow minor edge clock skew; tokens past this window are rejected outright.
+    if (expiry + 60 < now) return null;
     if (payload['aud'] !== projectId) return null;
     if (payload['iss'] !== `https://securetoken.google.com/${projectId}`) return null;
 
@@ -135,7 +151,9 @@ export async function verifyMember(
 
 /** The member behind a request, or null when the caller is not signed in. */
 export async function memberOf(request: Request, env: MemberEnv): Promise<VerifiedMember | null> {
-  const projectId = (env.FB_PROJECT_ID ?? env.VITE_FB_PROJECT_ID ?? '').trim();
+  const configuredProjectId = (env.FB_PROJECT_ID ?? env.VITE_FB_PROJECT_ID ?? '').trim();
+  const projectId =
+    configuredProjectId.length > 0 ? configuredProjectId : DEFAULT_MEMBER_PROJECT_ID;
   const token = bearerToken(request);
   if (token.length === 0) return null;
   return verifyMember(token, projectId);

@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -59,13 +60,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import bd.info.bsdc.app.BuildConfig
 import bd.info.bsdc.app.R
 import bd.info.bsdc.app.core.auth.AuthGateState
-import bd.info.bsdc.app.core.auth.AuthStateSnapshot
 import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.database.BsdcDatabaseMappers
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
+import bd.info.bsdc.app.core.designsystem.BsdcMotionSpecs
 import bd.info.bsdc.app.core.designsystem.BsdcPalette
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.FeedPost
@@ -318,6 +320,11 @@ fun BsdcAppShell(
                     activeDetailSlug = null
                     activeDetailPost = null
                 },
+                onOpenProfile = { target ->
+                    activeDetailSlug = null
+                    activeDetailPost = null
+                    activeProfileTarget = target
+                },
             )
             return
         }
@@ -352,6 +359,15 @@ fun BsdcAppShell(
                     selectedTab = MainTab.MESSAGES
                 },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
+                mediaRepository = container.mediaRepository,
+                onOpenPost = { post ->
+                    activeProfileTarget = null
+                    activeDetailPost = post
+                    activeDetailSlug = post.slug.ifBlank { post.id }
+                },
+                onProfileUpdated = {
+                    scope.launch { container.authRepository.refreshSessionAndProfile() }
+                },
             )
             return
         }
@@ -493,9 +509,16 @@ fun BsdcAppShell(
                                 }
                             },
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.AccountCircle,
-                                contentDescription = if (language == AppLanguage.BN) "আমার প্রোফাইল" else "My Profile",
+                            val topAvatarUrl = authState.profile?.avatarUrl?.takeIf { it.isNotBlank() }
+                                ?: authState.session?.photoUrl.orEmpty()
+                            val topDisplayName = authState.profile?.displayName?.takeIf { it.isNotBlank() }
+                                ?: authState.session?.displayName
+                                ?: "U"
+                            BsdcAvatar(
+                                avatarUrl = topAvatarUrl,
+                                displayName = topDisplayName,
+                                imageLoader = container.imageLoader,
+                                size = 30.dp,
                             )
                         }
                         IconButton(
@@ -575,7 +598,12 @@ fun BsdcAppShell(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
                 )
 
-                when (selectedTab) {
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = { BsdcMotionSpecs.tabTransition(BsdcThemeTokens.reducedMotion) },
+                    label = "mainTabTransition",
+                ) { tab ->
+                when (tab) {
                     MainTab.HOME -> FeedScreen(
                         repository = container.feedRepository,
                         imageLoader = container.imageLoader,
@@ -584,6 +612,9 @@ fun BsdcAppShell(
                         onOpenPost = { post ->
                             activeDetailPost = post
                             activeDetailSlug = post.slug.ifBlank { post.id }
+                        },
+                        onOpenProfile = { target ->
+                            activeProfileTarget = target
                         },
                     )
                     MainTab.VERIFY -> {
@@ -660,6 +691,7 @@ fun BsdcAppShell(
                         onOpenMarketplace = { showMarketScreen = true },
                         onOpenNewsReader = { activeNewsUrl = BsdcHosts.NEWS_ORIGIN },
                     )
+                }
                 }
             }
         }

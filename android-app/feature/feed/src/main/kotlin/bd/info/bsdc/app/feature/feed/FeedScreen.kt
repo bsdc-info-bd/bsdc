@@ -70,15 +70,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.designsystem.bsdcShimmerPlaceholder
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -99,6 +100,7 @@ fun FeedScreen(
     language: AppLanguage,
     onOpenPost: (FeedPost) -> Unit,
     onOpenTrashChanged: ((Boolean) -> Unit)? = null,
+    onOpenProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tokens = BsdcThemeTokens.colors
@@ -149,7 +151,11 @@ fun FeedScreen(
         newPostsAvailable = repository.fetchNewPostCount(newest)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
+    BsdcResponsiveContainer(
+        maxWidth = 760.dp,
+        modifier = modifier.fillMaxSize(),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -431,11 +437,17 @@ fun FeedScreen(
                                     }
                                 },
                                 onOpenReport = { reportTargetPost = post },
+                                onOpenAuthorProfile = {
+                                    val target = post.author?.username?.takeIf { it.isNotBlank() }
+                                        ?: post.author?.uid.orEmpty()
+                                    if (target.isNotBlank()) onOpenProfile(target)
+                                },
                             )
                         }
                     }
                 }
             }
+        }
         }
     }
 
@@ -577,6 +589,7 @@ private fun FeedPostCard(
     onBlockAuthor: () -> Unit,
     onMoveToTrash: () -> Unit,
     onOpenReport: () -> Unit,
+    onOpenAuthorProfile: () -> Unit,
 ) {
     val tokens = BsdcThemeTokens.colors
     var menuExpanded by remember { mutableStateOf(false) }
@@ -594,10 +607,15 @@ private fun FeedPostCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.weight(1f),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable(enabled = post.author != null, onClick = onOpenAuthorProfile),
             ) {
-                BsdcAvatarCircle(
-                    initials = (post.author?.displayName ?: "B").take(2),
+                BsdcAvatar(
+                    avatarUrl = post.author?.avatarUrl.orEmpty(),
+                    displayName = post.author?.displayName ?: "BSDC Member",
+                    imageLoader = imageLoader,
                     size = 40.dp,
                 )
                 Column {

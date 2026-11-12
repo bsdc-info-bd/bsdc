@@ -56,12 +56,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -81,6 +82,7 @@ fun PostDetailScreen(
     viewerUid: String?,
     language: AppLanguage,
     onBack: () -> Unit,
+    onOpenProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tokens = BsdcThemeTokens.colors
@@ -286,11 +288,17 @@ fun PostDetailScreen(
         } else {
             val isPostOwner = viewerUid != null && viewerUid == activePost.author?.uid
             val orderedThread = remember(comments) { flattenCommentTree(comments) }
+            val authorTarget = activePost.author?.username?.takeIf { it.isNotBlank() }
+                ?: activePost.author?.uid.orEmpty()
 
-            LazyColumn(
+            BsdcResponsiveContainer(
+                maxWidth = 760.dp,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(innerPadding),
+            ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
@@ -310,10 +318,17 @@ fun PostDetailScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                modifier = Modifier.weight(1f),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable(enabled = authorTarget.isNotBlank()) {
+                                        onOpenProfile(authorTarget)
+                                    },
                             ) {
-                                BsdcAvatarCircle(
-                                    initials = (activePost.author?.displayName ?: "B").take(2),
+                                BsdcAvatar(
+                                    avatarUrl = activePost.author?.avatarUrl.orEmpty(),
+                                    displayName = activePost.author?.displayName ?: "BSDC Member",
+                                    imageLoader = imageLoader,
                                     size = 44.dp,
                                 )
                                 Column {
@@ -507,10 +522,12 @@ fun PostDetailScreen(
                     items(orderedThread, key = { it.id }) { comment ->
                         CommentRow(
                             comment = comment,
+                            imageLoader = imageLoader,
                             canMarkAnswer = isPostOwner && activePost.kind == PostKind.QUESTION,
                             isCommentOwner = viewerUid != null && viewerUid == comment.author?.uid,
                             canInteract = viewerUid != null,
                             language = language,
+                            onOpenProfile = onOpenProfile,
                             onLike = {
                                 if (viewerUid == null) return@CommentRow
                                 scope.launch {
@@ -553,6 +570,7 @@ fun PostDetailScreen(
                     }
                 }
             }
+            }
         }
     }
 
@@ -592,10 +610,12 @@ fun PostDetailScreen(
 @Composable
 private fun CommentRow(
     comment: FeedComment,
+    imageLoader: ImageLoader,
     canMarkAnswer: Boolean,
     isCommentOwner: Boolean,
     canInteract: Boolean,
     language: AppLanguage,
+    onOpenProfile: (String) -> Unit,
     onLike: () -> Unit,
     onReply: () -> Unit,
     onToggleAnswer: () -> Unit,
@@ -603,6 +623,8 @@ private fun CommentRow(
 ) {
     val tokens = BsdcThemeTokens.colors
     val indentDp = (comment.depth.coerceIn(0, 3) * 18).dp
+    val commentAuthorTarget = comment.author?.username?.takeIf { it.isNotBlank() }
+        ?: comment.author?.uid.orEmpty()
 
     Row(
         modifier = Modifier
@@ -637,10 +659,17 @@ private fun CommentRow(
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(enabled = commentAuthorTarget.isNotBlank()) {
+                            onOpenProfile(commentAuthorTarget)
+                        },
                 ) {
-                    BsdcAvatarCircle(
-                        initials = (comment.author?.displayName ?: "M").take(2),
-                        size = 28.dp,
+                    BsdcAvatar(
+                        avatarUrl = comment.author?.avatarUrl.orEmpty(),
+                        displayName = comment.author?.displayName ?: "Member",
+                        imageLoader = imageLoader,
+                        size = 30.dp,
                     )
                     Text(
                         text = comment.author?.displayName ?: "Member",

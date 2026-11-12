@@ -34,11 +34,23 @@ public class ImageSignatureAndHostTest {
         assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://i.ibb.co/abc123/cover.webp"));
         assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://i2.ibb.co.com/xyz/avatar.jpg"));
         assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://lh3.googleusercontent.com/a/photo"));
+        assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://avatars.githubusercontent.com/u/1234"));
+        assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://www.gravatar.com/avatar/abc"));
+        assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://api.dicebear.com/9.x/thumbs/svg"));
+        assertTrue(ImgbbUrlAllowlist.isAllowedImageUrl("https://firebasestorage.googleapis.com/v0/b/app/o/avatar.png"));
 
         assertFalse(ImgbbUrlAllowlist.isAllowedImageUrl("https://res.cloudinary.com/demo/image/upload/sample.jpg"));
         assertFalse(ImgbbUrlAllowlist.isAllowedImageUrl("http://i.ibb.co/plain-http.jpg"));
         assertFalse(ImgbbUrlAllowlist.isAllowedImageUrl("https://i.ibb.co/fake/voice.opus"));
         assertFalse(ImgbbUrlAllowlist.isAllowedImageUrl("https://evil.example.com/pixel.png"));
+
+        assertEquals(
+            "https://i.ibb.co/plain-http.jpg",
+            ImgbbUrlAllowlist.normalizeImageUrl("  http://i.ibb.co/plain-http.jpg  "),
+        );
+        assertEquals("", ImgbbUrlAllowlist.normalizeImageUrl("https://evil.example.com/pixel.png"));
+        assertTrue(ImgbbUrlAllowlist.isRepairableImageUrl("https://i.ibb.co/abc123/avatar.webp"));
+        assertFalse(ImgbbUrlAllowlist.isRepairableImageUrl("https://lh3.googleusercontent.com/a/photo"));
     }
 
     @Test

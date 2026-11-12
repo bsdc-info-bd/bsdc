@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import bd.info.bsdc.app.core.auth.DataAccessBootstrapManager
 import bd.info.bsdc.app.core.model.BsdcBackendConfig
+import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.MediaPurpose
 import bd.info.bsdc.app.core.model.MediaUploadResult
 import bd.info.bsdc.app.core.network.SupabaseApiException
@@ -200,13 +201,22 @@ class BsdcMediaRepository(
 
     fun createImageLoader(maxCacheMb: Int = 150): ImageLoader {
         val boundedBytes = maxCacheMb.coerceIn(32, 1024).toLong() * 1024L * 1024L
+        val siteBase = config.siteUrl.trim().trimEnd('/')
+        val canonicalBase = BsdcHosts.SITE_ORIGIN.trimEnd('/')
         val guardedOkHttp = okHttpClient.newBuilder()
             .addInterceptor { chain ->
-                val url = chain.request().url.toString()
-                if (!ImgbbUrlAllowlist.isAllowedImageUrl(url) && !url.startsWith(config.siteUrl)) {
-                    throw IOException("Blocked non-allowlisted image host: ${chain.request().url.host}")
+                val orig = chain.request()
+                val url = orig.url.toString()
+                val isEdgeProxy = (siteBase.isNotEmpty() && url.startsWith("$siteBase/media/i")) ||
+                    url.startsWith("$canonicalBase/media/i")
+                if (!ImgbbUrlAllowlist.isAllowedImageUrl(url) && !isEdgeProxy) {
+                    throw IOException("Blocked non-allowlisted image host: ${orig.url.host}")
                 }
-                chain.proceed(chain.request())
+                val withHeaders = orig.newBuilder()
+                    .header("Accept", "image/avif,image/webp,image/png,image/jpeg,*/*;q=0.8")
+                    .header("User-Agent", "BSDC-Android/1.0")
+                    .build()
+                chain.proceed(withHeaders)
             }
             .build()
 
@@ -265,14 +275,27 @@ class BsdcMediaRepository(
         val (idToken, _) = bootstrapManager.ensureDataAccess(user)
 
         val transcoded = ImageResizeTranscoder.transcodeForPurpose(rawBytes, fileName, purpose)
-        val edgeUpload = transport.uploadToEdge(
-            idToken = idToken,
-            bytes = transcoded.bytes,
-            fileName = transcoded.fileName,
-            mimeType = transcoded.mimeType,
-            purpose = purpose,
-            onProgress = onProgress,
-        )
+        val edgeUpload = try {
+            transport.uploadToEdge(
+                idToken = idToken,
+                bytes = transcoded.bytes,
+                fileName = transcoded.fileName,
+                mimeType = transcoded.mimeType,
+                purpose = purpose,
+                onProgress = onProgress,
+            )
+        } catch (err: MediaUploadException) {
+            if (err.errorKey != "media.errors.signInRequired") throw err
+            val (refreshedToken, _) = bootstrapManager.ensureDataAccess(user, forceRefresh = true)
+            transport.uploadToEdge(
+                idToken = refreshedToken,
+                bytes = transcoded.bytes,
+                fileName = transcoded.fileName,
+                mimeType = transcoded.mimeType,
+                purpose = purpose,
+                onProgress = onProgress,
+            )
+        }
         val assetId = transport.recordMediaAsset(user.uid, edgeUpload)
         edgeUpload.copy(assetId = assetId)
     }

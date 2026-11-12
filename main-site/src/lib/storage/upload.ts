@@ -476,11 +476,18 @@ function endpointMissing(status: number, body: unknown): boolean {
 /**
  * The member's own Firebase ID token, or an empty string.
  */
-async function idToken(): Promise<string> {
+async function idToken(forceRefresh = false): Promise<string> {
   try {
     const { getFirebaseAuth } = await import('@/lib/firebase');
-    const user = getFirebaseAuth().currentUser;
-    if (user !== null) return await user.getIdToken();
+    const auth = getFirebaseAuth() as {
+      currentUser: { getIdToken?: (forceRefresh?: boolean) => Promise<string> } | null;
+      authStateReady?: () => Promise<void>;
+    };
+    await auth.authStateReady?.();
+    const user = auth.currentUser;
+    if (user !== null && typeof user.getIdToken === 'function') {
+      return await user.getIdToken(forceRefresh);
+    }
   } catch {
     // Fall back to the active auth-store user when Firebase SDK is mocked.
   }
@@ -488,7 +495,7 @@ async function idToken(): Promise<string> {
     const { useAuthStore } = await import('@/store/auth-store');
     const fallbackUser = useAuthStore.getState().user;
     if (fallbackUser !== null && typeof fallbackUser.getIdToken === 'function') {
-      return await fallbackUser.getIdToken();
+      return await fallbackUser.getIdToken(forceRefresh);
     }
   } catch {
     // Ignore.
@@ -520,13 +527,17 @@ async function postWithRetry(options: XhrOptions): Promise<XhrOutcome> {
   }
 }
 
+function isSignalAborted(signal?: AbortSignal): boolean {
+  return signal?.aborted === true;
+}
+
 async function uploadThroughProxy(
   file: File,
   purpose: MediaPurpose,
   onProgress?: (percent: number) => void,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
-  const token = await idToken();
+  const token = await idToken(false);
   if (token.length === 0) throw new MediaError('media.errors.signInRequired');
 
   const normalizedType = effectiveMimeType(file);
@@ -540,17 +551,33 @@ async function uploadThroughProxy(
           type: prepared.blob.type || normalizedType,
         });
 
-  const body = new FormData();
-  body.append('file', outgoing);
-  body.append('purpose', purpose);
+  const buildBody = (): FormData => {
+    const form = new FormData();
+    form.append('file', outgoing);
+    form.append('purpose', purpose);
+    return form;
+  };
 
-  const outcome = await postWithRetry({
+  let outcome = await postWithRetry({
     url: UPLOAD_ENDPOINT,
-    body,
+    body: buildBody(),
     headers: { authorization: `Bearer ${token}` },
     ...(onProgress ? { onProgress } : {}),
     ...(signal ? { signal } : {}),
   });
+
+  if (outcome.status === 401 && !isSignalAborted(signal)) {
+    const refreshedToken = await idToken(true);
+    if (refreshedToken.length > 0 && !isSignalAborted(signal)) {
+      outcome = await postWithRetry({
+        url: UPLOAD_ENDPOINT,
+        body: buildBody(),
+        headers: { authorization: `Bearer ${refreshedToken}` },
+        ...(onProgress ? { onProgress } : {}),
+        ...(signal ? { signal } : {}),
+      });
+    }
+  }
 
   const payload = outcome.body as ProxySuccessBody | ProxyErrorBody | null;
 

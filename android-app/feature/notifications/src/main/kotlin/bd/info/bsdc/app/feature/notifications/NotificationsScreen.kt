@@ -55,7 +55,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
@@ -63,7 +62,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
-import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.NotificationPrefs
 import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
@@ -491,19 +490,12 @@ private fun NotificationRowCard(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val avatarUrl = item.actor?.avatarUrl.orEmpty()
-            if (avatarUrl.isNotBlank()) {
-                BsdcImgbbImage(
-                    fullUrl = avatarUrl,
-                    thumbUrl = avatarUrl,
-                    contentDescription = actorName,
-                    imageLoader = imageLoader,
-                    modifier = Modifier.size(40.dp),
-                    targetWidthPx = 100,
-                    cornerRadiusDp = 20,
-                )
-            } else {
-                BsdcAvatarCircle(initials = actorName.ifBlank { "B" }, size = 40.dp)
-            }
+            BsdcAvatar(
+                avatarUrl = avatarUrl,
+                displayName = actorName.ifBlank { "B" },
+                imageLoader = imageLoader,
+                size = 40.dp,
+            )
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 val extraLabel = if (extraCount > 0) {
                     val c = BanglaDigitFormatter.formatCount(extraCount.toLong(), language)

@@ -112,7 +112,7 @@ class AuthRepository(
             val fallbackName = user.displayName?.takeIf { it.isNotBlank() }
                 ?: user.email?.substringBefore('@')
                 ?: "Member"
-            platformApi.ensureProfile(user.uid, fallbackName)
+            platformApi.ensureProfile(user.uid, fallbackName, user.photoUrl?.toString().orEmpty())
             val profile = platformApi.fetchProfile(user.uid)
             claims to profile
         }

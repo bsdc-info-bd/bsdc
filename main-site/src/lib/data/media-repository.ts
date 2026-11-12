@@ -68,11 +68,41 @@ function isMissingRpcError(error: { code?: string; message?: string }): boolean 
   return error.code === 'PGRST202' || error.code === '42883';
 }
 
+function isAuthRefreshableError(error: { code?: string; message?: string }): boolean {
+  return (
+    error.code === 'PGRST301' ||
+    error.code === '28000' ||
+    (typeof error.message === 'string' && error.message.includes('auth/required'))
+  );
+}
+
+async function tryRefreshMemberToken(ownerUid: string): Promise<boolean> {
+  try {
+    const { getFirebaseAuth } = await import('@/lib/firebase');
+    const auth = getFirebaseAuth() as {
+      currentUser: {
+        uid?: string;
+        getIdToken?: (forceRefresh?: boolean) => Promise<string>;
+      } | null;
+      authStateReady?: () => Promise<void>;
+    };
+    await auth.authStateReady?.();
+    const user = auth.currentUser;
+    if (user === null || user.uid !== ownerUid || typeof user.getIdToken !== 'function') {
+      return false;
+    }
+    const refreshed = await user.getIdToken(true);
+    return refreshed.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function recordMediaAsset(
   ownerUid: string,
   result: UploadResult,
 ): Promise<MediaAssetRow | null> {
-  const { data, error } = await getSupabase().rpc('record_media_asset', {
+  const rpcArgs = {
     p_provider: result.provider,
     p_kind: result.kind,
     p_url: result.url,
@@ -83,7 +113,13 @@ export async function recordMediaAsset(
     p_bytes: result.bytes,
     p_mime_type: result.mimeType,
     p_expires_at: result.expiresAt,
-  });
+  };
+
+  let { data, error } = await getSupabase().rpc('record_media_asset', rpcArgs);
+
+  if (error && isAuthRefreshableError(error) && (await tryRefreshMemberToken(ownerUid))) {
+    ({ data, error } = await getSupabase().rpc('record_media_asset', rpcArgs));
+  }
 
   if (error) {
     // A deployment that has not applied 0073 has no such function. Fall back

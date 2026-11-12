@@ -107,7 +107,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
@@ -115,6 +114,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
@@ -531,19 +531,13 @@ private fun InboxThreadCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            if (avatarUrl.isNotBlank()) {
-                BsdcImgbbImage(
-                    fullUrl = avatarUrl,
-                    thumbUrl = avatarUrl,
-                    contentDescription = title,
-                    imageLoader = imageLoader,
-                    modifier = Modifier.size(48.dp),
-                    targetWidthPx = 128,
-                    cornerRadiusDp = 24,
-                )
-            } else {
-                BsdcAvatarCircle(initials = title, online = item.kind == "direct", size = 48.dp)
-            }
+            BsdcAvatar(
+                avatarUrl = avatarUrl,
+                displayName = title,
+                imageLoader = imageLoader,
+                size = 48.dp,
+                online = item.kind == "direct",
+            )
 
             Column(
                 modifier = Modifier.weight(1f),
@@ -1319,7 +1313,12 @@ private fun ConversationThreadScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        BsdcAvatarCircle(initials = name, size = 36.dp)
+                        BsdcAvatar(
+                            avatarUrl = m.profile?.avatarUrl.orEmpty(),
+                            displayName = name,
+                            imageLoader = imageLoader,
+                            size = 36.dp,
+                        )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(name, style = MaterialTheme.typography.titleSmall)
                             if (!m.profile?.username.isNullOrBlank()) {

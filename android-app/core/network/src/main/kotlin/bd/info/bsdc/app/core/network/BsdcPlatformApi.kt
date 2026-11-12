@@ -173,12 +173,16 @@ class BsdcPlatformApi(
      * Ensures the foreign-key target row exists in `public.profiles` on first sign-in,
      * keeping `username = null` until onboarding completes.
      */
-    suspend fun ensureProfile(uid: String, displayName: String) {
+    suspend fun ensureProfile(uid: String, displayName: String, avatarUrl: String = "") {
         val safeName = displayName.trim().take(60).ifEmpty { "Member" }
+        val safeAvatar = avatarUrl.trim()
         val payload = buildJsonObject {
             put("uid", uid)
             put("username", JsonNull)
             put("display_name", safeName)
+            if (safeAvatar.startsWith("https://")) {
+                put("avatar_url", safeAvatar)
+            }
         }
         supabase.postJson(
             table = "profiles",

@@ -60,14 +60,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.designsystem.BsdcAvatarCircle
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.DevicePermissionKind
@@ -211,8 +212,12 @@ fun DiscoverHubScreen(
         loadSectionData(section)
     }
 
-    LazyColumn(
+    BsdcResponsiveContainer(
+        maxWidth = 860.dp,
         modifier = modifier.fillMaxSize(),
+    ) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -419,7 +424,12 @@ fun DiscoverHubScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            BsdcAvatarCircle(initials = row.title.ifBlank { row.kind }, size = 40.dp)
+                            BsdcAvatar(
+                                avatarUrl = row.imageUrl,
+                                displayName = row.title.ifBlank { row.kind },
+                                imageLoader = imageLoader,
+                                size = 40.dp,
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 BsdcBadge(label = row.kind.uppercase(), tone = BsdcTone.INFO)
                                 Text(text = row.title, style = MaterialTheme.typography.titleMedium)
@@ -450,9 +460,15 @@ fun DiscoverHubScreen(
                     BsdcCard {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
+                            BsdcAvatar(
+                                avatarUrl = g.avatarUrl,
+                                displayName = g.name,
+                                imageLoader = imageLoader,
+                                size = 42.dp,
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = g.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text(
@@ -786,7 +802,12 @@ fun DiscoverHubScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            BsdcAvatarCircle(initials = person.displayName.ifBlank { person.username }, size = 44.dp)
+                            BsdcAvatar(
+                                avatarUrl = person.avatarUrl,
+                                displayName = person.displayName.ifBlank { person.username },
+                                imageLoader = imageLoader,
+                                size = 44.dp,
+                            )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(text = person.displayName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                                 Text(
@@ -800,6 +821,7 @@ fun DiscoverHubScreen(
                 }
             }
         }
+    }
     }
 
     // Apply to Job dialog
