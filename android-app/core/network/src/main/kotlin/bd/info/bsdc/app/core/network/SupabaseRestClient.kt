@@ -171,11 +171,12 @@ class SupabaseRestClient(
     inline fun <reified T> decode(raw: String): T = BsdcHttpClientFactory.sharedJson.decodeFromString(raw)
 
     private fun io.ktor.client.request.HttpRequestBuilder.applySupabaseHeaders(token: String?) {
-        header("apikey", config.supabasePublishableKey)
+        val key = config.supabasePublishableKey.trim()
+        header("apikey", key)
         if (!token.isNullOrBlank()) {
             header("Authorization", "Bearer $token")
-        } else {
-            header("Authorization", "Bearer ${config.supabasePublishableKey}")
+        } else if (!key.startsWith("sb_")) {
+            header("Authorization", "Bearer $key")
         }
         header("Accept", "application/json")
     }

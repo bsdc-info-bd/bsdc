@@ -56,13 +56,11 @@ class BsdcAppContainer(appContext: Context) {
         FirebaseAuth.getInstance()
     }
 
-    private lateinit var bootstrapManagerRef: DataAccessBootstrapManager
-
     val supabaseRestClient: SupabaseRestClient by lazy {
         SupabaseRestClient(
             config = backendConfig,
             httpClient = ktorClient,
-            tokenProvider = { bootstrapManagerRef.currentSupabaseToken() },
+            tokenProvider = { dataAccessBootstrapManager.currentSupabaseToken() },
         )
     }
 
@@ -78,11 +76,10 @@ class BsdcAppContainer(appContext: Context) {
         DataAccessBootstrapManager(
             firebaseAuth = firebaseAuth,
             platformApi = platformApi,
-        ).also { bootstrapManagerRef = it }
+        )
     }
 
     val authRepository: AuthRepository by lazy {
-        dataAccessBootstrapManager
         AuthRepository(
             appContext = appContext,
             config = backendConfig,
@@ -97,7 +94,6 @@ class BsdcAppContainer(appContext: Context) {
     }
 
     val mediaRepository: BsdcMediaRepository by lazy {
-        dataAccessBootstrapManager
         BsdcMediaRepository(
             context = appContext,
             config = backendConfig,
