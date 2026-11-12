@@ -1,9 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { generateKeyPairSync } from 'node:crypto';
+import { generateKeyPairSync, sign, webcrypto } from 'node:crypto';
 
 import { onRequestGet as onConfigGet } from './config';
 import { executePushRun, json, sameSecret, workerUrl } from './run';
 import { onRequestPost as onWakePost } from './wake';
+
+function installNodeWebCrypto(): void {
+  vi.stubGlobal('crypto', webcrypto);
+  // Node 20 Web Crypto rejects a jsdom-realm ArrayBuffer on importKey.
+  // Cloudflare uses one realm; match its typed-array constructors in tests.
+  vi.stubGlobal('Uint8Array', Object.getPrototypeOf(Buffer.prototype).constructor);
+  vi.stubGlobal('ArrayBuffer', Buffer.alloc(0).buffer.constructor);
+}
 
 describe('where the push worker is', () => {
   it('is nothing when the deployment has not set one', () => {
@@ -91,6 +99,7 @@ describe('GET /api/push/config', () => {
 
 describe('POST /api/push/wake and FCM fallback', () => {
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -102,7 +111,55 @@ describe('POST /api/push/wake and FCM fallback', () => {
     expect(res.status).toBe(401);
   });
 
+  it('accepts verified Firebase ID token on POST /api/push/wake and forwards push run', async () => {
+    installNodeWebCrypto();
+    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'wake-kid', alg: 'RS256' };
+    const b64 = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const unsigned = [
+      b64({ alg: 'RS256', kid: 'wake-kid' }),
+      b64({
+        iss: 'https://securetoken.google.com/bsdc-bd',
+        aud: 'bsdc-bd',
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        sub: 'member-uid-1',
+      }),
+    ].join('.');
+    const idToken = `${unsigned}.${sign('RSA-SHA256', Buffer.from(unsigned), privateKey).toString('base64url')}`;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('securetoken@system.gserviceaccount.com')) {
+          return new Response(JSON.stringify({ keys: [jwk] }), { status: 200 });
+        }
+        if (url === 'https://push.api.bsdc.info.bd/run?limit=60') {
+          return new Response(JSON.stringify({ waiting: 2, sent: 2 }), { status: 200 });
+        }
+        return new Response('', { status: 404 });
+      }),
+    );
+
+    const res = await onWakePost({
+      request: new Request('https://www.bsdc.info.bd/api/push/wake', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${idToken}` },
+      }),
+      env: { PUSH_FLUSH_SECRET: 's'.repeat(48) },
+    } as Parameters<typeof onWakePost>[0]);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      ok: true,
+      path: 'worker',
+      waiting: 2,
+      sent: 2,
+    });
+  });
+
   it('dispatches pure data-only HIGH priority Android FCM messages in local fallback', async () => {
+    installNodeWebCrypto();
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
     const sentBodies: Record<string, unknown>[] = [];
@@ -173,9 +230,9 @@ describe('POST /api/push/wake and FCM fallback', () => {
     expect(msg['notification']).toBeUndefined();
     expect((msg['android'] as { priority?: string; notification?: unknown }).priority).toBe('HIGH');
     expect((msg['android'] as { notification?: unknown }).notification).toBeUndefined();
-    expect((msg['data'] as { kind?: string; channel_id?: string; conversation_id?: string }).kind).toBe(
-      'message',
-    );
+    expect(
+      (msg['data'] as { kind?: string; channel_id?: string; conversation_id?: string }).kind,
+    ).toBe('message');
     expect((msg['data'] as { channel_id?: string }).channel_id).toBe('bsdc_messenger');
     expect((msg['data'] as { conversation_id?: string }).conversation_id).toBe('c-99');
   });

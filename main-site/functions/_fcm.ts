@@ -74,8 +74,7 @@ function decodeSegment(segment: string): Record<string, unknown> {
 function pemToPkcs8(pem: string): ArrayBuffer {
   const body = pem
     .replace(/\\n/g, '\n')
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
+    .replace(/-----[^-]+-----/g, '')
     .replace(/\s+/g, '');
   const bytes = base64UrlToBytes(body.replace(/\+/g, '-').replace(/\//g, '_'));
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
@@ -430,7 +429,9 @@ export async function fcmFallbackDispatch(
                   first.language === 'en'
                     ? `${deviceRows.length} new notifications · BSDC`
                     : `${deviceRows.length}টি নতুন বিজ্ঞপ্তি · BSDC`,
-                body: first.actor_name.trim() || (first.language === 'en' ? 'Open BSDC' : 'বিএসডিসি খুলুন'),
+                body:
+                  first.actor_name.trim() ||
+                  (first.language === 'en' ? 'Open BSDC' : 'বিএসডিসি খুলুন'),
                 url: '/notifications',
                 tag: 'bsdc-summary',
                 topic: 'bsdc-summary',
@@ -530,9 +531,7 @@ export async function fcmFallbackDispatch(
     [...dead].map((t) => rpc(env, 'fcm_kill_device', { p_secret: secret, p_token: t })),
   );
   await Promise.all(
-    [...invalid].map((t) =>
-      rpc(env, 'fcm_flag_invalid_device', { p_secret: secret, p_token: t }),
-    ),
+    [...invalid].map((t) => rpc(env, 'fcm_flag_invalid_device', { p_secret: secret, p_token: t })),
   );
   const reachedIds = [...reached];
   const marked =

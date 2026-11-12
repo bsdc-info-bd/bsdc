@@ -16,6 +16,9 @@
 #
 #   claims.ts               parses a PEM private key, so it contains the literal
 #                           header and footer lines of one.
+#   _fcm.ts                 parses a Firebase service-account PEM private key
+#                           in pemToPkcs8(); commit 5e9c4a2 contained the literal
+#                           header and footer lines before switching to a regex.
 #   fcm.ts                  parses a Firebase service-account PEM private key
 #                           in pemToPkcs8(), so it contains the literal header
 #                           and footer lines of one.
@@ -46,6 +49,7 @@ description = "PEM headers and env-var names documented in code, plus synthetic 
 paths = [
   '''main-site/functions/api/auth/claims\.ts$''',
   '''main-site/functions/api/auth/claims-core\.ts$''',
+  '''main-site/functions/_fcm\.ts$''',
   '''push-worker/src/fcm\.ts$''',
   '''push-worker/src/fcm\.test\.ts$''',
   '''docs/deploying\.md$''',

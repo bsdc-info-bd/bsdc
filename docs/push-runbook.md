@@ -114,18 +114,21 @@ the next run tries again — a run that fails halfway repeats rather than drops.
 | Piece | File | What it is |
 | --- | --- | --- |
 | Tables and routines | `supabase/migrations/0060_push_reaches_a_closed_browser.sql` | `public.push_subscriptions`, `bsdc.push_settings`, `notifications.pushed_at`, and the seven routines |
-| Proof | `main-site/scripts/db-prove/t31.mjs` | 38 checks: refusals before setup, ownership, the watermark, the kill and the revival |
-| **Delivery (primary)** | `push-worker/src/index.ts` | the cron, the queue, and `POST /run` / `GET /health` |
+| Vocabulary & all-events triggers | `supabase/migrations/0087_notification_vocabulary_expansion.sql`, `0088_realtime_push_overhaul_and_all_events.sql` | Expands `bsdc_notification_kind` (20 kinds), binds realtime `public.notifications` (`REPLICA IDENTITY FULL` + publication), debounced `pg_net` wake-up, and event triggers across interactions, marketplace, learning, and moderation |
+| Proof | `main-site/scripts/db-prove/t31.mjs`, `t59.mjs` | Push routing/gating (`t31`) and 20-kind realtime/trigger coverage (`t59`) |
+| **Delivery (primary)** | `push-worker/src/index.ts` | the cron (`* * * * *`), the queue, and `POST /run` / `GET /health` |
+| **FCM HTTP v1** | `push-worker/src/fcm.ts`, `main-site/functions/_fcm.ts` | Web Push + pure data-only HIGH-priority Android FCM dispatch and Pages fallback |
 | **Encryption** | `push-worker/src/crypto.ts` | RFC 8291: ECDH, HKDF, AES-128-GCM, `aes128gcm` framing |
-| **The words** | `push-worker/src/notifications.ts` | titles and bodies per kind per language, grouping, preview cleaning |
+| **The words** | `push-worker/src/notifications.ts` | titles and bodies per kind per language (all 20 kinds), grouping, preview cleaning |
 | **Signing (worker)** | `push-worker/src/deliver.ts` | the ES256 VAPID token, per push service origin |
 | **Database read (worker)** | `push-worker/src/api.ts` | secret-gated RPC over PostgREST, with a timeout |
 | Worker config | `push-worker/wrangler.toml` | cron `* * * * *`, secrets, the optional queue |
-| **Scheduler endpoint** | `main-site/functions/api/push/run.ts` | `POST /api/push/run` — forwards to the Worker, falls back to the flush |
+| **Scheduler & wake-up endpoints** | `main-site/functions/api/push/{run,wake,config}.ts` | `POST /api/push/run`, authenticated `POST /api/push/wake` (instant delivery), and `GET /api/push/config` (runtime VAPID discovery) |
 | Delivery (fallback) | `main-site/functions/api/push/flush.ts` | the empty wake-up, `POST /api/push/flush` |
 | Content | `main-site/functions/api/push/content.ts` | what a woken device is told, `POST /api/push/content` |
-| The worker | `main-site/src/sw.ts` | precaching, offline, `push`, `notificationclick`, `pushsubscriptionchange` |
-| Worker config | `main-site/vite.config.ts` | `strategies: 'injectManifest'`, `srcDir: 'src'`, `filename: 'sw.ts'` |
+| The worker | `main-site/src/sw.ts` | `push`, `notificationclick`, `pushsubscriptionchange`, and live tab broadcast (`bsdc:notification`) |
+| Live web updates | `main-site/src/hooks/use-notification-realtime.ts`, `main-site/src/lib/notifications/notification-channel.ts` | Authenticated Supabase Realtime subscription for instant in-app updates + `wakePushDelivery()` helper |
+| Worker config | `main-site/vite.config.ts` | custom service worker build plugin compiling `src/sw.ts` into `dist/sw.js` |
 | Signing | `main-site/src/lib/push/webpush.ts` | base64url, the VAPID JWT, ES256, dead-status rules. Shared by the edge and the tests |
 | Support checks | `main-site/src/lib/push/support.ts` | which of the four prerequisites is missing, and the device list's names |
 | The words | `main-site/src/lib/notifications/copy.ts` | titles per kind per language, the body, the tag, the summary |
@@ -284,11 +287,15 @@ A run that finds more than 200 waiting drains it over several minutes rather tha
 in one request that exceeds the subrequest limit: the cap is `MAX_PER_RUN = 400`
 in `src/index.ts`, and unmarked rows are simply picked up by the next run.
 
-### 5.4 Anything else that can send the secret
+### 5.4 Instant wake-ups and external schedulers
 
-The endpoint does not care who is asking, only that they know the secret. A
-GitHub Action on a schedule, a cron job on a machine that is always on, an uptime
-checker that POSTs, `curl` from a laptop — all of them work:
+Alongside the 1-minute Worker cron, notifications wake devices immediately via:
+
+1. **Database `pg_net` trigger (`bsdc.wake_push_worker()`):** Debounced per transaction via advisory lock (`0088`) using `bsdc.push_settings` (`worker_url` and `flush_secret`, kept synced by `.github/workflows/database.yml`).
+2. **Client wake-up (`POST /api/push/wake`):** Authenticated with the caller's Firebase ID token (`bsdc-bd` or `bsdc-second`) after mutations (messages, posts, reactions, comments, orders, opportunities, outbox flush), forwarded server-side with `PUSH_FLUSH_SECRET` to the Worker or Pages fallback.
+3. **Runtime VAPID config (`GET /api/push/config`):** Exposes `{ enabled, vapidPublicKey }` from runtime secrets when `VITE_PUSH_VAPID_PUBLIC_KEY` was omitted at build time.
+
+External schedulers, GitHub Actions, cron jobs, and uptime checkers can also invoke `/api/push/run`:
 
 ```bash
 curl -sX POST "$SITE/api/push/run" -H "authorization: Bearer $PUSH_FLUSH_SECRET"
