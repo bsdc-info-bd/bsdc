@@ -37,6 +37,7 @@ jobs:
   build:
     name: Build native Android (Kotlin + Java + Compose)
     runs-on: ubuntu-latest
+    environment: ${{ (startsWith(github.ref, 'refs/tags/android-v') || inputs.release || github.ref == 'refs/heads/main') && 'production' || 'preview' }}
 
     steps:
       - uses: actions/checkout@v4
@@ -109,14 +110,22 @@ jobs:
           GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
         run: node scripts/prepare-firebase.mjs
 
+      - name: Resolve backend configuration for debug build
+        working-directory: android-app
+        env:
+          RAW_ANDROID_SUPABASE_URL: ${{ secrets.ANDROID_SUPABASE_URL }}
+          RAW_VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          RAW_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RAW_ANDROID_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ANDROID_SUPABASE_PUBLISHABLE_KEY }}
+          RAW_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          RAW_ANDROID_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_WEB_CLIENT_ID }}
+        run: node scripts/prepare-backend-env.mjs
+
       - name: Run all module unit tests, Android Lint & build debug APK
         working-directory: android-app
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           RELEASE_TAG: ${{ github.ref_name }}
-          ANDROID_SUPABASE_URL: ${{ secrets.ANDROID_SUPABASE_URL }}
-          ANDROID_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ANDROID_SUPABASE_PUBLISHABLE_KEY }}
-          ANDROID_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -o pipefail
           gradle --no-daemon --console=plain \
@@ -180,18 +189,27 @@ jobs:
           GOOGLE_SERVICES_JSON: ${{ secrets.ANDROID_GOOGLE_SERVICES_JSON }}
         run: node scripts/prepare-firebase.mjs --require-real-firebase
 
+      - name: Require production backend configuration for release
+        if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
+        working-directory: android-app
+        env:
+          RAW_ANDROID_SUPABASE_URL: ${{ secrets.ANDROID_SUPABASE_URL }}
+          RAW_VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          RAW_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          RAW_ANDROID_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ANDROID_SUPABASE_PUBLISHABLE_KEY }}
+          RAW_VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          RAW_ANDROID_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_WEB_CLIENT_ID }}
+        run: node scripts/prepare-backend-env.mjs --require-supabase
+
       - name: Build signed release APK & Play Store AAB
         if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
         working-directory: android-app
         env:
           GITHUB_RUN_NUMBER: ${{ github.run_number }}
           RELEASE_TAG: ${{ github.ref_name }}
-          ANDROID_SUPABASE_URL: ${{ secrets.ANDROID_SUPABASE_URL }}
-          ANDROID_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.ANDROID_SUPABASE_PUBLISHABLE_KEY }}
-          ANDROID_GOOGLE_WEB_CLIENT_ID: ${{ secrets.ANDROID_GOOGLE_WEB_CLIENT_ID }}
         run: |
           set -o pipefail
-          gradle --no-daemon --console=plain --stacktrace \
+          gradle --no-daemon --no-configuration-cache --console=plain --stacktrace \
             :core:model:test \
             :core:common:test \
             :core:permissions:testReleaseUnitTest \
@@ -226,9 +244,18 @@ jobs:
             exit "$status"
           fi
 
-      - name: Verify APK signature & print SHA-256 fingerprint
+      - name: Verify APK signature, release BuildConfig & print SHA-256 fingerprint
         if: startsWith(github.ref, 'refs/tags/android-v') || inputs.release
         run: |
+          bc="android-app/app/build/generated/source/buildConfig/release/bd/info/bsdc/app/BuildConfig.java"
+          test -f "$bc" || { echo "::error::Release BuildConfig.java not found"; exit 1; }
+          grep -qE 'SUPABASE_URL = "https://[^"]+"' "$bc" || { echo "::error::Release BuildConfig.SUPABASE_URL is empty"; exit 1; }
+          grep -qE 'SUPABASE_PUBLISHABLE_KEY = "[^"]+"' "$bc" || { echo "::error::Release BuildConfig.SUPABASE_PUBLISHABLE_KEY is empty"; exit 1; }
+          if grep -qE 'GOOGLE_WEB_CLIENT_ID = "[^"]+"' "$bc"; then
+            google_client_status="configured"
+          else
+            google_client_status="unset"
+          fi
           apk=$(find android-app/app/build/outputs/apk/release -maxdepth 1 -name '*.apk' | head -1)
           test -f "$apk" || { echo "::error::Signed release APK not found under android-app/app/build/outputs/apk/release"; exit 1; }
           apksigner=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
@@ -244,6 +271,8 @@ jobs:
             echo '## Native Release Signed'
             echo
             echo "- Certificate SHA-256: \`$fingerprint\`"
+            echo '- `BuildConfig.SUPABASE_URL` & `BuildConfig.SUPABASE_PUBLISHABLE_KEY`: verified non-empty'
+            echo "- \`BuildConfig.GOOGLE_WEB_CLIENT_ID\`: $google_client_status"
             echo '- Confirm `ANDROID_CERT_FINGERPRINT` matches on `main-site` and `vf-site` for Android App Links.'
           } >> "$GITHUB_STEP_SUMMARY"
 
