@@ -118,6 +118,18 @@ export function hasClaimedHandle(profile: Pick<Profile, 'username'>): boolean {
   return profile.username.trim().length > 0;
 }
 
+/**
+ * True when a member has already completed setup (either explicitly via
+ * `onboardingComplete` — including staff/imported accounts — or by holding a
+ * claimed username handle). Prevents existing OAuth accounts from being sent
+ * back into onboarding due to partial legacy rows.
+ */
+export function isProfileOnboarded(
+  profile: Pick<Profile, 'onboardingComplete' | 'username'> | null | undefined,
+): boolean {
+  return Boolean(profile && (profile.onboardingComplete || hasClaimedHandle(profile)));
+}
+
 export type ProfileDraft = Pick<
   Profile,
   | 'username'

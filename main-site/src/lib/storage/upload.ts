@@ -134,7 +134,15 @@ function postForm(options: XhrOptions): Promise<XhrOutcome> {
     request.onabort = () => fail('media.errors.cancelled');
     request.onload = () => {
       cleanup();
-      resolve({ status: request.status, body: request.response });
+      let body: unknown = request.response;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = null;
+        }
+      }
+      resolve({ status: request.status, body });
     };
     options.signal?.addEventListener('abort', abort, { once: true });
     request.send(options.body);
@@ -468,6 +476,7 @@ interface ProxyErrorBody {
  *     proxy's 502). That is `failed`, not `notConfigured`.
  */
 function endpointMissing(status: number, body: unknown): boolean {
+  if (status === 0) return false;
   if (status === 404 || status === 405 || status === 501) return true;
   if (status >= 400) return false;
   return body === null || typeof body !== 'object';
@@ -486,7 +495,14 @@ async function idToken(forceRefresh = false): Promise<string> {
     await auth.authStateReady?.();
     const user = auth.currentUser;
     if (user !== null && typeof user.getIdToken === 'function') {
-      return await user.getIdToken(forceRefresh);
+      try {
+        const token = await user.getIdToken(forceRefresh);
+        if (token.length > 0) return token;
+      } catch {
+        if (!forceRefresh) {
+          return await user.getIdToken(true);
+        }
+      }
     }
   } catch {
     // Fall back to the active auth-store user when Firebase SDK is mocked.

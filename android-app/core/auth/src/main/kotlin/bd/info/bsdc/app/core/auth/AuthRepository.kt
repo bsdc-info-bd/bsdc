@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.tasks.await
 
 enum class AuthGateState {
@@ -35,6 +37,7 @@ enum class AuthGateState {
     SIGNED_OUT,
     NEEDS_EMAIL_VERIFICATION,
     NEEDS_ONBOARDING,
+    PROFILE_LOAD_FAILED,
     READY,
 }
 
@@ -55,6 +58,7 @@ class AuthRepository(
     private val bootstrapManager: DataAccessBootstrapManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val hydrationMutex = Mutex()
 
     private val _state = MutableStateFlow(AuthStateSnapshot())
     val state: StateFlow<AuthStateSnapshot> = _state.asStateFlow()
@@ -84,7 +88,8 @@ class AuthRepository(
         hydrateUserSession(user)
     }
 
-    private suspend fun hydrateUserSession(user: FirebaseUser) {
+    private suspend fun hydrateUserSession(user: FirebaseUser) = hydrationMutex.withLock {
+        if (firebaseAuth.currentUser?.uid != user.uid) return@withLock
         _state.update { it.copy(isBusy = true, errorMessage = null) }
         val isPassword = user.providerData.any { it.providerId == "password" }
         val baseSession = BsdcUserSession(
@@ -104,34 +109,42 @@ class AuthRepository(
                 profile = null,
                 isBusy = false,
             )
-            return
+            return@withLock
         }
 
         val result = runCatching {
             val (_, claims) = bootstrapManager.ensureDataAccess(user)
-            val fallbackName = user.displayName?.takeIf { it.isNotBlank() }
-                ?: user.email?.substringBefore('@')
-                ?: "Member"
-            platformApi.ensureProfile(user.uid, fallbackName, user.photoUrl?.toString().orEmpty())
-            val profile = platformApi.fetchProfile(user.uid)
+            var profile = platformApi.fetchProfile(user.uid)
+            if (profile == null) {
+                val fallbackName = user.displayName?.takeIf { it.isNotBlank() }
+                    ?: user.email?.substringBefore('@')
+                    ?: "Member"
+                platformApi.ensureProfile(user.uid, fallbackName, user.photoUrl?.toString().orEmpty())
+                profile = platformApi.fetchProfile(user.uid)
+            }
             claims to profile
         }
 
+        if (firebaseAuth.currentUser?.uid != user.uid) return@withLock
+
         result.onSuccess { (claims, profile) ->
             val resolvedSession = baseSession.copy(claims = claims)
-            val needsOnboarding = profile == null || !profile.hasClaimedHandle || !profile.onboardingComplete
+            val alreadyOnboarded = profile != null && (profile.onboardingComplete || profile.hasClaimedHandle)
             _state.value = AuthStateSnapshot(
-                gate = if (needsOnboarding) AuthGateState.NEEDS_ONBOARDING else AuthGateState.READY,
+                gate = if (alreadyOnboarded) AuthGateState.READY else AuthGateState.NEEDS_ONBOARDING,
                 session = resolvedSession,
                 profile = profile,
                 isBusy = false,
             )
         }.onFailure { err ->
-            // Stay safely signed in so retry works without losing Firebase identity
+            val previous = _state.value
+            val previousProfile = previous.profile?.takeIf { previous.session?.uid == user.uid }
+            val wasReady = previousProfile != null &&
+                (previousProfile.onboardingComplete || previousProfile.hasClaimedHandle)
             _state.value = AuthStateSnapshot(
-                gate = AuthGateState.NEEDS_ONBOARDING,
+                gate = if (wasReady) AuthGateState.READY else AuthGateState.PROFILE_LOAD_FAILED,
                 session = baseSession,
-                profile = _state.value.profile,
+                profile = previousProfile,
                 isBusy = false,
                 errorMessage = err.localizedMessage,
             )

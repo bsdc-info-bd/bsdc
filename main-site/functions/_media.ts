@@ -20,6 +20,8 @@ import {
 export interface MediaEnv {
   /** ImgBB's API key. A secret: it is never sent to a browser. */
   IMGBB_API_KEY?: string;
+  /** Optional deployment alias for the server-only ImgBB API key. */
+  BSDC_IMGBB_API_KEY?: string;
 }
 
 export interface HostCredentials {
@@ -36,7 +38,7 @@ function first(...values: (string | undefined)[]): string {
 /** The ImgBB credential this deployment holds. */
 export function credentialsOf(env: MediaEnv): HostCredentials {
   return {
-    imgbbKey: first(env.IMGBB_API_KEY),
+    imgbbKey: first(env.IMGBB_API_KEY, env.BSDC_IMGBB_API_KEY),
   };
 }
 
@@ -193,23 +195,52 @@ const UPSTREAM_TIMEOUT_MS = 25_000;
 /** Upload attempts, including the first. A 5xx or a timeout is retried once. */
 const UPSTREAM_ATTEMPTS = 2;
 
-/** Statuses worth trying again: the host is busy or restarting, not refusing. */
-function retryable(status: number): boolean {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+/** Statuses worth trying again: the host is busy, rate-limiting, or transiently blocking at an edge WAF. */
+function retryable(status: number, body: string): boolean {
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+  return status === 403 && looksLikeHtmlBody(body);
+}
+
+function looksLikeHtmlBody(body: string): boolean {
+  return /^\s*</.test(body) && /<!doctype|<html|<head|<title/i.test(body);
 }
 
 /**
  * Whether ImgBB's own words name the credential.
  *
- * ImgBB answers an invalid or expired key with a 400 whose body carries a
- * message about the API key. That is a deployment problem, and it is the one
- * case where the member should be told "not available right now" rather than
- * "the upload failed" — the first is true for everybody until an administrator
- * acts, and the second invites a retry that cannot work.
+ * ImgBB answers an invalid or expired key with a 400 JSON payload whose error
+ * message mentions the API key (`Invalid API v1 key.` / error code 100). A WAF
+ * or edge rate-limit HTML page with HTTP 403 is a transient failure, NOT a
+ * missing secret — conflating the two blames a healthy deployment with
+ * "Picture uploads are unavailable right now".
  */
-function keyWasRefused(status: number, body: string): boolean {
-  if (status === 401 || status === 403) return true;
-  return /invalid.{0,20}(api)?\s*key|api key|key.{0,10}(invalid|expired|missing)/i.test(body);
+export function keyWasRefused(status: number, body: string): boolean {
+  if (looksLikeHtmlBody(body)) return false;
+
+  let message = body;
+  let code: number | null = null;
+  try {
+    const parsed = JSON.parse(body) as {
+      status_code?: unknown;
+      error?: { message?: unknown; code?: unknown };
+    };
+    if (typeof parsed.error?.message === 'string') message = parsed.error.message;
+    if (typeof parsed.error?.code === 'number') code = parsed.error.code;
+  } catch {
+    // Plain-text response; evaluate raw body below.
+  }
+
+  if (code === 100 && /key/i.test(message)) return true;
+  if (
+    /invalid.{0,24}(api)?\s*key|expired.{0,12}(api)?\s*key|missing.{0,12}(api)?\s*key/i.test(
+      message,
+    )
+  ) {
+    return true;
+  }
+  return status === 401 && /key|auth|token|credential/i.test(message);
 }
 
 function ensureHttpsUrl(raw: string): string {
@@ -227,6 +258,9 @@ function ensureHttpsUrl(raw: string): string {
   }
 }
 
+/** Threshold above which multipart Blob upload avoids doubling heap via base64 strings. */
+const MULTIPART_BLOB_THRESHOLD_BYTES = 2 * 1024 * 1024;
+
 async function sendToImgbb(
   file: File,
   key: string,
@@ -234,7 +268,9 @@ async function sendToImgbb(
   bytes: Uint8Array | undefined,
   now = Date.now(),
 ): Promise<EdgeUploadResult> {
-  const base64 = bytesToBase64(bytes ?? new Uint8Array(await file.arrayBuffer()));
+  const rawBytes = bytes ?? new Uint8Array(await file.arrayBuffer());
+  const useBinaryMultipart = rawBytes.byteLength > MULTIPART_BLOB_THRESHOLD_BYTES;
+  const base64 = useBinaryMultipart ? '' : bytesToBase64(rawBytes);
   const lifetime = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
 
   const endpoint = `https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`;
@@ -248,17 +284,23 @@ async function sendToImgbb(
       // Rebuilt on every attempt so a retry never reuses a consumed multipart
       // body stream in Workers/undici.
       const body = new FormData();
-      body.append('image', base64);
+      if (useBinaryMultipart) {
+        const mime = effectiveMimeType(file) || 'image/webp';
+        body.append('image', new Blob([rawBytes], { type: mime }), file.name || 'image.webp');
+      } else {
+        body.append('image', base64);
+      }
       if (lifetime > 0) body.append('expiration', String(lifetime));
       response = await fetch(endpoint, { method: 'POST', body, signal: controller.signal });
       text = await response.text();
     } catch {
       response = null;
+      text = '';
     } finally {
       clearTimeout(timeout);
     }
 
-    if (response !== null && !retryable(response.status)) break;
+    if (response !== null && !retryable(response.status, text)) break;
     if (attempt < UPSTREAM_ATTEMPTS) {
       await new Promise((resolve) => setTimeout(resolve, 400));
     }

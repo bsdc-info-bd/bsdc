@@ -292,8 +292,8 @@ jobs:
     name: Apply to production
     needs: verify
     if: |
-      github.event_name == 'workflow_dispatch' && inputs.target == 'production'
-      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
+      || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc'))
     runs-on: ubuntu-latest
     environment:
       name: production

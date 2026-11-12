@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rejectBytes } from '../_media';
+import { credentialsOf, keyWasRefused, rejectBytes } from '../_media';
 
 /**
  * The upload endpoint trusts neither the browser nor the content type.
@@ -40,5 +40,32 @@ describe('the bytes a file actually carries', () => {
     expect(rejectBytes(bytesOf('PK\u0003\u0004rest of a zip'))).toEqual(REFUSED);
     expect(rejectBytes(bytesOf('#!/bin/sh\nrm -rf /'))).toEqual(REFUSED);
     expect(rejectBytes(bytesOf([]))).toEqual(REFUSED);
+  });
+});
+
+describe('distinguishing invalid ImgBB credentials from transient WAF/HTML blocks', () => {
+  it('detects ImgBB JSON invalid-key refusals', () => {
+    expect(
+      keyWasRefused(
+        400,
+        JSON.stringify({ status_code: 400, error: { message: 'Invalid API v1 key.', code: 100 } }),
+      ),
+    ).toBe(true);
+    expect(keyWasRefused(401, JSON.stringify({ error: { message: 'Missing key' } }))).toBe(true);
+  });
+
+  it('does not treat a Cloudflare/WAF HTML 403 challenge as a missing ImgBB key', () => {
+    expect(
+      keyWasRefused(
+        403,
+        '<!DOCTYPE html><html><head><title>Just a moment...</title></head></html>',
+      ),
+    ).toBe(false);
+    expect(keyWasRefused(403, 'Rate limit exceeded')).toBe(false);
+  });
+
+  it('reads IMGBB_API_KEY and falls back to BSDC_IMGBB_API_KEY', () => {
+    expect(credentialsOf({ IMGBB_API_KEY: 'primary-key' }).imgbbKey).toBe('primary-key');
+    expect(credentialsOf({ BSDC_IMGBB_API_KEY: 'alias-key' }).imgbbKey).toBe('alias-key');
   });
 });

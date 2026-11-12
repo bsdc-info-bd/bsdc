@@ -315,6 +315,19 @@ describe('uploading through the edge', () => {
     });
     expect(sent).toHaveLength(0);
   });
+
+  it('treats status 0 with no body as failed rather than misconfigured', async () => {
+    answers = [{ match: PROXY, status: 0, body: null }];
+    await expect(uploadMedia(picture(), { purpose: 'post-image' })).rejects.toMatchObject({
+      messageKey: 'media.errors.failed',
+    });
+  });
+
+  it('parses a stringified JSON response from the upload proxy', async () => {
+    answers = [{ match: PROXY, status: 200, body: JSON.stringify(PROXY_OK) }];
+    const result = await uploadMedia(picture(), { purpose: 'post-image' });
+    expect(result.url).toBe(PROXY_OK.url);
+  });
 });
 
 describe('asking the deployment what it can do', () => {

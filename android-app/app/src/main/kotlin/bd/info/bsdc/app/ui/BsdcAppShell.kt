@@ -95,6 +95,7 @@ import bd.info.bsdc.app.feature.news.SystemDiagnosticsAndSettingsScreen
 import bd.info.bsdc.app.feature.notifications.NotificationsScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
+import bd.info.bsdc.app.feature.onboarding.ProfileSyncRecoveryScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
 import bd.info.bsdc.app.feature.verify.VerifyHubScreen
 import kotlinx.coroutines.launch
@@ -293,6 +294,15 @@ fun BsdcAppShell(
                 permissionCoordinator = permissionCoordinator,
                 language = language,
                 onLanguageSelected = onChangeLanguage,
+            )
+            return
+        }
+        authState.gate == AuthGateState.PROFILE_LOAD_FAILED -> {
+            ProfileSyncRecoveryScreen(
+                authState = authState,
+                authRepository = container.authRepository,
+                language = language,
+                onContinueAsGuest = { guestBrowsing = true },
             )
             return
         }

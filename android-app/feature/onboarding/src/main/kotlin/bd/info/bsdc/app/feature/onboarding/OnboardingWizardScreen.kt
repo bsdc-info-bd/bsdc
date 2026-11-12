@@ -1,11 +1,9 @@
 package bd.info.bsdc.app.feature.onboarding
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -13,7 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -42,17 +43,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.auth.AuthDomainValidators
 import bd.info.bsdc.app.core.auth.AuthRepository
 import bd.info.bsdc.app.core.auth.AuthStateSnapshot
+import bd.info.bsdc.app.core.designsystem.BsdcAnimatedEntrance
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcMotionSpecs
+import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.designsystem.bsdcInitialsOf
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.model.PermissionGrantState
@@ -214,45 +221,94 @@ fun OnboardingWizardScreen(
         }
     }
 
-    Column(
+    val reducedMotion = BsdcThemeTokens.reducedMotion
+
+    BsdcResponsiveContainer(
+        maxWidth = 640.dp,
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = if (bn) "প্রোফাইল সেটআপ (${step + 1}/৪)" else "Profile Setup (${step + 1}/4)",
-                style = MaterialTheme.typography.headlineMedium,
-            )
-            TextButton(onClick = { scope.launch { authRepository.atomicSignOut() } }) {
-                Text(if (bn) "সাইন আউট" else "Sign out")
+            BsdcAnimatedEntrance {
+                BsdcCard(elevated = false) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(BsdcThemeTokens.colors.brandSoft),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = bsdcInitialsOf(displayName.ifBlank { "Member" }),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = BsdcThemeTokens.colors.brandStrong,
+                                )
+                            }
+                            Column {
+                                Text(
+                                    text = if (bn) {
+                                        "প্রোফাইল সেটআপ (${step + 1}/৪)"
+                                    } else {
+                                        "Profile Setup (${step + 1}/4)"
+                                    },
+                                    style = MaterialTheme.typography.headlineMedium,
+                                )
+                                Text(
+                                    text = username.takeIf { it.isNotBlank() }?.let { "@$it" }
+                                        ?: (if (bn) "আপনার কমিউনিটি প্রোফাইল" else "Your community identity"),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = BsdcThemeTokens.colors.mutedText,
+                                )
+                            }
+                        }
+                        TextButton(onClick = { scope.launch { authRepository.atomicSignOut() } }) {
+                            Text(if (bn) "সাইন আউট" else "Sign out")
+                        }
+                    }
+
+                    LinearProgressIndicator(
+                        progress = { (step + 1) / 4f },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(999.dp)),
+                    )
+                }
             }
-        }
 
-        LinearProgressIndicator(
-            progress = { (step + 1) / 4f },
-            modifier = Modifier.fillMaxWidth(),
-        )
+            authState.errorMessage?.let { err ->
+                BsdcStatusBanner(
+                    title = if (bn) "প্রোফাইল সংরক্ষণ ত্রুটি" else "Save failed",
+                    body = err,
+                    tone = BsdcTone.BAD,
+                )
+            }
 
-        authState.errorMessage?.let { err ->
-            BsdcStatusBanner(
-                title = if (bn) "প্রোফাইল সংরক্ষণ ত্রুটি" else "Save failed",
-                body = err,
-                tone = BsdcTone.BAD,
-            )
-        }
-
-        AnimatedContent(
-            targetState = step,
-            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
-            label = "onboarding_step_transition",
-        ) { currentStep ->
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    BsdcMotionSpecs.screenTransition(
+                        reducedMotion = reducedMotion,
+                        forward = targetState >= initialState,
+                    )
+                },
+                label = "onboarding_step_transition",
+            ) { currentStep ->
             when (currentStep) {
                 0 -> BsdcCard(elevated = true) {
                     Text(
@@ -515,11 +571,13 @@ fun OnboardingWizardScreen(
                     } else {
                         "Finish & Enter BSDC"
                     },
+                    busy = authState.isBusy,
                     enabled = !authState.isBusy && stepZeroValid,
                     onClick = ::finishOnboarding,
                     modifier = Modifier.weight(1f),
                 )
             }
+        }
         }
     }
 

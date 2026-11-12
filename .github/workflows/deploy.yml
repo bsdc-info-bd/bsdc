@@ -1,6 +1,7 @@
 name: Deploy
 
-# Ships the fourteen web applications to Cloudflare Pages.
+# Ships the fourteen web applications to Cloudflare Pages and the bsdc-push
+# Cloudflare Worker.
 #
 # One job per application, so a failure in the notice console never stops
 # the member site from going out. Each job builds with that application's
@@ -8,11 +9,13 @@ name: Deploy
 # is uploaded that was not built in the same job from the same commit.
 #
 # Pull requests get a preview deployment with its URL written into the run
-# summary. Only `main` touches production.
+# summary. Pushes to `main` or `arena/3b09a022-bsdc` (and manual production
+# dispatches) publish straight to production — including server-only Cloudflare
+# Pages runtime secrets and `push-worker` (`bsdc-push`).
 
 on:
   push:
-    branches: [main]
+    branches: [main, arena/3b09a022-bsdc]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -20,6 +23,11 @@ on:
         description: 'Deploy a single application (blank deploys all of them)'
         type: string
         default: ''
+      target:
+        description: 'Target environment (auto selects production on main and arena/3b09a022-bsdc)'
+        type: choice
+        options: [auto, production, preview]
+        default: auto
 
 permissions:
   contents: read
@@ -33,7 +41,7 @@ jobs:
   deploy:
     name: ${{ matrix.app }}
     runs-on: ubuntu-latest
-    environment: ${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }}
+    environment: ${{ (github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.target == 'production') || ((github.event_name != 'workflow_dispatch' || inputs.target == 'auto') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc')))) && 'production' || 'preview' }}
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -74,6 +82,29 @@ jobs:
             echo "${{ matrix.app }} was not requested; skipping."
           fi
 
+      - name: Resolve deployment target
+        id: target
+        if: steps.scope.outputs.run == 'true'
+        run: |
+          IS_PROD="false"
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              if [ "${{ inputs.target }}" = "production" ]; then
+                IS_PROD="true"
+              elif [ "${{ inputs.target }}" = "auto" ] && { [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; }; then
+                IS_PROD="true"
+              fi
+            elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; then
+              IS_PROD="true"
+            fi
+          fi
+          echo "is_prod=$IS_PROD" >> "$GITHUB_OUTPUT"
+          if [ "$IS_PROD" = "true" ]; then
+            echo "pages_branch=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "pages_branch=${{ github.head_ref || github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install
         if: steps.scope.outputs.run == 'true'
         working-directory: ${{ matrix.app }}
@@ -96,10 +127,8 @@ jobs:
           # Everything the browser needs must be compiled in here: the site is
           # built in this job and uploaded as static files, so a value that is
           # only set inside Cloudflare (or only in a developer's .env) never
-          # reaches the bundle. All images are hosted exclusively on ImgBB; the
-          # ImgBB key is a secret and never ships in the bundle — it lives in
-          # Cloudflare Pages as IMGBB_API_KEY and is read by /api/media/upload
-          # at request time.
+          # reaches the bundle. All images are hosted exclusively by the edge;
+          # server-only credentials are NEVER compiled into this bundle.
           BSDC_REQUIRED_ENV: >-
             VITE_SUPABASE_URL,VITE_SUPABASE_PUBLISHABLE_KEY,
             VITE_FB_API_KEY,VITE_FB_AUTH_DOMAIN,VITE_FB_PROJECT_ID,VITE_FB_APP_ID,VITE_FB_DATABASE_URL
@@ -169,24 +198,24 @@ jobs:
             pages project create ${{ matrix.project }}
             --production-branch=main
 
-      # Database and Pages are separate workflows and can race on a main push.
-      # The member bundle needs migration 0082, so wait for the exact ordered
-      # ledger and required grants before publishing (never migrate here).
+      # Database and Pages are separate workflows and can race on production
+      # pushes. Wait for the exact ordered ledger and required grants before
+      # publishing (never migrate here).
       - name: Install Postgres client for the member-site rollout gate
-        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
 
       - name: Wait for the messenger database migration
-        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/wait-for-messenger-migration.mjs
 
-      # Firebase service accounts are not automatically Pages runtime bindings.
-      # Both projects need server-only credentials to mint database access.
-      # Never sync production credentials from pull requests/preview branches.
+      # Firebase service accounts, ImgBB upload key, and runtime bindings are
+      # server-only Pages secrets — never compiled into the Vite bundle and
+      # never synced from pull requests.
       - name: Prepare Firebase authentication bindings
-        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
         env:
           FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
           FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND }}
@@ -194,6 +223,8 @@ jobs:
           VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
+          BSDC_IMGBB_API_KEY: ${{ secrets.BSDC_IMGBB_API_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
           PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
@@ -202,7 +233,7 @@ jobs:
         run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
 
       - name: Configure production profile authentication
-        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -219,7 +250,8 @@ jobs:
       # omitted `main-site/functions`, leaving /api/auth/claims unavailable.
       #
       # Running from each package root uploads main-site/functions alongside
-      # main-site/dist, while keeping all consoles deployed normally.
+      # main-site/dist. Production pushes deploy with --branch=main so live
+      # production reflects main or arena/3b09a022-bsdc without needing merge.
       - name: Deploy to Cloudflare Pages
         if: steps.scope.outputs.run == 'true'
         id: pages
@@ -231,11 +263,11 @@ jobs:
           command: >-
             pages deploy dist
             --project-name=${{ matrix.project }}
-            --branch=${{ github.head_ref || github.ref_name }}
+            --branch=${{ steps.target.outputs.pages_branch }}
             --commit-dirty=true
 
       - name: Verify production member and corporate claim bindings
-        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
         env:
           DEPLOYMENT_URL: ${{ steps.pages.outputs.deployment-url }}
         run: |
@@ -263,7 +295,9 @@ jobs:
               process.stdin.on("end", () => {
                 const status = JSON.parse(data);
                 if (status.imgbb !== true) {
-                  console.warn("::warning title=ImgBB key missing in Pages::Set IMGBB_API_KEY in Cloudflare Pages project bsdc (Production AND Preview) so image uploads succeed.");
+                  console.warn("::warning title=ImgBB key missing in Pages::Set IMGBB_API_KEY in GitHub Secrets (environment: production) or Cloudflare Pages project bsdc so image uploads succeed.");
+                } else {
+                  console.log("Verified: /api/media/providers reports imgbb=true.");
                 }
               });'
 
@@ -291,7 +325,8 @@ jobs:
             echo "### ${{ matrix.app }} → ${{ matrix.project }}"
             echo
             echo "- ${{ steps.pages.outputs.deployment-url || 'deployed' }}"
-            echo "- commit ${GITHUB_SHA::7} on branch ${{ github.head_ref || github.ref_name }}"
+            echo "- target ${{ steps.target.outputs.is_prod == 'true' && 'production' || 'preview' }} (${{ steps.target.outputs.pages_branch }})"
+            echo "- commit ${GITHUB_SHA::7} from branch ${{ github.head_ref || github.ref_name }}"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
@@ -303,20 +338,18 @@ jobs:
   # be encrypted per subscription before it leaves — which a request-triggered
   # function cannot do for a device whose browser is closed.
   #
-  # Deployment needs three GitHub secrets that the Pages app does not use:
-  # CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID (already present) plus the
-  # worker's own secrets, which are NOT passed here. They live in Cloudflare and
-  # are set once with `npx wrangler secret put`. A workflow that carried a VAPID
-  # private key would be a second copy of the key in a second place.
-  #
-  # If the token is absent the job explains itself and exits 0: a fork or a
-  # first-time checkout must not be red because it cannot reach an account it
-  # has never been given.
+  # Runs directly on production pushes from `main` or `arena/3b09a022-bsdc`,
+  # as well as manual production dispatches.
   # ---------------------------------------------------------------------------
   push-worker:
     name: Push worker → bsdc-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: |
+      github.event_name != 'pull_request' && (
+        (github.event_name == 'workflow_dispatch' && (inputs.target == 'production' || (inputs.target == 'auto' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc'))))
+        || github.ref == 'refs/heads/main'
+        || github.ref == 'refs/heads/arena/3b09a022-bsdc'
+      )
     environment:
       name: production
     defaults:
@@ -325,7 +358,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -340,6 +373,16 @@ jobs:
             else
               echo "run=false" >> "$GITHUB_OUTPUT"
             fi
+          elif [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; then
+            # Always keep bsdc-push synchronized when deploying directly from the delivery branch.
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
+            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "The push worker did not change in this push."
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
           elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The push worker did not change in this push."
@@ -349,9 +392,6 @@ jobs:
 
       - name: Install
         if: steps.changed.outputs.run == 'true'
-        # The worker has no committed lockfile (the repository ignores them), so
-        # `npm ci` cannot run here. See .gitignore for why the lockfiles are not
-        # committed.
         run: npm install --no-audit --no-fund
 
       - name: Typecheck

@@ -211,3 +211,63 @@ export function startAuthListener(handlers: SessionHandlers): () => void {
     channel?.close();
   };
 }
+
+/**
+ * Re-runs Firebase data-access token exchange + Postgres profile hydration for
+ * the currently authenticated user after a transient failure. Used by error
+ * recovery surfaces so an existing member is never misrouted into onboarding.
+ */
+export async function retryProfileSync(): Promise<boolean> {
+  const [{ useAuthStore }, { useProfileStore }] = await Promise.all([
+    import('@/store/auth-store'),
+    import('@/store/profile-store'),
+  ]);
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) {
+    useAuthStore.getState().setSession(null, DEFAULT_CLAIMS);
+    useProfileStore.getState().setProfile(null);
+    return false;
+  }
+
+  useProfileStore.getState().setLoading(true);
+  try {
+    const { resetSupabase } = await import('@/lib/supabase/client');
+    resetSupabase();
+  } catch {
+    // Ignore when Supabase client is not active.
+  }
+
+  try {
+    await user.getIdToken(true);
+    const token = await ensureDataAccess(user);
+    if (auth.currentUser !== user) return false;
+    const tokenClaims = readClaims(token.claims);
+    useAuthStore.getState().setSession(user, tokenClaims);
+    const outcome = await loadOrBootstrapProfile(user);
+    if (auth.currentUser !== user) return false;
+    const claims = await syncRoleWithDatabase(user, tokenClaims);
+    if (auth.currentUser === user && claims !== tokenClaims) {
+      useAuthStore.getState().setSession(user, claims);
+    }
+    if (outcome.kind === 'profile') {
+      useProfileStore.getState().setProfile(outcome.profile);
+      useAuthStore.getState().setProfileLoaded(true);
+      return true;
+    }
+    if (outcome.kind === 'none') {
+      useProfileStore.getState().setProfile(null);
+      useAuthStore.getState().setProfileLoaded(true);
+      return true;
+    }
+    useProfileStore.getState().setError('profile/access-failed');
+    useAuthStore.getState().setProfileLoaded(true);
+    return false;
+  } catch {
+    if (auth.currentUser === user) {
+      useProfileStore.getState().setError('profile/access-failed');
+      useAuthStore.getState().setProfileLoaded(true);
+    }
+    return false;
+  }
+}
