@@ -11,31 +11,31 @@ public class NewsWebSecurityEngineTest {
     public void classifyNavigation_permitsOnlyHttpsNewsOriginInsideWebView() {
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.ALLOW_IN_NEWS_WEBVIEW,
-            NewsWebSecurityEngine.classifyNavigation("https://news.bsdc.info.bd/articles/kotlin-2"),
+            NewsWebSecurityEngine.classifyNavigation("https://news.bsdc.info.bd/articles/kotlin-2")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.REJECT,
-            NewsWebSecurityEngine.classifyNavigation("http://news.bsdc.info.bd/"),
+            NewsWebSecurityEngine.classifyNavigation("http://news.bsdc.info.bd/")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.REJECT,
-            NewsWebSecurityEngine.classifyNavigation("file:///data/local/tmp/secret.html"),
+            NewsWebSecurityEngine.classifyNavigation("file:///data/local/tmp/secret.html")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.REJECT,
-            NewsWebSecurityEngine.classifyNavigation("javascript:alert(1)"),
+            NewsWebSecurityEngine.classifyNavigation("javascript:alert(1)")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.ROUTE_NATIVE_APP,
-            NewsWebSecurityEngine.classifyNavigation("https://www.bsdc.info.bd/p/hello"),
+            NewsWebSecurityEngine.classifyNavigation("https://www.bsdc.info.bd/p/hello")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.REJECT,
-            NewsWebSecurityEngine.classifyNavigation("https://www.bsdc.info.bd/admin/users"),
+            NewsWebSecurityEngine.classifyNavigation("https://www.bsdc.info.bd/admin/users")
         );
         assertEquals(
             NewsWebSecurityEngine.NavigationDecision.OPEN_EXTERNAL_BROWSER,
-            NewsWebSecurityEngine.classifyNavigation("https://github.com/bsdc-info-bd/bsdc"),
+            NewsWebSecurityEngine.classifyNavigation("https://github.com/bsdc-info-bd/bsdc")
         );
     }
 
@@ -43,11 +43,11 @@ public class NewsWebSecurityEngineTest {
     public void normalizeNewsStartUrl_fallsBackForUnsafeInputs() {
         assertEquals(
             BsdcHosts.NEWS_ORIGIN,
-            NewsWebSecurityEngine.normalizeNewsStartUrl("https://evil.test/phish"),
+            NewsWebSecurityEngine.normalizeNewsStartUrl("https://evil.test/phish")
         );
         assertEquals(
             "https://news.bsdc.info.bd/latest",
-            NewsWebSecurityEngine.normalizeNewsStartUrl("https://news.bsdc.info.bd/latest"),
+            NewsWebSecurityEngine.normalizeNewsStartUrl("https://news.bsdc.info.bd/latest")
         );
     }
 
