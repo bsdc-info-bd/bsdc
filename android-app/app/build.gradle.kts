@@ -10,8 +10,10 @@ if (file("google-services.json").exists()) {
 }
 
 fun resolveVersion(): Pair<Int, String> {
-    val runNum = (System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1).coerceAtLeast(1)
-    val rawTag = (System.getenv("RELEASE_TAG") ?: System.getenv("GITHUB_REF_NAME") ?: "")
+    val runNum = (providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1).coerceAtLeast(1)
+    val rawTag = (providers.environmentVariable("RELEASE_TAG").orNull
+        ?: providers.environmentVariable("GITHUB_REF_NAME").orNull
+        ?: "")
         .trim()
         .removePrefix("refs/tags/")
         .removePrefix("android-v")
@@ -41,22 +43,27 @@ android {
         buildConfigField("String", "NEWS_ORIGIN", "\"https://news.bsdc.info.bd\"")
         buildConfigField("String", "PUSH_WORKER_ORIGIN", "\"https://push.api.bsdc.info.bd\"")
 
-        val supabaseUrl = (System.getenv("ANDROID_SUPABASE_URL") ?: "").replace("\"", "")
-        val supabaseKey = (System.getenv("ANDROID_SUPABASE_PUBLISHABLE_KEY") ?: "").replace("\"", "")
-        val googleWebClientId = (System.getenv("ANDROID_GOOGLE_WEB_CLIENT_ID") ?: "").replace("\"", "")
+        val supabaseUrl = providers.environmentVariable("ANDROID_SUPABASE_URL").orNull.orEmpty().replace("\"", "")
+        val supabaseKey = providers.environmentVariable("ANDROID_SUPABASE_PUBLISHABLE_KEY").orNull.orEmpty().replace("\"", "")
+        val googleWebClientId = providers.environmentVariable("ANDROID_GOOGLE_WEB_CLIENT_ID").orNull.orEmpty().replace("\"", "")
         buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
         buildConfigField("String", "SUPABASE_PUBLISHABLE_KEY", "\"$supabaseKey\"")
         buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"$googleWebClientId\"")
     }
 
+    val releaseKeystorePath = providers.environmentVariable("BSDC_KEYSTORE_PATH").orNull
+
     signingConfigs {
         create("release") {
-            val keystorePath = System.getenv("BSDC_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
-                storeFile = file(keystorePath)
-                storePassword = System.getenv("BSDC_KEYSTORE_PASSWORD") ?: ""
-                keyAlias = System.getenv("BSDC_KEY_ALIAS") ?: ""
-                keyPassword = System.getenv("BSDC_KEY_PASSWORD") ?: ""
+            if (!releaseKeystorePath.isNullOrBlank()) {
+                val storePass = providers.environmentVariable("BSDC_KEYSTORE_PASSWORD").orNull.orEmpty()
+                val alias = providers.environmentVariable("BSDC_KEY_ALIAS").orNull.orEmpty()
+                val keyPass = providers.environmentVariable("BSDC_KEY_PASSWORD").orNull.orEmpty()
+                    .ifEmpty { storePass }
+                storeFile = file(releaseKeystorePath)
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
             }
         }
     }
@@ -72,8 +79,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            val keystorePath = System.getenv("BSDC_KEYSTORE_PATH")
-            if (!keystorePath.isNullOrBlank()) {
+            if (!releaseKeystorePath.isNullOrBlank()) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
@@ -95,7 +101,12 @@ android {
 
     packaging {
         resources {
-            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += setOf(
+                "/META-INF/{AL2.0,LGPL2.1}",
+                "/META-INF/INDEX.LIST",
+                "/META-INF/io.netty.versions.properties",
+                "/META-INF/DEPENDENCIES",
+            )
         }
     }
 
