@@ -44,9 +44,9 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.LinkDestination
-import bd.info.bsdc.app.core.model.OfflineSyncSettings
 import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
+import bd.info.bsdc.app.core.sync.OfflineSyncSettings
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
