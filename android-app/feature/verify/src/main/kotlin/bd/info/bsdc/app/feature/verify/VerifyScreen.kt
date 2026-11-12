@@ -318,7 +318,7 @@ fun VerifyHubScreen(
                                     text = hintText,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = if (liveParsed is ParsedDocCode.Valid) {
-                                        BsdcThemeTokens.colors.ok
+                                        BsdcThemeTokens.colors.brandStrong
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -666,13 +666,13 @@ fun VerifyHubScreen(
                                             Icon(
                                                 imageVector = Icons.Rounded.CheckCircle,
                                                 contentDescription = null,
-                                                tint = BsdcThemeTokens.colors.ok,
+                                                tint = BsdcThemeTokens.colors.brandStrong,
                                                 modifier = Modifier.size(18.dp),
                                             )
                                             Text(
                                                 text = if (bn) "প্রাপ্তি নিশ্চিত করা হয়েছে" else "Acknowledged",
                                                 style = MaterialTheme.typography.labelMedium,
-                                                color = BsdcThemeTokens.colors.ok,
+                                                color = BsdcThemeTokens.colors.brandStrong,
                                             )
                                         }
                                     } else {
