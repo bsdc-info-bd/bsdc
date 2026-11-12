@@ -5,19 +5,11 @@ import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.AddCircleOutline
@@ -26,9 +18,7 @@ import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Logout
-import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VerifiedUser
@@ -36,7 +26,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,10 +33,8 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -76,18 +63,13 @@ import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.database.BsdcDatabaseMappers
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
-import bd.info.bsdc.app.core.designsystem.BsdcButton
-import bd.info.bsdc.app.core.designsystem.BsdcCard
-import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcPalette
-import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
-import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.NotificationPrefs
-import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
 import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
@@ -103,12 +85,15 @@ import bd.info.bsdc.app.feature.discover.DiscoverSection
 import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
+import bd.info.bsdc.app.feature.market.MarketHubScreen
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
+import bd.info.bsdc.app.feature.news.NewsReaderScreen
+import bd.info.bsdc.app.feature.news.SystemDiagnosticsAndSettingsScreen
 import bd.info.bsdc.app.feature.notifications.NotificationsScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
-import bd.info.bsdc.app.feature.verify.VerifyHubScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
+import bd.info.bsdc.app.feature.verify.VerifyHubScreen
 import kotlinx.coroutines.launch
 
 private enum class MainTab(
@@ -151,6 +136,8 @@ fun BsdcAppShell(
     var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
     var showNotificationsScreen by rememberSaveable { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
+    var showMarketScreen by rememberSaveable { mutableStateOf(false) }
+    var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
     var unreadNotifications by remember { mutableStateOf(0) }
@@ -213,9 +200,21 @@ fun BsdcAppShell(
                         activeDetailSlug = null
                         selectedTab = MainTab.MESSAGES
                     }
+                    p.startsWith("/shop") || p.startsWith("/cart") || p.startsWith("/orders") ||
+                        p.startsWith("/vendor") || p.startsWith("/ads") || p.startsWith("/checkout") -> {
+                        guestBrowsing = true
+                        showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeNewsUrl = null
+                        activeProfileTarget = null
+                        activeDetailSlug = null
+                        showMarketScreen = true
+                    }
                     p != "/" -> {
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
                         discoverSection = when {
@@ -232,6 +231,8 @@ fun BsdcAppShell(
                     else -> {
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.HOME
@@ -241,8 +242,10 @@ fun BsdcAppShell(
             is LinkDestination.NewsReader -> {
                 guestBrowsing = true
                 showNotificationsScreen = false
+                showSettingsScreen = false
+                showMarketScreen = false
                 activeDetailSlug = null
-                selectedTab = MainTab.EXPLORE
+                activeNewsUrl = incomingDestination.url
             }
             is LinkDestination.ExternalBrowser -> openInCustomTab(context, incomingDestination.url)
             else -> Unit
@@ -351,13 +354,39 @@ fun BsdcAppShell(
             )
             return
         }
+        activeNewsUrl != null -> {
+            NewsReaderScreen(
+                initialUrl = activeNewsUrl!!,
+                language = language,
+                onBack = { activeNewsUrl = null },
+                onRouteNativeUrl = { nativeUrl ->
+                    activeNewsUrl = null
+                    onRouteEvaluated(AppLinkUriRouter.resolveLink(nativeUrl))
+                },
+                onOpenExternal = { extUrl -> openInCustomTab(context, extUrl) },
+            )
+            return
+        }
+        showMarketScreen -> {
+            MarketHubScreen(
+                repository = container.marketRepository,
+                imageLoader = container.imageLoader,
+                viewerUid = authState.session?.uid,
+                language = language,
+                onBack = { showMarketScreen = false },
+                onSignInRequired = { showAuthModal = true },
+            )
+            return
+        }
         showSettingsScreen -> {
-            ExploreRouterAndSettingsTab(
+            SystemDiagnosticsAndSettingsScreen(
                 language = language,
                 themeMode = themeMode,
                 syncSettings = syncSettings,
                 cachedPostCount = cachedPosts.size,
                 incomingDestination = incomingDestination,
+                versionName = BuildConfig.VERSION_NAME,
+                versionCode = BuildConfig.VERSION_CODE,
                 onChangeTheme = onChangeTheme,
                 onChangeLanguage = onChangeLanguage,
                 onChangeSyncPolicy = { policy ->
@@ -368,6 +397,18 @@ fun BsdcAppShell(
                 },
                 onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
                 onOpenPermissionSheet = { showPermissionSheet = true },
+                onOpenNotifications = {
+                    showSettingsScreen = false
+                    showNotificationsScreen = true
+                },
+                onOpenMarketplace = {
+                    showSettingsScreen = false
+                    showMarketScreen = true
+                },
+                onOpenNewsReader = {
+                    showSettingsScreen = false
+                    activeNewsUrl = BsdcHosts.NEWS_ORIGIN
+                },
                 onTestRoute = { url ->
                     showSettingsScreen = false
                     onRouteEvaluated(AppLinkUriRouter.resolveLink(url))
@@ -615,6 +656,8 @@ fun BsdcAppShell(
                             onRouteEvaluated(LinkDestination.NativeRoute("/verify?code=$code"))
                         },
                         onOpenExternal = { url -> openInCustomTab(context, url) },
+                        onOpenMarketplace = { showMarketScreen = true },
+                        onOpenNewsReader = { activeNewsUrl = BsdcHosts.NEWS_ORIGIN },
                     )
                 }
             }
@@ -627,181 +670,6 @@ fun BsdcAppShell(
             language = language,
             onDismiss = { showPermissionSheet = false },
         )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun ExploreRouterAndSettingsTab(
-    language: AppLanguage,
-    themeMode: ThemeMode,
-    syncSettings: OfflineSyncSettings,
-    cachedPostCount: Int,
-    incomingDestination: LinkDestination,
-    onChangeTheme: (ThemeMode) -> Unit,
-    onChangeLanguage: (AppLanguage) -> Unit,
-    onChangeSyncPolicy: (SyncNetworkPolicy) -> Unit,
-    onTriggerSync: () -> Unit,
-    onOpenPermissionSheet: () -> Unit,
-    onTestRoute: (String) -> Unit,
-    onOpenExternal: (String) -> Unit,
-    onBack: () -> Unit,
-) {
-    val bn = language == AppLanguage.BN
-    var testUrl by remember { mutableStateOf("https://news.bsdc.info.bd/") }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = if (bn) "অ্যাপ সেটিংস ও ডায়াগনস্টিকস" else "App Settings & Diagnostics",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                TextButton(onClick = onBack) {
-                    Text(if (bn) "বন্ধ করুন" else "Close")
-                }
-            }
-        }
-        item {
-            BsdcCard {
-                Text(
-                    text = if (bn) "অফলাইন অটো-সিঙ্ক ও মিডিয়া ক্যাশ" else "Smart Offline Auto-Sync & ImgBB Cache",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = if (bn) {
-                        "সংরক্ষিত পোস্ট: ${BanglaDigitFormatter.formatCount(cachedPostCount.toLong(), language)} টি · সর্বোচ্চ ImgBB ক্যাশ: ${syncSettings.maxCacheMb} MB"
-                    } else {
-                        "Cached offline posts: $cachedPostCount · ImgBB disk cap: ${syncSettings.maxCacheMb} MB"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BsdcThemeTokens.colors.mutedText,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SyncNetworkPolicy.entries.forEach { policy ->
-                        FilterChip(
-                            selected = syncSettings.policy == policy,
-                            onClick = { onChangeSyncPolicy(policy) },
-                            label = {
-                                Text(
-                                    when (policy) {
-                                        SyncNetworkPolicy.WIFI_ONLY -> if (bn) "শুধু Wi-Fi" else "Wi-Fi Only"
-                                        SyncNetworkPolicy.WIFI_AND_CELLULAR -> if (bn) "Wi-Fi + ডেটা" else "Wi-Fi + Cellular"
-                                        SyncNetworkPolicy.OFF -> if (bn) "বন্ধ" else "Off"
-                                    },
-                                )
-                            },
-                        )
-                    }
-                }
-                BsdcButton(
-                    label = if (bn) "এখনই অফলাইন ফিড সিঙ্ক করুন" else "Sync Offline Feed Now",
-                    secondary = true,
-                    onClick = onTriggerSync,
-                )
-            }
-        }
-        item {
-            BsdcCard {
-                Text(
-                    text = if (bn) "থিম, ভাষা ও অনুমতি সেটিংস" else "Theme, Language & Permissions",
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    ThemeMode.entries.forEach { mode ->
-                        FilterChip(
-                            selected = themeMode == mode,
-                            onClick = { onChangeTheme(mode) },
-                            label = { Text(mode.name) },
-                        )
-                    }
-                    AppLanguage.entries.forEach { lang ->
-                        FilterChip(
-                            selected = language == lang,
-                            onClick = { onChangeLanguage(lang) },
-                            label = { Text(lang.nativeLabel) },
-                        )
-                    }
-                }
-                TextButton(onClick = onOpenPermissionSheet) {
-                    Text(if (bn) "ডিভাইস অনুমতি অবস্থা দেখুন" else "Manage Device Permissions")
-                }
-            }
-        }
-
-        item {
-            BsdcCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Rounded.Newspaper, contentDescription = null)
-                    Text(
-                        text = if (bn) "অ্যাপ লিংক ও নিউজ ওয়েবভিউ রাউটার পরীক্ষা" else "App Link & News WebView Router Test",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                }
-                OutlinedTextField(
-                    value = testUrl,
-                    onValueChange = { testUrl = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text("URL") },
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = false,
-                        onClick = { testUrl = "https://www.bsdc.info.bd/p/compose-guide" },
-                        label = { Text("www.bsdc") },
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = { testUrl = "https://vf.bsdc.info.bd/?code=BSDC-CT-4A7C21B9-6" },
-                        label = { Text("vf.bsdc") },
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = { testUrl = "https://news.bsdc.info.bd/latest" },
-                        label = { Text("news.bsdc") },
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = { testUrl = "https://www.bsdc.info.bd/admin/users" },
-                        label = { Text("/admin (blocked)") },
-                    )
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BsdcButton(
-                        label = if (bn) "রাউট পরীক্ষা করুন" else "Evaluate Route",
-                        onClick = { onTestRoute(testUrl) },
-                    )
-                    BsdcButton(
-                        label = if (bn) "ব্রাউজার খুলুন" else "Open Safe Tab",
-                        onClick = { onOpenExternal(BuildConfig.NEWS_ORIGIN) },
-                        secondary = true,
-                    )
-                }
-                val tone = when (incomingDestination) {
-                    is LinkDestination.NativeRoute -> BsdcTone.OK
-                    is LinkDestination.NewsReader -> BsdcTone.INFO
-                    is LinkDestination.AdminWebOnly, is LinkDestination.Ignored -> BsdcTone.BAD
-                    is LinkDestination.ExternalBrowser -> BsdcTone.WARN
-                }
-                BsdcStatusBanner(
-                    title = incomingDestination::class.simpleName ?: "Route",
-                    body = incomingDestination.toString(),
-                    tone = tone,
-                )
-            }
-        }
     }
 }
 

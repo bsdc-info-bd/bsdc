@@ -135,6 +135,8 @@ jobs:
             :feature:notifications:testDebugUnitTest \
             :feature:verify:testDebugUnitTest \
             :feature:discover:testDebugUnitTest \
+            :feature:market:testDebugUnitTest \
+            :feature:news:testDebugUnitTest \
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug 2>&1 | tee /tmp/gradle.out || status=$?
@@ -209,6 +211,8 @@ jobs:
             :feature:notifications:testReleaseUnitTest \
             :feature:verify:testReleaseUnitTest \
             :feature:discover:testReleaseUnitTest \
+            :feature:market:testReleaseUnitTest \
+            :feature:news:testReleaseUnitTest \
             :app:testReleaseUnitTest \
             :app:lintRelease \
             :app:assembleRelease \

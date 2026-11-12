@@ -16,6 +16,7 @@ import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
 import bd.info.bsdc.app.feature.compose.ComposeRepository
 import bd.info.bsdc.app.feature.discover.DiscoverRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
+import bd.info.bsdc.app.feature.market.MarketRepository
 import bd.info.bsdc.app.feature.messenger.MessengerRepository
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
 import bd.info.bsdc.app.feature.notifications.NotificationsRepository
@@ -178,6 +179,12 @@ class BsdcAppContainer(appContext: Context) {
             supabase = supabaseRestClient,
             platformApi = platformApi,
             database = database,
+        )
+    }
+
+    val marketRepository: MarketRepository by lazy {
+        MarketRepository(
+            supabase = supabaseRestClient,
         )
     }
 }

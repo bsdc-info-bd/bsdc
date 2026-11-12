@@ -124,6 +124,8 @@ dependencies {
     implementation(project(":feature:notifications"))
     implementation(project(":feature:verify"))
     implementation(project(":feature:discover"))
+    implementation(project(":feature:market"))
+    implementation(project(":feature:news"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

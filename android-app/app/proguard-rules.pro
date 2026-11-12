@@ -30,3 +30,12 @@
     public static int v(...);
     public static int d(...);
 }
+
+# Preserve CameraX, MLKit Barcode, ZXing, Location Services, and isolated WebView callbacks
+-keep class androidx.camera.** { *; }
+-keep class com.google.mlkit.vision.barcode.** { *; }
+-keep class com.google.zxing.** { *; }
+-keep class com.google.android.gms.location.** { *; }
+-dontwarn com.google.mlkit.**
+-dontwarn androidx.camera.**
+

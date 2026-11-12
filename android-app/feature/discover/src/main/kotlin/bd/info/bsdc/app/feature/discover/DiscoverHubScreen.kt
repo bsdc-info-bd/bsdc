@@ -88,6 +88,8 @@ fun DiscoverHubScreen(
     onOpenProfile: (String) -> Unit,
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
+    onOpenMarketplace: () -> Unit = {},
+    onOpenNewsReader: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -253,6 +255,16 @@ fun DiscoverHubScreen(
                                 label = { Text(label) },
                             )
                         }
+                        FilterChip(
+                            selected = false,
+                            onClick = onOpenMarketplace,
+                            label = { Text(if (bn) "মার্কেটপ্লেস" else "Market") },
+                        )
+                        FilterChip(
+                            selected = false,
+                            onClick = onOpenNewsReader,
+                            label = { Text(if (bn) "নিউজ" else "News") },
+                        )
                     }
                 }
             }
