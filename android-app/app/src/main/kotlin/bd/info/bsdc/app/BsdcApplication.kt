@@ -2,6 +2,11 @@ package bd.info.bsdc.app
 
 import android.app.Application
 import android.os.StrictMode
+import bd.info.bsdc.app.core.database.BsdcDatabase
+import bd.info.bsdc.app.core.network.SupabaseRestClient
+import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
+import bd.info.bsdc.app.core.push.PushChannelManager
+import bd.info.bsdc.app.core.push.PushRuntimeDependencies
 import bd.info.bsdc.app.core.sync.BsdcSyncProvider
 import bd.info.bsdc.app.core.sync.FeedPrefetchService
 import bd.info.bsdc.app.core.sync.SyncScheduler
@@ -11,7 +16,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
-class BsdcApplication : Application(), BsdcSyncProvider {
+class BsdcApplication : Application(), BsdcSyncProvider, PushRuntimeDependencies {
 
     lateinit var container: BsdcAppContainer
         private set
@@ -21,6 +26,7 @@ class BsdcApplication : Application(), BsdcSyncProvider {
     override fun onCreate() {
         super.onCreate()
         container = BsdcAppContainer(applicationContext)
+        PushChannelManager.ensureChannels(applicationContext)
 
         appScope.launch {
             val settings = container.syncPrefsStore.getSettings()
@@ -47,4 +53,7 @@ class BsdcApplication : Application(), BsdcSyncProvider {
     }
 
     override fun provideFeedPrefetchService(): FeedPrefetchService = container.feedPrefetchService
+    override fun provideSupabaseRestClient(): SupabaseRestClient = container.supabaseRestClient
+    override fun provideDatabase(): BsdcDatabase = container.database
+    override fun providePushRegistrationManager(): BsdcPushRegistrationManager = container.pushRegistrationManager
 }

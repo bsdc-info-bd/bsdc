@@ -108,6 +108,52 @@ export interface FcmSendRequest {
   fetcher?: typeof fetch;
 }
 
+export type AndroidChannelId =
+  | 'bsdc_messenger'
+  | 'bsdc_social'
+  | 'bsdc_orders'
+  | 'bsdc_verify_alerts'
+  | 'bsdc_general';
+
+/** Maps push tag & topic to the exact Android O+ NotificationChannel created by the native app. */
+export function resolveAndroidChannelId(words: Pick<PushWords, 'tag' | 'url'>): AndroidChannelId {
+  const tag = words.tag.toLowerCase();
+  if (tag.startsWith('bsdc-message-') || words.url.startsWith('/messages')) {
+    return 'bsdc_messenger';
+  }
+  if (
+    tag.startsWith('bsdc-order-') ||
+    tag.startsWith('bsdc-review-') ||
+    tag.startsWith('bsdc-payout-')
+  ) {
+    return 'bsdc_orders';
+  }
+  if (
+    tag.startsWith('bsdc-moderation-') ||
+    tag.startsWith('bsdc-certificate-') ||
+    tag.startsWith('bsdc-course-') ||
+    tag.startsWith('bsdc-job-') ||
+    tag.startsWith('bsdc-event-')
+  ) {
+    return 'bsdc_verify_alerts';
+  }
+  if (
+    tag.startsWith('bsdc-follow-') ||
+    tag.startsWith('bsdc-reaction-') ||
+    tag.startsWith('bsdc-comment-') ||
+    tag.startsWith('bsdc-reply-') ||
+    tag.startsWith('bsdc-mention-') ||
+    tag.startsWith('bsdc-mention_group-') ||
+    tag.startsWith('bsdc-bookmark-') ||
+    tag.startsWith('bsdc-share-') ||
+    tag.startsWith('bsdc-post_published-') ||
+    tag.startsWith('bsdc-group_invite-')
+  ) {
+    return 'bsdc_social';
+  }
+  return 'bsdc_general';
+}
+
 export async function sendFcmNotification(request: FcmSendRequest): Promise<DeliveryOutcome> {
   const fetcher = request.fetcher ?? fetch;
   let bearerToken: string;
@@ -120,6 +166,7 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
   const base = request.siteUrl.replace(/\/+$/, '');
   const urgency = request.urgency ?? 'normal';
   const link = `${base}${request.words.url}`;
+  const channelId = resolveAndroidChannelId(request.words);
 
   const message = {
     token: request.token,
@@ -135,6 +182,7 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
       body: request.words.body,
       icon: '/icons/icon-192.png',
       kind: request.words.topic,
+      channel_id: channelId,
     },
     webpush: {
       headers: { Urgency: urgency },
@@ -153,6 +201,7 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
         title: request.words.title,
         body: request.words.body,
         tag: request.words.tag,
+        channel_id: channelId,
         click_action: 'OPEN_URL',
       },
     },

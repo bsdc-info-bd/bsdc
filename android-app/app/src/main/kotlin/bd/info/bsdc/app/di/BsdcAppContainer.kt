@@ -10,12 +10,14 @@ import bd.info.bsdc.app.core.model.BsdcBackendConfig
 import bd.info.bsdc.app.core.network.BsdcHttpClientFactory
 import bd.info.bsdc.app.core.network.BsdcPlatformApi
 import bd.info.bsdc.app.core.network.SupabaseRestClient
+import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
 import bd.info.bsdc.app.core.sync.FeedPrefetchService
 import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
 import bd.info.bsdc.app.feature.compose.ComposeRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
 import bd.info.bsdc.app.feature.messenger.MessengerRepository
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
+import bd.info.bsdc.app.feature.notifications.NotificationsRepository
 import coil3.ImageLoader
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -146,6 +148,19 @@ class BsdcAppContainer(appContext: Context) {
         MessengerRepository(
             supabase = supabaseRestClient,
             database = database,
+        )
+    }
+
+    val pushRegistrationManager: BsdcPushRegistrationManager by lazy {
+        BsdcPushRegistrationManager(
+            appContext = appContext,
+            supabase = supabaseRestClient,
+        )
+    }
+
+    val notificationsRepository: NotificationsRepository by lazy {
+        NotificationsRepository(
+            supabase = supabaseRestClient,
         )
     }
 }

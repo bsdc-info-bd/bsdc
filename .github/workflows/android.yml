@@ -128,9 +128,11 @@ jobs:
             :core:media:testDebugUnitTest \
             :core:database:testDebugUnitTest \
             :core:sync:testDebugUnitTest \
+            :core:push:testDebugUnitTest \
             :feature:feed:testDebugUnitTest \
             :feature:compose:testDebugUnitTest \
             :feature:messenger:testDebugUnitTest \
+            :feature:notifications:testDebugUnitTest \
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug 2>&1 | tee /tmp/gradle.out || status=$?
@@ -198,9 +200,11 @@ jobs:
             :core:media:testReleaseUnitTest \
             :core:database:testReleaseUnitTest \
             :core:sync:testReleaseUnitTest \
+            :core:push:testReleaseUnitTest \
             :feature:feed:testReleaseUnitTest \
             :feature:compose:testReleaseUnitTest \
             :feature:messenger:testReleaseUnitTest \
+            :feature:notifications:testReleaseUnitTest \
             :app:testReleaseUnitTest \
             :app:lintRelease \
             :app:assembleRelease \

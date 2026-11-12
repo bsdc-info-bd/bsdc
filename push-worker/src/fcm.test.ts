@@ -5,6 +5,7 @@ import {
   classifyFcmError,
   clearFcmTokenCache,
   getFcmAccessToken,
+  resolveAndroidChannelId,
   sendFcmNotification,
 } from './fcm';
 import worker from './index';
@@ -183,7 +184,19 @@ describe('FCM HTTP v1 delivery', () => {
     expect((msg['webpush'] as { fcm_options?: { link?: string } }).fcm_options?.link).toBe(
       'https://www.bsdc.info.bd/messages/c1',
     );
-    expect((msg['data'] as { path?: string }).path).toBe('/messages/c1');
+    expect((msg['data'] as { path?: string; channel_id?: string }).path).toBe('/messages/c1');
+    expect((msg['data'] as { channel_id?: string }).channel_id).toBe('bsdc_messenger');
+    expect((msg['android'] as { notification?: { channel_id?: string } }).notification?.channel_id).toBe(
+      'bsdc_messenger',
+    );
+    expect(resolveAndroidChannelId({ tag: 'bsdc-comment-p1', url: '/p/p1' })).toBe('bsdc_social');
+    expect(resolveAndroidChannelId({ tag: 'bsdc-order-o1', url: '/orders/o1' })).toBe('bsdc_orders');
+    expect(resolveAndroidChannelId({ tag: 'bsdc-certificate-c1', url: '/certificates' })).toBe(
+      'bsdc_verify_alerts',
+    );
+    expect(resolveAndroidChannelId({ tag: 'bsdc-summary', url: '/notifications' })).toBe(
+      'bsdc_general',
+    );
   });
 
   it('delivers pending FCM devices end-to-end inside run /health even without VAPID keys', async () => {

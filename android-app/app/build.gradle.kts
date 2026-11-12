@@ -116,10 +116,12 @@ dependencies {
     implementation(project(":core:media"))
     implementation(project(":core:database"))
     implementation(project(":core:sync"))
+    implementation(project(":core:push"))
     implementation(project(":feature:onboarding"))
     implementation(project(":feature:feed"))
     implementation(project(":feature:compose"))
     implementation(project(":feature:messenger"))
+    implementation(project(":feature:notifications"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

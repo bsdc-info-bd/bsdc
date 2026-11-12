@@ -27,9 +27,12 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Logout
 import androidx.compose.material.icons.rounded.Newspaper
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -83,6 +86,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
+import bd.info.bsdc.app.core.model.NotificationPrefs
 import bd.info.bsdc.app.core.model.ParsedDocCode
 import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
@@ -98,6 +102,7 @@ import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
+import bd.info.bsdc.app.feature.notifications.NotificationsScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
@@ -141,6 +146,8 @@ fun BsdcAppShell(
     var guestBrowsing by rememberSaveable { mutableStateOf(false) }
     var showAuthModal by rememberSaveable { mutableStateOf(false) }
     var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
+    var showNotificationsScreen by rememberSaveable { mutableStateOf(false) }
+    var unreadNotifications by remember { mutableStateOf(0) }
     var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
 
@@ -158,28 +165,38 @@ fun BsdcAppShell(
                 when {
                     p.startsWith("/p/") -> {
                         guestBrowsing = true
+                        showNotificationsScreen = false
                         selectedTab = MainTab.HOME
                         activeDetailPost = null
                         activeDetailSlug = p.removePrefix("/p/").trim('/')
                     }
+                    p.startsWith("/notifications") -> {
+                        activeDetailSlug = null
+                        showNotificationsScreen = true
+                    }
                     p.startsWith("/verify") -> {
                         guestBrowsing = true
+                        showNotificationsScreen = false
                         activeDetailSlug = null
                         selectedTab = MainTab.VERIFY
                     }
                     p.startsWith("/compose") || p.startsWith("/create") -> {
+                        showNotificationsScreen = false
                         activeDetailSlug = null
                         selectedTab = MainTab.CREATE
                     }
                     p.startsWith("/messages") -> {
+                        showNotificationsScreen = false
                         activeDetailSlug = null
                         selectedTab = MainTab.MESSAGES
                     }
                     p != "/" -> {
+                        showNotificationsScreen = false
                         activeDetailSlug = null
                         selectedTab = MainTab.EXPLORE
                     }
                     else -> {
+                        showNotificationsScreen = false
                         activeDetailSlug = null
                         selectedTab = MainTab.HOME
                     }
@@ -187,6 +204,7 @@ fun BsdcAppShell(
             }
             is LinkDestination.NewsReader -> {
                 guestBrowsing = true
+                showNotificationsScreen = false
                 activeDetailSlug = null
                 selectedTab = MainTab.EXPLORE
             }
@@ -195,10 +213,17 @@ fun BsdcAppShell(
         }
     }
 
-    // Clear explicit auth overlay automatically once user completes authentication
-    LaunchedEffect(authState.gate) {
+    // Clear explicit auth overlay automatically, register FCM token, and refresh unread badge
+    LaunchedEffect(authState.gate, authState.session?.uid, language) {
         if (authState.gate == AuthGateState.READY) {
             showAuthModal = false
+            val uid = authState.session?.uid
+            if (!uid.isNullOrBlank()) {
+                container.pushRegistrationManager.registerCurrentDevice(uid, language)
+                unreadNotifications = container.notificationsRepository.fetchUnreadCount()
+            }
+        } else if (authState.gate == AuthGateState.SIGNED_OUT) {
+            unreadNotifications = 0
         }
     }
 
@@ -256,6 +281,23 @@ fun BsdcAppShell(
             )
             return
         }
+        showNotificationsScreen -> {
+            NotificationsScreen(
+                viewerUid = authState.session?.uid,
+                initialPrefs = authState.profile?.notifications ?: NotificationPrefs(),
+                repository = container.notificationsRepository,
+                pushManager = container.pushRegistrationManager,
+                imageLoader = container.imageLoader,
+                language = language,
+                onBack = { showNotificationsScreen = false },
+                onSignInRequired = { showAuthModal = true },
+                onNavigatePath = { destPath ->
+                    showNotificationsScreen = false
+                    onRouteEvaluated(LinkDestination.NativeRoute(destPath))
+                },
+            )
+            return
+        }
     }
 
     Scaffold(
@@ -271,6 +313,27 @@ fun BsdcAppShell(
                     )
                 },
                 actions = {
+                    IconButton(onClick = { showNotificationsScreen = true }) {
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotifications > 0) {
+                                    Badge {
+                                        Text(
+                                            BanglaDigitFormatter.formatCount(
+                                                unreadNotifications.coerceAtMost(99).toLong(),
+                                                language,
+                                            ),
+                                        )
+                                    }
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Notifications,
+                                contentDescription = if (language == AppLanguage.BN) "বিজ্ঞপ্তি" else "Notifications",
+                            )
+                        }
+                    }
                     IconButton(onClick = { showPermissionSheet = true }) {
                         Icon(
                             imageVector = Icons.Rounded.Security,
@@ -297,6 +360,7 @@ fun BsdcAppShell(
                         IconButton(
                             onClick = {
                                 scope.launch {
+                                    container.pushRegistrationManager.unregisterOnSignOut(authState.session?.uid)
                                     container.authRepository.atomicSignOut {
                                         container.database.wipeUserScopedTables()
                                     }
