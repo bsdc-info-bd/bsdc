@@ -123,6 +123,7 @@ dependencies {
     implementation(project(":feature:messenger"))
     implementation(project(":feature:notifications"))
     implementation(project(":feature:verify"))
+    implementation(project(":feature:discover"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

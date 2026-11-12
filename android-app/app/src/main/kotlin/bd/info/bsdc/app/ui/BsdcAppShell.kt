@@ -30,6 +30,7 @@ import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.QrCodeScanner
 import androidx.compose.material.icons.rounded.Security
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.VerifiedUser
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -97,6 +98,9 @@ import bd.info.bsdc.app.core.sync.SyncScheduler
 import bd.info.bsdc.app.di.BsdcAppContainer
 import bd.info.bsdc.app.feature.compose.CreateHubMode
 import bd.info.bsdc.app.feature.compose.CreateHubScreen
+import bd.info.bsdc.app.feature.discover.DiscoverHubScreen
+import bd.info.bsdc.app.feature.discover.DiscoverSection
+import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
@@ -146,6 +150,9 @@ fun BsdcAppShell(
     var showAuthModal by rememberSaveable { mutableStateOf(false) }
     var showPermissionSheet by rememberSaveable { mutableStateOf(false) }
     var showNotificationsScreen by rememberSaveable { mutableStateOf(false) }
+    var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
+    var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
     var unreadNotifications by remember { mutableStateOf(0) }
     var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
@@ -165,37 +172,67 @@ fun BsdcAppShell(
                     p.startsWith("/p/") -> {
                         guestBrowsing = true
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         selectedTab = MainTab.HOME
                         activeDetailPost = null
                         activeDetailSlug = p.removePrefix("/p/").trim('/')
                     }
+                    p.startsWith("/@") -> {
+                        guestBrowsing = true
+                        showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeDetailSlug = null
+                        activeProfileTarget = p.removePrefix("/").trim('/')
+                    }
                     p.startsWith("/notifications") -> {
                         activeDetailSlug = null
+                        activeProfileTarget = null
+                        showSettingsScreen = false
                         showNotificationsScreen = true
                     }
                     p.startsWith("/verify") -> {
                         guestBrowsing = true
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.VERIFY
                     }
                     p.startsWith("/compose") || p.startsWith("/create") -> {
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.CREATE
                     }
                     p.startsWith("/messages") -> {
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.MESSAGES
                     }
                     p != "/" -> {
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         activeDetailSlug = null
+                        discoverSection = when {
+                            p.startsWith("/groups") || p.startsWith("/g/") -> DiscoverSection.GROUPS
+                            p.startsWith("/events") -> DiscoverSection.EVENTS
+                            p.startsWith("/jobs") -> DiscoverSection.JOBS
+                            p.startsWith("/gigs") || p.startsWith("/freelance") -> DiscoverSection.GIGS
+                            p.startsWith("/projects") -> DiscoverSection.PROJECTS
+                            p.startsWith("/courses") || p.startsWith("/learn") -> DiscoverSection.COURSES
+                            else -> DiscoverSection.SEARCH
+                        }
                         selectedTab = MainTab.EXPLORE
                     }
                     else -> {
                         showNotificationsScreen = false
+                        showSettingsScreen = false
+                        activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.HOME
                     }
@@ -297,6 +334,49 @@ fun BsdcAppShell(
             )
             return
         }
+        activeProfileTarget != null -> {
+            MemberProfileScreen(
+                usernameOrUid = activeProfileTarget!!,
+                viewerUid = authState.session?.uid,
+                repository = container.discoverRepository,
+                imageLoader = container.imageLoader,
+                language = language,
+                onBack = { activeProfileTarget = null },
+                onSignInRequired = { showAuthModal = true },
+                onOpenMessages = {
+                    activeProfileTarget = null
+                    selectedTab = MainTab.MESSAGES
+                },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
+            )
+            return
+        }
+        showSettingsScreen -> {
+            ExploreRouterAndSettingsTab(
+                language = language,
+                themeMode = themeMode,
+                syncSettings = syncSettings,
+                cachedPostCount = cachedPosts.size,
+                incomingDestination = incomingDestination,
+                onChangeTheme = onChangeTheme,
+                onChangeLanguage = onChangeLanguage,
+                onChangeSyncPolicy = { policy ->
+                    scope.launch {
+                        container.syncPrefsStore.setNetworkPolicy(policy)
+                        SyncScheduler.applyPeriodicPolicy(context, policy)
+                    }
+                },
+                onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
+                onOpenPermissionSheet = { showPermissionSheet = true },
+                onTestRoute = { url ->
+                    showSettingsScreen = false
+                    onRouteEvaluated(AppLinkUriRouter.resolveLink(url))
+                },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
+                onBack = { showSettingsScreen = false },
+            )
+            return
+        }
     }
 
     Scaffold(
@@ -355,7 +435,27 @@ fun BsdcAppShell(
                             contentDescription = language.nativeLabel,
                         )
                     }
+                    IconButton(onClick = { showSettingsScreen = true }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Settings,
+                            contentDescription = if (language == AppLanguage.BN) "সেটিংস" else "Settings",
+                        )
+                    }
                     if (authState.gate == AuthGateState.READY) {
+                        IconButton(
+                            onClick = {
+                                val target = authState.profile?.username?.takeIf { it.isNotBlank() }
+                                    ?: authState.session?.uid
+                                if (!target.isNullOrBlank()) {
+                                    activeProfileTarget = target
+                                }
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.AccountCircle,
+                                contentDescription = if (language == AppLanguage.BN) "আমার প্রোফাইল" else "My Profile",
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 scope.launch {
@@ -497,23 +597,23 @@ fun BsdcAppShell(
                             onSignInRequired = { showAuthModal = true },
                         )
                     }
-                    MainTab.EXPLORE -> ExploreRouterAndSettingsTab(
+                    MainTab.EXPLORE -> DiscoverHubScreen(
+                        repository = container.discoverRepository,
+                        imageLoader = container.imageLoader,
+                        viewerUid = authState.session?.uid,
                         language = language,
-                        themeMode = themeMode,
-                        syncSettings = syncSettings,
-                        cachedPostCount = cachedPosts.size,
-                        incomingDestination = incomingDestination,
-                        onChangeTheme = onChangeTheme,
-                        onChangeLanguage = onChangeLanguage,
-                        onChangeSyncPolicy = { policy ->
-                            scope.launch {
-                                container.syncPrefsStore.setNetworkPolicy(policy)
-                                SyncScheduler.applyPeriodicPolicy(context, policy)
-                            }
+                        initialSection = discoverSection,
+                        onSignInRequired = { showAuthModal = true },
+                        onOpenPost = { slugOrId ->
+                            activeDetailPost = null
+                            activeDetailSlug = slugOrId
                         },
-                        onTriggerSync = { SyncScheduler.triggerImmediateSync(context, forceManual = true) },
-                        onOpenPermissionSheet = { showPermissionSheet = true },
-                        onTestRoute = { url -> onRouteEvaluated(AppLinkUriRouter.resolveLink(url)) },
+                        onOpenProfile = { target ->
+                            activeProfileTarget = target
+                        },
+                        onOpenVerifyCode = { code ->
+                            onRouteEvaluated(LinkDestination.NativeRoute("/verify?code=$code"))
+                        },
                         onOpenExternal = { url -> openInCustomTab(context, url) },
                     )
                 }
@@ -545,6 +645,7 @@ private fun ExploreRouterAndSettingsTab(
     onOpenPermissionSheet: () -> Unit,
     onTestRoute: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
+    onBack: () -> Unit,
 ) {
     val bn = language == AppLanguage.BN
     var testUrl by remember { mutableStateOf("https://news.bsdc.info.bd/") }
@@ -554,6 +655,21 @@ private fun ExploreRouterAndSettingsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = if (bn) "অ্যাপ সেটিংস ও ডায়াগনস্টিকস" else "App Settings & Diagnostics",
+                    style = MaterialTheme.typography.titleLarge,
+                )
+                TextButton(onClick = onBack) {
+                    Text(if (bn) "বন্ধ করুন" else "Close")
+                }
+            }
+        }
         item {
             BsdcCard {
                 Text(

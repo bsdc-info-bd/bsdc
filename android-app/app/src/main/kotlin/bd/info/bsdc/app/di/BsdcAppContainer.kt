@@ -14,6 +14,7 @@ import bd.info.bsdc.app.core.push.BsdcPushRegistrationManager
 import bd.info.bsdc.app.core.sync.FeedPrefetchService
 import bd.info.bsdc.app.core.sync.OfflineSyncPreferencesStore
 import bd.info.bsdc.app.feature.compose.ComposeRepository
+import bd.info.bsdc.app.feature.discover.DiscoverRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
 import bd.info.bsdc.app.feature.messenger.MessengerRepository
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
@@ -168,6 +169,14 @@ class BsdcAppContainer(appContext: Context) {
     val verifyRepository: VerifyRepository by lazy {
         VerifyRepository(
             supabase = supabaseRestClient,
+            database = database,
+        )
+    }
+
+    val discoverRepository: DiscoverRepository by lazy {
+        DiscoverRepository(
+            supabase = supabaseRestClient,
+            platformApi = platformApi,
             database = database,
         )
     }
