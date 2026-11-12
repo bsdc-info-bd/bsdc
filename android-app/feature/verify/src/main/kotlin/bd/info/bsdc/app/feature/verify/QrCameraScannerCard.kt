@@ -112,13 +112,13 @@ fun QrCameraScannerCard(
                 )
                 if (cameraState == PermissionGrantState.PERMANENTLY_DENIED_OPEN_SETTINGS) {
                     BsdcButton(
-                        text = if (bn) "অ্যাপ সেটিংস খুলুন" else "Open App Settings",
+                        label = if (bn) "অ্যাপ সেটিংস খুলুন" else "Open App Settings",
                         onClick = { permissionCoordinator.openAppSettings() },
                         modifier = Modifier.fillMaxWidth(),
                     )
                 } else {
                     BsdcButton(
-                        text = if (bn) "ক্যামেরা চালু করুন" else "Allow Camera & Scan",
+                        label = if (bn) "ক্যামেরা চালু করুন" else "Allow Camera & Scan",
                         onClick = { permissionCoordinator.request(DevicePermissionKind.CAMERA) },
                         modifier = Modifier.fillMaxWidth(),
                     )

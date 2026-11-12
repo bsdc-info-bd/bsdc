@@ -7,6 +7,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -328,7 +329,7 @@ fun VerifyHubScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             ) {
                                 BsdcButton(
-                                    text = if (docBusy) {
+                                    label = if (docBusy) {
                                         if (bn) "যাচাই হচ্ছে..." else "Checking..."
                                     } else {
                                         if (bn) "যাচাই করুন" else "Verify Code"
@@ -452,7 +453,7 @@ fun VerifyHubScreen(
                                 modifier = Modifier.fillMaxWidth(),
                             )
                             BsdcButton(
-                                text = if (reportBusy) {
+                                label = if (reportBusy) {
                                     if (bn) "খোঁজা হচ্ছে..." else "Checking..."
                                 } else {
                                     if (bn) "রসিদ যাচাই করুন" else "Verify Report Receipt"
@@ -485,7 +486,7 @@ fun VerifyHubScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
                                 BsdcBadge(
-                                    text = if (bn) "চূড়ান্ত নিবন্ধিত রিপোর্ট" else "FINALIZED REPORT",
+                                    label = if (bn) "চূড়ান্ত নিবন্ধিত রিপোর্ট" else "FINALIZED REPORT",
                                     tone = BsdcTone.OK,
                                 )
                                 Text(
@@ -600,6 +601,7 @@ fun VerifyHubScreen(
                 if (notices.isEmpty() && !noticesBusy) {
                     item {
                         BsdcEmptyState(
+                            icon = Icons.Rounded.Campaign,
                             title = if (bn) "কোনো সক্রিয় নোটিশ নেই" else "No active official notices",
                             subtitle = if (bn) {
                                 "প্রকাশিত অফিশিয়াল ঘোষণাগুলো এখানে দেখা যাবে।"
@@ -622,10 +624,10 @@ fun VerifyHubScreen(
                                 ) {
                                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                                         if (notice.pinned) {
-                                            BsdcBadge(text = if (bn) "পিনকৃত" else "PINNED", tone = BsdcTone.INFO)
+                                            BsdcBadge(label = if (bn) "পিনকৃত" else "PINNED", tone = BsdcTone.INFO)
                                         }
                                         BsdcBadge(
-                                            text = notice.priority.uppercase(),
+                                            label = notice.priority.uppercase(),
                                             tone = when (notice.priority.lowercase()) {
                                                 "urgent" -> BsdcTone.BAD
                                                 "important" -> BsdcTone.WARN
@@ -737,6 +739,7 @@ fun VerifyHubScreen(
                 if (history.isEmpty()) {
                     item {
                         BsdcEmptyState(
+                            icon = Icons.Rounded.History,
                             title = if (bn) "এখনো কোনো যাচাই করা হয়নি" else "No verification history yet",
                             subtitle = if (bn) {
                                 "কোড বা রিপোর্ট যাচাই করলে অফলাইন রেফারেন্স হিসেবে এখানে সংরক্ষিত থাকবে।"
@@ -897,7 +900,7 @@ private fun HistoryRowCard(
         "EXPIRED", "WITHDRAWN" -> BsdcTone.WARN
         else -> BsdcTone.BAD
     }
-    BsdcCard(onClick = onSelect) {
+    BsdcCard(modifier = Modifier.clickable(onClick = onSelect)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -921,7 +924,7 @@ private fun HistoryRowCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            BsdcBadge(text = entry.state, tone = tone)
+            BsdcBadge(label = entry.state, tone = tone)
         }
     }
 }

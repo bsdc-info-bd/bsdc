@@ -40,10 +40,12 @@ class VerifyRepository(
         }
         val parsed = DocCodeChecksum.parseDocCode(raw) as ParsedDocCode.Valid
         runCatching {
-            val rows = supabase.rpc<List<VerificationResult>>(
+            val rawJson = supabase.rpcText(
                 functionName = "verify_code",
                 params = JsonObject(mapOf("p_code" to JsonPrimitive(parsed.code))),
+                requireAuth = false,
             )
+            val rows = supabase.decode<List<VerificationResult>>(rawJson)
             val result = rows.firstOrNull()
                 ?: throw IllegalStateException("Empty response from verification registry.")
             database.verificationHistoryDao().upsert(
@@ -68,10 +70,12 @@ class VerifyRepository(
             return@withContext Result.failure(IllegalArgumentException("Enter a valid report receipt UUID."))
         }
         runCatching {
-            val rows = supabase.rpc<List<VerifiedReport>>(
+            val rawJson = supabase.rpcText(
                 functionName = "verify_performance_report",
                 params = JsonObject(mapOf("p_id" to JsonPrimitive(cleanId))),
+                requireAuth = false,
             )
+            val rows = supabase.decode<List<VerifiedReport>>(rawJson)
             val report = rows.firstOrNull()
             if (report != null) {
                 database.verificationHistoryDao().upsert(
@@ -128,19 +132,23 @@ class VerifyRepository(
 
     suspend fun fetchNoticeFeed(limit: Int = 50): Result<List<PublicNoticeRow>> = withContext(Dispatchers.IO) {
         runCatching {
-            supabase.rpc<List<PublicNoticeRow>>(
+            val rawJson = supabase.rpcText(
                 functionName = "notice_feed",
                 params = JsonObject(mapOf("p_limit" to JsonPrimitive(limit.coerceIn(1, 200)))),
+                requireAuth = false,
             )
+            supabase.decode<List<PublicNoticeRow>>(rawJson)
         }
     }
 
     suspend fun acknowledgeNotice(noticeId: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            supabase.rpcUnit(
+            supabase.rpcText(
                 functionName = "acknowledge_notice",
                 params = buildJsonObject { put("p_id", JsonPrimitive(noticeId)) },
+                requireAuth = true,
             )
+            Unit
         }
     }
 }

@@ -186,11 +186,13 @@ describe('FCM HTTP v1 delivery', () => {
     );
     expect((msg['data'] as { path?: string; channel_id?: string }).path).toBe('/messages/c1');
     expect((msg['data'] as { channel_id?: string }).channel_id).toBe('bsdc_messenger');
-    expect((msg['android'] as { notification?: { channel_id?: string } }).notification?.channel_id).toBe(
-      'bsdc_messenger',
-    );
+    expect(
+      (msg['android'] as { notification?: { channel_id?: string } }).notification?.channel_id,
+    ).toBe('bsdc_messenger');
     expect(resolveAndroidChannelId({ tag: 'bsdc-comment-p1', url: '/p/p1' })).toBe('bsdc_social');
-    expect(resolveAndroidChannelId({ tag: 'bsdc-order-o1', url: '/orders/o1' })).toBe('bsdc_orders');
+    expect(resolveAndroidChannelId({ tag: 'bsdc-order-o1', url: '/orders/o1' })).toBe(
+      'bsdc_orders',
+    );
     expect(resolveAndroidChannelId({ tag: 'bsdc-certificate-c1', url: '/certificates' })).toBe(
       'bsdc_verify_alerts',
     );
@@ -199,7 +201,7 @@ describe('FCM HTTP v1 delivery', () => {
     );
   });
 
-  it('delivers pending FCM devices end-to-end inside run /health even without VAPID keys', async () => {
+  it('delivers pending FCM devices end-to-end inside run /health even without VAPID', async () => {
     const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
     const fcmCalls: string[] = [];
 
