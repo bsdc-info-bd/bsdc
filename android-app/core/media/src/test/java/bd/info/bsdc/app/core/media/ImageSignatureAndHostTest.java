@@ -46,7 +46,7 @@ public class ImageSignatureAndHostTest {
 
         assertEquals(
             "https://i.ibb.co/plain-http.jpg",
-            ImgbbUrlAllowlist.normalizeImageUrl("  http://i.ibb.co/plain-http.jpg  "),
+            ImgbbUrlAllowlist.normalizeImageUrl("  http://i.ibb.co/plain-http.jpg  ")
         );
         assertEquals("", ImgbbUrlAllowlist.normalizeImageUrl("https://evil.example.com/pixel.png"));
         assertTrue(ImgbbUrlAllowlist.isRepairableImageUrl("https://i.ibb.co/abc123/avatar.webp"));
