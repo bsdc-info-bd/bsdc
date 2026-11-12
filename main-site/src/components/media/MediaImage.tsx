@@ -1,7 +1,6 @@
 import { ImageOff } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ImgHTMLAttributes } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useOnlineStatus } from '@/hooks/use-online-status';
 import { cn } from '@/lib/cn';
 import { isRepairableMediaHost } from '@/lib/media/hosts';
 import { responsiveSource, type ResponsiveSource } from '@/lib/media/optimise';
@@ -61,12 +60,6 @@ function normalizeMediaSrc(raw: string): string {
   return trimmed;
 }
 
-/**
- * The ImgBB host of an address, or null when it is not one this edge can fetch.
- *
- * Relative addresses are never proxied: they are already same-origin, so there
- * is no CORS, referrer or hotlink problem for the proxy to solve.
- */
 function hostOf(url: string): string | null {
   try {
     const parsed = new URL(url, 'https://bsdc.info.bd');
@@ -84,16 +77,9 @@ interface Painting {
 }
 
 /**
- * Resilient, responsive image element backed by BSDC's ImgBB + Cloudflare edge
- * delivery pipeline.
- *
- * - Builds real multi-resolution `srcset` + `sizes` descriptors whenever both
- *   an ImgBB `medium` (~640w) variant and full WebP URL exist.
- * - Paints cached images in 0ms without fade flicker, while giving network loads
- *   a zero-CLS placeholder surface.
- * - Automatically upgrades legacy 180x180 square thumbnails to full resolution
- *   on wide cards, verifies decoded dimensions, and walks the bounded recovery
- *   ladder through BSDC's `/media/i` edge cache when needed.
+ * Resilient, responsive image element backed directly by ImgBB + Cloudflare edge
+ * delivery (`/media/i` fallback) with zero service-worker interception or
+ * first-mount remount churn.
  */
 export function MediaImage({
   src,
@@ -112,7 +98,6 @@ export function MediaImage({
   ...imageProps
 }: MediaImageProps) {
   const { t } = useTranslation();
-  const online = useOnlineStatus();
 
   const cleanSrc = normalizeMediaSrc(src);
   const cleanFallback = normalizeMediaSrc(fallbackSrc);
@@ -144,20 +129,10 @@ export function MediaImage({
         : mediumUrl.length > 0 && mediumUrl !== primary
           ? mediumUrl
           : '';
-  /**
-   * The proxy can only fetch what its allowlist names.
-   *
-   * `/media/i` answers 400 for anything that is not on an ImgBB host, so asking
-   * it to repair a Google avatar or a legacy Cloudinary row spent four rungs of
-   * the ladder on four guaranteed failures — four extra requests per picture, per
-   * page, on the connection every other picture was sharing. A host this
-   * platform cannot repair gets the rungs that can work and nothing else.
-   */
   const canProxy = allowProxy && primary.length > 0 && hostOf(primary) !== null;
 
+  const prevPrimaryRef = useRef(primary);
   const machine = useRef<RecoveryState>(initialRecoveryState(primary));
-  const failures = useRef(0);
-  const offlineFailure = useRef(false);
   const upgradedLegacyThumb = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const nextKey = useRef(1);
@@ -168,7 +143,6 @@ export function MediaImage({
     key: 0,
   }));
   const [loaded, setLoaded] = useState(false);
-  const [offlineTile, setOfflineTile] = useState(false);
   const [gaveUp, setGaveUp] = useState(primary.length === 0);
 
   const clearTimer = useCallback(() => {
@@ -180,16 +154,17 @@ export function MediaImage({
 
   useEffect(() => clearTimer, [clearTimer]);
 
+  // Only reset recovery state when `primary` actually changes after mount;
+  // remounting the initial `<img>` key on first paint aborts in-flight loads.
   useEffect(() => {
+    if (prevPrimaryRef.current === primary) return;
+    prevPrimaryRef.current = primary;
     clearTimer();
     machine.current = initialRecoveryState(primary);
-    failures.current = 0;
-    offlineFailure.current = false;
     upgradedLegacyThumb.current = false;
     nextKey.current += 1;
     setPainting({ url: primary, attempt: 0, key: nextKey.current });
     setLoaded(false);
-    setOfflineTile(false);
     setGaveUp(primary.length === 0);
   }, [primary, clearTimer]);
 
@@ -212,10 +187,8 @@ export function MediaImage({
 
   const apply = useCallback(
     (failure: ImageFailure) => {
-      failures.current += 1;
       const { state: next, plan } = advanceRecovery(machine.current, {
         failure,
-        online,
         fallbackUrl: fallback,
         primaryUrl: primary,
         canProxy,
@@ -223,40 +196,33 @@ export function MediaImage({
       machine.current = next;
 
       if (plan.step === 'give-up') {
-        if (plan.offline) {
-          offlineFailure.current = true;
-          setOfflineTile(true);
-          setGaveUp(true);
-          onFailure?.();
-          return;
-        }
-        offlineFailure.current = false;
         setGaveUp(true);
         onFailure?.();
         return;
       }
 
-      offlineFailure.current = false;
-      setOfflineTile(false);
       paint(next, plan.delayMs);
     },
-    [canProxy, fallback, online, paint, primary, onFailure],
+    [canProxy, fallback, paint, primary, onFailure],
   );
 
+  // If a transient network drop settled into `gaveUp`, retry seamlessly when
+  // connectivity returns without requiring a full page reload.
   useEffect(() => {
-    if (!online || !offlineFailure.current || primary.length === 0) return;
-    offlineFailure.current = false;
-    failures.current = 0;
-    const busted = withBust(primary, `online-${Date.now().toString(36)}`);
-    machine.current = {
-      ...initialRecoveryState(primary),
-      url: busted,
+    if (!gaveUp || primary.length === 0) return undefined;
+    const onReconnect = () => {
+      const busted = withBust(primary, `retry-${Date.now().toString(36)}`);
+      machine.current = {
+        ...initialRecoveryState(primary),
+        url: busted,
+      };
+      setGaveUp(false);
+      setLoaded(false);
+      paint(machine.current, 0);
     };
-    setOfflineTile(false);
-    setGaveUp(false);
-    setLoaded(false);
-    paint(machine.current, 0);
-  }, [online, paint, primary]);
+    window.addEventListener('online', onReconnect, { once: true });
+    return () => window.removeEventListener('online', onReconnect);
+  }, [gaveUp, paint, primary]);
 
   const observeElement = useCallback((node: HTMLImageElement | null) => {
     if (node !== null && node.complete && node.naturalWidth > 0) {
@@ -282,9 +248,6 @@ export function MediaImage({
       return;
     }
 
-    // Legacy ImgBB rows stored a 180x180 square crop in `thumb_url`. When a wide
-    // card detects a <=200px decoded thumb and has a distinct full URL, upgrade
-    // seamlessly to the full image so historical posts never render blurry.
     if (
       !upgradedLegacyThumb.current &&
       slot >= 300 &&
@@ -319,9 +282,7 @@ export function MediaImage({
         )}
       >
         <ImageOff size={20} aria-hidden="true" />
-        <span className="fab-sr-only">
-          {offlineTile ? t('media.gallery.imageOffline') : t('media.gallery.imageUnavailable')}
-        </span>
+        <span className="fab-sr-only">{t('media.gallery.imageUnavailable')}</span>
       </span>
     );
   }
@@ -341,10 +302,6 @@ export function MediaImage({
       src={painting.url}
       alt={alt}
       className={cn(!loaded && 'bg-surface-2', className)}
-      // Lazy unless the caller says otherwise. Every `<img>` in a feed used to be
-      // eager, so opening a twenty-post page started twenty downloads at once on
-      // the connection the first one needed. The caller still wins: a hero image
-      // passes `loading="eager"` and is loaded immediately.
       loading={imageProps.loading ?? 'lazy'}
       onError={handleError}
       onLoad={handleLoad}

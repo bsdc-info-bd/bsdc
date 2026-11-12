@@ -666,30 +666,41 @@ check(
 );
 
 /* ------------------------------------------------------------------ *
- * 7. Offline and installability
+ * 7. Direct live delivery and push-only worker
  * ------------------------------------------------------------------ */
 
-check('G-01', 'PWA', 'A manifest is shipped with maskable icons', () => {
+check('G-01', 'Web delivery', 'Website ships no Workbox or VitePWA offline bundle', () => {
   const config = read('main-site/vite.config.ts');
+  const pkg = read('main-site/package.json');
+  const ok = !/vite-plugin-pwa|workbox-/i.test(config) && !/vite-plugin-pwa|workbox-/i.test(pkg);
   return {
-    ok: /manifest/.test(config) && /maskable/.test(config),
-    evidence: 'VitePWA manifest with a maskable icon',
+    ok,
+    evidence: 'vite.config.ts and package.json do not use VitePWA or Workbox',
   };
 });
 
-check('G-02', 'PWA', 'An update is offered, never forced mid-action', () => {
-  const pwa = read('main-site/src/pwa.ts');
+check('G-02', 'Web delivery', 'Push worker cleans up any leftover offline or image caches', () => {
+  const worker = read('main-site/src/sw.ts');
+  const helper = read('main-site/src/lib/push/register-worker.ts');
+  const ok =
+    /addEventListener\('push'/.test(worker) &&
+    /purgeLegacyOfflineCaches/.test(worker) &&
+    /cleanupLegacyOfflineCaches/.test(helper);
   return {
-    ok: /onNeedRefresh/.test(pwa) && /action/.test(pwa),
-    evidence: 'onNeedRefresh raises a persistent toast with an explicit action',
+    ok,
+    evidence: 'push-only sw.ts and register-worker.ts delete bsdc-images/bsdc-fonts/workbox caches',
   };
 });
 
-check('G-03', 'PWA', 'The offline state is honest rather than a blank page', () => ({
+check('G-03', 'Web delivery', 'No offline shell, offline banner, or picture cache module ships', () => ({
   ok:
-    has('main-site/src/components/layout/OfflineBanner.tsx') ||
-    /offline/i.test(read('main-site/src/pwa.ts')),
-  evidence: 'an offline banner and an offline-ready notice',
+    !has('main-site/src/components/layout/OfflineBanner.tsx') &&
+    !has('main-site/src/routes/OfflinePage.tsx') &&
+    !has('main-site/src/pwa.ts') &&
+    !has('main-site/src/lib/media/image-strategy.ts') &&
+    !has('main-site/src/lib/media/cache-policy.ts') &&
+    !has('main-site/src/components/media/PictureHealthCard.tsx'),
+  evidence: 'offline page, offline banner, pwa.ts, and client picture cache modules are absent',
 }));
 
 /* ------------------------------------------------------------------ *
@@ -1145,47 +1156,32 @@ check(
   }),
 );
 
-check('G-04', 'PWA', 'The manifest describes an installable application', () => {
-  const config = read('main-site/vite.config.ts');
-  const required = ['standalone', 'theme_color', 'background_color', 'start_url'];
-  const missing = required.filter((key) => !config.includes(key));
+check('G-04', 'Web delivery', 'Website HTML does not advertise an offline PWA manifest', () => {
+  const html = read('main-site/index.html');
   return {
-    ok: missing.length === 0,
-    evidence: missing.length === 0 ? required.join(', ') : `missing ${missing.join(', ')}`,
+    ok: !/manifest\.webmanifest/.test(html),
+    evidence: 'no manifest.webmanifest link in main-site/index.html',
   };
 });
 
-check('G-05', 'PWA', 'Offline and runtime caching rules cover each request kind', () => {
-  const config = read('main-site/vite.config.ts');
+check('G-05', 'Web delivery', 'Service worker never intercepts fetches, navigations, or images', () => {
   const worker = read('main-site/src/sw.ts');
-  const cacheNames = read('main-site/src/lib/media/cache-names.ts');
   const checks = {
-    injectManifest: /strateg(?:y|ies):\s*['\"]injectManifest['\"]/.test(config),
-    precache: /precacheAndRoute\(self\.__WB_MANIFEST\)/.test(worker),
-    navigation: /new NavigationRoute\(createHandlerBoundToURL\('\/index\.html'\)/.test(worker),
-    // The picture cache is written by hand and its name carries a version, so
-    // the question is "is there an image route with an image cache" rather than
-    // "does it still use the strategy that poisoned it". Cache names live in
-    // cache-names.ts so the page and worker share a single source of truth.
-    imageCache:
-      /request\.destination !== 'image'/.test(worker) &&
-      /IMAGE_CACHE_NAME/.test(worker) &&
-      /export const IMAGE_CACHE_NAME = 'bsdc-images-v\d+';/.test(cacheNames),
-    fontCache:
-      /request\.destination === 'font'/.test(worker) &&
-      /FONT_CACHE_NAME/.test(worker) &&
-      /cacheName: FONT_CACHE/.test(worker) &&
-      /export const FONT_CACHE_NAME = 'bsdc-fonts-v\d+';/.test(cacheNames),
+    noWorkbox: !/from\s+['"]workbox-/.test(worker),
+    noPrecache: !/precacheAndRoute/.test(worker),
+    noNavigation: !/NavigationRoute|createHandlerBoundToURL/.test(worker),
+    noFetchListener: !/addEventListener\(['"]fetch['"]/.test(worker),
+    noCachePut: !/caches\.open\(|cache\.put\(/.test(worker),
   };
-  const missing = Object.entries(checks)
+  const failed = Object.entries(checks)
     .filter(([, present]) => !present)
     .map(([name]) => name);
   return {
-    ok: missing.length === 0,
+    ok: failed.length === 0,
     evidence:
-      missing.length === 0
-        ? 'the shell/assets are precached, navigation falls back to the shell, images use stale-while-revalidate and fonts use cache-first'
-        : `missing ${missing.join(', ')}`,
+      failed.length === 0
+        ? 'push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes'
+        : `failed: ${failed.join(', ')}`,
   };
 });
 
@@ -1412,12 +1408,16 @@ check('F-10', 'Performance', 'Stylesheets stay small enough to inline-parse quic
   };
 });
 
-check('G-06', 'PWA', 'The offline page is part of the precache, not fetched when offline', () => ({
-  ok:
-    /offline/i.test(read('main-site/vite.config.ts')) ||
-    has('main-site/src/routes/OfflinePage.tsx'),
-  evidence: 'an offline route is built into the shell and precached with it',
-}));
+check('G-06', 'Web delivery', 'Feed and API queries do not stall on browser online heuristics', () => {
+  const entry = read('main-site/src/main.tsx');
+  return {
+    ok:
+      /networkMode:\s*'always'/.test(entry) &&
+      /registerPushServiceWorker\(\)/.test(entry) &&
+      !/registerServiceWorker/.test(entry),
+    evidence: 'QueryClient configures networkMode: always and registers only the push worker',
+  };
+});
 
 check(
   'I-05',

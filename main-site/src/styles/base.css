@@ -4,7 +4,7 @@
 
 /* Self-hosted Bengali subset; Latin text remains on the system/Inter stack.
    Keeping the font local also makes Bangla legible when third-party fonts are
-   blocked or the installed PWA is offline. See public/fonts/README.md. */
+   blocked. See public/fonts/README.md. */
 @font-face {
   font-family: 'BSDC Bengali';
   src: url('/fonts/noto-sans-bengali.woff2') format('woff2');

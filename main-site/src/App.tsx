@@ -13,7 +13,6 @@ const HomePage = lazy(() => import('@/routes/HomePage'));
 const AboutPage = lazy(() => import('@/routes/AboutPage'));
 const GuidelinesPage = lazy(() => import('@/routes/GuidelinesPage'));
 const ContactPage = lazy(() => import('@/routes/ContactPage'));
-const OfflinePage = lazy(() => import('@/routes/OfflinePage'));
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage'));
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
 const SignupPage = lazy(() => import('@/routes/auth/SignupPage'));
@@ -82,7 +81,6 @@ const router = createBrowserRouter([
       { path: ROUTES.about, element: withSuspense(<AboutPage />) },
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
-      { path: ROUTES.offline, element: withSuspense(<OfflinePage />) },
       { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 
       // Guests only: a signed-in member is sent back to the home page.

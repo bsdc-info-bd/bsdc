@@ -10,13 +10,12 @@ import { AppBar } from './AppBar';
 import { BottomNav } from './BottomNav';
 import { CommandPalette } from './CommandPalette';
 import { Footer } from './Footer';
-import { OfflineBanner } from './OfflineBanner';
 import { RouteProgress } from './RouteProgress';
 import { SkipLink } from './SkipLink';
 
 /**
- * The application shell: skip link, app bar, route progress, offline banner,
- * main region, footer, mobile tab bar, command palette and toasts.
+ * The application shell: skip link, app bar, route progress, main region,
+ * footer, mobile tab bar, command palette and toasts.
  * Bottom padding reserves space for the mobile tab bar so content never hides.
  *
  * Not every route gets all of it. `chromeFor` decides, and a conversation
@@ -35,7 +34,6 @@ export function AppShell() {
     <div className="flex min-h-[100dvh] flex-col">
       <SkipLink />
       <RouteProgress />
-      <OfflineBanner />
       {chrome.appBar ? <AppBar /> : null}
       <VerifyEmailBanner />
       <main

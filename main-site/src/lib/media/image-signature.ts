@@ -1,11 +1,10 @@
 /**
  * Whether a byte prefix is a picture, decided from the bytes.
  *
- * This file is deliberately free of DOM types. The edge media proxy
- * (`/media/i`) needs the same check as the service worker, and it compiles
- * against `@cloudflare/workers-types` rather than `lib.dom`, so a check that
- * mentions `Response` cannot live here. `cache-policy.ts` re-exports this for
- * the worker; the edge imports it directly.
+ * This file is deliberately free of DOM types. The edge upload and media proxy
+ * endpoints (`functions/_media.ts` and `functions/media/i.ts`) compile against
+ * `@cloudflare/workers-types` rather than `lib.dom`, so byte-signature checks
+ * live here as pure `Uint8Array` helpers.
  *
  * Why it exists at all: a host under load does not answer an image URL with an
  * image. It answers with a 200 and a small HTML page, and the header that says

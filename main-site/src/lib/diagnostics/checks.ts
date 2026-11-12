@@ -148,7 +148,7 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.online',
           'Connection',
           'warn',
-          'The device reports no connection. Cached pages still work; everything else waits.',
+          'The device reports no internet connection.',
         ),
   );
 
@@ -355,7 +355,7 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.worker',
           'Background support',
           'fail',
-          'This browser has no service worker, so offline pages and notifications cannot work here.',
+          'This browser has no service worker, so push notifications cannot work here.',
         )
       : result(
           'browser.worker',
@@ -418,13 +418,13 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.storage',
           'On-device storage',
           'ok',
-          'The browser allows this site to keep a cache and a session.',
+          'The browser allows this site to keep a session.',
         )
       : result(
           'browser.storage',
           'On-device storage',
           'warn',
-          'The browser is blocking storage. Nothing is remembered here: you will be signed out on reload and pictures will not be cached.',
+          'The browser is blocking storage. Nothing is remembered here: you will be signed out on reload.',
         ),
   );
 

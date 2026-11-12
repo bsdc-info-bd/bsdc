@@ -1,8 +1,8 @@
 /**
  * The hosts a picture may live on.
  *
- * Imported by the service worker, the browser image renderer, the edge media
- * proxy (`/media/i`), and unit tests so all four share one exact allowlist.
+ * Imported by the browser image renderer, the edge media proxy (`/media/i`),
+ * and unit tests so all three share one exact allowlist.
  *
  * Pure module with zero imports so every bundle can include it cleanly.
  */
@@ -57,9 +57,6 @@ export const MEDIA_PROXY_PATH = '/media/i';
 
 /** Cache-busting query parameter appended during recovery retries. */
 export const BUST_PARAM = 'bsdc_r';
-
-/** Trust window (7 days) for verified service-worker image cache entries. */
-export const MEDIA_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 /** Hosts that BSDC uploads to and permits `/media/i` to fetch and edge-cache. */
 export function isRepairableMediaHost(hostname: string): boolean {

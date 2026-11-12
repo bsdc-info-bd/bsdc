@@ -158,7 +158,7 @@ export const en = {
       },
       reach: {
         title: 'Reach',
-        body: 'World-class SEO, offline support, push notifications and a native Android application.',
+        body: 'World-class SEO, push notifications, real-time messaging and a native Android application.',
       },
     },
     ecosystemTitle: 'The BSDC ecosystem',
@@ -267,10 +267,6 @@ export const en = {
     notFoundTitle: 'This page does not exist',
     notFoundBody:
       'The address may be mistyped, or the content may have been removed. Try the home page.',
-    offlineTitle: 'You are offline',
-    offlineBody:
-      'BSDC works offline for pages you have already visited. Reconnect to load new content.',
-    offlineBadge: 'Offline',
   },
   auth: {
     signIn: 'Sign in',
@@ -509,16 +505,6 @@ export const en = {
       title: 'Language',
       description: 'Interface language for menus, buttons and messages.',
     },
-    media: {
-      title: 'Pictures',
-      description: 'Repair the picture cache without signing out.',
-      body: 'If pictures stop loading, this drops the cached copies on this device and asks for them again. Nothing else is removed: you stay signed in, your drafts stay, and your settings stay.',
-      repair: 'Repair pictures',
-      repairing: 'Repairing…',
-      repaired: 'Done. Pictures are being fetched again.',
-      repairFailed: 'The cache could not be cleared. Reload the page and try again.',
-      hint: 'This never asks you to clear all site data. If it does not help, the problem is at the picture host, not on your device.',
-    },
     notifications: {
       title: 'Notifications',
       description: 'Choose what BSDC may notify you about.',
@@ -562,7 +548,7 @@ export const en = {
       forbidden: 'You do not have permission to do that.',
       signInRequired: 'Sign in to continue.',
       profileMissing: 'Finish setting up your profile before you publish.',
-      offline: 'You appear to be offline. The change was not saved.',
+      offline: 'Network connection interrupted. The change was not saved.',
     },
   },
   media: {
@@ -608,12 +594,6 @@ export const en = {
     gallery: {
       postImages: 'Pictures in this post',
       imageUnavailable: 'This image could not be loaded.',
-      imageOffline: 'You are offline. This picture will load when the connection returns.',
-      imageRetrying: 'Loading this picture again…',
-    },
-    repair: {
-      banner: 'Pictures not loading? Repair just the picture cache.',
-      repaired: 'Picture cache repaired. Pictures will reload now.',
     },
     lightbox: {
       title: 'Picture',
@@ -2346,11 +2326,6 @@ export const en = {
       emptyTitle: 'No payouts yet',
       emptyBody: 'Your withdrawals will be listed here with their status.',
     },
-  },
-  pwa: {
-    updateTitle: 'A new version of BSDC is available',
-    updateAction: 'Refresh',
-    readyTitle: 'BSDC is ready to work offline',
   },
 };
 

@@ -141,7 +141,9 @@ describe('the arrangement a card shows', () => {
         const image = screen.queryByRole('img');
         if (image === null || image.tagName !== 'IMG') break;
         fireEvent.error(image);
-        vi.runOnlyPendingTimers();
+        act(() => {
+          vi.runOnlyPendingTimers();
+        });
       }
 
       expect(screen.getByRole('img', { name: 'The first picture' }).tagName).toBe('SPAN');
@@ -244,7 +246,18 @@ describe('a post row becomes a gallery item', () => {
   });
 });
 
-describe('MediaImage protocol upgrade and reconnect recovery', () => {
+describe('MediaImage stability, protocol upgrade, and reconnect recovery', () => {
+  it('does not tear down or remount the img element on initial mount', () => {
+    const { rerender } = render(
+      <MediaImage src="https://i.ibb.co/abc/stable.jpg" alt="Stable photo" />,
+    );
+    const firstEl = screen.getByRole('img', { name: 'Stable photo' });
+    expect(firstEl).toHaveAttribute('data-attempt', '0');
+    expect(firstEl).toHaveAttribute('src', 'https://i.ibb.co/abc/stable.jpg');
+    rerender(<MediaImage src="https://i.ibb.co/abc/stable.jpg" alt="Stable photo" />);
+    expect(screen.getByRole('img', { name: 'Stable photo' })).toBe(firstEl);
+  });
+
   it('upgrades plain HTTP ImgBB URLs to HTTPS immediately', () => {
     render(<MediaImage src="http://i.ibb.co/legacy/pic.jpg" alt="Legacy photo" />);
     expect(screen.getByRole('img', { name: 'Legacy photo' })).toHaveAttribute(
@@ -253,31 +266,32 @@ describe('MediaImage protocol upgrade and reconnect recovery', () => {
     );
   });
 
-  it('shows the offline placeholder when offline and retries automatically on reconnect', () => {
-    const onLineSpy = vi.spyOn(navigator, 'onLine', 'get');
-    onLineSpy.mockReturnValue(false);
-
+  it('walks the full recovery ladder to unavailability and retries on online event', () => {
+    vi.useFakeTimers();
     try {
-      render(<MediaImage src="https://i.ibb.co/offline/pic.jpg" alt="Reconnect photo" />);
-      const initialImg = screen.getByRole('img', { name: 'Reconnect photo' });
-      expect(initialImg.tagName).toBe('IMG');
+      render(<MediaImage src="https://i.ibb.co/abc/pic.jpg" alt="Recoverable photo" />);
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const current = screen.queryByRole('img', { name: 'Recoverable photo' });
+        if (current === null || current.tagName !== 'IMG') break;
+        fireEvent.error(current);
+        act(() => {
+          vi.runOnlyPendingTimers();
+        });
+      }
+      expect(screen.getByRole('img', { name: 'Recoverable photo' }).tagName).toBe('SPAN');
+      expect(screen.getByText('media.gallery.imageUnavailable')).toBeInTheDocument();
 
-      fireEvent.error(initialImg);
-      expect(screen.getByRole('img', { name: 'Reconnect photo' }).tagName).toBe('SPAN');
-      expect(screen.getByText('media.gallery.imageOffline')).toBeInTheDocument();
-
-      onLineSpy.mockReturnValue(true);
       act(() => {
         window.dispatchEvent(new Event('online'));
       });
 
-      const retriedImg = screen.getByRole('img', { name: 'Reconnect photo' });
+      const retriedImg = screen.getByRole('img', { name: 'Recoverable photo' });
       expect(retriedImg.tagName).toBe('IMG');
       expect(retriedImg.getAttribute('src')).toMatch(
-        /^https:\/\/i\.ibb\.co\/offline\/pic\.jpg\?bsdc_r=online-/,
+        /^https:\/\/i\.ibb\.co\/abc\/pic\.jpg\?bsdc_r=retry-/,
       );
     } finally {
-      onLineSpy.mockRestore();
+      vi.useRealTimers();
     }
   });
 });
