@@ -73,7 +73,6 @@ import bd.info.bsdc.app.core.auth.AuthGateState
 import bd.info.bsdc.app.core.auth.AuthStateSnapshot
 import bd.info.bsdc.app.core.common.AppLinkUriRouter
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
-import bd.info.bsdc.app.core.common.DocCodeChecksum
 import bd.info.bsdc.app.core.database.BsdcDatabaseMappers
 import bd.info.bsdc.app.core.designsystem.BsdcBrandWordmark
 import bd.info.bsdc.app.core.designsystem.BsdcButton
@@ -87,7 +86,6 @@ import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.NotificationPrefs
-import bd.info.bsdc.app.core.model.ParsedDocCode
 import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
@@ -104,6 +102,7 @@ import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
 import bd.info.bsdc.app.feature.notifications.NotificationsScreen
 import bd.info.bsdc.app.feature.onboarding.BsdcAuthScreen
+import bd.info.bsdc.app.feature.verify.VerifyHubScreen
 import bd.info.bsdc.app.feature.onboarding.OnboardingWizardScreen
 import bd.info.bsdc.app.feature.onboarding.VerifyEmailGateScreen
 import kotlinx.coroutines.launch
@@ -445,7 +444,18 @@ fun BsdcAppShell(
                             activeDetailSlug = post.slug.ifBlank { post.id }
                         },
                     )
-                    MainTab.VERIFY -> VerifyChecksumSandboxTab(language = language)
+                    MainTab.VERIFY -> {
+                        val verifyRoute = (incomingDestination as? LinkDestination.NativeRoute)
+                            ?.path
+                            ?.takeIf { it.startsWith("/verify") }
+                        VerifyHubScreen(
+                            repository = container.verifyRepository,
+                            viewerUid = authState.session?.uid,
+                            language = language,
+                            initialRoutePath = verifyRoute,
+                            onSignInRequired = { showAuthModal = true },
+                        )
+                    }
                     MainTab.CREATE -> CreateHubScreen(
                         viewerUid = authState.session?.uid,
                         composeRepository = container.composeRepository,
@@ -517,94 +527,6 @@ fun BsdcAppShell(
             language = language,
             onDismiss = { showPermissionSheet = false },
         )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun VerifyChecksumSandboxTab(language: AppLanguage) {
-    val bn = language == AppLanguage.BN
-    val sampleValid = remember {
-        val body = "4A7C21B9"
-        "BSDC-CT-$body-${DocCodeChecksum.cardCheckDigit(body)}"
-    }
-    var codeInput by remember { mutableStateOf(sampleValid) }
-    val parsed = remember(codeInput) { DocCodeChecksum.parseDocCode(codeInput) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        item {
-            BsdcCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Rounded.QrCodeScanner, contentDescription = null)
-                    Text(
-                        text = if (bn) "BSDC ডকুমেন্ট যাচাই (অফলাইন চেকসাম)" else "BSDC Verification (Local Checksum Engine)",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                }
-                Text(
-                    text = if (bn) {
-                        "vf.bsdc.info.bd-এর একই Java 21 চেক-ডিজিট যুক্তি এবং O→4 / I→8 অটো-মেরামত। ক্যামেরা QR স্ক্যানার ধাপ ৮-এ যুক্ত হবে।"
-                    } else {
-                        "Exact Java 21 parity with vf.bsdc.info.bd check-digit math & O→4 / I→8 repair. Live CameraX QR scanning arrives in Phase 8."
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = BsdcThemeTokens.colors.mutedText,
-                )
-                OutlinedTextField(
-                    value = codeInput,
-                    onValueChange = { codeInput = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    label = { Text(if (bn) "ডকুমেন্ট কোড লিখুন" else "Document Code") },
-                )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = false,
-                        onClick = { codeInput = sampleValid },
-                        label = { Text("Valid CT") },
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = {
-                            val b = "48AB12CD"
-                            codeInput = "bsdc–id–OIAB12CD—${DocCodeChecksum.cardCheckDigit(b)}"
-                        },
-                        label = { Text("O/I Typo Test") },
-                    )
-                    FilterChip(
-                        selected = false,
-                        onClick = { codeInput = "BSDC-CT-4A7C21B9-9" },
-                        label = { Text("Bad Check Digit") },
-                    )
-                }
-            }
-        }
-
-        item {
-            when (parsed) {
-                is ParsedDocCode.Valid -> {
-                    BsdcStatusBanner(
-                        title = if (bn) "কোড ফরম্যাট সঠিক (${parsed.kind.code})" else "Check Digit Valid (${parsed.kind.code})",
-                        body = "Formatted: ${DocCodeChecksum.formatDocCode(parsed.code)}\nShare URL: ${DocCodeChecksum.verificationUrl(BuildConfig.VF_ORIGIN, parsed.code)}",
-                        tone = BsdcTone.OK,
-                    )
-                }
-                is ParsedDocCode.Invalid -> {
-                    BsdcStatusBanner(
-                        title = if (bn) "অবৈধ বা ভুল কোড" else "Local Checksum Rejection",
-                        body = parsed.reason,
-                        tone = BsdcTone.BAD,
-                    )
-                }
-            }
-        }
     }
 }
 

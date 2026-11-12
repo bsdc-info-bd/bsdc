@@ -133,6 +133,7 @@ jobs:
             :feature:compose:testDebugUnitTest \
             :feature:messenger:testDebugUnitTest \
             :feature:notifications:testDebugUnitTest \
+            :feature:verify:testDebugUnitTest \
             :app:testDebugUnitTest \
             :app:lintDebug \
             :app:assembleDebug 2>&1 | tee /tmp/gradle.out || status=$?
@@ -205,6 +206,7 @@ jobs:
             :feature:compose:testReleaseUnitTest \
             :feature:messenger:testReleaseUnitTest \
             :feature:notifications:testReleaseUnitTest \
+            :feature:verify:testReleaseUnitTest \
             :app:testReleaseUnitTest \
             :app:lintRelease \
             :app:assembleRelease \

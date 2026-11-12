@@ -122,6 +122,7 @@ dependencies {
     implementation(project(":feature:compose"))
     implementation(project(":feature:messenger"))
     implementation(project(":feature:notifications"))
+    implementation(project(":feature:verify"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

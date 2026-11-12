@@ -18,6 +18,7 @@ import bd.info.bsdc.app.feature.feed.FeedRepository
 import bd.info.bsdc.app.feature.messenger.MessengerRepository
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
 import bd.info.bsdc.app.feature.notifications.NotificationsRepository
+import bd.info.bsdc.app.feature.verify.VerifyRepository
 import coil3.ImageLoader
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
@@ -161,6 +162,13 @@ class BsdcAppContainer(appContext: Context) {
     val notificationsRepository: NotificationsRepository by lazy {
         NotificationsRepository(
             supabase = supabaseRestClient,
+        )
+    }
+
+    val verifyRepository: VerifyRepository by lazy {
+        VerifyRepository(
+            supabase = supabaseRestClient,
+            database = database,
         )
     }
 }
