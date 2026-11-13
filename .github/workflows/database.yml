@@ -25,6 +25,7 @@ on:
       - 'scripts/prove-staff-provision-concurrency.mjs'
       - 'scripts/prove-messenger-concurrency.mjs'
       - 'scripts/wait-for-messenger-migration.mjs'
+      - 'scripts/sync-push-secrets.mjs'
       - '.github/workflows/database.yml'
   pull_request:
     paths:
@@ -36,6 +37,7 @@ on:
       - 'scripts/prove-staff-provision-concurrency.mjs'
       - 'scripts/prove-messenger-concurrency.mjs'
       - 'scripts/wait-for-messenger-migration.mjs'
+      - 'scripts/sync-push-secrets.mjs'
       - '.github/workflows/database.yml'
   workflow_dispatch:
     inputs:
@@ -97,7 +99,9 @@ jobs:
           psql --version
 
       - name: Check the runner's own logic
-        run: node scripts/db-push.mjs --self-test
+        run: |
+          node scripts/db-push.mjs --self-test
+          node scripts/sync-push-secrets.mjs --self-test
 
       - name: Show the plan
         run: node scripts/db-push.mjs --plan
@@ -364,24 +368,11 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
           PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
-        run: |
-          set +x
-          set -euo pipefail
-          WORKER_URL="${PUSH_WORKER_URL:-https://push.api.bsdc.info.bd}"
-          WORKER_URL="${WORKER_URL%/}"
-          if [ "${#PUSH_FLUSH_SECRET}" -lt 32 ]; then
-            echo "::warning title=PUSH_FLUSH_SECRET missing::Skipping bsdc.push_settings sync (secret unset or shorter than 32 chars)."
-            exit 0
-          fi
-          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -v flush_secret="$PUSH_FLUSH_SECRET" -v worker_url="$WORKER_URL" <<'SQL'
-          \set ECHO none
-          insert into bsdc.push_settings (name, value)
-          values
-            ('flush_secret', :'flush_secret'),
-            ('worker_url', :'worker_url')
-          on conflict (name) do update set value = excluded.value;
-          SQL
-          echo "Synchronized bsdc.push_settings (flush_secret & worker_url)."
+          PUSH_VAPID_PUBLIC_KEY: ${{ secrets.PUSH_VAPID_PUBLIC_KEY }}
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
+          PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
+          PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
+        run: node scripts/sync-push-secrets.mjs --target db
 
       - name: Record what the database now holds
         env:

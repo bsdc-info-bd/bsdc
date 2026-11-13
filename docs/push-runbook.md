@@ -217,7 +217,10 @@ There are two schedulers, and the Worker is the one that carries the words.
 
 `deploy.yml` deploys `push-worker/` (`bsdc-push`) and syncs its runtime secrets
 automatically on pushes to **any branch** (no merge to `main` required) and on
-non-preview manual `workflow_dispatch` runs. For manual local deploys:
+non-preview manual `workflow_dispatch` runs. When `PUSH_FLUSH_SECRET` or VAPID
+keys are omitted from GitHub Secrets, `scripts/sync-push-secrets.mjs` reads or
+provisions them idempotently inside `bsdc.push_settings` so Supabase, Pages, and
+`bsdc-push` stay synchronized. For manual local deploys:
 
 ```bash
 cd push-worker

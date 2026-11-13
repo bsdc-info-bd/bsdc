@@ -213,6 +213,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
           VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
@@ -226,7 +227,9 @@ jobs:
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
           PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
           PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
-        run: node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
+        run: |
+          node scripts/prepare-firebase-bindings.mjs "$RUNNER_TEMP/bsdc-auth-bindings.json"
+          node scripts/sync-push-secrets.mjs --target pages --bindings "$RUNNER_TEMP/bsdc-auth-bindings.json"
 
       - name: Configure production profile authentication
         if: steps.scope.outputs.run == 'true' && matrix.app == 'main-site' && steps.target.outputs.is_prod == 'true'
@@ -324,6 +327,9 @@ jobs:
                   console.error("::error::/api/push/config returned an unexpected payload.");
                   process.exit(1);
                 }
+                if (cfg.enabled !== true) {
+                  console.warn("::warning title=Pages push VAPID key missing::/api/push/config returned enabled=false.");
+                }
                 console.log("Verified: /api/push/config responded cleanly (enabled=" + cfg.enabled + ").");
               });'
           WAKE_CODE=$(curl -sS -o /tmp/bsdc-wake-check.json -w "%{http_code}" \
@@ -389,17 +395,30 @@ jobs:
             # Always keep bsdc-push synchronized when pushing from any working/feature branch.
             echo "run=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
-            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs; then
+            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
               echo "run=false" >> "$GITHUB_OUTPUT"
               echo "The push worker did not change in this push."
             else
               echo "run=true" >> "$GITHUB_OUTPUT"
             fi
-          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs; then
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The push worker did not change in this push."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install Postgres client for push settings sync
+        if: steps.changed.outputs.run == 'true'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -n "${SUPABASE_DB_URL:-}" ] && ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
           fi
 
       - name: Install
@@ -423,17 +442,21 @@ jobs:
           FB_CLIENT_EMAIL: ${{ secrets.FB_CLIENT_EMAIL }}
           FB_PRIVATE_KEY: ${{ secrets.FB_PRIVATE_KEY }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL || 'https://push.api.bsdc.info.bd' }}
           PUSH_VAPID_PUBLIC_KEY: ${{ secrets.PUSH_VAPID_PUBLIC_KEY }}
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
           PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
           PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
-        run: node scripts/prepare-firebase-bindings.mjs --push-worker "$RUNNER_TEMP/bsdc-push-bindings.json"
+        run: |
+          node scripts/prepare-firebase-bindings.mjs --push-worker "$RUNNER_TEMP/bsdc-push-bindings.json"
+          node scripts/sync-push-secrets.mjs --target worker --bindings "$RUNNER_TEMP/bsdc-push-bindings.json"
 
       - name: Deploy
         id: deploy_step
@@ -536,45 +559,92 @@ jobs:
         env:
           DEPLOYED: ${{ steps.deploy_step.outputs.deployed }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
         run: |
-          set -euo pipefail
-          HEALTH_URL="${PUSH_WORKER_HEALTH_URL:-https://push.api.bsdc.info.bd/health}"
-          RUN_URL="${HEALTH_URL%/health}/run?limit=1"
-          if curl --fail --silent --show-error --retry 4 --retry-all-errors --max-time 15 "$HEALTH_URL" -o /tmp/push-health.json; then
-            node -e '
-              const fs = require("node:fs");
-              const h = JSON.parse(fs.readFileSync("/tmp/push-health.json", "utf8"));
-              console.log("bsdc-push /health:", JSON.stringify(h));
-              if (h.fcm !== true) console.warn("::warning title=bsdc-push FCM unconfigured::bsdc-push /health reports fcm=false; check FIREBASE_SERVICE_ACCOUNT_BSDC_BD.");
-              if (h.vapid !== true) console.warn("::warning title=bsdc-push VAPID unconfigured::bsdc-push /health reports vapid=false; check PUSH_VAPID_* secrets.");
-              if (h.status !== "ok" || h.secret !== true || h.database !== true) {
-                const msg = "bsdc-push /health failed required checks (status=" + h.status + ", secret=" + h.secret + ", database=" + h.database + ").";
-                if (process.env.DEPLOYED === "true") {
+          node -e '
+            const fs = require("node:fs");
+            const path = require("node:path");
+            const { setTimeout: wait } = require("node:timers/promises");
+
+            (async () => {
+              const baseUrl = (process.env.PUSH_WORKER_URL || "https://push.api.bsdc.info.bd").trim().replace(/\/+$/, "");
+              const healthUrl = baseUrl + "/health";
+              const deployed = process.env.DEPLOYED === "true";
+
+              let bindings = {};
+              try {
+                const raw = fs.readFileSync(path.join(process.env.RUNNER_TEMP || "/tmp", "bsdc-push-bindings.json"), "utf8");
+                bindings = JSON.parse(raw);
+              } catch {}
+              const flushSecret = (process.env.PUSH_FLUSH_SECRET || bindings.PUSH_FLUSH_SECRET || "").trim();
+
+              let health = null;
+              for (let attempt = 1; attempt <= 4; attempt += 1) {
+                try {
+                  const res = await fetch(healthUrl, { signal: AbortSignal.timeout(15000) });
+                  if (res.ok) {
+                    const candidate = await res.json();
+                    health = candidate;
+                    if (candidate.status === "ok" && candidate.secret === true && candidate.database === true && candidate.fcm === true) {
+                      break;
+                    }
+                  }
+                } catch {}
+                if (attempt < 4) await wait(5000);
+              }
+
+              if (!health) {
+                if (deployed) {
+                  console.error("::error::Could not reach " + healthUrl + " after deploying bsdc-push.");
+                  process.exit(1);
+                }
+                console.warn("::warning title=push-worker health probe unreachable::Could not verify " + healthUrl + " (deploy skipped due to token scopes; Pages fallback remains active).");
+                return;
+              }
+
+              console.log("bsdc-push /health:", JSON.stringify(health));
+              if (health.fcm !== true) console.warn("::warning title=bsdc-push FCM unconfigured::bsdc-push /health reports fcm=false; check FIREBASE_SERVICE_ACCOUNT_BSDC_BD.");
+              if (health.vapid !== true) console.warn("::warning title=bsdc-push VAPID unconfigured::bsdc-push /health reports vapid=false; check PUSH_VAPID_* secrets.");
+              if (health.status !== "ok" || health.secret !== true || health.database !== true || health.fcm !== true) {
+                const msg = "bsdc-push /health failed required checks (status=" + health.status + ", secret=" + health.secret + ", database=" + health.database + ", fcm=" + health.fcm + ").";
+                if (deployed) {
                   console.error("::error::" + msg);
                   process.exit(1);
                 }
                 console.warn("::warning title=bsdc-push unconfigured::" + msg);
               }
-            '
-            rm -f /tmp/push-health.json
-            if [ "${#PUSH_FLUSH_SECRET}" -ge 32 ]; then
-              RUN_CODE=$(curl -sS -o /tmp/push-run-smoke.json -w "%{http_code}" \
-                -X POST -H "authorization: Bearer $PUSH_FLUSH_SECRET" \
-                --max-time 20 "$RUN_URL" || echo "000")
-              echo "bsdc-push /run?limit=1 HTTP $RUN_CODE: $(cat /tmp/push-run-smoke.json 2>/dev/null || true)"
-              rm -f /tmp/push-run-smoke.json
-              if [ "$RUN_CODE" = "403" ]; then
-                echo "::warning title=bsdc-push flush secret mismatch::POST /run returned 403; ensure Database sync and bsdc-push PUSH_FLUSH_SECRET match."
-              elif [ "$RUN_CODE" != "200" ]; then
-                echo "::warning title=bsdc-push /run smoke returned HTTP $RUN_CODE::Verify Supabase push_pending_devices / fcm_pending_devices RPC availability."
-              fi
-            fi
-          elif [ "$DEPLOYED" = "true" ]; then
-            echo "::error::Could not verify $HEALTH_URL after deploying bsdc-push."
-            exit 1
-          else
-            echo "::warning title=push-worker health probe unreachable::Could not verify $HEALTH_URL (deploy skipped due to token scopes; Pages fallback remains active)."
-          fi
+
+              if (flushSecret.length >= 32) {
+                let runStatus = 0;
+                let runSummary = "";
+                for (let attempt = 1; attempt <= 3; attempt += 1) {
+                  try {
+                    const res = await fetch(baseUrl + "/run?limit=1", {
+                      method: "POST",
+                      headers: { authorization: "Bearer " + flushSecret },
+                      signal: AbortSignal.timeout(20000),
+                    });
+                    runStatus = res.status;
+                    runSummary = await res.text();
+                    if (runStatus === 200) break;
+                  } catch {}
+                  if (attempt < 3) await wait(3000);
+                }
+                console.log("bsdc-push POST /run?limit=1 HTTP " + runStatus + ": " + runSummary);
+                if (runStatus !== 200) {
+                  const msg = "bsdc-push POST /run?limit=1 returned HTTP " + runStatus + ".";
+                  if (deployed) {
+                    console.error("::error::" + msg);
+                    process.exit(1);
+                  }
+                  console.warn("::warning title=bsdc-push flush probe non-200::" + msg);
+                }
+              }
+            })().catch((err) => {
+              console.error("::error::" + (err && err.message ? err.message : "Health verification failed"));
+              process.exit(1);
+            });
+          '
 
       - name: Remove temporary push-worker bindings
         if: always()
