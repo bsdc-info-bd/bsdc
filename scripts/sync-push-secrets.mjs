@@ -21,14 +21,11 @@
  *   - No secret value is ever passed as a CLI argument or written to stdout/stderr.
  */
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { randomBytes, webcrypto } from 'node:crypto';
 import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { promisify } from 'node:util';
-
-const execFileAsync = promisify(execFile);
 
 const DEFAULT_WORKER_URL = 'https://push.api.bsdc.info.bd';
 const DEFAULT_PUSH_CONFIG_URL = 'https://www.bsdc.info.bd/api/push/config';
@@ -96,6 +93,7 @@ export function buildPushSyncSql({
 
   const lines = [
     'BEGIN;',
+    'SET LOCAL client_min_messages = warning;',
     `SELECT pg_advisory_xact_lock(hashtext(${sqlLiteral(LOCK_KEY)}));`,
     `INSERT INTO bsdc.push_settings (name, value) VALUES ('worker_url', ${sqlLiteral(normalizedWorkerUrl)}) ON CONFLICT (name) DO UPDATE SET value = excluded.value;`,
   ];
@@ -206,14 +204,41 @@ async function pagesAlreadyExposesPublicVapidKey(configUrl) {
   }
 }
 
-async function runPsql(dbUrl, sql) {
-  const { stdout } = await execFileAsync('psql', [dbUrl, '-X', '-qAt', '-v', 'ON_ERROR_STOP=1'], {
-    input: sql,
-    env: { ...process.env, PGCONNECT_TIMEOUT: '10' },
-    timeout: 30_000,
-    maxBuffer: 1024 * 1024,
-  });
-  return stdout;
+export function sanitizeErrorMessage(message, secrets = []) {
+  let out = String(message ?? '');
+  for (const secret of secrets) {
+    if (typeof secret === 'string' && secret.trim().length > 0) {
+      out = out.replaceAll(secret, '<redacted>');
+      out = out.replaceAll(secret.trim(), '<redacted>');
+    }
+  }
+  return out.trim() || 'psql command failed';
+}
+
+function runPsql(dbUrl, sql, secrets = []) {
+  const args = [
+    dbUrl,
+    '--no-psqlrc',
+    '--quiet',
+    '--tuples-only',
+    '--no-align',
+    '--set',
+    'ON_ERROR_STOP=1',
+    '--file',
+    '-',
+  ];
+  try {
+    return execFileSync('psql', args, {
+      input: sql,
+      encoding: 'utf8',
+      env: { ...process.env, PGCONNECT_TIMEOUT: '10' },
+      timeout: 30_000,
+      maxBuffer: 1024 * 1024,
+    });
+  } catch (error) {
+    const raw = `${error?.stderr ?? ''}\n${error?.message ?? ''}`;
+    throw new Error(sanitizeErrorMessage(raw, [dbUrl, ...secrets]));
+  }
 }
 
 function parseJsonLine(stdout) {
@@ -302,8 +327,15 @@ async function runSelfTests() {
   assert.equal(mergedPages.IMGBB_API_KEY, 'key');
   assert.equal(mergedPages.PUSH_WORKER_URL, 'https://push.api.bsdc.info.bd');
   assert.equal(mergedPages.PUSH_VAPID_SUBJECT, 'mailto:rrc@bsdc.info.bd');
+  assert.equal(
+    sanitizeErrorMessage('psql failed for postgres://user:secret@host/db with flush123', [
+      'postgres://user:secret@host/db',
+      'flush123',
+    ]),
+    'psql failed for <redacted> with <redacted>',
+  );
 
-  console.log('12 push secret sync checks passed. No credentials printed.');
+  console.log('13 push secret sync checks passed. No credentials printed.');
 }
 
 function readFlagValue(args, name) {
@@ -330,7 +362,7 @@ async function main() {
     return;
   }
 
-  const existsOut = await runPsql(
+  const existsOut = runPsql(
     dbUrl,
     "SELECT (to_regclass('bsdc.push_settings') IS NOT NULL)::text;",
   );
@@ -368,7 +400,12 @@ async function main() {
     allowVapidProvision,
   });
 
-  const stdout = await runPsql(dbUrl, sql);
+  const stdout = runPsql(dbUrl, sql, [
+    process.env.PUSH_FLUSH_SECRET ?? '',
+    candidateFlushSecret,
+    explicitPrivate,
+    candidateVapid.privateKey,
+  ]);
   const resolved = parseJsonLine(stdout);
   if (!resolved) {
     throw new Error('Failed to parse synchronized push settings summary from database.');
