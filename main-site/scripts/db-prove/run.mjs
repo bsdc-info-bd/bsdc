@@ -100,6 +100,10 @@ const HARNESSES = [
     't61.mjs',
     '0090: per-device push delivery receipts, multi-device partial failures, push_content window, and seq-scoped instant trigger',
   ],
+  [
+    't62.mjs',
+    '0091: certificate issuance, editing, amendment/reissue, revocation, and template RPC validation without 23514/23503 leaks',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

@@ -64,23 +64,60 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          fetch-depth: 0
 
-      # `jobs.<id>.if` cannot read the matrix context, so a single-app
-      # deployment is filtered here instead: out-of-scope jobs start, skip
-      # every step and finish in seconds.
+      # `jobs.<id>.if` cannot read the matrix context, so a single-app or
+      # unchanged-app deployment is filtered here instead: out-of-scope jobs
+      # start, skip every step and finish in seconds.
       - name: Is this application in scope
         id: scope
+        shell: bash
         run: |
-          if [ -z "${{ inputs.app }}" ] || [ "${{ inputs.app }}" = "${{ matrix.app }}" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "${{ matrix.app }} was not requested; skipping."
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -z "${{ inputs.app }}" ] || [ "${{ inputs.app }}" = "${{ matrix.app }}" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "${{ matrix.app }} was not requested; skipping."
+            fi
+            exit 0
           fi
+
+          BASE=""
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ -n "${{ github.event.pull_request.base.sha }}" ] && git cat-file -e "${{ github.event.pull_request.base.sha }}^{commit}" 2>/dev/null; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
+            BASE="${{ github.event.before }}"
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1; then
+            BASE="HEAD~1"
+          fi
+
+          if [ -z "$BASE" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "${{ matrix.app }}" = "main-site" ]; then
+            if git diff --quiet "$BASE" HEAD -- main-site ':(exclude)main-site/scripts/db-prove' ':(exclude)main-site/scripts/browser' brand scripts/check-deploy-env.mjs scripts/prepare-firebase-bindings.mjs scripts/sync-push-secrets.mjs scripts/wait-for-messenger-migration.mjs; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "main-site had no runtime or build changes; skipping."
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            if git diff --quiet "$BASE" HEAD -- "${{ matrix.app }}" corporate-kit brand scripts/check-deploy-env.mjs; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "${{ matrix.app }} had no changes; skipping."
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.scope.outputs.run == 'true'
+        with:
+          node-version: 20
 
       - name: Resolve deployment target
         id: target
@@ -391,17 +428,14 @@ jobs:
             else
               echo "run=false" >> "$GITHUB_OUTPUT"
             fi
-          elif [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            # Always keep bsdc-push synchronized when pushing from any working/feature branch.
-            echo "run=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
-            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
+            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
               echo "run=false" >> "$GITHUB_OUTPUT"
               echo "The push worker did not change in this push."
             else
               echo "run=true" >> "$GITHUB_OUTPUT"
             fi
-          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../scripts/prepare-firebase-bindings.mjs ../scripts/sync-push-secrets.mjs; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The push worker did not change in this push."
           else

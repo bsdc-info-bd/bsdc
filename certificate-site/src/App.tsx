@@ -18,7 +18,6 @@ import {
   computeFieldDiff,
   formatDocCode,
   listRpc,
-  messageOf,
   qrSvg,
   relativeTimeLabel,
   rowsToCsv,
@@ -30,14 +29,21 @@ import {
 } from '@kit';
 import {
   EMPTY_DRAFT,
+  MAX_BODY,
+  MAX_RECIPIENT_NAME,
+  MAX_REVOKE_REASON,
+  MAX_SUBJECT,
   certificateFilename,
   draftProblems,
   draftToArgs,
   editCertificateProblems,
+  formatCertificateError,
   longDate,
   parseBatch,
   registryState,
   resolvedBody,
+  resolvedEditBody,
+  revokeCertificateProblems,
   type CertificateRevisionRow,
   type EditCertificateDraft,
   type IssueDraft,
@@ -114,11 +120,11 @@ function Issue(): ReactElement {
 
   const active = templates.state.data.filter((template) => template.is_active);
   const template = active.find((item) => item.key === draft.templateKey) ?? null;
-  const problems = draftProblems(draft);
+  const problems = draftProblems(draft, template);
   const body = resolvedBody(draft, template);
 
   const issue = (): void => {
-    if (!template) return;
+    if (!template || problems.length > 0) return;
     setBusy(true);
     setError('');
     callRpc<string>(env, 'issue_certificate', draftToArgs(draft))
@@ -134,7 +140,7 @@ function Issue(): ReactElement {
         setDraft({ ...EMPTY_DRAFT, templateKey: draft.templateKey });
       })
       .catch((cause: unknown) => {
-        setError(messageOf(cause));
+        setError(formatCertificateError(cause));
       })
       .finally(() => {
         setBusy(false);
@@ -174,7 +180,7 @@ function Issue(): ReactElement {
           />
           <Field
             label="Recipient name"
-            hint="Exactly as it should be printed."
+            hint={`Exactly as it should be printed (${draft.recipientName.trim().length} / ${MAX_RECIPIENT_NAME}).`}
             value={draft.recipientName}
             onChange={(event) => {
               set({ recipientName: event.target.value });
@@ -182,7 +188,7 @@ function Issue(): ReactElement {
           />
           <Field
             label="What it is for"
-            hint="The course, the contribution or the role."
+            hint={`The course, the contribution or the role (${draft.subject.trim().length} / ${MAX_SUBJECT}).`}
             value={draft.subject}
             onChange={(event) => {
               set({ subject: event.target.value });
@@ -217,7 +223,7 @@ function Issue(): ReactElement {
         <div style={{ marginTop: 'var(--sp-3)' }}>
           <TextArea
             label="Wording"
-            hint="Leave empty to use the template. {recipient}, {subject} and {date} are filled in."
+            hint={`Leave empty to use the template. {recipient}, {subject} and {date} are filled in (${body.length} / ${MAX_BODY} resolved).`}
             value={draft.body}
             onChange={(event) => {
               set({ body: event.target.value });
@@ -316,7 +322,8 @@ function Batch({ templates }: { templates: readonly TemplateRow[] }): ReactEleme
   const [done, setDone] = useState<readonly string[]>([]);
   const [failed, setFailed] = useState<readonly string[]>([]);
 
-  const parsed = parseBatch(text);
+  const selectedTemplate = templates.find((item) => item.key === templateKey) ?? null;
+  const parsed = parseBatch(text, selectedTemplate);
 
   const run = (): void => {
     setIssuing(true);
@@ -338,7 +345,7 @@ function Batch({ templates }: { templates: readonly TemplateRow[] }): ReactEleme
           });
           issued.push(`${row.name}: ${code}`);
         } catch (cause: unknown) {
-          errors.push(`Line ${String(row.line)} (${row.name}): ${messageOf(cause)}`);
+          errors.push(`Line ${String(row.line)} (${row.name}): ${formatCertificateError(cause)}`);
         }
       }
       setDone(issued);
@@ -423,6 +430,7 @@ function Registry(): ReactElement {
   const [bulkExpiresOn, setBulkExpiresOn] = useState('');
   const [bulkFeedback, setBulkFeedback] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [registryFeedback, setRegistryFeedback] = useState('');
 
   const [inspectRow, setInspectRow] = useState<RegistryRow | null>(null);
 
@@ -467,7 +475,7 @@ function Registry(): ReactElement {
       setBulkReason('');
       reload();
     } catch (cause) {
-      setBulkFeedback(messageOf(cause));
+      setBulkFeedback(formatCertificateError(cause));
     } finally {
       setBulkBusy(false);
     }
@@ -560,6 +568,12 @@ function Registry(): ReactElement {
         </div>
       </Card>
 
+      {registryFeedback !== '' && (
+        <Banner tone="ok" title="Certificate Updated">
+          <p className="kit-small">{registryFeedback}</p>
+        </Banner>
+      )}
+
       {bulkFeedback !== '' && (
         <Banner tone="neutral" title="Batch Update">
           <p className="kit-small">{bulkFeedback}</p>
@@ -616,7 +630,14 @@ function Registry(): ReactElement {
                 <td className="kit-small">{row.verifications}</td>
                 <td>
                   <div className="kit-row">
-                    <Button size="small" variant="quiet" onClick={() => setInspectRow(row)}>
+                    <Button
+                      size="small"
+                      variant="quiet"
+                      onClick={() => {
+                        setRegistryFeedback('');
+                        setInspectRow(row);
+                      }}
+                    >
                       Edit / History
                     </Button>
                     <PrintCertificateButton
@@ -689,10 +710,12 @@ function Registry(): ReactElement {
       >
         {inspectRow && (
           <CertificateInspector
+            key={inspectRow.code}
             row={inspectRow}
             templates={templates.state.status === 'ready' ? templates.state.data : []}
-            onChanged={() => {
+            onChanged={(message) => {
               setInspectRow(null);
+              setRegistryFeedback(message);
               reload();
             }}
           />
@@ -709,7 +732,7 @@ function CertificateInspector({
 }: {
   readonly row: RegistryRow;
   readonly templates: readonly TemplateRow[];
-  readonly onChanged: () => void;
+  readonly onChanged: (message: string) => void;
 }): ReactElement {
   const env = useCorporateEnv();
   const [draft, setDraft] = useState<EditCertificateDraft>({
@@ -724,7 +747,6 @@ function CertificateInspector({
   const [newTemplateKey, setNewTemplateKey] = useState(row.template_key);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState('');
 
   const loadHistory = useCallback(
     () => listRpc<CertificateRevisionRow>(env, 'certificate_history', { p_code: row.code }),
@@ -732,13 +754,31 @@ function CertificateInspector({
   );
   const historyState = useAsync(loadHistory, [env, row.code]);
 
-  const problems = editCertificateProblems(draft);
+  const currentTemplate = templates.find((t) => t.key === row.template_key) ?? null;
+  const reissueTemplate = templates.find((t) => t.key === newTemplateKey) ?? null;
+  const inPlaceProblems = editCertificateProblems(draft, currentTemplate, row.body ?? '');
+  const reissueProblems = [
+    ...editCertificateProblems(draft, reissueTemplate, row.body ?? ''),
+    ...(!reissueTemplate
+      ? ['Selected replacement template could not be found.']
+      : !reissueTemplate.is_active
+        ? ['Selected replacement template is inactive; choose an active template to reissue.']
+        : []),
+  ];
+  const revokeProblems = revokeCertificateProblems(draft.reason);
+  const previewBody = resolvedEditBody(draft, currentTemplate, row.body ?? '');
+  const staleBodyRecipient =
+    draft.recipientName.trim() !== row.recipient_name.trim() &&
+    draft.body.trim() !== '' &&
+    !draft.body.includes('{recipient}') &&
+    row.recipient_name.trim().length >= 2 &&
+    draft.body.includes(row.recipient_name.trim()) &&
+    !draft.body.includes(draft.recipientName.trim());
 
   const saveInPlace = (): void => {
-    if (problems.length > 0) return;
+    if (inPlaceProblems.length > 0) return;
     setBusy(true);
     setError('');
-    setResult('');
     void callRpc<number>(env, 'edit_issued_certificate', {
       p_code: row.code,
       p_recipient_name: draft.recipientName.trim(),
@@ -750,19 +790,16 @@ function CertificateInspector({
       p_reason: draft.reason.trim(),
     })
       .then((nextRev) => {
-        setResult(`Updated in place to revision #${nextRev}.`);
-        historyState.reload();
-        onChanged();
+        onChanged(`Updated ${row.code} in place to revision #${nextRev}.`);
       })
-      .catch((cause: unknown) => setError(messageOf(cause)))
+      .catch((cause: unknown) => setError(formatCertificateError(cause)))
       .finally(() => setBusy(false));
   };
 
   const amendReissue = (): void => {
-    if (problems.length > 0) return;
+    if (reissueProblems.length > 0) return;
     setBusy(true);
     setError('');
-    setResult('');
     void callRpc<string>(env, 'amend_and_reissue_certificate', {
       p_code: row.code,
       p_template_key: newTemplateKey,
@@ -775,15 +812,18 @@ function CertificateInspector({
       p_reason: draft.reason.trim(),
     })
       .then((newCode) => {
-        setResult(`Issued replacement ${newCode} and marked ${row.code} superseded.`);
-        onChanged();
+        onChanged(`Issued replacement ${newCode} and marked ${row.code} superseded.`);
       })
-      .catch((cause: unknown) => setError(messageOf(cause)))
+      .catch((cause: unknown) => setError(formatCertificateError(cause)))
       .finally(() => setBusy(false));
   };
 
   const toggleStanding = (): void => {
-    if (draft.reason.trim().length < 3) {
+    if (row.status === 'issued' && revokeProblems.length > 0) {
+      setError(revokeProblems[0] ?? 'Enter an audit reason first.');
+      return;
+    }
+    if (row.status === 'revoked' && draft.reason.trim().length < 3) {
       setError('Enter an audit reason (minimum 3 characters) first.');
       return;
     }
@@ -792,8 +832,12 @@ function CertificateInspector({
     const rpcName =
       row.status === 'revoked' ? 'restore_issued_certificate' : 'revoke_issued_certificate';
     void callRpc(env, rpcName, { p_code: row.code, p_reason: draft.reason.trim() })
-      .then(() => onChanged())
-      .catch((cause: unknown) => setError(messageOf(cause)))
+      .then(() =>
+        onChanged(
+          row.status === 'revoked' ? `Restored ${row.code} to issued.` : `Revoked ${row.code}.`,
+        ),
+      )
+      .catch((cause: unknown) => setError(formatCertificateError(cause)))
       .finally(() => setBusy(false));
   };
 
@@ -804,9 +848,9 @@ function CertificateInspector({
           {error}
         </Banner>
       )}
-      {result !== '' && (
-        <Banner tone="ok" title="Saved">
-          {result}
+      {row.superseded_by && (
+        <Banner tone="warn" title="Superseded certificate">
+          This record was superseded by <strong>{row.superseded_by}</strong>.
         </Banner>
       )}
 
@@ -818,21 +862,27 @@ function CertificateInspector({
           <Select
             label="Template (used if Amending & Reissuing)"
             value={newTemplateKey}
-            options={templates.map((t) => ({ value: t.key, label: t.name }))}
+            options={templates.map((t) => ({
+              value: t.key,
+              label: t.is_active ? t.name : `${t.name} (inactive)`,
+            }))}
             onChange={(e) => setNewTemplateKey(e.target.value)}
           />
           <Field
             label="Recipient Name"
+            hint={`${draft.recipientName.trim().length} / ${MAX_RECIPIENT_NAME} characters`}
             value={draft.recipientName}
             onChange={(e) => setDraft({ ...draft, recipientName: e.target.value })}
           />
           <Field
             label="Subject"
+            hint={`${draft.subject.trim().length} / ${MAX_SUBJECT} characters`}
             value={draft.subject}
             onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
           />
           <Field
             label="Recipient Member UID (optional)"
+            hint="Leave blank unless linking to a registered member UID."
             value={draft.recipientUid}
             onChange={(e) => setDraft({ ...draft, recipientUid: e.target.value })}
           />
@@ -852,33 +902,72 @@ function CertificateInspector({
           </div>
           <TextArea
             label="Printed Body Text"
+            hint={`Leave blank to regenerate from the template. Supports {recipient}, {subject}, and {date} (${previewBody.length} / ${MAX_BODY} characters resolved).`}
             rows={3}
             value={draft.body}
             onChange={(e) => setDraft({ ...draft, body: e.target.value })}
           />
+          {currentTemplate && (
+            <div className="kit-row">
+              <Button
+                size="small"
+                variant="quiet"
+                onClick={() => setDraft({ ...draft, body: currentTemplate.body_template })}
+              >
+                Use template wording
+              </Button>
+            </div>
+          )}
+          {staleBodyRecipient && (
+            <Banner tone="warn" title="Printed body still mentions the previous name">
+              <p className="kit-small">
+                Recipient Name changed, while Printed Body Text still contains &ldquo;
+                {row.recipient_name}&rdquo;. Click <strong>Use template wording</strong> or edit the
+                body before saving if the printed text should update too.
+              </p>
+            </Banner>
+          )}
+          {previewBody !== '' && (
+            <div className="kit-card" style={{ padding: 'var(--sp-2)' }}>
+              <p className="kit-hint" style={{ margin: 0 }}>
+                <strong>
+                  Resolved printed wording ({previewBody.length} / {MAX_BODY}):
+                </strong>{' '}
+                {previewBody}
+              </p>
+            </div>
+          )}
           <Field
             label="Mandatory Audit Reason"
+            hint={`Minimum 3 characters (${draft.reason.trim().length} / ${MAX_REVOKE_REASON} max for revocations).`}
             placeholder="e.g. Corrected legal spelling per member ID request"
             value={draft.reason}
             onChange={(e) => setDraft({ ...draft, reason: e.target.value })}
           />
 
-          {problems.length > 0 && (
+          {inPlaceProblems.length > 0 && (
             <ul className="kit-error">
-              {problems.map((p) => (
+              {inPlaceProblems.map((p) => (
                 <li key={p}>{p}</li>
               ))}
             </ul>
           )}
+          {inPlaceProblems.length === 0 && reissueProblems.length > 0 && (
+            <p className="kit-hint">To Amend &amp; Reissue: {reissueProblems.join(' ')}</p>
+          )}
 
           <div className="kit-row">
-            <Button size="small" disabled={busy || problems.length > 0} onClick={saveInPlace}>
+            <Button
+              size="small"
+              disabled={busy || inPlaceProblems.length > 0}
+              onClick={saveInPlace}
+            >
               Save Edit In-Place
             </Button>
             <Button
               size="small"
               variant="quiet"
-              disabled={busy || problems.length > 0}
+              disabled={busy || reissueProblems.length > 0}
               onClick={amendReissue}
             >
               Amend & Reissue New Code
@@ -886,7 +975,12 @@ function CertificateInspector({
             <Button
               size="small"
               variant={row.status === 'revoked' ? 'primary' : 'danger'}
-              disabled={busy || draft.reason.trim().length < 3}
+              disabled={
+                busy ||
+                (row.status === 'revoked'
+                  ? draft.reason.trim().length < 3
+                  : revokeProblems.length > 0)
+              }
               onClick={toggleStanding}
             >
               {row.status === 'revoked' ? 'Restore Certificate' : 'Revoke Certificate'}
@@ -1010,7 +1104,7 @@ function PrintCertificateButton({
       );
       pdf.downloadPdf(bytes, certificateFilename(record.code, record.recipient_name));
     } catch (cause) {
-      setError(messageOf(cause));
+      setError(formatCertificateError(cause));
     } finally {
       setBusy(false);
     }

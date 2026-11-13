@@ -164,6 +164,8 @@ try {
     }];
     else if (name === 'list_admin_macros') response = [];
     else if (name === 'admin_cli_audit_query') response = [];
+    else if (name === 'certificate_history') response = [];
+    else if (name === 'edit_issued_certificate') response = 2;
     else if (name === 'certificate_for_print') response = args.p_code === 'BSDC-CT-4A7C21B9-1'
       ? [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha Rahman', body: 'Template wording', issued_on: '2026-11-07', expires_on: null, status: 'issued' }]
       : [{ code: args.p_code, template_key: 'course-completion', recipient_name: 'Ayesha', body: 'Frozen issued wording from the registry.', issued_on: '2026-11-07', expires_on: null, status: 'revoked' }];
@@ -315,6 +317,16 @@ try {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'certificate-site overflows 375px viewport');
   await page.setViewportSize({ width: 1280, height: 900 });
   console.log('PASS revoked certificate reprint uses frozen body and verification portal and fits 375px mobile');
+  await page.getByRole('button', { name: 'Edit / History', exact: true }).click();
+  await page.getByLabel('Recipient Name').fill('A'.repeat(121));
+  await page.getByLabel('Mandatory Audit Reason').fill('Fixing legal spelling');
+  await page.getByText('Recipient name must be at most 120 characters.').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Save Edit In-Place' }).isDisabled(), true);
+  await page.getByLabel('Recipient Name').fill('Ayesha Rahman');
+  await page.getByRole('button', { name: 'Save Edit In-Place' }).click();
+  await page.getByText('Updated BSDC-CT-4A7C21B9-0 in place to revision #2.').waitFor();
+  assert(calls.some((call) => call.name === 'edit_issued_certificate' && call.args.p_recipient_name === 'Ayesha Rahman'));
+  console.log('PASS certificate edit blocks >120 chars pre-submit and confirms in-place save');
 
   await login('notice-site');
   const published = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Published notice', exact: true }) });

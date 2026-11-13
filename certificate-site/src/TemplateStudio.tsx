@@ -10,11 +10,20 @@ import {
   TextArea,
   callRpc,
   meetsRole,
-  messageOf,
   useCorporateEnv,
   useSession,
 } from '@kit';
-import { fillTemplate, templateDraftProblems, type TemplateDraft, type TemplateRow } from './model';
+import {
+  MAX_TEMPLATE_BODY,
+  MAX_TEMPLATE_HEADING,
+  MAX_TEMPLATE_NAME,
+  MAX_TEMPLATE_PURPOSE,
+  fillTemplate,
+  formatCertificateError,
+  templateDraftProblems,
+  type TemplateDraft,
+  type TemplateRow,
+} from './model';
 
 const EMPTY_TEMPLATE: TemplateDraft = {
   key: '',
@@ -28,6 +37,7 @@ const EMPTY_TEMPLATE: TemplateDraft = {
   signatureName: 'Executive Director',
   signatureTitle: 'Bangladesh Software Development Community',
   isActive: true,
+  sortOrder: 50,
 };
 
 function fromRow(row: TemplateRow): TemplateDraft {
@@ -42,6 +52,7 @@ function fromRow(row: TemplateRow): TemplateDraft {
     signatureName: row.signature_name,
     signatureTitle: row.signature_title,
     isActive: row.is_active,
+    sortOrder: row.sort_order ?? 100,
   };
 }
 
@@ -92,13 +103,13 @@ export function TemplateStudio({
       p_signature_name: draft.signatureName.trim(),
       p_signature_title: draft.signatureTitle.trim(),
       p_is_active: draft.isActive,
-      p_sort_order: 50,
+      p_sort_order: draft.sortOrder ?? 100,
     })
       .then((saved) => {
         setOk(`Saved template "${saved.name}" (${saved.key}).`);
         onSaved();
       })
-      .catch((cause: unknown) => setError(messageOf(cause)))
+      .catch((cause: unknown) => setError(formatCertificateError(cause)))
       .finally(() => setBusy(false));
   };
 
@@ -163,16 +174,19 @@ export function TemplateStudio({
               />
               <Field
                 label="Display Name"
+                hint={`${draft.name.trim().length} / ${MAX_TEMPLATE_NAME} characters`}
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
               />
               <Field
                 label="Heading"
+                hint={`${draft.heading.trim().length} / ${MAX_TEMPLATE_HEADING} characters`}
                 value={draft.heading}
                 onChange={(e) => setDraft({ ...draft, heading: e.target.value })}
               />
               <Field
                 label="Purpose"
+                hint={`${draft.purpose.trim().length} / ${MAX_TEMPLATE_PURPOSE} characters`}
                 value={draft.purpose}
                 onChange={(e) => setDraft({ ...draft, purpose: e.target.value })}
               />
@@ -217,7 +231,7 @@ export function TemplateStudio({
             <div style={{ marginTop: 'var(--sp-3)' }}>
               <TextArea
                 label="Body Wording Template"
-                hint="Supports {recipient}, {subject}, and {date} variables."
+                hint={`Supports {recipient}, {subject}, and {date} variables (${draft.bodyTemplate.trim().length} / ${MAX_TEMPLATE_BODY} characters).`}
                 rows={4}
                 value={draft.bodyTemplate}
                 onChange={(e) => setDraft({ ...draft, bodyTemplate: e.target.value })}
