@@ -7,6 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.os.LocaleListCompat
@@ -16,11 +17,13 @@ import bd.info.bsdc.app.core.designsystem.BsdcTheme
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.ThemeMode
+import bd.info.bsdc.app.core.network.AppUiPreferences
 import bd.info.bsdc.app.ui.BsdcAppShell
 
 class MainActivity : AppCompatActivity() {
 
     private var activeDestination by mutableStateOf<LinkDestination>(LinkDestination.NativeRoute("/"))
+    private var destinationNonce by mutableLongStateOf(0L)
     private var appLanguage by mutableStateOf(AppLanguage.BN)
     private var themeMode by mutableStateOf(ThemeMode.SYSTEM)
 
@@ -28,6 +31,13 @@ class MainActivity : AppCompatActivity() {
         installSplashScreen()
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+
+        appLanguage = AppUiPreferences.getLanguage(this)
+        themeMode = AppUiPreferences.getThemeMode(this)
+        val desiredTags = appLanguage.tag
+        if (AppCompatDelegate.getApplicationLocales().toLanguageTags() != desiredTags) {
+            AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(desiredTags))
+        }
 
         resolveIncomingIntent(intent)
 
@@ -41,15 +51,20 @@ class MainActivity : AppCompatActivity() {
                 BsdcAppShell(
                     container = container,
                     incomingDestination = activeDestination,
+                    destinationNonce = destinationNonce,
                     language = appLanguage,
                     themeMode = themeMode,
                     onChangeLanguage = { next ->
+                        AppUiPreferences.setLanguage(this, next)
                         appLanguage = next
                         AppCompatDelegate.setApplicationLocales(
                             LocaleListCompat.forLanguageTags(next.tag),
                         )
                     },
-                    onChangeTheme = { next -> themeMode = next },
+                    onChangeTheme = { next ->
+                        AppUiPreferences.setThemeMode(this, next)
+                        themeMode = next
+                    },
                     onRouteEvaluated = { destination -> activeDestination = destination },
                 )
             }
@@ -67,6 +82,7 @@ class MainActivity : AppCompatActivity() {
         val dataUri = incoming.dataString
         if (!dataUri.isNullOrBlank()) {
             activeDestination = AppLinkUriRouter.resolveLink(dataUri)
+            destinationNonce += 1L
             return
         }
 
@@ -79,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         }
         if (payload.isNotEmpty()) {
             activeDestination = AppLinkUriRouter.pushDestination(payload)
+            destinationNonce += 1L
         }
     }
 }

@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -141,6 +142,7 @@ export async function fetchQueue(status = 'open', limit = 50): Promise<QueuedRep
 export async function claimReport(reportId: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('claim_report', { p_report_id: reportId });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return data;
 }
 
@@ -155,6 +157,7 @@ export async function resolveReport(
     p_reason: reason,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return data;
 }
 

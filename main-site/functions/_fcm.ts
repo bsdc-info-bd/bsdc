@@ -352,7 +352,7 @@ export async function fcmFallbackDispatch(
   const pending = await rpc<FcmPendingRow[] | null>(env, 'fcm_pending_devices', {
     p_secret: secret,
     p_limit: limit,
-    p_lookback_hours: 48,
+    p_lookback_hours: 72,
   });
   const rows = Array.isArray(pending) ? pending : [];
   if (rows.length === 0) {
@@ -396,10 +396,12 @@ export async function fcmFallbackDispatch(
   const endpoint = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(creds.projectId)}/messages:send`;
 
   const reached = new Set<string>();
+  const reachedPairs: { id: string; token: string }[] = [];
   const dead = new Set<string>();
   const invalid = new Set<string>();
   let sent = 0;
   let failed = 0;
+  let hasPartialFailure = false;
 
   for (const [token, deviceRows] of byToken.entries()) {
     const first = deviceRows[0]!;
@@ -511,7 +513,10 @@ export async function fcmFallbackDispatch(
         const outcome = classifyStatus(res.status, text);
         if (outcome === 'sent') {
           sent += 1;
-          for (const row of group.rows) reached.add(row.notification_id);
+          for (const row of group.rows) {
+            reached.add(row.notification_id);
+            reachedPairs.push({ id: row.notification_id, token });
+          }
         } else if (outcome === 'dead') {
           dead.add(token);
           break;
@@ -520,9 +525,13 @@ export async function fcmFallbackDispatch(
           break;
         } else {
           failed += 1;
+          hasPartialFailure = true;
+          break;
         }
       } catch {
         failed += 1;
+        hasPartialFailure = true;
+        break;
       }
     }
   }
@@ -534,10 +543,21 @@ export async function fcmFallbackDispatch(
     [...invalid].map((t) => rpc(env, 'fcm_flag_invalid_device', { p_secret: secret, p_token: t })),
   );
   const reachedIds = [...reached];
-  const marked =
-    reachedIds.length > 0
-      ? await rpc<number>(env, 'fcm_mark_devices', { p_secret: secret, p_ids: reachedIds })
-      : 0;
+  let marked: number | null = 0;
+  if (reachedIds.length > 0) {
+    if (hasPartialFailure || rows.length >= limit) {
+      const perDeviceMarked = await rpc<number>(env, 'fcm_mark_device_deliveries', {
+        p_secret: secret,
+        p_pairs: reachedPairs,
+      });
+      marked =
+        typeof perDeviceMarked === 'number'
+          ? perDeviceMarked
+          : await rpc<number>(env, 'fcm_mark_devices', { p_secret: secret, p_ids: reachedIds });
+    } else {
+      marked = await rpc<number>(env, 'fcm_mark_devices', { p_secret: secret, p_ids: reachedIds });
+    }
+  }
 
   return {
     configured: true,

@@ -43,6 +43,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DoneAll
 import androidx.compose.material.icons.rounded.Edit
@@ -95,7 +96,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -138,12 +141,36 @@ fun MessengerRootScreen(
     imageLoader: ImageLoader,
     language: AppLanguage,
     initialConversationId: String? = null,
+    initialPeerHandleOrUid: String? = null,
+    onConsumeInitialPeer: () -> Unit = {},
     onSignInRequired: () -> Unit,
     onOpenProfileHandle: (String) -> Unit = {},
 ) {
     val bn = language == AppLanguage.BN
-    var selectedConversationId by rememberSaveable(initialConversationId) {
+    var selectedConversationId by rememberSaveable {
         mutableStateOf(initialConversationId?.takeIf { it.isNotBlank() })
+    }
+    var launchError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(initialConversationId) {
+        if (!initialConversationId.isNullOrBlank()) {
+            selectedConversationId = initialConversationId
+        }
+    }
+
+    LaunchedEffect(viewerUid, initialPeerHandleOrUid) {
+        if (!viewerUid.isNullOrBlank() && !initialPeerHandleOrUid.isNullOrBlank()) {
+            val target = initialPeerHandleOrUid
+            onConsumeInitialPeer()
+            runCatching { repository.openDirectConversation(target) }
+                .onSuccess { cid ->
+                    launchError = null
+                    if (cid.isNotBlank()) selectedConversationId = cid
+                }
+                .onFailure { err ->
+                    launchError = err.message ?: (if (bn) "সরাসরি বার্তা খোলা যায়নি।" else "Could not start direct conversation.")
+                }
+        }
     }
 
     if (viewerUid.isNullOrBlank()) {
@@ -170,14 +197,27 @@ fun MessengerRootScreen(
 
     val openId = selectedConversationId
     if (openId == null) {
-        MessengerInboxScreen(
-            viewerUid = viewerUid,
-            repository = repository,
-            realtimeTransport = realtimeTransport,
-            imageLoader = imageLoader,
-            language = language,
-            onOpenConversation = { id -> selectedConversationId = id },
-        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            launchError?.let { msg ->
+                BsdcStatusBanner(
+                    title = if (bn) "ত্রুটি" else "Error",
+                    body = msg,
+                    tone = BsdcTone.BAD,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
+            MessengerInboxScreen(
+                viewerUid = viewerUid,
+                repository = repository,
+                realtimeTransport = realtimeTransport,
+                imageLoader = imageLoader,
+                language = language,
+                onOpenConversation = { id ->
+                    launchError = null
+                    selectedConversationId = id
+                },
+            )
+        }
     } else {
         ConversationThreadScreen(
             conversationId = openId,
@@ -214,6 +254,8 @@ private fun MessengerInboxScreen(
     var refreshing by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var showNewChatSheet by remember { mutableStateOf(false) }
+    var newChatBusy by remember { mutableStateOf(false) }
+    var newChatError by remember { mutableStateOf<String?>(null) }
     var showSavedSheet by remember { mutableStateOf(false) }
     var refreshNonce by remember { mutableIntStateOf(0) }
 
@@ -368,9 +410,13 @@ private fun MessengerInboxScreen(
                 }
             }
 
-            if (errorMsg != null && liveThreads == null) {
+            if (errorMsg != null) {
                 BsdcStatusBanner(
-                    title = if (bn) "অফলাইন ক্যাশ প্রদর্শিত হচ্ছে" else "Showing offline cache",
+                    title = if (liveThreads == null) {
+                        if (bn) "অফলাইন ক্যাশ প্রদর্শিত হচ্ছে" else "Showing offline cache"
+                    } else {
+                        if (bn) "ত্রুটি" else "Sync notice"
+                    },
                     body = errorMsg.orEmpty(),
                     tone = BsdcTone.WARN,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -417,21 +463,36 @@ private fun MessengerInboxScreen(
                                     scope.launch {
                                         runCatching {
                                             repository.updateConversationFlags(thread.id, viewerUid, pinned = !thread.pinned)
-                                        }.onSuccess { refreshNonce++ }
+                                        }.onSuccess {
+                                            errorMsg = null
+                                            refreshNonce++
+                                        }.onFailure { err ->
+                                            errorMsg = err.message ?: (if (bn) "পিন আপডেট ব্যর্থ" else "Could not update pin state.")
+                                        }
                                     }
                                 },
                                 onToggleArchive = {
                                     scope.launch {
                                         runCatching {
                                             repository.updateConversationFlags(thread.id, viewerUid, archived = !thread.archived)
-                                        }.onSuccess { refreshNonce++ }
+                                        }.onSuccess {
+                                            errorMsg = null
+                                            refreshNonce++
+                                        }.onFailure { err ->
+                                            errorMsg = err.message ?: (if (bn) "আর্কাইভ আপডেট ব্যর্থ" else "Could not update archive state.")
+                                        }
                                     }
                                 },
                                 onToggleMute = {
                                     scope.launch {
                                         runCatching {
                                             repository.updateConversationFlags(thread.id, viewerUid, muted = !thread.muted)
-                                        }.onSuccess { refreshNonce++ }
+                                        }.onSuccess {
+                                            errorMsg = null
+                                            refreshNonce++
+                                        }.onFailure { err ->
+                                            errorMsg = err.message ?: (if (bn) "মিউট আপডেট ব্যর্থ" else "Could not update mute state.")
+                                        }
                                     }
                                 },
                             )
@@ -445,25 +506,44 @@ private fun MessengerInboxScreen(
     if (showNewChatSheet) {
         NewConversationSheet(
             bn = bn,
-            onDismiss = { showNewChatSheet = false },
+            busy = newChatBusy,
+            errorMessage = newChatError,
+            onClearError = { newChatError = null },
+            onDismiss = {
+                newChatBusy = false
+                newChatError = null
+                showNewChatSheet = false
+            },
             onStartDirect = { handle ->
                 scope.launch {
+                    newChatBusy = true
+                    newChatError = null
                     runCatching { repository.openDirectConversation(handle) }
                         .onSuccess { cid ->
+                            newChatBusy = false
                             showNewChatSheet = false
                             if (cid.isNotBlank()) onOpenConversation(cid)
                         }
-                        .onFailure { err -> errorMsg = err.message }
+                        .onFailure { err ->
+                            newChatBusy = false
+                            newChatError = err.message ?: (if (bn) "সদস্য পাওয়া যায়নি।" else "Could not open chat.")
+                        }
                 }
             },
             onCreateGroup = { title, handles ->
                 scope.launch {
+                    newChatBusy = true
+                    newChatError = null
                     runCatching { repository.createGroupConversation(title, handles) }
                         .onSuccess { cid ->
+                            newChatBusy = false
                             showNewChatSheet = false
                             if (cid.isNotBlank()) onOpenConversation(cid)
                         }
-                        .onFailure { err -> errorMsg = err.message }
+                        .onFailure { err ->
+                            newChatBusy = false
+                            newChatError = err.message ?: (if (bn) "গ্রুপ তৈরি ব্যর্থ হয়েছে।" else "Could not create group.")
+                        }
                 }
             },
         )
@@ -827,12 +907,28 @@ private fun ConversationThreadScreen(
         }
     }
 
+    val clipboard = LocalClipboardManager.current
+    val cachedThreadsList by repository.observeCachedThreads().collectAsStateWithLifecycle(initialValue = emptyList())
+    val cachedSummary = remember(cachedThreadsList, conversationId) {
+        cachedThreadsList.firstOrNull { it.id == conversationId }
+    }
     val memberReadPairs = remember(members) {
         members.map { "${it.uid}|${it.lastReadAt}" }
     }
-    val peerNames = members.filter { it.uid != viewerUid }
-        .mapNotNull { it.profile?.displayName?.takeIf(String::isNotBlank) }
-    val headerTitle = if (peerNames.size == 1) peerNames.first() else (if (bn) "কথোপকথন" else "Conversation")
+    val activePeers = remember(members, viewerUid) {
+        members.filter { it.uid != viewerUid && it.leftAt == null }
+    }
+    val isGroupThread = cachedSummary?.kind == "group" || activePeers.size > 1
+    val singlePeer = if (!isGroupThread) activePeers.firstOrNull() else null
+    val peerProfileTarget = singlePeer?.profile?.username?.takeIf { it.isNotBlank() } ?: singlePeer?.uid
+    val peerNames = activePeers.mapNotNull { it.profile?.displayName?.takeIf(String::isNotBlank) }
+    val headerTitle = when {
+        cachedSummary != null && isGroupThread && cachedSummary.title.isNotBlank() -> cachedSummary.title
+        peerNames.size == 1 -> peerNames.first()
+        peerNames.size > 1 -> peerNames.take(2).joinToString(", ") + if (peerNames.size > 2) " +${peerNames.size - 2}" else ""
+        cachedSummary != null && cachedSummary.title.isNotBlank() -> cachedSummary.title
+        else -> if (bn) "কথোপকথন" else "Conversation"
+    }
 
     Scaffold(
         topBar = {
@@ -843,7 +939,13 @@ private fun ConversationThreadScreen(
                     }
                 },
                 title = {
-                    Column {
+                    Column(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(enabled = !peerProfileTarget.isNullOrBlank()) {
+                                peerProfileTarget?.let(onOpenProfileHandle)
+                            },
+                    ) {
                         Text(headerTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val sub = when {
                             typingUids.isNotEmpty() -> if (bn) "টাইপ করছেন..." else "typing..."
@@ -876,6 +978,32 @@ private fun ConversationThreadScreen(
                                 leadingIcon = { Icon(Icons.Rounded.Group, contentDescription = null) },
                                 onClick = { menuExpanded = false; showMembersSheet = true },
                             )
+                            val isPinned = threadState?.isPinned == true
+                            DropdownMenuItem(
+                                text = { Text(if (isPinned) (if (bn) "আনপিন" else "Unpin chat") else (if (bn) "চ্যাট পিন করুন" else "Pin chat")) },
+                                leadingIcon = { Icon(Icons.Rounded.PushPin, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    scope.launch {
+                                        runCatching { repository.updateConversationFlags(conversationId, viewerUid, pinned = !isPinned) }
+                                            .onSuccess { loadThread() }
+                                            .onFailure { errorBanner = it.message }
+                                    }
+                                },
+                            )
+                            val isArchived = threadState?.isArchived == true
+                            DropdownMenuItem(
+                                text = { Text(if (isArchived) (if (bn) "আর্কাইভ থেকে সরান" else "Unarchive") else (if (bn) "আর্কাইভ করুন" else "Archive")) },
+                                leadingIcon = { Icon(if (isArchived) Icons.Rounded.Unarchive else Icons.Rounded.Archive, contentDescription = null) },
+                                onClick = {
+                                    menuExpanded = false
+                                    scope.launch {
+                                        runCatching { repository.updateConversationFlags(conversationId, viewerUid, archived = !isArchived) }
+                                            .onSuccess { loadThread() }
+                                            .onFailure { errorBanner = it.message }
+                                    }
+                                },
+                            )
                             val isMuted = threadState?.muted == true
                             DropdownMenuItem(
                                 text = { Text(if (isMuted) (if (bn) "আনমিউট" else "Unmute") else (if (bn) "মিউট" else "Mute")) },
@@ -885,14 +1013,17 @@ private fun ConversationThreadScreen(
                                     scope.launch {
                                         runCatching { repository.updateConversationFlags(conversationId, viewerUid, muted = !isMuted) }
                                             .onSuccess { loadThread() }
+                                            .onFailure { errorBanner = it.message }
                                     }
                                 },
                             )
-                            DropdownMenuItem(
-                                text = { Text(if (bn) "গ্রুপ ত্যাগ করুন" else "Leave conversation") },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null) },
-                                onClick = { menuExpanded = false; confirmLeave = true },
-                            )
+                            if (isGroupThread) {
+                                DropdownMenuItem(
+                                    text = { Text(if (bn) "গ্রুপ ত্যাগ করুন" else "Leave group") },
+                                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.ExitToApp, contentDescription = null) },
+                                    onClick = { menuExpanded = false; confirmLeave = true },
+                                )
+                            }
                         }
                     }
                 },
@@ -1191,6 +1322,7 @@ private fun ConversationThreadScreen(
                             scope.launch {
                                 runCatching { repository.toggleReaction(msg.id, emoji) }
                                     .onSuccess { loadThread() }
+                                    .onFailure { errorBanner = it.message }
                             }
                         },
                         onTapImage = { url -> lightboxUrl = url },
@@ -1224,6 +1356,7 @@ private fun ConversationThreadScreen(
                                     scope.launch {
                                         runCatching { repository.toggleReaction(actionMsg.id, emoji) }
                                             .onSuccess { loadThread() }
+                                            .onFailure { errorBanner = it.message }
                                     }
                                 },
                             ) {
@@ -1240,19 +1373,33 @@ private fun ConversationThreadScreen(
                         replyTarget = actionMsg
                         selectedActionMsg = null
                     }
+                    if (actionMsg.body.isNotBlank()) {
+                        SheetActionRow(Icons.Rounded.ContentCopy, if (bn) "টেক্সট কপি করুন" else "Copy text") {
+                            clipboard.setText(AnnotatedString(actionMsg.body))
+                            selectedActionMsg = null
+                        }
+                    }
                     SheetActionRow(
                         if (actionMsg.starred) Icons.Rounded.Star else Icons.Rounded.StarBorder,
                         if (actionMsg.starred) (if (bn) "তারকা সরান" else "Unstar") else (if (bn) "তারকা চিহ্নিত করুন" else "Star message"),
                     ) {
                         selectedActionMsg = null
-                        scope.launch { runCatching { repository.toggleStar(actionMsg.id) }.onSuccess { loadThread() } }
+                        scope.launch {
+                            runCatching { repository.toggleStar(actionMsg.id) }
+                                .onSuccess { loadThread() }
+                                .onFailure { errorBanner = it.message }
+                        }
                     }
                     SheetActionRow(
                         Icons.Rounded.PushPin,
                         if (actionMsg.pinned) (if (bn) "আনপিন করুন" else "Unpin") else (if (bn) "পিন করুন" else "Pin message"),
                     ) {
                         selectedActionMsg = null
-                        scope.launch { runCatching { repository.togglePin(actionMsg.id) }.onSuccess { loadThread() } }
+                        scope.launch {
+                            runCatching { repository.togglePin(actionMsg.id) }
+                                .onSuccess { loadThread() }
+                                .onFailure { errorBanner = it.message }
+                        }
                     }
                     if (actionMsg.senderUid == viewerUid) {
                         if (actionMsg.kind == "text") {
@@ -1264,7 +1411,11 @@ private fun ConversationThreadScreen(
                         }
                         SheetActionRow(Icons.Rounded.Delete, if (bn) "মুছে ফেলুন" else "Delete") {
                             selectedActionMsg = null
-                            scope.launch { runCatching { repository.deleteMessage(actionMsg.id) }.onSuccess { loadThread() } }
+                            scope.launch {
+                                runCatching { repository.deleteMessage(actionMsg.id) }
+                                    .onSuccess { loadThread() }
+                                    .onFailure { errorBanner = it.message }
+                            }
                         }
                     }
                 }
@@ -1286,7 +1437,15 @@ private fun ConversationThreadScreen(
                     style = MaterialTheme.typography.titleLarge,
                 )
                 pins.forEach { p ->
-                    BsdcCard {
+                    BsdcCard(
+                        modifier = Modifier.clickable {
+                            showPinsSheet = false
+                            val idx = combinedMessages.indexOfFirst { it.id == p.messageId }
+                            if (idx >= 0) {
+                                scope.launch { listState.animateScrollToItem(idx) }
+                            }
+                        },
+                    ) {
                         Text(p.body.ifBlank { p.kind }, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
@@ -1309,7 +1468,16 @@ private fun ConversationThreadScreen(
                 )
                 members.filter { it.leftAt == null }.forEach { m ->
                     val name = m.profile?.displayName?.ifBlank { "@${m.profile.username}" } ?: m.uid
+                    val targetHandle = m.profile?.username?.takeIf { it.isNotBlank() } ?: m.uid
                     Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable {
+                                showMembersSheet = false
+                                onOpenProfileHandle(targetHandle)
+                            }
+                            .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
@@ -1350,6 +1518,7 @@ private fun ConversationThreadScreen(
                         scope.launch {
                             runCatching { repository.leaveConversation(conversationId) }
                                 .onSuccess { onBack() }
+                                .onFailure { errorBanner = it.message }
                         }
                     },
                 ) {
@@ -1692,6 +1861,9 @@ private fun SheetActionRow(
 @Composable
 private fun NewConversationSheet(
     bn: Boolean,
+    busy: Boolean,
+    errorMessage: String?,
+    onClearError: () -> Unit,
     onDismiss: () -> Unit,
     onStartDirect: (String) -> Unit,
     onCreateGroup: (String, List<String>) -> Unit,
@@ -1712,49 +1884,58 @@ private fun NewConversationSheet(
                 text = if (bn) "নতুন কথোপকথন শুরু করুন" else "Start a conversation",
                 style = MaterialTheme.typography.titleLarge,
             )
+            errorMessage?.let { err ->
+                BsdcStatusBanner(
+                    title = if (bn) "শুরু করা যায়নি" else "Could not start chat",
+                    body = err,
+                    tone = BsdcTone.BAD,
+                )
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = !groupMode,
-                    onClick = { groupMode = false },
+                    onClick = { groupMode = false; onClearError() },
                     label = { Text(if (bn) "সরাসরি মেসেজ" else "Direct message") },
                 )
                 FilterChip(
                     selected = groupMode,
-                    onClick = { groupMode = true },
+                    onClick = { groupMode = true; onClearError() },
                     label = { Text(if (bn) "গ্রুপ চ্যাট" else "Group chat") },
                 )
             }
             if (!groupMode) {
                 OutlinedTextField(
                     value = handleInput,
-                    onValueChange = { handleInput = it },
+                    onValueChange = { handleInput = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text(if (bn) "@ইউজারনেম বা UID" else "@username or UID") },
                 )
                 BsdcButton(
                     label = if (bn) "চ্যাট খুলুন" else "Open chat",
-                    enabled = handleInput.isNotBlank(),
+                    enabled = handleInput.isNotBlank() && !busy,
+                    busy = busy,
                     onClick = { onStartDirect(handleInput) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
                 OutlinedTextField(
                     value = groupTitle,
-                    onValueChange = { groupTitle = it },
+                    onValueChange = { groupTitle = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text(if (bn) "গ্রুপের নাম" else "Group title") },
                 )
                 OutlinedTextField(
                     value = membersRaw,
-                    onValueChange = { membersRaw = it },
+                    onValueChange = { membersRaw = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(if (bn) "সদস্য (@handle কমা দিয়ে লিখুন)" else "Members (@handles comma-separated)") },
                 )
                 BsdcButton(
                     label = if (bn) "গ্রুপ তৈরি করুন" else "Create group",
-                    enabled = groupTitle.trim().isNotEmpty(),
+                    enabled = groupTitle.trim().isNotEmpty() && !busy,
+                    busy = busy,
                     onClick = {
                         val handles = membersRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
                         onCreateGroup(groupTitle, handles)

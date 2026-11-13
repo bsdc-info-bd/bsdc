@@ -269,8 +269,10 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
       stats.devices += byEndpoint.size;
 
       const reached = new Set<string>();
+      const reachedPairs: { id: string; endpoint: string }[] = [];
       const dead = new Set<string>();
       const invalid = new Set<string>();
+      let webPartial = false;
 
       await inWaves([...byEndpoint.entries()], CONCURRENCY, async ([endpoint, deviceRows]) => {
         const first = deviceRows[0];
@@ -305,7 +307,10 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
           switch (outcome) {
             case 'sent':
               stats.sent += 1;
-              for (const row of plan.rows) reached.add(row.notification_id);
+              for (const row of plan.rows) {
+                reached.add(row.notification_id);
+                reachedPairs.push({ id: row.notification_id, endpoint });
+              }
               break;
             case 'dead':
               stats.dead += 1;
@@ -317,12 +322,15 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
               return;
             case 'unauthorized':
               stats.unauthorized += 1;
+              webPartial = true;
               break;
             case 'retry':
               stats.retry += 1;
+              webPartial = true;
               break;
             default:
               stats.failed += 1;
+              webPartial = true;
               break;
           }
 
@@ -338,15 +346,6 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
         ),
       );
 
-      const ids = [...reached];
-      if (ids.length > 0) {
-        const marked = await callRpc<number>(env, 'push_mark_devices', {
-          p_secret: secret,
-          p_ids: ids,
-        });
-        stats.marked += typeof marked === 'number' ? marked : 0;
-      }
-
       await Promise.all(
         [...invalid].map((endpoint) =>
           callRpc(env, 'push_flag_invalid_device', {
@@ -355,6 +354,35 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
           }).catch(() => null),
         ),
       );
+
+      const ids = [...reached];
+      if (ids.length > 0) {
+        if (webPartial || rows.length >= limit) {
+          try {
+            const marked = await callRpc<number>(env, 'push_mark_device_deliveries', {
+              p_secret: secret,
+              p_pairs: reachedPairs,
+            });
+            stats.marked += typeof marked === 'number' ? marked : 0;
+          } catch (error) {
+            if (error instanceof DatabaseUnavailable && error.status === 404) {
+              const marked = await callRpc<number>(env, 'push_mark_devices', {
+                p_secret: secret,
+                p_ids: ids,
+              });
+              stats.marked += typeof marked === 'number' ? marked : 0;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const marked = await callRpc<number>(env, 'push_mark_devices', {
+            p_secret: secret,
+            p_ids: ids,
+          });
+          stats.marked += typeof marked === 'number' ? marked : 0;
+        }
+      }
     }
   }
 
@@ -398,9 +426,11 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
       }
 
       const fcmReached = new Set<string>();
+      const fcmReachedPairs: { id: string; token: string }[] = [];
       const fcmDead = new Set<string>();
       const fcmInvalid = new Set<string>();
       const siteUrl = siteOrigin(env.SITE_URL);
+      let fcmPartial = false;
 
       await inWaves([...byToken.entries()], CONCURRENCY, async ([token, deviceRows]) => {
         const first = deviceRows[0];
@@ -439,7 +469,10 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
           switch (outcome) {
             case 'sent':
               stats.sent += 1;
-              for (const row of plan.rows) fcmReached.add(row.notification_id);
+              for (const row of plan.rows) {
+                fcmReached.add(row.notification_id);
+                fcmReachedPairs.push({ id: row.notification_id, token });
+              }
               break;
             case 'dead':
               stats.dead += 1;
@@ -451,13 +484,16 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
               return;
             case 'unauthorized':
               stats.unauthorized += 1;
+              fcmPartial = true;
               return;
             case 'retry':
               stats.retry += 1;
-              break;
+              fcmPartial = true;
+              return;
             default:
               stats.failed += 1;
-              break;
+              fcmPartial = true;
+              return;
           }
         }
       });
@@ -468,15 +504,6 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
         ),
       );
 
-      const fcmIds = [...fcmReached];
-      if (fcmIds.length > 0) {
-        const marked = await callRpc<number>(env, 'fcm_mark_devices', {
-          p_secret: secret,
-          p_ids: fcmIds,
-        });
-        stats.marked += typeof marked === 'number' ? marked : 0;
-      }
-
       await Promise.all(
         [...fcmInvalid].map((token) =>
           callRpc(env, 'fcm_flag_invalid_device', { p_secret: secret, p_token: token }).catch(
@@ -484,6 +511,35 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
           ),
         ),
       );
+
+      const fcmIds = [...fcmReached];
+      if (fcmIds.length > 0) {
+        if (fcmPartial || fcmRows.length >= limit) {
+          try {
+            const marked = await callRpc<number>(env, 'fcm_mark_device_deliveries', {
+              p_secret: secret,
+              p_pairs: fcmReachedPairs,
+            });
+            stats.marked += typeof marked === 'number' ? marked : 0;
+          } catch (error) {
+            if (error instanceof DatabaseUnavailable && error.status === 404) {
+              const marked = await callRpc<number>(env, 'fcm_mark_devices', {
+                p_secret: secret,
+                p_ids: fcmIds,
+              });
+              stats.marked += typeof marked === 'number' ? marked : 0;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const marked = await callRpc<number>(env, 'fcm_mark_devices', {
+            p_secret: secret,
+            p_ids: fcmIds,
+          });
+          stats.marked += typeof marked === 'number' ? marked : 0;
+        }
+      }
     }
   }
 

@@ -94,7 +94,7 @@ class SupabaseRestClient(
         synchronized(wakeLock) {
             pendingWakeJob?.cancel()
             pendingWakeJob = wakeScope.launch {
-                delay(750L)
+                delay(100L)
                 wakePushNow(reason)
             }
         }

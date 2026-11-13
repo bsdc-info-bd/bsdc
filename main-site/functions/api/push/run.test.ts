@@ -236,4 +236,94 @@ describe('POST /api/push/wake and FCM fallback', () => {
     expect((msg['data'] as { channel_id?: string }).channel_id).toBe('bsdc_messenger');
     expect((msg['data'] as { conversation_id?: string }).conversation_id).toBe('c-99');
   });
+
+  it('uses per-device FCM marking when one device succeeds and a sibling fails transiently', async () => {
+    installNodeWebCrypto();
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const rpcCalls: { name: string; body: Record<string, unknown> }[] = [];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === 'https://oauth2.googleapis.com/token') {
+          return new Response(JSON.stringify({ access_token: 'oauth-token' }), { status: 200 });
+        }
+        if (url.includes('/rest/v1/rpc/')) {
+          const name = url.split('/rest/v1/rpc/')[1] ?? '';
+          const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          rpcCalls.push({ name, body });
+          if (name === 'fcm_pending_devices') {
+            return new Response(
+              JSON.stringify([
+                {
+                  notification_id: 'n-multi-1',
+                  uid: 'u1',
+                  token: 'android-fcm-token-ok-1234567890',
+                  platform: 'android',
+                  language: 'en',
+                  kind: 'message',
+                  body: 'Hi',
+                  actor_name: 'Nadia',
+                  actor_avatar: '',
+                  url: '/messages/c-99',
+                  post_id: null,
+                  conversation_id: 'c-99',
+                  created_at: new Date().toISOString(),
+                },
+                {
+                  notification_id: 'n-multi-1',
+                  uid: 'u1',
+                  token: 'android-fcm-token-retry-123456',
+                  platform: 'android',
+                  language: 'en',
+                  kind: 'message',
+                  body: 'Hi',
+                  actor_name: 'Nadia',
+                  actor_avatar: '',
+                  url: '/messages/c-99',
+                  post_id: null,
+                  conversation_id: 'c-99',
+                  created_at: new Date().toISOString(),
+                },
+              ]),
+              { status: 200 },
+            );
+          }
+          if (name === 'fcm_mark_device_deliveries') return new Response('1', { status: 200 });
+          return new Response('null', { status: 200 });
+        }
+        if (url.includes('fcm.googleapis.com/v1/')) {
+          const bodyText = String(init?.body ?? '');
+          if (bodyText.includes('android-fcm-token-retry-123456')) {
+            return new Response('{"error":{"status":"UNAVAILABLE"}}', { status: 503 });
+          }
+          return new Response(JSON.stringify({ name: 'msg-ok' }), { status: 200 });
+        }
+        return new Response('', { status: 404 });
+      }),
+    );
+
+    const outcome = await executePushRun(
+      {
+        SUPABASE_URL: 'https://proj.supabase.co',
+        SUPABASE_ANON_KEY: 'sb_publishable_key',
+        PUSH_FLUSH_SECRET: 's'.repeat(48),
+        FB_PROJECT_ID: 'bsdc-bd',
+        FB_CLIENT_EMAIL: 'fcm@bsdc-bd.iam.gserviceaccount.com',
+        FB_PRIVATE_KEY: pem,
+      },
+      { limit: 50 },
+    );
+
+    expect(outcome.status).toBe(200);
+    expect(outcome.body['sent']).toBe(1);
+    expect(outcome.body['failed']).toBe(1);
+    expect(rpcCalls.some((c) => c.name === 'fcm_mark_devices')).toBe(false);
+    const pairCall = rpcCalls.find((c) => c.name === 'fcm_mark_device_deliveries');
+    expect(pairCall?.body['p_pairs']).toEqual([
+      { id: 'n-multi-1', token: 'android-fcm-token-ok-1234567890' },
+    ]);
+  });
 });

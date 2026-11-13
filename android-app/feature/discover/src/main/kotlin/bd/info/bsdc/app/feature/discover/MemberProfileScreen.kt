@@ -725,6 +725,9 @@ fun MemberProfileScreen(
                                                                         following = nowFollowing
                                                                         load()
                                                                     }
+                                                                    .onFailure { err ->
+                                                                        error = err.localizedMessage ?: (if (bn) "অনুসরণ আপডেট ব্যর্থ।" else "Could not update follow status.")
+                                                                    }
                                                             }
                                                         }
                                                     },

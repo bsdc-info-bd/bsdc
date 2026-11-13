@@ -10,7 +10,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import androidx.core.content.ContextCompat
-import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.network.AppUiPreferences
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -39,11 +39,7 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
         }
         serviceScope.launch {
             val res = runCatching {
-                val lang = if (resources.configuration.locales[0]?.language == "en") {
-                    AppLanguage.EN
-                } else {
-                    AppLanguage.BN
-                }
+                val lang = AppUiPreferences.getLanguage(applicationContext)
                 deps.providePushRegistrationManager().registerRawToken(uid, token, lang)
             }
             if (res.isFailure) {

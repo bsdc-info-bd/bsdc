@@ -144,6 +144,7 @@ fun NotificationsScreen(
                                 scope.launch {
                                     runCatching { repository.markInboxRead(null) }
                                         .onSuccess { refreshNonce++ }
+                                        .onFailure { err -> errorMsg = err.message ?: (if (bn) "আপডেট ব্যর্থ" else "Failed to mark read.") }
                                 }
                             },
                         ) {
@@ -159,6 +160,7 @@ fun NotificationsScreen(
                                 scope.launch {
                                     runCatching { repository.clearInbox() }
                                         .onSuccess { refreshNonce++ }
+                                        .onFailure { err -> errorMsg = err.message ?: (if (bn) "মুছে ফেলা যায়নি" else "Failed to clear notifications.") }
                                 }
                             },
                         ) {
@@ -319,6 +321,7 @@ fun NotificationsScreen(
                                         scope.launch {
                                             runCatching { repository.markInboxRead(listOf(item.id)) }
                                                 .onSuccess { refreshNonce++ }
+                                                .onFailure { err -> errorMsg = err.message }
                                         }
                                     }
                                     val dest = NotificationsFilterEngine.sanitizeTargetPath(
@@ -352,45 +355,80 @@ fun NotificationsScreen(
                     title = if (bn) "মেসেঞ্জার বার্তা" else "Messenger messages",
                     checked = prefs.messages,
                     onCheckedChange = { v ->
+                        val prev = prefs
                         val next = prefs.copy(messages = v)
                         prefs = next
-                        scope.launch { runCatching { repository.updateNotificationPrefs(viewerUid, next) } }
+                        scope.launch {
+                            runCatching { repository.updateNotificationPrefs(viewerUid, next) }
+                                .onFailure { err ->
+                                    prefs = prev
+                                    pushMsg = err.message ?: (if (bn) "পছন্দ সংরক্ষণ ব্যর্থ" else "Could not save notification preferences.")
+                                }
+                        }
                     },
                 )
                 PrefToggleRow(
                     title = if (bn) "মন্তব্য ও উত্তর" else "Comments & replies",
                     checked = prefs.comments,
                     onCheckedChange = { v ->
+                        val prev = prefs
                         val next = prefs.copy(comments = v)
                         prefs = next
-                        scope.launch { runCatching { repository.updateNotificationPrefs(viewerUid, next) } }
+                        scope.launch {
+                            runCatching { repository.updateNotificationPrefs(viewerUid, next) }
+                                .onFailure { err ->
+                                    prefs = prev
+                                    pushMsg = err.message ?: (if (bn) "পছন্দ সংরক্ষণ ব্যর্থ" else "Could not save notification preferences.")
+                                }
+                        }
                     },
                 )
                 PrefToggleRow(
                     title = if (bn) "মেনশন (@উল্লেখ)" else "Mentions (@handle)",
                     checked = prefs.mentions,
                     onCheckedChange = { v ->
+                        val prev = prefs
                         val next = prefs.copy(mentions = v)
                         prefs = next
-                        scope.launch { runCatching { repository.updateNotificationPrefs(viewerUid, next) } }
+                        scope.launch {
+                            runCatching { repository.updateNotificationPrefs(viewerUid, next) }
+                                .onFailure { err ->
+                                    prefs = prev
+                                    pushMsg = err.message ?: (if (bn) "পছন্দ সংরক্ষণ ব্যর্থ" else "Could not save notification preferences.")
+                                }
+                        }
                     },
                 )
                 PrefToggleRow(
                     title = if (bn) "নতুন অনুসরণকারী" else "Followers",
                     checked = prefs.followers,
                     onCheckedChange = { v ->
+                        val prev = prefs
                         val next = prefs.copy(followers = v)
                         prefs = next
-                        scope.launch { runCatching { repository.updateNotificationPrefs(viewerUid, next) } }
+                        scope.launch {
+                            runCatching { repository.updateNotificationPrefs(viewerUid, next) }
+                                .onFailure { err ->
+                                    prefs = prev
+                                    pushMsg = err.message ?: (if (bn) "পছন্দ সংরক্ষণ ব্যর্থ" else "Could not save notification preferences.")
+                                }
+                        }
                     },
                 )
                 PrefToggleRow(
                     title = if (bn) "সাপ্তাহিক ডাইজেস্ট" else "Community digest",
                     checked = prefs.digest,
                     onCheckedChange = { v ->
+                        val prev = prefs
                         val next = prefs.copy(digest = v)
                         prefs = next
-                        scope.launch { runCatching { repository.updateNotificationPrefs(viewerUid, next) } }
+                        scope.launch {
+                            runCatching { repository.updateNotificationPrefs(viewerUid, next) }
+                                .onFailure { err ->
+                                    prefs = prev
+                                    pushMsg = err.message ?: (if (bn) "পছন্দ সংরক্ষণ ব্যর্থ" else "Could not save notification preferences.")
+                                }
+                        }
                     },
                 )
                 if (devices.isNotEmpty()) {

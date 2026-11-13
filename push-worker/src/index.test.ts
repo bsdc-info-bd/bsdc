@@ -215,6 +215,57 @@ describe('the push engine', () => {
     expect(harness.rpc.some((call) => call.name === 'push_mark_devices')).toBe(false);
   });
 
+  it('uses per-device marking when one device succeeds and a sibling fails transiently', async () => {
+    const keysA = await subscriptionKeys();
+    const keysB = await subscriptionKeys();
+    const rpcCalls: { name: string; args: Record<string, unknown> }[] = [];
+    const pendingRows = [
+      row({ ...keysA, endpoint: 'https://fcm.googleapis.com/wp/device-ok-123456' }),
+      row({ ...keysB, endpoint: 'https://fcm.googleapis.com/wp/device-503-123456' }),
+    ];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes('/rest/v1/rpc/')) {
+          const name = url.split('/rest/v1/rpc/')[1] ?? '';
+          const args = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+          rpcCalls.push({ name, args });
+          if (name === 'push_pending_devices') {
+            return new Response(JSON.stringify(pendingRows), { status: 200 });
+          }
+          if (name === 'push_mark_device_deliveries') {
+            return new Response('1', { status: 200 });
+          }
+          return new Response('null', { status: 200 });
+        }
+        return new Response('', { status: url.includes('device-ok') ? 201 : 503 });
+      }),
+    );
+
+    const response = await worker.fetch(
+      new Request('https://push.test/run', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${'a'.repeat(48)}` },
+      }),
+      await env(),
+    );
+    const stats = (await response.json()) as { sent: number; retry: number; marked: number };
+    expect(stats.sent).toBe(1);
+    expect(stats.retry).toBe(1);
+    expect(stats.marked).toBe(1);
+    expect(rpcCalls.some((c) => c.name === 'push_mark_devices')).toBe(false);
+    const pairCall = rpcCalls.find((c) => c.name === 'push_mark_device_deliveries');
+    expect(pairCall?.args['p_pairs']).toEqual([
+      {
+        id: '00000000-0000-0000-0000-000000000001',
+        endpoint: 'https://fcm.googleapis.com/wp/device-ok-123456',
+      },
+    ]);
+  });
+
   it('reports a broken signing key once rather than per device', async () => {
     const keys = await subscriptionKeys();
     stub([row({ ...keys })], 201);

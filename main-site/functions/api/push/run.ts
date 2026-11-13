@@ -179,14 +179,35 @@ async function runLocally(env: PushEnv, secret: string, limit: number): Promise<
         dead.map(([endpoint]) => rpc(env, 'push_kill', { p_secret: secret, p_endpoint: endpoint })),
       );
 
-      const reached = pending.filter((row) => outcomes.get(row.endpoint) !== 'failed');
-      const ids = [...new Set(reached.map((row) => row.notification_id))];
-      const marked =
-        ids.length > 0 ? await rpc<number>(env, 'push_mark', { p_secret: secret, p_ids: ids }) : 0;
+      const reachedSent = pending.filter((row) => outcomes.get(row.endpoint) === 'sent');
+      const reachedAll = pending.filter((row) => outcomes.get(row.endpoint) !== 'failed');
+      const webFailedCount = [...outcomes.values()].filter((o) => o === 'failed').length;
+      let marked: number | null = 0;
+      if (webFailedCount > 0 || pending.length >= limit) {
+        if (reachedSent.length > 0) {
+          const perDevice = await rpc<number>(env, 'push_mark_device_deliveries', {
+            p_secret: secret,
+            p_pairs: reachedSent.map((row) => ({
+              id: row.notification_id,
+              endpoint: row.endpoint,
+            })),
+          });
+          marked =
+            typeof perDevice === 'number'
+              ? perDevice
+              : await rpc<number>(env, 'push_mark', {
+                  p_secret: secret,
+                  p_ids: [...new Set(reachedSent.map((row) => row.notification_id))],
+                });
+        }
+      } else if (reachedAll.length > 0) {
+        const ids = [...new Set(reachedAll.map((row) => row.notification_id))];
+        marked = await rpc<number>(env, 'push_mark', { p_secret: secret, p_ids: ids });
+      }
 
       webSent = [...outcomes.values()].filter((o) => o === 'sent').length;
       webDead = dead.length;
-      webFailed = [...outcomes.values()].filter((o) => o === 'failed').length;
+      webFailed = webFailedCount;
       webMarked = typeof marked === 'number' ? marked : 0;
     }
   }

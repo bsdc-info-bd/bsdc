@@ -165,6 +165,7 @@ class ImgbbEdgeMediaTransport(
         val insertedRaw = supabase.postJson(
             table = "media_assets",
             body = insertBody,
+            queryPairs = listOf("select" to "id"),
             prefer = "return=representation",
             requireAuth = true,
         )

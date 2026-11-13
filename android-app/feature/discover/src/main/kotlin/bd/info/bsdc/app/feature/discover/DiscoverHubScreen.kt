@@ -102,6 +102,9 @@ fun DiscoverHubScreen(
     val recentSearches by repository.observeRecentSearches().collectAsState(initial = emptyList())
 
     var section by rememberSaveable { mutableStateOf(initialSection) }
+    LaunchedEffect(initialSection) {
+        section = initialSection
+    }
     var searchInput by rememberSaveable { mutableStateOf("") }
     var selectedKindFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var searchResults by remember { mutableStateOf<List<SearchResultDto>>(emptyList()) }
@@ -188,21 +191,24 @@ fun DiscoverHubScreen(
     fun loadSectionData(target: DiscoverSection) {
         scope.launch {
             listBusy = true
+            val failureHandler: (Throwable) -> Unit = { err ->
+                showInfo(err.localizedMessage ?: (if (bn) "লোড ব্যর্থ হয়েছে।" else "Failed to load."), BsdcTone.BAD)
+            }
             when (target) {
                 DiscoverSection.SEARCH -> {
                     if (trending.isEmpty()) {
-                        repository.fetchTrending().onSuccess { trending = it }
+                        repository.fetchTrending().onSuccess { trending = it }.onFailure(failureHandler)
                     }
                 }
-                DiscoverSection.GROUPS -> repository.fetchGroups().onSuccess { groups = it }
-                DiscoverSection.EVENTS -> repository.fetchEvents().onSuccess { events = it }
-                DiscoverSection.JOBS -> repository.fetchJobs().onSuccess { jobs = it }
-                DiscoverSection.GIGS -> repository.fetchGigs().onSuccess { gigs = it }
-                DiscoverSection.PROJECTS -> repository.fetchProjects().onSuccess { projects = it }
-                DiscoverSection.COURSES -> repository.fetchCourses().onSuccess { courses = it }
+                DiscoverSection.GROUPS -> repository.fetchGroups().onSuccess { groups = it }.onFailure(failureHandler)
+                DiscoverSection.EVENTS -> repository.fetchEvents().onSuccess { events = it }.onFailure(failureHandler)
+                DiscoverSection.JOBS -> repository.fetchJobs().onSuccess { jobs = it }.onFailure(failureHandler)
+                DiscoverSection.GIGS -> repository.fetchGigs().onSuccess { gigs = it }.onFailure(failureHandler)
+                DiscoverSection.PROJECTS -> repository.fetchProjects().onSuccess { projects = it }.onFailure(failureHandler)
+                DiscoverSection.COURSES -> repository.fetchCourses().onSuccess { courses = it }.onFailure(failureHandler)
                 DiscoverSection.PEOPLE -> {
                     if (!viewerUid.isNullOrBlank()) {
-                        repository.fetchFollowSuggestions().onSuccess { people = it }
+                        repository.fetchFollowSuggestions().onSuccess { people = it }.onFailure(failureHandler)
                     }
                 }
             }
@@ -495,7 +501,9 @@ fun DiscoverHubScreen(
                                 OutlinedButton(
                                     onClick = {
                                         scope.launch {
-                                            repository.leaveGroup(g.id).onSuccess { loadSectionData(DiscoverSection.GROUPS) }
+                                            repository.leaveGroup(g.id)
+                                                .onSuccess { loadSectionData(DiscoverSection.GROUPS) }
+                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         }
                                     },
                                 ) { Text(if (bn) "ছেড়ে দিন" else "Leave") }
@@ -512,7 +520,9 @@ fun DiscoverHubScreen(
                                             onSignInRequired()
                                         } else {
                                             scope.launch {
-                                                repository.joinGroup(g.id).onSuccess { loadSectionData(DiscoverSection.GROUPS) }
+                                                repository.joinGroup(g.id)
+                                                    .onSuccess { loadSectionData(DiscoverSection.GROUPS) }
+                                                    .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                             }
                                         }
                                     },
@@ -567,7 +577,9 @@ fun DiscoverHubScreen(
                                             onSignInRequired()
                                         } else {
                                             scope.launch {
-                                                repository.rsvpEvent(ev.id, st).onSuccess { loadSectionData(DiscoverSection.EVENTS) }
+                                                repository.rsvpEvent(ev.id, st)
+                                                    .onSuccess { loadSectionData(DiscoverSection.EVENTS) }
+                                                    .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                             }
                                         }
                                     },
@@ -706,9 +718,9 @@ fun DiscoverHubScreen(
                                         onSignInRequired()
                                     } else {
                                         scope.launch {
-                                            repository.toggleProjectStar(proj.id).onSuccess {
-                                                loadSectionData(DiscoverSection.PROJECTS)
-                                            }
+                                            repository.toggleProjectStar(proj.id)
+                                                .onSuccess { loadSectionData(DiscoverSection.PROJECTS) }
+                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         }
                                     }
                                 },
@@ -765,9 +777,9 @@ fun DiscoverHubScreen(
                                             onSignInRequired()
                                         } else {
                                             scope.launch {
-                                                repository.enrollInCourse(course.id).onSuccess {
-                                                    loadSectionData(DiscoverSection.COURSES)
-                                                }
+                                                repository.enrollInCourse(course.id)
+                                                    .onSuccess { loadSectionData(DiscoverSection.COURSES) }
+                                                    .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                             }
                                         }
                                     },
@@ -781,7 +793,9 @@ fun DiscoverHubScreen(
                                         quizQuestions = emptyList()
                                         quizGrade = null
                                         selectedQuizAnswers.clear()
-                                        repository.fetchCourseOutline(course.slug).onSuccess { courseLessons = it }
+                                        repository.fetchCourseOutline(course.slug)
+                                            .onSuccess { courseLessons = it }
+                                            .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         courseQuizId = repository.fetchCourseQuizId(course.id)
                                     }
                                 },
@@ -951,10 +965,12 @@ fun DiscoverHubScreen(
                                 onCheckedChange = {
                                     if (!viewerUid.isNullOrBlank()) {
                                         scope.launch {
-                                            repository.completeLesson(lesson.lessonId).onSuccess {
-                                                repository.fetchCourseOutline(course.slug).onSuccess { courseLessons = it }
-                                                loadSectionData(DiscoverSection.COURSES)
-                                            }
+                                            repository.completeLesson(lesson.lessonId)
+                                                .onSuccess {
+                                                    repository.fetchCourseOutline(course.slug).onSuccess { courseLessons = it }
+                                                    loadSectionData(DiscoverSection.COURSES)
+                                                }
+                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         }
                                     }
                                 },
@@ -977,7 +993,9 @@ fun DiscoverHubScreen(
                                         onSignInRequired()
                                     } else {
                                         scope.launch {
-                                            repository.fetchQuizPaper(courseQuizId!!).onSuccess { quizQuestions = it }
+                                            repository.fetchQuizPaper(courseQuizId!!)
+                                                .onSuccess { quizQuestions = it }
+                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         }
                                     }
                                 },
@@ -1012,6 +1030,7 @@ fun DiscoverHubScreen(
                                     scope.launch {
                                         repository.gradeQuiz(courseQuizId!!, selectedQuizAnswers.toMap())
                                             .onSuccess { quizGrade = it }
+                                            .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                     }
                                 },
                                 modifier = Modifier.fillMaxWidth(),

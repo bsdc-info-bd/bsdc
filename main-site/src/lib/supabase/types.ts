@@ -326,6 +326,8 @@ export type NotificationRow = {
   comment_id: string | null;
   conversation_id: string | null;
   body: string;
+  target_url?: string;
+  seq?: number;
   read_at: string | null;
   created_at: string;
 };

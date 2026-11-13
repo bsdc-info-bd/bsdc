@@ -96,6 +96,10 @@ const HARNESSES = [
     't60.mjs',
     '0089: rich creative customization, platform/language/topic targeting, guest telemetry, and staff editing',
   ],
+  [
+    't61.mjs',
+    '0090: per-device push delivery receipts, multi-device partial failures, push_content window, and seq-scoped instant trigger',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

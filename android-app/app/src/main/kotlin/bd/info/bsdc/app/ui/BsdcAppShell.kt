@@ -74,11 +74,9 @@ import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
-import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.LinkDestination
 import bd.info.bsdc.app.core.model.NotificationPrefs
-import bd.info.bsdc.app.core.model.PermissionGrantState
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
 import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
@@ -97,6 +95,7 @@ import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.MarketHubScreen
+import bd.info.bsdc.app.feature.market.MarketSection
 import bd.info.bsdc.app.feature.messenger.LiveChannelStatus
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
@@ -126,6 +125,7 @@ private enum class MainTab(
 fun BsdcAppShell(
     container: BsdcAppContainer,
     incomingDestination: LinkDestination,
+    destinationNonce: Long = 0L,
     language: AppLanguage,
     themeMode: ThemeMode,
     onChangeLanguage: (AppLanguage) -> Unit,
@@ -154,8 +154,11 @@ fun BsdcAppShell(
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
+    var marketSection by rememberSaveable { mutableStateOf(MarketSection.SHOP) }
+    var pendingMessengerTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var unreadNotifications by remember { mutableIntStateOf(0) }
     var notificationsLiveNonce by remember { mutableIntStateOf(0) }
+    var localRouteNonce by remember { mutableIntStateOf(0) }
     var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
 
@@ -166,7 +169,7 @@ fun BsdcAppShell(
         }
     }
 
-    LaunchedEffect(incomingDestination) {
+    LaunchedEffect(incomingDestination, destinationNonce, localRouteNonce) {
         when (incomingDestination) {
             is LinkDestination.NativeRoute -> {
                 val p = incomingDestination.path
@@ -175,6 +178,8 @@ fun BsdcAppShell(
                         guestBrowsing = true
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         selectedTab = MainTab.HOME
                         activeDetailPost = null
@@ -184,19 +189,25 @@ fun BsdcAppShell(
                         guestBrowsing = true
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeDetailSlug = null
                         activeProfileTarget = p.removePrefix("/").trim('/')
                     }
-                    p.startsWith("/notifications") -> {
+                    p.startsWith("/notifications") || p.startsWith("/moderation") -> {
                         activeDetailSlug = null
                         activeProfileTarget = null
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         showNotificationsScreen = true
                     }
                     p.startsWith("/verify") -> {
                         guestBrowsing = true
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.VERIFY
@@ -204,6 +215,8 @@ fun BsdcAppShell(
                     p.startsWith("/compose") || p.startsWith("/create") -> {
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.CREATE
@@ -211,6 +224,8 @@ fun BsdcAppShell(
                     p.startsWith("/messages") -> {
                         showNotificationsScreen = false
                         showSettingsScreen = false
+                        showMarketScreen = false
+                        activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
                         selectedTab = MainTab.MESSAGES
@@ -223,6 +238,13 @@ fun BsdcAppShell(
                         activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
+                        marketSection = when {
+                            p.startsWith("/cart") -> MarketSection.CART
+                            p.startsWith("/orders") -> MarketSection.ORDERS
+                            p.startsWith("/vendor") -> MarketSection.VENDOR
+                            p.startsWith("/ads") -> MarketSection.ADS
+                            else -> MarketSection.SHOP
+                        }
                         showMarketScreen = true
                     }
                     p != "/" -> {
@@ -239,6 +261,7 @@ fun BsdcAppShell(
                             p.startsWith("/gigs") || p.startsWith("/freelance") -> DiscoverSection.GIGS
                             p.startsWith("/projects") -> DiscoverSection.PROJECTS
                             p.startsWith("/courses") || p.startsWith("/learn") -> DiscoverSection.COURSES
+                            p.startsWith("/people") -> DiscoverSection.PEOPLE
                             else -> DiscoverSection.SEARCH
                         }
                         selectedTab = MainTab.EXPLORE
@@ -259,6 +282,7 @@ fun BsdcAppShell(
                 showNotificationsScreen = false
                 showSettingsScreen = false
                 showMarketScreen = false
+                activeProfileTarget = null
                 activeDetailSlug = null
                 activeNewsUrl = incomingDestination.url
             }
@@ -268,16 +292,13 @@ fun BsdcAppShell(
     }
 
     // Clear explicit auth overlay automatically, register FCM token, and refresh unread badge
-    val notifPermGranted = permissionCoordinator.states[DevicePermissionKind.NOTIFICATIONS] == PermissionGrantState.GRANTED
-    LaunchedEffect(authState.gate, authState.session?.uid, language, notifPermGranted) {
+    LaunchedEffect(authState.gate, authState.session?.uid, language) {
         if (authState.gate == AuthGateState.READY) {
             showAuthModal = false
             val uid = authState.session?.uid
             if (!uid.isNullOrBlank()) {
                 container.pushRegistrationManager.registerCurrentDevice(uid, language)
-                if (notifPermGranted) {
-                    PushRegistrationSyncWorker.enqueueImmediate(context)
-                }
+                PushRegistrationSyncWorker.enqueueImmediate(context)
                 unreadNotifications = container.notificationsRepository.fetchUnreadCount()
             }
         } else if (authState.gate == AuthGateState.SIGNED_OUT) {
@@ -322,9 +343,7 @@ fun BsdcAppShell(
             scope.launch {
                 unreadNotifications = container.notificationsRepository.fetchUnreadCount()
             }
-            if (notifPermGranted) {
-                PushRegistrationSyncWorker.enqueueImmediate(context)
-            }
+            PushRegistrationSyncWorker.enqueueImmediate(context)
         }
     }
 
@@ -409,6 +428,7 @@ fun BsdcAppShell(
                 onSignInRequired = { showAuthModal = true },
                 onNavigatePath = { destPath ->
                     showNotificationsScreen = false
+                    localRouteNonce++
                     onRouteEvaluated(LinkDestination.NativeRoute(destPath))
                 },
                 liveRefreshNonce = notificationsLiveNonce,
@@ -425,6 +445,7 @@ fun BsdcAppShell(
                 onBack = { activeProfileTarget = null },
                 onSignInRequired = { showAuthModal = true },
                 onOpenMessages = {
+                    pendingMessengerTarget = activeProfileTarget
                     activeProfileTarget = null
                     selectedTab = MainTab.MESSAGES
                 },
@@ -448,6 +469,7 @@ fun BsdcAppShell(
                 onBack = { activeNewsUrl = null },
                 onRouteNativeUrl = { nativeUrl ->
                     activeNewsUrl = null
+                    localRouteNonce++
                     onRouteEvaluated(AppLinkUriRouter.resolveLink(nativeUrl))
                 },
                 onOpenExternal = { extUrl -> openInCustomTab(context, extUrl) },
@@ -460,6 +482,7 @@ fun BsdcAppShell(
                 imageLoader = container.imageLoader,
                 viewerUid = authState.session?.uid,
                 language = language,
+                initialSection = marketSection,
                 onBack = { showMarketScreen = false },
                 onSignInRequired = { showAuthModal = true },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
@@ -491,6 +514,7 @@ fun BsdcAppShell(
                 },
                 onOpenMarketplace = {
                     showSettingsScreen = false
+                    marketSection = MarketSection.SHOP
                     showMarketScreen = true
                 },
                 onOpenNewsReader = {
@@ -499,6 +523,7 @@ fun BsdcAppShell(
                 },
                 onTestRoute = { url ->
                     showSettingsScreen = false
+                    localRouteNonce++
                     onRouteEvaluated(AppLinkUriRouter.resolveLink(url))
                 },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
@@ -721,8 +746,16 @@ fun BsdcAppShell(
                             activeDetailSlug = res.slug.ifBlank { res.id }
                             selectedTab = MainTab.HOME
                         },
-                        onDirectoryCreated = { _, _ ->
-                            selectedTab = MainTab.HOME
+                        onDirectoryCreated = { mode, _ ->
+                            discoverSection = when (mode) {
+                                CreateHubMode.EVENT -> DiscoverSection.EVENTS
+                                CreateHubMode.JOB -> DiscoverSection.JOBS
+                                CreateHubMode.GIG -> DiscoverSection.GIGS
+                                CreateHubMode.PROJECT -> DiscoverSection.PROJECTS
+                                CreateHubMode.GROUP -> DiscoverSection.GROUPS
+                                CreateHubMode.POST -> DiscoverSection.SEARCH
+                            }
+                            selectedTab = MainTab.EXPLORE
                         },
                     )
                     MainTab.MESSAGES -> {
@@ -740,7 +773,10 @@ fun BsdcAppShell(
                             imageLoader = container.imageLoader,
                             language = language,
                             initialConversationId = deepConversationId,
+                            initialPeerHandleOrUid = pendingMessengerTarget,
+                            onConsumeInitialPeer = { pendingMessengerTarget = null },
                             onSignInRequired = { showAuthModal = true },
+                            onOpenProfileHandle = { target -> activeProfileTarget = target },
                         )
                     }
                     MainTab.EXPLORE -> DiscoverHubScreen(
@@ -758,10 +794,14 @@ fun BsdcAppShell(
                             activeProfileTarget = target
                         },
                         onOpenVerifyCode = { code ->
+                            localRouteNonce++
                             onRouteEvaluated(LinkDestination.NativeRoute("/verify?code=$code"))
                         },
                         onOpenExternal = { url -> openInCustomTab(context, url) },
-                        onOpenMarketplace = { showMarketScreen = true },
+                        onOpenMarketplace = {
+                            marketSection = MarketSection.SHOP
+                            showMarketScreen = true
+                        },
                         onOpenNewsReader = { activeNewsUrl = BsdcHosts.NEWS_ORIGIN },
                     )
                 }

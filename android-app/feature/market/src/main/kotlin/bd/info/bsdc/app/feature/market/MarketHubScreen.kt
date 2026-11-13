@@ -70,6 +70,7 @@ fun MarketHubScreen(
     imageLoader: ImageLoader,
     viewerUid: String?,
     language: AppLanguage,
+    initialSection: MarketSection = MarketSection.SHOP,
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit = {},
@@ -78,7 +79,10 @@ fun MarketHubScreen(
     val bn = language == AppLanguage.BN
     val scope = rememberCoroutineScope()
 
-    var section by rememberSaveable { mutableStateOf(MarketSection.SHOP) }
+    var section by rememberSaveable { mutableStateOf(initialSection) }
+    LaunchedEffect(initialSection) {
+        section = initialSection
+    }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var products by remember { mutableStateOf<List<CatalogProductDto>>(emptyList()) }
     var cartLines by remember { mutableStateOf<List<CartLineDto>>(emptyList()) }
@@ -101,35 +105,39 @@ fun MarketHubScreen(
     fun loadActive() {
         scope.launch {
             busy = true
+            val onErr: (Throwable) -> Unit = { err ->
+                statusBanner = (err.localizedMessage ?: (if (bn) "লোড ব্যর্থ হয়েছে।" else "Failed to load.")) to BsdcTone.BAD
+            }
             when (section) {
                 MarketSection.SHOP -> {
                     repository.fetchCatalog(search = searchQuery.takeIf { it.isNotBlank() })
                         .onSuccess { products = it }
+                        .onFailure(onErr)
                 }
                 MarketSection.CART -> {
                     if (!viewerUid.isNullOrBlank()) {
-                        repository.fetchCart().onSuccess { cartLines = it }
+                        repository.fetchCart().onSuccess { cartLines = it }.onFailure(onErr)
                         repository.fetchAddresses(viewerUid).onSuccess { list ->
                             addresses = list
                             if (selectedAddressId == null) selectedAddressId = list.firstOrNull()?.id
-                        }
+                        }.onFailure(onErr)
                     }
                 }
                 MarketSection.ORDERS -> {
                     if (!viewerUid.isNullOrBlank()) {
-                        repository.fetchOrders().onSuccess { orders = it }
+                        repository.fetchOrders().onSuccess { orders = it }.onFailure(onErr)
                     }
                 }
                 MarketSection.VENDOR -> {
                     if (!viewerUid.isNullOrBlank()) {
-                        repository.fetchMyShop().onSuccess { myShop = it }
-                        repository.fetchShopOrders().onSuccess { shopOrders = it }
+                        repository.fetchMyShop().onSuccess { myShop = it }.onFailure(onErr)
+                        repository.fetchShopOrders().onSuccess { shopOrders = it }.onFailure(onErr)
                     }
                 }
                 MarketSection.ADS -> {
                     if (!viewerUid.isNullOrBlank()) {
-                        repository.fetchAdWalletBalance().onSuccess { adWalletBalance = it }
-                        repository.fetchMyCampaigns().onSuccess { campaigns = it }
+                        repository.fetchAdWalletBalance().onSuccess { adWalletBalance = it }.onFailure(onErr)
+                        repository.fetchMyCampaigns().onSuccess { campaigns = it }.onFailure(onErr)
                     }
                 }
             }
@@ -265,7 +273,11 @@ fun MarketHubScreen(
                                             onSignInRequired()
                                         } else {
                                             scope.launch {
-                                                repository.toggleWishlist(prod.id).onSuccess { loadActive() }
+                                                repository.toggleWishlist(prod.id)
+                                                    .onSuccess { loadActive() }
+                                                    .onFailure { err ->
+                                                        statusBanner = (err.localizedMessage ?: "Wishlist update failed") to BsdcTone.BAD
+                                                    }
                                             }
                                         }
                                     },
@@ -313,6 +325,9 @@ fun MarketHubScreen(
                                                 repository.addToCart(prod.id, 1)
                                                     .onSuccess {
                                                         statusBanner = (if (bn) "কার্টে যোগ হয়েছে।" else "Added to cart.") to BsdcTone.OK
+                                                    }
+                                                    .onFailure { err ->
+                                                        statusBanner = (err.localizedMessage ?: "Could not add to cart") to BsdcTone.BAD
                                                     }
                                             }
                                         }
@@ -368,6 +383,7 @@ fun MarketHubScreen(
                                             scope.launch {
                                                 repository.setCartQuantity(line.productId, line.quantity - 1)
                                                     .onSuccess { loadActive() }
+                                                    .onFailure { err -> statusBanner = (err.localizedMessage ?: "Cart update failed") to BsdcTone.BAD }
                                             }
                                         },
                                     ) { Icon(Icons.Rounded.Remove, contentDescription = "Decrease") }
@@ -377,6 +393,7 @@ fun MarketHubScreen(
                                             scope.launch {
                                                 repository.setCartQuantity(line.productId, line.quantity + 1)
                                                     .onSuccess { loadActive() }
+                                                    .onFailure { err -> statusBanner = (err.localizedMessage ?: "Cart update failed") to BsdcTone.BAD }
                                             }
                                         },
                                     ) { Icon(Icons.Rounded.Add, contentDescription = "Increase") }
@@ -447,7 +464,9 @@ fun MarketHubScreen(
                                 OutlinedButton(
                                     onClick = {
                                         scope.launch {
-                                            repository.cancelOrder(ord.id).onSuccess { loadActive() }
+                                            repository.cancelOrder(ord.id)
+                                                .onSuccess { loadActive() }
+                                                .onFailure { err -> statusBanner = (err.localizedMessage ?: "Cancel failed") to BsdcTone.BAD }
                                         }
                                     },
                                 ) { Text(if (bn) "অর্ডার বাতিল" else "Cancel Order") }
@@ -484,7 +503,9 @@ fun MarketHubScreen(
                                     OutlinedButton(
                                         onClick = {
                                             scope.launch {
-                                                repository.advanceOrder(so.id, nxt).onSuccess { loadActive() }
+                                                repository.advanceOrder(so.id, nxt)
+                                                    .onSuccess { loadActive() }
+                                                    .onFailure { err -> statusBanner = (err.localizedMessage ?: "Order update failed") to BsdcTone.BAD }
                                             }
                                         },
                                     ) { Text("Mark $nxt") }
@@ -522,7 +543,9 @@ fun MarketHubScreen(
                                 OutlinedButton(
                                     onClick = {
                                         scope.launch {
-                                            repository.toggleCampaignPause(c.id, !isPaused).onSuccess { loadActive() }
+                                            repository.toggleCampaignPause(c.id, !isPaused)
+                                                .onSuccess { loadActive() }
+                                                .onFailure { err -> statusBanner = (err.localizedMessage ?: "Campaign update failed") to BsdcTone.BAD }
                                         }
                                     },
                                 ) {
@@ -564,6 +587,8 @@ fun MarketHubScreen(
                                 selectedAddressId = created.id
                                 showNewAddressDialog = false
                                 loadActive()
+                            }.onFailure { err ->
+                                statusBanner = (err.localizedMessage ?: "Address save failed") to BsdcTone.BAD
                             }
                         }
                     },

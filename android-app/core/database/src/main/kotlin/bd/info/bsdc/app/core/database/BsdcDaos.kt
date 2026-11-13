@@ -89,7 +89,7 @@ interface OutboxMessageDao {
 
 @Dao
 interface MessengerCacheDao {
-    @Query("SELECT * FROM threads_cache ORDER BY lastMessageAtEpochMs DESC")
+    @Query("SELECT * FROM threads_cache ORDER BY isPinned DESC, lastMessageAtEpochMs DESC")
     fun observeThreads(): Flow<List<CachedThreadEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

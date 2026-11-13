@@ -1,10 +1,6 @@
 package bd.info.bsdc.app.core.push
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -14,7 +10,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.network.AppUiPreferences
 import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import java.util.concurrent.TimeUnit
@@ -22,7 +18,8 @@ import java.util.concurrent.TimeUnit
 /**
  * Periodically and reactively keeps the current Android FCM device token synced
  * with Postgres (`register_fcm_token('android')`) even after OS token rotation,
- * app updates, or granting `POST_NOTIFICATIONS` later from Android Settings.
+ * app updates, or language/account changes (regardless of POST_NOTIFICATIONS
+ * state so in-app live events and re-enabled notifications work seamlessly).
  */
 class PushRegistrationSyncWorker(
     appContext: Context,
@@ -36,19 +33,7 @@ class PushRegistrationSyncWorker(
         val uid = runCatching { FirebaseAuth.getInstance().currentUser?.uid }.getOrNull()
         if (uid.isNullOrBlank()) return Result.success()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val granted = ContextCompat.checkSelfPermission(
-                applicationContext,
-                Manifest.permission.POST_NOTIFICATIONS,
-            ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) return Result.success()
-        }
-
-        val lang = if (applicationContext.resources.configuration.locales[0]?.language == "en") {
-            AppLanguage.EN
-        } else {
-            AppLanguage.BN
-        }
+        val lang = AppUiPreferences.getLanguage(applicationContext)
 
         val outcome = deps.providePushRegistrationManager().registerCurrentDevice(uid, lang)
         return if (outcome.isSuccess) {

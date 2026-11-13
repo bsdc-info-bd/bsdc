@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -73,7 +74,14 @@ class NotificationReplyReceiver : BroadcastReceiver() {
                         requireAuth = true,
                     )
                     db.outboxMessageDao().remove(clientId)
-                    supabase.wakePushDelivery("inline-reply")
+                    supabase
+                }
+                if (sent.isSuccess) {
+                    runCatching {
+                        withTimeoutOrNull(4_000L) {
+                            sent.getOrThrow().wakePushNow("inline-reply")
+                        }
+                    }
                 }
                 if (sent.isFailure) {
                     db.outboxMessageDao().updateStatus(clientId, "FAILED", 1)

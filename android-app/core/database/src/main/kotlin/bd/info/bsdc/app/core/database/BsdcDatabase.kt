@@ -17,7 +17,7 @@ import androidx.room.withTransaction
         VerificationHistoryEntity::class,
         SavedSearchEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class BsdcDatabase : RoomDatabase() {

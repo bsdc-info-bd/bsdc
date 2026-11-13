@@ -64,7 +64,7 @@ export const onRequestPost: PagesFunction<PushEnv> = async (context) => {
   const outcome = await executePushRun(env, {
     limit: 60,
     fallbackWorkerUrl: DEFAULT_WORKER_URL,
-    workerTimeoutMs: 8_000,
+    workerTimeoutMs: 4_500,
   });
 
   return wakeResponse(

@@ -236,8 +236,13 @@ class SupabaseRealtimeTransport(
 
                         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                             heartbeatJob?.cancel()
-                            if (!closed) {
-                                listener.onStatusChanged(LiveChannelStatus.RECONNECTING)
+                            if (closed) return
+                            listener.onStatusChanged(LiveChannelStatus.RECONNECTING)
+                            reconnectAttempt++
+                            val backoff = (2_000L * reconnectAttempt).coerceAtMost(30_000L)
+                            scope.launch {
+                                delay(backoff)
+                                if (!closed) connect()
                             }
                         }
                     },

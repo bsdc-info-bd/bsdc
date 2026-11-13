@@ -9,10 +9,13 @@ import type { NotificationRow } from '@/lib/supabase/types';
 import { useAuthStore } from '@/store/auth-store';
 
 function targetRouteFor(row: NotificationRow): string {
+  const explicit = typeof row.target_url === 'string' ? row.target_url.trim() : '';
+  if (explicit.startsWith('/') && !explicit.startsWith('//') && !explicit.includes('\\')) {
+    return explicit;
+  }
   if (row.kind === 'message' && row.conversation_id) {
     return `${ROUTES.messages}/${row.conversation_id}`;
   }
-  if (row.kind === 'moderation' || row.kind === 'feedback') return ROUTES.notifications;
   return ROUTES.notifications;
 }
 
@@ -51,12 +54,13 @@ export function useNotificationRealtime(): void {
       .then(({ joinNotificationStream }) => {
         if (disposed) return;
         stopStream = joinNotificationStream(uid, {
-          onNotification(row, eventType) {
+          onNotification(row) {
             refreshAll(row.kind === 'message');
-            if (eventType !== 'INSERT' || row.read_at !== null) return;
-            if (seenIds.current.has(row.id)) return;
-            seenIds.current.add(row.id);
-            if (seenIds.current.size > 100) seenIds.current.clear();
+            if (row.read_at !== null) return;
+            const dedupeKey = `${row.id}:${row.seq ?? row.created_at}`;
+            if (seenIds.current.has(dedupeKey)) return;
+            seenIds.current.add(dedupeKey);
+            if (seenIds.current.size > 150) seenIds.current.clear();
 
             if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
 

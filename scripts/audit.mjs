@@ -270,11 +270,13 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     // which device was reached, which one a push service says is gone, which one
     // returned keys it could not use, and the housekeeping sweep.
     'push_mark_devices',
+    'push_mark_device_deliveries',
     'push_kill_device',
     'push_flag_invalid_device',
     'push_sweep_dead_devices',
-    // 0085. FCM device delivery equivalents, gated by the same flush secret.
+    // 0085 & 0090. FCM device delivery equivalents, gated by the same flush secret.
     'fcm_mark_devices',
+    'fcm_mark_device_deliveries',
     'fcm_kill_device',
     'fcm_flag_invalid_device',
     'fcm_sweep_dead_devices',

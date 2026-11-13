@@ -151,6 +151,9 @@ fun PostDetailScreen(
                                         .onSuccess { saved ->
                                             interaction = interaction.copy(bookmarked = saved)
                                         }
+                                        .onFailure { err ->
+                                            bannerMessage = err.message ?: "Could not update bookmark."
+                                        }
                                 }
                             },
                         ) {
@@ -356,6 +359,8 @@ fun PostDetailScreen(
                                                     repository.followUser(viewerUid, activePost.author!!.uid)
                                                 }.onSuccess {
                                                     bannerMessage = "Following ${activePost.author?.displayName}."
+                                                }.onFailure { err ->
+                                                    bannerMessage = err.message ?: "Could not follow member."
                                                 }
                                             }
                                         },
@@ -452,6 +457,9 @@ fun PostDetailScreen(
                                         .onSuccess {
                                             repository.fetchPostBySlugOrId(activePost.id)?.let { post = it }
                                         }
+                                        .onFailure { err ->
+                                            bannerMessage = err.message ?: "Could not record vote."
+                                        }
                                 }
                             },
                         )
@@ -481,6 +489,9 @@ fun PostDetailScreen(
                                                     reaction = if (reacted) resolved else null,
                                                 )
                                                 post = activePost.copy(likes = total)
+                                            }
+                                            .onFailure { err ->
+                                                bannerMessage = err.message ?: "Could not update reaction."
                                             }
                                     }
                                 },
@@ -555,6 +566,9 @@ fun PostDetailScreen(
                                                 }
                                             }
                                         }
+                                        .onFailure { err ->
+                                            bannerMessage = err.message ?: "Could not update comment like."
+                                        }
                                 }
                             },
                             onReply = { replyTarget = comment },
@@ -570,6 +584,9 @@ fun PostDetailScreen(
                                                 }
                                             }
                                         }
+                                        .onFailure { err ->
+                                            bannerMessage = err.message ?: "Could not mark answer."
+                                        }
                                 }
                             },
                             onDelete = {
@@ -577,6 +594,9 @@ fun PostDetailScreen(
                                     runCatching { repository.moveCommentToTrash(comment.id) }
                                         .onSuccess {
                                             comments = comments.filterNot { it.id == comment.id }
+                                        }
+                                        .onFailure { err ->
+                                            bannerMessage = err.message ?: "Could not delete comment."
                                         }
                                 }
                             },
@@ -614,6 +634,9 @@ fun PostDetailScreen(
                     }.onSuccess {
                         showReportDialog = false
                         bannerMessage = "Report submitted to BSDC moderators."
+                    }.onFailure { err ->
+                        showReportDialog = false
+                        bannerMessage = err.message ?: "Could not submit report."
                     }
                 }
             },

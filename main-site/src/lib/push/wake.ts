@@ -14,8 +14,8 @@ import { isConfigured } from '@/lib/env';
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let lastSentAt = 0;
 
-const DEBOUNCE_MS = 350;
-const MIN_GAP_MS = 900;
+const DEBOUNCE_MS = 80;
+const MIN_GAP_MS = 350;
 
 async function sendWakeRequest(): Promise<void> {
   if (typeof window === 'undefined' || !isConfigured.firebase) return;

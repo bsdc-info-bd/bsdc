@@ -203,7 +203,7 @@ class MarketRepository(
                 "advance_order",
                 params = buildJsonObject {
                     put("p_order_id", orderId)
-                    put("p_next_status", nextStatus)
+                    put("p_status", nextStatus)
                 },
                 requireAuth = true,
             )

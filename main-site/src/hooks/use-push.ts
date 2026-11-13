@@ -162,8 +162,13 @@ export function usePush(): PushControl {
     const asked = globalThis.Notification.permission;
     setPermission(asked);
 
-    if (uid === null || asked !== 'granted' || refreshedFor.current === uid) return;
-    refreshedFor.current = uid;
+    if (uid === null) {
+      refreshedFor.current = null;
+      return;
+    }
+    const syncKey = `${uid}:${i18n.language === 'en' ? 'en' : 'bn'}`;
+    if (asked !== 'granted' || refreshedFor.current === syncKey) return;
+    refreshedFor.current = syncKey;
 
     void (async () => {
       try {
@@ -197,7 +202,7 @@ export function usePush(): PushControl {
         setErrorKey('push.errors.failed');
         return;
       }
-      refreshedFor.current = uid;
+      refreshedFor.current = `${uid}:${i18n.language === 'en' ? 'en' : 'bn'}`;
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
     } catch (error) {

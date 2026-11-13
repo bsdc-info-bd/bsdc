@@ -151,8 +151,8 @@ class MessengerRepository(
                     preview = r.lastMessagePreview,
                     unreadCount = r.unreadCount,
                     muted = r.muted,
-                    pinned = false,
-                    archived = false,
+                    pinned = r.isPinned,
+                    archived = r.isArchived,
                     other = r.peerUid?.takeIf { it.isNotBlank() }?.let { puid ->
                         MessengerPeerProfile(
                             uid = puid,
@@ -287,6 +287,8 @@ class MessengerRepository(
                     lastMessagePreview = item.preview,
                     unreadCount = item.unreadCount,
                     muted = item.muted,
+                    isPinned = item.pinned,
+                    isArchived = item.archived,
                     lastMessageAtEpochMs = if (ms == Long.MIN_VALUE) 0L else ms,
                 )
             },
@@ -584,6 +586,7 @@ class MessengerRepository(
                 put("edited_at", Instant.now().toString())
             },
             queryPairs = listOf("id" to "eq.$messageId"),
+            prefer = "return=minimal",
         )
     }
 
@@ -596,6 +599,7 @@ class MessengerRepository(
                 put("deleted_at", Instant.now().toString())
             },
             queryPairs = listOf("id" to "eq.$messageId"),
+            prefer = "return=minimal",
         )
     }
 
@@ -655,6 +659,7 @@ class MessengerRepository(
                         "conversation_id" to "eq.$conversationId",
                         "uid" to "eq.$viewerUid",
                     ),
+                    prefer = "return=minimal",
                 )
             }
         }
@@ -685,6 +690,7 @@ class MessengerRepository(
                 "conversation_id" to "eq.$conversationId",
                 "uid" to "eq.$viewerUid",
             ),
+            prefer = "return=minimal",
         )
     }
 

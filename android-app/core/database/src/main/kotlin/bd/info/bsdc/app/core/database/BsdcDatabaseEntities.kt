@@ -115,6 +115,8 @@ data class CachedThreadEntity(
     val lastMessagePreview: String,
     val unreadCount: Int,
     val muted: Boolean,
+    val isPinned: Boolean = false,
+    val isArchived: Boolean = false,
     val lastMessageAtEpochMs: Long,
 )
 
