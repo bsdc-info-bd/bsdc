@@ -83,6 +83,9 @@ interface OutboxMessageDao {
     @Query("DELETE FROM pending_outbox_messages WHERE clientMessageId = :clientId")
     suspend fun remove(clientId: String)
 
+    @Query("DELETE FROM pending_outbox_messages WHERE conversationId NOT IN (:keepIds)")
+    suspend fun deleteForThreadsNotIn(keepIds: List<String>)
+
     @Query("DELETE FROM pending_outbox_messages")
     suspend fun deleteAll()
 }
@@ -94,6 +97,12 @@ interface MessengerCacheDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertThreads(threads: List<CachedThreadEntity>)
+
+    @Query("DELETE FROM threads_cache WHERE conversationId NOT IN (:keepIds)")
+    suspend fun deleteThreadsNotIn(keepIds: List<String>)
+
+    @Query("DELETE FROM messages_cache WHERE conversationId NOT IN (:keepIds)")
+    suspend fun deleteMessagesForThreadsNotIn(keepIds: List<String>)
 
     @Query("SELECT * FROM messages_cache WHERE conversationId = :conversationId ORDER BY createdAtEpochMs ASC LIMIT 500")
     fun observeMessages(conversationId: String): Flow<List<CachedMessageEntity>>

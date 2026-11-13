@@ -108,6 +108,10 @@ const HARNESSES = [
     't63.mjs',
     '0092: follower privacy (`showFollowers`), profile social lists, rich autocomplete, chat member picker, and group creation',
   ],
+  [
+    't64.mjs',
+    'fresh-messenger reset: clears all conversations, messages, drafts, reactions, receipts, pins, stars, send requests, messenger reports, and messenger notifications atomically',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

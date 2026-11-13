@@ -1,5 +1,6 @@
 package bd.info.bsdc.app.feature.messenger
 
+import androidx.room.withTransaction
 import bd.info.bsdc.app.core.database.BsdcDatabase
 import bd.info.bsdc.app.core.database.CachedMessageEntity
 import bd.info.bsdc.app.core.database.CachedThreadEntity
@@ -286,25 +287,39 @@ class MessengerRepository(
             )
         }
 
-        // Cache into Room threads_cache
-        database.messengerCacheDao().upsertThreads(
-            items.map { item ->
-                val ms = MessengerEngine.parseEpochMillis(item.lastMessageAt)
-                CachedThreadEntity(
-                    conversationId = item.id,
-                    title = item.displayTitle(false),
-                    isGroup = item.kind == "group",
-                    avatarUrl = item.other?.avatarUrl?.ifBlank { item.avatarUrl } ?: item.avatarUrl,
-                    peerUid = item.other?.uid,
-                    lastMessagePreview = item.preview,
-                    unreadCount = item.unreadCount,
-                    muted = item.muted,
-                    isPinned = item.pinned,
-                    isArchived = item.archived,
-                    lastMessageAtEpochMs = if (ms == Long.MIN_VALUE) 0L else ms,
-                )
-            },
-        )
+        // Reconcile Room threads_cache atomically so cleared/deleted conversations never linger offline
+        val cachedThreads = items.map { item ->
+            val ms = MessengerEngine.parseEpochMillis(item.lastMessageAt)
+            CachedThreadEntity(
+                conversationId = item.id,
+                title = item.displayTitle(false),
+                isGroup = item.kind == "group",
+                avatarUrl = item.other?.avatarUrl?.ifBlank { item.avatarUrl } ?: item.avatarUrl,
+                peerUid = item.other?.uid,
+                lastMessagePreview = item.preview,
+                unreadCount = item.unreadCount,
+                muted = item.muted,
+                isPinned = item.pinned,
+                isArchived = item.archived,
+                lastMessageAtEpochMs = if (ms == Long.MIN_VALUE) 0L else ms,
+            )
+        }
+        database.withTransaction {
+            val cacheDao = database.messengerCacheDao()
+            if (cachedThreads.isEmpty()) {
+                cacheDao.deleteAllMessages()
+                cacheDao.deleteAllThreads()
+                database.outboxMessageDao().deleteAll()
+            } else {
+                if (cachedThreads.size < limit && cachedThreads.size <= 500) {
+                    val activeIds = cachedThreads.map { it.conversationId }
+                    cacheDao.deleteMessagesForThreadsNotIn(activeIds)
+                    cacheDao.deleteThreadsNotIn(activeIds)
+                    database.outboxMessageDao().deleteForThreadsNotIn(activeIds)
+                }
+                cacheDao.upsertThreads(cachedThreads)
+            }
+        }
         items
     }
 
