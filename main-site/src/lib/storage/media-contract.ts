@@ -23,7 +23,8 @@ export type MediaPurpose =
   | 'project-image'
   | 'post-image'
   | 'comment-image'
-  | 'product-image';
+  | 'product-image'
+  | 'ad-creative';
 
 /** Every purpose the platform will accept from a caller. */
 export const MEDIA_PURPOSES: readonly MediaPurpose[] = [
@@ -34,6 +35,7 @@ export const MEDIA_PURPOSES: readonly MediaPurpose[] = [
   'post-image',
   'comment-image',
   'product-image',
+  'ad-creative',
 ];
 
 export function isMediaPurpose(value: unknown): value is MediaPurpose {

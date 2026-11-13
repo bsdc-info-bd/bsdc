@@ -241,6 +241,9 @@ enum class MediaPurpose(val wireValue: String, val maxDimensionPx: Int) {
 
     @SerialName("product-image")
     PRODUCT_IMAGE("product-image", 1600),
+
+    @SerialName("ad-creative")
+    AD_CREATIVE("ad-creative", 1200),
 }
 
 enum class DevicePermissionKind {
@@ -468,4 +471,83 @@ enum class SyncNetworkPolicy(val wireValue: String) {
     }
 }
 
+@Serializable
+enum class AdPlacement(val wireValue: String) {
+    @SerialName("feed")
+    FEED("feed"),
 
+    @SerialName("sidebar")
+    SIDEBAR("sidebar"),
+
+    @SerialName("shop")
+    SHOP("shop"),
+
+    @SerialName("search")
+    SEARCH("search"),
+
+    @SerialName("article")
+    ARTICLE("article"),
+}
+
+@Serializable
+enum class AdLayout(val wireValue: String) {
+    @SerialName("card")
+    CARD("card"),
+
+    @SerialName("banner")
+    BANNER("banner"),
+
+    @SerialName("compact")
+    COMPACT("compact"),
+
+    @SerialName("native")
+    NATIVE("native");
+
+    companion object {
+        @JvmStatic
+        fun fromWire(raw: String?): AdLayout =
+            entries.firstOrNull { it.wireValue.equals(raw?.trim(), ignoreCase = true) } ?: CARD
+    }
+}
+
+@Serializable
+enum class AdEventKind(val wireValue: String) {
+    @SerialName("impression")
+    IMPRESSION("impression"),
+
+    @SerialName("click")
+    CLICK("click"),
+}
+
+@Serializable
+data class ServedAdModel(
+    @SerialName("creative_id") val creativeId: String = "",
+    @SerialName("campaign_id") val campaignId: String = "",
+    val headline: String = "",
+    val body: String = "",
+    @SerialName("image_url") val imageUrl: String = "",
+    @SerialName("thumb_url") val thumbUrl: String = "",
+    @SerialName("image_alt") val imageAlt: String = "",
+    @SerialName("cta_label") val ctaLabel: String = "",
+    @SerialName("target_url") val targetUrl: String = "",
+    val placement: String = "feed",
+    val layout: String = "card",
+    @SerialName("accent_color") val accentColor: String = "",
+    @SerialName("badge_label") val badgeLabel: String = "",
+)
+
+object AdSafetyValidator {
+    private val HEX_COLOR = Regex("^#[0-9a-fA-F]{6}$")
+
+    @JvmStatic
+    fun isSafeTargetUrl(raw: String?): Boolean {
+        val trimmed = raw?.trim().orEmpty()
+        return trimmed.startsWith("https://") && trimmed.length in 12..500 && !trimmed.contains(' ')
+    }
+
+    @JvmStatic
+    fun sanitizeHexColor(raw: String?): String? {
+        val trimmed = raw?.trim().orEmpty()
+        return trimmed.takeIf { HEX_COLOR.matches(it) }
+    }
+}

@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign, webcrypto } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { bearerToken, memberOf } from './_member-token';
+import { bearerToken, mediaUploaderOf, memberOf } from './_member-token';
 
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'member-key-1', alg: 'RS256' };
@@ -108,5 +108,40 @@ describe('member token verification at the edge', () => {
       },
     });
     expect(await memberOf(expiredReq, { FB_PROJECT_ID: 'bsdc-bd' })).toBeNull();
+  });
+
+  it('allows bsdc-second verified staff via mediaUploaderOf while keeping memberOf bsdc-bd-only', async () => {
+    stubJwks([jwk]);
+    const staffToken = signedMemberToken({
+      aud: 'bsdc-second',
+      iss: 'https://securetoken.google.com/bsdc-second',
+      sub: 'staff-uid-42',
+      role: 'authenticated',
+      bsdc_role: 'admin',
+    });
+    const req = new Request('https://www.bsdc.info.bd/api/media/upload', {
+      method: 'POST',
+      headers: { authorization: `Bearer ${staffToken}` },
+    });
+
+    expect(await memberOf(req, { FB_PROJECT_ID: 'bsdc-bd' })).toBeNull();
+    const uploader = await mediaUploaderOf(req, { FB_PROJECT_ID: 'bsdc-bd' });
+    expect(uploader).not.toBeNull();
+    expect(uploader?.uid).toBe('staff-uid-42');
+    expect(uploader?.project).toBe('second');
+    expect(uploader?.isStaff).toBe(true);
+
+    const nonStaffSecondReq = new Request('https://www.bsdc.info.bd/api/media/upload', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${signedMemberToken({
+          aud: 'bsdc-second',
+          iss: 'https://securetoken.google.com/bsdc-second',
+          sub: 'plain-second-user',
+          bsdc_role: 'member',
+        })}`,
+      },
+    });
+    expect(await mediaUploaderOf(nonStaffSecondReq, { FB_PROJECT_ID: 'bsdc-bd' })).toBeNull();
   });
 });

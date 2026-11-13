@@ -68,8 +68,10 @@ import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAdSlot
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.model.AdPlacement
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
@@ -404,6 +406,18 @@ fun DiscoverHubScreen(
                             }
                         }
                     }
+                }
+
+                item("search_ad") {
+                    BsdcAdSlot(
+                        placement = AdPlacement.SEARCH,
+                        supabase = repository.restClient,
+                        imageLoader = imageLoader,
+                        language = language,
+                        topic = searchInput.trim().takeIf { it.isNotEmpty() },
+                        city = nearMeCity,
+                        onOpenExternal = onOpenExternal,
+                    )
                 }
 
                 items(searchResults, key = { "${it.kind}_${it.id}" }) { row ->

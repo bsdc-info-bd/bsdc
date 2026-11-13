@@ -174,6 +174,7 @@ const UPLOAD_MAX_EDGE: Record<MediaPurpose, number> = {
   'post-image': 1600,
   'comment-image': 1440,
   'product-image': 1600,
+  'ad-creative': 1200,
 };
 
 const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
@@ -184,6 +185,7 @@ const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
   'post-image': 0.84,
   'comment-image': 0.84,
   'product-image': 0.85,
+  'ad-creative': 0.88,
 };
 
 async function encodeCanvasWebp(

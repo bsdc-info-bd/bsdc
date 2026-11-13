@@ -1085,17 +1085,121 @@ a:hover {
 
 .kit-adpreview {
   display: grid;
-  gap: var(--sp-1);
-  justify-items: start;
+  gap: var(--sp-2);
   padding: var(--sp-3);
-  border: 1px dashed var(--c-line);
+  border: 1px solid var(--c-line);
+  border-inline-start: 4px solid var(--ad-accent, var(--c-accent));
   border-radius: var(--r-md);
   background: var(--c-surface-2);
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.kit-adpreview--banner {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.kit-adpreview--compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.kit-adpreview--compact .kit-adpreview-body {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.kit-adpreview-media {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  display: block;
+}
+
+.kit-adpreview--compact .kit-adpreview-media {
+  width: 76px;
+  height: 76px;
+}
+
+.kit-adpreview-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.kit-adpreview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .kit-adpreview .kit-small {
   margin: 0;
   color: var(--c-muted);
+}
+
+.kit-ad-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-line);
+  flex: 0 0 auto;
+}
+
+.kit-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-3);
+}
+
+.kit-modal {
+  background: var(--c-surface);
+  color: var(--c-text);
+  border: 1px solid var(--c-line);
+  border-radius: var(--r-md);
+  width: min(720px, 100%);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: var(--sp-4);
+  display: grid;
+  gap: var(--sp-3);
+}
+
+.kit-crop-stage {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  touch-action: none;
+  user-select: none;
+}
+
+.kit-crop-box {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  background: var(--c-surface-2);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+  overflow: hidden;
+}
+
+.kit-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid var(--c-accent);
+  background: #ffffff;
 }
 
 @media (prefers-reduced-motion: reduce) {

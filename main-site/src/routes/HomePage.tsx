@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { Card, Countdown, ExternalLink, LinkButton, SectionHeading } from '@/design-system';
 import { FeedRail, TrendingTags } from '@/components/feed/FeedRail';
 import { FeedTabs } from '@/components/feed/FeedTabs';
@@ -43,6 +44,7 @@ export default function HomePage() {
             <>
               <FeedRail />
               <TrendingTags className="mt-6" />
+              <AdSlot placement="sidebar" className="mt-6" />
               {/* A member who follows nobody has no ranking signals, so the feed
                   is thin until they do. This is how they start, and on a wide
                   screen it belongs beside the feed rather than pushing it down. */}
@@ -101,6 +103,7 @@ export default function HomePage() {
           <>
             <FeedRail />
             <TrendingTags className="mt-6" />
+            <AdSlot placement="sidebar" className="mt-6" />
             <Card className="mt-6">
               <h2 className="text-base font-semibold">{t('home.feedJoin')}</h2>
               <p className="mt-1 text-sm text-muted">{t('home.feedBody')}</p>

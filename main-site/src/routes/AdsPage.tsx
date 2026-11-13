@@ -2,6 +2,7 @@ import { Megaphone } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -321,10 +322,22 @@ function Creative({
 
   return (
     <li className="rounded-card border border-border p-3">
+      {creative.imageUrl.length > 0 ? (
+        <MediaImage
+          src={creative.imageUrl}
+          variantSrc={creative.thumbUrl ?? ''}
+          alt={creative.imageAlt?.trim() || creative.headline}
+          slotWidth={320}
+          loading="lazy"
+          decoding="async"
+          className="mb-2 h-28 w-full rounded-card object-cover"
+        />
+      ) : null}
       <p className="font-medium">{creative.headline}</p>
       {creative.body ? <p className="mt-1 text-sm">{creative.body}</p> : null}
       <p className="mt-1 text-xs text-muted">
-        {t(`ads.placements.${creative.placement}`)} ·{' '}
+        {t(`ads.placements.${creative.placement}`)}
+        {creative.layout ? ` · ${t(`ads.layouts.${creative.layout}`)}` : ''} ·{' '}
         {t('ads.counted', {
           impressions: formatNumber(creative.impressions, language),
           clicks: formatNumber(creative.clicks, language),

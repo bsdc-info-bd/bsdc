@@ -62,9 +62,11 @@ import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAdSlot
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
+import bd.info.bsdc.app.core.model.AdPlacement
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.PostKind
@@ -83,6 +85,7 @@ fun PostDetailScreen(
     language: AppLanguage,
     onBack: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    onOpenExternal: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tokens = BsdcThemeTokens.colors
@@ -491,6 +494,17 @@ fun PostDetailScreen(
                             )
                         }
                     }
+                }
+
+                item("sponsored_ad") {
+                    BsdcAdSlot(
+                        placement = AdPlacement.ARTICLE,
+                        supabase = repository.restClient,
+                        imageLoader = imageLoader,
+                        language = language,
+                        topic = activePost.tags.firstOrNull(),
+                        onOpenExternal = onOpenExternal,
+                    )
                 }
 
                 item("comments_heading") {

@@ -11,6 +11,8 @@ import kotlinx.serialization.json.put
 class MarketRepository(
     private val supabase: SupabaseRestClient,
 ) {
+    val restClient: SupabaseRestClient get() = supabase
+
     suspend fun fetchCatalog(
         category: String? = null,
         search: String? = null,

@@ -1,6 +1,7 @@
 import { CheckCircle2, Compass, RefreshCw, SlidersHorizontal } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { PostCard } from '@/components/content/PostCard';
 import { Alert, Button, EmptyState, LinkButton, PageSkeleton } from '@/design-system';
 import type { UseFeedResult } from '@/hooks/use-feed';
@@ -111,13 +112,21 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
         </Alert>
       ) : null}
 
-      {feed.posts.map((post, index) => (
-        <div key={post.id} ref={feed.observe(post.id)}>
-          {/* The first card is the page's LCP element, so its picture is the one
-              worth telling the browser not to defer. */}
-          <PostCard post={post} priority={index === 0} />
-        </div>
-      ))}
+      {feed.posts.map((post, index) => {
+        const showAdAfter =
+          index === 3 ||
+          (feed.posts.length > 0 && feed.posts.length <= 3 && index === feed.posts.length - 1);
+        return (
+          <Fragment key={post.id}>
+            <div ref={feed.observe(post.id)}>
+              {/* The first card is the page's LCP element, so its picture is the one
+                  worth telling the browser not to defer. */}
+              <PostCard post={post} priority={index === 0} />
+            </div>
+            {showAdAfter ? <AdSlot placement="feed" className="my-1" /> : null}
+          </Fragment>
+        );
+      })}
 
       <div ref={sentinel} aria-hidden className="h-px" />
 

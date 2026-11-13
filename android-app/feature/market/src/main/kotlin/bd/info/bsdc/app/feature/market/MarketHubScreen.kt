@@ -56,7 +56,9 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAdSlot
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.model.AdPlacement
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -70,6 +72,7 @@ fun MarketHubScreen(
     language: AppLanguage,
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
+    onOpenExternal: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -211,6 +214,17 @@ fun MarketHubScreen(
                                 onClick = { loadActive() },
                             )
                         }
+                    }
+
+                    item("shop_ad") {
+                        BsdcAdSlot(
+                            placement = AdPlacement.SHOP,
+                            supabase = repository.restClient,
+                            imageLoader = imageLoader,
+                            language = language,
+                            topic = searchQuery.takeIf { it.isNotBlank() },
+                            onOpenExternal = onOpenExternal,
+                        )
                     }
 
                     if (products.isEmpty() && !busy) {

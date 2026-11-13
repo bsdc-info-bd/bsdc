@@ -2166,6 +2166,12 @@ export const bn: Translation = {
       search: 'অনুসন্ধান',
       article: 'লেখা',
     },
+    layouts: {
+      card: 'কার্ড',
+      banner: 'ব্যানার',
+      compact: 'সংক্ষিপ্ত',
+      native: 'নেটিভ',
+    },
     statuses: {
       draft: 'খসড়া',
       pending_review: 'যাচাইয়ে',

@@ -95,6 +95,8 @@ class DiscoverRepository(
     private val platformApi: BsdcPlatformApi,
     private val database: BsdcDatabase,
 ) {
+    val restClient: SupabaseRestClient get() = supabase
+
     fun observeRecentSearches(): Flow<List<SavedSearchEntity>> =
         database.savedSearchDao().observeRecent()
 

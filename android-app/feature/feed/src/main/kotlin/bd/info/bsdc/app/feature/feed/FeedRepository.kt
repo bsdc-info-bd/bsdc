@@ -157,6 +157,7 @@ class FeedRepository(
     private val supabase: SupabaseRestClient,
     private val database: BsdcDatabase,
 ) {
+    val restClient: SupabaseRestClient get() = supabase
     private val json = BsdcHttpClientFactory.sharedJson
 
     companion object {

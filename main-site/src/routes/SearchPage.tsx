@@ -2,6 +2,7 @@ import { Search as SearchIcon, TrendingUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -133,6 +134,12 @@ export default function SearchPage() {
             }}
           />
         </Card>
+
+        <AdSlot
+          placement="search"
+          topic={state.text.trim().length > 0 ? state.text.trim() : undefined}
+          className="mt-4"
+        />
 
         <div className="mt-4">
           <Tabs

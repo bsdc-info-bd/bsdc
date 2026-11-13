@@ -97,6 +97,17 @@ export async function signOut(env: CorporateEnv): Promise<void> {
   await firebaseSignOut(getCorporateAuth(env));
 }
 
+export { claimsEndpoints, mediaUploadEndpoints } from './data-access';
+
+export async function getCorporateIdToken(env: CorporateEnv): Promise<string> {
+  const auth = getCorporateAuth(env);
+  const user = auth.currentUser;
+  if (!user) throw new Error('Sign in as staff first.');
+  const token = await ensureCorporateDataAccess(env, user);
+  if (auth.currentUser !== user) throw new Error('Your session changed. Sign in again.');
+  return token.token;
+}
+
 /** Test helper: forces the next call to build fresh singletons. */
 export function resetClients(): void {
   app = null;

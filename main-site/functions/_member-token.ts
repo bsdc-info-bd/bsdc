@@ -24,10 +24,23 @@ const JWKS_URL =
 /** Canonical member Firebase project when no runtime override is bound. */
 const DEFAULT_MEMBER_PROJECT_ID = 'bsdc-bd';
 
+/** Canonical corporate staff Firebase project for the admin consoles. */
+const DEFAULT_CORPORATE_PROJECT_ID = 'bsdc-second';
+
+const STAFF_ROLES: ReadonlySet<string> = new Set(['moderator', 'manager', 'admin', 'owner']);
+
 export interface MemberEnv {
   /** The Firebase project whose members this deployment serves. */
   FB_PROJECT_ID?: string;
   VITE_FB_PROJECT_ID?: string;
+  /** The corporate staff Firebase project (used by sibling consoles like admin-site). */
+  FB2_PROJECT_ID?: string;
+  VITE_FB2_PROJECT_ID?: string;
+  SUPABASE_URL?: string;
+  VITE_SUPABASE_URL?: string;
+  SUPABASE_ANON_KEY?: string;
+  SUPABASE_PUBLISHABLE_KEY?: string;
+  VITE_SUPABASE_PUBLISHABLE_KEY?: string;
 }
 
 export interface VerifiedMember {
@@ -37,6 +50,11 @@ export interface VerifiedMember {
   /** The application role the token carries, when one has been minted. */
   appRole: string;
   claims: Record<string, unknown>;
+}
+
+export interface VerifiedMediaCaller extends VerifiedMember {
+  project: 'main' | 'second';
+  isStaff: boolean;
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
@@ -157,4 +175,89 @@ export async function memberOf(request: Request, env: MemberEnv): Promise<Verifi
   const token = bearerToken(request);
   if (token.length === 0) return null;
   return verifyMember(token, projectId);
+}
+
+async function hasDatabaseStaffRole(env: MemberEnv, idToken: string): Promise<boolean> {
+  const base = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+  const key = (
+    env.SUPABASE_ANON_KEY ??
+    env.SUPABASE_PUBLISHABLE_KEY ??
+    env.VITE_SUPABASE_PUBLISHABLE_KEY ??
+    ''
+  ).trim();
+  if (base === '' || key === '') return false;
+  try {
+    const response = await fetch(`${base}/rest/v1/rpc/my_role`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        authorization: `Bearer ${idToken}`,
+        'content-type': 'application/json',
+      },
+      body: '{}',
+    });
+    if (!response.ok) return false;
+    const rows = (await response.json()) as
+      | { role?: unknown; staff?: unknown }[]
+      | { role?: unknown; staff?: unknown }
+      | null;
+    const row = Array.isArray(rows) ? rows[0] : rows;
+    if (!row) return false;
+    return row.staff === true || (typeof row.role === 'string' && STAFF_ROLES.has(row.role));
+  } catch {
+    return false;
+  }
+}
+
+function hasStaffTokenClaim(verified: VerifiedMember): boolean {
+  return verified.claims['staff'] === true || STAFF_ROLES.has(verified.appRole);
+}
+
+/**
+ * Verifies an uploader for `/api/media/upload`: accepts either signed-in
+ * `bsdc-bd` members (all member media purposes) or verified `bsdc-second`
+ * corporate staff (ad creative uploads from `admin-site`).
+ */
+export async function mediaUploaderOf(
+  request: Request,
+  env: MemberEnv,
+  verifiedMember?: VerifiedMember | null,
+): Promise<VerifiedMediaCaller | null> {
+  const token = bearerToken(request);
+  if (token.length === 0) return null;
+
+  const memberProjectId =
+    (env.FB_PROJECT_ID ?? env.VITE_FB_PROJECT_ID ?? '').trim() || DEFAULT_MEMBER_PROJECT_ID;
+  const corporateProjectId =
+    (env.FB2_PROJECT_ID ?? env.VITE_FB2_PROJECT_ID ?? '').trim() || DEFAULT_CORPORATE_PROJECT_ID;
+
+  if (verifiedMember !== undefined && verifiedMember !== null) {
+    const isStaff =
+      hasStaffTokenClaim(verifiedMember) ||
+      (verifiedMember.claims['role'] === 'authenticated' &&
+        (await hasDatabaseStaffRole(env, token)));
+    return { ...verifiedMember, project: 'main', isStaff };
+  }
+
+  const audience = peekAudience(token);
+  if (audience === memberProjectId) {
+    const verified = await verifyMember(token, memberProjectId);
+    if (verified === null) return null;
+    const isStaff =
+      hasStaffTokenClaim(verified) ||
+      (verified.claims['role'] === 'authenticated' && (await hasDatabaseStaffRole(env, token)));
+    return { ...verified, project: 'main', isStaff };
+  }
+
+  if (audience === corporateProjectId) {
+    const verified = await verifyMember(token, corporateProjectId);
+    if (verified === null) return null;
+    const isStaff =
+      hasStaffTokenClaim(verified) ||
+      (verified.claims['role'] === 'authenticated' && (await hasDatabaseStaffRole(env, token)));
+    if (!isStaff) return null;
+    return { ...verified, project: 'second', isStaff: true };
+  }
+
+  return null;
 }

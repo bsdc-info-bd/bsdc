@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -79,9 +80,11 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.designsystem.bsdcShimmerPlaceholder
+import bd.info.bsdc.app.core.media.BsdcAdSlot
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
+import bd.info.bsdc.app.core.model.AdPlacement
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.PollOptionModel
@@ -101,6 +104,7 @@ fun FeedScreen(
     onOpenPost: (FeedPost) -> Unit,
     onOpenTrashChanged: ((Boolean) -> Unit)? = null,
     onOpenProfile: (String) -> Unit = {},
+    onOpenExternal: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val tokens = BsdcThemeTokens.colors
@@ -314,9 +318,11 @@ fun FeedScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        items(visiblePosts, key = { it.id }) { post ->
+                        itemsIndexed(visiblePosts, key = { _, item -> item.id }) { index, post ->
                             val state = interactionOverrides[post.id] ?: PostInteractionState()
                             val chosenPollOption = pollVoteLocalChoice[post.id]
+                            val showFeedAdAfter =
+                                index == 3 || (visiblePosts.size in 2..3 && index == visiblePosts.lastIndex)
                             FeedPostCard(
                                 post = post,
                                 interaction = state,
@@ -443,6 +449,16 @@ fun FeedScreen(
                                     if (target.isNotBlank()) onOpenProfile(target)
                                 },
                             )
+                            if (showFeedAdAfter) {
+                                Spacer(Modifier.height(14.dp))
+                                BsdcAdSlot(
+                                    placement = AdPlacement.FEED,
+                                    supabase = repository.restClient,
+                                    imageLoader = imageLoader,
+                                    language = language,
+                                    onOpenExternal = onOpenExternal,
+                                )
+                            }
                         }
                     }
                 }

@@ -2176,6 +2176,12 @@ export const en = {
       search: 'Search',
       article: 'Article',
     },
+    layouts: {
+      card: 'Card',
+      banner: 'Banner',
+      compact: 'Compact',
+      native: 'Native',
+    },
     statuses: {
       draft: 'Draft',
       pending_review: 'In review',

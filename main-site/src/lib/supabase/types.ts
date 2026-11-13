@@ -1440,6 +1440,8 @@ export type DbAdStatus =
   | 'rejected'
   | 'completed';
 export type DbAdPlacement = 'feed' | 'sidebar' | 'shop' | 'search' | 'article';
+export type DbAdLayout = 'banner' | 'card' | 'compact' | 'native';
+export type DbAdPlatform = 'web' | 'android';
 export type DbAdPricing = 'cpm' | 'cpc';
 export type DbAdEventKind = 'impression' | 'click';
 export type DbAdWalletKind = 'topup' | 'spend' | 'refund' | 'adjustment';
@@ -1471,8 +1473,14 @@ export type AdCreativeRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url: string;
+  image_alt: string;
   cta_label: string;
   target_url: string;
+  layout: DbAdLayout;
+  accent_color: string;
+  badge_label: string;
+  platforms: DbAdPlatform[];
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -1516,9 +1524,14 @@ export type ServedAdRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url?: string;
+  image_alt?: string;
   cta_label: string;
   target_url: string;
   placement: DbAdPlacement;
+  layout?: DbAdLayout;
+  accent_color?: string;
+  badge_label?: string;
 };
 
 export type MyCampaignRow = {
@@ -1545,8 +1558,14 @@ export type CampaignCreativeRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url?: string;
+  image_alt?: string;
   cta_label: string;
   target_url: string;
+  layout?: DbAdLayout;
+  accent_color?: string;
+  badge_label?: string;
+  platforms?: DbAdPlatform[];
   is_enabled: boolean;
   impressions: number;
   clicks: number;
@@ -2050,8 +2069,14 @@ export type Database = {
             | 'headline'
             | 'body'
             | 'image_url'
+            | 'thumb_url'
+            | 'image_alt'
             | 'cta_label'
             | 'target_url'
+            | 'layout'
+            | 'accent_color'
+            | 'badge_label'
+            | 'platforms'
             | 'is_enabled'
           >
         >;
@@ -2455,11 +2480,18 @@ export type Database = {
       shop_ledger_entries: { Args: { p_limit?: number }; Returns: LedgerEntryRow[] };
       shop_payouts: { Args: { p_limit?: number }; Returns: ShopPayoutRow[] };
       serve_ads: {
-        Args: { p_placement: DbAdPlacement; p_limit?: number };
+        Args: {
+          p_placement: DbAdPlacement;
+          p_limit?: number;
+          p_platform?: DbAdPlatform;
+          p_language?: string;
+          p_topic?: string;
+          p_city?: string;
+        };
         Returns: ServedAdRow[];
       };
       record_ad_event: {
-        Args: { p_creative_id: string; p_kind: DbAdEventKind };
+        Args: { p_creative_id: string; p_kind: DbAdEventKind; p_viewer_token?: string };
         Returns: boolean;
       };
       create_campaign: {

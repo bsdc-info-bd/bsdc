@@ -127,6 +127,7 @@ export const UPLOAD_LIFETIME_SECONDS: Record<MediaPurpose, number> = {
   'post-image': 0,
   'comment-image': 0,
   'product-image': 0,
+  'ad-creative': 0,
 };
 
 /** ISO string for `seconds` from now, or null when the host keeps it forever. */

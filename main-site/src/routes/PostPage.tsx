@@ -3,6 +3,7 @@ import { Check, Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { MediaImage } from '@/components/media/MediaImage';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { CommentThread } from '@/components/interactions/CommentThread';
@@ -401,6 +402,8 @@ export default function PostPage() {
               }}
             />
           </div>
+
+          <AdSlot placement="article" topic={post.tags[0]} className="mt-6" />
 
           <div className="mt-8">
             <CommentThread

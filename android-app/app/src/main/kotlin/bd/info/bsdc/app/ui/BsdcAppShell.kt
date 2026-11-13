@@ -393,6 +393,7 @@ fun BsdcAppShell(
                     activeDetailPost = null
                     activeProfileTarget = target
                 },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
             )
             return
         }
@@ -461,6 +462,7 @@ fun BsdcAppShell(
                 language = language,
                 onBack = { showMarketScreen = false },
                 onSignInRequired = { showAuthModal = true },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
             )
             return
         }
@@ -686,6 +688,7 @@ fun BsdcAppShell(
                         onOpenProfile = { target ->
                             activeProfileTarget = target
                         },
+                        onOpenExternal = { url -> openInCustomTab(context, url) },
                     )
                     MainTab.VERIFY -> {
                         val verifyRoute = (incomingDestination as? LinkDestination.NativeRoute)
