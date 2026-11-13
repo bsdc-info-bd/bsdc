@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Award, FileText, MessageSquare, Users } from 'lucide-react';
+import { Award, BadgeCheck, FileText, Lock, MessageSquare, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -13,6 +13,7 @@ import {
   Chip,
   EmptyState,
   ExternalLink,
+  Modal,
   PageSkeleton,
   StatCard,
   Tabs,
@@ -21,6 +22,12 @@ import {
 import { PostCard } from '@/components/content/PostCard';
 import { FollowButton } from '@/components/social/FollowButton';
 import { usePresence } from '@/hooks/use-presence';
+import {
+  fetchProfileFollowers,
+  fetchProfileFollowing,
+  isPrivateSocialListError,
+  type SocialProfileItem,
+} from '@/lib/data/follow-repository';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import {
   fetchProfileByUsername,
@@ -92,6 +99,164 @@ function AboutPanel({ profile }: { profile: Profile }) {
   );
 }
 
+type SocialModalMode = 'followers' | 'following';
+
+function FollowersModal({
+  open,
+  mode,
+  onModeChange,
+  onClose,
+  profile,
+  followersCount,
+  followingCount,
+  language,
+}: {
+  open: boolean;
+  mode: SocialModalMode;
+  onModeChange: (next: SocialModalMode) => void;
+  onClose: () => void;
+  profile: Profile;
+  followersCount: number;
+  followingCount: number;
+  language: 'en' | 'bn';
+}) {
+  const { t } = useTranslation();
+  const [limit, setLimit] = useState(30);
+
+  const listQuery = useQuery<SocialProfileItem[]>({
+    queryKey: ['profile-social-list', profile.uid, mode, limit],
+    queryFn: () =>
+      mode === 'followers'
+        ? fetchProfileFollowers(profile.uid, limit, 0)
+        : fetchProfileFollowing(profile.uid, limit, 0),
+    enabled: open,
+    retry: (count, error) => (isPrivateSocialListError(error) ? false : count < 1),
+    staleTime: 20_000,
+  });
+
+  const isPrivate = listQuery.isError && isPrivateSocialListError(listQuery.error);
+  const items = listQuery.data ?? [];
+  const hasMore = items.length >= limit;
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={
+        mode === 'followers'
+          ? t('profile.social.followersTab', {
+              total: formatNumber(followersCount, language),
+            })
+          : t('profile.social.followingTab', {
+              total: formatNumber(followingCount, language),
+            })
+      }
+      closeLabel={t('common.close')}
+    >
+      <div className="mb-4 flex gap-2">
+        <Button
+          size="sm"
+          variant={mode === 'followers' ? 'primary' : 'secondary'}
+          onClick={() => {
+            setLimit(30);
+            onModeChange('followers');
+          }}
+        >
+          {t('profile.social.followersTab', {
+            total: formatNumber(followersCount, language),
+          })}
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === 'following' ? 'primary' : 'secondary'}
+          onClick={() => {
+            setLimit(30);
+            onModeChange('following');
+          }}
+        >
+          {t('profile.social.followingTab', {
+            total: formatNumber(followingCount, language),
+          })}
+        </Button>
+      </div>
+
+      {listQuery.isPending ? (
+        <PageSkeleton label={t('common.loading')} />
+      ) : isPrivate ? (
+        <EmptyState
+          icon={<Lock size={26} />}
+          title={t('profile.social.privateTitle')}
+          description={t('profile.social.privateBody', { name: profile.displayName })}
+        />
+      ) : listQuery.isError ? (
+        <Alert tone="danger" title={t(dataErrorKey(listQuery.error))} />
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<Users size={26} />}
+          title={
+            mode === 'followers'
+              ? t('profile.social.emptyFollowers')
+              : t('profile.social.emptyFollowing')
+          }
+          description={profile.displayName}
+        />
+      ) : (
+        <div className="space-y-2">
+          <ul className="max-h-[55dvh] space-y-2 overflow-y-auto pr-1">
+            {items.map((member) => {
+              const target =
+                member.username.trim().length > 0
+                  ? profilePath(member.username)
+                  : `/u/${member.uid}`;
+              return (
+                <li
+                  key={member.uid}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-2.5"
+                >
+                  <Link
+                    to={target}
+                    onClick={onClose}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+                  >
+                    <Avatar src={member.avatarUrl} name={member.displayName} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1">
+                        <span className="fab-truncate text-sm font-semibold">
+                          {member.displayName}
+                        </span>
+                        {member.verified ? (
+                          <BadgeCheck
+                            size={14}
+                            className="shrink-0 text-green-700"
+                            aria-hidden="true"
+                          />
+                        ) : null}
+                      </span>
+                      <span className="fab-truncate block text-xs text-muted">
+                        {member.username ? `@${member.username}` : ''}
+                        {member.username && member.location ? ' · ' : ''}
+                        {member.location}
+                      </span>
+                    </span>
+                  </Link>
+                  <FollowButton uid={member.uid} displayName={member.displayName} size="sm" />
+                </li>
+              );
+            })}
+          </ul>
+          {hasMore ? (
+            <div className="pt-2 text-center">
+              <Button variant="secondary" size="sm" onClick={() => setLimit((n) => n + 30)}>
+                {t('profile.social.loadMore')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 export default function ProfilePage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
@@ -99,10 +264,19 @@ export default function ProfilePage() {
   const currentUser = useAuthStore((state) => state.user);
   const navigate = useNavigate();
   const [openingChat, setOpeningChat] = useState(false);
+  const [socialModal, setSocialModal] = useState<SocialModalMode | null>(null);
 
   /** Opening a chat is idempotent: the same pair always lands on one thread. */
   async function startConversation() {
     if (!profile) return;
+    if (!currentUser) {
+      navigate(ROUTES.login);
+      return;
+    }
+    if (currentUser.uid === profile.uid) {
+      toast.error(t('chat.selfChatBlocked'));
+      return;
+    }
     setOpeningChat(true);
     try {
       const { openDirectConversation } = await import('@/lib/messaging/message-repository');
@@ -318,16 +492,36 @@ export default function ProfilePage() {
             label={t('profile.stats.posts')}
             value={formatNumber(stats?.posts ?? 0, language)}
           />
-          <StatCard
-            icon={<Users size={16} />}
-            label={t('profile.stats.followers')}
-            value={formatNumber(stats?.followers ?? 0, language)}
-          />
-          <StatCard
-            icon={<Users size={16} />}
-            label={t('profile.stats.following')}
-            value={formatNumber(stats?.following ?? 0, language)}
-          />
+          <button
+            type="button"
+            onClick={() => setSocialModal('followers')}
+            aria-label={t('profile.social.followersLabel', {
+              total: formatNumber(stats?.followers ?? 0, language),
+            })}
+            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+          >
+            <StatCard
+              icon={<Users size={16} />}
+              label={t('profile.stats.followers')}
+              value={formatNumber(stats?.followers ?? 0, language)}
+              className="transition-colors hover:border-green-400"
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => setSocialModal('following')}
+            aria-label={t('profile.social.followingLabel', {
+              total: formatNumber(stats?.following ?? 0, language),
+            })}
+            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+          >
+            <StatCard
+              icon={<Users size={16} />}
+              label={t('profile.stats.following')}
+              value={formatNumber(stats?.following ?? 0, language)}
+              className="transition-colors hover:border-green-400"
+            />
+          </button>
           <StatCard
             icon={<Award size={16} />}
             label={t('profile.stats.reputation')}
@@ -339,6 +533,19 @@ export default function ProfilePage() {
           <Tabs items={items} activeId={tab} onChange={setTab} label={t('profile.tabs.about')} />
         </div>
       </div>
+
+      {socialModal !== null ? (
+        <FollowersModal
+          open={socialModal !== null}
+          mode={socialModal}
+          onModeChange={(next) => setSocialModal(next)}
+          onClose={() => setSocialModal(null)}
+          profile={profile}
+          followersCount={stats?.followers ?? 0}
+          followingCount={stats?.following ?? 0}
+          language={language}
+        />
+      ) : null}
     </>
   );
 }

@@ -2,6 +2,7 @@ import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
+  ChatMemberCandidateRow,
   SavedMessageRow,
   ConversationInboxRow,
   ConversationMemberRow,
@@ -13,6 +14,7 @@ import type {
   ToggleMessageReactionRow,
 } from '@/lib/supabase/types';
 import type {
+  ChatMemberCandidate,
   SavedMessage,
   ConversationMember,
   ConversationPin,
@@ -445,23 +447,54 @@ export async function openDirectConversation(otherUid: string): Promise<string> 
   return typeof data === 'string' ? data : '';
 }
 
+export async function searchMembersForChat(
+  query: string,
+  limit = 10,
+): Promise<ChatMemberCandidate[]> {
+  const { data, error } = await getSupabase()
+    .rpc('search_members_for_chat', { p_query: query, p_limit: limit })
+    .returns<ChatMemberCandidateRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map((row) => ({
+    uid: row.uid,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    location: row.location,
+    verified: row.verified === true,
+  }));
+}
+
 /**
  * Turns a username (with or without the @) or a raw uid into the member's
  * uid, so the start-a-conversation form can accept whatever people paste.
+ * Uses two separate exact filters instead of `.or(...)` interpolation.
  */
 export async function resolveMemberUid(handle: string): Promise<string> {
-  const value = handle.trim().replace(/^@/, '');
-  if (value.length === 0) throw new Error('member not found');
-  const { data, error } = await getSupabase()
+  const raw = handle.trim().replace(/^@+/, '');
+  if (raw.length === 0) throw new Error('member not found');
+
+  const supabase = getSupabase();
+  const byUsername = await supabase
     .from('profiles')
     .select('uid')
-    .or(`username.eq.${value},uid.eq.${value}`)
+    .eq('username', raw.toLowerCase())
     .limit(1)
     .returns<Array<Pick<ProfileJoin, 'uid'>>>();
-  if (error) throw toDataError(error);
-  const uid = data?.[0]?.uid;
-  if (uid === undefined) throw new Error('member not found');
-  return uid;
+  if (byUsername.error) throw toDataError(byUsername.error);
+  const handleUid = byUsername.data?.[0]?.uid;
+  if (handleUid !== undefined) return handleUid;
+
+  const byUid = await supabase
+    .from('profiles')
+    .select('uid')
+    .eq('uid', raw)
+    .limit(1)
+    .returns<Array<Pick<ProfileJoin, 'uid'>>>();
+  if (byUid.error) throw toDataError(byUid.error);
+  const directUid = byUid.data?.[0]?.uid;
+  if (directUid === undefined) throw new Error('member not found');
+  return directUid;
 }
 
 export async function createGroupConversation(

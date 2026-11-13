@@ -104,6 +104,10 @@ const HARNESSES = [
     't62.mjs',
     '0091: certificate issuance, editing, amendment/reissue, revocation, and template RPC validation without 23514/23503 leaks',
   ],
+  [
+    't63.mjs',
+    '0092: follower privacy (`showFollowers`), profile social lists, rich autocomplete, chat member picker, and group creation',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

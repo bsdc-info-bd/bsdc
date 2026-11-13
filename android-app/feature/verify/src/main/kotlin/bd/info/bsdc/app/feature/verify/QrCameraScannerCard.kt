@@ -1,17 +1,22 @@
 package bd.info.bsdc.app.feature.verify
 
+import android.graphics.ImageFormat
+import android.util.Size
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageProxy
 import androidx.camera.core.Preview
+import androidx.camera.core.resolutionselector.AspectRatioStrategy
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,10 +61,16 @@ import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.model.PermissionGrantState
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
+import com.google.mlkit.vision.barcode.BarcodeScanner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.google.zxing.BinaryBitmap
+import com.google.zxing.DecodeHintType
+import com.google.zxing.PlanarYUVLuminanceSource
+import com.google.zxing.common.HybridBinarizer
+import com.google.zxing.qrcode.QRCodeReader
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -129,85 +140,164 @@ fun QrCameraScannerCard(
     }
 
     val analyzerExecutor = remember { Executors.newSingleThreadExecutor() }
-    val scanner = remember {
-        BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build(),
-        )
+    val mlkitScanner: BarcodeScanner? = remember {
+        runCatching {
+            BarcodeScanning.getClient(
+                BarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .build(),
+            )
+        }.getOrNull()
+    }
+    val zxingReader = remember { QRCodeReader() }
+    val zxingHints = remember {
+        mapOf(DecodeHintType.TRY_HARDER to true)
     }
     val handledOnce = remember { AtomicBoolean(false) }
+    val isDisposed = remember { AtomicBoolean(false) }
+    val useZxingFallback = remember { AtomicBoolean(mlkitScanner == null) }
 
+    // TextureView (`COMPATIBLE`) avoids SurfaceView Z-order/teardown IllegalStateException inside Compose.
     val previewView = remember {
         PreviewView(context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,
             )
+            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
             scaleType = PreviewView.ScaleType.FILL_CENTER
         }
     }
 
     DisposableEffect(lifecycleOwner, previewView) {
+        isDisposed.set(false)
         val future = ProcessCameraProvider.getInstance(context)
+        val mainExecutor = ContextCompat.getMainExecutor(context)
         var provider: ProcessCameraProvider? = null
+        var boundAnalysis: ImageAnalysis? = null
+
+        val resolutionSelector = ResolutionSelector.Builder()
+            .setAspectRatioStrategy(AspectRatioStrategy.RATIO_4_3_FALLBACK_AUTO_STRATEGY)
+            .setResolutionStrategy(
+                ResolutionStrategy(
+                    Size(1280, 720),
+                    ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                ),
+            )
+            .build()
+
+        fun dispatchResult(raw: String) {
+            val clean = raw.trim()
+            if (clean.isNotEmpty() && !isDisposed.get() && handledOnce.compareAndSet(false, true)) {
+                mainExecutor.execute {
+                    if (!isDisposed.get()) {
+                        onScannedValue(clean)
+                    }
+                }
+            }
+        }
 
         val listener = Runnable {
+            if (isDisposed.get()) return@Runnable
             runCatching {
-                provider = future.get()
-                val preview = Preview.Builder().build().also {
-                    it.surfaceProvider = previewView.surfaceProvider
+                val camProvider = future.get()
+                if (isDisposed.get()) return@runCatching
+                provider = camProvider
+
+                val cameraSelector = when {
+                    camProvider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA) -> CameraSelector.DEFAULT_BACK_CAMERA
+                    camProvider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA) -> CameraSelector.DEFAULT_FRONT_CAMERA
+                    else -> {
+                        lastError = if (bn) "এই ডিভাইসে ক্যামেরা পাওয়া যায়নি।" else "No camera hardware available on this device."
+                        return@runCatching
+                    }
                 }
+
+                val preview = Preview.Builder()
+                    .setResolutionSelector(resolutionSelector)
+                    .build()
+                    .also { it.surfaceProvider = previewView.surfaceProvider }
+
                 val analysis = ImageAnalysis.Builder()
+                    .setResolutionSelector(resolutionSelector)
                     .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                     .build()
+                boundAnalysis = analysis
+
                 analysis.setAnalyzer(analyzerExecutor) { imageProxy ->
-                    val mediaImage = imageProxy.image
-                    if (mediaImage == null || handledOnce.get()) {
+                    if (isDisposed.get() || handledOnce.get()) {
                         imageProxy.close()
                         return@setAnalyzer
                     }
-                    val input = InputImage.fromMediaImage(
-                        mediaImage,
-                        imageProxy.imageInfo.rotationDegrees,
-                    )
-                    scanner.process(input)
-                        .addOnSuccessListener { barcodes ->
-                            val value = barcodes.firstNotNullOfOrNull { it.rawValue?.trim() }
-                            if (!value.isNullOrBlank() && handledOnce.compareAndSet(false, true)) {
-                                ContextCompat.getMainExecutor(context).execute {
-                                    onScannedValue(value)
-                                }
-                            }
-                        }
-                        .addOnFailureListener { exc ->
-                            lastError = exc.localizedMessage
-                        }
-                        .addOnCompleteListener {
+
+                    val activeMlkit = if (!useZxingFallback.get()) mlkitScanner else null
+                    val mediaImage = imageProxy.image
+
+                    if (activeMlkit == null || mediaImage == null) {
+                        try {
+                            decodeQrWithZxing(imageProxy, zxingReader, zxingHints)?.let(::dispatchResult)
+                        } finally {
                             imageProxy.close()
                         }
+                        return@setAnalyzer
+                    }
+
+                    val input = try {
+                        InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+                    } catch (_: Throwable) {
+                        useZxingFallback.set(true)
+                        try {
+                            decodeQrWithZxing(imageProxy, zxingReader, zxingHints)?.let(::dispatchResult)
+                        } finally {
+                            imageProxy.close()
+                        }
+                        return@setAnalyzer
+                    }
+
+                    try {
+                        activeMlkit.process(input)
+                            .addOnSuccessListener { barcodes ->
+                                val value = barcodes.firstNotNullOfOrNull { it.rawValue?.trim() }
+                                if (!value.isNullOrBlank()) {
+                                    dispatchResult(value)
+                                }
+                            }
+                            .addOnFailureListener {
+                                // Play Services barcode module missing/offline on some ROMs; switch to pure-Java ZXing.
+                                useZxingFallback.set(true)
+                            }
+                            .addOnCompleteListener {
+                                imageProxy.close()
+                            }
+                    } catch (_: Throwable) {
+                        useZxingFallback.set(true)
+                        imageProxy.close()
+                    }
                 }
 
-                provider?.unbindAll()
-                val boundCamera = provider?.bindToLifecycle(
+                camProvider.unbindAll()
+                val boundCamera = camProvider.bindToLifecycle(
                     lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    cameraSelector,
                     preview,
                     analysis,
                 )
                 cameraRef = boundCamera
-                boundCamera?.cameraControl?.enableTorch(torchEnabled)
+                runCatching { boundCamera.cameraControl.enableTorch(torchEnabled) }
             }.onFailure { err ->
-                lastError = err.localizedMessage ?: "Camera unavailable on this device."
+                lastError = err.localizedMessage ?: (if (bn) "এই ডিভাইসে ক্যামেরা চালু করা যায়নি।" else "Camera unavailable on this device.")
             }
         }
-        future.addListener(listener, ContextCompat.getMainExecutor(context))
+        future.addListener(listener, mainExecutor)
 
         onDispose {
+            isDisposed.set(true)
+            runCatching { boundAnalysis?.clearAnalyzer() }
             runCatching { cameraRef?.cameraControl?.enableTorch(false) }
+            cameraRef = null
             runCatching { provider?.unbindAll() }
-            runCatching { scanner.close() }
-            runCatching { analyzerExecutor.shutdown() }
+            runCatching { mlkitScanner?.close() }
+            runCatching { analyzerExecutor.shutdownNow() }
         }
     }
 
@@ -238,7 +328,7 @@ fun QrCameraScannerCard(
                 FilledTonalIconButton(
                     onClick = {
                         torchEnabled = !torchEnabled
-                        cameraRef?.cameraControl?.enableTorch(torchEnabled)
+                        runCatching { cameraRef?.cameraControl?.enableTorch(torchEnabled) }
                     },
                 ) {
                     Icon(
@@ -288,4 +378,48 @@ fun QrCameraScannerCard(
             Spacer(modifier = Modifier.height(2.dp))
         }
     }
+}
+
+private fun decodeQrWithZxing(
+    imageProxy: ImageProxy,
+    reader: QRCodeReader,
+    hints: Map<DecodeHintType, Any>,
+): String? {
+    if (imageProxy.format != ImageFormat.YUV_420_888 || imageProxy.planes.isEmpty()) return null
+    val width = imageProxy.width
+    val height = imageProxy.height
+    if (width <= 0 || height <= 0) return null
+
+    val yPlane = imageProxy.planes[0]
+    val buffer = yPlane.buffer
+    val rowStride = yPlane.rowStride
+    val pixelStride = yPlane.pixelStride
+    if (pixelStride <= 0) return null
+
+    val yBytes = ByteArray(width * height)
+    val dup = buffer.duplicate()
+    val limit = dup.limit()
+    for (row in 0 until height) {
+        val rowStart = row * rowStride
+        if (rowStart >= limit) break
+        if (pixelStride == 1) {
+            dup.position(rowStart)
+            val available = (limit - rowStart).coerceAtMost(width)
+            dup.get(yBytes, row * width, available)
+        } else {
+            for (col in 0 until width) {
+                val idx = rowStart + col * pixelStride
+                if (idx >= limit) break
+                yBytes[row * width + col] = dup.get(idx)
+            }
+        }
+    }
+
+    return runCatching {
+        val source = PlanarYUVLuminanceSource(yBytes, width, height, 0, 0, width, height, false)
+        val bitmap = BinaryBitmap(HybridBinarizer(source))
+        reader.decode(bitmap, hints).text?.trim()
+    }.also {
+        runCatching { reader.reset() }
+    }.getOrNull()
 }

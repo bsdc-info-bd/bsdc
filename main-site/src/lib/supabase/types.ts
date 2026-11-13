@@ -636,6 +636,31 @@ export type FollowSuggestionRow = {
   reason: 'mutual' | 'skills' | 'city' | 'active';
 };
 
+/** One row of `profile_followers()` / `profile_following()` (0092). */
+export type SocialProfileItemRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  verified: boolean;
+  viewer_follows: boolean;
+  followed_at: string;
+};
+
+/** One row of `search_members_for_chat()` (0092). */
+export type ChatMemberCandidateRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  is_following: boolean;
+  verified: boolean;
+};
+
 /** One row of `my_push_subscriptions()`: a device that asked to be woken. */
 export type PushSubscriptionRow = {
   endpoint: string;
@@ -1115,6 +1140,15 @@ export type SearchSuggestionRow = {
   kind: SearchKind;
   slug: string;
   title: string;
+};
+
+export type RichSearchSuggestionRow = {
+  kind: SearchKind;
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  image_url: string;
 };
 
 export type TrendingSearchRow = {
@@ -2373,6 +2407,18 @@ export type Database = {
         }[];
       };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
+      profile_followers: {
+        Args: { p_uid: string; p_limit?: number; p_offset?: number };
+        Returns: SocialProfileItemRow[];
+      };
+      profile_following: {
+        Args: { p_uid: string; p_limit?: number; p_offset?: number };
+        Returns: SocialProfileItemRow[];
+      };
+      search_members_for_chat: {
+        Args: { p_query?: string; p_limit?: number };
+        Returns: ChatMemberCandidateRow[];
+      };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
@@ -2655,6 +2701,10 @@ export type Database = {
       search_suggestions: {
         Args: { p_prefix: string; p_limit?: number };
         Returns: SearchSuggestionRow[];
+      };
+      search_suggestions_rich: {
+        Args: { p_prefix: string; p_limit?: number };
+        Returns: RichSearchSuggestionRow[];
       };
       trending_searches: { Args: { p_limit?: number }; Returns: TrendingSearchRow[] };
       log_search: { Args: { p_term: string; p_results: number }; Returns: undefined };

@@ -13,6 +13,8 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +22,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,8 +33,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ExitToApp
@@ -60,6 +66,7 @@ import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.StarBorder
 import androidx.compose.material.icons.rounded.Unarchive
+import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -70,6 +77,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -124,8 +132,11 @@ import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.MediaPurpose
 import coil3.ImageLoader
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
 /**
@@ -159,17 +170,26 @@ fun MessengerRootScreen(
     }
 
     LaunchedEffect(viewerUid, initialPeerHandleOrUid) {
-        if (!viewerUid.isNullOrBlank() && !initialPeerHandleOrUid.isNullOrBlank()) {
-            val target = initialPeerHandleOrUid
-            onConsumeInitialPeer()
-            runCatching { repository.openDirectConversation(target) }
-                .onSuccess { cid ->
-                    launchError = null
-                    if (cid.isNotBlank()) selectedConversationId = cid
+        val target = initialPeerHandleOrUid?.trim()
+        if (!viewerUid.isNullOrBlank() && !target.isNullOrBlank()) {
+            if (target == viewerUid) {
+                launchError = if (bn) "নিজেকে সরাসরি বার্তা পাঠানো যায় না।" else "You cannot start a direct chat with yourself."
+                onConsumeInitialPeer()
+                return@LaunchedEffect
+            }
+            try {
+                val cid = repository.openDirectConversation(target)
+                launchError = null
+                if (cid.isNotBlank()) selectedConversationId = cid
+            } catch (ce: CancellationException) {
+                throw ce
+            } catch (err: Exception) {
+                launchError = err.message ?: (if (bn) "সরাসরি বার্তা খোলা যায়নি।" else "Could not start direct conversation.")
+            } finally {
+                withContext(NonCancellable) {
+                    onConsumeInitialPeer()
                 }
-                .onFailure { err ->
-                    launchError = err.message ?: (if (bn) "সরাসরি বার্তা খোলা যায়নি।" else "Could not start direct conversation.")
-                }
+            }
         }
     }
 
@@ -506,6 +526,8 @@ private fun MessengerInboxScreen(
     if (showNewChatSheet) {
         NewConversationSheet(
             bn = bn,
+            repository = repository,
+            imageLoader = imageLoader,
             busy = newChatBusy,
             errorMessage = newChatError,
             onClearError = { newChatError = null },
@@ -1857,10 +1879,12 @@ private fun SheetActionRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun NewConversationSheet(
     bn: Boolean,
+    repository: MessengerRepository,
+    imageLoader: ImageLoader,
     busy: Boolean,
     errorMessage: String?,
     onClearError: () -> Unit,
@@ -1871,13 +1895,29 @@ private fun NewConversationSheet(
     var groupMode by remember { mutableStateOf(false) }
     var handleInput by remember { mutableStateOf("") }
     var groupTitle by remember { mutableStateOf("") }
-    var membersRaw by remember { mutableStateOf("") }
+    var groupSearchInput by remember { mutableStateOf("") }
+    var selectedMembers by remember { mutableStateOf<List<ChatMemberCandidate>>(emptyList()) }
+    var suggestions by remember { mutableStateOf<List<ChatMemberCandidate>>(emptyList()) }
+    var searchingMembers by remember { mutableStateOf(false) }
+
+    val activeMemberQuery = if (groupMode) groupSearchInput else handleInput
+
+    LaunchedEffect(activeMemberQuery, groupMode) {
+        delay(200L)
+        searchingMembers = true
+        suggestions = runCatching { repository.searchMembersForChat(activeMemberQuery, limit = 12) }
+            .getOrDefault(emptyList())
+        searchingMembers = false
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .verticalScroll(rememberScrollState())
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
@@ -1909,41 +1949,193 @@ private fun NewConversationSheet(
                     onValueChange = { handleInput = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text(if (bn) "@ইউজারনেম বা UID" else "@username or UID") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    label = { Text(if (bn) "নাম বা @ইউজারনেম খুঁজুন" else "Search name or @username") },
+                    trailingIcon = {
+                        if (handleInput.isNotEmpty()) {
+                            IconButton(onClick = { handleInput = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = null)
+                            }
+                        }
+                    },
                 )
-                BsdcButton(
-                    label = if (bn) "চ্যাট খুলুন" else "Open chat",
-                    enabled = handleInput.isNotBlank() && !busy,
-                    busy = busy,
-                    onClick = { onStartDirect(handleInput) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (handleInput.isNotBlank()) {
+                    BsdcButton(
+                        label = if (bn) "@${handleInput.trim().removePrefix("@")} সাথে চ্যাট খুলুন" else "Open chat with ${handleInput.trim()}",
+                        enabled = !busy,
+                        busy = busy,
+                        onClick = { onStartDirect(handleInput) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             } else {
                 OutlinedTextField(
                     value = groupTitle,
-                    onValueChange = { groupTitle = it; onClearError() },
+                    onValueChange = { groupTitle = it.take(MessengerEngine.MAX_GROUP_TITLE_CHARS); onClearError() },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     label = { Text(if (bn) "গ্রুপের নাম" else "Group title") },
+                    supportingText = { Text("${groupTitle.trim().length}/${MessengerEngine.MAX_GROUP_TITLE_CHARS}") },
                 )
+
+                if (selectedMembers.isNotEmpty()) {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        selectedMembers.forEach { member ->
+                            InputChip(
+                                selected = true,
+                                onClick = {
+                                    selectedMembers = selectedMembers.filterNot { it.uid == member.uid }
+                                },
+                                label = {
+                                    Text(
+                                        if (member.username.isNotBlank()) "@${member.username}" else member.displayName,
+                                        maxLines = 1,
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        Icons.Rounded.Close,
+                                        contentDescription = if (bn) "সরান" else "Remove",
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                },
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
-                    value = membersRaw,
-                    onValueChange = { membersRaw = it; onClearError() },
+                    value = groupSearchInput,
+                    onValueChange = { groupSearchInput = it; onClearError() },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(if (bn) "সদস্য (@handle কমা দিয়ে লিখুন)" else "Members (@handles comma-separated)") },
-                )
-                BsdcButton(
-                    label = if (bn) "গ্রুপ তৈরি করুন" else "Create group",
-                    enabled = groupTitle.trim().isNotEmpty() && !busy,
-                    busy = busy,
-                    onClick = {
-                        val handles = membersRaw.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        onCreateGroup(groupTitle, handles)
+                    singleLine = true,
+                    leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                    label = { Text(if (bn) "সদস্য খুঁজুন ও যোগ করুন (@handle)" else "Find & add members (@handle)") },
+                    trailingIcon = {
+                        if (groupSearchInput.isNotEmpty()) {
+                            IconButton(onClick = { groupSearchInput = "" }) {
+                                Icon(Icons.Rounded.Close, contentDescription = null)
+                            }
+                        }
                     },
+                )
+
+                val manualEntries = remember(groupSearchInput) {
+                    groupSearchInput.split(",")
+                        .map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                }
+                val combinedTargets = remember(selectedMembers, manualEntries) {
+                    (selectedMembers.map { it.uid } + manualEntries).distinct()
+                }
+
+                BsdcButton(
+                    label = if (bn) {
+                        "গ্রুপ তৈরি করুন (${combinedTargets.size})"
+                    } else {
+                        "Create group (${combinedTargets.size} selected)"
+                    },
+                    enabled = groupTitle.trim().isNotEmpty() && combinedTargets.isNotEmpty() && !busy,
+                    busy = busy,
+                    onClick = { onCreateGroup(groupTitle, combinedTargets) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
-            Spacer(Modifier.height(16.dp))
+
+            if (searchingMembers) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
+
+            if (suggestions.isNotEmpty()) {
+                Text(
+                    text = if (bn) "সদস্য তালিকা" else "Suggested members",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = BsdcThemeTokens.colors.mutedText,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    suggestions.forEach { member ->
+                        val isSelected = selectedMembers.any { it.uid == member.uid }
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) BsdcThemeTokens.colors.brandSoft else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(1.dp, BsdcThemeTokens.colors.border),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !busy) {
+                                    onClearError()
+                                    if (!groupMode) {
+                                        onStartDirect(member.uid)
+                                    } else if (isSelected) {
+                                        selectedMembers = selectedMembers.filterNot { it.uid == member.uid }
+                                    } else {
+                                        selectedMembers = selectedMembers + member
+                                        groupSearchInput = ""
+                                    }
+                                },
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                BsdcAvatar(
+                                    avatarUrl = member.avatarUrl,
+                                    displayName = member.displayName,
+                                    imageLoader = imageLoader,
+                                    size = 38.dp,
+                                )
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Text(
+                                            text = member.displayName,
+                                            style = MaterialTheme.typography.titleSmall,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        if (member.verified) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Verified,
+                                                contentDescription = null,
+                                                tint = BsdcThemeTokens.colors.brandStrong,
+                                                modifier = Modifier.size(14.dp),
+                                            )
+                                        }
+                                    }
+                                    val sub = buildString {
+                                        if (member.username.isNotBlank()) append("@${member.username}")
+                                        if (member.location.isNotBlank()) {
+                                            if (isNotEmpty()) append(" · ")
+                                            append(member.location)
+                                        }
+                                    }
+                                    if (sub.isNotBlank()) {
+                                        Text(
+                                            text = sub,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BsdcThemeTokens.colors.mutedText,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                                if (member.isFollowing) {
+                                    BsdcBadge(
+                                        label = if (bn) "অনুসরিত" else "Following",
+                                        tone = BsdcTone.INFO,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
         }
     }
 }

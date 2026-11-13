@@ -341,6 +341,7 @@ object ProfileRowCoercer {
             discoverable = obj.boolOrDefault("discoverable", true),
             showActivity = obj.boolOrDefault("showActivity", true),
             showEmail = obj.boolOrDefault("showEmail", false),
+            showFollowers = obj.boolOrDefault("showFollowers", true),
         )
     }
 

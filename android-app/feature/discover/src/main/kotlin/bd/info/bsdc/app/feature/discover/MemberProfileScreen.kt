@@ -20,6 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +44,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PersonAdd
@@ -63,6 +67,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryTabRow
@@ -119,6 +124,7 @@ import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.MediaPurpose
 import bd.info.bsdc.app.core.model.MemberProfile
+import bd.info.bsdc.app.core.network.SupabaseApiException
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -131,6 +137,11 @@ private enum class ProfileTab {
     POSTS,
     ABOUT,
     BADGES,
+}
+
+private enum class SocialSheetMode {
+    FOLLOWERS,
+    FOLLOWING,
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -147,6 +158,7 @@ fun MemberProfileScreen(
     onOpenExternal: (String) -> Unit,
     mediaRepository: BsdcMediaRepository? = null,
     onOpenPost: (FeedPost) -> Unit = {},
+    onOpenProfile: (String) -> Unit = {},
     onProfileUpdated: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -166,6 +178,7 @@ fun MemberProfileScreen(
     var following by remember { mutableStateOf(false) }
     var activeTab by rememberSaveable { mutableStateOf(ProfileTab.POSTS) }
     var lightboxImage by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var socialSheetMode by remember { mutableStateOf<SocialSheetMode?>(null) }
     var moreMenuExpanded by remember { mutableStateOf(false) }
     var confirmBlockOpen by remember { mutableStateOf(false) }
 
@@ -378,7 +391,8 @@ fun MemberProfileScreen(
             maxWidth = 820.dp,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .imePadding(),
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
@@ -737,7 +751,13 @@ fun MemberProfileScreen(
                                                     label = if (bn) "বার্তা" else "Message",
                                                     secondary = true,
                                                     leadingIcon = Icons.Rounded.ChatBubbleOutline,
-                                                    onClick = onOpenMessages,
+                                                    onClick = {
+                                                        if (viewerUid.isNullOrBlank()) {
+                                                            onSignInRequired()
+                                                        } else {
+                                                            onOpenMessages()
+                                                        }
+                                                    },
                                                     modifier = Modifier.weight(1f),
                                                 )
                                             }
@@ -750,7 +770,13 @@ fun MemberProfileScreen(
 
                     // Responsive 4-metric stats strip
                     item("stats") {
-                        ProfileStatsGrid(profile = p, postsCount = maxOf(p.postsCount, memberPosts.size), language = language)
+                        ProfileStatsGrid(
+                            profile = p,
+                            postsCount = maxOf(p.postsCount, memberPosts.size),
+                            language = language,
+                            onClickFollowers = { socialSheetMode = SocialSheetMode.FOLLOWERS },
+                            onClickFollowing = { socialSheetMode = SocialSheetMode.FOLLOWING },
+                        )
                     }
 
                     // Inline animated profile editor for self
@@ -1007,6 +1033,31 @@ fun MemberProfileScreen(
         )
     }
 
+    val activeSocialMode = socialSheetMode
+    val activeProfile = profile
+    if (activeSocialMode != null && activeProfile != null) {
+        FollowersListSheet(
+            profile = activeProfile,
+            initialMode = activeSocialMode,
+            viewerUid = viewerUid,
+            repository = repository,
+            imageLoader = imageLoader,
+            language = language,
+            onDismiss = { socialSheetMode = null },
+            onSignInRequired = {
+                socialSheetMode = null
+                onSignInRequired()
+            },
+            onOpenMember = { target ->
+                socialSheetMode = null
+                onOpenProfile(target)
+            },
+            onFollowChanged = {
+                scope.launch { load() }
+            },
+        )
+    }
+
     if (confirmBlockOpen) {
         val p = profile
         if (p != null && !viewerUid.isNullOrBlank()) {
@@ -1052,6 +1103,8 @@ private fun ProfileStatsGrid(
     profile: MemberProfile,
     postsCount: Int,
     language: AppLanguage,
+    onClickFollowers: () -> Unit,
+    onClickFollowing: () -> Unit,
 ) {
     val bn = language == AppLanguage.BN
     val postsFmt = BanglaDigitFormatter.formatCount(postsCount.toLong(), language)
@@ -1077,14 +1130,20 @@ private fun ProfileStatsGrid(
                     value = flwFmt,
                     icon = Icons.Rounded.Groups,
                     tone = BsdcTone.INFO,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(onClick = onClickFollowers),
                 )
                 BsdcMetricTile(
                     label = if (bn) "অনুসরণ" else "Following",
                     value = flgFmt,
                     icon = Icons.Rounded.Visibility,
                     tone = BsdcTone.NEUTRAL,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(16.dp))
+                        .clickable(onClick = onClickFollowing),
                 )
                 BsdcMetricTile(
                     label = if (bn) "সুনাম" else "Reputation",
@@ -1112,7 +1171,10 @@ private fun ProfileStatsGrid(
                         value = flwFmt,
                         icon = Icons.Rounded.Groups,
                         tone = BsdcTone.INFO,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(onClick = onClickFollowers),
                     )
                 }
                 Row(
@@ -1124,7 +1186,10 @@ private fun ProfileStatsGrid(
                         value = flgFmt,
                         icon = Icons.Rounded.Visibility,
                         tone = BsdcTone.NEUTRAL,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable(onClick = onClickFollowing),
                     )
                     BsdcMetricTile(
                         label = if (bn) "সুনাম" else "Reputation",
@@ -1135,6 +1200,261 @@ private fun ProfileStatsGrid(
                     )
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FollowersListSheet(
+    profile: MemberProfile,
+    initialMode: SocialSheetMode,
+    viewerUid: String?,
+    repository: DiscoverRepository,
+    imageLoader: ImageLoader,
+    language: AppLanguage,
+    onDismiss: () -> Unit,
+    onSignInRequired: () -> Unit,
+    onOpenMember: (String) -> Unit,
+    onFollowChanged: () -> Unit,
+) {
+    val bn = language == AppLanguage.BN
+    val ext = BsdcThemeTokens.colors
+    val scope = rememberCoroutineScope()
+    var mode by remember(initialMode) { mutableStateOf(initialMode) }
+    var items by remember { mutableStateOf<List<SocialProfileItemDto>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var loadingMore by remember { mutableStateOf(false) }
+    var hasMore by remember { mutableStateOf(false) }
+    var isPrivate by remember { mutableStateOf(false) }
+    var errMsg by remember { mutableStateOf<String?>(null) }
+
+    suspend fun loadPage(offset: Int, append: Boolean) {
+        if (append) loadingMore = true else {
+            loading = true
+            isPrivate = false
+            errMsg = null
+        }
+        val res = if (mode == SocialSheetMode.FOLLOWERS) {
+            repository.fetchFollowers(profile.uid, limit = 30, offset = offset)
+        } else {
+            repository.fetchFollowing(profile.uid, limit = 30, offset = offset)
+        }
+        res.onSuccess { page ->
+            items = if (append) items + page else page
+            hasMore = page.size >= 30
+        }.onFailure { err ->
+            val apiErr = err as? SupabaseApiException
+            if (apiErr?.pgCode == "42501" || (err.message?.contains("private", ignoreCase = true) == true)) {
+                isPrivate = true
+                items = emptyList()
+            } else {
+                errMsg = err.localizedMessage ?: (if (bn) "তালিকা লোড করা যায়নি।" else "Could not load list.")
+            }
+        }
+        loading = false
+        loadingMore = false
+    }
+
+    LaunchedEffect(profile.uid, mode) {
+        loadPage(offset = 0, append = false)
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .imePadding()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = mode == SocialSheetMode.FOLLOWERS,
+                    onClick = { mode = SocialSheetMode.FOLLOWERS },
+                    label = {
+                        Text(
+                            if (bn) {
+                                "অনুসারী (${BanglaDigitFormatter.formatCount(profile.followersCount.toLong(), language)})"
+                            } else {
+                                "Followers (${profile.followersCount})"
+                            },
+                        )
+                    },
+                )
+                FilterChip(
+                    selected = mode == SocialSheetMode.FOLLOWING,
+                    onClick = { mode = SocialSheetMode.FOLLOWING },
+                    label = {
+                        Text(
+                            if (bn) {
+                                "অনুসরণ (${BanglaDigitFormatter.formatCount(profile.followingCount.toLong(), language)})"
+                            } else {
+                                "Following (${profile.followingCount})"
+                            },
+                        )
+                    },
+                )
+            }
+
+            when {
+                loading -> {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+                isPrivate -> {
+                    BsdcEmptyState(
+                        icon = Icons.Rounded.Lock,
+                        title = if (bn) "এই তালিকাটি ব্যক্তিগত" else "This list is private",
+                        subtitle = if (bn) {
+                            "${profile.displayName} তার অনুসারী ও অনুসরণ তালিকা সবার জন্য উন্মুক্ত রাখেননি।"
+                        } else {
+                            "${profile.displayName} chose to keep their followers and following lists private."
+                        },
+                    )
+                }
+                !errMsg.isNullOrBlank() -> {
+                    BsdcStatusBanner(
+                        title = if (bn) "লোড ব্যর্থ" else "Load failed",
+                        body = errMsg.orEmpty(),
+                        tone = BsdcTone.BAD,
+                    )
+                }
+                items.isEmpty() -> {
+                    BsdcEmptyState(
+                        icon = Icons.Rounded.Groups,
+                        title = if (mode == SocialSheetMode.FOLLOWERS) {
+                            if (bn) "এখনও কোনো অনুসারী নেই" else "No followers yet"
+                        } else {
+                            if (bn) "কাউকে অনুসরণ করা হচ্ছে না" else "Not following anyone yet"
+                        },
+                        subtitle = if (bn) "কমিউনিটি সংযোগ এখানে দেখা যাবে।" else "Community connections will appear here.",
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(items, key = { it.uid }) { member ->
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                border = BorderStroke(1.dp, ext.border),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onOpenMember(member.username.ifBlank { member.uid })
+                                    },
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                ) {
+                                    BsdcAvatar(
+                                        avatarUrl = member.avatarUrl,
+                                        displayName = member.displayName,
+                                        imageLoader = imageLoader,
+                                        size = 42.dp,
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            Text(
+                                                text = member.displayName,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            if (member.verified) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Verified,
+                                                    contentDescription = null,
+                                                    tint = ext.brandStrong,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                            }
+                                        }
+                                        val handleLine = buildString {
+                                            if (member.username.isNotBlank()) append("@${member.username}")
+                                            if (member.location.isNotBlank()) {
+                                                if (isNotEmpty()) append(" · ")
+                                                append(member.location)
+                                            }
+                                        }
+                                        if (handleLine.isNotBlank()) {
+                                            Text(
+                                                text = handleLine,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = ext.mutedText,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                    if (viewerUid != member.uid) {
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (viewerUid.isNullOrBlank()) {
+                                                    onSignInRequired()
+                                                } else {
+                                                    scope.launch {
+                                                        repository.toggleFollow(
+                                                            followerUid = viewerUid,
+                                                            followeeUid = member.uid,
+                                                            currentlyFollowing = member.viewerFollows,
+                                                        ).onSuccess { nowFollowing ->
+                                                            items = items.map {
+                                                                if (it.uid == member.uid) it.copy(viewerFollows = nowFollowing) else it
+                                                            }
+                                                            onFollowChanged()
+                                                        }
+                                                    }
+                                                }
+                                            },
+                                        ) {
+                                            Text(
+                                                if (member.viewerFollows) {
+                                                    if (bn) "অনুসরণ করছেন" else "Following"
+                                                } else {
+                                                    if (bn) "অনুসরণ করুন" else "Follow"
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (hasMore) {
+                            item("load_more") {
+                                BsdcButton(
+                                    label = if (bn) "আরও দেখুন" else "Load more",
+                                    secondary = true,
+                                    busy = loadingMore,
+                                    enabled = !loadingMore,
+                                    onClick = {
+                                        scope.launch { loadPage(offset = items.size, append = true) }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(10.dp))
         }
     }
 }

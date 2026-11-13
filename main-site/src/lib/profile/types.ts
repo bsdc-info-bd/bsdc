@@ -64,6 +64,7 @@ export const privacyPrefsSchema = z.object({
   discoverable: z.boolean().default(true),
   showActivity: z.boolean().default(true),
   showEmail: z.boolean().default(false),
+  showFollowers: z.boolean().default(true),
 });
 
 export type NotificationPrefs = z.infer<typeof notificationPrefsSchema>;

@@ -278,6 +278,7 @@ function PrivacyPanel() {
   const rows: { key: keyof PrivacyPrefs; label: string }[] = [
     { key: 'discoverable', label: t('settings.privacy.discoverable') },
     { key: 'showActivity', label: t('settings.privacy.showActivity') },
+    { key: 'showFollowers', label: t('settings.privacy.showFollowers') },
     { key: 'showEmail', label: t('settings.privacy.showEmail') },
   ];
 

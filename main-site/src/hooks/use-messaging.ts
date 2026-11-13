@@ -4,6 +4,7 @@ import type { ConversationChannel, LiveStatus } from '@/lib/messaging/messenger-
 import type * as MessengerChannelModule from '@/lib/messaging/messenger-channel';
 import type * as MessageRepositoryModule from '@/lib/messaging/message-repository';
 import type {
+  ChatMemberCandidate,
   ConversationMember,
   ConversationPin,
   ConversationState,
@@ -1205,4 +1206,29 @@ export function useStartConversation(): {
     openDirect: async (handle) => direct.mutateAsync(handle),
     openGroup: async (title, members) => group.mutateAsync({ title, members }),
   };
+}
+
+/** Live member lookup for the new DM / group conversation sheet. */
+export function useMemberSearch(
+  query: string,
+  enabled: boolean,
+): {
+  candidates: ChatMemberCandidate[];
+  isLoading: boolean;
+} {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const [debounced, setDebounced] = useState(query.trim());
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const result = useQuery({
+    queryKey: ['chat-member-search', uid, debounced],
+    queryFn: async () => (await repository()).searchMembersForChat(debounced, 10),
+    enabled: enabled && uid !== null,
+    staleTime: 20_000,
+  });
+
+  return { candidates: result.data ?? [], isLoading: enabled && result.isLoading };
 }

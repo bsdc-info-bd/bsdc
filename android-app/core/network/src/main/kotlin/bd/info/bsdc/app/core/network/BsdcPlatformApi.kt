@@ -4,6 +4,7 @@ import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcBackendConfig
 import bd.info.bsdc.app.core.model.BsdcRole
 import bd.info.bsdc.app.core.model.MemberProfile
+import bd.info.bsdc.app.core.model.PrivacyPrefs
 import bd.info.bsdc.app.core.model.ProfileDraft
 import bd.info.bsdc.app.core.model.ProfileStats
 import bd.info.bsdc.app.core.model.ReverseGeoResult
@@ -227,6 +228,7 @@ class BsdcPlatformApi(
                     put("discoverable", true)
                     put("showActivity", true)
                     put("showEmail", false)
+                    put("showFollowers", true)
                 },
             )
         }
@@ -274,6 +276,26 @@ class BsdcPlatformApi(
         }
         return claimedDto?.let { ProfileRowCoercer.coerce(it) }
             ?: throw SupabaseApiException(500, null, "profile/save-failed")
+    }
+
+    suspend fun updatePrivacyPrefs(uid: String, privacy: PrivacyPrefs) {
+        val body = buildJsonObject {
+            put(
+                "privacy",
+                buildJsonObject {
+                    put("discoverable", privacy.discoverable)
+                    put("showActivity", privacy.showActivity)
+                    put("showEmail", privacy.showEmail)
+                    put("showFollowers", privacy.showFollowers)
+                },
+            )
+        }
+        supabase.patchJson(
+            table = "profiles",
+            body = body,
+            queryPairs = listOf("uid" to "eq.$uid"),
+            prefer = "return=minimal",
+        )
     }
 
     suspend fun fetchStats(uid: String): ProfileStats {

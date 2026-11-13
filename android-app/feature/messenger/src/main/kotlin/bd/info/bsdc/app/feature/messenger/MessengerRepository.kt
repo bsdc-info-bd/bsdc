@@ -111,6 +111,18 @@ private data class ConversationMessageRowDto(
 )
 
 @Serializable
+data class ChatMemberCandidate(
+    val uid: String = "",
+    val username: String = "",
+    @SerialName("display_name") val displayName: String = "Member",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    val bio: String = "",
+    val location: String = "",
+    @SerialName("is_following") val isFollowing: Boolean = false,
+    val verified: Boolean = false,
+)
+
+@Serializable
 private data class ProfileBasicDto(
     val uid: String = "",
     val username: String = "",
@@ -694,20 +706,47 @@ class MessengerRepository(
         )
     }
 
+    suspend fun searchMembersForChat(query: String = "", limit: Int = 12): List<ChatMemberCandidate> =
+        withContext(Dispatchers.IO) {
+            val clean = query.trim().removePrefix("@")
+            val raw = supabase.rpcText(
+                functionName = "search_members_for_chat",
+                params = buildJsonObject {
+                    put("p_query", clean)
+                    put("p_limit", limit.coerceIn(1, 30))
+                },
+                requireAuth = true,
+            )
+            json.decodeFromString<List<ChatMemberCandidate>>(raw)
+        }
+
     suspend fun resolveMemberUid(handleOrUid: String): String = withContext(Dispatchers.IO) {
         val clean = handleOrUid.trim().removePrefix("@")
         require(clean.isNotBlank()) { "Member username or UID required" }
-        val raw = supabase.getJsonText(
+        val normalized = clean.lowercase()
+        val byHandle = supabase.getJsonText(
             table = "profiles",
             queryPairs = listOf(
                 "select" to "uid",
-                "or" to "(username.eq.$clean,uid.eq.$clean)",
+                "username" to "eq.$normalized",
                 "limit" to "1",
             ),
             requireAuth = true,
         )
-        val rows = json.decodeFromString<List<ProfileBasicDto>>(raw)
-        rows.firstOrNull()?.uid?.takeIf(String::isNotBlank)
+        val handleMatch = json.decodeFromString<List<ProfileBasicDto>>(byHandle).firstOrNull()?.uid
+        if (!handleMatch.isNullOrBlank()) return@withContext handleMatch
+
+        val byUid = supabase.getJsonText(
+            table = "profiles",
+            queryPairs = listOf(
+                "select" to "uid",
+                "uid" to "eq.$clean",
+                "limit" to "1",
+            ),
+            requireAuth = true,
+        )
+        json.decodeFromString<List<ProfileBasicDto>>(byUid)
+            .firstOrNull()?.uid?.takeIf(String::isNotBlank)
             ?: error("Member @$clean not found")
     }
 
@@ -725,17 +764,28 @@ class MessengerRepository(
         title: String,
         memberHandlesOrUids: List<String>,
     ): String = withContext(Dispatchers.IO) {
+        val trimmedTitle = title.trim()
+        require(trimmedTitle.isNotEmpty()) { "Group title is required" }
         val resolvedUids = mutableListOf<String>()
+        val unresolved = mutableListOf<String>()
         for (entry in memberHandlesOrUids) {
-            val uid = runCatching { resolveMemberUid(entry) }.getOrNull()
-            if (!uid.isNullOrBlank() && uid !in resolvedUids) {
+            val clean = entry.trim()
+            if (clean.isEmpty()) continue
+            val uid = runCatching { resolveMemberUid(clean) }.getOrNull()
+            if (uid.isNullOrBlank()) {
+                unresolved.add(clean)
+            } else if (uid !in resolvedUids) {
                 resolvedUids.add(uid)
             }
         }
+        if (unresolved.isNotEmpty()) {
+            error("Could not find member(s): ${unresolved.joinToString(", ")}")
+        }
+        require(resolvedUids.isNotEmpty()) { "Select at least one member to create a group" }
         val raw = supabase.rpcText(
             functionName = "create_group_conversation",
             params = buildJsonObject {
-                put("p_title", title.trim().take(MessengerEngine.MAX_GROUP_TITLE_CHARS))
+                put("p_title", trimmedTitle.take(MessengerEngine.MAX_GROUP_TITLE_CHARS))
                 put("p_members", buildJsonArray { resolvedUids.forEach { add(JsonPrimitive(it)) } })
             },
             requireAuth = true,

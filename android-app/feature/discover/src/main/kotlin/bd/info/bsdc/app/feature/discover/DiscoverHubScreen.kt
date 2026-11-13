@@ -5,6 +5,7 @@ import android.content.Intent
 import android.speech.RecognizerIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,7 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Event
@@ -35,6 +40,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,6 +48,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +65,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
@@ -76,6 +85,7 @@ import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.DevicePermissionKind
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
 import coil3.ImageLoader
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -108,9 +118,25 @@ fun DiscoverHubScreen(
     var searchInput by rememberSaveable { mutableStateOf("") }
     var selectedKindFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var searchResults by remember { mutableStateOf<List<SearchResultDto>>(emptyList()) }
+    var liveSuggestions by remember { mutableStateOf<List<RichSearchSuggestionDto>>(emptyList()) }
     var trending by remember { mutableStateOf<List<TrendingSearchDto>>(emptyList()) }
     var searchBusy by remember { mutableStateOf(false) }
     var nearMeCity by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(section, searchInput) {
+        if (section != DiscoverSection.SEARCH) {
+            liveSuggestions = emptyList()
+            return@LaunchedEffect
+        }
+        val clean = searchInput.trim()
+        if (clean.removePrefix("@").length < 2) {
+            liveSuggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(220L)
+        repository.fetchRichSuggestions(clean, limit = 10)
+            .onSuccess { liveSuggestions = it }
+    }
 
     var groups by remember { mutableStateOf<List<GroupDirectoryDto>>(emptyList()) }
     var events by remember { mutableStateOf<List<EventCalendarDto>>(emptyList()) }
@@ -307,19 +333,92 @@ fun DiscoverHubScreen(
                         ) {
                             OutlinedTextField(
                                 value = searchInput,
-                                onValueChange = { searchInput = it },
-                                label = { Text(if (bn) "পোস্ট, মানুষ, কোর্স, চাকরি..." else "Search posts, people, courses, jobs...") },
+                                onValueChange = {
+                                    searchInput = it
+                                    if (it.isBlank()) searchResults = emptyList()
+                                },
+                                label = { Text(if (bn) "পোস্ট, মানুষ (@handle), কোর্স, চাকরি..." else "Search posts, people (@handle), courses...") },
                                 singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(onSearch = { executeSearch(searchInput) }),
                                 modifier = Modifier.weight(1f),
                                 trailingIcon = {
-                                    IconButton(onClick = { launchVoiceSearch() }) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Mic,
-                                            contentDescription = if (bn) "ভয়েস সার্চ" else "Voice Search",
-                                        )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (searchInput.isNotEmpty()) {
+                                            IconButton(onClick = { searchInput = ""; searchResults = emptyList(); liveSuggestions = emptyList() }) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Close,
+                                                    contentDescription = if (bn) "মুছুন" else "Clear",
+                                                )
+                                            }
+                                        }
+                                        IconButton(onClick = { launchVoiceSearch() }) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Mic,
+                                                contentDescription = if (bn) "ভয়েস সার্চ" else "Voice Search",
+                                            )
+                                        }
                                     }
                                 },
                             )
+                        }
+                        if (liveSuggestions.isNotEmpty() && searchInput.trim().isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, BsdcThemeTokens.colors.border),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column {
+                                    liveSuggestions.forEachIndexed { idx, sug ->
+                                        if (idx > 0) HorizontalDivider(color = BsdcThemeTokens.colors.border)
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    liveSuggestions = emptyList()
+                                                    when (sug.kind.lowercase()) {
+                                                        "person" -> onOpenProfile(sug.slug.ifBlank { sug.id })
+                                                        "post" -> onOpenPost(sug.slug.ifBlank { sug.id })
+                                                        "group" -> section = DiscoverSection.GROUPS
+                                                        "course" -> section = DiscoverSection.COURSES
+                                                        "job" -> section = DiscoverSection.JOBS
+                                                        "project" -> section = DiscoverSection.PROJECTS
+                                                        else -> executeSearch(sug.title)
+                                                    }
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            BsdcAvatar(
+                                                avatarUrl = sug.imageUrl,
+                                                displayName = sug.title.ifBlank { sug.kind },
+                                                imageLoader = imageLoader,
+                                                size = 34.dp,
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = sug.title,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                if (sug.subtitle.isNotBlank()) {
+                                                    Text(
+                                                        text = sug.subtitle,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = BsdcThemeTokens.colors.mutedText,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                            }
+                                            BsdcBadge(label = sug.kind.uppercase(), tone = BsdcTone.INFO)
+                                        }
+                                    }
+                                }
+                            }
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val kinds = listOf(null to (if (bn) "সব" else "All"), "post" to "Post", "person" to "Person", "group" to "Group", "course" to "Course", "job" to "Job", "project" to "Project")

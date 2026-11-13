@@ -23,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Kbd } from '@/design-system';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
-import { useSearchSuggestions } from '@/hooks/use-search';
+import { useRichSuggestions } from '@/hooks/use-search';
 import { changeLanguage } from '@/i18n';
 import {
   coursePath,
@@ -35,7 +35,7 @@ import {
   ROUTES,
   SITE,
 } from '@/lib/site';
-import type { SearchSuggestion } from '@/lib/search/search-types';
+import type { RichSearchSuggestion } from '@/lib/search/search-types';
 import { useThemeStore } from '@/store/theme-store';
 import { useUiStore } from '@/store/ui-store';
 
@@ -52,7 +52,7 @@ export function CommandPalette() {
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
   const [term, setTerm] = useState('');
-  const { suggestions } = useSearchSuggestions(term);
+  const { suggestions } = useRichSuggestions(term);
   const open = useUiStore((state) => state.commandPaletteOpen);
   const setOpen = useUiStore((state) => state.setCommandPaletteOpen);
   const setPreference = useThemeStore((state) => state.setPreference);
@@ -162,10 +162,10 @@ export function CommandPalette() {
     },
   ];
 
-  function suggestionPath(suggestion: SearchSuggestion): string {
+  function suggestionPath(suggestion: RichSearchSuggestion): string {
     switch (suggestion.kind) {
       case 'person':
-        return profilePath(suggestion.slug);
+        return suggestion.slug.length > 0 ? profilePath(suggestion.slug) : `/u/${suggestion.id}`;
       case 'group':
         return groupPath(suggestion.slug);
       case 'course':
@@ -179,7 +179,7 @@ export function CommandPalette() {
     }
   }
 
-  function suggestionIcon(kind: SearchSuggestion['kind']): ReactNode {
+  function suggestionIcon(kind: RichSearchSuggestion['kind']): ReactNode {
     switch (kind) {
       case 'person':
         return <User size={16} />;
@@ -199,8 +199,11 @@ export function CommandPalette() {
   // Live suggestions come from the database; the row policies there decide
   // what may be suggested, so nothing private is ever offered.
   const found: PaletteAction[] = suggestions.map((suggestion) => ({
-    id: `${suggestion.kind}-${suggestion.slug}`,
-    label: suggestion.title,
+    id: `${suggestion.kind}-${suggestion.id}-${suggestion.slug}`,
+    label:
+      suggestion.subtitle.length > 0
+        ? `${suggestion.title} · ${suggestion.subtitle}`
+        : suggestion.title,
     icon: suggestionIcon(suggestion.kind),
     run: go(suggestionPath(suggestion)),
   }));

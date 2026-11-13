@@ -10,6 +10,7 @@ public class DiscoverSearchEngineTest {
     @Test
     public void sanitizeSearchQuery_cleansControlCharsAndTruncates() {
         assertEquals("kotlin compose", DiscoverSearchEngine.sanitizeSearchQuery("  kotlin\n\t compose  "));
+        assertEquals("@bob", DiscoverSearchEngine.sanitizeSearchQuery("  @bob \n "));
         String longText = "a".repeat(120);
         assertEquals(80, DiscoverSearchEngine.sanitizeSearchQuery(longText).length());
     }

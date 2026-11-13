@@ -34,6 +34,29 @@ data class SearchSuggestionDto(
 )
 
 @Serializable
+data class RichSearchSuggestionDto(
+    val kind: String,
+    val id: String = "",
+    val slug: String = "",
+    val title: String = "",
+    val subtitle: String = "",
+    @SerialName("image_url") val imageUrl: String = "",
+)
+
+@Serializable
+data class SocialProfileItemDto(
+    val uid: String,
+    val username: String = "",
+    @SerialName("display_name") val displayName: String = "Member",
+    @SerialName("avatar_url") val avatarUrl: String = "",
+    val bio: String = "",
+    val location: String = "",
+    val verified: Boolean = false,
+    @SerialName("viewer_follows") val viewerFollows: Boolean = false,
+    @SerialName("followed_at") val followedAt: String = "",
+)
+
+@Serializable
 data class TrendingSearchDto(
     val term: String,
     val uses: Int = 0,

@@ -1,7 +1,26 @@
 import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
-import { toDataError } from '@/lib/supabase/errors';
-import type { FollowSuggestionRow } from '@/lib/supabase/types';
+import { DataError, toDataError } from '@/lib/supabase/errors';
+import type { FollowSuggestionRow, SocialProfileItemRow } from '@/lib/supabase/types';
+
+export interface SocialProfileItem {
+  uid: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  bio: string;
+  location: string;
+  verified: boolean;
+  viewerFollows: boolean;
+  followedAt: string;
+}
+
+export function isPrivateSocialListError(error: unknown): boolean {
+  if (error instanceof DataError) {
+    return error.code === '42501' || error.message.toLowerCase().includes('private');
+  }
+  return error instanceof Error && error.message.toLowerCase().includes('private');
+}
 
 /** A suggestion the way the rest of the app reads it. */
 export interface FollowSuggestion {
@@ -93,4 +112,42 @@ function toSuggestion(row: FollowSuggestionRow): FollowSuggestion {
     sharedSkills: row.shared_skills ?? [],
     reason: row.reason,
   };
+}
+
+function toSocialProfile(row: SocialProfileItemRow): SocialProfileItem {
+  return {
+    uid: row.uid,
+    username: row.username,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    bio: row.bio,
+    location: row.location,
+    verified: row.verified === true,
+    viewerFollows: row.viewer_follows === true,
+    followedAt: row.followed_at,
+  };
+}
+
+export async function fetchProfileFollowers(
+  targetUid: string,
+  limit = 30,
+  offset = 0,
+): Promise<SocialProfileItem[]> {
+  const { data, error } = await getSupabase()
+    .rpc('profile_followers', { p_uid: targetUid, p_limit: limit, p_offset: offset })
+    .returns<SocialProfileItemRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toSocialProfile);
+}
+
+export async function fetchProfileFollowing(
+  targetUid: string,
+  limit = 30,
+  offset = 0,
+): Promise<SocialProfileItem[]> {
+  const { data, error } = await getSupabase()
+    .rpc('profile_following', { p_uid: targetUid, p_limit: limit, p_offset: offset })
+    .returns<SocialProfileItemRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toSocialProfile);
 }

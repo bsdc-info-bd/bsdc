@@ -192,14 +192,47 @@ describe('the lightbox', () => {
   });
 
   it('offers the original file, and no arrows when there is only one', async () => {
-    render(<MediaGallery items={[item(0, 1600, 900)]} label="Pictures" />);
-    await userEvent.click(screen.getByRole('button', { name: 'The first picture' }));
-    expect(screen.getByLabelText('media.lightbox.download')).toHaveAttribute(
-      'href',
-      'https://cdn.example/0.jpg',
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(['img'], { type: 'image/jpeg' }), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      }),
     );
-    expect(screen.queryByLabelText('media.lightbox.next')).not.toBeInTheDocument();
-    expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+    const originalFetch = globalThis.fetch;
+    const prevCreateDesc = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const prevRevokeDesc = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockReturnValue('blob:https://bsdc.info.bd/mock'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    });
+
+    const preventNav = (e: Event) => e.preventDefault();
+    document.addEventListener('click', preventNav);
+
+    try {
+      render(<MediaGallery items={[item(0, 1600, 900)]} label="Pictures" />);
+      await userEvent.click(screen.getByRole('button', { name: 'The first picture' }));
+      const downloadButton = screen.getByLabelText('media.lightbox.download');
+      expect(downloadButton).toBeInTheDocument();
+      await userEvent.click(downloadButton);
+      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example/0.jpg', { mode: 'cors' });
+      expect(screen.queryByLabelText('media.lightbox.next')).not.toBeInTheDocument();
+      expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('click', preventNav);
+      globalThis.fetch = originalFetch;
+      if (prevCreateDesc) Object.defineProperty(URL, 'createObjectURL', prevCreateDesc);
+      else delete (URL as unknown as Record<string, unknown>)['createObjectURL'];
+      if (prevRevokeDesc) Object.defineProperty(URL, 'revokeObjectURL', prevRevokeDesc);
+      else delete (URL as unknown as Record<string, unknown>)['revokeObjectURL'];
+    }
   });
 });
 

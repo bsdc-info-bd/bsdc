@@ -1,5 +1,6 @@
 import {
   Archive,
+  BadgeCheck,
   Bell,
   BellOff,
   Bookmark,
@@ -10,6 +11,7 @@ import {
   Plus,
   Search,
   UserPlus,
+  X,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +25,7 @@ import {
   Avatar,
   Badge,
   Button,
+  Chip,
   EmptyState,
   IconButton,
   Modal,
@@ -33,17 +36,23 @@ import {
 import {
   useConversationSettings,
   useInbox,
+  useMemberSearch,
   useMessageSearch,
   useSavedMessages,
   useStartConversation,
 } from '@/hooks/use-messaging';
 import { cn } from '@/lib/cn';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
-import type { ConversationSummary, InboxFilter } from '@/lib/messaging/message-types';
+import type {
+  ChatMemberCandidate,
+  ConversationSummary,
+  InboxFilter,
+} from '@/lib/messaging/message-types';
 import { conversationName } from '@/lib/messaging/message-types';
 import { ROUTES, conversationPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
+import { useProfileStore } from '@/store/profile-store';
 
 const FILTERS: InboxFilter[] = ['all', 'unread', 'direct', 'groups', 'pinned', 'archived'];
 
@@ -225,6 +234,7 @@ export default function MessagesPage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const viewerUsername = useProfileStore((state) => state.profile?.username ?? '');
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const inbox = useInbox();
@@ -240,23 +250,38 @@ export default function MessagesPage() {
   const [username, setUsername] = useState('');
   const [groupTitle, setGroupTitle] = useState('');
   const [members, setMembers] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<ChatMemberCandidate[]>([]);
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const [starting, setStarting] = useState(false);
   const startLock = useRef(false);
+
+  const memberSearch = useMemberSearch(
+    memberSearchQuery.trim().length > 0 ? memberSearchQuery : username.replace(/^@+/, ''),
+    newChat,
+  );
 
   const activeSummary = useMemo(
     () => inbox.allConversations.find((item) => item.id === activeId) ?? null,
     [inbox.allConversations, activeId],
   );
 
-  async function openDirect(): Promise<void> {
-    const handle = username.trim().replace(/^@/, '');
+  async function openDirect(explicitHandle?: string): Promise<void> {
+    const handle = (explicitHandle ?? username).trim().replace(/^@+/, '');
     if (handle.length === 0 || startLock.current) return;
+    if (
+      handle === uid ||
+      (viewerUsername.length > 0 && handle.toLowerCase() === viewerUsername.toLowerCase())
+    ) {
+      toast.error(t('chat.selfChatBlocked'));
+      return;
+    }
     startLock.current = true;
     setStarting(true);
     try {
       const conversationId = await start.openDirect(handle);
       setNewChat(false);
       setUsername('');
+      setMemberSearchQuery('');
       navigate(conversationPath(conversationId));
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
@@ -268,10 +293,12 @@ export default function MessagesPage() {
 
   async function openGroup(): Promise<void> {
     const title = groupTitle.trim();
-    const handles = members
+    const typedHandles = members
       .split(',')
-      .map((value) => value.trim().replace(/^@/, ''))
+      .map((value) => value.trim().replace(/^@+/, ''))
       .filter((value) => value.length > 0);
+    const chipHandles = selectedMembers.map((m) => m.username.trim() || m.uid);
+    const handles = Array.from(new Set([...chipHandles, ...typedHandles]));
     if (title.length === 0 || handles.length === 0 || startLock.current) return;
     startLock.current = true;
     setStarting(true);
@@ -280,6 +307,8 @@ export default function MessagesPage() {
       setNewChat(false);
       setGroupTitle('');
       setMembers('');
+      setSelectedMembers([]);
+      setMemberSearchQuery('');
       navigate(conversationPath(conversationId));
     } catch (error) {
       toast.error(t(dataErrorKey(error)));
@@ -583,13 +612,94 @@ export default function MessagesPage() {
             onChange={(event) => setUsername(event.target.value)}
             placeholder="@username"
           />
+
+          <TextField
+            label={t('chat.memberSuggestions')}
+            value={memberSearchQuery}
+            onChange={(event) => setMemberSearchQuery(event.target.value)}
+            placeholder={t('chat.searchMembersPlaceholder')}
+          />
+
+          {memberSearch.candidates.length > 0 ? (
+            <ul className="max-h-44 divide-y divide-border/60 overflow-y-auto rounded-xl border border-border bg-surface">
+              {memberSearch.candidates.map((candidate) => {
+                const alreadyPicked = selectedMembers.some((m) => m.uid === candidate.uid);
+                return (
+                  <li
+                    key={candidate.uid}
+                    className="flex items-center justify-between gap-2 px-3 py-2"
+                  >
+                    <button
+                      type="button"
+                      disabled={starting}
+                      onClick={() => void openDirect(candidate.username || candidate.uid)}
+                      className="flex min-w-0 flex-1 items-center gap-2 text-start hover:opacity-85"
+                    >
+                      <Avatar src={candidate.avatarUrl} name={candidate.displayName} size="xs" />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-1">
+                          <span className="fab-truncate text-xs font-semibold">
+                            {candidate.displayName}
+                          </span>
+                          {candidate.verified ? (
+                            <BadgeCheck
+                              size={12}
+                              className="shrink-0 text-green-700"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </span>
+                        {candidate.username ? (
+                          <span className="fab-truncate block text-2xs text-muted">
+                            @{candidate.username}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    <Button
+                      size="sm"
+                      variant={alreadyPicked ? 'secondary' : 'outline'}
+                      onClick={() => {
+                        if (alreadyPicked) {
+                          setSelectedMembers((prev) => prev.filter((m) => m.uid !== candidate.uid));
+                        } else {
+                          setSelectedMembers((prev) => [...prev, candidate]);
+                        }
+                      }}
+                    >
+                      {alreadyPicked ? <Check size={13} /> : <Plus size={13} />}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : memberSearchQuery.trim().length > 0 && !memberSearch.isLoading ? (
+            <p className="text-xs text-muted">{t('chat.noMatchingMembers')}</p>
+          ) : null}
+
           <TextField
             label={t('chat.groupTitleLabel')}
             value={groupTitle}
             onChange={(event) => setGroupTitle(event.target.value)}
           />
+          {selectedMembers.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedMembers.map((member) => (
+                <Chip
+                  key={member.uid}
+                  onClick={() =>
+                    setSelectedMembers((prev) => prev.filter((item) => item.uid !== member.uid))
+                  }
+                >
+                  {member.username ? `@${member.username}` : member.displayName}
+                  <X size={12} aria-hidden="true" />
+                </Chip>
+              ))}
+            </div>
+          ) : null}
           <TextField
             label={t('chat.memberLabel')}
+            hint={t('chat.addMemberHint')}
             value={members}
             onChange={(event) => setMembers(event.target.value)}
             placeholder="@alice, @bob"
@@ -598,7 +708,11 @@ export default function MessagesPage() {
             variant="outline"
             onClick={() => void openGroup()}
             loading={starting}
-            disabled={starting || groupTitle.trim().length === 0 || members.trim().length === 0}
+            disabled={
+              starting ||
+              groupTitle.trim().length === 0 ||
+              (selectedMembers.length === 0 && members.trim().length === 0)
+            }
           >
             <Archive size={15} aria-hidden="true" />
             {t('chat.startGroup')}

@@ -30,6 +30,15 @@ export interface SearchSuggestion {
   title: string;
 }
 
+export interface RichSearchSuggestion {
+  kind: SearchKind;
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+}
+
 export interface ParsedQuery {
   /** The words actually sent to Postgres, with operators removed. */
   text: string;

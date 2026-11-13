@@ -45,6 +45,38 @@ class ProfileRowCoercionTest {
         assertEquals(32, profile.skills[1].length)
         assertTrue(!profile.notifications.messages)
         assertTrue(profile.notifications.followers)
+        assertTrue(profile.privacy.showFollowers)
+    }
+
+    @Test
+    fun coercesPrivacyShowFollowersDefaultsAndExplicitFalse() {
+        val explicitFalse = ProfileRowDto(
+            uid = "user-456",
+            privacy = buildJsonObject {
+                put("discoverable", false)
+                put("showActivity", "false")
+                put("showEmail", true)
+                put("showFollowers", false)
+            },
+        )
+        val p1 = ProfileRowCoercer.coerce(explicitFalse)
+        assertNotNull(p1)
+        assertTrue(!p1!!.privacy.discoverable)
+        assertTrue(!p1.privacy.showActivity)
+        assertTrue(p1.privacy.showEmail)
+        assertTrue(!p1.privacy.showFollowers)
+
+        val missingShowFollowers = ProfileRowDto(
+            uid = "user-789",
+            privacy = buildJsonObject {
+                put("discoverable", true)
+                put("showFollowers", "not-a-boolean")
+            },
+        )
+        val p2 = ProfileRowCoercer.coerce(missingShowFollowers)
+        assertNotNull(p2)
+        assertTrue(p2!!.privacy.discoverable)
+        assertTrue(p2.privacy.showFollowers)
     }
 
     @Test

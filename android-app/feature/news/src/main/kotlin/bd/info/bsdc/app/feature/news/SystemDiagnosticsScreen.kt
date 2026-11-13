@@ -1,6 +1,7 @@
 package bd.info.bsdc.app.feature.news
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
@@ -8,23 +9,27 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -44,6 +49,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.LinkDestination
+import bd.info.bsdc.app.core.model.PrivacyPrefs
 import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
@@ -70,9 +76,12 @@ fun SystemDiagnosticsAndSettingsScreen(
     onOpenExternal: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    privacyPrefs: PrivacyPrefs? = null,
+    onUpdatePrivacy: ((PrivacyPrefs) -> Unit)? = null,
 ) {
     val bn = language == AppLanguage.BN
     var testUrl by remember { mutableStateOf(BsdcHosts.NEWS_ORIGIN) }
+    var localPrivacy by remember(privacyPrefs) { mutableStateOf(privacyPrefs ?: PrivacyPrefs()) }
 
     Scaffold(
         topBar = {
@@ -92,7 +101,8 @@ fun SystemDiagnosticsAndSettingsScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .imePadding(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -196,6 +206,66 @@ fun SystemDiagnosticsAndSettingsScreen(
                 }
             }
 
+            if (privacyPrefs != null && onUpdatePrivacy != null) {
+                item {
+                    BsdcCard {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Lock,
+                                contentDescription = null,
+                                tint = BsdcThemeTokens.colors.brandStrong,
+                            )
+                            Text(
+                                text = if (bn) "গোপনীয়তা ও অনুসন্ধান দৃশ্যমানতা" else "Privacy & Discovery",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                        PrivacyToggleRow(
+                            title = if (bn) "অনুসন্ধান ও সাজেশনে প্রোফাইল দেখান" else "Show profile in search & suggestions",
+                            checked = localPrivacy.discoverable,
+                            onCheckedChange = { checked ->
+                                val next = localPrivacy.copy(discoverable = checked)
+                                localPrivacy = next
+                                onUpdatePrivacy(next)
+                            },
+                        )
+                        HorizontalDivider(color = BsdcThemeTokens.colors.border)
+                        PrivacyToggleRow(
+                            title = if (bn) "সক্রিয়তার অবস্থা দেখান" else "Show activity status",
+                            checked = localPrivacy.showActivity,
+                            onCheckedChange = { checked ->
+                                val next = localPrivacy.copy(showActivity = checked)
+                                localPrivacy = next
+                                onUpdatePrivacy(next)
+                            },
+                        )
+                        HorizontalDivider(color = BsdcThemeTokens.colors.border)
+                        PrivacyToggleRow(
+                            title = if (bn) "অনুসারী ও অনুসরণ তালিকা উন্মুক্ত রাখুন" else "Show followers & following lists",
+                            checked = localPrivacy.showFollowers,
+                            onCheckedChange = { checked ->
+                                val next = localPrivacy.copy(showFollowers = checked)
+                                localPrivacy = next
+                                onUpdatePrivacy(next)
+                            },
+                        )
+                        HorizontalDivider(color = BsdcThemeTokens.colors.border)
+                        PrivacyToggleRow(
+                            title = if (bn) "প্রোফাইলে ইমেইল দৃশ্যমান রাখুন" else "Show email on profile",
+                            checked = localPrivacy.showEmail,
+                            onCheckedChange = { checked ->
+                                val next = localPrivacy.copy(showEmail = checked)
+                                localPrivacy = next
+                                onUpdatePrivacy(next)
+                            },
+                        )
+                    }
+                }
+            }
+
             item {
                 BsdcCard {
                     Row(
@@ -243,5 +313,30 @@ fun SystemDiagnosticsAndSettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun PrivacyToggleRow(
+    title: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 12.dp),
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }

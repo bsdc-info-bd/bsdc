@@ -312,6 +312,7 @@ data class PrivacyPrefs(
     val discoverable: Boolean = true,
     val showActivity: Boolean = true,
     val showEmail: Boolean = false,
+    val showFollowers: Boolean = true,
 )
 
 @Serializable

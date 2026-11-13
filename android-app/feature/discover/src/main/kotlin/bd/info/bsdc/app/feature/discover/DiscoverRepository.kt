@@ -10,6 +10,7 @@ import bd.info.bsdc.app.core.model.PollOptionModel
 import bd.info.bsdc.app.core.model.PostAuthorSummary
 import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.core.model.PostMediaModel
+import bd.info.bsdc.app.core.model.PrivacyPrefs
 import bd.info.bsdc.app.core.network.BsdcPlatformApi
 import bd.info.bsdc.app.core.network.ProfileRowCoercer
 import bd.info.bsdc.app.core.network.ProfileRowDto
@@ -172,6 +173,24 @@ class DiscoverRepository(
             supabase.decode<List<SearchSuggestionDto>>(raw)
         }
     }
+
+    suspend fun fetchRichSuggestions(prefix: String, limit: Int = 10): Result<List<RichSearchSuggestionDto>> =
+        withContext(Dispatchers.IO) {
+            val rawInput = prefix.trim()
+            val clean = DiscoverSearchEngine.sanitizeSearchQuery(rawInput)
+            if (clean.removePrefix("@").length < 2) return@withContext Result.success(emptyList())
+            runCatching {
+                val raw = supabase.rpcText(
+                    "search_suggestions_rich",
+                    params = buildJsonObject {
+                        put("p_prefix", if (rawInput.startsWith("@")) "@${clean.removePrefix("@")}" else clean)
+                        put("p_limit", limit.coerceIn(1, 20))
+                    },
+                    requireAuth = false,
+                )
+                supabase.decode<List<RichSearchSuggestionDto>>(raw)
+            }
+        }
 
     suspend fun fetchTrending(): Result<List<TrendingSearchDto>> = withContext(Dispatchers.IO) {
         runCatching {
@@ -701,6 +720,45 @@ class DiscoverRepository(
                     requireAuth = true,
                 )
                 Unit
+            }
+        }
+
+    suspend fun fetchFollowers(uid: String, limit: Int = 30, offset: Int = 0): Result<List<SocialProfileItemDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.rpcText(
+                    "profile_followers",
+                    params = buildJsonObject {
+                        put("p_uid", uid)
+                        put("p_limit", limit.coerceIn(1, 60))
+                        put("p_offset", offset.coerceAtLeast(0))
+                    },
+                    requireAuth = false,
+                )
+                supabase.decode<List<SocialProfileItemDto>>(raw)
+            }
+        }
+
+    suspend fun fetchFollowing(uid: String, limit: Int = 30, offset: Int = 0): Result<List<SocialProfileItemDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.rpcText(
+                    "profile_following",
+                    params = buildJsonObject {
+                        put("p_uid", uid)
+                        put("p_limit", limit.coerceIn(1, 60))
+                        put("p_offset", offset.coerceAtLeast(0))
+                    },
+                    requireAuth = false,
+                )
+                supabase.decode<List<SocialProfileItemDto>>(raw)
+            }
+        }
+
+    suspend fun updatePrivacyPrefs(uid: String, privacy: PrivacyPrefs): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                platformApi.updatePrivacyPrefs(uid, privacy)
             }
         }
 }

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
@@ -456,6 +458,9 @@ fun BsdcAppShell(
                     activeDetailPost = post
                     activeDetailSlug = post.slug.ifBlank { post.id }
                 },
+                onOpenProfile = { target ->
+                    activeProfileTarget = target
+                },
                 onProfileUpdated = {
                     scope.launch { container.authRepository.refreshSessionAndProfile() }
                 },
@@ -528,6 +533,18 @@ fun BsdcAppShell(
                 },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
                 onBack = { showSettingsScreen = false },
+                privacyPrefs = authState.profile?.privacy,
+                onUpdatePrivacy = if (authState.session?.uid != null) {
+                    { nextPrivacy ->
+                        val uid = authState.session?.uid ?: return@SystemDiagnosticsAndSettingsScreen
+                        scope.launch {
+                            container.discoverRepository.updatePrivacyPrefs(uid, nextPrivacy)
+                                .onSuccess { container.authRepository.refreshSessionAndProfile() }
+                        }
+                    }
+                } else {
+                    null
+                },
             )
             return
         }
@@ -668,7 +685,9 @@ fun BsdcAppShell(
         Row(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding),
+                .padding(innerPadding)
+                .consumeWindowInsets(innerPadding)
+                .imePadding(),
         ) {
             if (useRail) {
                 NavigationRail(

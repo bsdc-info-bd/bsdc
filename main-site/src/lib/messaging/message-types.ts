@@ -24,6 +24,15 @@ export interface MessageAuthor {
   avatarUrl: string;
 }
 
+export interface ChatMemberCandidate {
+  uid: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string;
+  location: string;
+  verified: boolean;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
