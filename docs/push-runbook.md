@@ -215,6 +215,10 @@ There are two schedulers, and the Worker is the one that carries the words.
 
 ### 5.1 Deploy the Worker
 
+`deploy.yml` deploys `push-worker/` (`bsdc-push`) and syncs its runtime secrets
+automatically on pushes to **any branch** (no merge to `main` required) and on
+non-preview manual `workflow_dispatch` runs. For manual local deploys:
+
 ```bash
 cd push-worker
 npm ci

@@ -146,9 +146,23 @@ export function pushWorkerBindings(source = process.env) {
   if (rawServiceAccount !== '') {
     const fb = bindingsFromCredential(
       rawServiceAccount,
-      firstNonEmpty(source.VITE_FB_PROJECT_ID, 'bsdc-bd'),
+      firstNonEmpty(source.VITE_FB_PROJECT_ID, source.FB_PROJECT_ID, 'bsdc-bd'),
     );
     Object.assign(out, fb);
+  } else {
+    const projectId = firstNonEmpty(source.FB_PROJECT_ID, source.VITE_FB_PROJECT_ID);
+    const clientEmail = firstNonEmpty(source.FB_CLIENT_EMAIL);
+    const rawPrivateKey = typeof source.FB_PRIVATE_KEY === 'string' ? source.FB_PRIVATE_KEY : '';
+    const privateKey = rawPrivateKey.trim() !== '' ? rawPrivateKey.replace(/\\n/g, '\n') : '';
+    if (projectId !== '' && clientEmail !== '' && privateKey !== '') {
+      const normalized = JSON.stringify({
+        type: 'service_account',
+        project_id: projectId,
+        client_email: clientEmail,
+        private_key: privateKey,
+      });
+      Object.assign(out, bindingsFromCredential(normalized, projectId));
+    }
   }
   return out;
 }
@@ -243,7 +257,23 @@ if (process.argv.includes('--self-test')) {
       FB_PRIVATE_KEY: fixture.private_key,
     },
   );
-  console.log('19 Firebase and runtime binding checks passed. No credentials printed.');
+  assert.deepEqual(
+    pushWorkerBindings({
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'anon-key',
+      FB_PROJECT_ID: fixture.project_id,
+      FB_CLIENT_EMAIL: fixture.client_email,
+      FB_PRIVATE_KEY: fixture.private_key,
+    }),
+    {
+      SUPABASE_URL: 'https://example.supabase.co',
+      SUPABASE_ANON_KEY: 'anon-key',
+      FB_PROJECT_ID: fixture.project_id,
+      FB_CLIENT_EMAIL: fixture.client_email,
+      FB_PRIVATE_KEY: fixture.private_key,
+    },
+  );
+  console.log('20 Firebase and runtime binding checks passed. No credentials printed.');
 } else if (process.argv.includes('--push-worker')) {
   try {
     const output = process.argv.slice(2).find((arg) => !arg.startsWith('--'));

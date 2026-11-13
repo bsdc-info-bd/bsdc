@@ -9,22 +9,22 @@ name: Deploy
 # is uploaded that was not built in the same job from the same commit.
 #
 # Pull requests get a preview deployment with its URL written into the run
-# summary. Pushes to `main` or `arena/3b09a022-bsdc` (and manual production
-# dispatches) publish straight to production — including server-only Cloudflare
-# Pages runtime secrets and `push-worker` (`bsdc-push`).
+# summary. Pushes to any branch (and non-preview manual dispatches) publish
+# straight to production — including server-only Cloudflare Pages runtime
+# secrets and `push-worker` (`bsdc-push`), so no merge to `main` is required.
 
 on:
   push:
-    branches: [main, arena/3b09a022-bsdc]
+    branches: ['**']
   pull_request:
   workflow_dispatch:
     inputs:
       app:
-        description: 'Deploy a single application (blank deploys all of them)'
+        description: 'Deploy a single application (blank deploys all of them, or push-worker)'
         type: string
         default: ''
       target:
-        description: 'Target environment (auto selects production on main and arena/3b09a022-bsdc)'
+        description: 'Target environment (auto deploys production on pushes and manual runs; preview deploys previews)'
         type: choice
         options: [auto, production, preview]
         default: auto
@@ -41,7 +41,7 @@ jobs:
   deploy:
     name: ${{ matrix.app }}
     runs-on: ubuntu-latest
-    environment: ${{ (github.event_name != 'pull_request' && ((github.event_name == 'workflow_dispatch' && inputs.target == 'production') || ((github.event_name != 'workflow_dispatch' || inputs.target == 'auto') && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc')))) && 'production' || 'preview' }}
+    environment: ${{ (github.event_name != 'pull_request' && inputs.target != 'preview') && 'production' || 'preview' }}
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -87,16 +87,8 @@ jobs:
         if: steps.scope.outputs.run == 'true'
         run: |
           IS_PROD="false"
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-              if [ "${{ inputs.target }}" = "production" ]; then
-                IS_PROD="true"
-              elif [ "${{ inputs.target }}" = "auto" ] && { [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; }; then
-                IS_PROD="true"
-              fi
-            elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; then
-              IS_PROD="true"
-            fi
+          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ inputs.target }}" != "preview" ]; then
+            IS_PROD="true"
           fi
           echo "is_prod=$IS_PROD" >> "$GITHUB_OUTPUT"
           if [ "$IS_PROD" = "true" ]; then
@@ -221,6 +213,9 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_SECOND }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
           VITE_FB2_PROJECT_ID: ${{ secrets.VITE_FB2_PROJECT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           IMGBB_API_KEY: ${{ secrets.IMGBB_API_KEY }}
@@ -251,8 +246,8 @@ jobs:
       # omitted `main-site/functions`, leaving /api/auth/claims unavailable.
       #
       # Running from each package root uploads main-site/functions alongside
-      # main-site/dist. Production pushes deploy with --branch=main so live
-      # production reflects main or arena/3b09a022-bsdc without needing merge.
+      # main-site/dist. Production pushes from any branch deploy with
+      # --branch=main so live production reflects that branch without merging.
       - name: Deploy to Cloudflare Pages
         if: steps.scope.outputs.run == 'true'
         id: pages
@@ -360,18 +355,13 @@ jobs:
   # be encrypted per subscription before it leaves — which a request-triggered
   # function cannot do for a device whose browser is closed.
   #
-  # Runs directly on production pushes from `main` or `arena/3b09a022-bsdc`,
-  # as well as manual production dispatches.
+  # Runs directly on pushes from any branch (no merge to `main` needed)
+  # as well as non-preview manual dispatches.
   # ---------------------------------------------------------------------------
   push-worker:
     name: Push worker → bsdc-push
     runs-on: ubuntu-latest
-    if: |
-      github.event_name != 'pull_request' && (
-        (github.event_name == 'workflow_dispatch' && (inputs.target == 'production' || (inputs.target == 'auto' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc'))))
-        || github.ref == 'refs/heads/main'
-        || github.ref == 'refs/heads/arena/3b09a022-bsdc'
-      )
+    if: github.event_name != 'pull_request' && inputs.target != 'preview'
     environment:
       name: production
     defaults:
@@ -395,17 +385,17 @@ jobs:
             else
               echo "run=false" >> "$GITHUB_OUTPUT"
             fi
-          elif [ "${{ github.ref }}" = "refs/heads/arena/3b09a022-bsdc" ]; then
-            # Always keep bsdc-push synchronized when deploying directly from the delivery branch.
+          elif [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            # Always keep bsdc-push synchronized when pushing from any working/feature branch.
             echo "run=true" >> "$GITHUB_OUTPUT"
           elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ] && git cat-file -e "${{ github.event.before }}^{commit}" 2>/dev/null; then
-            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml; then
+            if git diff --quiet "${{ github.event.before }}" HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs; then
               echo "run=false" >> "$GITHUB_OUTPUT"
               echo "The push worker did not change in this push."
             else
               echo "run=true" >> "$GITHUB_OUTPUT"
             fi
-          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml; then
+          elif git rev-parse --verify HEAD~1 >/dev/null 2>&1 && git diff --quiet HEAD~1 HEAD -- ../push-worker ../.github/workflows/deploy.yml ../scripts/prepare-firebase-bindings.mjs; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The push worker did not change in this push."
           else
@@ -429,7 +419,13 @@ jobs:
         working-directory: .
         env:
           FIREBASE_SERVICE_ACCOUNT_BSDC_BD: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BSDC_BD }}
+          FB_PROJECT_ID: ${{ secrets.FB_PROJECT_ID }}
+          FB_CLIENT_EMAIL: ${{ secrets.FB_CLIENT_EMAIL }}
+          FB_PRIVATE_KEY: ${{ secrets.FB_PRIVATE_KEY }}
           VITE_FB_PROJECT_ID: ${{ secrets.VITE_FB_PROJECT_ID }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
           PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
@@ -440,6 +436,7 @@ jobs:
         run: node scripts/prepare-firebase-bindings.mjs --push-worker "$RUNNER_TEMP/bsdc-push-bindings.json"
 
       - name: Deploy
+        id: deploy_step
         if: steps.changed.outputs.run == 'true'
         shell: bash
         env:
@@ -450,6 +447,7 @@ jobs:
           set -euo pipefail
           TOKEN="${CLOUDFLARE_WORKERS_API_TOKEN:-$CLOUDFLARE_API_TOKEN}"
           if [ -z "$TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Push worker skipped::CLOUDFLARE_API_TOKEN or CLOUDFLARE_ACCOUNT_ID is not configured; main-site /api/push/flush remains active."
             echo "- push-worker → skipped (Cloudflare credentials not set)" >> "$GITHUB_STEP_SUMMARY"
             exit 0
@@ -460,6 +458,7 @@ jobs:
             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts" || echo "000")
 
           if [ "$HTTP_CODE" = "401" ] || [ "$HTTP_CODE" = "403" ]; then
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Push worker skipped (Workers permission missing)::The configured Cloudflare API token only has Cloudflare Pages access (HTTP $HTTP_CODE on Workers API). Add 'Account -> Workers Scripts -> Edit' to CLOUDFLARE_API_TOKEN (or set CLOUDFLARE_WORKERS_API_TOKEN) to deploy bsdc-push; main-site /api/push/flush continues handling push wake-ups."
             {
               echo "### push-worker → bsdc-push (skipped)"
@@ -480,8 +479,10 @@ jobs:
           if [ "$STATUS" -eq 0 ]; then
             if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
               CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json"
+              sleep 3
             fi
-            echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
+            echo "- push-worker → bsdc-push (cron every minute, branch ${{ github.ref_name }})" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
@@ -504,13 +505,16 @@ jobs:
             rm -f /tmp/cf-worker-sched.json
             if [ -s "$RUNNER_TEMP/bsdc-push-bindings.json" ] && [ "$(cat "$RUNNER_TEMP/bsdc-push-bindings.json")" != "{}" ]; then
               CLOUDFLARE_API_TOKEN="$TOKEN" ./node_modules/.bin/wrangler secret bulk "$RUNNER_TEMP/bsdc-push-bindings.json"
+              sleep 3
             fi
+            echo "deployed=true" >> "$GITHUB_OUTPUT"
             echo "Uploaded bsdc-push via Workers Script API (HTTP $PUT_CODE, schedule HTTP $SCHED_CODE)."
-            echo "- push-worker → bsdc-push (cron every minute)" >> "$GITHUB_STEP_SUMMARY"
+            echo "- push-worker → bsdc-push (cron every minute, branch ${{ github.ref_name }})" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           if [ "$PUT_CODE" = "401" ] || [ "$PUT_CODE" = "403" ] || grep -qiE "No access to the specified resource|Authentication error" /tmp/cf-worker-put.json 2>/dev/null; then
+            echo "deployed=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Push worker skipped (Workers Scripts Edit permission missing)::The configured Cloudflare API token lacks 'Account -> Workers Scripts -> Edit' write access (HTTP $PUT_CODE). Grant 'Account -> Workers Scripts -> Edit' to CLOUDFLARE_API_TOKEN (or set CLOUDFLARE_WORKERS_API_TOKEN) to deploy bsdc-push; main-site /api/push/run local fallback continues serving push wake-ups."
             {
               echo "### push-worker → bsdc-push (skipped)"
@@ -529,19 +533,47 @@ jobs:
 
       - name: Verify push-worker health
         if: steps.changed.outputs.run == 'true'
+        env:
+          DEPLOYED: ${{ steps.deploy_step.outputs.deployed }}
+          PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
         run: |
           set -euo pipefail
           HEALTH_URL="${PUSH_WORKER_HEALTH_URL:-https://push.api.bsdc.info.bd/health}"
-          if curl --fail --silent --show-error --retry 3 --retry-all-errors --max-time 15 "$HEALTH_URL" -o /tmp/push-health.json; then
+          RUN_URL="${HEALTH_URL%/health}/run?limit=1"
+          if curl --fail --silent --show-error --retry 4 --retry-all-errors --max-time 15 "$HEALTH_URL" -o /tmp/push-health.json; then
             node -e '
               const fs = require("node:fs");
               const h = JSON.parse(fs.readFileSync("/tmp/push-health.json", "utf8"));
               console.log("bsdc-push /health:", JSON.stringify(h));
-              if (h.status !== "ok") process.exit(1);
+              if (h.fcm !== true) console.warn("::warning title=bsdc-push FCM unconfigured::bsdc-push /health reports fcm=false; check FIREBASE_SERVICE_ACCOUNT_BSDC_BD.");
+              if (h.vapid !== true) console.warn("::warning title=bsdc-push VAPID unconfigured::bsdc-push /health reports vapid=false; check PUSH_VAPID_* secrets.");
+              if (h.status !== "ok" || h.secret !== true || h.database !== true) {
+                const msg = "bsdc-push /health failed required checks (status=" + h.status + ", secret=" + h.secret + ", database=" + h.database + ").";
+                if (process.env.DEPLOYED === "true") {
+                  console.error("::error::" + msg);
+                  process.exit(1);
+                }
+                console.warn("::warning title=bsdc-push unconfigured::" + msg);
+              }
             '
             rm -f /tmp/push-health.json
+            if [ "${#PUSH_FLUSH_SECRET}" -ge 32 ]; then
+              RUN_CODE=$(curl -sS -o /tmp/push-run-smoke.json -w "%{http_code}" \
+                -X POST -H "authorization: Bearer $PUSH_FLUSH_SECRET" \
+                --max-time 20 "$RUN_URL" || echo "000")
+              echo "bsdc-push /run?limit=1 HTTP $RUN_CODE: $(cat /tmp/push-run-smoke.json 2>/dev/null || true)"
+              rm -f /tmp/push-run-smoke.json
+              if [ "$RUN_CODE" = "403" ]; then
+                echo "::warning title=bsdc-push flush secret mismatch::POST /run returned 403; ensure Database sync and bsdc-push PUSH_FLUSH_SECRET match."
+              elif [ "$RUN_CODE" != "200" ]; then
+                echo "::warning title=bsdc-push /run smoke returned HTTP $RUN_CODE::Verify Supabase push_pending_devices / fcm_pending_devices RPC availability."
+              fi
+            fi
+          elif [ "$DEPLOYED" = "true" ]; then
+            echo "::error::Could not verify $HEALTH_URL after deploying bsdc-push."
+            exit 1
           else
-            echo "::warning title=push-worker health probe unreachable::Could not verify $HEALTH_URL (if worker deploy was skipped due to token scopes, Pages fallback remains active)."
+            echo "::warning title=push-worker health probe unreachable::Could not verify $HEALTH_URL (deploy skipped due to token scopes; Pages fallback remains active)."
           fi
 
       - name: Remove temporary push-worker bindings

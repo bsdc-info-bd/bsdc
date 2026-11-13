@@ -264,6 +264,22 @@ describe('the push engine', () => {
     expect(text).not.toContain('a'.repeat(48));
     expect(text).not.toContain('PUSH_VAPID');
   });
+
+  it('reports health as unconfigured rather than throwing when bindings are absent', async () => {
+    const response = await worker.fetch(
+      new Request('https://push.test/health'),
+      {} as Parameters<typeof worker.fetch>[1],
+    );
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      worker: 'bsdc-push',
+      status: 'unconfigured',
+      vapid: false,
+      fcm: false,
+      secret: false,
+      database: false,
+    });
+  });
 });
 
 describe('the cron', () => {

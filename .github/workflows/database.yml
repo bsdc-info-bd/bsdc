@@ -5,9 +5,9 @@ name: Database
 #   verify  — builds the whole schema from nothing on a throwaway Postgres,
 #             then applies it a second time, then asserts the invariants the
 #             platform depends on. Runs on every pull request and every push.
-#   deploy  — applies the missing migrations to the real project. Runs only
-#             on main, only after verify has passed, only one at a time, and
-#             only with a connection string nobody can read out of a log.
+#   deploy  — applies the missing migrations and push settings to the real
+#             project. Runs after verify on pushes from any branch (no merge
+#             to main required) and manual production dispatches.
 #
 # A migration that has not been proved against an empty database has not been
 # proved at all: the file that works on your machine is working against six
@@ -15,7 +15,7 @@ name: Database
 
 on:
   push:
-    branches: [main, 'arena/**']
+    branches: ['**']
     paths:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
@@ -293,7 +293,7 @@ jobs:
     needs: verify
     if: |
       (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
-      || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/arena/3b09a022-bsdc'))
+      || github.event_name == 'push'
     runs-on: ubuntu-latest
     environment:
       name: production

@@ -567,7 +567,9 @@ export default {
           vapid: keys !== null,
           fcm: fcm !== null,
           secret: (env.PUSH_FLUSH_SECRET ?? '').trim().length >= 32,
-          database: env.SUPABASE_URL.trim().length > 0 && env.SUPABASE_ANON_KEY.trim().length > 0,
+          database:
+            (env.SUPABASE_URL ?? '').trim().length > 0 &&
+            (env.SUPABASE_ANON_KEY ?? '').trim().length > 0,
           time: new Date().toISOString(),
         },
         200,
