@@ -632,7 +632,8 @@ jobs:
                 }
                 console.log("bsdc-push POST /run?limit=1 HTTP " + runStatus + ": " + runSummary);
                 if (runStatus !== 200) {
-                  const msg = "bsdc-push POST /run?limit=1 returned HTTP " + runStatus + ".";
+                  const safeBody = String(runSummary || "").replace(/[\r\n]+/g, " ").trim().slice(0, 220);
+                  const msg = "bsdc-push POST /run?limit=1 returned HTTP " + runStatus + (safeBody ? ": " + safeBody : ".");
                   if (deployed) {
                     console.error("::error::" + msg);
                     process.exit(1);

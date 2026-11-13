@@ -334,8 +334,94 @@ async function runSelfTests() {
     ]),
     'psql failed for <redacted> with <redacted>',
   );
+  const candidates = buildSupabaseCandidates(
+    {
+      VITE_SUPABASE_URL: 'https://vite.supabase.co/',
+      VITE_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_1',
+      SUPABASE_URL: 'https://env.supabase.co',
+      SUPABASE_ANON_KEY: 'eyJ_anon',
+    },
+    {},
+  );
+  assert.deepEqual(
+    candidates.map((c) => c.label),
+    ['vite', 'supabase-env', 'vite-url-anon'],
+  );
+  assert.equal(candidates[0].url, 'https://vite.supabase.co');
 
-  console.log('13 push secret sync checks passed. No credentials printed.');
+  console.log('14 push secret sync checks passed. No credentials printed.');
+}
+
+export function buildSupabaseCandidates(env, existing = {}) {
+  const rawList = [
+    {
+      label: 'vite',
+      url: firstNonEmpty(env.VITE_SUPABASE_URL),
+      key: firstNonEmpty(env.VITE_SUPABASE_PUBLISHABLE_KEY),
+    },
+    {
+      label: 'supabase-env',
+      url: firstNonEmpty(env.SUPABASE_URL),
+      key: firstNonEmpty(
+        env.SUPABASE_ANON_KEY,
+        env.SUPABASE_PUBLISHABLE_KEY,
+        env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      ),
+    },
+    {
+      label: 'vite-url-anon',
+      url: firstNonEmpty(env.VITE_SUPABASE_URL),
+      key: firstNonEmpty(env.SUPABASE_ANON_KEY, env.SUPABASE_PUBLISHABLE_KEY),
+    },
+    {
+      label: 'existing',
+      url: firstNonEmpty(existing.SUPABASE_URL),
+      key: firstNonEmpty(existing.SUPABASE_ANON_KEY),
+    },
+  ];
+  const seen = new Set();
+  const out = [];
+  for (const item of rawList) {
+    const url = item.url.replace(/\/+$/, '');
+    const key = item.key;
+    if (!url.startsWith('https://') || key === '') continue;
+    const dedupe = `${url}\0${key}`;
+    if (seen.has(dedupe)) continue;
+    seen.add(dedupe);
+    out.push({ label: item.label, url, key });
+  }
+  return out;
+}
+
+async function resolveWorkingSupabaseBinding(env, existing, flushSecret) {
+  const candidates = buildSupabaseCandidates(env, existing);
+  if (candidates.length === 0 || !flushSecret) return null;
+  for (const candidate of candidates) {
+    const headers = {
+      apikey: candidate.key,
+      'content-type': 'application/json',
+    };
+    if (!candidate.key.startsWith('sb_')) {
+      headers.authorization = `Bearer ${candidate.key}`;
+    }
+    try {
+      const response = await fetch(`${candidate.url}/rest/v1/rpc/push_pending_devices`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ p_secret: flushSecret, p_limit: 1 }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      console.log(
+        `Supabase RPC preflight (source=${candidate.label}, status=${response.status}).`,
+      );
+      if (response.ok) {
+        return { url: candidate.url, key: candidate.key, label: candidate.label };
+      }
+    } catch {
+      console.log(`Supabase RPC preflight (source=${candidate.label}, status=network-error).`);
+    }
+  }
+  return null;
 }
 
 function readFlagValue(args, name) {
@@ -419,6 +505,15 @@ async function main() {
       existing = {};
     }
     const merged = mergePushSecretsIntoBindings(existing, resolved, target);
+    const verifiedSupabase = await resolveWorkingSupabaseBinding(
+      process.env,
+      merged,
+      merged.PUSH_FLUSH_SECRET ?? '',
+    );
+    if (verifiedSupabase) {
+      merged.SUPABASE_URL = verifiedSupabase.url;
+      merged.SUPABASE_ANON_KEY = verifiedSupabase.key;
+    }
     writeFileSync(bindingsPath, JSON.stringify(merged), { mode: 0o600 });
     chmodSync(bindingsPath, 0o600);
   }
