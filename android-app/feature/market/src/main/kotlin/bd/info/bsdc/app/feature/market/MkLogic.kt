@@ -77,6 +77,28 @@ object MkLogic {
     /** Cancelling is allowed only before the vendor has handed the order to a rider. */
     fun canCustomerCancel(status: String): Boolean = status == "placed" || status == "accepted"
 
+    /** Shop categories, same keys as the database and the web (mk-logic.ts SHOP_TYPES). */
+    val SHOP_TYPES: List<String> = listOf(
+        "grocery", "restaurant", "bakery", "pharmacy", "electronics", "fashion", "beauty",
+        "stationery", "home_kitchen", "books", "handicraft", "other",
+    )
+
+    fun shopTypeLabel(type: String, bn: Boolean): String {
+        val en = mapOf(
+            "grocery" to "Grocery", "restaurant" to "Restaurant & food", "bakery" to "Bakery & sweets",
+            "pharmacy" to "Pharmacy", "electronics" to "Electronics", "fashion" to "Fashion",
+            "beauty" to "Beauty", "stationery" to "Stationery", "home_kitchen" to "Home & kitchen",
+            "books" to "Books", "handicraft" to "Handicraft", "other" to "Other",
+        )
+        val bnLabels = mapOf(
+            "grocery" to "মুদি", "restaurant" to "রেস্তোরাঁ ও খাবার", "bakery" to "বেকারি ও মিষ্টি",
+            "pharmacy" to "ফার্মেসি", "electronics" to "ইলেকট্রনিক্স", "fashion" to "ফ্যাশন",
+            "beauty" to "বিউটি", "stationery" to "স্টেশনারি", "home_kitchen" to "ঘর ও রান্নাঘর",
+            "books" to "বই", "handicraft" to "হস্তশিল্প", "other" to "অন্যান্য",
+        )
+        return if (bn) bnLabels[type] ?: type else en[type] ?: type
+    }
+
     /** Lakh grouping for a plain digit string, e.g. 1000000 becomes 10,00,000. */
     internal fun groupLakh(digits: String): String {
         if (digits.length <= 3) return digits

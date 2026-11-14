@@ -241,3 +241,14 @@ data class MkListedShopDto(
     val rating: Double = 0.0,
     val review_count: Int = 0,
 )
+
+/** One Nominatim search hit. Nominatim returns coordinates as strings. */
+@Serializable
+data class MkPlaceDto(
+    val display_name: String = "",
+    val lat: String = "",
+    val lon: String = "",
+) {
+    val latitude: Double? get() = lat.toDoubleOrNull()
+    val longitude: Double? get() = lon.toDoubleOrNull()
+}

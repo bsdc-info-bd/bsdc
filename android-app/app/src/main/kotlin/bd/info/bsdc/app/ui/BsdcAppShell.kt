@@ -98,6 +98,7 @@ import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.MarketHubScreen
 import bd.info.bsdc.app.feature.market.MarketSection
+import bd.info.bsdc.app.feature.market.MkMarketScreen
 import bd.info.bsdc.app.feature.messenger.LiveChannelStatus
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
@@ -153,6 +154,7 @@ fun BsdcAppShell(
     var showNotificationsScreen by rememberSaveable { mutableStateOf(false) }
     var showSettingsScreen by rememberSaveable { mutableStateOf(false) }
     var showMarketScreen by rememberSaveable { mutableStateOf(false) }
+    var showMarketAds by rememberSaveable { mutableStateOf(false) }
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
@@ -482,16 +484,37 @@ fun BsdcAppShell(
             return
         }
         showMarketScreen -> {
-            MarketHubScreen(
-                repository = container.marketRepository,
-                imageLoader = container.imageLoader,
-                viewerUid = authState.session?.uid,
-                language = language,
-                initialSection = marketSection,
-                onBack = { showMarketScreen = false },
-                onSignInRequired = { showAuthModal = true },
-                onOpenExternal = { url -> openInCustomTab(context, url) },
-            )
+            if (showMarketAds || marketSection == MarketSection.ADS) {
+                // Ads keep their existing hub until the ads dashboard is rebuilt.
+                MarketHubScreen(
+                    repository = container.marketRepository,
+                    imageLoader = container.imageLoader,
+                    viewerUid = authState.session?.uid,
+                    language = language,
+                    initialSection = MarketSection.ADS,
+                    onBack = {
+                        showMarketAds = false
+                        marketSection = MarketSection.SHOP
+                    },
+                    onSignInRequired = { showAuthModal = true },
+                    onOpenExternal = { url -> openInCustomTab(context, url) },
+                )
+            } else {
+                MkMarketScreen(
+                    repository = container.mkRepository,
+                    imageLoader = container.imageLoader,
+                    viewerUid = authState.session?.uid,
+                    language = language,
+                    onBack = {
+                        showMarketScreen = false
+                        showMarketAds = false
+                    },
+                    onSignInRequired = { showAuthModal = true },
+                    onOpenExternal = { url -> openInCustomTab(context, url) },
+                    onOpenAds = { showMarketAds = true },
+                    initialSection = marketSection,
+                )
+            }
             return
         }
         showSettingsScreen -> {

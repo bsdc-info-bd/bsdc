@@ -1,9 +1,17 @@
 package bd.info.bsdc.app.feature.market
 
+import bd.info.bsdc.app.core.network.BsdcHttpClientFactory
 import bd.info.bsdc.app.core.network.SupabaseRestClient
+import io.ktor.client.HttpClient
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import java.net.URLEncoder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -18,6 +26,8 @@ import kotlinx.serialization.json.put
 class MkRepository(
     private val supabase: SupabaseRestClient,
 ) {
+
+    private val geocoder: HttpClient by lazy { BsdcHttpClientFactory.createKtorClient() }
 
     suspend fun fetchPaymentInstructions(): Result<MkPaymentInstructionsDto> = call {
         supabase.decode<MkPaymentInstructionsDto>(rpc("mk_payment_instructions", buildJsonObject { }))
@@ -62,10 +72,10 @@ class MkRepository(
         val raw = rpc(
             "mk_list_vendors",
             buildJsonObject {
-                put("p_type", type.orNullString())
+                put("p_type", type.orNullString() ?: JsonNull)
                 put("p_query", query)
-                put("p_lat", origin?.first.orNullNumber())
-                put("p_lng", origin?.second.orNullNumber())
+                put("p_lat", origin?.first.orNullNumber() ?: JsonNull)
+                put("p_lng", origin?.second.orNullNumber() ?: JsonNull)
                 put("p_limit", limit)
             },
             requireAuth = false,
@@ -173,6 +183,27 @@ class MkRepository(
         Unit
     }
 
+    /** Resolves a vendor slug to its id for mk_place_order. Null when the shop is closed or out of credits. */
+    suspend fun fetchVendorRef(slug: String): Result<String?> = call {
+        supabase.decode<String?>(rpc("mk_vendor_ref", buildJsonObject { put("p_slug", slug) }, requireAuth = false))
+    }
+
+    /**
+     * OpenStreetMap place search (Nominatim), limited to Bangladesh, for the address pin.
+     * Callers debounce input: Nominatim's usage policy allows about one request per second.
+     */
+    suspend fun searchPlaces(query: String): Result<List<MkPlaceDto>> = call {
+        val q = query.trim()
+        if (q.length < 3) return@call emptyList()
+        val url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=bd&q=" +
+            URLEncoder.encode(q, "UTF-8")
+        val body = geocoder.get(url) {
+            header(HttpHeaders.UserAgent, "BSDC-Android/1.0 (bsdc.info.bd)")
+            header(HttpHeaders.Accept, "application/json")
+        }.bodyAsText()
+        BsdcHttpClientFactory.sharedJson.decodeFromString<List<MkPlaceDto>>(body)
+    }
+
     private suspend fun rpc(
         name: String,
         params: JsonObject,
@@ -184,7 +215,7 @@ class MkRepository(
             runCatching { block() }
         }
 
-    private fun String?.orNullString(): JsonPrimitive? = this?.takeIf { it.isNotBlank() }?.let { JsonPrimitive(it) }
+    private fun String?.orNullString(): JsonElement? = this?.takeIf { it.isNotBlank() }?.let { JsonPrimitive(it) }
 
-    private fun Double?.orNullNumber(): JsonPrimitive? = this?.let { JsonPrimitive(it) }
+    private fun Double?.orNullNumber(): JsonElement? = this?.let { JsonPrimitive(it) }
 }
