@@ -11,9 +11,9 @@ import {
   Card,
   EmptyState,
   LinkButton,
+  ListHero,
   Modal,
   PageSkeleton,
-  SectionHeading,
   TextareaField,
   TextField,
 } from '@/design-system';
@@ -86,13 +86,14 @@ export default function FreelancePage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading
+        <ListHero
           title={t('freelance.title')}
           description={t('freelance.description')}
-          action={
+          icon={<HandCoins size={22} />}
+          actions={
             <LinkButton
               to={`${ROUTES.create}?kind=gig`}
-              variant="outline"
+              variant="secondary"
               size="sm"
               iconStart={<HandCoins size={14} />}
             >

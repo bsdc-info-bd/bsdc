@@ -13,9 +13,9 @@ import {
   Chip,
   EmptyState,
   LinkButton,
+  ListHero,
   Modal,
   PageSkeleton,
-  SectionHeading,
   SelectField,
   TextareaField,
   TextField,
@@ -81,22 +81,29 @@ export default function JobsPage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading
+        <ListHero
           title={t('jobs.title')}
           description={t('jobs.description')}
-          action={
+          icon={<Briefcase size={22} />}
+          actions={
             <LinkButton
               to={`${ROUTES.create}?kind=job`}
-              variant="outline"
+              variant="secondary"
               size="sm"
               iconStart={<Briefcase size={14} />}
             >
               {t('create.submit.job')}
             </LinkButton>
           }
+          footer={
+            <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-200" />
+              {t('jobs.openCount', { total: formatNumber(board.jobs.length, language) })}
+            </p>
+          }
         />
 
-        <Card className="mt-4">
+        <Card className="mt-4 rounded-2xl p-3 sm:p-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <TextField
               label={t('jobs.search')}

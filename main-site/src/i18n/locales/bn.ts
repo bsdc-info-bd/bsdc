@@ -1543,6 +1543,7 @@ export const bn: Translation = {
       withdrawn: 'প্রত্যাহার',
     },
     applicantCount: '{{total}} জন আবেদনকারী',
+    openCount: '{{total}} টি খোলা পদ',
     apply: 'আবেদন করুন',
     applyTo: '{{title}} পদে আবেদন',
     coverLetter: 'কভার লেটার',

@@ -12,6 +12,7 @@ export { ExternalLink, type ExternalLinkProps } from './ExternalLink';
 export { IconButton, type IconButtonProps } from './IconButton';
 export { Kbd } from './Kbd';
 export { LinkButton, type LinkButtonProps } from './LinkButton';
+export { ListHero, type ListHeroProps } from './ListHero';
 export { LanguageToggle } from './LanguageToggle';
 export { Logo, type LogoProps } from './Logo';
 export { Modal, type ModalProps } from './Modal';

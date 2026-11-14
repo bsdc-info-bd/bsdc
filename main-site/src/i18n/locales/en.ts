@@ -1551,6 +1551,7 @@ export const en = {
       withdrawn: 'Withdrawn',
     },
     applicantCount: '{{total}} applicants',
+    openCount: '{{total}} open roles',
     apply: 'Apply',
     applyTo: 'Apply to {{title}}',
     coverLetter: 'Cover letter',

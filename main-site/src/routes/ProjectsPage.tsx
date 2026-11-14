@@ -12,8 +12,8 @@ import {
   EmptyState,
   ExternalLink,
   LinkButton,
+  ListHero,
   PageSkeleton,
-  SectionHeading,
   SelectField,
   Switch,
   TextField,
@@ -70,13 +70,14 @@ export default function ProjectsPage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading
+        <ListHero
           title={t('projects.title')}
           description={t('projects.description')}
-          action={
+          icon={<Rocket size={22} />}
+          actions={
             <LinkButton
               to={`${ROUTES.create}?kind=project`}
-              variant="outline"
+              variant="secondary"
               size="sm"
               iconStart={<Rocket size={14} />}
             >
