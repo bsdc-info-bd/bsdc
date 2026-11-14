@@ -146,6 +146,11 @@ data class ProjectDto(
 )
 
 @Serializable
+data class ProjectStarRowDto(
+    @SerialName("project_id") val projectId: String = "",
+)
+
+@Serializable
 data class CourseCatalogDto(
     val id: String,
     val slug: String,

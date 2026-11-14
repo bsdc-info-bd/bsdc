@@ -354,6 +354,39 @@ class DiscoverRepository(
         }
     }
 
+    /** One project by its slug, readable without signing in. Null when no such project exists. */
+    suspend fun fetchProject(slug: String): Result<ProjectDto?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.getJsonText(
+                table = "projects",
+                queryPairs = listOf(
+                    "slug" to "eq.${slug.trim()}",
+                    "limit" to "1",
+                ),
+                requireAuth = false,
+            )
+            supabase.decode<List<ProjectDto>>(raw).firstOrNull()
+        }
+    }
+
+    /** Whether this viewer has starred the project. Reads only the viewer's own star rows. */
+    suspend fun fetchViewerStarred(projectId: String, viewerUid: String): Result<Boolean> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "project_stars",
+                    queryPairs = listOf(
+                        "select" to "project_id",
+                        "project_id" to "eq.$projectId",
+                        "uid" to "eq.$viewerUid",
+                        "limit" to "1",
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<ProjectStarRowDto>>(raw).isNotEmpty()
+            }
+        }
+
     suspend fun toggleProjectStar(projectId: String): Result<Boolean> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.rpcText(

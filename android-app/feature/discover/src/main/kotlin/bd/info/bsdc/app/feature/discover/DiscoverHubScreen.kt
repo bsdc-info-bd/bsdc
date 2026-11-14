@@ -99,6 +99,7 @@ fun DiscoverHubScreen(
     onSignInRequired: () -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenProfile: (String) -> Unit,
+    onOpenProject: (String) -> Unit = {},
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
     onOpenMarketplace: () -> Unit = {},
@@ -800,13 +801,29 @@ fun DiscoverHubScreen(
                 }
                 items(projects, key = { it.id }) { proj ->
                     BsdcCard {
+                        if (proj.coverUrl.isNotBlank()) {
+                            BsdcImgbbImage(
+                                fullUrl = proj.coverUrl,
+                                thumbUrl = proj.coverUrl,
+                                contentDescription = proj.name,
+                                imageLoader = imageLoader,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onOpenProject(proj.slug) },
+                            )
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = proj.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = proj.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.clickable { onOpenProject(proj.slug) },
+                                )
                                 if (proj.tagline.isNotBlank()) {
                                     Text(text = proj.tagline, style = MaterialTheme.typography.bodySmall)
                                 }

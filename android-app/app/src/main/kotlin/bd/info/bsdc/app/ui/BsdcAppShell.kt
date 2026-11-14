@@ -94,6 +94,7 @@ import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.discover.DiscoverHubScreen
 import bd.info.bsdc.app.feature.discover.DiscoverSection
 import bd.info.bsdc.app.feature.discover.MemberProfileScreen
+import bd.info.bsdc.app.feature.discover.ProjectDetailScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.AdsDashboardScreen
@@ -157,6 +158,7 @@ fun BsdcAppShell(
     var showMarketAds by rememberSaveable { mutableStateOf(false) }
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeProjectSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
     var marketSection by rememberSaveable { mutableStateOf(MarketSection.SHOP) }
     var pendingMessengerTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -436,6 +438,19 @@ fun BsdcAppShell(
                     onRouteEvaluated(LinkDestination.NativeRoute(destPath))
                 },
                 liveRefreshNonce = notificationsLiveNonce,
+            )
+            return
+        }
+        activeProjectSlug != null -> {
+            ProjectDetailScreen(
+                slug = activeProjectSlug!!,
+                viewerUid = authState.session?.uid,
+                repository = container.discoverRepository,
+                imageLoader = container.imageLoader,
+                language = language,
+                onBack = { activeProjectSlug = null },
+                onSignInRequired = { showAuthModal = true },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
             )
             return
         }
@@ -832,6 +847,9 @@ fun BsdcAppShell(
                         },
                         onOpenProfile = { target ->
                             activeProfileTarget = target
+                        },
+                        onOpenProject = { slug ->
+                            activeProjectSlug = slug
                         },
                         onOpenVerifyCode = { code ->
                             localRouteNonce++
