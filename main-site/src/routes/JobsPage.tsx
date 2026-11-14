@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -197,7 +198,10 @@ export default function JobsPage() {
                             <Chip
                               selected={board.filters.skill === skill}
                               onClick={() => {
-                                board.setFilters({ ...board.filters, skill });
+                                board.setFilters({
+                                  ...board.filters,
+                                  skill: board.filters.skill === skill ? null : skill,
+                                });
                               }}
                             >
                               {skill}
@@ -222,6 +226,7 @@ export default function JobsPage() {
                   ) : (
                     <p className="text-xs text-muted">{t('jobs.signInToApply')}</p>
                   )}
+                  <ShareLinkButton title={job.title} url={`${SITE.url}${jobPath(job.slug)}`} />
                 </div>
               </Card>
             );

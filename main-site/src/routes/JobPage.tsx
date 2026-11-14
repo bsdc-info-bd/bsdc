@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -203,6 +204,7 @@ export default function JobPage() {
                     {t('jobs.detail.applyExternal')}
                   </ExternalLink>
                 ) : null}
+                <ShareLinkButton title={job.title} url={url} size="md" />
               </div>
             </div>
           </Card>

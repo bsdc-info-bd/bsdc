@@ -112,16 +112,26 @@ const HARNESSES = [
     't64.mjs',
     'fresh-messenger reset: clears all conversations, messages, drafts, reactions, receipts, pins, stars, send requests, messenger reports, and messenger notifications atomically',
   ],
-  ['t65.mjs',
+  [
+    't65.mjs',
     '0093: every real ad click is counted and billed, with per-identity double-tap, hourly, and daily spam guards',
   ],
-  ['t66.mjs',
+  [
+    't66.mjs',
     '0094: cash-on-delivery marketplace: vendor application, credits, listing, ordering, order lifecycle, reviews, and RLS',
   ],
-  ['t67.mjs',
-    '0101: self-service advertising: campaign builder, bKash payment reports, staff approval that credits the wallet, and money reserved once'],
-  ['t68.mjs',
-    '0102: the event calendar returns each event\'s own time zone, with its grants unchanged'],
+  [
+    't67.mjs',
+    '0101: self-service advertising: campaign builder, bKash payment reports, staff approval that credits the wallet, and money reserved once',
+  ],
+  [
+    't68.mjs',
+    "0102: the event calendar returns each event's own time zone, with its grants unchanged",
+  ],
+  [
+    't69.mjs',
+    '0103: listing skills are stored in one normalised form, so a skill filter finds jobs and gigs whatever case they were typed in',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

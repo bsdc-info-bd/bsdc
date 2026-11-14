@@ -1,3 +1,4 @@
+import { normaliseSkill } from './skills';
 import type {
   DbApplicationStatus,
   DbExperienceLevel,
@@ -177,11 +178,12 @@ export const EMPTY_JOB_FILTERS: JobFilters = {
  */
 export function filterJobs(jobs: readonly JobListing[], filters: JobFilters): JobListing[] {
   const query = filters.query.trim().toLowerCase();
+  const skill = filters.skill === null ? null : normaliseSkill(filters.skill);
 
   return jobs.filter((job) => {
     if (filters.level !== null && job.level !== filters.level) return false;
     if (filters.workMode !== null && job.workMode !== filters.workMode) return false;
-    if (filters.skill !== null && !job.skills.includes(filters.skill.toLowerCase())) return false;
+    if (skill !== null && !job.skills.includes(skill)) return false;
     if (query.length === 0) return true;
 
     return (

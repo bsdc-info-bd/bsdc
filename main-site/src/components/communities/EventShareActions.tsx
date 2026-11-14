@@ -2,6 +2,7 @@ import { CalendarPlus, Share2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button } from '@/design-system';
+import { shareLink } from '@/lib/share/share-link';
 import {
   buildEventIcs,
   icsFileName,
@@ -22,21 +23,9 @@ export function EventShareActions({ event, size = 'sm' }: EventShareActionsProps
   const { t } = useTranslation();
 
   async function share() {
-    if (typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ title: event.title, text: event.title, url: event.url });
-        return;
-      } catch (failure) {
-        // The reader closed the sheet: nothing to report. Any other failure falls back to copying.
-        if (failure instanceof DOMException && failure.name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(event.url);
-      toast.success(t('events.linkCopied'));
-    } catch {
-      toast.error(t('events.shareFailed'));
-    }
+    const outcome = await shareLink({ title: event.title, url: event.url });
+    if (outcome === 'copied') toast.success(t('events.linkCopied'));
+    if (outcome === 'failed') toast.error(t('events.shareFailed'));
   }
 
   function addToCalendar() {
