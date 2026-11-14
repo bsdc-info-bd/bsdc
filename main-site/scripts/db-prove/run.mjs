@@ -115,6 +115,9 @@ const HARNESSES = [
   ['t65.mjs',
     '0093: every real ad click is counted and billed, with per-identity double-tap, hourly, and daily spam guards',
   ],
+  ['t66.mjs',
+    '0094: cash-on-delivery marketplace: vendor application, credits, listing, ordering, order lifecycle, reviews, and RLS',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
