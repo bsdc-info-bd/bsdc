@@ -60,7 +60,7 @@ async function run(sql, uid) {
 const ok = (r) => r.error === null;
 const code = (r) => r.error?.code ?? '';
 
-const validCampaign = (over = {}) =>
+const validCampaign = () =>
   JSON.stringify({
     name: 'Eid sale 2026',
     pricing: 'cpc',

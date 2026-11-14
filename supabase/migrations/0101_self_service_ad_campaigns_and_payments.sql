@@ -47,6 +47,10 @@ create index if not exists ad_payment_requests_status_idx
 -- Read and written only through the functions below, never directly.
 alter table public.ad_payment_requests enable row level security;
 revoke all on public.ad_payment_requests from public, anon, authenticated;
+-- Reached only through the security-definer RPCs below, never directly (as 0099 does).
+drop policy if exists ad_payment_requests_deny_direct_access on public.ad_payment_requests;
+create policy ad_payment_requests_deny_direct_access on public.ad_payment_requests
+  for all to public using (false) with check (false);
 
 -- ---------------------------------------------------------------------------
 -- 2. Instructions shown to the advertiser

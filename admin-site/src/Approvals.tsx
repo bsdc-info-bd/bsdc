@@ -320,7 +320,9 @@ function AdPayments(): ReactElement {
         </Banner>
       ) : null}
       {state.status === 'ready' && state.data.length === 0 ? (
-        <Empty>No advertising payments are waiting. A payment appears here once an advertiser reports it.</Empty>
+        <Empty>
+          No advertising payments are waiting. A payment appears here once an advertiser reports it.
+        </Empty>
       ) : null}
       {state.status === 'ready' && state.data.length > 0 ? (
         <div className="kit-stack">
@@ -376,7 +378,9 @@ function AdPaymentRow({
           </div>
           <div className="kit-small kit-muted">Campaign {payment.campaign_id.slice(0, 8)}</div>
         </div>
-        <Badge tone={waitingTone(payment.created_at)}>waiting {waitingFor(payment.created_at)}</Badge>
+        <Badge tone={waitingTone(payment.created_at)}>
+          waiting {waitingFor(payment.created_at)}
+        </Badge>
       </div>
       <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
         <TextArea
@@ -385,7 +389,11 @@ function AdPaymentRow({
           onChange={(event) => setNote(event.target.value)}
           placeholder="For example: transaction not found on the statement."
         />
-        {error ? <Banner tone="bad" title="Not saved"><p className="kit-small">{error}</p></Banner> : null}
+        {error ? (
+          <Banner tone="bad" title="Not saved">
+            <p className="kit-small">{error}</p>
+          </Banner>
+        ) : null}
         <div className="kit-row" style={{ justifyContent: 'flex-end' }}>
           <Button variant="danger" size="small" disabled={busy} onClick={() => decide('reject')}>
             Refuse
