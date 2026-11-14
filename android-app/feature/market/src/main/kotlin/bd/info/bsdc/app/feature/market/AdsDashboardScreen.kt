@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
@@ -73,6 +75,7 @@ fun AdsDashboardScreen(
     var busyCampaignId by remember { mutableStateOf<String?>(null) }
     var actionError by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
 
     suspend fun reload() {
         repository.fetchWalletBalance()
@@ -103,6 +106,43 @@ fun AdsDashboardScreen(
             actionLabel = mkText(bn, "Sign in", "সাইন ইন"),
             onAction = onSignInRequired,
             modifier = modifier.fillMaxSize(),
+        )
+        return
+    }
+
+    val selected = campaigns.firstOrNull { it.id == selectedId }
+    if (selected != null) {
+        AdsCampaignDetail(
+            campaign = selected,
+            bn = bn,
+            busy = busyCampaignId == selected.id,
+            anyBusy = busyCampaignId != null,
+            onBack = { selectedId = null },
+            onTogglePause = {
+                val pause = selected.status == "active"
+                scope.launch {
+                    busyCampaignId = selected.id
+                    actionError = null
+                    notice = null
+                    repository.setCampaignPaused(selected.id, pause)
+                        .onSuccess {
+                            notice = if (pause) {
+                                mkText(bn, "Campaign paused.", "ক্যাম্পেইন বিরতিতে রাখা হয়েছে।")
+                            } else {
+                                mkText(bn, "Campaign is live again.", "ক্যাম্পেইন আবার চালু হয়েছে।")
+                            }
+                            reload()
+                        }
+                        .onFailure {
+                            actionError = mkText(
+                                bn,
+                                "Could not change this campaign. Try again.",
+                                "ক্যাম্পেইনটি বদলানো যায়নি। আবার চেষ্টা করুন।",
+                            )
+                        }
+                    busyCampaignId = null
+                }
+            },
         )
         return
     }
@@ -251,6 +291,7 @@ fun AdsDashboardScreen(
                 bn = bn,
                 busy = busyCampaignId == campaign.id,
                 anyBusy = busyCampaignId != null,
+                onOpen = { selectedId = campaign.id },
                 onTogglePause = {
                     val pause = campaign.status == "active"
                     scope.launch {
@@ -290,6 +331,7 @@ private fun CampaignCard(
     busy: Boolean,
     anyBusy: Boolean,
     onTogglePause: () -> Unit,
+    onOpen: () -> Unit,
 ) {
     val colors = BsdcThemeTokens.colors
     val canToggle = campaign.status == "active" || campaign.status == "paused"
@@ -299,7 +341,7 @@ private fun CampaignCard(
         0f
     }
 
-    BsdcCard(modifier = Modifier.fillMaxWidth()) {
+    BsdcCard(modifier = Modifier.fillMaxWidth(), onClick = onOpen) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -410,14 +452,254 @@ private fun statusTone(status: String): BsdcTone = when (status) {
 }
 
 /** Click-through rate as a percentage. Zero impressions reads as 0%, never a division error. */
-private fun clickRateLabel(clicks: Int, impressions: Int, bn: Boolean): String {
+internal fun clickRateLabel(clicks: Int, impressions: Int, bn: Boolean): String {
     if (impressions <= 0) return digits("0%", bn)
     val rate = clicks * 100.0 / impressions
     return digits("${"%.2f".format(rate)}%", bn)
 }
 
 /** Converts ASCII digits to Bangla digits when the Bangla interface is on. Other text is unchanged. */
-private fun digits(text: String, bn: Boolean): String {
+internal fun digits(text: String, bn: Boolean): String {
     if (!bn) return text
     return text.map { c -> if (c in '0'..'9') '০' + (c - '0') else c }.joinToString("")
+}
+
+/** Full view of one campaign: budget, schedule, pricing, daily cap, creatives and metrics. */
+@Composable
+private fun AdsCampaignDetail(
+    campaign: AdCampaignDto,
+    bn: Boolean,
+    busy: Boolean,
+    anyBusy: Boolean,
+    onBack: () -> Unit,
+    onTogglePause: () -> Unit,
+) {
+    val colors = BsdcThemeTokens.colors
+    val canToggle = campaign.status == "active" || campaign.status == "paused"
+    val remaining = (campaign.totalBudget - campaign.spent).coerceAtLeast(0L)
+    val fraction = if (campaign.totalBudget > 0) {
+        (campaign.spent.toFloat() / campaign.totalBudget.toFloat()).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val pricingLabel = when (campaign.pricing) {
+        "cpc" -> mkText(bn, "Per click", "প্রতি ক্লিকে")
+        else -> mkText(bn, "Per 1,000 views", "প্রতি ১,০০০ ভিউতে")
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBack,
+                        contentDescription = mkText(bn, "Back", "ফিরে যান"),
+                    )
+                }
+                Text(
+                    text = campaign.name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        item {
+            BsdcCard(modifier = Modifier.fillMaxWidth()) {
+                BsdcBadge(
+                    label = statusLabel(campaign.status, bn),
+                    tone = statusTone(campaign.status),
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = mkText(bn, "Budget left", "বাকি বাজেট"),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = colors.mutedText,
+                )
+                Text(
+                    text = MkLogic.formatTaka(remaining, bn),
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(colors.mutedText.copy(alpha = 0.2f)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(fraction)
+                            .height(8.dp)
+                            .background(colors.brandStrong),
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = mkText(
+                        bn,
+                        "${MkLogic.formatTaka(campaign.spent, bn)} of ${MkLogic.formatTaka(campaign.totalBudget, bn)} spent",
+                        "${MkLogic.formatTaka(campaign.spent, bn)} / ${MkLogic.formatTaka(campaign.totalBudget, bn)} খরচ হয়েছে",
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.mutedText,
+                )
+            }
+        }
+
+        item {
+            BsdcSectionHeader(title = mkText(bn, "Metrics", "পরিসংখ্যান"))
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BsdcMetricTile(
+                    label = mkText(bn, "Impressions", "ইমপ্রেশন"),
+                    value = digits(campaign.impressions.toString(), bn),
+                    icon = Icons.Rounded.Visibility,
+                    modifier = Modifier.weight(1f),
+                )
+                BsdcMetricTile(
+                    label = mkText(bn, "Clicks", "ক্লিক"),
+                    value = digits(campaign.clicks.toString(), bn),
+                    icon = Icons.Rounded.PlayArrow,
+                    tone = BsdcTone.INFO,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                BsdcMetricTile(
+                    label = mkText(bn, "CTR", "সিটিআর"),
+                    value = clickRateLabel(campaign.clicks, campaign.impressions, bn),
+                    icon = Icons.Rounded.Campaign,
+                    modifier = Modifier.weight(1f),
+                )
+                BsdcMetricTile(
+                    label = mkText(bn, "Spent today", "আজ খরচ"),
+                    value = MkLogic.formatTaka(campaign.spendToday, bn),
+                    icon = Icons.Rounded.Payments,
+                    tone = BsdcTone.WARN,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        item {
+            BsdcCard(modifier = Modifier.fillMaxWidth()) {
+                DetailLine(mkText(bn, "Pricing", "মূল্য নির্ধারণ"), pricingLabel)
+                DetailLine(
+                    mkText(bn, "Bid", "বিড"),
+                    "${MkLogic.formatTaka(campaign.bid, bn)} · $pricingLabel",
+                )
+                DetailLine(
+                    mkText(bn, "Total budget", "মোট বাজেট"),
+                    MkLogic.formatTaka(campaign.totalBudget, bn),
+                )
+                DetailLine(
+                    mkText(bn, "Daily cap", "দৈনিক সীমা"),
+                    if (campaign.dailyBudget > 0) {
+                        MkLogic.formatTaka(campaign.dailyBudget, bn)
+                    } else {
+                        mkText(bn, "No cap", "কোনো সীমা নেই")
+                    },
+                )
+                DetailLine(
+                    mkText(bn, "Schedule", "সময়সূচি"),
+                    scheduleLabel(campaign.startsAt, campaign.endsAt, bn),
+                )
+                DetailLine(
+                    mkText(bn, "Creatives", "ক্রিয়েটিভ"),
+                    digits(campaign.creativeCount.toString(), bn),
+                )
+            }
+        }
+
+        if (campaign.reviewNote.isNotBlank()) {
+            item {
+                BsdcStatusBanner(
+                    title = mkText(bn, "Review note", "রিভিউ মন্তব্য"),
+                    body = campaign.reviewNote,
+                    tone = BsdcTone.WARN,
+                )
+            }
+        }
+
+        if (canToggle) {
+            item {
+                BsdcButton(
+                    label = if (campaign.status == "active") {
+                        mkText(bn, "Pause campaign", "ক্যাম্পেইন বিরতি দিন")
+                    } else {
+                        mkText(bn, "Resume campaign", "ক্যাম্পেইন চালু করুন")
+                    },
+                    onClick = onTogglePause,
+                    enabled = !anyBusy,
+                    busy = busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
+
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+private fun DetailLine(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = BsdcThemeTokens.colors.mutedText,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f).padding(start = 16.dp),
+        )
+    }
+}
+
+private fun statusLabel(status: String, bn: Boolean): String = when (status) {
+    "active" -> mkText(bn, "Live", "চালু")
+    "paused" -> mkText(bn, "Paused", "বিরতিতে")
+    "pending_review" -> mkText(bn, "In review", "রিভিউ চলছে")
+    "rejected" -> mkText(bn, "Rejected", "প্রত্যাখ্যাত")
+    else -> mkText(bn, "Draft", "খসড়া")
+}
+
+private fun scheduleLabel(startsAt: String?, endsAt: String?, bn: Boolean): String {
+    val start = startsAt?.take(10).orEmpty()
+    val end = endsAt?.take(10).orEmpty()
+    return when {
+        start.isEmpty() && end.isEmpty() -> mkText(bn, "Starts on approval", "অনুমোদনের পর শুরু")
+        end.isEmpty() -> mkText(bn, "From $start, no end date", "$start থেকে, শেষের তারিখ নেই")
+        else -> mkText(bn, "$start to $end", "$start থেকে $end")
+    }.let { digits(it, bn) }
 }

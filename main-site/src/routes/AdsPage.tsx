@@ -33,10 +33,22 @@ import {
   type CreativeCopy,
 } from '@/lib/ads/ads-types';
 import { formatNumber } from '@/lib/format';
-import { formatTaka } from '@/lib/mk/mk-logic';
+import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
+
+/** A calendar day in Bangladesh time, for campaign schedules. Empty when the date cannot be read. */
+function formatDay(iso: string, language: Language): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(language === 'bn' ? 'bn-BD' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka',
+  }).format(date);
+}
 
 /** A private performance page, not a self-service campaign builder. */
 export default function AdsPage() {
@@ -181,6 +193,33 @@ function Dashboard() {
                   })}
                 </p>
               </div>
+              <ul className="mt-3 grid gap-1 text-xs text-muted" aria-label={t('ads.factsTitle')}>
+                <li>
+                  {t('ads.bidLine', {
+                    amount: formatTaka(campaign.bid, language),
+                    pricing: t(`ads.pricings.${campaign.pricing}`),
+                  })}
+                </li>
+                <li>
+                  {campaign.endsAt
+                    ? t('ads.scheduleRange', {
+                        start: formatDay(campaign.startsAt, language),
+                        end: formatDay(campaign.endsAt, language),
+                      })
+                    : t('ads.scheduleOpen', { start: formatDay(campaign.startsAt, language) })}
+                </li>
+                <li>
+                  {campaign.dailyBudget > 0
+                    ? t('ads.dailyCapLine', {
+                        spent: formatTaka(campaign.spendToday, language),
+                        cap: formatTaka(campaign.dailyBudget, language),
+                      })
+                    : t('ads.dailyNoCap', { spent: formatTaka(campaign.spendToday, language) })}
+                </li>
+                <li>
+                  {t('ads.creatives', { total: formatNumber(campaign.creativeCount, language) })}
+                </li>
+              </ul>
               {campaign.reviewNote.length > 0 ? (
                 <Alert tone="warning" title={t('ads.reviewNote')} className="mt-3">
                   {campaign.reviewNote}
