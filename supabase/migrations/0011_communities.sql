@@ -547,6 +547,10 @@ as $$
 $$;
 
 -- Upcoming events with this member's answer attached.
+-- Dropped first so that replaying this file after 0102 (which adds a column to the
+-- return type) succeeds; create or replace cannot change a return type.
+drop function if exists public.event_calendar(integer);
+
 create or replace function public.event_calendar(p_limit integer default 40)
 returns table (
   id          uuid,
