@@ -87,6 +87,7 @@ export interface CommunityEvent {
   coverUrl: string;
   startsAt: string;
   endsAt: string;
+  timezone: string;
   capacity: number | null;
   going: number;
   groupId: string | null;
@@ -137,14 +138,46 @@ export function isEventLive(event: CommunityEvent, now: number = Date.now()): bo
   return Date.parse(event.startsAt) <= now && Date.parse(event.endsAt) > now;
 }
 
-/** Groups upcoming events by calendar day, in chronological order. */
+/** The zone a community event is shown in when its own zone is unknown or invalid. */
+export const DEFAULT_EVENT_ZONE = 'Asia/Dhaka';
+
+/**
+ * The calendar day ('yyyy-mm-dd') an instant falls on in the given zone. Events
+ * are bucketed by the zone they happen in, not by UTC or the reader's device.
+ */
+export function dayKeyInZone(iso: string, zone: string): string {
+  const date = new Date(iso);
+  const pick = (timeZone: string): string =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(date);
+  try {
+    return pick(zone);
+  } catch {
+    return pick(DEFAULT_EVENT_ZONE);
+  }
+}
+
+/**
+ * A 'yyyy-mm-dd' key as a local calendar date at noon, so that formatting it
+ * never slips to the neighbouring day in any zone.
+ */
+export function parseDayKey(day: string): Date {
+  const [year = 1970, month = 1, date = 1] = day.split('-').map((part) => Number(part));
+  return new Date(year, month - 1, date, 12, 0, 0);
+}
+
+/** Groups upcoming events by their calendar day in their own zone, in chronological order. */
 export function groupEventsByDay(
   events: readonly CommunityEvent[],
 ): { day: string; events: CommunityEvent[] }[] {
   const days = new Map<string, CommunityEvent[]>();
 
   for (const event of [...events].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))) {
-    const day = event.startsAt.slice(0, 10);
+    const day = dayKeyInZone(event.startsAt, event.timezone);
     const bucket = days.get(day);
     if (bucket === undefined) {
       days.set(day, [event]);
@@ -160,7 +193,6 @@ export function groupEventsByDay(
 export interface EventDetail extends CommunityEvent {
   description: string;
   joinUrl: string;
-  timezone: string;
   isCancelled: boolean;
   hostUid: string;
 }

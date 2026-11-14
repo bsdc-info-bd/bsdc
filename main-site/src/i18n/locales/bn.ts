@@ -1482,6 +1482,10 @@ export const bn: Translation = {
     full: 'পূর্ণ',
     live: 'এখন চলছে',
     signInToRsvp: 'সাড়া দিতে সাইন ইন করুন।',
+    share: 'শেয়ার করুন',
+    addToCalendar: 'ক্যালেন্ডারে যোগ করুন',
+    linkCopied: 'লিংক কপি হয়েছে।',
+    shareFailed: 'শেয়ার করা যায়নি। আবার চেষ্টা করুন।',
     detail: {
       metaTitle: '{{title}} — BSDC ইভেন্ট',
       loading: 'ইভেন্টের তথ্য লোড হচ্ছে',

@@ -1490,6 +1490,10 @@ export const en = {
     full: 'Full',
     live: 'Happening now',
     signInToRsvp: 'Sign in to respond.',
+    share: 'Share',
+    addToCalendar: 'Add to calendar',
+    linkCopied: 'Link copied.',
+    shareFailed: 'Could not share. Try again.',
     detail: {
       metaTitle: '{{title}} — BSDC Events',
       loading: 'Loading the event',

@@ -257,6 +257,7 @@ function toEvent(row: EventCalendarRow): CommunityEvent {
     coverUrl: row.cover_url,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
+    timezone: row.timezone,
     capacity: row.capacity,
     going: row.going_count,
     groupId: row.group_id,

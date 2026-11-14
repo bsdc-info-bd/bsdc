@@ -753,12 +753,12 @@ export type EventCalendarRow = {
   group_id: string | null;
   page_id: string | null;
   my_status: DbRsvpStatus | null;
+  timezone: string;
 };
 
 export type EventDetailRow = EventCalendarRow & {
   description: string;
   join_url: string;
-  timezone: string;
   is_cancelled: boolean;
   host_uid: string;
 };

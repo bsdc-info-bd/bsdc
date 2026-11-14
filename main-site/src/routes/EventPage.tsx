@@ -1,6 +1,7 @@
 import { ArrowLeft, CalendarDays, Globe, MapPin, Users, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { EventShareActions } from '@/components/communities/EventShareActions';
 import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -15,6 +16,7 @@ import {
 } from '@/design-system';
 import { useEventDetail } from '@/hooks/use-communities';
 import { isEventFull, isEventLive, type RsvpStatus } from '@/lib/communities/community-types';
+import { calendarFileForDetail } from '@/lib/communities/event-calendar-file';
 import { formatNumber } from '@/lib/format';
 import { eventJsonLd, formatInZone, safeExternalUrl } from '@/lib/listings/listing-schema';
 import { ROUTES, SITE, eventPath } from '@/lib/site';
@@ -148,6 +150,7 @@ export default function EventPage() {
               {isHost ? (
                 <p className="text-sm text-muted">{t('events.detail.hostedByYou')}</p>
               ) : null}
+              <EventShareActions event={calendarFileForDetail(event, url)} size="md" />
 
               <ul className="grid gap-2 text-sm sm:grid-cols-2">
                 <li className="flex items-start gap-2">

@@ -120,6 +120,8 @@ const HARNESSES = [
   ],
   ['t67.mjs',
     '0101: self-service advertising: campaign builder, bKash payment reports, staff approval that credits the wallet, and money reserved once'],
+  ['t68.mjs',
+    '0102: the event calendar returns each event\'s own time zone, with its grants unchanged'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
