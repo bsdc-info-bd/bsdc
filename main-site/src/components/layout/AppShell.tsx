@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { Toaster } from '@/design-system';
@@ -9,7 +10,6 @@ import { usePublishPresence } from '@/hooks/use-presence';
 import { useSystemThemeSync } from '@/hooks/use-system-theme-sync';
 import { AppBar } from './AppBar';
 import { BottomNav } from './BottomNav';
-import { CommandPalette } from './CommandPalette';
 import { Footer } from './Footer';
 import { RouteProgress } from './RouteProgress';
 import { SkipLink } from './SkipLink';
@@ -25,6 +25,10 @@ import { SkipLink } from './SkipLink';
  * is what makes a chat on a phone feel like a web page that happens to have a
  * chat in it.
  */
+const CommandPalette = lazy(() =>
+  import('./CommandPalette').then((module) => ({ default: module.CommandPalette })),
+);
+
 export function AppShell() {
   useCommandPaletteHotkey();
   useNotificationRealtime();
@@ -52,7 +56,9 @@ export function AppShell() {
       </main>
       {chrome.footer ? <Footer /> : null}
       {chrome.bottomNav ? <BottomNav /> : null}
-      <CommandPalette />
+      <Suspense fallback={null}>
+        <CommandPalette />
+      </Suspense>
       <Toaster />
       <ScrollRestoration />
     </div>
