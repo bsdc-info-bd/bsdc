@@ -269,8 +269,16 @@ check(
 );
 
 // --------------------------------- 4. Pending shops & campaigns staff queues ---
-// Setup row: open_shop is retired (0100), so insert the same pending shop directly.
-await db.query(`insert into public.shops (slug, name, tagline, city, owner_uid, status) values ('dhaka-dev-gear', 'Dhaka Dev Gear', '', 'Dhaka', 'gmember-1', 'pending')`);
+// Setup row: a submitted COD vendor application (0094), which is what the queue lists.
+await db.query(`insert into public.mk_vendor_applications (
+  owner_uid, full_name, shop_name, nid_number, mobile, vendor_type, address_line, lat, lng,
+  place_label, package_code, agreements, payment_sender, payment_holder, payment_txn_id
+) values (
+  'gmember-1', 'Gmember One', 'Dhaka Dev Gear', '1234567890', '01712345678', 'electronics',
+  'House 1, Road 2, Dhanmondi', 23.7465, 90.3760, 'Dhanmondi, Dhaka', '10',
+  '{"terms":true,"privacy":true,"vendor_policy":true,"cod_policy":true,"self_delivery":true,"accuracy":true}'::jsonb,
+  '01712345678', 'Gmember One', 'TXN-41-SHOP'
+)`);
 const campRes = await as(
   'owner-1',
   { bsdc_role: 'owner', staff: true },
@@ -335,8 +343,9 @@ const staffPendingShops = await as(
 check(
   staffPendingShops.ok &&
     staffPendingShops.rows?.length === 1 &&
-    staffPendingShops.rows[0].slug === 'dhaka-dev-gear',
-  'staff reads pending shop queue via admin_pending_shops',
+    staffPendingShops.rows[0].name === 'Dhaka Dev Gear' &&
+    staffPendingShops.rows[0].payment_txn_id === 'TXN-41-SHOP',
+  'staff reads the submitted vendor application (with payment details) via admin_pending_shops',
 );
 
 const staffPendingCampaigns = await as(

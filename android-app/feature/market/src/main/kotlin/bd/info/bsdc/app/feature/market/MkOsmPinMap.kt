@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,6 +20,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import bd.info.bsdc.app.core.model.BsdcHosts
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * OpenStreetMap pin for the delivery address: Leaflet with OSM tiles inside a WebView.
@@ -55,6 +58,14 @@ fun MkOsmPinMap(
                 // The map is a single page. Any link inside it stays where it is.
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+
+                    // OpenStreetMap refuses tile requests without an identifying User-Agent and Referer, which a
+                    // WebView does not reliably send. Tiles are fetched here instead, and only from the tile host.
+                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                        val uri = request?.url ?: return null
+                        if (uri.scheme != "https" || uri.host != OSM_TILE_HOST) return null
+                        return fetchTile(uri.toString())
+                    }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
                         state.loaded = true
@@ -118,6 +129,26 @@ private class PinBridge(private val onChanged: (Double, Double) -> Unit) {
     }
 }
 
+private const val OSM_TILE_HOST = "tile.openstreetmap.org"
+private const val TILE_USER_AGENT = "BSDC-Android/1.0 (+https://www.bsdc.info.bd)"
+
+/** Fetches one OSM tile with the app's identity. Runs on the WebView's background thread. Null means the tile is skipped. */
+private fun fetchTile(url: String): WebResourceResponse? = runCatching {
+    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+        connectTimeout = 8_000
+        readTimeout = 8_000
+        setRequestProperty("User-Agent", TILE_USER_AGENT)
+        setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
+        setRequestProperty("Accept", "image/png,image/*;q=0.8")
+    }
+    if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+        connection.disconnect()
+        null
+    } else {
+        WebResourceResponse("image/png", "binary", connection.inputStream)
+    }
+}.getOrNull()
+
 private const val DHAKA_LAT = 23.8103
 private const val DHAKA_LNG = 90.4125
 
@@ -141,7 +172,7 @@ private fun mapPage(
 <style>
 $leafletCss
 
-  html,body,#map{height:100%;margin:0;padding:0;background:#eef2ef;font-family:sans-serif}
+  html,body,#map{height:100%;margin:0;padding:0;background:#e5e3df;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>

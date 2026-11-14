@@ -93,8 +93,8 @@ function Shops(): ReactElement {
 
   return (
     <Card
-      title="Shops waiting for review"
-      description="Opening a shop creates products but no storefront until somebody approves it."
+      title="Vendor applications waiting for review"
+      description="Check the bKash payment before approving. Approval unlocks the shop, its products and its order credits."
       actions={
         <Button variant="quiet" size="small" onClick={reload}>
           Refresh
@@ -171,6 +171,34 @@ function ShopRow({
             {shop.owner_name}
             {shop.slug.length > 0 ? ` · /shop/${shop.slug}` : ''}
           </div>
+          <dl
+            className="kit-small"
+            style={{
+              margin: 'var(--sp-2) 0 0',
+              display: 'grid',
+              gridTemplateColumns: 'max-content 1fr',
+              gap: '2px var(--sp-2)',
+            }}
+          >
+            <dt className="kit-muted">Mobile</dt>
+            <dd style={{ margin: 0 }}>{shop.mobile}</dd>
+            <dt className="kit-muted">Address</dt>
+            <dd style={{ margin: 0 }}>{shop.address_line}</dd>
+            {shop.trade_license_no.length > 0 ? (
+              <>
+                <dt className="kit-muted">Trade licence</dt>
+                <dd style={{ margin: 0 }}>{shop.trade_license_no}</dd>
+              </>
+            ) : null}
+            <dt className="kit-muted">Credit package</dt>
+            <dd style={{ margin: 0 }}>{shop.package_code} orders</dd>
+            <dt className="kit-muted">bKash sender</dt>
+            <dd style={{ margin: 0 }}>
+              {shop.payment_sender} · {shop.payment_holder}
+            </dd>
+            <dt className="kit-muted">Transaction ID</dt>
+            <dd style={{ margin: 0 }}>{shop.payment_txn_id}</dd>
+          </dl>
         </div>
         <Badge tone={waitingTone(shop.created_at)}>waiting {waitingFor(shop.created_at)}</Badge>
       </div>

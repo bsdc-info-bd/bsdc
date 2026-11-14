@@ -27,6 +27,13 @@ const NOMINATIM = 'https://nominatim.openstreetmap.org';
 const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 /**
+ * The delivery pin is drawn in SVG rather than loaded from Leaflet's default
+ * marker image, which does not survive the bundler and shows as a broken image.
+ */
+const PIN_SVG =
+  '<svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>';
+
+/**
  * OpenStreetMap pin with place search and "use my location". Leaflet and its
  * stylesheet load only when the picker mounts, so the rest of the app pays
  * nothing for the map. Search results are restricted to Bangladesh.
@@ -66,7 +73,15 @@ export function LocationPicker({ value, onChange, language, labels }: LocationPi
         attribution: '&copy; OpenStreetMap contributors',
       }).addTo(map);
 
-      const marker = L.marker([start.lat, start.lng], { draggable: true }).addTo(map);
+      const pinIcon = L.divIcon({
+        className: 'bsdc-map-pin',
+        html: PIN_SVG,
+        iconSize: [30, 40],
+        iconAnchor: [15, 40],
+      });
+      const marker = L.marker([start.lat, start.lng], { draggable: true, icon: pinIcon }).addTo(
+        map,
+      );
       marker.on('dragend', () => {
         const at = marker.getLatLng();
         void report(at.lat, at.lng);
