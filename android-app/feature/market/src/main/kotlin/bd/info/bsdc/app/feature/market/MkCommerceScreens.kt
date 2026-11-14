@@ -161,7 +161,12 @@ fun MkProductScreen(
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.weight(1f),
                     )
-                    MkQtyStepper(qty = selectedQty, max = maxQty, onChange = { qty = it.coerceIn(1, maxQty) })
+                    MkQtyStepper(
+                        qty = selectedQty,
+                        max = maxQty,
+                        bn = bn,
+                        onChange = { qty = it.coerceIn(1, maxQty) },
+                    )
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
@@ -332,6 +337,7 @@ fun MkCartScreen(
                         MkQtyStepper(
                             qty = line.qty,
                             max = line.stock.coerceAtLeast(line.qty),
+                            bn = bn,
                             onChange = { next -> changeQty(line.product_id, next) },
                         )
                     }

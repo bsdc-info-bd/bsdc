@@ -99,10 +99,16 @@ fun MkTimeline(status: String, bn: Boolean, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MkQtyStepper(qty: Int, max: Int, onChange: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun MkQtyStepper(
+    qty: Int,
+    max: Int,
+    bn: Boolean,
+    onChange: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { onChange(qty - 1) }, enabled = qty > 0) {
-            Icon(Icons.Rounded.Remove, contentDescription = "Decrease")
+            Icon(Icons.Rounded.Remove, contentDescription = mkText(bn, "Decrease", "কমান"))
         }
         AnimatedContent(targetState = qty, label = "mkQty") { value ->
             Text(
@@ -113,7 +119,7 @@ fun MkQtyStepper(qty: Int, max: Int, onChange: (Int) -> Unit, modifier: Modifier
             )
         }
         IconButton(onClick = { onChange(qty + 1) }, enabled = qty < max) {
-            Icon(Icons.Rounded.Add, contentDescription = "Increase")
+            Icon(Icons.Rounded.Add, contentDescription = mkText(bn, "Increase", "বাড়ান"))
         }
     }
 }
