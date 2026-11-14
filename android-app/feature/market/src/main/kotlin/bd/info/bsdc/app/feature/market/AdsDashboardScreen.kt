@@ -686,14 +686,6 @@ private fun DetailLine(label: String, value: String) {
     }
 }
 
-private fun statusLabel(status: String, bn: Boolean): String = when (status) {
-    "active" -> mkText(bn, "Live", "চালু")
-    "paused" -> mkText(bn, "Paused", "বিরতিতে")
-    "pending_review" -> mkText(bn, "In review", "রিভিউ চলছে")
-    "rejected" -> mkText(bn, "Rejected", "প্রত্যাখ্যাত")
-    else -> mkText(bn, "Draft", "খসড়া")
-}
-
 private fun scheduleLabel(startsAt: String?, endsAt: String?, bn: Boolean): String {
     val start = startsAt?.take(10).orEmpty()
     val end = endsAt?.take(10).orEmpty()
