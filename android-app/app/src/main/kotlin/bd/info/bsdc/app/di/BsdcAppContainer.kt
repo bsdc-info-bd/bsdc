@@ -17,6 +17,7 @@ import bd.info.bsdc.app.feature.compose.ComposeRepository
 import bd.info.bsdc.app.feature.discover.DiscoverRepository
 import bd.info.bsdc.app.feature.feed.FeedRepository
 import bd.info.bsdc.app.feature.market.MarketRepository
+import bd.info.bsdc.app.feature.market.MkRepository
 import bd.info.bsdc.app.feature.messenger.MessengerRepository
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
 import bd.info.bsdc.app.feature.notifications.NotificationsRepository
@@ -180,6 +181,12 @@ class BsdcAppContainer(appContext: Context) {
 
     val marketRepository: MarketRepository by lazy {
         MarketRepository(
+            supabase = supabaseRestClient,
+        )
+    }
+
+    val mkRepository: MkRepository by lazy {
+        MkRepository(
             supabase = supabaseRestClient,
         )
     }
