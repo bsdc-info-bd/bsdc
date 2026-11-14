@@ -45,6 +45,8 @@ fun MkOsmPinMap(
             .height(230.dp)
             .clip(RoundedCornerShape(14.dp)),
         factory = { context ->
+            val leafletJs = context.assets.open("leaflet/leaflet.js").bufferedReader().use { it.readText() }
+            val leafletCss = context.assets.open("leaflet/leaflet.css").bufferedReader().use { it.readText() }
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
@@ -74,7 +76,13 @@ fun MkOsmPinMap(
                 )
                 loadDataWithBaseURL(
                     BsdcHosts.SITE_ORIGIN + "/",
-                    mapPage(lat ?: DHAKA_LAT, lng ?: DHAKA_LNG, hasPin = lat != null && lng != null),
+                    mapPage(
+                        lat = lat ?: DHAKA_LAT,
+                        lng = lng ?: DHAKA_LNG,
+                        hasPin = lat != null && lng != null,
+                        leafletJs = leafletJs,
+                        leafletCss = leafletCss,
+                    ),
                     "text/html",
                     "utf-8",
                     null,
@@ -115,23 +123,33 @@ private const val DHAKA_LNG = 90.4125
 
 /**
  * The page is generated here with numbers only, so nothing from the user reaches the HTML.
- * Leaflet and OSM tiles load over HTTPS. OSM attribution is shown on the map.
+ * Leaflet is bundled in assets (BSD-2-Clause). Only OSM map tiles come from the network, over HTTPS.
+ * OSM attribution is shown on the map.
  */
-private fun mapPage(lat: Double, lng: Double, hasPin: Boolean): String = """
+private fun mapPage(
+    lat: Double,
+    lng: Double,
+    hasPin: Boolean,
+    leafletJs: String,
+    leafletCss: String,
+): String = """
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+$leafletCss
+
   html,body,#map{height:100%;margin:0;padding:0;background:#eef2ef;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+$leafletJs
+</script>
 <script>
   var map = L.map('map', { zoomControl: true }).setView([$lat, $lng], ${if (hasPin) 16 else 13});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -139,9 +157,15 @@ private fun mapPage(lat: Double, lng: Double, hasPin: Boolean): String = """
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
   var marker = null;
+  var PIN_ICON = L.divIcon({
+    className: 'bsdc-pin',
+    html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>',
+    iconSize: [30, 40],
+    iconAnchor: [15, 40]
+  });
   function place(la, ln) {
     if (!marker) {
-      marker = L.marker([la, ln], { draggable: true }).addTo(map);
+      marker = L.marker([la, ln], { draggable: true, icon: PIN_ICON }).addTo(map);
       marker.on('dragend', function () {
         var p = marker.getLatLng();
         BsdcPin.pinChanged(p.lat, p.lng);
