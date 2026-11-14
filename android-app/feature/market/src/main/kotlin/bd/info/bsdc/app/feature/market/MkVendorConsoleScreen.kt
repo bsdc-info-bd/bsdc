@@ -1,6 +1,8 @@
 package bd.info.bsdc.app.feature.market
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,7 +52,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcMetricTile
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
-import bd.info.bsdc.app.core.model.BsdcHosts
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import coil3.ImageLoader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -73,6 +76,7 @@ private fun vendorActionLabel(target: String, bn: Boolean): String = when (targe
 @Composable
 fun MkVendorConsoleScreen(
     repository: MkRepository,
+    mediaRepository: BsdcMediaRepository,
     imageLoader: ImageLoader,
     bn: Boolean,
     onOpenExternal: (String) -> Unit,
@@ -86,6 +90,9 @@ fun MkVendorConsoleScreen(
     var error by remember { mutableStateOf<String?>(null) }
     var pendingCancel by remember { mutableStateOf<MkVendorOrderDto?>(null) }
     var actionBusy by remember { mutableStateOf(false) }
+    var section by rememberSaveable { mutableStateOf(VendorSection.ORDERS) }
+    var refreshTick by rememberSaveable { mutableStateOf(0) }
+    val refreshAll: () -> Unit = { refreshTick++ }
 
     suspend fun reload(status: String) {
         repository.fetchVendorDashboard()
@@ -100,7 +107,7 @@ fun MkVendorConsoleScreen(
     }
 
     // Keeps the queue fresh between pushes. Realtime alerts come from the notification pipeline.
-    LaunchedEffect(filter) {
+    LaunchedEffect(filter, refreshTick) {
         while (true) {
             reload(filter)
             delay(15_000L)
@@ -121,17 +128,10 @@ fun MkVendorConsoleScreen(
     }
 
     if (!data.has_shop) {
-        BsdcEmptyState(
-            icon = Icons.Rounded.Inventory2,
-            title = mkText(bn, "Open your shop on BSDC", "BSDC-তে আপনার দোকান খুলুন"),
-            subtitle = mkText(
-                bn,
-                "Apply once, pay the order credit by bKash, and wait for approval. Then you can sell here.",
-                "একবার আবেদন করুন, bKash-এ অর্ডার ক্রেডিট দিন, অনুমোদনের অপেক্ষা করুন। এরপর এখান থেকে বিক্রি করতে পারবেন।",
-            ),
-            actionLabel = mkText(bn, "Open seller setup", "বিক্রেতা সেটআপ খুলুন"),
-            onAction = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/vendor/apply") },
-            modifier = modifier.fillMaxSize(),
+        MkVendorOnboarding(
+            repository = repository,
+            bn = bn,
+            modifier = modifier,
         )
         return
     }
@@ -172,12 +172,12 @@ fun MkVendorConsoleScreen(
                     title = mkText(bn, "Your shop is hidden", "আপনার দোকান লুকানো আছে"),
                     body = mkText(
                         bn,
-                        "Order credits are used up. Buy a new package on the web; it shows again after approval.",
-                        "অর্ডার ক্রেডিট শেষ। ওয়েবে নতুন প্যাকেজ কিনুন; অনুমোদনের পর আবার দেখাবে।",
+                        "Order credits are used up. Buy a package in the Shop tab; the shop shows again after approval.",
+                        "অর্ডার ক্রেডিট শেষ। দোকান ট্যাবে প্যাকেজ কিনুন; অনুমোদনের পর দোকান আবার দেখাবে।",
                     ),
                     tone = BsdcTone.WARN,
-                    actionLabel = mkText(bn, "Buy credits on web", "ওয়েবে ক্রেডিট কিনুন"),
-                    onAction = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/vendor/console") },
+                    actionLabel = mkText(bn, "Buy credits", "ক্রেডিট কিনুন"),
+                    onAction = { section = VendorSection.SHOP },
                 )
             }
         }
@@ -217,13 +217,43 @@ fun MkVendorConsoleScreen(
             }
         }
         item {
-            OutlinedButton(
-                onClick = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/vendor/console") },
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(mkText(bn, "Manage products, photos & credits on web", "পণ্য, ছবি ও ক্রেডিট ওয়েবে পরিচালনা করুন"))
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(VendorSection.entries) { option ->
+                    FilterChip(
+                        selected = section == option,
+                        onClick = { section = option },
+                        label = { Text(option.label(bn)) },
+                    )
+                }
             }
         }
+        if (section == VendorSection.PRODUCTS) {
+            item {
+                MkVendorCatalogPanel(
+                    repository = repository,
+                    mediaRepository = mediaRepository,
+                    imageLoader = imageLoader,
+                    bn = bn,
+                    onChanged = refreshAll,
+                )
+            }
+        }
+        if (section == VendorSection.SHOP) {
+            item {
+                MkVendorShopPanel(
+                    repository = repository,
+                    mediaRepository = mediaRepository,
+                    imageLoader = imageLoader,
+                    bn = bn,
+                    vendor = data.vendor,
+                    credits = credits,
+                    listed = listed,
+                    purchases = data.purchases.orEmpty(),
+                    onChanged = refreshAll,
+                )
+            }
+        }
+        if (section == VendorSection.ORDERS) {
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(ORDER_FILTERS) { key ->
@@ -284,6 +314,7 @@ fun MkVendorConsoleScreen(
                     onOpenExternal("https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng")
                 },
             )
+        }
         }
     }
 
@@ -453,4 +484,88 @@ private fun statusShortLabel(status: String, bn: Boolean): String = when (status
     "delivered" -> mkText(bn, "Delivered", "পৌঁছেছে")
     "cancelled" -> mkText(bn, "Cancelled", "বাতিল")
     else -> status
+}
+
+private enum class VendorSection { ORDERS, PRODUCTS, SHOP }
+
+private fun VendorSection.label(bn: Boolean): String = when (this) {
+    VendorSection.ORDERS -> mkText(bn, "Orders", "অর্ডার")
+    VendorSection.PRODUCTS -> mkText(bn, "Products", "পণ্য")
+    VendorSection.SHOP -> mkText(bn, "Shop & credits", "দোকান ও ক্রেডিট")
+}
+
+/**
+ * For a signed-in user without a shop: the native application wizard, or the status of an application
+ * already sent. Approval is an admin step, so the screen says what happens next rather than guessing.
+ */
+@Composable
+private fun MkVendorOnboarding(
+    repository: MkRepository,
+    bn: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    var application by remember { mutableStateOf<MkMyApplicationDto?>(null) }
+    var loaded by remember { mutableStateOf(false) }
+    var statusTick by rememberSaveable { mutableStateOf(0) }
+
+    LaunchedEffect(statusTick) {
+        application = repository.fetchMyApplication().getOrNull()
+        loaded = true
+    }
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        if (!loaded) {
+            CircularProgressIndicator(modifier = Modifier.size(28.dp))
+            return@Column
+        }
+        val app = application
+        when {
+            app != null && app.status == "submitted" -> {
+                BsdcStatusBanner(
+                    title = mkText(bn, "Application under review", "আবেদন যাচাই চলছে"),
+                    body = mkText(
+                        bn,
+                        "We received your application for ${app.shop_name}. The admin checks your bKash payment before your shop goes live. You get a notification when it is decided.",
+                        "${app.shop_name} দোকানের আবেদন পেয়েছি। দোকান চালুর আগে অ্যাডমিন আপনার bKash পেমেন্ট যাচাই করবেন। সিদ্ধান্ত হলে নোটিফিকেশন পাবেন।",
+                    ),
+                    tone = BsdcTone.WARN,
+                )
+                OutlinedButton(onClick = { statusTick++ }, modifier = Modifier.fillMaxWidth()) {
+                    Text(mkText(bn, "Check status", "অবস্থা দেখুন"))
+                }
+            }
+            app != null && app.status == "approved" -> {
+                BsdcStatusBanner(
+                    title = mkText(bn, "Approved", "অনুমোদিত"),
+                    body = mkText(bn, "Your shop is being set up. Check again in a moment.", "আপনার দোকান প্রস্তুত হচ্ছে। একটু পরে আবার দেখুন।"),
+                    tone = BsdcTone.OK,
+                )
+                OutlinedButton(onClick = { statusTick++ }, modifier = Modifier.fillMaxWidth()) {
+                    Text(mkText(bn, "Refresh", "হালনাগাদ করুন"))
+                }
+            }
+            else -> {
+                if (app != null && app.status == "rejected") {
+                    BsdcStatusBanner(
+                        title = mkText(bn, "Application not approved", "আবেদন অনুমোদন পায়নি"),
+                        body = app.review_note.ifBlank {
+                            mkText(bn, "Check your details and apply again.", "তথ্য দেখে আবার আবেদন করুন।")
+                        },
+                        tone = BsdcTone.BAD,
+                    )
+                }
+                MkVendorApplyScreen(
+                    repository = repository,
+                    bn = bn,
+                    onSubmitted = { statusTick++ },
+                )
+            }
+        }
+    }
 }

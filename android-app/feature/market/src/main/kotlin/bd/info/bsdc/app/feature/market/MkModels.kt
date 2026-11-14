@@ -46,6 +46,55 @@ data class MkPurchaseDto(
 )
 
 @Serializable
+data class MkMyApplicationDto(
+    val id: String = "",
+    val status: String = "submitted",
+    val shop_name: String = "",
+    val vendor_type: String = "",
+    val package_code: String = "",
+    val review_note: String = "",
+    val submitted_at: String = "",
+    val reviewed_at: String? = null,
+)
+
+@Serializable
+data class MkSubmitResultDto(
+    val application_id: String = "",
+    val status: String = "",
+)
+
+@Serializable
+data class MkBuyCreditsResultDto(
+    val purchase_id: String = "",
+    val status: String = "",
+)
+
+@Serializable
+data class MkCatalogCategoryDto(
+    val id: String = "",
+    val name: String = "",
+    val sort: Int = 0,
+)
+
+@Serializable
+data class MkCatalogProductDto(
+    val id: String = "",
+    val name: String = "",
+    val description: String = "",
+    val price_poisha: Long = 0,
+    val stock: Int = 0,
+    val status: String = "draft",
+    val category_id: String? = null,
+    val images: List<String> = emptyList(),
+)
+
+@Serializable
+data class MkVendorCatalogDto(
+    val categories: List<MkCatalogCategoryDto> = emptyList(),
+    val products: List<MkCatalogProductDto> = emptyList(),
+)
+
+@Serializable
 data class MkVendorDashboardDto(
     val has_shop: Boolean = false,
     val vendor: MkVendorShopDto? = null,

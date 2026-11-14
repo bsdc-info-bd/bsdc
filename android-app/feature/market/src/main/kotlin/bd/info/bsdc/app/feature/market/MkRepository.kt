@@ -183,6 +183,91 @@ class MkRepository(
         Unit
     }
 
+    /** The signed-in user's latest vendor application, or null when they have not applied. */
+    suspend fun fetchMyApplication(): Result<MkMyApplicationDto?> = call {
+        supabase.decode<MkMyApplicationDto?>(rpc("mk_my_application", buildJsonObject { }))
+    }
+
+    /** Submits the four-part vendor application. [payload] uses the keys of mk_submit_vendor_application. */
+    suspend fun submitVendorApplication(payload: JsonObject): Result<MkSubmitResultDto> = call {
+        supabase.decode<MkSubmitResultDto>(rpc("mk_submit_vendor_application", buildJsonObject { put("p", payload) }))
+    }
+
+    /** Records a bKash payment for an order-credit package; the admin approves it before credits are added. */
+    suspend fun buyCredits(
+        packageCode: String,
+        sender: String,
+        holder: String,
+        txnId: String,
+    ): Result<MkBuyCreditsResultDto> = call {
+        supabase.decode<MkBuyCreditsResultDto>(
+            rpc(
+                "mk_vendor_buy_credits",
+                buildJsonObject {
+                    put("p_package_code", packageCode)
+                    put("p_sender", sender)
+                    put("p_holder", holder)
+                    put("p_txn_id", txnId)
+                },
+            ),
+        )
+    }
+
+    suspend fun fetchVendorCatalog(): Result<MkVendorCatalogDto> = call {
+        supabase.decode<MkVendorCatalogDto>(rpc("mk_vendor_catalog", buildJsonObject { }))
+    }
+
+    /** Creates a category when [id] is null, otherwise renames it. Returns the category id. */
+    suspend fun saveVendorCategory(id: String?, name: String, sort: Int): Result<String> = call {
+        supabase.decode<String>(
+            rpc(
+                "mk_vendor_save_category",
+                buildJsonObject {
+                    put("p_id", id.orNullString() ?: JsonNull)
+                    put("p_name", name)
+                    put("p_sort", sort)
+                },
+            ),
+        )
+    }
+
+    /** Creates or updates a product. [payload] uses the keys of mk_vendor_save_product. Returns the product id. */
+    suspend fun saveVendorProduct(id: String?, payload: JsonObject): Result<String> = call {
+        supabase.decode<String>(
+            rpc(
+                "mk_vendor_save_product",
+                buildJsonObject {
+                    put("p_id", id.orNullString() ?: JsonNull)
+                    put("p", payload)
+                },
+            ),
+        )
+    }
+
+    /** Updates only the fields that are passed. Null fields are left as they are on the server. */
+    suspend fun updateVendorProfile(
+        description: String? = null,
+        logoUrl: String? = null,
+        coverUrl: String? = null,
+        mobile: String? = null,
+    ): Result<Unit> = call {
+        rpc(
+            "mk_vendor_update_profile",
+            buildJsonObject {
+                put(
+                    "p",
+                    buildJsonObject {
+                        description?.let { put("description", it) }
+                        logoUrl?.let { put("logo_url", it) }
+                        coverUrl?.let { put("cover_url", it) }
+                        mobile?.let { put("mobile", it) }
+                    },
+                )
+            },
+        )
+        Unit
+    }
+
     /** Resolves a vendor slug to its id for mk_place_order. Null when the shop is closed or out of credits. */
     suspend fun fetchVendorRef(slug: String): Result<String?> = call {
         supabase.decode<String?>(rpc("mk_vendor_ref", buildJsonObject { put("p_slug", slug) }, requireAuth = false))

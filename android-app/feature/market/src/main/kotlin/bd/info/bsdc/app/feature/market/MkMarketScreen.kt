@@ -50,6 +50,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
@@ -80,6 +81,7 @@ sealed interface MkRoute {
 @Composable
 fun MkMarketScreen(
     repository: MkRepository,
+    mediaRepository: BsdcMediaRepository,
     imageLoader: ImageLoader,
     viewerUid: String?,
     language: AppLanguage,
@@ -236,6 +238,7 @@ fun MkMarketScreen(
                 )
                 MkRoute.Console -> MkVendorConsoleScreen(
                     repository = repository,
+                    mediaRepository = mediaRepository,
                     imageLoader = imageLoader,
                     bn = bn,
                     onOpenExternal = onOpenExternal,

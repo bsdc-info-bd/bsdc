@@ -499,6 +499,7 @@ fun BsdcAppShell(
             } else {
                 MkMarketScreen(
                     repository = container.mkRepository,
+                    mediaRepository = container.mediaRepository,
                     imageLoader = container.imageLoader,
                     viewerUid = authState.session?.uid,
                     language = language,

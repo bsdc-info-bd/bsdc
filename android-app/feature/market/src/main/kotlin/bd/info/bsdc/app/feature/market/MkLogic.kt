@@ -92,6 +92,35 @@ object MkLogic {
     /** Matches mk_customer_cancel_order: only a placed order can be cancelled by the customer. */
     fun canCustomerCancel(status: String): Boolean = status == "placed"
 
+    /** Agreement keys the server stores, same as mk-logic.ts AGREEMENT_KEYS. Every one must be ticked. */
+    val AGREEMENT_KEYS: List<String> = listOf(
+        "terms", "privacy", "vendor_policy", "cod_policy", "self_delivery", "accuracy",
+    )
+
+    /** NID is 10, 13 or 17 digits, matching the database check. */
+    fun isNid(input: String): Boolean = NID_PATTERN.matches(input.trim())
+
+    /** Transaction IDs are 4 to 40 characters. */
+    fun isTxnId(input: String): Boolean = input.trim().length in 4..40
+
+    /**
+     * Parses a taka amount typed by a vendor ("150", "12.5", "১২০.৫০") into poisha.
+     * Returns null for anything that is not a positive amount with at most two decimals.
+     */
+    fun parseTakaToPoisha(input: String): Long? {
+        val normalised = input.trim().replace(",", "").map { ch ->
+            if (ch in '\u09E6'..'\u09EF') ('0' + (ch - '\u09E6')) else ch
+        }.joinToString("")
+        val match = TAKA_PATTERN.matchEntire(normalised) ?: return null
+        val taka = match.groupValues[1].toLong()
+        val paisa = match.groupValues[2].padEnd(2, '0').toLong()
+        val total = taka * 100 + paisa
+        return if (total > 0) total else null
+    }
+
+    private val NID_PATTERN = Regex("""[0-9]{10}|[0-9]{13}|[0-9]{17}""")
+    private val TAKA_PATTERN = Regex("""(\d{1,7})(?:\.(\d{1,2}))?""")
+
     /** Shop categories, same keys as the database and the web (mk-logic.ts SHOP_TYPES). */
     val SHOP_TYPES: List<String> = listOf(
         "grocery", "restaurant", "bakery", "pharmacy", "electronics", "fashion", "beauty",

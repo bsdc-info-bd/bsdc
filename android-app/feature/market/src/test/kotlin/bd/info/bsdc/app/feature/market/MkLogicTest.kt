@@ -85,4 +85,39 @@ class MkLogicTest {
         assertEquals("Delivered | পৌঁছে গেছে", MkLogic.orderStatusLabel("delivered"))
         assertEquals("mystery", MkLogic.orderStatusLabel("mystery"))
     }
+
+    @Test
+    fun nidAcceptsOnlyTheThreeOfficialLengths() {
+        assertTrue(MkLogic.isNid("1234567890"))
+        assertTrue(MkLogic.isNid("1234567890123"))
+        assertTrue(MkLogic.isNid("12345678901234567"))
+        assertFalse(MkLogic.isNid("123456789"))
+        assertFalse(MkLogic.isNid("12345678901234"))
+        assertFalse(MkLogic.isNid("12345abcde"))
+    }
+
+    @Test
+    fun txnIdNeedsFourToFortyCharacters() {
+        assertTrue(MkLogic.isTxnId("ABCD"))
+        assertFalse(MkLogic.isTxnId("ABC"))
+        assertFalse(MkLogic.isTxnId("A".repeat(41)))
+    }
+
+    @Test
+    fun takaInputBecomesPoisha() {
+        assertEquals(15000L, MkLogic.parseTakaToPoisha("150"))
+        assertEquals(1250L, MkLogic.parseTakaToPoisha("12.5"))
+        assertEquals(12000L, MkLogic.parseTakaToPoisha("1,20"))
+        assertEquals(12050L, MkLogic.parseTakaToPoisha("120.50"))
+        assertEquals(12000L, MkLogic.parseTakaToPoisha("১২০"))
+    }
+
+    @Test
+    fun takaInputRejectsZeroNegativeAndExcessDecimals() {
+        assertEquals(null, MkLogic.parseTakaToPoisha("0"))
+        assertEquals(null, MkLogic.parseTakaToPoisha("-5"))
+        assertEquals(null, MkLogic.parseTakaToPoisha("1.234"))
+        assertEquals(null, MkLogic.parseTakaToPoisha(""))
+        assertEquals(null, MkLogic.parseTakaToPoisha("abc"))
+    }
 }
