@@ -55,6 +55,9 @@ const AdminReportsPage = lazy(() => import('@/routes/AdminReportsPage'));
 const AdminModerationPage = lazy(() => import('@/routes/AdminModerationPage'));
 const AdminPeoplePage = lazy(() => import('@/routes/AdminPeoplePage'));
 const VendorPage = lazy(() => import('@/routes/VendorPage'));
+const ShopApplyPage = lazy(() => import('@/routes/ShopApplyPage'));
+const VendorConsolePage = lazy(() => import('@/routes/VendorConsolePage'));
+const AdminMarketplacePage = lazy(() => import('@/routes/AdminMarketplacePage'));
 const VendorProductsPage = lazy(() => import('@/routes/VendorProductsPage'));
 const VendorOrdersPage = lazy(() => import('@/routes/VendorOrdersPage'));
 const VendorPayoutsPage = lazy(() => import('@/routes/VendorPayoutsPage'));
@@ -135,6 +138,9 @@ const router = createBrowserRouter([
           { path: ROUTES.adminPeople, element: withSuspense(<AdminPeoplePage />) },
           { path: ROUTES.vendor, element: withSuspense(<VendorPage />) },
           { path: ROUTES.vendorProducts, element: withSuspense(<VendorProductsPage />) },
+          { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
+          { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
+          { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
           { path: ROUTES.vendorOrders, element: withSuspense(<VendorOrdersPage />) },
           { path: ROUTES.vendorPayouts, element: withSuspense(<VendorPayoutsPage />) },
         ],

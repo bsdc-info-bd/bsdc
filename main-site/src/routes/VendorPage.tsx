@@ -1,6 +1,7 @@
 import { Banknote, Boxes, ClipboardList, Store, Wallet } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { mkCopy } from '@/lib/mk/mk-copy';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -187,6 +188,9 @@ export default function VendorPage() {
               </LinkButton>
               <LinkButton to={ROUTES.vendorPayouts} variant="secondary">
                 {t('vendor.managePayouts')}
+              </LinkButton>
+              <LinkButton to={ROUTES.vendorConsole} variant="secondary">
+                {mkCopy(language === 'en' ? 'en' : 'bn').consoleTitle}
               </LinkButton>
             </div>
           </>

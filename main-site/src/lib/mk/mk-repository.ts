@@ -103,7 +103,7 @@ export async function saveVendorCategory(id: string | null, name: string, sort: 
     p_sort: sort,
   });
   if (error) throw error;
-  return data as string;
+  return data;
 }
 
 export interface ProductPayload {
@@ -122,7 +122,7 @@ export async function saveVendorProduct(id: string | null, payload: ProductPaylo
     p: payload as unknown as Json,
   });
   if (error) throw error;
-  return data as string;
+  return data;
 }
 
 export async function updateVendorProfile(payload: {
