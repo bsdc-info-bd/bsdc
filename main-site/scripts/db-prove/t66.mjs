@@ -580,6 +580,18 @@ check(refAnon.rows[0]?.id === vendorId, 'a listed shop resolves for a visitor to
 const refMissing = await run(`select public.mk_vendor_ref('no-such-shop') as id`, cust1);
 check(refMissing.error === null && refMissing.rows[0]?.id === null, 'an unknown slug resolves to null', refMissing.error?.message ?? '');
 
+// 18. Order notifications open the right screen (0098)
+const vendorLink = await db.query(
+  `select target_url from public.notifications where uid = $1 and kind = 'order' and body like 'Order % · New order%' order by created_at desc limit 1`,
+  [vendorUid],
+);
+check(vendorLink.rows[0]?.target_url === '/vendor/console', 'a new order opens the shop console for the vendor', vendorLink.rows[0]?.target_url ?? '');
+const customerLink = await db.query(
+  `select target_url from public.notifications where uid = $1 and kind = 'order' and body like $2 limit 1`,
+  [cust1, `Order ${orderCode.rows[0]?.code} · Accepted%`],
+);
+check(customerLink.rows[0]?.target_url === '/marketplace/orders', 'a status update opens the customer tracker', customerLink.rows[0]?.target_url ?? '');
+
 console.log(`\n${pass} passed, ${bad.length} failed`);
 if (bad.length > 0) {
   process.exit(1);
