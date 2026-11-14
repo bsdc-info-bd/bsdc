@@ -64,7 +64,8 @@ class MkLogicTest {
 
     @Test
     fun customerCancelStopsAfterHandover() {
-        assertTrue(MkLogic.canCustomerCancel("accepted"))
+        assertTrue(MkLogic.canCustomerCancel("placed"))
+        assertFalse(MkLogic.canCustomerCancel("accepted"))
         assertFalse(MkLogic.canCustomerCancel("out_for_delivery"))
     }
 

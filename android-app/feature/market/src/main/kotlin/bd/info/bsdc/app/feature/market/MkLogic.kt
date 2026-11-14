@@ -89,8 +89,8 @@ object MkLogic {
     /** A review is allowed only after delivery and only once. */
     fun canReview(status: String, reviewed: Boolean): Boolean = status == "delivered" && !reviewed
 
-    /** Cancelling is allowed only before the vendor has handed the order to a rider. */
-    fun canCustomerCancel(status: String): Boolean = status == "placed" || status == "accepted"
+    /** Matches mk_customer_cancel_order: only a placed order can be cancelled by the customer. */
+    fun canCustomerCancel(status: String): Boolean = status == "placed"
 
     /** Shop categories, same keys as the database and the web (mk-logic.ts SHOP_TYPES). */
     val SHOP_TYPES: List<String> = listOf(
