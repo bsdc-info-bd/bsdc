@@ -101,6 +101,7 @@ fun DiscoverHubScreen(
     onOpenProfile: (String) -> Unit,
     onOpenProject: (String) -> Unit = {},
     onOpenJob: (String) -> Unit = {},
+    onOpenGroup: (String) -> Unit = {},
     onOpenEvent: (String) -> Unit = {},
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
@@ -592,15 +593,20 @@ fun DiscoverHubScreen(
                                 size = 42.dp,
                             )
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(text = g.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = g.name,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier.clickable { onOpenGroup(g.slug) },
+                                )
                                 Text(
                                     text = "${g.privacy.uppercase()} • ${BanglaDigitFormatter.formatCount(g.membersCount.toLong(), language)} ${if (bn) "সদস্য" else "members"}",
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
-                            if (g.myRole != null) {
-                                OutlinedButton(
+                            when (GroupDetailLogic.joinAction(g.privacy, g.myRole, g.requestStatus, !viewerUid.isNullOrBlank())) {
+                                GroupJoinAction.OPEN -> OutlinedButton(
                                     onClick = {
                                         scope.launch {
                                             repository.leaveGroup(g.id)
@@ -609,26 +615,26 @@ fun DiscoverHubScreen(
                                         }
                                     },
                                 ) { Text(if (bn) "ছেড়ে দিন" else "Leave") }
-                            } else {
-                                BsdcButton(
-                                    label = if (g.requestStatus == "pending") {
-                                        if (bn) "অপেক্ষমান" else "Pending"
+                                GroupJoinAction.JOIN, GroupJoinAction.REQUEST -> BsdcButton(
+                                    label = if (g.privacy == "private") {
+                                        if (bn) "অনুরোধ" else "Request"
                                     } else {
                                         if (bn) "যোগ দিন" else "Join"
                                     },
-                                    enabled = g.requestStatus != "pending",
                                     onClick = {
-                                        if (viewerUid.isNullOrBlank()) {
-                                            onSignInRequired()
-                                        } else {
-                                            scope.launch {
-                                                repository.joinGroup(g.id)
-                                                    .onSuccess { loadSectionData(DiscoverSection.GROUPS) }
-                                                    .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
-                                            }
+                                        scope.launch {
+                                            repository.joinGroup(g.id)
+                                                .onSuccess { loadSectionData(DiscoverSection.GROUPS) }
+                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
                                         }
                                     },
                                 )
+                                GroupJoinAction.PENDING -> BsdcButton(
+                                    label = if (bn) "অপেক্ষমান" else "Pending",
+                                    enabled = false,
+                                    onClick = {},
+                                )
+                                GroupJoinAction.CLOSED -> Unit
                             }
                         }
                         if (g.description.isNotBlank()) {

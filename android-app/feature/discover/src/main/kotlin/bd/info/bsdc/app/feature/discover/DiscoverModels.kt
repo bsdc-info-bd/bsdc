@@ -289,3 +289,55 @@ data class FollowSuggestionDto(
     @SerialName("shared_skills") val sharedSkills: List<String> = emptyList(),
     val reason: String = "active",
 )
+
+/** One group in full, from the groups table. Text columns can be null, so they are nullable. */
+@Serializable
+data class GroupDetailDto(
+    val id: String,
+    val slug: String,
+    val name: String,
+    val description: String? = null,
+    val privacy: String = "public",
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null,
+    val rules: String? = null,
+    val language: String? = null,
+    @SerialName("owner_uid") val ownerUid: String? = null,
+    @SerialName("members_count") val membersCount: Int = 0,
+    @SerialName("posts_count") val postsCount: Int = 0,
+    @SerialName("is_archived") val isArchived: Boolean = false,
+    @SerialName("created_at") val createdAt: String? = null,
+)
+
+/** The viewer's standing in one group: their role when a member, otherwise any pending request. */
+data class GroupViewerState(val role: String?, val requestStatus: String?)
+
+@Serializable
+data class GroupMembershipDto(val role: String? = null)
+
+@Serializable
+data class GroupRequestDto(val status: String? = null)
+
+@Serializable
+data class GroupChannelDto(
+    val id: String,
+    val name: String,
+    val topic: String? = null,
+    val position: Int = 0,
+    @SerialName("is_read_only") val isReadOnly: Boolean = false,
+)
+
+@Serializable
+data class GroupMemberProfileDto(
+    val username: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+)
+
+@Serializable
+data class GroupMemberDto(
+    val uid: String,
+    val role: String = "member",
+    @SerialName("joined_at") val joinedAt: String? = null,
+    val profiles: GroupMemberProfileDto? = null,
+)

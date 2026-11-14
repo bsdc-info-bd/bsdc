@@ -216,6 +216,84 @@ class DiscoverRepository(
         }
     }
 
+    /** One group by slug. Null when it does not exist or is hidden from this viewer. */
+    suspend fun fetchGroupBySlug(slug: String): Result<GroupDetailDto?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.getJsonText(
+                table = "groups",
+                queryPairs = listOf("slug" to "eq.${slug.trim()}", "limit" to "1"),
+                requireAuth = false,
+            )
+            supabase.decode<List<GroupDetailDto>>(raw).firstOrNull()
+        }
+    }
+
+    /** The viewer's role in a group, or their pending request when they are not a member. */
+    suspend fun fetchGroupViewer(groupId: String, uid: String): Result<GroupViewerState> = withContext(Dispatchers.IO) {
+        runCatching {
+            val membership = supabase.decode<List<GroupMembershipDto>>(
+                supabase.getJsonText(
+                    table = "group_members",
+                    queryPairs = listOf(
+                        "select" to "role",
+                        "group_id" to "eq.$groupId",
+                        "uid" to "eq.$uid",
+                        "limit" to "1",
+                    ),
+                    requireAuth = true,
+                ),
+            ).firstOrNull()?.role
+            val request = if (membership == null) {
+                supabase.decode<List<GroupRequestDto>>(
+                    supabase.getJsonText(
+                        table = "group_join_requests",
+                        queryPairs = listOf(
+                            "select" to "status",
+                            "group_id" to "eq.$groupId",
+                            "uid" to "eq.$uid",
+                            "limit" to "1",
+                        ),
+                        requireAuth = true,
+                    ),
+                ).firstOrNull()?.status
+            } else {
+                null
+            }
+            GroupViewerState(role = membership, requestStatus = request)
+        }
+    }
+
+    suspend fun fetchGroupChannels(groupId: String): Result<List<GroupChannelDto>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.getJsonText(
+                table = "channels",
+                queryPairs = listOf(
+                    "select" to "id,name,topic,position,is_read_only",
+                    "group_id" to "eq.$groupId",
+                    "order" to "position.asc",
+                    "limit" to "100",
+                ),
+                requireAuth = false,
+            )
+            supabase.decode<List<GroupChannelDto>>(raw)
+        }
+    }
+
+    suspend fun fetchGroupMembers(groupId: String): Result<List<GroupMemberDto>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.getJsonText(
+                table = "group_members",
+                queryPairs = listOf(
+                    "select" to "uid,role,joined_at,profiles:uid(uid,username,display_name,avatar_url)",
+                    "group_id" to "eq.$groupId",
+                    "limit" to "200",
+                ),
+                requireAuth = false,
+            )
+            supabase.decode<List<GroupMemberDto>>(raw)
+        }
+    }
+
     suspend fun joinGroup(groupId: String): Result<String> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.rpcText(
