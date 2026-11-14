@@ -2660,7 +2660,10 @@ export type Database = {
       };
       ad_my_payment_requests: { Args: { p_limit?: number }; Returns: Json };
       ad_owner_submit_campaign: { Args: { p_campaign_id: string }; Returns: Json };
-      ad_admin_list_payment_requests: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      ad_admin_list_payment_requests: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: Json;
+      };
       ad_admin_decide_payment_request: {
         Args: { p_request_id: string; p_decision: string; p_note?: string };
         Returns: Json;
