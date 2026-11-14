@@ -63,7 +63,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-motion': ['framer-motion'],
+          // framer-motion is used only by lazy routes, so it loads with them instead of on
+          // every first paint (it was preloaded by index.html and counted against the budget).
           'vendor-i18n': ['i18next', 'react-i18next'],
         },
       },
