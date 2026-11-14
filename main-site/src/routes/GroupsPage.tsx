@@ -1,4 +1,5 @@
 import { Lock, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -11,11 +12,14 @@ import {
   Card,
   EmptyState,
   LinkButton,
+  Chip,
   PageSkeleton,
   SectionHeading,
+  TextField,
 } from '@/design-system';
 import { useGroupDirectory } from '@/hooks/use-communities';
 import { joinAction, type GroupSummary } from '@/lib/communities/community-types';
+import { filterGroups, type GroupScope } from '@/lib/communities/group-filters';
 import { formatNumber } from '@/lib/format';
 import { groupPath, ROUTES, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
@@ -27,6 +31,13 @@ export default function GroupsPage() {
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const directory = useGroupDirectory();
+  const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<GroupScope>('all');
+  const visible = useMemo(
+    () => filterGroups(directory.groups, query, scope, isSignedIn),
+    [directory.groups, query, scope, isSignedIn],
+  );
+  const scopes: readonly GroupScope[] = ['all', 'joined', 'open'];
 
   async function join(group: GroupSummary) {
     try {
@@ -70,6 +81,35 @@ export default function GroupsPage() {
         {directory.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {directory.isError ? <Alert tone="danger" title={t('groups.failed')} /> : null}
 
+        {directory.groups.length > 0 ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <TextField
+              label={t('groups.search')}
+              type="search"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+            />
+            <div role="group" aria-label={t('groups.search')} className="flex flex-wrap gap-2">
+              {scopes.map((option) => (
+                <Chip
+                  key={option}
+                  selected={scope === option}
+                  aria-pressed={scope === option}
+                  onClick={() => {
+                    setScope(option);
+                  }}
+                >
+                  {t(
+                    `groups.filter${option === 'all' ? 'All' : option === 'joined' ? 'Joined' : 'Open'}`,
+                  )}
+                </Chip>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {!directory.isLoading && !directory.isError && directory.groups.length === 0 ? (
           <EmptyState
             icon={<Users size={22} />}
@@ -83,8 +123,14 @@ export default function GroupsPage() {
           />
         ) : null}
 
+        {directory.groups.length > 0 && visible.length === 0 ? (
+          <p className="mt-4 text-sm text-muted" role="status">
+            {t('groups.noMatches')}
+          </p>
+        ) : null}
+
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {directory.groups.map((group) => {
+          {visible.map((group) => {
             const action = joinAction(group, isSignedIn);
             return (
               <Card as="li" key={group.id}>
