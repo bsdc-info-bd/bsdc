@@ -67,4 +67,21 @@ class MkLogicTest {
         assertTrue(MkLogic.canCustomerCancel("accepted"))
         assertFalse(MkLogic.canCustomerCancel("out_for_delivery"))
     }
+
+    @Test
+    fun onlyOpenOrdersKeepAStatusNotification() {
+        assertTrue(MkLogic.isActiveOrderStatus("placed"))
+        assertTrue(MkLogic.isActiveOrderStatus("accepted"))
+        assertTrue(MkLogic.isActiveOrderStatus("packaged"))
+        assertTrue(MkLogic.isActiveOrderStatus("out_for_delivery"))
+        assertFalse(MkLogic.isActiveOrderStatus("delivered"))
+        assertFalse(MkLogic.isActiveOrderStatus("cancelled"))
+    }
+
+    @Test
+    fun statusLabelsMatchTheServerWording() {
+        assertEquals("Out for delivery | ডেলিভারিতে", MkLogic.orderStatusLabel("out_for_delivery"))
+        assertEquals("Delivered | পৌঁছে গেছে", MkLogic.orderStatusLabel("delivered"))
+        assertEquals("mystery", MkLogic.orderStatusLabel("mystery"))
+    }
 }

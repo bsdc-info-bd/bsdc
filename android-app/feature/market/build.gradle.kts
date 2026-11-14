@@ -34,6 +34,8 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:network"))
     implementation(project(":core:media"))
+    implementation(project(":core:push"))
+    implementation(libs.androidx.core.ktx)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

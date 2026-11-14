@@ -335,6 +335,31 @@ fun MkCheckoutScreen(
                         }
                     }
                     Spacer(Modifier.height(10.dp))
+                    MkOsmPinMap(
+                        lat = lat,
+                        lng = lng,
+                        onPin = { plat, plng ->
+                            if (MkLogic.isInsideBangladesh(plat, plng)) {
+                                pinLat = plat
+                                pinLng = plng
+                                placeLabel = ""
+                                error = null
+                            } else {
+                                error = mkText(bn, "The pin must be inside Bangladesh.", "পিন বাংলাদেশের ভেতরে হতে হবে।")
+                            }
+                        },
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        text = mkText(
+                            bn,
+                            "Tap the map or drag the pin to mark the exact spot.",
+                            "ম্যাপে ট্যাপ করুন বা পিন টেনে সঠিক জায়গা ঠিক করুন।",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BsdcThemeTokens.colors.mutedText,
+                    )
+                    Spacer(Modifier.height(8.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (pinOk) {
                             BsdcBadge(label = mkText(bn, "Pinned", "পিন হয়েছে"), tone = BsdcTone.OK)

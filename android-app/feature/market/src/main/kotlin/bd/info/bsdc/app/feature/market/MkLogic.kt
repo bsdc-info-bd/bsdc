@@ -71,6 +71,21 @@ object MkLogic {
         else -> -1
     }
 
+    /** Orders still moving through the line. These keep a status notification on the device. */
+    fun isActiveOrderStatus(status: String): Boolean =
+        status == "placed" || status == "accepted" || status == "packaged" || status == "out_for_delivery"
+
+    /** Bilingual status text, the same wording the server writes into order notifications. */
+    fun orderStatusLabel(status: String): String = when (status) {
+        "placed" -> "New order | নতুন অর্ডার"
+        "accepted" -> "Accepted | গ্রহণ করা হয়েছে"
+        "packaged" -> "Packaged | প্যাকেট হয়েছে"
+        "out_for_delivery" -> "Out for delivery | ডেলিভারিতে"
+        "delivered" -> "Delivered | পৌঁছে গেছে"
+        "cancelled" -> "Cancelled | বাতিল"
+        else -> status
+    }
+
     /** A review is allowed only after delivery and only once. */
     fun canReview(status: String, reviewed: Boolean): Boolean = status == "delivered" && !reviewed
 
