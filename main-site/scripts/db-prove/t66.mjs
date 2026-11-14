@@ -531,6 +531,18 @@ check(
 const applicantsDirect = await run(`select count(*) from public.mk_vendor_applications`, cust1);
 check(applicantsDirect.error !== null, 'applications (NID numbers) are not readable directly by members', '');
 
+// 15. Read models for the new screens (0095)
+const myApp = await run(`select public.mk_my_application() as a`, applicant2);
+check(myApp.rows[0]?.a?.status === 'rejected' && myApp.rows[0]?.a?.review_note?.length > 0,
+  'an applicant sees the rejection and the reviewer note', myApp.error?.message);
+const noApp = await run(`select public.mk_my_application() as a`, 'mk-nobody');
+check(noApp.rows[0]?.a === null, 'a person with no application gets null, not an error', noApp.error?.message);
+const catalog = await run(`select public.mk_vendor_catalog() as c`, vendorUid);
+check((catalog.rows[0]?.c?.products ?? []).length >= 2 && (catalog.rows[0]?.c?.categories ?? []).length === 1,
+  'vendor catalogue lists every product and category', catalog.error?.message);
+const catalogAnon = await run(`select public.mk_vendor_catalog()`, cust2);
+check(code(catalogAnon) === '42501', 'a customer cannot read the vendor catalogue', code(catalogAnon));
+
 console.log(`\n${pass} passed, ${bad.length} failed`);
 if (bad.length > 0) {
   process.exit(1);

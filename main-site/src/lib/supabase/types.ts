@@ -2347,6 +2347,45 @@ export type Database = {
     };
     Views: Record<never, never>;
     Functions: {
+      mk_payment_instructions: { Args: never; Returns: Json };
+      mk_my_application: { Args: never; Returns: Json };
+      mk_submit_vendor_application: { Args: { p: Json }; Returns: Json };
+      mk_vendor_dashboard: { Args: never; Returns: Json };
+      mk_vendor_orders: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_vendor_set_order_status: {
+        Args: { p_order_id: string; p_next: string; p_reason?: string };
+        Returns: Json;
+      };
+      mk_vendor_catalog: { Args: never; Returns: Json };
+      mk_vendor_save_category: {
+        Args: { p_id?: string | null; p_name: string; p_sort?: number };
+        Returns: string;
+      };
+      mk_vendor_save_product: { Args: { p_id?: string | null; p: Json }; Returns: string };
+      mk_vendor_update_profile: { Args: { p: Json }; Returns: Json };
+      mk_vendor_buy_credits: {
+        Args: { p_package_code: string; p_sender: string; p_holder: string; p_txn_id: string };
+        Returns: Json;
+      };
+      mk_list_vendors: {
+        Args: { p_type?: string | null; p_query?: string; p_lat?: number | null; p_lng?: number | null; p_limit?: number };
+        Returns: Json;
+      };
+      mk_admin_list_applications: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_admin_decide_application: {
+        Args: { p_application_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
+      mk_admin_list_credit_purchases: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_admin_decide_credit_purchase: {
+        Args: { p_purchase_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
+      mk_admin_set_setting: { Args: { p_key: string; p_value: string }; Returns: Json };
+      mk_admin_set_package: {
+        Args: { p_code: string; p_orders: number; p_price_poisha: number; p_is_active?: boolean };
+        Returns: Json;
+      };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.
