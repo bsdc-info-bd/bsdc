@@ -543,6 +543,43 @@ check((catalog.rows[0]?.c?.products ?? []).length >= 2 && (catalog.rows[0]?.c?.c
 const catalogAnon = await run(`select public.mk_vendor_catalog()`, cust2);
 check(code(catalogAnon) === '42501', 'a customer cannot read the vendor catalogue', code(catalogAnon));
 
+// 16. Order notifications (0096)
+const orderCode = await db.query(`select code from public.mk_orders where id = $1`, [orderId]);
+const cancelledCode = await db.query(`select code from public.mk_orders where id = $1`, [order2]);
+const vendorNew = await db.query(
+  `select count(*)::int as n from public.notifications where uid = $1 and kind = 'order' and body like 'Order % · New order%'`,
+  [vendorUid],
+);
+check(vendorNew.rows[0]?.n >= 1, 'the vendor is told at once when an order is placed', String(vendorNew.rows[0]?.n));
+const customerSelf = await db.query(
+  `select count(*)::int as n from public.notifications where uid = $1 and body like '%New order%'`,
+  [cust1],
+);
+check(customerSelf.rows[0]?.n === 0, 'the customer is not notified of their own placement', String(customerSelf.rows[0]?.n));
+const customerAccepted = await db.query(
+  `select count(*)::int as n from public.notifications where uid = $1 and body like $2`,
+  [cust1, `Order ${orderCode.rows[0]?.code} · Accepted%`],
+);
+check(customerAccepted.rows[0]?.n >= 1, 'the customer is told when the shop accepts their order', String(customerAccepted.rows[0]?.n));
+const vendorCancelled = await db.query(
+  `select count(*)::int as n from public.notifications where uid = $1 and body like $2`,
+  [cust2, `Order ${cancelledCode.rows[0]?.code} · Cancelled%`],
+);
+check(vendorCancelled.rows[0]?.n >= 1, 'a shop cancellation reaches the customer, with the reason', String(vendorCancelled.rows[0]?.n));
+const ownInbox = await run(`select count(*)::int as n from public.notifications where kind = 'order'`, cust1);
+check(ownInbox.error === null && ownInbox.rows[0]?.n >= 2, 'the customer reads their own order notifications through RLS', ownInbox.error?.message ?? String(ownInbox.rows[0]?.n));
+const otherInbox = await run(`select count(*)::int as n from public.notifications where uid = '${cust2}'`, cust1);
+check(otherInbox.error === null && otherInbox.rows[0]?.n === 0, 'another customer cannot read these notifications', String(otherInbox.rows[0]?.n));
+
+// 17. Checkout reference (0097)
+const shopSlug = await db.query(`select slug from public.mk_vendors where id = $1`, [vendorId]);
+const refOk = await run(`select public.mk_vendor_ref('${shopSlug.rows[0]?.slug}') as id`, cust1);
+check(refOk.rows[0]?.id === vendorId, 'a listed shop resolves to its id for checkout', refOk.error?.message ?? '');
+const refAnon = await run(`select public.mk_vendor_ref('${shopSlug.rows[0]?.slug}') as id`, null);
+check(refAnon.rows[0]?.id === vendorId, 'a listed shop resolves for a visitor too', refAnon.error?.message ?? '');
+const refMissing = await run(`select public.mk_vendor_ref('no-such-shop') as id`, cust1);
+check(refMissing.error === null && refMissing.rows[0]?.id === null, 'an unknown slug resolves to null', refMissing.error?.message ?? '');
+
 console.log(`\n${pass} passed, ${bad.length} failed`);
 if (bad.length > 0) {
   process.exit(1);

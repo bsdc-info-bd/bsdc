@@ -165,3 +165,94 @@ export interface MkListedShop {
   rating: number;
   review_count: number;
 }
+
+// Customer side ---------------------------------------------------------------
+
+export interface MkVendorPageData {
+  vendor: {
+    slug: string;
+    name: string;
+    vendor_type: ShopType;
+    description: string;
+    logo_url: string;
+    cover_url: string;
+    place_label: string;
+    lat: number;
+    lng: number;
+  };
+  categories: { id: string; name: string }[];
+  products: MkStorefrontProduct[];
+  rating: number;
+  review_count: number;
+}
+
+export interface MkStorefrontProduct {
+  id: string;
+  slug: string;
+  name: string;
+  price_poisha: number;
+  in_stock: boolean;
+  category_id: string | null;
+  image_url: string;
+}
+
+export interface MkProductDetail {
+  id: string;
+  name: string;
+  description: string;
+  price_poisha: number;
+  in_stock: boolean;
+  stock: number;
+  images: string[];
+  vendor: { slug: string; name: string };
+  rating: number;
+}
+
+export interface MkCartLine {
+  product_id: string;
+  qty: number;
+  product_name: string;
+  price_poisha: number;
+  stock: number;
+  product_status: string;
+  orderable: boolean;
+  vendor_id: string;
+  vendor_slug: string;
+  vendor_name: string;
+  line_total: number;
+  image_url: string;
+}
+
+export interface MkPlacedOrder {
+  order_id: string;
+  code: string;
+  status: 'placed';
+  subtotal_poisha: number;
+  delivery_fee_poisha: number;
+  total_poisha: number;
+  line_count: number;
+}
+
+export interface MkCustomerOrder {
+  id: string;
+  code: string;
+  status: OrderStatus;
+  total_poisha: number;
+  delivery_fee_poisha: number;
+  placed_at: string;
+  delivered_at: string | null;
+  vendor: { slug: string; name: string; logo_url: string };
+  reviewed: boolean;
+  items: { name: string; qty: number; line_total: number; image_url: string }[];
+}
+
+export interface MkAddress {
+  customer_name: string;
+  customer_phone: string;
+  address_line: string;
+  landmark: string;
+  lat: number | null;
+  lng: number | null;
+  place_label: string;
+  note: string;
+}

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSupabase } from '@/lib/supabase/client';
 import type { OrderStatus } from '@/lib/mk/mk-logic';
+import type { MkAddress } from '@/lib/mk/mk-types';
 import * as repo from '@/lib/mk/mk-repository';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -161,5 +162,107 @@ export function useListedShops(type: string | null, query: string, origin: { lat
     queryKey: [...KEYS.shops, type, query, origin?.lat ?? null, origin?.lng ?? null],
     queryFn: () => repo.listShops(type, query, origin),
     staleTime: 30_000,
+  });
+}
+
+// Customer hooks --------------------------------------------------------------
+
+export function useVendorPage(slug: string) {
+  return useQuery({
+    queryKey: ['mk', 'vendor-page', slug],
+    queryFn: () => repo.fetchVendorPage(slug),
+    enabled: slug !== '',
+    staleTime: 30_000,
+  });
+}
+
+export function useProductDetail(productId: string) {
+  return useQuery({
+    queryKey: ['mk', 'product', productId],
+    queryFn: () => repo.fetchProductDetail(productId),
+    enabled: productId !== '',
+    staleTime: 30_000,
+  });
+}
+
+export function useMyCart() {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  return useQuery({
+    queryKey: ['mk', 'cart', uid],
+    queryFn: repo.fetchMyCart,
+    enabled: uid !== null,
+    staleTime: 5_000,
+  });
+}
+
+export function useSetCartQty() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { productId: string; qty: number }) => repo.setCartQty(input.productId, input.qty),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'cart'] });
+    },
+  });
+}
+
+export function usePlaceOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      vendorId: string;
+      address: MkAddress;
+      directItems: { product_id: string; qty: number }[] | null;
+    }) => repo.placeOrder(input.vendorId, input.address, input.directItems),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'cart'] });
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] });
+    },
+  });
+}
+
+/**
+ * The customer's orders, kept live. Realtime pushes every status change from
+ * the vendor; a change refreshes the tracker at once.
+ */
+export function useMyOrders() {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: ['mk', 'orders', uid],
+    queryFn: repo.fetchMyOrders,
+    enabled: uid !== null,
+    staleTime: 5_000,
+  });
+
+  useEffect(() => {
+    if (uid === null) return undefined;
+    const channel = getSupabase()
+      .channel(`mk-my-orders-${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mk_orders' }, () => {
+        void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] });
+      })
+      .subscribe();
+    return () => {
+      void getSupabase().removeChannel(channel);
+    };
+  }, [uid, queryClient]);
+
+  return query;
+}
+
+export function useCancelMyOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { orderId: string; reason: string }) => repo.cancelMyOrder(input.orderId, input.reason),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] }),
+  });
+}
+
+export function useSubmitReview() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { orderId: string; rating: number; body: string }) =>
+      repo.submitReview(input.orderId, input.rating, input.body),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] }),
   });
 }

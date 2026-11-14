@@ -2382,6 +2382,18 @@ export type Database = {
         Returns: Json;
       };
       mk_admin_set_setting: { Args: { p_key: string; p_value: string }; Returns: Json };
+      mk_vendor_ref: { Args: { p_slug: string }; Returns: string | null };
+      mk_vendor_page: { Args: { p_slug: string }; Returns: Json };
+      mk_product_detail: { Args: { p_product_id: string }; Returns: Json };
+      mk_cart_set: { Args: { p_product_id: string; p_qty: number }; Returns: number };
+      mk_my_cart: { Args: never; Returns: Json };
+      mk_place_order: {
+        Args: { p_vendor_id: string; p_address: Json; p_items?: Json };
+        Returns: Json;
+      };
+      mk_my_orders: { Args: { p_limit?: number }; Returns: Json };
+      mk_customer_cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: Json };
+      mk_submit_review: { Args: { p_order_id: string; p_rating: number; p_body?: string }; Returns: Json };
       mk_admin_set_package: {
         Args: { p_code: string; p_orders: number; p_price_poisha: number; p_is_active?: boolean };
         Returns: Json;

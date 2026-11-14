@@ -58,6 +58,12 @@ const VendorPage = lazy(() => import('@/routes/VendorPage'));
 const ShopApplyPage = lazy(() => import('@/routes/ShopApplyPage'));
 const VendorConsolePage = lazy(() => import('@/routes/VendorConsolePage'));
 const AdminMarketplacePage = lazy(() => import('@/routes/AdminMarketplacePage'));
+const MarketplacePage = lazy(() => import('@/routes/MarketplacePage'));
+const MarketShopPage = lazy(() => import('@/routes/MarketShopPage'));
+const MarketProductPage = lazy(() => import('@/routes/MarketProductPage'));
+const MarketCartPage = lazy(() => import('@/routes/MarketCartPage'));
+const MarketCheckoutPage = lazy(() => import('@/routes/MarketCheckoutPage'));
+const MarketOrdersPage = lazy(() => import('@/routes/MarketOrdersPage'));
 const VendorProductsPage = lazy(() => import('@/routes/VendorProductsPage'));
 const VendorOrdersPage = lazy(() => import('@/routes/VendorOrdersPage'));
 const VendorPayoutsPage = lazy(() => import('@/routes/VendorPayoutsPage'));
@@ -141,6 +147,12 @@ const router = createBrowserRouter([
           { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
           { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
           { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
+          { path: ROUTES.market, element: withSuspense(<MarketplacePage />) },
+          { path: '/marketplace/shop/:slug', element: withSuspense(<MarketShopPage />) },
+          { path: '/marketplace/product/:id', element: withSuspense(<MarketProductPage />) },
+          { path: ROUTES.marketCart, element: withSuspense(<MarketCartPage />) },
+          { path: '/marketplace/checkout/:slug', element: withSuspense(<MarketCheckoutPage />) },
+          { path: ROUTES.marketOrders, element: withSuspense(<MarketOrdersPage />) },
           { path: ROUTES.vendorOrders, element: withSuspense(<VendorOrdersPage />) },
           { path: ROUTES.vendorPayouts, element: withSuspense(<VendorPayoutsPage />) },
         ],

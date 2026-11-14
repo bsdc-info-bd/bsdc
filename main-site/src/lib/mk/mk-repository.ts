@@ -10,6 +10,12 @@ import type {
   MkVendorCatalog,
   MkVendorDashboard,
   MkVendorOrder,
+  MkAddress,
+  MkCartLine,
+  MkCustomerOrder,
+  MkPlacedOrder,
+  MkProductDetail,
+  MkVendorPageData,
 } from './mk-types';
 
 /**
@@ -231,6 +237,76 @@ export async function setAdminPackage(
     p_orders: orders,
     p_price_poisha: pricePoisha,
     p_is_active: isActive,
+  });
+  if (error) throw error;
+}
+
+// Customer -------------------------------------------------------------------
+
+
+export async function fetchVendorPage(slug: string): Promise<MkVendorPageData | null> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_page', { p_slug: slug });
+  if (error) throw error;
+  return asJson<MkVendorPageData | null>(data);
+}
+
+export async function fetchVendorRef(slug: string): Promise<string | null> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_ref', { p_slug: slug });
+  if (error) throw error;
+  return (data) ?? null;
+}
+
+export async function fetchProductDetail(productId: string): Promise<MkProductDetail | null> {
+  const { data, error } = await getSupabase().rpc('mk_product_detail', { p_product_id: productId });
+  if (error) throw error;
+  return asJson<MkProductDetail | null>(data);
+}
+
+export async function setCartQty(productId: string, qty: number): Promise<number> {
+  const { data, error } = await getSupabase().rpc('mk_cart_set', { p_product_id: productId, p_qty: qty });
+  if (error) throw error;
+  return data;
+}
+
+export async function fetchMyCart(): Promise<MkCartLine[]> {
+  const { data, error } = await getSupabase().rpc('mk_my_cart');
+  if (error) throw error;
+  return asJson<MkCartLine[]>(data);
+}
+
+export async function placeOrder(
+  vendorId: string,
+  address: MkAddress,
+  directItems: { product_id: string; qty: number }[] | null,
+): Promise<MkPlacedOrder> {
+  const { data, error } = await getSupabase().rpc('mk_place_order', {
+    p_vendor_id: vendorId,
+    p_address: address as unknown as Json,
+    p_items: directItems === null ? null : (directItems as unknown as Json),
+  });
+  if (error) throw error;
+  return asJson<MkPlacedOrder>(data);
+}
+
+export async function fetchMyOrders(): Promise<MkCustomerOrder[]> {
+  const { data, error } = await getSupabase().rpc('mk_my_orders', { p_limit: 40 });
+  if (error) throw error;
+  return asJson<MkCustomerOrder[]>(data);
+}
+
+export async function cancelMyOrder(orderId: string, reason: string): Promise<void> {
+  const { error } = await getSupabase().rpc('mk_customer_cancel_order', {
+    p_order_id: orderId,
+    p_reason: reason,
+  });
+  if (error) throw error;
+}
+
+export async function submitReview(orderId: string, rating: number, body: string): Promise<void> {
+  const { error } = await getSupabase().rpc('mk_submit_review', {
+    p_order_id: orderId,
+    p_rating: rating,
+    p_body: body,
   });
   if (error) throw error;
 }
