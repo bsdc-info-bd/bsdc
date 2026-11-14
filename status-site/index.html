@@ -1,13 +1,69 @@
 <!doctype html>
+<!-- bsdc:hand-written — this head is maintained by hand, not by scripts/scaffold-corporate.sh. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
+
     <title>Service status — BSDC</title>
+    <meta
+      name="description"
+      content="Live uptime, incident history and planned maintenance for the Bangladesh Software Development Community platform and its public services."
+    />
+    <link rel="canonical" href="https://status.site.main.bsdc.info.bd/" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BSDC" />
+    <meta property="og:title" content="Service status — BSDC" />
+    <meta
+      property="og:description"
+      content="Live availability and incident updates across BSDC services, authentication, database and media delivery."
+    />
+    <meta property="og:url" content="https://status.site.main.bsdc.info.bd/" />
+    <meta property="og:image" content="https://www.bsdc.info.bd/og/og-image.png" />
+    <meta property="og:image:alt" content="BSDC service status" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Service status — BSDC" />
+    <meta
+      name="twitter:description"
+      content="Live availability and incident updates across BSDC services."
+    />
+    <meta name="twitter:image" content="https://www.bsdc.info.bd/og/og-image.png" />
+    <meta name="twitter:image:alt" content="BSDC service status" />
+
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="https://www.bsdc.info.bd/apple-touch-icon.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "BSDC Service Status",
+        "url": "https://status.site.main.bsdc.info.bd/",
+        "description": "Live uptime, incidents and maintenance announcements for Bangladesh Software Development Community services.",
+        "inLanguage": "en",
+        "publisher": {
+          "@type": "Organization",
+          "name": "Bangladesh Software Development Community",
+          "url": "https://www.bsdc.info.bd/"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <main>
+        <h1>BSDC service status</h1>
+        <p>
+          Checking live component availability requires JavaScript. If you cannot enable it, visit
+          <a href="https://www.bsdc.info.bd/">www.bsdc.info.bd</a> or write to
+          <a href="mailto:support@bsdc.info.bd">support@bsdc.info.bd</a>.
+        </p>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

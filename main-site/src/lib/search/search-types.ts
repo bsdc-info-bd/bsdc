@@ -1,4 +1,12 @@
-import { coursePath, groupPath, postPath, profilePath, projectPath } from '@/lib/site';
+import {
+  coursePath,
+  groupPath,
+  jobPath,
+  postPath,
+  profilePath,
+  projectPath,
+  ROUTES,
+} from '@/lib/site';
 import type { SearchKind } from '@/lib/supabase/types';
 
 export type { SearchKind };
@@ -20,6 +28,15 @@ export interface SearchSuggestion {
   kind: SearchKind;
   slug: string;
   title: string;
+}
+
+export interface RichSearchSuggestion {
+  kind: SearchKind;
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
 }
 
 export interface ParsedQuery {
@@ -88,7 +105,7 @@ export function resultPath(result: SearchResult): string {
     case 'course':
       return coursePath(result.slug);
     case 'job':
-      return '/jobs';
+      return result.slug.length > 0 ? jobPath(result.slug) : ROUTES.jobs;
     case 'project':
       return projectPath(result.slug);
   }

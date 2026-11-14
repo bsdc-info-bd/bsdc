@@ -10,7 +10,8 @@ import './i18n';
 import './styles/index.css';
 import { isConfigured } from './lib/env';
 import { startPerformanceReporting } from './lib/perf/collect';
-import { registerServiceWorker } from './pwa';
+import { registerPushServiceWorker } from './lib/push/register-worker';
+import { registerQueryClient } from './lib/query-client';
 
 /**
  * The connection to the database is opened before React asks for anything.
@@ -77,6 +78,7 @@ markImageCapability();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      networkMode: 'always',
       staleTime: 60_000,
       gcTime: 10 * 60_000,
       retry: 1,
@@ -84,6 +86,7 @@ const queryClient = new QueryClient({
     },
   },
 });
+registerQueryClient(queryClient);
 
 const container = document.getElementById('root');
 if (!container) {
@@ -104,11 +107,8 @@ createRoot(container).render(
   </StrictMode>,
 );
 
-// `registerServiceWorker` heals the picture cache itself, once per build, before
-// it registers anything. Calling `healMediaCachesOnce` here as well raced it:
-// two calls passed the marker check together and both deleted, which is how a
-// cache that was still being written went missing.
-registerServiceWorker();
+// Registers the push-only worker and removes any legacy offline/image caches.
+registerPushServiceWorker();
 
 // Ask the deployment what it can upload through, once, while the browser is
 // idle — so the first member to attach a picture does not pay for the question.

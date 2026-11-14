@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type * as AdsRepository from '@/lib/ads/ads-repository';
 import type * as FirebaseModule from '@/lib/firebase';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -10,6 +11,7 @@ import type {
   CreativeCopy,
   ServedAd,
 } from '@/lib/ads/ads-types';
+import { isConfigured } from '@/lib/env';
 import { useAuthStore } from '@/store/auth-store';
 
 let repositoryModule: Promise<typeof AdsRepository> | null = null;
@@ -50,19 +52,34 @@ export interface AdSlotResult {
   onClick: () => void;
 }
 
+export interface AdSlotOptions {
+  topic?: string | undefined;
+  city?: string | undefined;
+}
+
 /**
  * One ad for one slot, counted the way the industry agrees an impression
  * should be counted: at least half of it on screen for a full second. The
  * server still deduplicates, so a failed report costs nobody anything.
  */
-export function useAdSlot(placement: AdPlacement): AdSlotResult {
+export function useAdSlot(placement: AdPlacement, options: AdSlotOptions = {}): AdSlotResult {
+  const { i18n } = useTranslation();
+  const language = i18n.language === 'bn' ? 'bn' : 'en';
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const [node, setNode] = useState<HTMLElement | null>(null);
   const reported = useRef(false);
+  const topic = options.topic?.trim() ?? '';
+  const city = options.city?.trim() ?? '';
 
   const query = useQuery({
-    queryKey: ['ad-slot', placement, uid],
-    queryFn: async () => (await repository()).fetchAds(placement, 1),
+    queryKey: ['ad-slot', placement, uid, language, topic, city],
+    queryFn: async () =>
+      (await repository()).fetchAds(placement, 1, {
+        language,
+        ...(topic.length > 0 ? { topic } : {}),
+        ...(city.length > 0 ? { city } : {}),
+      }),
+    enabled: isConfigured.supabase,
     staleTime: 120_000,
     retry: false,
   });

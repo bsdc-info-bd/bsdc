@@ -26,6 +26,30 @@ import {
   type PendingCampaignRow,
   type PendingShopRow,
 } from './approvals';
+import {
+  LAYOUT_LABELS,
+  PLACEMENT_LABELS,
+  PLATFORM_LABELS,
+  type AdLayout,
+  type AdPlacement,
+  type AdPlatform,
+} from './campaigns';
+
+interface PendingCreativePreviewRow {
+  readonly creative_id: string;
+  readonly placement: AdPlacement;
+  readonly headline: string;
+  readonly body: string;
+  readonly image_url: string;
+  readonly thumb_url: string;
+  readonly image_alt: string;
+  readonly cta_label: string;
+  readonly target_url: string;
+  readonly is_enabled: boolean;
+  readonly layout: AdLayout;
+  readonly badge_label: string;
+  readonly platforms: readonly AdPlatform[];
+}
 
 /**
  * The two review queues.
@@ -259,6 +283,22 @@ function CampaignRow({
   const [confirming, setConfirming] = useState<'approve' | 'refuse' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showCreatives, setShowCreatives] = useState(false);
+  const [creatives, setCreatives] = useState<readonly PendingCreativePreviewRow[] | null>(null);
+  const [creativesError, setCreativesError] = useState('');
+
+  const toggleCreatives = (): void => {
+    const next = !showCreatives;
+    setShowCreatives(next);
+    if (next && creatives === null) {
+      setCreativesError('');
+      listRpc<PendingCreativePreviewRow>(env, 'campaign_creative_details', {
+        p_campaign_id: campaign.id,
+      })
+        .then((rows) => setCreatives(rows))
+        .catch((failure: unknown) => setCreativesError(messageOf(failure)));
+    }
+  };
 
   const submit = (approve: boolean): void => {
     const problems = decisionProblems(approve, draft);
@@ -311,6 +351,51 @@ function CampaignRow({
         </Banner>
       ) : null}
 
+      {showCreatives ? (
+        <div className="kit-stack">
+          {creativesError !== '' ? (
+            <Banner tone="bad" title="Could not load creatives">
+              <p className="kit-small">{creativesError}</p>
+            </Banner>
+          ) : creatives === null ? (
+            <Loading label="Loading creatives." />
+          ) : (
+            creatives.map((item) => (
+              <div key={item.creative_id} className="kit-adpreview">
+                <div className="kit-adpreview-head">
+                  <span className="kit-badge">
+                    {item.badge_label || 'Sponsored'} · {PLACEMENT_LABELS[item.placement]} ·{' '}
+                    {LAYOUT_LABELS[item.layout] ?? item.layout}
+                  </span>
+                  <span className="kit-small kit-muted">
+                    {(item.platforms ?? ['web', 'android'])
+                      .map((p) => PLATFORM_LABELS[p])
+                      .join(' + ')}
+                  </span>
+                </div>
+                <div className="kit-adpreview-body">
+                  {item.image_url !== '' ? (
+                    <img
+                      src={item.thumb_url || item.image_url}
+                      alt={item.image_alt || item.headline}
+                      className="kit-adpreview-media"
+                    />
+                  ) : null}
+                  <div className="kit-stack" style={{ gap: '4px' }}>
+                    <strong>{item.headline}</strong>
+                    {item.body !== '' ? <p className="kit-small">{item.body}</p> : null}
+                    <span className="kit-small kit-muted">
+                      {item.cta_label ? `[${item.cta_label}] → ` : ''}
+                      {item.target_url}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
       {error.length > 0 ? (
         <Banner tone="bad" title="That did not work">
           <p className="kit-small">{error}</p>
@@ -329,6 +414,11 @@ function CampaignRow({
           <Button size="small" variant="quiet" onClick={() => setConfirming('refuse')}>
             Refuse
           </Button>
+          {campaign.creative_count > 0 ? (
+            <Button size="small" variant="quiet" onClick={toggleCreatives}>
+              {showCreatives ? 'Hide creatives' : 'Preview creatives'}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="kit-stack">

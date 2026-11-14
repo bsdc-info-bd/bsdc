@@ -53,6 +53,26 @@ describe('reading what the endpoint sent', () => {
     ]);
   });
 
+  it('unwraps the { notifications: [...] } envelope returned by /api/push/content', () => {
+    const parsed = parsePushContent({
+      notifications: [
+        {
+          id: 'n-1',
+          kind: 'message',
+          body: 'Hello',
+          url: '/messages/c1',
+          actor_name: 'Karim',
+          actor_avatar: '',
+          language: 'en',
+          created_at: '2026-10-09T04:00:00.000Z',
+        },
+      ],
+    });
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.url).toBe('/messages/c1');
+    expect(parsed[0]?.kind).toBe('message');
+  });
+
   it('is not fooled by an answer that is not a list', () => {
     expect(parsePushContent(null)).toEqual([]);
     expect(parsePushContent({ id: 'abc' })).toEqual([]);
@@ -84,6 +104,13 @@ describe('the words', () => {
     expect(notificationTitle(content({ kind: 'message', language: 'bn' }))).toBe('নতুন বার্তা');
     expect(notificationTitle(content({ kind: 'message', language: 'en' }))).toBe('New message');
     expect(notificationTitle(content({ kind: 'follow', language: 'en' }))).toBe('New follower');
+    expect(notificationTitle(content({ kind: 'order', language: 'en' }))).toBe('Order update');
+    expect(notificationTitle(content({ kind: 'certificate', language: 'bn' }))).toBe(
+      'সার্টিফিকেট প্রস্তুত',
+    );
+    expect(notificationTitle(content({ kind: 'feedback', language: 'en' }))).toBe(
+      'Feedback update',
+    );
   });
 
   it('says what happened, and who did it when nothing else is known', () => {

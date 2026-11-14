@@ -22,7 +22,7 @@ import { useMyProjects, useProjects } from '@/hooks/use-opportunities';
 import { cn } from '@/lib/cn';
 import { formatNumber } from '@/lib/format';
 import { filterProjects } from '@/lib/opportunities/project-filters';
-import { projectEditPath, projectPath, ROUTES } from '@/lib/site';
+import { projectEditPath, projectPath, ROUTES, SITE } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 /** A searchable, cover-led directory of what the community is building. */
@@ -45,6 +45,28 @@ export default function ProjectsPage() {
         title={t('projects.metaTitle')}
         description={t('projects.metaDescription')}
         path={ROUTES.projects}
+        jsonLd={[
+          {
+            '@type': 'CollectionPage',
+            name: t('projects.title'),
+            description: t('projects.metaDescription'),
+            url: `${SITE.url}${ROUTES.projects}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              itemListElement: projects.slice(0, 20).map((project, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                item: {
+                  '@type': 'SoftwareSourceCode',
+                  name: project.name,
+                  description: project.tagline,
+                  url: `${SITE.url}${projectPath(project.slug)}`,
+                  ...(project.tech.length > 0 ? { programmingLanguage: project.tech } : {}),
+                },
+              })),
+            },
+          },
+        ]}
       />
 
       <div className="fab-container py-6 sm:py-10">

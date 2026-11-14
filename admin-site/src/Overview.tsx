@@ -1,16 +1,23 @@
-import { useCallback } from 'react';
-import type { ReactElement } from 'react';
+import { useCallback, useState, type ReactElement } from 'react';
 import {
-  Badge,
   Banner,
   Button,
   Card,
+  Drawer,
   Empty,
+  Field,
+  KpiTile,
   Loading,
+  PortalFederationStrip,
   Table,
+  buildTelemetrySignals,
   listRpc,
+  relativeTimeLabel,
+  rowsToCsv,
   useAsync,
   useCorporateEnv,
+  useSession,
+  type TelemetrySnapshot,
 } from '@kit';
 import {
   describeAction,
@@ -23,28 +30,23 @@ import {
   type Overview as OverviewRow,
 } from './overview';
 
-/**
- * What this console is for, in one screen.
- *
- * Two things live here that existed in the database and in no console:
- *
- *   1. `admin_overview()` — written in 0024, counted members, posts, open
- *      reports, pending shops, pending campaigns and enabled plugins, and was
- *      called by nothing. An owner had no page that told them what needed them.
- *   2. `admin_audit()` — the audit trail. Every privileged change in the platform
- *      writes to it, and until now the only way to read it was a SQL console. That
- *      is the wrong answer for the one record that exists to answer "who did this,
- *      and when" during an incident.
- */
 export function Overview(): ReactElement {
   const env = useCorporateEnv();
+  const { state: session } = useSession();
+  const userRole = session.status === 'authenticated' ? session.profile.role : null;
+
   const load = useCallback(async () => {
-    const rows = await listRpc<OverviewRow>(env, 'admin_overview');
-    return rows[0] ?? null;
+    const [ovRows, snapRows] = await Promise.all([
+      listRpc<OverviewRow>(env, 'admin_overview'),
+      listRpc<TelemetrySnapshot>(env, 'admin_telemetry_snapshot').catch(() => []),
+    ]);
+    return { overview: ovRows[0] ?? null, snapshot: snapRows[0] ?? null };
   }, [env]);
   const { state, reload } = useAsync(load, [env]);
+  const [auditDrawerOpen, setAuditDrawerOpen] = useState(false);
 
-  if (state.status === 'loading') return <Loading label="Counting the community." />;
+  if (state.status === 'loading')
+    return <Loading label="Synchronizing community & corporate telemetry." />;
   if (state.status === 'error') {
     return (
       <Banner tone="bad" title="The overview did not load">
@@ -52,19 +54,19 @@ export function Overview(): ReactElement {
       </Banner>
     );
   }
-  if (state.data === null) {
+  if (state.data.overview === null) {
     return (
       <Banner tone="warn" title="The overview returned no numbers">
         <p className="kit-small">
-          The function answered with no rows. That usually means the caller holds no moderation
-          permission, which is itself worth knowing.
+          The function answered with no rows. Verify active moderation/admin clearance.
         </p>
       </Banner>
     );
   }
 
-  const overview = state.data;
+  const { overview, snapshot } = state.data;
   const waiting = outstandingWork(overview);
+  const signals = snapshot ? buildTelemetrySignals(snapshot) : [];
 
   return (
     <div className="kit-stack">
@@ -72,40 +74,176 @@ export function Overview(): ReactElement {
         tone={waiting === 0 ? 'ok' : waiting > 20 ? 'bad' : 'warn'}
         title={
           waiting === 0
-            ? 'Nothing is waiting on you'
-            : `${formatCount(waiting)} item${waiting === 1 ? '' : 's'} waiting on a person`
+            ? 'All community queues clear'
+            : `${formatCount(waiting)} pending decision${waiting === 1 ? '' : 's'} waiting`
         }
       >
         <p className="kit-small">
           {waiting === 0
-            ? 'Every report, shop and campaign has been answered. This screen refreshes when you press it, not on a timer, so it cannot show you a stale queue as if it were live.'
-            : 'Reports are worked on the moderator console. Shops and campaigns are worked on the Approvals tab. Nothing here clears itself.'}
+            ? 'Every shop application, campaign review, and report queue is balanced. Press Refresh at any time for a live Postgres snapshot.'
+            : 'Use Approvals for shops and campaigns, the CLI tab for batch operations, or switch directly via the Portal Network rail.'}
         </p>
       </Banner>
 
-      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
-        <h2 style={{ margin: 0 }}>The community right now</h2>
-        <Button variant="quiet" size="small" onClick={reload}>
-          Refresh
-        </Button>
-      </div>
+      <Card
+        title="Federated Portal Launchpad"
+        description="Jump straight into any specialized BSDC console with keyboard shortcut Ctrl+K or g+<key>."
+        actions={
+          <div className="kit-row">
+            <Button size="small" variant="quiet" onClick={() => setAuditDrawerOpen(true)}>
+              Open Audit Inspector
+            </Button>
+            <Button size="small" variant="quiet" onClick={reload}>
+              Refresh Telemetry
+            </Button>
+          </div>
+        }
+      >
+        <PortalFederationStrip currentAppId={env.appId} userRole={userRole} />
+      </Card>
 
       <div className="kit-grid">
         {overviewTiles(overview).map((tile) => (
-          <div key={tile.key} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
-            <div className="kit-row" style={{ justifyContent: 'space-between' }}>
-              <span className="kit-small kit-muted">{tile.label}</span>
-              <Badge tone={tile.tone}>{tile.tone === 'ok' ? 'clear' : tile.tone}</Badge>
-            </div>
-            <div style={{ fontSize: '2rem', fontWeight: 700, lineHeight: 1.1 }}>{tile.value}</div>
-            <p className="kit-small kit-muted" style={{ margin: 0 }}>
-              {tile.note}
-            </p>
-          </div>
+          <KpiTile
+            key={tile.key}
+            label={tile.label}
+            value={tile.value}
+            tone={tile.tone}
+            badge={tile.tone === 'ok' ? 'clear' : tile.tone}
+            detail={tile.note}
+          />
         ))}
       </div>
 
+      {signals.length > 0 && (
+        <Card
+          title="Cross-Portal Corporate Health"
+          description="Live snapshot from admin_telemetry_snapshot() spanning trust documents, security rules, edge errors, and incidents."
+        >
+          <div className="kit-grid">
+            {signals.map((sig) => (
+              <KpiTile
+                key={sig.id}
+                label={sig.label}
+                value={sig.value}
+                tone={sig.tone}
+                detail={sig.detail}
+              />
+            ))}
+          </div>
+        </Card>
+      )}
+
       <AuditTrail />
+
+      <Drawer
+        open={auditDrawerOpen}
+        title="Live Audit Inspector"
+        subtitle="Filter immutable audit_log rows by action prefix, actor UID, or subject."
+        onClose={() => setAuditDrawerOpen(false)}
+      >
+        <AuditInspector />
+      </Drawer>
+    </div>
+  );
+}
+
+function AuditInspector(): ReactElement {
+  const env = useCorporateEnv();
+  const [actionFilter, setActionFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('');
+
+  const load = useCallback(
+    () =>
+      listRpc<AuditRow>(env, 'admin_cli_audit_query', {
+        p_action: actionFilter.trim(),
+        p_subject: subjectFilter.trim(),
+        p_limit: 120,
+      }),
+    [env, actionFilter, subjectFilter],
+  );
+  const { state, reload } = useAsync(load, [env, actionFilter, subjectFilter]);
+
+  const exportCsv = (): void => {
+    if (state.status !== 'ready') return;
+    const csv = rowsToCsv(
+      ['created_at', 'actor_uid', 'action', 'subject', 'detail'],
+      state.data.map((r) => [
+        r.created_at,
+        r.actor_uid,
+        r.action,
+        r.subject,
+        describeMetadata(r.metadata),
+      ]),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bsdc-audit-export.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  return (
+    <div className="kit-stack">
+      <div className="kit-grid kit-grid--2">
+        <Field
+          label="Action filter"
+          placeholder="e.g. certificate. or notice."
+          value={actionFilter}
+          onChange={(e) => setActionFilter(e.target.value)}
+        />
+        <Field
+          label="Subject filter"
+          placeholder="UID, code, or path"
+          value={subjectFilter}
+          onChange={(e) => setSubjectFilter(e.target.value)}
+        />
+      </div>
+      <div className="kit-row">
+        <Button size="small" onClick={reload}>
+          Run Query
+        </Button>
+        {state.status === 'ready' && state.data.length > 0 && (
+          <Button size="small" variant="quiet" onClick={exportCsv}>
+            Export CSV ({state.data.length})
+          </Button>
+        )}
+      </div>
+
+      {state.status === 'loading' && <Loading label="Searching audit ledger." />}
+      {state.status === 'error' && (
+        <Banner tone="bad" title="Audit query failed">
+          {state.message}
+        </Banner>
+      )}
+      {state.status === 'ready' && state.data.length === 0 && (
+        <Empty>No audit records match the active filter.</Empty>
+      )}
+      {state.status === 'ready' && state.data.length > 0 && (
+        <Table caption="Filtered audit entries" head={['When', 'Actor', 'Action', 'Subject']}>
+          {state.data.map((row, idx) => (
+            <tr key={`${row.created_at}-${row.action}-${String(idx)}`}>
+              <td className="kit-small">
+                <div className="kit-mono">{row.created_at.slice(0, 19).replace('T', ' ')}</div>
+                <span className="kit-muted">{relativeTimeLabel(row.created_at)}</span>
+              </td>
+              <td className="kit-mono kit-small">{row.actor_uid.slice(0, 12)}</td>
+              <td className="kit-small">
+                <strong>{describeAction(row.action)}</strong>
+                <div className="kit-mono kit-muted">{row.action}</div>
+              </td>
+              <td className="kit-small">
+                <div className="kit-mono">{row.subject || '—'}</div>
+                <div className="kit-muted">{describeMetadata(row.metadata)}</div>
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
     </div>
   );
 }
@@ -113,7 +251,7 @@ export function Overview(): ReactElement {
 function AuditTrail(): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
-    async () => groupByDay(await listRpc<AuditRow>(env, 'admin_audit', { p_limit: 100 })),
+    async () => groupByDay(await listRpc<AuditRow>(env, 'admin_audit', { p_limit: 80 })),
     [env],
   );
   const { state, reload } = useAsync(load, [env]);
@@ -121,7 +259,7 @@ function AuditTrail(): ReactElement {
   return (
     <Card
       title="Recent privileged changes"
-      description="Every role change, suspension, configuration edit and approval writes here in the same transaction as the change."
+      description="Every role change, certificate revision, notice publication, configuration edit, and approval writes in the same transaction."
       actions={
         <Button variant="quiet" size="small" onClick={reload}>
           Refresh
@@ -135,10 +273,7 @@ function AuditTrail(): ReactElement {
         </Banner>
       ) : null}
       {state.status === 'ready' && state.data.length === 0 ? (
-        <Empty>
-          Nothing has been recorded yet. That is plausible on a new deployment and suspicious on an
-          old one — the audit log is written by the same transaction as the change.
-        </Empty>
+        <Empty>Nothing has been recorded yet.</Empty>
       ) : null}
       {state.status === 'ready'
         ? state.data.map((group) => (

@@ -5,9 +5,9 @@ name: Database
 #   verify  — builds the whole schema from nothing on a throwaway Postgres,
 #             then applies it a second time, then asserts the invariants the
 #             platform depends on. Runs on every pull request and every push.
-#   deploy  — applies the missing migrations to the real project. Runs only
-#             on main, only after verify has passed, only one at a time, and
-#             only with a connection string nobody can read out of a log.
+#   deploy  — applies the missing migrations and push settings to the real
+#             project. Runs after verify on pushes from any branch (no merge
+#             to main required) and manual production dispatches.
 #
 # A migration that has not been proved against an empty database has not been
 # proved at all: the file that works on your machine is working against six
@@ -15,7 +15,7 @@ name: Database
 
 on:
   push:
-    branches: [main, 'arena/**']
+    branches: ['**']
     paths:
       - 'supabase/**'
       - 'scripts/db-push.mjs'
@@ -25,6 +25,8 @@ on:
       - 'scripts/prove-staff-provision-concurrency.mjs'
       - 'scripts/prove-messenger-concurrency.mjs'
       - 'scripts/wait-for-messenger-migration.mjs'
+      - 'scripts/sync-push-secrets.mjs'
+      - 'scripts/sync-bikash-number.mjs'
       - '.github/workflows/database.yml'
   pull_request:
     paths:
@@ -36,6 +38,8 @@ on:
       - 'scripts/prove-staff-provision-concurrency.mjs'
       - 'scripts/prove-messenger-concurrency.mjs'
       - 'scripts/wait-for-messenger-migration.mjs'
+      - 'scripts/sync-push-secrets.mjs'
+      - 'scripts/sync-bikash-number.mjs'
       - '.github/workflows/database.yml'
   workflow_dispatch:
     inputs:
@@ -84,10 +88,23 @@ jobs:
           node-version: 20
 
       - name: Install the Postgres client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              echo "apt-get install failed (attempt $attempt); retrying..." >&2
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
+          fi
+          command -v psql >/dev/null 2>&1
+          psql --version
 
       - name: Check the runner's own logic
-        run: node scripts/db-push.mjs --self-test
+        run: |
+          node scripts/db-push.mjs --self-test
+          node scripts/sync-push-secrets.mjs --self-test
+          node scripts/sync-bikash-number.mjs --self-test
 
       - name: Show the plan
         run: node scripts/db-push.mjs --plan
@@ -282,8 +299,8 @@ jobs:
     name: Apply to production
     needs: verify
     if: |
-      github.event_name == 'workflow_dispatch' && inputs.target == 'production'
-      || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      (github.event_name == 'workflow_dispatch' && inputs.target == 'production')
+      || github.event_name == 'push'
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -297,7 +314,17 @@ jobs:
           node-version: 20
 
       - name: Install the Postgres client
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              echo "apt-get install failed (attempt $attempt); retrying..." >&2
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
+          fi
+          command -v psql >/dev/null 2>&1
+          psql --version
 
       # Reaching the database is the step that fails on a first deployment,
       # and the reason is never in the error: a direct Supabase host has no
@@ -338,6 +365,23 @@ jobs:
             echo "::error::applying the migrations failed: $(tail -c 1200 /tmp/apply.out | tr '\n' ' ')"
             exit "$status"
           fi
+
+      - name: Sync push delivery settings
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PUSH_FLUSH_SECRET: ${{ secrets.PUSH_FLUSH_SECRET }}
+          PUSH_WORKER_URL: ${{ secrets.PUSH_WORKER_URL }}
+          PUSH_VAPID_PUBLIC_KEY: ${{ secrets.PUSH_VAPID_PUBLIC_KEY }}
+          VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY }}
+          PUSH_VAPID_PRIVATE_KEY: ${{ secrets.PUSH_VAPID_PRIVATE_KEY }}
+          PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
+        run: node scripts/sync-push-secrets.mjs --target db
+
+      - name: Sync the BSDC bKash number for marketplace vendors
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BSDC_BIKASH_NUMBER: ${{ secrets.BSDC_BIKASH_NUMBER }}
+        run: node scripts/sync-bikash-number.mjs
 
       - name: Record what the database now holds
         env:

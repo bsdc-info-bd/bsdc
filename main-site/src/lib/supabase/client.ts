@@ -25,12 +25,16 @@ let client: BsdcSupabaseClient | null = null;
 async function currentAccessToken(): Promise<string | null> {
   if (!isConfigured.firebase) return null;
   const { getFirebaseAuth } = await import('@/lib/firebase');
-  const user = getFirebaseAuth().currentUser;
+  const auth = getFirebaseAuth() as ReturnType<typeof getFirebaseAuth> & {
+    authStateReady?: () => Promise<void>;
+  };
+  await auth.authStateReady?.();
+  const user = auth.currentUser;
   if (!user) return null;
   const { ensureDataAccess } = await import('@/lib/auth/data-access');
   const token = await ensureDataAccess(user);
   // Never send a previous account's token after a sign-out/account switch.
-  if (getFirebaseAuth().currentUser !== user) throw new Error('auth/required');
+  if (auth.currentUser !== user) throw new Error('auth/required');
   return token.token;
 }
 

@@ -51,8 +51,10 @@ describe('stage 3 scoring primitives', () => {
     expect(recencyScore(hoursAgo(12), NOW)).toBeCloseTo(0.25, 5);
   });
 
-  it('never returns a negative recency for a future timestamp', () => {
+  it('never returns a negative recency for a future timestamp and guards invalid dates', () => {
     expect(recencyScore(new Date(NOW + 60_000).toISOString(), NOW)).toBe(1);
+    expect(recencyScore('not-a-date', NOW)).toBe(0);
+    expect(Number.isNaN(recencyScore('not-a-date', NOW))).toBe(false);
   });
 
   it('rewards conversation more than likes', () => {
@@ -159,14 +161,17 @@ describe('stage 4 diversity', () => {
     expect(result.map((item) => item.postId)).toEqual(['a1', 'a2', 'b1', 'a3']);
   });
 
-  it('never loses a candidate', () => {
+  it('never loses a candidate and treats tag casing uniformly', () => {
     const input = [
-      scored('a1', 'alpha', 5, ['react']),
+      scored('a1', 'alpha', 5, ['React']),
       scored('a2', 'beta', 4, ['react']),
-      scored('a3', 'gamma', 3, ['react']),
+      scored('a3', 'gamma', 3, ['REACT']),
       scored('a4', 'delta', 2, ['react']),
+      scored('b1', 'epsilon', 1, ['go']),
     ];
-    expect(diversify(input)).toHaveLength(4);
+    const out = diversify(input);
+    expect(out).toHaveLength(5);
+    expect(out[3]?.postId).toBe('b1');
   });
 
   it('is deterministic when two posts tie', () => {

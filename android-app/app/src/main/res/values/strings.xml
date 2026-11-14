@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BSDC</string>
+    <string name="app_tagline">The open developer community of Bangladesh</string>
+    <string name="tab_home">Home</string>
+    <string name="tab_verify">Verify</string>
+    <string name="tab_create">Create</string>
+    <string name="tab_messenger">Messages</string>
+    <string name="tab_explore">Explore</string>
+</resources>

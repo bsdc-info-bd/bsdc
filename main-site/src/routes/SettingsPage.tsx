@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
-import { PictureHealthCard } from '@/components/media/PictureHealthCard';
 import { PushCard } from '@/components/notifications/PushCard';
 import { HandleCard } from '@/components/profile/HandleCard';
 import { LocationField } from '@/components/profile/LocationField';
@@ -239,10 +238,6 @@ function NotificationsPanel() {
           all. What this decides is whether a closed device is woken by them. */}
       <PushCard />
 
-      {/* The picture cache, on its own, with a button that touches nothing
-          else. This is the answer to "clear your cookies and cache". */}
-      <PictureHealthCard />
-
       <Card>
         <p className="mb-3 text-sm text-muted">{t('settings.notifications.description')}</p>
         <div className="grid gap-3">
@@ -283,6 +278,7 @@ function PrivacyPanel() {
   const rows: { key: keyof PrivacyPrefs; label: string }[] = [
     { key: 'discoverable', label: t('settings.privacy.discoverable') },
     { key: 'showActivity', label: t('settings.privacy.showActivity') },
+    { key: 'showFollowers', label: t('settings.privacy.showFollowers') },
     { key: 'showEmail', label: t('settings.privacy.showEmail') },
   ];
 

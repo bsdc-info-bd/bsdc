@@ -69,6 +69,23 @@ describe('what may be uploaded at all', () => {
     expect(() => assertUploadable(file('video/mp4', 10))).toThrow(MediaError);
   });
 
+  it('normalises legacy MIME aliases, casing, and empty browser MIME types with image extensions', () => {
+    expect(kindOf('image/jpg')).toBe('image');
+    expect(kindOf('image/pjpeg')).toBe('image');
+    expect(kindOf('image/x-png')).toBe('image');
+    expect(kindOf('IMAGE/JPEG; charset=utf-8')).toBe('image');
+
+    expect(
+      assertUploadable(new File([new Uint8Array(32)], 'photo.jpg', { type: 'image/jpg' })),
+    ).toBe('image');
+    expect(assertUploadable(new File([new Uint8Array(32)], 'camera.webp', { type: '' }))).toBe(
+      'image',
+    );
+    expect(() =>
+      assertUploadable(new File([new Uint8Array(32)], 'unknown-no-ext', { type: '' })),
+    ).toThrow(MediaError);
+  });
+
   it('refuses an empty file and one over the limit for its kind', () => {
     expect(() => assertUploadable(file('image/png', 0))).toThrow(MediaError);
     expect(() => assertUploadable(file('image/png', MAX_BYTES.image + 1))).toThrow(MediaError);

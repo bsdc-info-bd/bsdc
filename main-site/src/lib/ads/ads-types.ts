@@ -1,6 +1,8 @@
 import type {
   DbAdEventKind,
+  DbAdLayout,
   DbAdPlacement,
+  DbAdPlatform,
   DbAdPricing,
   DbAdStatus,
   DbAdWalletKind,
@@ -8,6 +10,8 @@ import type {
 
 export type AdStatus = DbAdStatus;
 export type AdPlacement = DbAdPlacement;
+export type AdLayout = DbAdLayout;
+export type AdPlatform = DbAdPlatform;
 export type AdPricing = DbAdPricing;
 export type AdEventKind = DbAdEventKind;
 export type AdWalletKind = DbAdWalletKind;
@@ -26,9 +30,14 @@ export interface ServedAd {
   headline: string;
   body: string;
   imageUrl: string;
+  thumbUrl?: string;
+  imageAlt?: string;
   ctaLabel: string;
   targetUrl: string;
   placement: AdPlacement;
+  layout?: AdLayout;
+  accentColor?: string;
+  badgeLabel?: string;
 }
 
 export interface Campaign {
@@ -55,8 +64,14 @@ export interface CampaignCreative {
   headline: string;
   body: string;
   imageUrl: string;
+  thumbUrl?: string;
+  imageAlt?: string;
   ctaLabel: string;
   targetUrl: string;
+  layout?: AdLayout;
+  accentColor?: string;
+  badgeLabel?: string;
+  platforms?: readonly AdPlatform[];
   isEnabled: boolean;
   impressions: number;
   clicks: number;

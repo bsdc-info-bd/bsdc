@@ -126,6 +126,17 @@ describe('advertiser dashboard', () => {
     expect(screen.queryByRole('button', { name: 'ads.resume' })).not.toBeInTheDocument();
   });
 
+  it('lists bid, schedule, daily spend and creatives for each campaign', () => {
+    useAuthStore.getState().setSession({ uid: 'advertiser-1' } as User, DEFAULT_CLAIMS);
+    page();
+    const facts = screen.getByRole('list', { name: 'ads.factsTitle' });
+    expect(facts).toHaveTextContent('ads.bidLine');
+    expect(facts).toHaveTextContent('ads.scheduleOpen');
+    expect(facts).toHaveTextContent('ads.dailyNoCap');
+    expect(facts).toHaveTextContent('ads.creatives');
+    expect(facts).not.toHaveTextContent('ads.dailyCapLine');
+  });
+
   it('does not offer editing for a finished campaign', () => {
     useAuthStore.getState().setSession({ uid: 'advertiser-1' } as User, DEFAULT_CLAIMS);
     mocks.campaigns = [{ ...campaign, status: 'completed' }];

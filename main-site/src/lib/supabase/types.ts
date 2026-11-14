@@ -301,11 +301,21 @@ export type DbNotificationKind =
   | 'comment'
   | 'reply'
   | 'mention'
+  | 'mention_group'
   | 'bookmark'
   | 'share'
   | 'post_published'
   | 'message'
-  | 'moderation';
+  | 'moderation'
+  | 'order'
+  | 'review'
+  | 'payout'
+  | 'course'
+  | 'job'
+  | 'event'
+  | 'certificate'
+  | 'group_invite'
+  | 'feedback';
 
 export type NotificationRow = {
   id: string;
@@ -316,6 +326,8 @@ export type NotificationRow = {
   comment_id: string | null;
   conversation_id: string | null;
   body: string;
+  target_url?: string;
+  seq?: number;
   read_at: string | null;
   created_at: string;
 };
@@ -624,6 +636,31 @@ export type FollowSuggestionRow = {
   reason: 'mutual' | 'skills' | 'city' | 'active';
 };
 
+/** One row of `profile_followers()` / `profile_following()` (0092). */
+export type SocialProfileItemRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  verified: boolean;
+  viewer_follows: boolean;
+  followed_at: string;
+};
+
+/** One row of `search_members_for_chat()` (0092). */
+export type ChatMemberCandidateRow = {
+  uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  bio: string;
+  location: string;
+  is_following: boolean;
+  verified: boolean;
+};
+
 /** One row of `my_push_subscriptions()`: a device that asked to be woken. */
 export type PushSubscriptionRow = {
   endpoint: string;
@@ -640,6 +677,17 @@ export type PushSubscriptionRow = {
  */
 export type PushDeviceRow = {
   endpoint: string;
+  user_agent: string;
+  language: string;
+  created_at: string;
+  last_used_at: string | null;
+  state: 'live' | 'invalid' | 'dead';
+};
+
+/** One row of `my_fcm_devices()` (0085). */
+export type FcmDeviceRow = {
+  token_hash: string;
+  platform: 'web' | 'android' | 'ios';
   user_agent: string;
   language: string;
   created_at: string;
@@ -1094,6 +1142,15 @@ export type SearchSuggestionRow = {
   title: string;
 };
 
+export type RichSearchSuggestionRow = {
+  kind: SearchKind;
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  image_url: string;
+};
+
 export type TrendingSearchRow = {
   term: string;
   uses: number;
@@ -1419,6 +1476,8 @@ export type DbAdStatus =
   | 'rejected'
   | 'completed';
 export type DbAdPlacement = 'feed' | 'sidebar' | 'shop' | 'search' | 'article';
+export type DbAdLayout = 'banner' | 'card' | 'compact' | 'native';
+export type DbAdPlatform = 'web' | 'android';
 export type DbAdPricing = 'cpm' | 'cpc';
 export type DbAdEventKind = 'impression' | 'click';
 export type DbAdWalletKind = 'topup' | 'spend' | 'refund' | 'adjustment';
@@ -1450,8 +1509,14 @@ export type AdCreativeRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url: string;
+  image_alt: string;
   cta_label: string;
   target_url: string;
+  layout: DbAdLayout;
+  accent_color: string;
+  badge_label: string;
+  platforms: DbAdPlatform[];
   is_enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -1495,9 +1560,14 @@ export type ServedAdRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url?: string;
+  image_alt?: string;
   cta_label: string;
   target_url: string;
   placement: DbAdPlacement;
+  layout?: DbAdLayout;
+  accent_color?: string;
+  badge_label?: string;
 };
 
 export type MyCampaignRow = {
@@ -1524,8 +1594,14 @@ export type CampaignCreativeRow = {
   headline: string;
   body: string;
   image_url: string;
+  thumb_url?: string;
+  image_alt?: string;
   cta_label: string;
   target_url: string;
+  layout?: DbAdLayout;
+  accent_color?: string;
+  badge_label?: string;
+  platforms?: DbAdPlatform[];
   is_enabled: boolean;
   impressions: number;
   clicks: number;
@@ -2029,8 +2105,14 @@ export type Database = {
             | 'headline'
             | 'body'
             | 'image_url'
+            | 'thumb_url'
+            | 'image_alt'
             | 'cta_label'
             | 'target_url'
+            | 'layout'
+            | 'accent_color'
+            | 'badge_label'
+            | 'platforms'
             | 'is_enabled'
           >
         >;
@@ -2265,6 +2347,69 @@ export type Database = {
     };
     Views: Record<never, never>;
     Functions: {
+      mk_payment_instructions: { Args: never; Returns: Json };
+      mk_my_application: { Args: never; Returns: Json };
+      mk_submit_vendor_application: { Args: { p: Json }; Returns: Json };
+      mk_vendor_dashboard: { Args: never; Returns: Json };
+      mk_vendor_orders: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_vendor_set_order_status: {
+        Args: { p_order_id: string; p_next: string; p_reason?: string };
+        Returns: Json;
+      };
+      mk_vendor_catalog: { Args: never; Returns: Json };
+      mk_vendor_save_category: {
+        Args: { p_id?: string | null; p_name: string; p_sort?: number };
+        Returns: string;
+      };
+      mk_vendor_save_product: { Args: { p_id?: string | null; p: Json }; Returns: string };
+      mk_vendor_update_profile: { Args: { p: Json }; Returns: Json };
+      mk_vendor_buy_credits: {
+        Args: { p_package_code: string; p_sender: string; p_holder: string; p_txn_id: string };
+        Returns: Json;
+      };
+      mk_list_vendors: {
+        Args: {
+          p_type?: string | null;
+          p_query?: string;
+          p_lat?: number | null;
+          p_lng?: number | null;
+          p_limit?: number;
+        };
+        Returns: Json;
+      };
+      mk_admin_list_applications: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_admin_decide_application: {
+        Args: { p_application_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
+      mk_admin_list_credit_purchases: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: Json;
+      };
+      mk_admin_decide_credit_purchase: {
+        Args: { p_purchase_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
+      mk_admin_set_setting: { Args: { p_key: string; p_value: string }; Returns: Json };
+      mk_vendor_ref: { Args: { p_slug: string }; Returns: string | null };
+      mk_vendor_page: { Args: { p_slug: string }; Returns: Json };
+      mk_product_detail: { Args: { p_product_id: string }; Returns: Json };
+      mk_cart_set: { Args: { p_product_id: string; p_qty: number }; Returns: number };
+      mk_my_cart: { Args: never; Returns: Json };
+      mk_place_order: {
+        Args: { p_vendor_id: string; p_address: Json; p_items?: Json };
+        Returns: Json;
+      };
+      mk_my_orders: { Args: { p_limit?: number }; Returns: Json };
+      mk_customer_cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: Json };
+      mk_submit_review: {
+        Args: { p_order_id: string; p_rating: number; p_body?: string };
+        Returns: Json;
+      };
+      mk_admin_set_package: {
+        Args: { p_code: string; p_orders: number; p_price_poisha: number; p_is_active?: boolean };
+        Returns: Json;
+      };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.
@@ -2282,6 +2427,18 @@ export type Database = {
       my_push_subscriptions: { Args: Record<string, never>; Returns: PushSubscriptionRow[] };
       my_push_devices: { Args: Record<string, never>; Returns: PushDeviceRow[] };
       forget_push_device: { Args: { p_endpoint: string }; Returns: undefined };
+      register_fcm_token: {
+        Args: {
+          p_token: string;
+          p_platform?: string;
+          p_user_agent?: string;
+          p_language?: string;
+        };
+        Returns: string;
+      };
+      forget_fcm_token: { Args: { p_token: string }; Returns: undefined };
+      forget_fcm_device: { Args: { p_token_hash: string }; Returns: undefined };
+      my_fcm_devices: { Args: Record<string, never>; Returns: FcmDeviceRow[] };
       /** 0073. Records an upload, validating the promise the host was given. */
       record_media_asset: {
         Args: {
@@ -2313,6 +2470,18 @@ export type Database = {
         }[];
       };
       follow_suggestions: { Args: { p_limit?: number }; Returns: FollowSuggestionRow[] };
+      profile_followers: {
+        Args: { p_uid: string; p_limit?: number; p_offset?: number };
+        Returns: SocialProfileItemRow[];
+      };
+      profile_following: {
+        Args: { p_uid: string; p_limit?: number; p_offset?: number };
+        Returns: SocialProfileItemRow[];
+      };
+      search_members_for_chat: {
+        Args: { p_query?: string; p_limit?: number };
+        Returns: ChatMemberCandidateRow[];
+      };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
@@ -2422,11 +2591,18 @@ export type Database = {
       shop_ledger_entries: { Args: { p_limit?: number }; Returns: LedgerEntryRow[] };
       shop_payouts: { Args: { p_limit?: number }; Returns: ShopPayoutRow[] };
       serve_ads: {
-        Args: { p_placement: DbAdPlacement; p_limit?: number };
+        Args: {
+          p_placement: DbAdPlacement;
+          p_limit?: number;
+          p_platform?: DbAdPlatform;
+          p_language?: string;
+          p_topic?: string;
+          p_city?: string;
+        };
         Returns: ServedAdRow[];
       };
       record_ad_event: {
-        Args: { p_creative_id: string; p_kind: DbAdEventKind };
+        Args: { p_creative_id: string; p_kind: DbAdEventKind; p_viewer_token?: string };
         Returns: boolean;
       };
       create_campaign: {
@@ -2588,6 +2764,10 @@ export type Database = {
       search_suggestions: {
         Args: { p_prefix: string; p_limit?: number };
         Returns: SearchSuggestionRow[];
+      };
+      search_suggestions_rich: {
+        Args: { p_prefix: string; p_limit?: number };
+        Returns: RichSearchSuggestionRow[];
       };
       trending_searches: { Args: { p_limit?: number }; Returns: TrendingSearchRow[] };
       log_search: { Args: { p_term: string; p_results: number }; Returns: undefined };

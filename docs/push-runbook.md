@@ -114,18 +114,21 @@ the next run tries again — a run that fails halfway repeats rather than drops.
 | Piece | File | What it is |
 | --- | --- | --- |
 | Tables and routines | `supabase/migrations/0060_push_reaches_a_closed_browser.sql` | `public.push_subscriptions`, `bsdc.push_settings`, `notifications.pushed_at`, and the seven routines |
-| Proof | `main-site/scripts/db-prove/t31.mjs` | 38 checks: refusals before setup, ownership, the watermark, the kill and the revival |
-| **Delivery (primary)** | `push-worker/src/index.ts` | the cron, the queue, and `POST /run` / `GET /health` |
+| Vocabulary & all-events triggers | `supabase/migrations/0087_notification_vocabulary_expansion.sql`, `0088_realtime_push_overhaul_and_all_events.sql` | Expands `bsdc_notification_kind` (20 kinds), binds realtime `public.notifications` (`REPLICA IDENTITY FULL` + publication), debounced `pg_net` wake-up, and event triggers across interactions, marketplace, learning, and moderation |
+| Proof | `main-site/scripts/db-prove/t31.mjs`, `t59.mjs` | Push routing/gating (`t31`) and 20-kind realtime/trigger coverage (`t59`) |
+| **Delivery (primary)** | `push-worker/src/index.ts` | the cron (`* * * * *`), the queue, and `POST /run` / `GET /health` |
+| **FCM HTTP v1** | `push-worker/src/fcm.ts`, `main-site/functions/_fcm.ts` | Web Push + pure data-only HIGH-priority Android FCM dispatch and Pages fallback |
 | **Encryption** | `push-worker/src/crypto.ts` | RFC 8291: ECDH, HKDF, AES-128-GCM, `aes128gcm` framing |
-| **The words** | `push-worker/src/notifications.ts` | titles and bodies per kind per language, grouping, preview cleaning |
+| **The words** | `push-worker/src/notifications.ts` | titles and bodies per kind per language (all 20 kinds), grouping, preview cleaning |
 | **Signing (worker)** | `push-worker/src/deliver.ts` | the ES256 VAPID token, per push service origin |
 | **Database read (worker)** | `push-worker/src/api.ts` | secret-gated RPC over PostgREST, with a timeout |
 | Worker config | `push-worker/wrangler.toml` | cron `* * * * *`, secrets, the optional queue |
-| **Scheduler endpoint** | `main-site/functions/api/push/run.ts` | `POST /api/push/run` — forwards to the Worker, falls back to the flush |
+| **Scheduler & wake-up endpoints** | `main-site/functions/api/push/{run,wake,config}.ts` | `POST /api/push/run`, authenticated `POST /api/push/wake` (instant delivery), and `GET /api/push/config` (runtime VAPID discovery) |
 | Delivery (fallback) | `main-site/functions/api/push/flush.ts` | the empty wake-up, `POST /api/push/flush` |
 | Content | `main-site/functions/api/push/content.ts` | what a woken device is told, `POST /api/push/content` |
-| The worker | `main-site/src/sw.ts` | precaching, offline, `push`, `notificationclick`, `pushsubscriptionchange` |
-| Worker config | `main-site/vite.config.ts` | `strategies: 'injectManifest'`, `srcDir: 'src'`, `filename: 'sw.ts'` |
+| The worker | `main-site/src/sw.ts` | `push`, `notificationclick`, `pushsubscriptionchange`, and live tab broadcast (`bsdc:notification`) |
+| Live web updates | `main-site/src/hooks/use-notification-realtime.ts`, `main-site/src/lib/notifications/notification-channel.ts` | Authenticated Supabase Realtime subscription for instant in-app updates + `wakePushDelivery()` helper |
+| Worker config | `main-site/vite.config.ts` | custom service worker build plugin compiling `src/sw.ts` into `dist/sw.js` |
 | Signing | `main-site/src/lib/push/webpush.ts` | base64url, the VAPID JWT, ES256, dead-status rules. Shared by the edge and the tests |
 | Support checks | `main-site/src/lib/push/support.ts` | which of the four prerequisites is missing, and the device list's names |
 | The words | `main-site/src/lib/notifications/copy.ts` | titles per kind per language, the body, the tag, the summary |
@@ -212,6 +215,13 @@ There are two schedulers, and the Worker is the one that carries the words.
 
 ### 5.1 Deploy the Worker
 
+`deploy.yml` deploys `push-worker/` (`bsdc-push`) and syncs its runtime secrets
+automatically on pushes to **any branch** (no merge to `main` required) and on
+non-preview manual `workflow_dispatch` runs. When `PUSH_FLUSH_SECRET` or VAPID
+keys are omitted from GitHub Secrets, `scripts/sync-push-secrets.mjs` reads or
+provisions them idempotently inside `bsdc.push_settings` so Supabase, Pages, and
+`bsdc-push` stay synchronized. For manual local deploys:
+
 ```bash
 cd push-worker
 npm ci
@@ -219,18 +229,20 @@ npx wrangler login            # or: export CLOUDFLARE_API_TOKEN=…
 npx wrangler deploy
 ```
 
-The first deploy writes down the address it printed —
-`https://bsdc-push.<account>.workers.dev`.
+The first deploy binds the custom domain `https://push.api.bsdc.info.bd`
+configured in `push-worker/wrangler.toml` (alongside `*.workers.dev` if enabled).
 
-Six secrets, each one set once and never committed:
+Required & optional secrets (set automatically by `deploy.yml` when present in
+GitHub Actions secrets, or manually via `npx wrangler secret put`):
 
 ```bash
-npx wrangler secret put SUPABASE_URL             # https://<ref>.supabase.co
-npx wrangler secret put SUPABASE_ANON_KEY        # the anon key, NOT the service key
-npx wrangler secret put PUSH_FLUSH_SECRET        # the same string as step 2 above
-npx wrangler secret put PUSH_VAPID_PUBLIC_KEY    # the k= half
-npx wrangler secret put PUSH_VAPID_PRIVATE_KEY   # signing only, never leaves the worker
-npx wrangler secret put PUSH_VAPID_SUBJECT       # mailto:hello@bsdc.info.bd
+npx wrangler secret put SUPABASE_URL                     # https://<ref>.supabase.co
+npx wrangler secret put SUPABASE_ANON_KEY                # the anon key, NOT the service key
+npx wrangler secret put PUSH_FLUSH_SECRET                # the same string as step 2 above
+npx wrangler secret put PUSH_VAPID_PUBLIC_KEY            # the k= half (Web Push)
+npx wrangler secret put PUSH_VAPID_PRIVATE_KEY           # Web Push signing key
+npx wrangler secret put PUSH_VAPID_SUBJECT               # mailto:admin@bsdc.info.bd
+npx wrangler secret put FIREBASE_SERVICE_ACCOUNT_BSDC_BD # enables FCM HTTP v1 delivery
 ```
 
 `SUPABASE_ANON_KEY` is enough because every database call the Worker makes is a
@@ -241,12 +253,12 @@ security — the same rule every Pages Function here follows.
 Check it:
 
 ```bash
-curl -s https://bsdc-push.<account>.workers.dev/health
-# {"worker":"bsdc-push","status":"ok","vapid":true,"secret":true,"database":true,…}
+curl -s https://push.api.bsdc.info.bd/health
+# {"worker":"bsdc-push","status":"ok","vapid":true,"fcm":true,"secret":true,"database":true,…}
 ```
 
-`"status":"unconfigured"` means a secret is missing, and which one is in the same
-line. `status` is `ok` only when the VAPID pair is present; `secret` and
+`"status":"unconfigured"` means both VAPID keys and FCM credentials are missing.
+`status` is `ok` when either `vapid` or `fcm` is configured; `secret` and
 `database` say whether the other half is.
 
 ### 5.2 Point the site at it
@@ -255,7 +267,7 @@ Cloudflare Pages → main-site → Settings → Environment variables (productio
 
 | Variable | Value |
 | --- | --- |
-| `PUSH_WORKER_URL` | `https://bsdc-push.<account>.workers.dev` |
+| `PUSH_WORKER_URL` | `https://push.api.bsdc.info.bd` |
 | `PUSH_DISABLE_LOCAL_FALLBACK` | leave unset. Set to `1` only if you want a Worker outage to be visible rather than silently degraded. |
 
 With `PUSH_WORKER_URL` set, `POST /api/push/run` forwards to the Worker and
@@ -282,11 +294,15 @@ A run that finds more than 200 waiting drains it over several minutes rather tha
 in one request that exceeds the subrequest limit: the cap is `MAX_PER_RUN = 400`
 in `src/index.ts`, and unmarked rows are simply picked up by the next run.
 
-### 5.4 Anything else that can send the secret
+### 5.4 Instant wake-ups and external schedulers
 
-The endpoint does not care who is asking, only that they know the secret. A
-GitHub Action on a schedule, a cron job on a machine that is always on, an uptime
-checker that POSTs, `curl` from a laptop — all of them work:
+Alongside the 1-minute Worker cron, notifications wake devices immediately via:
+
+1. **Database `pg_net` trigger (`bsdc.wake_push_worker()`):** Debounced per transaction via advisory lock (`0088`) using `bsdc.push_settings` (`worker_url` and `flush_secret`, kept synced by `.github/workflows/database.yml`).
+2. **Client wake-up (`POST /api/push/wake`):** Authenticated with the caller's Firebase ID token (`bsdc-bd` or `bsdc-second`) after mutations (messages, posts, reactions, comments, orders, opportunities, outbox flush), forwarded server-side with `PUSH_FLUSH_SECRET` to the Worker or Pages fallback.
+3. **Runtime VAPID config (`GET /api/push/config`):** Exposes `{ enabled, vapidPublicKey }` from runtime secrets when `VITE_PUSH_VAPID_PUBLIC_KEY` was omitted at build time.
+
+External schedulers, GitHub Actions, cron jobs, and uptime checkers can also invoke `/api/push/run`:
 
 ```bash
 curl -sX POST "$SITE/api/push/run" -H "authorization: Bearer $PUSH_FLUSH_SECRET"
@@ -396,10 +412,13 @@ editor). Within the scheduler's interval the device should wake.
   is the primary path. The Pages Function sends an empty wake-up, which costs one
   extra request when a device wakes and is the path that keeps working when the
   Worker is not there. Both are shipped; neither is dead code.
-- **No Firebase Cloud Messaging.** `VITE_FIREBASE_VAPID_PUBLIC_KEY` is still in
-  `.env.example` because a deployment may already hold one, but it signs only for
-  Firebase's service, and this path signs for every push service directly. FCM
-  endpoints work with it — they are ordinary Web Push endpoints.
+- **Firebase Cloud Messaging (FCM HTTP v1) alongside Web Push.**
+  `VITE_FIREBASE_VAPID_PUBLIC_KEY` (FCM Web Push) and `public.fcm_tokens`
+  (Android app + FCM web fallback when `VITE_PUSH_VAPID_PUBLIC_KEY` is not set)
+  are delivered by `push-worker/` using `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` over
+  FCM HTTP v1 (`https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send`),
+  while RFC 8291 Web Push remains primary whenever `VITE_PUSH_VAPID_PUBLIC_KEY`
+  is present.
 - **No OneSignal.** `VITE_ONESIGNAL_APP_ID` predates this and is not used.
 - **No per-kind filtering of push.** The switches in Settings → Notifications
   decide which notifications are written at all; push delivers what was written.

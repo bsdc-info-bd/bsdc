@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import {
   Bell,
   Menu,
@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, Modal, ThemeToggle } from '@/design-system';
 import { useUnreadNotificationCount } from '@/hooks/use-interactions';
-import { useCart } from '@/hooks/use-market';
 import { useUnreadMessageCount } from '@/hooks/use-messaging';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
@@ -27,7 +26,7 @@ const NAV_ITEMS = [
   { to: ROUTES.events, labelKey: 'nav.events' },
   { to: ROUTES.learn, labelKey: 'nav.learn' },
   { to: ROUTES.jobs, labelKey: 'nav.jobs' },
-  { to: ROUTES.shop, labelKey: 'nav.shop' },
+  { to: ROUTES.market, labelKey: 'nav.shop' },
   { to: ROUTES.projects, labelKey: 'nav.projects' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
@@ -52,7 +51,7 @@ export function AppBar() {
           { to: ROUTES.create, labelKey: 'create.title' },
           { to: ROUTES.messages, labelKey: 'messages.open' },
           { to: ROUTES.notifications, labelKey: 'notifications.open' },
-          { to: ROUTES.cart, labelKey: 'cart.title' },
+          { to: ROUTES.marketCart, labelKey: 'cart.title' },
           { to: ROUTES.settings, labelKey: 'settings.title' },
         ]
       : []),
@@ -133,18 +132,18 @@ export function AppBar() {
               <CartLink />
             </div>
           ) : null}
-          {signedIn ? <MessagesLink /> : null}
           {signedIn ? (
-            <div className="hidden sm:block">
-              <NotificationBell />
+            <div className="hidden min-[360px]:block">
+              <MessagesLink />
             </div>
           ) : null}
+          {signedIn ? <NotificationBell /> : null}
           <IconButton
             label={t('a11y.openCommandPalette')}
             icon={<Search size={20} />}
             onClick={() => setCommandPaletteOpen(true)}
           />
-          <ThemeToggle />
+          <ThemeToggle className="hidden sm:inline-flex" />
           <LanguageToggle className="hidden sm:inline-flex" />
           <AccountMenu />
         </div>
@@ -155,7 +154,8 @@ export function AppBar() {
         title={t('a11y.primaryNavigation')}
         closeLabel={t('common.close')}
       >
-        <div className="mb-2 sm:hidden">
+        <div className="mb-2 flex items-center gap-2 sm:hidden">
+          <ThemeToggle />
           <LanguageToggle />
         </div>
         <nav aria-label={t('a11y.primaryNavigation')}>
@@ -184,15 +184,16 @@ export function AppBar() {
   );
 }
 
-/** Cart with the number of items currently reserved in it. */
+/**
+ * Cart with the number of items currently reserved in it. The count is loaded
+ * lazily so the marketplace data layer stays out of the eager entry bundle.
+ */
 function CartLink() {
   const { t } = useTranslation();
-  const cart = useCart();
-  const count = cart.totals.itemCount;
 
   return (
     <Link
-      to={ROUTES.cart}
+      to={ROUTES.marketCart}
       aria-label={t('cart.title')}
       title={t('cart.title')}
       className="relative"
@@ -200,14 +201,16 @@ function CartLink() {
       <span className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full text-text hover:bg-surface-2">
         <ShoppingCart size={20} aria-hidden="true" />
       </span>
-      {count > 0 ? (
-        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
-          {count > 99 ? '99+' : count}
-        </span>
-      ) : null}
+      <Suspense fallback={null}>
+        <CartCountBadge />
+      </Suspense>
     </Link>
   );
 }
+
+const CartCountBadge = lazy(() =>
+  import('./CartCountBadge').then((module) => ({ default: module.CartCountBadge })),
+);
 
 /** Bell with an unread count; the count polls quietly in the background. */
 function NotificationBell() {

@@ -86,7 +86,9 @@ jobs:
       # copies of the same resolution to keep in step.
       - name: Check Firebase runtime binding preparation
         if: matrix.app == 'main-site'
-        run: node ../scripts/prepare-firebase-bindings.mjs --self-test
+        run: |
+          node ../scripts/prepare-firebase-bindings.mjs --self-test
+          node ../scripts/sync-push-secrets.mjs --self-test
 
       - name: Install
         run: npm install --no-audit --no-fund

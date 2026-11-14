@@ -4,6 +4,7 @@ import type { ConversationChannel, LiveStatus } from '@/lib/messaging/messenger-
 import type * as MessengerChannelModule from '@/lib/messaging/messenger-channel';
 import type * as MessageRepositoryModule from '@/lib/messaging/message-repository';
 import type {
+  ChatMemberCandidate,
   ConversationMember,
   ConversationPin,
   ConversationState,
@@ -63,6 +64,7 @@ interface PendingDraft {
 // A server refresh must not overwrite a newer, locally edited draft while its
 // debounced write is still in flight. Keys are scoped to both account and room.
 const pendingDrafts = new Map<string, PendingDraft>();
+const draftCache = new Map<string, string>();
 const draftKey = (uid: string, conversationId: string) => JSON.stringify([uid, conversationId]);
 
 function writeDraftInOrder(conversationId: string, uid: string, body: string): Promise<void> {
@@ -294,6 +296,7 @@ export interface ConversationResult {
   isSending: boolean;
   hasOlder: boolean;
   isLoadingOlder: boolean;
+  initialDraft: string;
   draftSaveFailed: boolean;
   retryDraft: () => void;
   refresh: () => void;
@@ -398,7 +401,16 @@ export function useConversation(conversationId: string): ConversationResult {
 
   const stateQuery = useQuery({
     queryKey: keys.state,
-    queryFn: async () => (await repository()).fetchConversationState(conversationId),
+    queryFn: async () => {
+      const state = await (await repository()).fetchConversationState(conversationId);
+      if (uid !== null) {
+        const key = draftKey(uid, conversationId);
+        if (!pendingDrafts.has(key) && !draftWrites.has(key)) {
+          draftCache.delete(key);
+        }
+      }
+      return state;
+    },
     enabled,
     staleTime: 60_000,
     // Membership may be revoked while Realtime is disconnected or an event is
@@ -824,6 +836,7 @@ export function useConversation(conversationId: string): ConversationResult {
       const key = draftKey(uid, conversationId);
       const pending: PendingDraft = { body, failed: false };
       pendingDrafts.set(key, pending);
+      draftCache.set(key, body);
       setDraftSaveFailed(false);
       // Keep the unsent text available immediately on return to this room.
       queryClient.setQueryData<ConversationState | null>(keys.state, (current) =>
@@ -837,9 +850,13 @@ export function useConversation(conversationId: string): ConversationResult {
             // An older write may finish after newer typing. It must not reset
             // the cached draft or clear the newer write's pending overlay.
             if (pendingDrafts.get(key) !== pending) return;
-            queryClient.setQueryData<ConversationState | null>(keys.state, (current) =>
-              current === null || current === undefined ? current : { ...current, draftBody: body },
-            );
+            let populated = false;
+            queryClient.setQueryData<ConversationState | null>(keys.state, (current) => {
+              if (current === null || current === undefined) return current;
+              populated = true;
+              return { ...current, draftBody: body };
+            });
+            if (populated) draftCache.delete(key);
             pendingDrafts.delete(key);
             if (activeDraftKeyRef.current === key) setDraftSaveFailed(false);
           })
@@ -900,6 +917,7 @@ export function useConversation(conversationId: string): ConversationResult {
               uid === null
                 ? stateQuery.data.draftBody
                 : (pendingDrafts.get(draftKey(uid, conversationId))?.body ??
+                  draftCache.get(draftKey(uid, conversationId)) ??
                   stateQuery.data.draftBody),
           },
     typingUids,
@@ -912,6 +930,13 @@ export function useConversation(conversationId: string): ConversationResult {
     isSending: sendMutation.isPending,
     hasOlder,
     isLoadingOlder,
+    initialDraft:
+      uid === null
+        ? ''
+        : (pendingDrafts.get(draftKey(uid, conversationId))?.body ??
+          stateQuery.data?.draftBody ??
+          draftCache.get(draftKey(uid, conversationId)) ??
+          ''),
     draftSaveFailed,
     retryDraft: () => {
       if (uid === null) return;
@@ -1181,4 +1206,29 @@ export function useStartConversation(): {
     openDirect: async (handle) => direct.mutateAsync(handle),
     openGroup: async (title, members) => group.mutateAsync({ title, members }),
   };
+}
+
+/** Live member lookup for the new DM / group conversation sheet. */
+export function useMemberSearch(
+  query: string,
+  enabled: boolean,
+): {
+  candidates: ChatMemberCandidate[];
+  isLoading: boolean;
+} {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const [debounced, setDebounced] = useState(query.trim());
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(query.trim()), 200);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const result = useQuery({
+    queryKey: ['chat-member-search', uid, debounced],
+    queryFn: async () => (await repository()).searchMembersForChat(debounced, 10),
+    enabled: enabled && uid !== null,
+    staleTime: 20_000,
+  });
+
+  return { candidates: result.data ?? [], isLoading: enabled && result.isLoading };
 }

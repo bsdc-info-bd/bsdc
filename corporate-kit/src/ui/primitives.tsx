@@ -1,20 +1,14 @@
-import type {
-  ButtonHTMLAttributes,
-  InputHTMLAttributes,
-  ReactElement,
-  ReactNode,
-  SelectHTMLAttributes,
-  TextareaHTMLAttributes,
+import {
+  useId,
+  type ButtonHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactElement,
+  type ReactNode,
+  type SelectHTMLAttributes,
+  type TextareaHTMLAttributes,
 } from 'react';
-import { useId } from 'react';
 
-/**
- * The small set of controls every console is built from. They are plain
- * elements with class names: an operations console should stay legible to
- * whoever maintains it next, and that is easier when a button is a button.
- */
-
-type Tone = 'neutral' | 'ok' | 'warn' | 'bad';
+export type Tone = 'neutral' | 'ok' | 'warn' | 'bad';
 
 const toneClass = (tone: Tone, base: string): string =>
   tone === 'neutral'
@@ -37,7 +31,7 @@ export function Card({
       {(title || actions) && (
         <div
           className="kit-row"
-          style={{ justifyContent: 'space-between', marginBottom: 'var(--sp-3)' }}
+          style={{ justifyContent: 'space-between', marginBottom: 'var(--sp-2)' }}
         >
           {title ? <h2 style={{ margin: 0 }}>{title}</h2> : <span />}
           {actions}
@@ -46,6 +40,146 @@ export function Card({
       {description && <p className="kit-muted kit-small">{description}</p>}
       {children}
     </section>
+  );
+}
+
+export function KpiTile({
+  label,
+  value,
+  tone = 'neutral',
+  badge,
+  detail,
+  action,
+}: {
+  readonly label: string;
+  readonly value: string | number;
+  readonly tone?: Tone | undefined;
+  readonly badge?: string | undefined;
+  readonly detail?: string | undefined;
+  readonly action?: ReactNode | undefined;
+}): ReactElement {
+  return (
+    <div className={`kit-kpi kit-kpi--${tone}`}>
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <span className="kit-small kit-muted">{label}</span>
+        {badge && <Badge tone={tone}>{badge}</Badge>}
+      </div>
+      <div className="kit-kpi-value">{value}</div>
+      {detail && (
+        <p className="kit-small kit-muted" style={{ margin: 0 }}>
+          {detail}
+        </p>
+      )}
+      {action && <div className="kit-kpi-foot">{action}</div>}
+    </div>
+  );
+}
+
+export function SplitPane({
+  primary,
+  secondary,
+}: {
+  readonly primary: ReactNode;
+  readonly secondary: ReactNode;
+}): ReactElement {
+  return (
+    <div className="kit-split">
+      <div className="kit-split-main">{primary}</div>
+      <div className="kit-split-side">{secondary}</div>
+    </div>
+  );
+}
+
+export function Drawer({
+  open,
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  readonly open: boolean;
+  readonly title: string;
+  readonly subtitle?: string | undefined;
+  readonly onClose: () => void;
+  readonly children: ReactNode;
+}): ReactElement | null {
+  if (!open) return null;
+  return (
+    <div
+      className="kit-drawer-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="kit-drawer">
+        <div className="kit-drawer-head">
+          <div>
+            <h2 style={{ margin: 0 }}>{title}</h2>
+            {subtitle && (
+              <p className="kit-small kit-muted" style={{ margin: 0 }}>
+                {subtitle}
+              </p>
+            )}
+          </div>
+          <Button size="small" variant="quiet" onClick={onClose}>
+            Close
+          </Button>
+        </div>
+        <div className="kit-drawer-body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+export function BulkBar({
+  selectedCount,
+  label = 'selected',
+  onClear,
+  children,
+}: {
+  readonly selectedCount: number;
+  readonly label?: string | undefined;
+  readonly onClear: () => void;
+  readonly children: ReactNode;
+}): ReactElement | null {
+  if (selectedCount === 0) return null;
+  return (
+    <div className="kit-bulkbar" role="region" aria-label="Bulk actions">
+      <div className="kit-row">
+        <Badge tone="ok">
+          {selectedCount} {label}
+        </Badge>
+        <Button size="small" variant="quiet" onClick={onClear}>
+          Clear selection
+        </Button>
+      </div>
+      <div className="kit-row">{children}</div>
+    </div>
+  );
+}
+
+export function CopyButton({
+  value,
+  label = 'Copy',
+}: {
+  readonly value: string;
+  readonly label?: string | undefined;
+}): ReactElement {
+  return (
+    <Button
+      size="small"
+      variant="quiet"
+      onClick={() => {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          void navigator.clipboard.writeText(value);
+        }
+      }}
+    >
+      {label}
+    </Button>
   );
 }
 

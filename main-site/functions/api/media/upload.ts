@@ -36,26 +36,37 @@ import { BodyError, readBody } from '../../_body';
  */
 import { isMediaPurpose } from '../../../src/lib/storage/media-contract';
 import { HostError, reject, rejectBytes, sendToHost, type MediaEnv } from '../../_media';
-import { memberOf } from '../../_member-token';
+import { mediaUploaderOf, memberOf, type MemberEnv } from '../../_member-token';
+import { corsHeadersFor } from '../auth/claims-core';
 
-interface UploadEnv extends MediaEnv {
-  FB_PROJECT_ID?: string;
-}
+interface UploadEnv extends MediaEnv, MemberEnv {}
 
-function json(body: unknown, status: number): Response {
+function json(body: unknown, status: number, origin: string | null = null): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      ...corsHeadersFor(origin),
+    },
   });
 }
 
-function failure(errorKey: string, status: number): Response {
-  return json({ ok: false, errorKey }, status);
+function failure(errorKey: string, status: number, origin: string | null = null): Response {
+  return json({ ok: false, errorKey }, status, origin);
 }
 
+export const onRequestOptions: PagesFunction<UploadEnv> = ({ request }) =>
+  new Response(null, { status: 204, headers: corsHeadersFor(request.headers.get('origin')) });
+
 export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
+  const origin = context.request.headers.get('origin');
   const member = await memberOf(context.request, context.env);
-  if (member === null) return failure('media.errors.signInRequired', 401);
+  const caller =
+    member !== null
+      ? await mediaUploaderOf(context.request, context.env, member)
+      : await mediaUploaderOf(context.request, context.env);
+  if (caller === null) return failure('media.errors.signInRequired', 401, origin);
 
   let form: FormData;
   try {
@@ -65,9 +76,9 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
     }).formData();
   } catch (error) {
     if (error instanceof BodyError && error.status === 413) {
-      return failure('media.errors.tooLarge', 413);
+      return failure('media.errors.tooLarge', 413, origin);
     }
-    return failure('media.errors.failed', 400);
+    return failure('media.errors.failed', 400, origin);
   }
 
   // Read as `unknown` first: Workers' `FormDataEntryValue` is a union whose
@@ -75,17 +86,23 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   // exactly the one that must happen — a text field where a file belongs is a
   // request this endpoint cannot carry out.
   const entry: unknown = form.get('file');
-  if (!(entry instanceof File)) return failure('media.errors.empty', 400);
+  if (!(entry instanceof File)) return failure('media.errors.empty', 400, origin);
   const file = entry;
 
   const rawPurpose = form.get('purpose');
   const purpose = typeof rawPurpose === 'string' ? rawPurpose.trim() : '';
-  if (!isMediaPurpose(purpose)) return failure('media.errors.unsupported', 400);
+  if (!isMediaPurpose(purpose)) return failure('media.errors.unsupported', 400, origin);
+  if (purpose === 'ad-creative' && !caller.isStaff) {
+    return failure('media.errors.signInRequired', 403, origin);
+  }
+  if (caller.project === 'second' && purpose !== 'ad-creative') {
+    return failure('media.errors.signInRequired', 403, origin);
+  }
 
   // Refused before a byte leaves this function: an unsupported type, an empty
   // file, one over the limit for its kind, or a host with no credentials.
   const refused = reject(file, purpose, context.env);
-  if (refused !== null) return failure(refused.errorKey, refused.status);
+  if (refused !== null) return failure(refused.errorKey, refused.status, origin);
 
   // And refused on the evidence rather than the label: a declared image type
   // over bytes that are not an image is still not an image. The bytes are read
@@ -94,21 +111,21 @@ export const onRequestPost: PagesFunction<UploadEnv> = async (context) => {
   try {
     bytes = new Uint8Array(await file.arrayBuffer());
   } catch {
-    return failure('media.errors.empty', 400);
+    return failure('media.errors.empty', 400, origin);
   }
   const notAnImage = rejectBytes(bytes);
-  if (notAnImage !== null) return failure(notAnImage.errorKey, notAnImage.status);
+  if (notAnImage !== null) return failure(notAnImage.errorKey, notAnImage.status, origin);
 
   try {
     const result = await sendToHost(file, purpose, context.env, bytes);
-    return json({ ok: true, ...result }, 200);
+    return json({ ok: true, ...result }, 200, origin);
   } catch (error) {
     // The host refused or was unreachable. Which host, and what it said, stays
     // here; the member gets a readable reason either way. A refused credential
     // is reported as `notConfigured` rather than as a generic failure, because
     // the two need different things done about them and only one of them is
     // worth asking the member to retry.
-    if (error instanceof HostError) return failure(error.errorKey, error.status);
-    return failure('media.errors.failed', 502);
+    if (error instanceof HostError) return failure(error.errorKey, error.status, origin);
+    return failure('media.errors.failed', 502, origin);
   }
 };

@@ -19,7 +19,7 @@ import {
 import { useGigDetail } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { formatSalaryRange } from '@/lib/opportunities/opportunity-types';
-import { ROUTES, gigPath } from '@/lib/site';
+import { ROUTES, SITE, gigPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -40,9 +40,17 @@ export default function GigPage() {
 
   if (detail.isError) {
     return (
-      <div className="fab-container py-6">
-        <Alert tone="danger" title={t('freelance.detail.failed')} />
-      </div>
+      <>
+        <Seo
+          title={t('freelance.detail.failed')}
+          description={t('freelance.detail.notFoundBody')}
+          path={gigPath(slug)}
+          noindex
+        />
+        <div className="fab-container py-6">
+          <Alert tone="danger" title={t('freelance.detail.failed')} />
+        </div>
+      </>
     );
   }
 
@@ -100,6 +108,21 @@ export default function GigPage() {
     }
   }
 
+  const gigOffer =
+    gig.budgetMin !== null || gig.budgetMax !== null
+      ? {
+          '@type': 'Offer',
+          priceCurrency: gig.currency,
+          priceSpecification: {
+            '@type': 'PriceSpecification',
+            priceCurrency: gig.currency,
+            ...(gig.budgetMin !== null ? { minPrice: gig.budgetMin } : {}),
+            ...(gig.budgetMax !== null ? { maxPrice: gig.budgetMax } : {}),
+            ...(gig.isHourly ? { unitText: 'HOUR' } : {}),
+          },
+        }
+      : undefined;
+
   return (
     <>
       <Seo
@@ -107,6 +130,21 @@ export default function GigPage() {
         description={summary.length > 0 ? summary : gig.title}
         path={path}
         noindex={!open}
+        jsonLd={
+          open
+            ? [
+                {
+                  '@type': 'Service',
+                  name: gig.title,
+                  description: summary.length > 0 ? summary : gig.title,
+                  url: `${SITE.url}${path}`,
+                  serviceType: gig.skills.join(', '),
+                  provider: { '@id': `${SITE.url}/#organization` },
+                  ...(gigOffer ? { offers: gigOffer } : {}),
+                },
+              ]
+            : []
+        }
       />
 
       <article className="fab-container py-5 sm:py-8">

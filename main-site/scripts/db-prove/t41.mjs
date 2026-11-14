@@ -269,7 +269,8 @@ check(
 );
 
 // --------------------------------- 4. Pending shops & campaigns staff queues ---
-await as('gmember-1', {}, `select public.open_shop('dhaka-dev-gear', 'Dhaka Dev Gear', 'Dhaka')`);
+// Setup row: open_shop is retired (0100), so insert the same pending shop directly.
+await db.query(`insert into public.shops (slug, name, tagline, city, owner_uid, status) values ('dhaka-dev-gear', 'Dhaka Dev Gear', '', 'Dhaka', 'gmember-1', 'pending')`);
 const campRes = await as(
   'owner-1',
   { bsdc_role: 'owner', staff: true },

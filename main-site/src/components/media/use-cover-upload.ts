@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { assertUploadable, MediaError } from '@/lib/storage/upload';
 import type { MediaPurpose, UploadResult } from '@/lib/storage/upload';
+import { DataError } from '@/lib/supabase/errors';
 
 interface PreparedCover {
   file: File;
@@ -79,10 +80,15 @@ export function useCoverUpload(purpose: MediaPurpose): CoverUpload {
         setFile(next);
       } catch (error) {
         setFile(null);
-        const key =
-          error instanceof Error && error.message.startsWith('media.')
-            ? error.message
-            : 'media.errors.failed';
+        let key = 'media.errors.failed';
+        if (error instanceof DataError) {
+          key =
+            error.messageKey === 'data.errors.signInRequired'
+              ? 'media.errors.signInRequired'
+              : 'media.errors.recordFailed';
+        } else if (error instanceof Error && error.message.startsWith('media.')) {
+          key = error.message;
+        }
         toast.error(t(key));
       }
     },

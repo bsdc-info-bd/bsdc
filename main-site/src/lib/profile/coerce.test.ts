@@ -168,6 +168,8 @@ describe('a row that exists is a profile that exists', () => {
       digest: true,
     });
     expect(coercePrivacy(null).showEmail).toBe(false);
+    expect(coercePrivacy(null).showFollowers).toBe(true);
+    expect(coercePrivacy({ showFollowers: false }).showFollowers).toBe(false);
     expect(coerceProfile({ uid: 'uid-1' })?.skills).toEqual([]);
   });
 });

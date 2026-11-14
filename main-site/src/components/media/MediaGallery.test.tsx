@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { MediaGallery, type GalleryItem } from './MediaGallery';
+import { MediaImage } from './MediaImage';
 import type { PostMediaItem } from '@/lib/content/post-repository';
 import { toGalleryItems } from '@/lib/media/gallery-items';
 import type * as I18nModule from 'react-i18next';
@@ -140,7 +141,9 @@ describe('the arrangement a card shows', () => {
         const image = screen.queryByRole('img');
         if (image === null || image.tagName !== 'IMG') break;
         fireEvent.error(image);
-        vi.runOnlyPendingTimers();
+        act(() => {
+          vi.runOnlyPendingTimers();
+        });
       }
 
       expect(screen.getByRole('img', { name: 'The first picture' }).tagName).toBe('SPAN');
@@ -189,14 +192,47 @@ describe('the lightbox', () => {
   });
 
   it('offers the original file, and no arrows when there is only one', async () => {
-    render(<MediaGallery items={[item(0, 1600, 900)]} label="Pictures" />);
-    await userEvent.click(screen.getByRole('button', { name: 'The first picture' }));
-    expect(screen.getByLabelText('media.lightbox.download')).toHaveAttribute(
-      'href',
-      'https://cdn.example/0.jpg',
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(new Blob(['img'], { type: 'image/jpeg' }), {
+        status: 200,
+        headers: { 'content-type': 'image/jpeg' },
+      }),
     );
-    expect(screen.queryByLabelText('media.lightbox.next')).not.toBeInTheDocument();
-    expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+    const originalFetch = globalThis.fetch;
+    const prevCreateDesc = Object.getOwnPropertyDescriptor(URL, 'createObjectURL');
+    const prevRevokeDesc = Object.getOwnPropertyDescriptor(URL, 'revokeObjectURL');
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn().mockReturnValue('blob:https://bsdc.info.bd/mock'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      writable: true,
+      value: vi.fn(),
+    });
+
+    const preventNav = (e: Event) => e.preventDefault();
+    document.addEventListener('click', preventNav);
+
+    try {
+      render(<MediaGallery items={[item(0, 1600, 900)]} label="Pictures" />);
+      await userEvent.click(screen.getByRole('button', { name: 'The first picture' }));
+      const downloadButton = screen.getByLabelText('media.lightbox.download');
+      expect(downloadButton).toBeInTheDocument();
+      await userEvent.click(downloadButton);
+      expect(fetchMock).toHaveBeenCalledWith('https://cdn.example/0.jpg', { mode: 'cors' });
+      expect(screen.queryByLabelText('media.lightbox.next')).not.toBeInTheDocument();
+      expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
+    } finally {
+      document.removeEventListener('click', preventNav);
+      globalThis.fetch = originalFetch;
+      if (prevCreateDesc) Object.defineProperty(URL, 'createObjectURL', prevCreateDesc);
+      else delete (URL as unknown as Record<string, unknown>)['createObjectURL'];
+      if (prevRevokeDesc) Object.defineProperty(URL, 'revokeObjectURL', prevRevokeDesc);
+      else delete (URL as unknown as Record<string, unknown>)['revokeObjectURL'];
+    }
   });
 });
 
@@ -240,5 +276,55 @@ describe('a post row becomes a gallery item', () => {
         height: null,
       },
     ]);
+  });
+});
+
+describe('MediaImage stability, protocol upgrade, and reconnect recovery', () => {
+  it('does not tear down or remount the img element on initial mount', () => {
+    const { rerender } = render(
+      <MediaImage src="https://i.ibb.co/abc/stable.jpg" alt="Stable photo" />,
+    );
+    const firstEl = screen.getByRole('img', { name: 'Stable photo' });
+    expect(firstEl).toHaveAttribute('data-attempt', '0');
+    expect(firstEl).toHaveAttribute('src', 'https://i.ibb.co/abc/stable.jpg');
+    rerender(<MediaImage src="https://i.ibb.co/abc/stable.jpg" alt="Stable photo" />);
+    expect(screen.getByRole('img', { name: 'Stable photo' })).toBe(firstEl);
+  });
+
+  it('upgrades plain HTTP ImgBB URLs to HTTPS immediately', () => {
+    render(<MediaImage src="http://i.ibb.co/legacy/pic.jpg" alt="Legacy photo" />);
+    expect(screen.getByRole('img', { name: 'Legacy photo' })).toHaveAttribute(
+      'src',
+      'https://i.ibb.co/legacy/pic.jpg',
+    );
+  });
+
+  it('walks the full recovery ladder to unavailability and retries on online event', () => {
+    vi.useFakeTimers();
+    try {
+      render(<MediaImage src="https://i.ibb.co/abc/pic.jpg" alt="Recoverable photo" />);
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        const current = screen.queryByRole('img', { name: 'Recoverable photo' });
+        if (current === null || current.tagName !== 'IMG') break;
+        fireEvent.error(current);
+        act(() => {
+          vi.runOnlyPendingTimers();
+        });
+      }
+      expect(screen.getByRole('img', { name: 'Recoverable photo' }).tagName).toBe('SPAN');
+      expect(screen.getByText('media.gallery.imageUnavailable')).toBeInTheDocument();
+
+      act(() => {
+        window.dispatchEvent(new Event('online'));
+      });
+
+      const retriedImg = screen.getByRole('img', { name: 'Recoverable photo' });
+      expect(retriedImg.tagName).toBe('IMG');
+      expect(retriedImg.getAttribute('src')).toMatch(
+        /^https:\/\/i\.ibb\.co\/abc\/pic\.jpg\?bsdc_r=retry-/,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

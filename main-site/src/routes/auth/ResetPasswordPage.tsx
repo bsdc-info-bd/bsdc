@@ -56,7 +56,10 @@ export default function ResetPasswordPage() {
         title={t('auth.reset.title')}
         subtitle={t('auth.reset.subtitle')}
         footer={
-          <Link to={ROUTES.login} className="font-semibold text-green-700 underline">
+          <Link
+            to={ROUTES.login}
+            className="font-semibold text-green-700 underline underline-offset-4 hover:text-green-800"
+          >
             {t('auth.reset.backToLogin')}
           </Link>
         }

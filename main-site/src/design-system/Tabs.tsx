@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { cn } from '@/lib/cn';
 
 export interface TabItem {
@@ -18,18 +18,35 @@ export interface TabsProps {
 /** Keyboard-accessible tabs with arrow-key roving focus. */
 export function Tabs({ items, activeId, onChange, label, className }: TabsProps) {
   const baseId = useId();
+  const tabRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
   const activeIndex = Math.max(
     0,
     items.findIndex((item) => item.id === activeId),
   );
   const active = items[activeIndex];
 
+  function activateByIndex(index: number) {
+    const next = items[index];
+    if (!next) return;
+    onChange(next.id);
+    tabRefs.current.get(next.id)?.focus();
+  }
+
   function onKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
-    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
-    event.preventDefault();
-    const delta = event.key === 'ArrowRight' ? 1 : -1;
-    const next = items[(activeIndex + delta + items.length) % items.length];
-    if (next) onChange(next.id);
+    if (items.length === 0) return;
+    if (event.key === 'ArrowRight') {
+      event.preventDefault();
+      activateByIndex((activeIndex + 1) % items.length);
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault();
+      activateByIndex((activeIndex - 1 + items.length) % items.length);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      activateByIndex(0);
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      activateByIndex(items.length - 1);
+    }
   }
 
   return (
@@ -40,6 +57,10 @@ export function Tabs({ items, activeId, onChange, label, className }: TabsProps)
           return (
             <button
               key={item.id}
+              ref={(node) => {
+                if (node) tabRefs.current.set(item.id, node);
+                else tabRefs.current.delete(item.id);
+              }}
               id={`${baseId}-tab-${item.id}`}
               role="tab"
               type="button"

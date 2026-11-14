@@ -5,6 +5,7 @@ export interface SectionHeadingProps {
   title: string;
   description?: string;
   level?: 2 | 3;
+  headingId?: string;
   action?: ReactNode;
   className?: string;
 }
@@ -13,6 +14,7 @@ export function SectionHeading({
   title,
   description,
   level = 2,
+  headingId,
   action,
   className,
 }: SectionHeadingProps) {
@@ -20,7 +22,9 @@ export function SectionHeading({
   return (
     <div className={cn('mb-3 flex flex-wrap items-end justify-between gap-2', className)}>
       <div className="min-w-0">
-        <Heading className={level === 2 ? 'text-2xl' : 'text-xl'}>{title}</Heading>
+        <Heading id={headingId} className={level === 2 ? 'text-2xl' : 'text-xl'}>
+          {title}
+        </Heading>
         {description ? <p className="mt-1 max-w-prose text-sm text-muted">{description}</p> : null}
       </div>
       {action}

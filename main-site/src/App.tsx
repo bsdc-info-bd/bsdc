@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireGuest } from '@/components/auth/RequireGuest';
 import { AppShell } from '@/components/layout/AppShell';
@@ -13,7 +13,6 @@ const HomePage = lazy(() => import('@/routes/HomePage'));
 const AboutPage = lazy(() => import('@/routes/AboutPage'));
 const GuidelinesPage = lazy(() => import('@/routes/GuidelinesPage'));
 const ContactPage = lazy(() => import('@/routes/ContactPage'));
-const OfflinePage = lazy(() => import('@/routes/OfflinePage'));
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage'));
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
 const SignupPage = lazy(() => import('@/routes/auth/SignupPage'));
@@ -43,11 +42,6 @@ const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
 const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
 const PlaygroundPage = lazy(() => import('@/routes/PlaygroundPage'));
 const SearchPage = lazy(() => import('@/routes/SearchPage'));
-const ShopPage = lazy(() => import('@/routes/ShopPage'));
-const ProductPage = lazy(() => import('@/routes/ProductPage'));
-const CartPage = lazy(() => import('@/routes/CartPage'));
-const CheckoutPage = lazy(() => import('@/routes/CheckoutPage'));
-const OrdersPage = lazy(() => import('@/routes/OrdersPage'));
 const AdsPage = lazy(() => import('@/routes/AdsPage'));
 const AdminPage = lazy(() => import('@/routes/AdminPage'));
 const AdminPluginsPage = lazy(() => import('@/routes/AdminPluginsPage'));
@@ -55,10 +49,15 @@ const AdminAnalyticsPage = lazy(() => import('@/routes/AdminAnalyticsPage'));
 const AdminReportsPage = lazy(() => import('@/routes/AdminReportsPage'));
 const AdminModerationPage = lazy(() => import('@/routes/AdminModerationPage'));
 const AdminPeoplePage = lazy(() => import('@/routes/AdminPeoplePage'));
-const VendorPage = lazy(() => import('@/routes/VendorPage'));
-const VendorProductsPage = lazy(() => import('@/routes/VendorProductsPage'));
-const VendorOrdersPage = lazy(() => import('@/routes/VendorOrdersPage'));
-const VendorPayoutsPage = lazy(() => import('@/routes/VendorPayoutsPage'));
+const ShopApplyPage = lazy(() => import('@/routes/ShopApplyPage'));
+const VendorConsolePage = lazy(() => import('@/routes/VendorConsolePage'));
+const AdminMarketplacePage = lazy(() => import('@/routes/AdminMarketplacePage'));
+const MarketplacePage = lazy(() => import('@/routes/MarketplacePage'));
+const MarketShopPage = lazy(() => import('@/routes/MarketShopPage'));
+const MarketProductPage = lazy(() => import('@/routes/MarketProductPage'));
+const MarketCartPage = lazy(() => import('@/routes/MarketCartPage'));
+const MarketCheckoutPage = lazy(() => import('@/routes/MarketCheckoutPage'));
+const MarketOrdersPage = lazy(() => import('@/routes/MarketOrdersPage'));
 const LearnPage = lazy(() => import('@/routes/LearnPage'));
 const CoursePage = lazy(() => import('@/routes/CoursePage'));
 const VerifyCertificatePage = lazy(() => import('@/routes/VerifyCertificatePage'));
@@ -82,7 +81,6 @@ const router = createBrowserRouter([
       { path: ROUTES.about, element: withSuspense(<AboutPage />) },
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
-      { path: ROUTES.offline, element: withSuspense(<OfflinePage />) },
       { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 
       // Guests only: a signed-in member is sent back to the home page.
@@ -135,10 +133,21 @@ const router = createBrowserRouter([
           { path: ROUTES.adminReports, element: withSuspense(<AdminReportsPage />) },
           { path: ROUTES.adminModeration, element: withSuspense(<AdminModerationPage />) },
           { path: ROUTES.adminPeople, element: withSuspense(<AdminPeoplePage />) },
-          { path: ROUTES.vendor, element: withSuspense(<VendorPage />) },
-          { path: ROUTES.vendorProducts, element: withSuspense(<VendorProductsPage />) },
-          { path: ROUTES.vendorOrders, element: withSuspense(<VendorOrdersPage />) },
-          { path: ROUTES.vendorPayouts, element: withSuspense(<VendorPayoutsPage />) },
+          // The open-store vendor pages were retired for cash-on-delivery marketplace sales (0100).
+          { path: ROUTES.vendor, element: <Navigate to={ROUTES.vendorConsole} replace /> },
+          { path: '/vendor/products', element: <Navigate to={ROUTES.vendorConsole} replace /> },
+          { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
+          { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
+          { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
+          { path: ROUTES.market, element: withSuspense(<MarketplacePage />) },
+          { path: '/marketplace/shop/:slug', element: withSuspense(<MarketShopPage />) },
+          { path: '/marketplace/product/:id', element: withSuspense(<MarketProductPage />) },
+          { path: ROUTES.marketCart, element: withSuspense(<MarketCartPage />) },
+          { path: '/marketplace/checkout/:slug', element: withSuspense(<MarketCheckoutPage />) },
+          { path: ROUTES.marketOrders, element: withSuspense(<MarketOrdersPage />) },
+          { path: '/vendor/orders', element: <Navigate to={ROUTES.vendorConsole} replace /> },
+          // Vendors are paid by the customer in cash on delivery. There are no platform payouts.
+          { path: '/vendor/payouts', element: <Navigate to={ROUTES.vendorConsole} replace /> },
         ],
       },
 
@@ -160,11 +169,12 @@ const router = createBrowserRouter([
       { path: ROUTES.search, element: withSuspense(<SearchPage />) },
 
       // Marketplace, customer side. The cart and checkout are private.
-      { path: ROUTES.shop, element: withSuspense(<ShopPage />) },
-      { path: '/shop/:slug', element: withSuspense(<ProductPage />) },
-      { path: ROUTES.cart, element: withSuspense(<CartPage />) },
-      { path: ROUTES.checkout, element: withSuspense(<CheckoutPage />) },
-      { path: ROUTES.orders, element: withSuspense(<OrdersPage />) },
+      // Legacy open-store paths now point at the cash-on-delivery marketplace.
+      { path: ROUTES.shop, element: <Navigate to={ROUTES.market} replace /> },
+      { path: '/shop/:slug', element: <Navigate to={ROUTES.market} replace /> },
+      { path: ROUTES.cart, element: <Navigate to={ROUTES.marketCart} replace /> },
+      { path: ROUTES.checkout, element: <Navigate to={ROUTES.marketCart} replace /> },
+      { path: ROUTES.orders, element: <Navigate to={ROUTES.marketOrders} replace /> },
 
       // Learning. Certificate verification is public and needs no session.
       { path: ROUTES.learn, element: withSuspense(<LearnPage />) },

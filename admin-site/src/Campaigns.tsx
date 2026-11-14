@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+} from 'react';
 import {
   Badge,
   Banner,
@@ -16,30 +23,43 @@ import {
   useAsync,
   useCorporateEnv,
 } from '@kit';
+import { AdImageField } from './AdImageField';
 import {
+  DEFAULT_CREATIVE_PLATFORMS,
+  LAYOUTS,
+  LAYOUT_LABELS,
   LIMITS,
   PLACEMENTS,
   PLACEMENT_LABELS,
+  PLATFORMS,
+  PLATFORM_LABELS,
   STATUS_LABELS,
   STATUS_TONES,
   activationRefusal,
   count,
   creativeArgs,
-  setupArgs,
   dateToIso,
   eventCost,
   forecastEvents,
+  isImgbbUrl,
   money,
   needsAttention,
   percent,
   poishaToTaka,
+  setupArgs,
   takaToPoisha,
+  updateCampaignArgs,
+  updateCreativeArgs,
   validateCreative,
   validateDraft,
+  type AdLayout,
   type AdPlacement,
+  type AdPlatform,
   type AdPricing,
+  type CampaignDetailRow,
   type CampaignRow,
   type CreativeDraft,
+  type CreativePerformanceRow,
   type OwnerRow,
   type PlacementRow,
 } from './campaigns';
@@ -52,7 +72,16 @@ const EMPTY_CREATIVE: CreativeDraft = {
   targetUrl: '',
   imageUrl: '',
   ctaLabel: '',
+  thumbUrl: '',
+  imageAlt: '',
+  layout: 'card',
+  accentColor: '',
+  badgeLabel: '',
+  platforms: [...DEFAULT_CREATIVE_PLATFORMS],
+  isEnabled: true,
 };
+
+const ACCENT_PRESETS: readonly string[] = ['', '#15803d', '#0f766e', '#1d4ed8', '#b45309'];
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -66,11 +95,6 @@ function today(): string {
  * campaign that cannot serve and therefore one an operator will forget. Nothing
  * on this screen is a form for "my" campaign: every field belongs to somebody
  * else, which is why the owner is chosen first and shown on every row.
- *
- * The forecast is the part worth reading carefully. It is computed with the
- * same truncation the wallet uses (see `campaigns.ts`), so the number an
- * operator reads before pressing Create is the number of impressions the budget
- * will actually pay for.
  */
 export function Campaigns(): ReactElement {
   const env = useCorporateEnv();
@@ -82,8 +106,6 @@ export function Campaigns(): ReactElement {
   const [loading, setLoading] = useState(true);
   const reload = useCallback(() => setVersion((value) => value + 1), []);
 
-  // Refresh without unmounting the controls: an acknowledgement must not
-  // disappear while the updated wallet balance is being loaded.
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -106,9 +128,10 @@ export function Campaigns(): ReactElement {
     <div className="kit-stack">
       <Banner tone="neutral" title="A campaign is set up here, not by the advertiser">
         <p className="kit-small">
-          You choose the owner, the bid, the budget and the dates. The advertiser signs in to an
-          account you issue them and sees their performance — they do not create campaigns, change a
-          bid, or top up a wallet. Nothing spends until it is funded and running.
+          You choose the owner, the bid, the budget, targeting, and the creative. The advertiser
+          signs in to an account you issue them and sees their performance — they do not create
+          campaigns, change a bid, or top up a wallet. Nothing spends until it is funded and
+          running.
         </p>
       </Banner>
 
@@ -151,7 +174,13 @@ export function Campaigns(): ReactElement {
               onCreated={reload}
             />
           ) : null}
-          {data.campaigns.ok ? <Book campaigns={data.campaigns.data} onChanged={reload} /> : null}
+          {data.campaigns.ok ? (
+            <Book
+              campaigns={data.campaigns.data}
+              inventory={data.inventory.ok ? data.inventory.data : []}
+              onChanged={reload}
+            />
+          ) : null}
         </>
       ) : null}
     </div>
@@ -278,6 +307,7 @@ function Builder({
   const [endsAt, setEndsAt] = useState('');
   const [cities, setCities] = useState('');
   const [topics, setTopics] = useState('');
+  const [language, setLanguage] = useState<'any' | 'bn' | 'en'>('any');
   const [activate, setActivate] = useState(false);
   const [creative, setCreative] = useState<CreativeDraft>(EMPTY_CREATIVE);
   const [busy, setBusy] = useState(false);
@@ -299,7 +329,7 @@ function Builder({
       endsAt,
       cities: splitTags(cities),
       topics: splitTags(topics),
-      language: 'any',
+      language,
       activate,
     }),
     [
@@ -313,6 +343,7 @@ function Builder({
       endsAt,
       cities,
       topics,
+      language,
       activate,
     ],
   );
@@ -320,9 +351,6 @@ function Builder({
   const problems = useMemo(() => validateDraft(draft, floorBid), [draft, floorBid]);
   const creativeProblems = useMemo(() => validateCreative(creative), [creative]);
   const funding = activationRefusal(draft, owner?.wallet_balance ?? 0);
-
-  // The forecast only means something once the bid and the budget are real
-  // numbers, so it is shown then and not before.
   const forecast = useMemo(
     () => forecastEvents(draft.pricing, draft.bid, draft.totalBudget),
     [draft.pricing, draft.bid, draft.totalBudget],
@@ -336,6 +364,7 @@ function Builder({
     creative.body,
     creative.targetUrl,
     creative.imageUrl,
+    creative.thumbUrl ?? '',
     creative.ctaLabel,
   ].some((value) => value.trim().length > 0);
   const needsCreative = activate || hasCreative;
@@ -356,6 +385,7 @@ function Builder({
       setEndsAt('');
       setCities('');
       setTopics('');
+      setLanguage('any');
       setCreative(EMPTY_CREATIVE);
       setActivate(false);
       onCreated();
@@ -495,6 +525,19 @@ function Builder({
                 setTopics(event.target.value);
               }}
             />
+            <Select
+              label="Target language"
+              value={language}
+              options={[
+                { value: 'any', label: 'All languages (Bangla & English)' },
+                { value: 'bn', label: 'Bangla readers only' },
+                { value: 'en', label: 'English readers only' },
+              ]}
+              onChange={(event) => {
+                const next = event.target.value;
+                setLanguage(next === 'bn' || next === 'en' ? next : 'any');
+              }}
+            />
           </div>
 
           {draft.bid > 0 && draft.totalBudget > 0 ? (
@@ -529,58 +572,15 @@ function Builder({
 
           <h3>First creative</h3>
           <p className="kit-small kit-muted">
-            Optional here, required before the campaign can run. Copy is the one part the advertiser
-            may change later — doing so sends the campaign back for review.
+            Optional here, required before the campaign can run. Upload or crop an ImgBB visual,
+            pick placement layout and platform reach, and preview below.
           </p>
-          <div className="kit-grid kit-grid--2">
-            <Field
-              label="Headline"
-              value={creative.headline}
-              hint={`${LIMITS.headlineMin}–${LIMITS.headlineMax} characters.`}
-              error={creativeProblems.find((problem) => problem.field === 'headline')?.message}
-              onChange={(event) => {
-                setCreative({ ...creative, headline: event.target.value });
-              }}
-            />
-            <Select
-              label="Placement"
-              value={creative.placement}
-              options={PLACEMENTS.map((placement) => ({
-                value: placement,
-                label: placementHint(placement, inventory),
-              }))}
-              onChange={(event) => {
-                setCreative({ ...creative, placement: event.target.value as AdPlacement });
-              }}
-            />
-            <Field
-              label="Destination"
-              value={creative.targetUrl}
-              hint="https only: a click is a promise about where the reader lands."
-              error={creativeProblems.find((problem) => problem.field === 'targetUrl')?.message}
-              onChange={(event) => {
-                setCreative({ ...creative, targetUrl: event.target.value });
-              }}
-            />
-            <Field
-              label="Button label"
-              value={creative.ctaLabel}
-              hint={`Optional, up to ${LIMITS.ctaMax} characters.`}
-              error={creativeProblems.find((problem) => problem.field === 'cta')?.message}
-              onChange={(event) => {
-                setCreative({ ...creative, ctaLabel: event.target.value });
-              }}
-            />
-          </div>
-          <TextArea
-            label="Body"
-            rows={2}
-            value={creative.body}
-            hint={`Up to ${LIMITS.bodyMax} characters. ${creative.body.length} used.`}
-            error={creativeProblems.find((problem) => problem.field === 'body')?.message}
-            onChange={(event) => {
-              setCreative({ ...creative, body: event.target.value });
-            }}
+
+          <CreativeFormFields
+            draft={creative}
+            inventory={inventory}
+            problems={creativeProblems}
+            onChange={setCreative}
           />
 
           <h3>What the reader sees</h3>
@@ -613,6 +613,148 @@ function Builder({
   );
 }
 
+function CreativeFormFields({
+  draft,
+  inventory,
+  problems,
+  onChange,
+}: {
+  draft: CreativeDraft;
+  inventory: readonly PlacementRow[];
+  problems: readonly { readonly field: string; readonly message: string }[];
+  onChange: (next: CreativeDraft) => void;
+}): ReactElement {
+  const err = (field: string): string | undefined =>
+    problems.find((problem) => problem.field === field)?.message;
+  const platforms = draft.platforms ?? DEFAULT_CREATIVE_PLATFORMS;
+  const layout = draft.layout ?? 'card';
+
+  function togglePlatform(platform: AdPlatform): void {
+    const exists = platforms.includes(platform);
+    const next = exists ? platforms.filter((item) => item !== platform) : [...platforms, platform];
+    onChange({ ...draft, platforms: next });
+  }
+
+  return (
+    <div className="kit-stack" style={{ gap: 'var(--sp-3)' }}>
+      <div className="kit-grid kit-grid--2">
+        <Field
+          label="Headline"
+          value={draft.headline}
+          hint={`${LIMITS.headlineMin}–${LIMITS.headlineMax} characters.`}
+          error={err('headline')}
+          onChange={(event) => onChange({ ...draft, headline: event.target.value })}
+        />
+        <Select
+          label="Placement"
+          value={draft.placement}
+          options={PLACEMENTS.map((placement) => ({
+            value: placement,
+            label:
+              inventory.length > 0
+                ? placementHint(placement, inventory)
+                : PLACEMENT_LABELS[placement],
+          }))}
+          onChange={(event) => onChange({ ...draft, placement: event.target.value as AdPlacement })}
+        />
+        <Field
+          label="Destination"
+          value={draft.targetUrl}
+          hint="https only: a click is a promise about where the reader lands."
+          error={err('targetUrl')}
+          onChange={(event) => onChange({ ...draft, targetUrl: event.target.value })}
+        />
+        <Field
+          label="Button label"
+          value={draft.ctaLabel}
+          hint={`Optional, up to ${LIMITS.ctaMax} characters.`}
+          error={err('cta')}
+          onChange={(event) => onChange({ ...draft, ctaLabel: event.target.value })}
+        />
+        <Select
+          label="Layout style"
+          value={layout}
+          options={LAYOUTS.map((item) => ({ value: item, label: LAYOUT_LABELS[item] }))}
+          onChange={(event) => onChange({ ...draft, layout: event.target.value as AdLayout })}
+        />
+        <Field
+          label="Badge label"
+          value={draft.badgeLabel ?? ''}
+          maxLength={LIMITS.badgeMax}
+          hint="Optional short tag next to Sponsored (e.g. Hiring, Event, Offer)."
+          error={err('badgeLabel')}
+          onChange={(event) => onChange({ ...draft, badgeLabel: event.target.value })}
+        />
+        <Field
+          label="Accent color (hex)"
+          value={draft.accentColor ?? ''}
+          maxLength={7}
+          hint="Optional border & CTA accent like #15803d. Empty uses platform green."
+          error={err('accentColor')}
+          onChange={(event) => onChange({ ...draft, accentColor: event.target.value })}
+        />
+        <div className="kit-stack" style={{ gap: '6px' }}>
+          <span className="kit-small">
+            <strong>Quick colors &amp; platforms</strong>
+          </span>
+          <div className="kit-row" style={{ gap: '6px', alignItems: 'center' }}>
+            {ACCENT_PRESETS.map((hex) => (
+              <Button
+                key={hex || 'default'}
+                type="button"
+                size="small"
+                variant={(draft.accentColor ?? '') === hex ? 'primary' : 'quiet'}
+                onClick={() => onChange({ ...draft, accentColor: hex })}
+              >
+                {hex === '' ? 'Default' : hex}
+              </Button>
+            ))}
+          </div>
+          <div className="kit-row" style={{ gap: 'var(--sp-3)' }}>
+            {PLATFORMS.map((platform) => (
+              <label key={platform} className="kit-check" style={{ margin: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={platforms.includes(platform)}
+                  onChange={() => togglePlatform(platform)}
+                />
+                <span>{PLATFORM_LABELS[platform]}</span>
+              </label>
+            ))}
+          </div>
+          {err('platforms') ? (
+            <span className="kit-small kit-error">{err('platforms')}</span>
+          ) : null}
+        </div>
+      </div>
+
+      <TextArea
+        label="Body"
+        rows={2}
+        value={draft.body}
+        hint={`Up to ${LIMITS.bodyMax} characters. ${draft.body.length} used.`}
+        error={err('body')}
+        onChange={(event) => onChange({ ...draft, body: event.target.value })}
+      />
+
+      <AdImageField
+        imageUrl={draft.imageUrl}
+        thumbUrl={draft.thumbUrl ?? ''}
+        imageAlt={draft.imageAlt ?? ''}
+        error={err('imageUrl') ?? err('thumbUrl') ?? err('imageAlt')}
+        onChange={(next) =>
+          onChange({
+            ...draft,
+            imageUrl: next.imageUrl,
+            thumbUrl: next.thumbUrl,
+            imageAlt: next.imageAlt,
+          })
+        }
+      />
+    </div>
+  );
+}
+
 function placementHint(placement: AdPlacement, inventory: readonly PlacementRow[]): string {
   const live = inventory.find((row) => row.placement === placement);
   if (!live) return PLACEMENT_LABELS[placement];
@@ -621,7 +763,6 @@ function placementHint(placement: AdPlacement, inventory: readonly PlacementRow[
   )} impressions today`;
 }
 
-/** "dhaka, sylhet" into the array the function wants, without empty entries. */
 function splitTags(value: string): string[] {
   return value
     .split(',')
@@ -631,9 +772,11 @@ function splitTags(value: string): string[] {
 
 function Book({
   campaigns,
+  inventory,
   onChanged,
 }: {
   campaigns: readonly CampaignRow[];
+  inventory: readonly PlacementRow[];
   onChanged: () => void;
 }): ReactElement {
   const env = useCorporateEnv();
@@ -719,31 +862,69 @@ function Book({
       ) : null}
 
       {openId !== null ? (
-        <CampaignDetail campaignId={openId} env={env} onChanged={onChanged} />
+        <CampaignDetail campaignId={openId} env={env} inventory={inventory} onChanged={onChanged} />
       ) : null}
     </>
   );
 }
 
+interface LoadedCampaignDetail {
+  readonly perf: {
+    name: string;
+    status: keyof typeof STATUS_LABELS;
+    bid: number;
+    pricing: AdPricing;
+    daily_budget: number;
+    total_budget: number;
+    spent: number;
+    wallet_balance: number;
+    cost_per_click: number;
+    cost_per_mille: number;
+    review_note: string;
+    active_creatives: number;
+    creative_count: number;
+    days_running: number;
+  };
+  readonly settings: CampaignDetailRow | null;
+  readonly creatives: readonly CreativePerformanceRow[];
+}
+
 function CampaignDetail({
   campaignId,
   env,
+  inventory,
   onChanged,
 }: {
   campaignId: string;
   env: ReturnType<typeof useCorporateEnv>;
+  inventory: readonly PlacementRow[];
   onChanged: () => void;
 }): ReactElement {
-  const load = useCallback(
-    async () =>
-      await callRpc<Record<string, unknown>[]>(env, 'campaign_performance', {
+  const load = useCallback(async (): Promise<LoadedCampaignDetail | null> => {
+    const [perfRows, detailRows, creativeRows] = await Promise.all([
+      callRpc<LoadedCampaignDetail['perf'][]>(env, 'campaign_performance', {
         p_campaign_id: campaignId,
       }),
-    [env, campaignId],
-  );
+      callRpc<CampaignDetailRow[]>(env, 'campaign_details', { p_campaign_id: campaignId }),
+      callRpc<CreativePerformanceRow[]>(env, 'campaign_creative_details', {
+        p_campaign_id: campaignId,
+      }),
+    ]);
+    const perf = perfRows[0];
+    if (!perf) return null;
+    return {
+      perf,
+      settings: detailRows[0] ?? null,
+      creatives: creativeRows ?? [],
+    };
+  }, [env, campaignId]);
+
   const { state, reload } = useAsync(load, [campaignId]);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [noteFailed, setNoteFailed] = useState(false);
+  const [editingSettings, setEditingSettings] = useState(false);
+  const [editingCreativeId, setEditingCreativeId] = useState<string | null>(null);
   const [creative, setCreative] = useState<CreativeDraft>(EMPTY_CREATIVE);
 
   if (state.status === 'loading') return <Loading label="Loading the campaign." />;
@@ -754,69 +935,23 @@ function CampaignDetail({
       </Banner>
     );
   }
+  if (state.data === null) return <Empty>The campaign answered with nothing.</Empty>;
 
-  const row = state.data[0] as
-    | {
-        name: string;
-        status: keyof typeof STATUS_LABELS;
-        bid: number;
-        pricing: AdPricing;
-        daily_budget: number;
-        wallet_balance: number;
-        cost_per_click: number;
-        cost_per_mille: number;
-        review_note: string;
-        active_creatives: number;
-        creative_count: number;
-        days_running: number;
-      }
-    | undefined;
+  const { perf: row, settings, creatives } = state.data;
+  const finished = row.status === 'completed';
+  const creativeProblems = validateCreative(creative);
 
-  if (!row) return <Empty>The campaign answered with nothing.</Empty>;
-
-  async function setRunning(running: boolean): Promise<void> {
+  async function runAction(fn: () => Promise<void>, successMessage: string): Promise<void> {
     setBusy(true);
     setNote(null);
+    setNoteFailed(false);
     try {
-      await callRpc<string>(env, 'set_campaign_paused', {
-        p_campaign_id: campaignId,
-        p_paused: !running,
-      });
-      setNote(running ? 'Running again.' : 'Paused. It serves nothing until resumed.');
+      await fn();
+      setNote(successMessage);
       reload();
       onChanged();
     } catch (error) {
-      setNote(messageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function addFirstCreative(): Promise<void> {
-    setBusy(true);
-    setNote(null);
-    try {
-      await callRpc<string>(env, 'staff_add_creative', creativeArgs(campaignId, creative));
-      setCreative(EMPTY_CREATIVE);
-      setNote('Creative added. Submit the campaign for staff review when ready.');
-      reload();
-      onChanged();
-    } catch (error) {
-      setNote(messageOf(error));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitDraft(): Promise<void> {
-    setBusy(true);
-    setNote(null);
-    try {
-      await callRpc<string>(env, 'submit_campaign', { p_campaign_id: campaignId });
-      setNote('Sent for review. Approve it in Approvals.');
-      reload();
-      onChanged();
-    } catch (error) {
+      setNoteFailed(true);
       setNote(messageOf(error));
     } finally {
       setBusy(false);
@@ -866,100 +1001,483 @@ function CampaignDetail({
       ) : null}
 
       {note !== null ? (
-        <Banner tone="neutral" title="Last action">
+        <Banner
+          tone={noteFailed ? 'bad' : 'neutral'}
+          title={noteFailed ? 'Action refused' : 'Last action'}
+        >
           <p className="kit-small">{note}</p>
         </Banner>
       ) : null}
 
-      {row.status === 'draft' || row.status === 'rejected' ? (
-        <>
-          <h3>Add a creative</h3>
-          <div className="kit-grid kit-grid--2">
-            <Field
-              label="Headline"
-              value={creative.headline}
-              onChange={(event) => setCreative({ ...creative, headline: event.target.value })}
-            />
-            <Select
-              label="Placement"
-              value={creative.placement}
-              options={PLACEMENTS.map((placement) => ({
-                value: placement,
-                label: PLACEMENT_LABELS[placement],
-              }))}
-              onChange={(event) =>
-                setCreative({ ...creative, placement: event.target.value as AdPlacement })
-              }
-            />
-            <Field
-              label="Destination"
-              value={creative.targetUrl}
-              onChange={(event) => setCreative({ ...creative, targetUrl: event.target.value })}
-            />
-            <Field
-              label="Button label"
-              value={creative.ctaLabel}
-              onChange={(event) => setCreative({ ...creative, ctaLabel: event.target.value })}
-            />
-          </div>
-          <TextArea
-            label="Body"
-            rows={2}
-            value={creative.body}
-            onChange={(event) => setCreative({ ...creative, body: event.target.value })}
-          />
-          <div className="kit-row">
-            <Button
-              variant="quiet"
-              disabled={busy || validateCreative(creative).length > 0}
-              onClick={() => void addFirstCreative()}
-            >
-              Add creative
-            </Button>
-            <Button
-              disabled={busy || row.active_creatives === 0}
-              onClick={() => void submitDraft()}
-            >
-              Send for review
-            </Button>
-          </div>
-          <p className="kit-small kit-muted">
-            A funded wallet and an enabled creative are required. Staff approve it from Approvals.
-          </p>
-        </>
-      ) : null}
-
       <div className="kit-row">
+        {row.status === 'draft' ||
+        row.status === 'rejected' ||
+        row.status === 'paused' ||
+        row.status === 'pending_review' ? (
+          <Button
+            disabled={busy || row.active_creatives === 0}
+            onClick={() =>
+              void runAction(async () => {
+                await callRpc(env, 'staff_activate_campaign', { p_campaign_id: campaignId });
+              }, 'Campaign is now live and eligible to serve.')
+            }
+          >
+            Activate now
+          </Button>
+        ) : null}
+        {row.status === 'draft' || row.status === 'rejected' ? (
+          <Button
+            variant="quiet"
+            disabled={busy || row.active_creatives === 0}
+            onClick={() =>
+              void runAction(async () => {
+                await callRpc(env, 'submit_campaign', { p_campaign_id: campaignId });
+              }, 'Sent for review. Approve it in Approvals.')
+            }
+          >
+            Send for review
+          </Button>
+        ) : null}
         {row.status === 'active' ? (
-          <Button variant="quiet" disabled={busy} onClick={() => void setRunning(false)}>
+          <Button
+            variant="quiet"
+            disabled={busy}
+            onClick={() =>
+              void runAction(async () => {
+                await callRpc(env, 'set_campaign_paused', {
+                  p_campaign_id: campaignId,
+                  p_paused: true,
+                });
+              }, 'Paused. It serves nothing until resumed.')
+            }
+          >
             Pause
           </Button>
         ) : null}
         {row.status === 'paused' ? (
-          <Button disabled={busy} onClick={() => void setRunning(true)}>
+          <Button
+            variant="quiet"
+            disabled={busy}
+            onClick={() =>
+              void runAction(async () => {
+                await callRpc(env, 'set_campaign_paused', {
+                  p_campaign_id: campaignId,
+                  p_paused: false,
+                });
+              }, 'Running again.')
+            }
+          >
             Resume
           </Button>
         ) : null}
+        {!finished && settings !== null ? (
+          <Button
+            variant="quiet"
+            disabled={busy}
+            onClick={() => setEditingSettings((prev) => !prev)}
+          >
+            {editingSettings ? 'Hide campaign editor' : 'Edit campaign settings'}
+          </Button>
+        ) : null}
       </div>
+
+      {editingSettings && settings !== null ? (
+        <EditCampaignSettingsForm
+          settings={settings}
+          floorBid={inventory[0]?.floor_bid ?? LIMITS.bidMin}
+          busy={busy}
+          onSave={(payload) =>
+            void runAction(async () => {
+              await callRpc(env, 'staff_update_campaign', payload);
+              setEditingSettings(false);
+            }, 'Campaign settings updated.')
+          }
+        />
+      ) : null}
+
+      <h3>Creatives ({count(creatives.length)})</h3>
+      {creatives.length === 0 ? (
+        <Empty>No creative has been attached to this campaign yet.</Empty>
+      ) : (
+        <div className="kit-stack">
+          {creatives.map((item) => (
+            <div key={item.creative_id} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+              <div
+                className="kit-row"
+                style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
+              >
+                <div className="kit-row" style={{ alignItems: 'flex-start', flex: '1 1 240px' }}>
+                  {item.image_url !== '' ? (
+                    <img
+                      src={item.thumb_url || item.image_url}
+                      alt={item.image_alt || item.headline}
+                      className="kit-ad-thumb"
+                    />
+                  ) : null}
+                  <div>
+                    <strong>{item.headline}</strong>
+                    <div className="kit-small kit-muted">
+                      {PLACEMENT_LABELS[item.placement]} ·{' '}
+                      {LAYOUT_LABELS[item.layout] ?? item.layout} ·{' '}
+                      {(item.platforms ?? DEFAULT_CREATIVE_PLATFORMS)
+                        .map((p) => PLATFORM_LABELS[p])
+                        .join(' + ')}
+                    </div>
+                    {item.body !== '' ? <p className="kit-small">{item.body}</p> : null}
+                    <div className="kit-small kit-muted">
+                      {count(item.impressions)} shown · {count(item.clicks)} clicked (
+                      {percent(item.ctr)}) · {money(item.spend)} spent
+                    </div>
+                  </div>
+                </div>
+                <div className="kit-row">
+                  <Badge tone={item.is_enabled ? 'ok' : 'neutral'}>
+                    {item.is_enabled ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                  {!finished ? (
+                    <>
+                      <Button
+                        size="small"
+                        variant="quiet"
+                        disabled={busy}
+                        onClick={() =>
+                          void runAction(
+                            async () => {
+                              await callRpc(env, 'staff_set_creative_enabled', {
+                                p_creative_id: item.creative_id,
+                                p_enabled: !item.is_enabled,
+                              });
+                            },
+                            item.is_enabled ? 'Creative disabled.' : 'Creative enabled.',
+                          )
+                        }
+                      >
+                        {item.is_enabled ? 'Disable' : 'Enable'}
+                      </Button>
+                      <Button
+                        size="small"
+                        variant="quiet"
+                        disabled={busy}
+                        onClick={() =>
+                          setEditingCreativeId(
+                            editingCreativeId === item.creative_id ? null : item.creative_id,
+                          )
+                        }
+                      >
+                        {editingCreativeId === item.creative_id ? 'Close editor' : 'Edit'}
+                      </Button>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+
+              {editingCreativeId === item.creative_id && !finished ? (
+                <EditCreativeForm
+                  initial={item}
+                  inventory={inventory}
+                  busy={busy}
+                  onCancel={() => setEditingCreativeId(null)}
+                  onSave={(nextDraft) =>
+                    void runAction(async () => {
+                      await callRpc(
+                        env,
+                        'staff_update_creative',
+                        updateCreativeArgs(item.creative_id, nextDraft),
+                      );
+                      setEditingCreativeId(null);
+                    }, 'Creative updated.')
+                  }
+                />
+              ) : null}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!finished ? (
+        <>
+          <h3>Add another creative</h3>
+          <CreativeFormFields
+            draft={creative}
+            inventory={inventory}
+            problems={creativeProblems}
+            onChange={setCreative}
+          />
+          <CreativePreview draft={creative} />
+          <div className="kit-row">
+            <Button
+              variant="quiet"
+              disabled={busy || creativeProblems.length > 0}
+              onClick={() =>
+                void runAction(async () => {
+                  await callRpc<string>(
+                    env,
+                    'staff_add_creative',
+                    creativeArgs(campaignId, creative),
+                  );
+                  setCreative(EMPTY_CREATIVE);
+                }, 'Creative added.')
+              }
+            >
+              Add creative
+            </Button>
+          </div>
+        </>
+      ) : null}
     </Card>
   );
 }
 
+function EditCampaignSettingsForm({
+  settings,
+  floorBid,
+  busy,
+  onSave,
+}: {
+  settings: CampaignDetailRow;
+  floorBid: number;
+  busy: boolean;
+  onSave: (payload: Record<string, unknown>) => void;
+}): ReactElement {
+  const [name, setName] = useState(settings.name);
+  const [pricing, setPricing] = useState<AdPricing>(settings.pricing);
+  const [bidTaka, setBidTaka] = useState(poishaToTaka(settings.bid));
+  const [budgetTaka, setBudgetTaka] = useState(poishaToTaka(settings.total_budget));
+  const [dailyTaka, setDailyTaka] = useState(
+    settings.daily_budget > 0 ? poishaToTaka(settings.daily_budget) : '',
+  );
+  const [startsAt, setStartsAt] = useState(settings.starts_at.slice(0, 10));
+  const [endsAt, setEndsAt] = useState(settings.ends_at ? settings.ends_at.slice(0, 10) : '');
+  const [cities, setCities] = useState((settings.target_cities ?? []).join(', '));
+  const [topics, setTopics] = useState((settings.target_topics ?? []).join(', '));
+  const [language, setLanguage] = useState<'any' | 'bn' | 'en'>(settings.target_language ?? 'any');
+
+  const draft = useMemo(
+    () => ({
+      ownerUid: settings.owner_uid,
+      name,
+      pricing,
+      bid: takaToPoisha(bidTaka),
+      totalBudget: takaToPoisha(budgetTaka),
+      dailyBudget: dailyTaka.trim() === '' ? 0 : takaToPoisha(dailyTaka),
+      startsAt,
+      endsAt,
+      cities: splitTags(cities),
+      topics: splitTags(topics),
+      language,
+      activate: false,
+    }),
+    [
+      settings.owner_uid,
+      name,
+      pricing,
+      bidTaka,
+      budgetTaka,
+      dailyTaka,
+      startsAt,
+      endsAt,
+      cities,
+      topics,
+      language,
+    ],
+  );
+  const problems = useMemo(() => validateDraft(draft, floorBid), [draft, floorBid]);
+  const spendProblem =
+    draft.totalBudget < settings.spent
+      ? `Budget cannot be lower than already spent (${money(settings.spent)}).`
+      : null;
+
+  return (
+    <div className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+      <h4>Edit campaign settings</h4>
+      <div className="kit-grid kit-grid--2">
+        <Field label="Campaign name" value={name} onChange={(e) => setName(e.target.value)} />
+        <Select
+          label="Charged per"
+          value={pricing}
+          options={[
+            { value: 'cpm', label: 'Thousand impressions (CPM)' },
+            { value: 'cpc', label: 'Click (CPC)' },
+          ]}
+          onChange={(e) => setPricing(e.target.value === 'cpc' ? 'cpc' : 'cpm')}
+        />
+        <Field
+          label={pricing === 'cpm' ? 'Bid per thousand (৳)' : 'Bid per click (৳)'}
+          inputMode="decimal"
+          value={bidTaka}
+          onChange={(e) => setBidTaka(e.target.value)}
+        />
+        <Field
+          label="Total budget (৳)"
+          inputMode="decimal"
+          value={budgetTaka}
+          onChange={(e) => setBudgetTaka(e.target.value)}
+        />
+        <Field
+          label="Daily cap (৳)"
+          inputMode="decimal"
+          value={dailyTaka}
+          onChange={(e) => setDailyTaka(e.target.value)}
+        />
+        <Select
+          label="Target language"
+          value={language}
+          options={[
+            { value: 'any', label: 'All languages' },
+            { value: 'bn', label: 'Bangla only' },
+            { value: 'en', label: 'English only' },
+          ]}
+          onChange={(e) => {
+            const val = e.target.value;
+            setLanguage(val === 'bn' || val === 'en' ? val : 'any');
+          }}
+        />
+        <Field
+          label="Starts"
+          type="date"
+          value={startsAt}
+          onChange={(e) => setStartsAt(e.target.value)}
+        />
+        <Field
+          label="Ends"
+          type="date"
+          value={endsAt}
+          onChange={(e) => setEndsAt(e.target.value)}
+        />
+        <Field label="Cities" value={cities} onChange={(e) => setCities(e.target.value)} />
+        <Field label="Topics" value={topics} onChange={(e) => setTopics(e.target.value)} />
+      </div>
+      {(spendProblem ?? problems[0]?.message) ? (
+        <p className="kit-small kit-error">{spendProblem ?? problems[0]?.message}</p>
+      ) : null}
+      <Button
+        size="small"
+        disabled={busy || problems.length > 0 || spendProblem !== null}
+        onClick={() => onSave(updateCampaignArgs(settings.campaign_id, draft))}
+      >
+        Save campaign changes
+      </Button>
+    </div>
+  );
+}
+
+function EditCreativeForm({
+  initial,
+  inventory,
+  busy,
+  onCancel,
+  onSave,
+}: {
+  initial: CreativePerformanceRow;
+  inventory: readonly PlacementRow[];
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (draft: CreativeDraft) => void;
+}): ReactElement {
+  const [draft, setDraft] = useState<CreativeDraft>({
+    placement: initial.placement,
+    headline: initial.headline,
+    body: initial.body,
+    targetUrl: initial.target_url,
+    imageUrl: initial.image_url,
+    ctaLabel: initial.cta_label,
+    thumbUrl: initial.thumb_url,
+    imageAlt: initial.image_alt,
+    layout: initial.layout ?? 'card',
+    accentColor: initial.accent_color,
+    badgeLabel: initial.badge_label,
+    platforms: initial.platforms?.length ? initial.platforms : [...DEFAULT_CREATIVE_PLATFORMS],
+    isEnabled: initial.is_enabled,
+  });
+  const problems = validateCreative(draft);
+
+  return (
+    <div
+      className="kit-stack"
+      style={{
+        marginTop: 'var(--sp-3)',
+        paddingTop: 'var(--sp-3)',
+        borderTop: '1px solid var(--c-line)',
+      }}
+    >
+      <CreativeFormFields
+        draft={draft}
+        inventory={inventory}
+        problems={problems}
+        onChange={setDraft}
+      />
+      <CreativePreview draft={draft} />
+      <div className="kit-row">
+        <Button size="small" disabled={busy || problems.length > 0} onClick={() => onSave(draft)}>
+          Save creative
+        </Button>
+        <Button size="small" variant="quiet" disabled={busy} onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /**
- * A preview of what the advertiser will read. It is the same numbers the
- * performance call returns, rendered by the same formatting, so an operator
- * can answer "what will they see?" without signing in as them.
+ * Live visual preview of the creative in its chosen placement, layout, accent
+ * color, badge label, and ImgBB artwork.
  */
 export function CreativePreview({ draft }: { draft: CreativeDraft }): ReactElement {
+  const layout = draft.layout ?? 'card';
+  const badge = draft.badgeLabel?.trim() || 'Sponsored';
+  const platforms = draft.platforms ?? DEFAULT_CREATIVE_PLATFORMS;
+  const mediaSrc = (draft.thumbUrl ?? '').trim() || draft.imageUrl.trim();
+  const hasMedia = mediaSrc !== '' && isImgbbUrl(mediaSrc);
+  const accentStyle =
+    draft.accentColor && /^#[0-9a-fA-F]{6}$/.test(draft.accentColor.trim())
+      ? ({ '--ad-accent': draft.accentColor.trim() } as CSSProperties)
+      : undefined;
+
   return (
-    <div className="kit-adpreview">
-      <span className="kit-badge">Sponsored · {PLACEMENT_LABELS[draft.placement]}</span>
-      <strong>{draft.headline.trim() === '' ? 'Headline' : draft.headline}</strong>
-      <p className="kit-small">{draft.body.trim() === '' ? 'Body copy.' : draft.body}</p>
-      {draft.ctaLabel.trim().length > 0 ? (
-        <span className="kit-btn kit-btn--small">{draft.ctaLabel}</span>
-      ) : null}
-      <span className="kit-small kit-muted">{draft.targetUrl || 'https://…'}</span>
+    <div className={`kit-adpreview kit-adpreview--${layout}`} style={accentStyle}>
+      <div className="kit-adpreview-head">
+        <span className="kit-badge">
+          {badge} · {PLACEMENT_LABELS[draft.placement]} · {LAYOUT_LABELS[layout]}
+        </span>
+        <div className="kit-adpreview-chips">
+          {platforms.map((platform) => (
+            <span key={platform} className="kit-badge">
+              {PLATFORM_LABELS[platform]}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="kit-adpreview-body">
+        {hasMedia ? (
+          <img
+            src={mediaSrc}
+            alt={draft.imageAlt?.trim() || draft.headline || 'Ad creative preview'}
+            className="kit-adpreview-media"
+          />
+        ) : null}
+        <div className="kit-stack" style={{ gap: 'var(--sp-1)' }}>
+          <strong>{draft.headline.trim() === '' ? 'Headline' : draft.headline}</strong>
+          <p className="kit-small">{draft.body.trim() === '' ? 'Body copy.' : draft.body}</p>
+          {draft.ctaLabel.trim().length > 0 ? (
+            <span
+              className="kit-btn kit-btn--small"
+              style={
+                draft.accentColor && /^#[0-9a-fA-F]{6}$/.test(draft.accentColor.trim())
+                  ? {
+                      backgroundColor: draft.accentColor.trim(),
+                      borderColor: draft.accentColor.trim(),
+                    }
+                  : undefined
+              }
+            >
+              {draft.ctaLabel}
+            </span>
+          ) : null}
+          <span className="kit-small kit-muted">{draft.targetUrl || 'https://…'}</span>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@ import { Megaphone } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -32,10 +33,22 @@ import {
   type CreativeCopy,
 } from '@/lib/ads/ads-types';
 import { formatNumber } from '@/lib/format';
-import { formatMoney } from '@/lib/market/market-types';
+import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
+
+/** A calendar day in Bangladesh time, for campaign schedules. Empty when the date cannot be read. */
+function formatDay(iso: string, language: Language): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(language === 'bn' ? 'bn-BD' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka',
+  }).format(date);
+}
 
 /** A private performance page, not a self-service campaign builder. */
 export default function AdsPage() {
@@ -93,7 +106,7 @@ function Dashboard() {
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.walletBalance')}
-          value={formatMoney(balance, 'BDT', language)}
+          value={formatTaka(balance, language)}
           hint={t('ads.walletHint')}
         />
         <StatCard
@@ -107,9 +120,8 @@ function Dashboard() {
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.totalSpend')}
-          value={formatMoney(
+          value={formatTaka(
             campaigns.reduce((total, campaign) => total + campaign.spent, 0),
-            'BDT',
             language,
           )}
           hint={t('ads.shownCampaignsHint')}
@@ -147,9 +159,8 @@ function Dashboard() {
                     {' · '}
                     {campaign.clicks > 0
                       ? t('ads.costPerClick', {
-                          amount: formatMoney(
+                          amount: formatTaka(
                             effectiveCostPerClick(campaign.spent, campaign.clicks),
-                            'BDT',
                             language,
                           ),
                         })
@@ -172,16 +183,43 @@ function Dashboard() {
                 <ProgressBar
                   value={budgetProgress(campaign) * 100}
                   label={t('ads.budgetUsed', {
-                    spent: formatMoney(campaign.spent, 'BDT', language),
-                    total: formatMoney(campaign.totalBudget, 'BDT', language),
+                    spent: formatTaka(campaign.spent, language),
+                    total: formatTaka(campaign.totalBudget, language),
                   })}
                 />
                 <p className="mt-1 text-xs text-muted">
                   {t('ads.remaining', {
-                    amount: formatMoney(budgetRemaining(campaign), 'BDT', language),
+                    amount: formatTaka(budgetRemaining(campaign), language),
                   })}
                 </p>
               </div>
+              <ul className="mt-3 grid gap-1 text-xs text-muted" aria-label={t('ads.factsTitle')}>
+                <li>
+                  {t('ads.bidLine', {
+                    amount: formatTaka(campaign.bid, language),
+                    pricing: t(`ads.pricings.${campaign.pricing}`),
+                  })}
+                </li>
+                <li>
+                  {campaign.endsAt
+                    ? t('ads.scheduleRange', {
+                        start: formatDay(campaign.startsAt, language),
+                        end: formatDay(campaign.endsAt, language),
+                      })
+                    : t('ads.scheduleOpen', { start: formatDay(campaign.startsAt, language) })}
+                </li>
+                <li>
+                  {campaign.dailyBudget > 0
+                    ? t('ads.dailyCapLine', {
+                        spent: formatTaka(campaign.spendToday, language),
+                        cap: formatTaka(campaign.dailyBudget, language),
+                      })
+                    : t('ads.dailyNoCap', { spent: formatTaka(campaign.spendToday, language) })}
+                </li>
+                <li>
+                  {t('ads.creatives', { total: formatNumber(campaign.creativeCount, language) })}
+                </li>
+              </ul>
               {campaign.reviewNote.length > 0 ? (
                 <Alert tone="warning" title={t('ads.reviewNote')} className="mt-3">
                   {campaign.reviewNote}
@@ -247,7 +285,7 @@ function Dashboard() {
                                   <td className="py-2">{day.day}</td>
                                   <td>{formatNumber(day.impressions, language)}</td>
                                   <td>{formatNumber(day.clicks, language)}</td>
-                                  <td>{formatMoney(day.spend, 'BDT', language)}</td>
+                                  <td>{formatTaka(day.spend, language)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -321,15 +359,27 @@ function Creative({
 
   return (
     <li className="rounded-card border border-border p-3">
+      {creative.imageUrl.length > 0 ? (
+        <MediaImage
+          src={creative.imageUrl}
+          variantSrc={creative.thumbUrl ?? ''}
+          alt={creative.imageAlt?.trim() || creative.headline}
+          slotWidth={320}
+          loading="lazy"
+          decoding="async"
+          className="mb-2 h-28 w-full rounded-card object-cover"
+        />
+      ) : null}
       <p className="font-medium">{creative.headline}</p>
       {creative.body ? <p className="mt-1 text-sm">{creative.body}</p> : null}
       <p className="mt-1 text-xs text-muted">
-        {t(`ads.placements.${creative.placement}`)} ·{' '}
+        {t(`ads.placements.${creative.placement}`)}
+        {creative.layout ? ` · ${t(`ads.layouts.${creative.layout}`)}` : ''} ·{' '}
         {t('ads.counted', {
           impressions: formatNumber(creative.impressions, language),
           clicks: formatNumber(creative.clicks, language),
         })}{' '}
-        · {formatMoney(creative.spend, 'BDT', language)}
+        · {formatTaka(creative.spend, language)}
       </p>
       {editable && !editing ? (
         <Button

@@ -9,15 +9,17 @@ import { TrendingTags } from '@/components/feed/FeedRail';
 import { isConfigured } from '@/lib/env';
 import { formatNumber } from '@/lib/format';
 import { SITE } from '@/lib/site';
+import { useAuthStore } from '@/store/auth-store';
 
 export default function TagPage() {
   const { t, i18n } = useTranslation();
   const language = i18n.language === 'en' ? 'en' : 'bn';
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
   const params = useParams();
   const slug = (params['slug'] ?? '').toLowerCase();
 
   const { data, isPending } = useQuery({
-    queryKey: ['tag', slug],
+    queryKey: ['tag', uid ?? 'anon', slug],
     queryFn: async () => {
       const module = await import('@/lib/content/post-repository');
       const [tag, posts] = await Promise.all([module.fetchTag(slug), module.fetchPostsByTag(slug)]);
@@ -29,9 +31,17 @@ export default function TagPage() {
 
   if (!isConfigured.supabase) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('data.errors.notConfigured')} />
-      </div>
+      <>
+        <Seo
+          title={t('tag.metaTitle', { tag: slug })}
+          description={t('tag.metaDescription', { tag: slug })}
+          path={`/tag/${slug}`}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('data.errors.notConfigured')} />
+        </div>
+      </>
     );
   }
 
@@ -43,6 +53,7 @@ export default function TagPage() {
       : language === 'bn' && data.tag.label_bn.length > 0
         ? data.tag.label_bn
         : data.tag.label_en;
+  const hasPosts = (data?.tag?.posts_count ?? 0) > 0 || (data?.posts.length ?? 0) > 0;
 
   return (
     <>
@@ -54,13 +65,18 @@ export default function TagPage() {
             : t('tag.metaDescription', { tag: label })
         }
         path={`/tag/${slug}`}
-        jsonLd={[
-          {
-            '@type': 'CollectionPage',
-            name: label,
-            url: `${SITE.url}/tag/${slug}`,
-          },
-        ]}
+        noindex={!hasPosts}
+        jsonLd={
+          hasPosts
+            ? [
+                {
+                  '@type': 'CollectionPage',
+                  name: label,
+                  url: `${SITE.url}/tag/${slug}`,
+                },
+              ]
+            : []
+        }
       />
       <div className="fab-container py-6 sm:py-10">
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,44rem)_13rem] lg:justify-center">

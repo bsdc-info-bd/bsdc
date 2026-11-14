@@ -22,6 +22,10 @@ export type AdStatus = 'draft' | 'pending_review' | 'active' | 'rejected' | 'pau
 
 export type AdPlacement = 'feed' | 'sidebar' | 'search' | 'shop' | 'article';
 
+export type AdLayout = 'banner' | 'card' | 'compact' | 'native';
+
+export type AdPlatform = 'web' | 'android';
+
 export interface CampaignDraft {
   readonly ownerUid: string;
   readonly name: string;
@@ -44,6 +48,13 @@ export interface CreativeDraft {
   readonly targetUrl: string;
   readonly imageUrl: string;
   readonly ctaLabel: string;
+  readonly thumbUrl?: string;
+  readonly imageAlt?: string;
+  readonly layout?: AdLayout;
+  readonly accentColor?: string;
+  readonly badgeLabel?: string;
+  readonly platforms?: readonly AdPlatform[];
+  readonly isEnabled?: boolean;
 }
 
 export interface Problem {
@@ -69,6 +80,24 @@ export interface CampaignRow {
   readonly starts_at: string;
   readonly ends_at: string | null;
   readonly creative_count: number;
+}
+
+export interface CampaignDetailRow {
+  readonly campaign_id: string;
+  readonly owner_uid: string;
+  readonly name: string;
+  readonly status: AdStatus;
+  readonly pricing: AdPricing;
+  readonly bid: number;
+  readonly total_budget: number;
+  readonly daily_budget: number;
+  readonly spent: number;
+  readonly starts_at: string;
+  readonly ends_at: string | null;
+  readonly target_cities: readonly string[];
+  readonly target_topics: readonly string[];
+  readonly target_language: 'any' | 'bn' | 'en';
+  readonly review_note: string;
 }
 
 export interface OwnerRow {
@@ -136,6 +165,12 @@ export interface CreativePerformanceRow {
   readonly spend: number;
   readonly ctr: number | string;
   readonly cost_per_click: number;
+  readonly thumb_url: string;
+  readonly image_alt: string;
+  readonly layout: AdLayout;
+  readonly accent_color: string;
+  readonly badge_label: string;
+  readonly platforms: readonly AdPlatform[];
 }
 
 export interface DayRow {
@@ -156,6 +191,22 @@ export const PLACEMENT_LABELS: Readonly<Record<AdPlacement, string>> = {
   article: 'Article',
 };
 
+export const LAYOUTS: readonly AdLayout[] = ['card', 'banner', 'compact', 'native'];
+
+export const LAYOUT_LABELS: Readonly<Record<AdLayout, string>> = {
+  card: 'Card (standard)',
+  banner: 'Wide banner',
+  compact: 'Compact thumbnail',
+  native: 'Native story',
+};
+
+export const PLATFORMS: readonly AdPlatform[] = ['web', 'android'];
+
+export const PLATFORM_LABELS: Readonly<Record<AdPlatform, string>> = {
+  web: 'Web',
+  android: 'Android',
+};
+
 export const STATUS_LABELS: Readonly<Record<AdStatus, string>> = {
   draft: 'Draft',
   pending_review: 'Waiting for review',
@@ -174,7 +225,7 @@ export const STATUS_TONES: Readonly<Record<AdStatus, 'ok' | 'warn' | 'bad' | 'ne
   completed: 'neutral',
 };
 
-/** Limits from `0022_ads.sql`, so the form can say them before the round trip. */
+/** Limits from `0022_ads.sql` and `0089_ads_delivery_creatives_and_tracking_upgrade.sql`. */
 export const LIMITS = {
   bidMin: 100,
   bidMax: 10_000_000,
@@ -185,7 +236,37 @@ export const LIMITS = {
   headlineMax: 80,
   bodyMax: 200,
   ctaMax: 32,
+  altMax: 200,
+  badgeMax: 32,
+  urlMax: 500,
 } as const;
+
+export const DEFAULT_CREATIVE_PLATFORMS: readonly AdPlatform[] = ['web', 'android'];
+
+/** Matches `bsdc.media_host_of` in `0083_imgbb_only_media.sql`. */
+export function isImgbbUrl(raw: string): boolean {
+  const value = raw.trim();
+  if (value === '') return false;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname.toLowerCase();
+    return (
+      host === 'i.ibb.co' ||
+      host === 'ibb.co' ||
+      host === 'i.ibb.co.com' ||
+      host.endsWith('.ibb.co') ||
+      host.endsWith('.ibb.co.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function isHexColor(raw: string): boolean {
+  const value = raw.trim();
+  return value === '' || /^#[0-9a-fA-F]{6}$/.test(value);
+}
 
 /**
  * What one event costs, in poisha — the same arithmetic as
@@ -360,6 +441,13 @@ export function validateCreative(draft: CreativeDraft): readonly Problem[] {
   const body = draft.body.trim();
   const cta = draft.ctaLabel.trim();
   const url = draft.targetUrl.trim();
+  const imageUrl = draft.imageUrl.trim();
+  const thumbUrl = (draft.thumbUrl ?? '').trim();
+  const imageAlt = (draft.imageAlt ?? '').trim();
+  const accentColor = (draft.accentColor ?? '').trim();
+  const badgeLabel = (draft.badgeLabel ?? '').trim();
+  const layout = draft.layout ?? 'card';
+  const platforms = draft.platforms ?? DEFAULT_CREATIVE_PLATFORMS;
 
   if (headline.length < LIMITS.headlineMin) {
     problems.push({ field: 'headline', message: 'A creative needs a headline an eye can catch.' });
@@ -382,13 +470,50 @@ export function validateCreative(draft: CreativeDraft): readonly Problem[] {
       message: `A button label is at most ${LIMITS.ctaMax} characters.`,
     });
   }
-  // The database requires an https destination of at least four characters;
-  // anything else is a link that would take a reader somewhere unprotected.
   if (!/^https:\/\/\S{4,500}$/.test(url)) {
     problems.push({
       field: 'targetUrl',
       message:
         'A destination has to be an https address — an ad is a promise about where a click goes.',
+    });
+  }
+  if (imageUrl.length > LIMITS.urlMax || (imageUrl.length > 0 && !isImgbbUrl(imageUrl))) {
+    problems.push({
+      field: 'imageUrl',
+      message: 'Ad images must be hosted on ImgBB (https://i.ibb.co/...).',
+    });
+  }
+  if (thumbUrl.length > LIMITS.urlMax || (thumbUrl.length > 0 && !isImgbbUrl(thumbUrl))) {
+    problems.push({
+      field: 'thumbUrl',
+      message: 'Ad thumbnails must be hosted on ImgBB (https://i.ibb.co/...).',
+    });
+  }
+  if (imageAlt.length > LIMITS.altMax) {
+    problems.push({
+      field: 'imageAlt',
+      message: `Image description is cut after ${LIMITS.altMax} characters.`,
+    });
+  }
+  if (!LAYOUTS.includes(layout)) {
+    problems.push({ field: 'layout', message: 'Choose a valid ad layout.' });
+  }
+  if (!isHexColor(accentColor)) {
+    problems.push({
+      field: 'accentColor',
+      message: 'Accent color must be a 6-digit hex code such as #15803d.',
+    });
+  }
+  if (badgeLabel.length > LIMITS.badgeMax) {
+    problems.push({
+      field: 'badgeLabel',
+      message: `Badge label is at most ${LIMITS.badgeMax} characters.`,
+    });
+  }
+  if (platforms.length === 0) {
+    problems.push({
+      field: 'platforms',
+      message: 'Select at least one platform (Web or Android).',
     });
   }
   return problems;
@@ -443,6 +568,18 @@ export function campaignArgs(draft: CampaignDraft): Record<string, unknown> {
   };
 }
 
+function creativeOptionArgs(draft: CreativeDraft): Record<string, unknown> {
+  return {
+    p_thumb_url: (draft.thumbUrl ?? '').trim(),
+    p_image_alt: (draft.imageAlt ?? '').trim(),
+    p_layout: draft.layout ?? 'card',
+    p_accent_color: (draft.accentColor ?? '').trim(),
+    p_badge_label: (draft.badgeLabel ?? '').trim(),
+    p_platforms:
+      draft.platforms && draft.platforms.length > 0 ? draft.platforms : DEFAULT_CREATIVE_PLATFORMS,
+  };
+}
+
 /** Arguments for the atomic staff builder, including optional first creative. */
 export function setupArgs(draft: CampaignDraft, creative: CreativeDraft): Record<string, unknown> {
   return {
@@ -453,6 +590,7 @@ export function setupArgs(draft: CampaignDraft, creative: CreativeDraft): Record
     p_target_url: creative.targetUrl.trim(),
     p_image_url: creative.imageUrl.trim(),
     p_cta_label: creative.ctaLabel.trim(),
+    ...creativeOptionArgs(creative),
   };
 }
 
@@ -465,6 +603,45 @@ export function creativeArgs(campaignId: string, draft: CreativeDraft): Record<s
     p_target_url: draft.targetUrl.trim(),
     p_image_url: draft.imageUrl.trim(),
     p_cta_label: draft.ctaLabel.trim(),
+    ...creativeOptionArgs(draft),
+  };
+}
+
+export function updateCampaignArgs(
+  campaignId: string,
+  draft: Omit<CampaignDraft, 'ownerUid' | 'activate'>,
+): Record<string, unknown> {
+  const endsIso = dateToIso(draft.endsAt);
+  return {
+    p_campaign_id: campaignId,
+    p_name: draft.name.trim(),
+    p_pricing: draft.pricing,
+    p_bid: draft.bid,
+    p_total_budget: draft.totalBudget,
+    p_daily_budget: draft.dailyBudget,
+    p_starts_at: dateToIso(draft.startsAt) === '' ? null : dateToIso(draft.startsAt),
+    p_ends_at: endsIso === '' ? null : endsIso,
+    p_clear_end: endsIso === '',
+    p_cities: draft.cities,
+    p_topics: draft.topics,
+    p_language: draft.language.trim() === '' ? 'any' : draft.language.trim(),
+  };
+}
+
+export function updateCreativeArgs(
+  creativeId: string,
+  draft: CreativeDraft,
+): Record<string, unknown> {
+  return {
+    p_creative_id: creativeId,
+    p_placement: draft.placement,
+    p_headline: draft.headline.trim(),
+    p_body: draft.body.trim(),
+    p_target_url: draft.targetUrl.trim(),
+    p_image_url: draft.imageUrl.trim(),
+    p_cta_label: draft.ctaLabel.trim(),
+    ...creativeOptionArgs(draft),
+    p_is_enabled: draft.isEnabled ?? true,
   };
 }
 

@@ -45,11 +45,15 @@ export const onRequestGet: PagesFunction<RpcEnv> = async (context) => {
   const items = posts
     .map((post) => {
       const url = `${origin}/p/${post.slug}`;
+      const title =
+        post.title.trim().length > 0
+          ? post.title.trim()
+          : post.excerpt.trim().slice(0, 80) || 'BSDC Post';
       const date = new Date(post.published_at ?? post.updated_at);
       const pubDate = Number.isNaN(date.getTime()) ? '' : date.toUTCString();
       return [
         '    <item>',
-        `      <title>${escapeXml(post.title)}</title>`,
+        `      <title>${escapeXml(title)}</title>`,
         `      <link>${escapeXml(url)}</link>`,
         `      <guid isPermaLink="true">${escapeXml(url)}</guid>`,
         `      <description>${escapeXml(post.excerpt)}</description>`,

@@ -39,16 +39,14 @@ export class CorporateDataAccessError extends Error {
  * or `bsdc.info.bd`), include the sibling apex/www host and BSDC's canonical
  * Cloudflare Pages origin (`https://bsdc.pages.dev`) as explicit HTTPS fallbacks
  * so a `www` <-> apex redirect or unpointed custom domain never blocks staff
- * sign-in while `redirect: 'error'` remains enforced on every request.
+ * calls while `redirect: 'error'` remains enforced on every request.
  */
-export function claimsEndpoints(siteUrl: string): string[] {
+function sitePathEndpoints(siteUrl: string, pathname: string, label: string): string[] {
   let url: URL;
   try {
-    url = new URL('/api/auth/claims', siteUrl);
+    url = new URL(pathname, siteUrl);
   } catch {
-    throw new CorporateDataAccessError(
-      'The main-site address for staff sign-in is not configured.',
-    );
+    throw new CorporateDataAccessError(`The main-site address for ${label} is not configured.`);
   }
   const host = url.hostname.toLowerCase();
   const local = host === 'localhost' || host === '127.0.0.1';
@@ -57,7 +55,7 @@ export function claimsEndpoints(siteUrl: string): string[] {
     url.username ||
     url.password
   ) {
-    throw new CorporateDataAccessError('The main-site address for staff sign-in must use HTTPS.');
+    throw new CorporateDataAccessError(`The main-site address for ${label} must use HTTPS.`);
   }
 
   const ordered = [url.href];
@@ -70,14 +68,22 @@ export function claimsEndpoints(siteUrl: string): string[] {
 
   if (isBsdcDomain) {
     for (const candidate of [
-      'https://www.bsdc.info.bd/api/auth/claims',
-      'https://bsdc.info.bd/api/auth/claims',
-      'https://bsdc.pages.dev/api/auth/claims',
+      `https://www.bsdc.info.bd${pathname}`,
+      `https://bsdc.info.bd${pathname}`,
+      `https://bsdc.pages.dev${pathname}`,
     ]) {
       if (!ordered.includes(candidate)) ordered.push(candidate);
     }
   }
   return ordered;
+}
+
+export function claimsEndpoints(siteUrl: string): string[] {
+  return sitePathEndpoints(siteUrl, '/api/auth/claims', 'staff sign-in');
+}
+
+export function mediaUploadEndpoints(siteUrl: string): string[] {
+  return sitePathEndpoints(siteUrl, '/api/media/upload', 'media upload');
 }
 
 function isSoftHtmlFallback(response: Response): boolean {

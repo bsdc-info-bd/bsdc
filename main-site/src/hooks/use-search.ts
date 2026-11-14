@@ -4,6 +4,7 @@ import {
   groupByKind,
   isSearchable,
   parseQuery,
+  type RichSearchSuggestion,
   type SearchGroup,
   type SearchKind,
   type SearchResult,
@@ -84,6 +85,24 @@ export function useSearchSuggestions(input: string): {
   const query = useQuery({
     queryKey: ['search-suggestions', debounced],
     queryFn: async () => (await repository()).fetchSuggestions(debounced),
+    enabled,
+    staleTime: 60_000,
+  });
+
+  return { suggestions: query.data ?? [], isLoading: enabled && query.isLoading };
+}
+
+/** Rich live suggestions with avatars, thumbnails and context lines. */
+export function useRichSuggestions(input: string): {
+  suggestions: RichSearchSuggestion[];
+  isLoading: boolean;
+} {
+  const debounced = useDebounced(input, 180);
+  const enabled = isSearchable(debounced);
+
+  const query = useQuery({
+    queryKey: ['search-suggestions-rich', debounced],
+    queryFn: async () => (await repository()).fetchRichSuggestions(debounced),
     enabled,
     staleTime: 60_000,
   });

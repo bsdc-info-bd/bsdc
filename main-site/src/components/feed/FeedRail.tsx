@@ -28,7 +28,7 @@ const PRIMARY = [
   // Tags has no index page of its own; the tag cloud lives on the home rail and
   // in the search overlay, so linking to a bare `/tag` would be a 404 with a
   // friendly label on it.
-  { to: ROUTES.shop, labelKey: 'rail.market', fallback: 'Marketplace' },
+  { to: ROUTES.market, labelKey: 'rail.market', fallback: 'Marketplace' },
   { to: ROUTES.jobs, labelKey: 'rail.jobs', fallback: 'Jobs' },
   { to: ROUTES.projects, labelKey: 'rail.projects', fallback: 'Projects' },
 ] as const;

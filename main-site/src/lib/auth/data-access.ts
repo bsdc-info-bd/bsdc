@@ -20,6 +20,11 @@ function hasDataRole(token: IdTokenResult): boolean {
   return token.claims['role'] === DATA_ROLE;
 }
 
+function isExpiringSoon(token: IdTokenResult): boolean {
+  const expMs = Date.parse(token.expirationTime);
+  return Number.isFinite(expMs) && expMs <= Date.now() + 60_000;
+}
+
 /**
  * Uses the role already present in a signed Firebase token when repairing a
  * legacy token. The server verifies the request but uses current database
@@ -35,7 +40,10 @@ export function bootstrapRole(claims: Record<string, unknown>) {
  * refreshes the Firebase token before the caller continues to the data layer.
  */
 async function bootstrapDataAccess(user: User): Promise<IdTokenResult> {
-  const current = await user.getIdTokenResult();
+  let current = await user.getIdTokenResult();
+  if (hasDataRole(current) && isExpiringSoon(current)) {
+    current = await user.getIdTokenResult(true);
+  }
   if (hasDataRole(current)) return current;
 
   const idToken = await user.getIdToken();

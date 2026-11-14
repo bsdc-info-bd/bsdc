@@ -1,10 +1,10 @@
 import { Github } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/store/auth-store';
 import { Button } from '@/design-system';
-import { authErrorKey } from '@/lib/auth/errors';
 import { signInWithProvider, type OAuthProviderId } from '@/lib/auth/auth-service';
+import { authErrorKey } from '@/lib/auth/errors';
+import { useAuthStore } from '@/store/auth-store';
 
 export interface OAuthButtonsProps {
   remember: boolean;
@@ -46,15 +46,28 @@ function YahooMark() {
 /** Google, GitHub and Yahoo — the exact provider set approved for BSDC. */
 export function OAuthButtons({ remember, disabled = false, onError }: OAuthButtonsProps) {
   const { t } = useTranslation();
+  const redirectResolving = useAuthStore((state) => state.redirectResolving);
+  const authStatus = useAuthStore((state) => state.status);
   const [pending, setPending] = useState<OAuthProviderId | null>(null);
+  const [settling, setSettling] = useState(false);
+
+  useEffect(() => {
+    if (!settling) return;
+    const timer = window.setTimeout(() => setSettling(false), 4_000);
+    return () => window.clearTimeout(timer);
+  }, [settling]);
 
   async function start(id: OAuthProviderId) {
-    if (pending) return;
+    if (pending || settling || redirectResolving || authStatus === 'authenticated') return;
     useAuthStore.getState().setRedirectError(null);
     setPending(id);
     try {
       await signInWithProvider(id, remember);
+      // Keep the button locked briefly while Firebase onAuthStateChanged + claims
+      // + profile hydration finishes so a rapid double-tap cannot open a second popup.
+      setSettling(true);
     } catch (error) {
+      setSettling(false);
       onError(authErrorKey(error));
     } finally {
       setPending(null);
@@ -67,29 +80,35 @@ export function OAuthButtons({ remember, disabled = false, onError }: OAuthButto
     { id: 'yahoo', label: t('auth.continueWithYahoo'), icon: <YahooMark /> },
   ];
 
+  const lockAll = disabled || redirectResolving || settling || authStatus === 'authenticated';
+
   return (
     <div>
       <div className="flex items-center gap-3">
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
-        <span className="text-xs font-semibold uppercase tracking-wide text-muted">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted">
           {t('auth.orContinueWith')}
         </span>
         <span className="h-px flex-1 bg-border" aria-hidden="true" />
       </div>
-      <div className="mt-3 grid gap-2">
-        {providers.map((provider) => (
-          <Button
-            key={provider.id}
-            variant="secondary"
-            block
-            iconStart={provider.icon}
-            loading={pending === provider.id}
-            disabled={disabled || (pending !== null && pending !== provider.id)}
-            onClick={() => void start(provider.id)}
-          >
-            {provider.label}
-          </Button>
-        ))}
+      <div className="mt-3 grid gap-2.5">
+        {providers.map((provider) => {
+          const isCurrent = pending === provider.id;
+          return (
+            <Button
+              key={provider.id}
+              variant="secondary"
+              block
+              iconStart={provider.icon}
+              loading={isCurrent}
+              disabled={lockAll || (pending !== null && !isCurrent)}
+              className="justify-center border-border bg-bg transition-all duration-150 ease-app hover:-translate-y-0.5 hover:border-green-500/50 hover:bg-surface active:translate-y-0"
+              onClick={() => void start(provider.id)}
+            >
+              {isCurrent || settling ? t('auth.oauthSigningIn') : provider.label}
+            </Button>
+          );
+        })}
       </div>
     </div>
   );

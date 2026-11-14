@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -65,6 +66,7 @@ export async function applyToJob(
     p_resume_url: resumeUrl,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return typeof data === 'string' ? data : '';
 }
 
@@ -77,6 +79,7 @@ export async function decideApplication(
     p_status: status,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function recordJobView(jobId: string): Promise<void> {
@@ -186,6 +189,7 @@ export async function submitProposal(
     p_delivery_days: deliveryDays,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return typeof data === 'string' ? data : '';
 }
 
@@ -485,6 +489,7 @@ export async function toggleProjectStar(projectId: string): Promise<boolean> {
     p_project_id: projectId,
   });
   if (error) throw toDataError(error);
+  if (data === true) wakePushDelivery();
   return data === true;
 }
 

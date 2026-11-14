@@ -7,6 +7,7 @@ import {
   type MediaPurpose,
   type UploadResult,
 } from '@/lib/storage/upload';
+import { DataError } from '@/lib/supabase/errors';
 
 export type AttachmentStatus = 'queued' | 'uploading' | 'attached' | 'failed';
 
@@ -64,6 +65,10 @@ function newId(): string {
 
 function keyOf(error: unknown): string {
   if (error instanceof MediaError) return error.messageKey;
+  if (error instanceof DataError) {
+    if (error.messageKey === 'data.errors.signInRequired') return 'media.errors.signInRequired';
+    return 'media.errors.recordFailed';
+  }
   if (error instanceof Error && error.message.startsWith('media.')) return error.message;
   if (error instanceof DOMException && error.name === 'AbortError') return 'media.errors.cancelled';
   return 'media.errors.failed';
@@ -355,8 +360,7 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
       patch(id, { edit });
       if (edited === null) return;
 
-      const wasAttached = item.status === 'attached';
-      if (wasAttached) release(id);
+      release(id);
       const previewUrl = URL.createObjectURL(edited);
       setAttachments((current) =>
         current.map((entry) => {
@@ -369,8 +373,10 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
             status: 'queued' as const,
             progress: 0,
             errorKey: null,
-            mediaId: wasAttached ? entry.mediaId : '',
+            mediaId: '',
             uploadResult: null,
+            url: '',
+            thumbUrl: '',
             width: null,
             height: null,
           };

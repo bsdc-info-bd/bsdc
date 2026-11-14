@@ -122,6 +122,57 @@ await expectRobots(
 );
 
 // ---------------------------------------------------------------------------
+// private, archived, and unpublished records never leak metadata in seo_for_path
+// ---------------------------------------------------------------------------
+await db.exec(`
+  insert into public.profiles (uid, username, display_name, bio, avatar_url, status, privacy) values
+    ('dddddddd-4444-4444-8444-000000000008', 'hidden_dev', 'Hidden Dev', 'Secret bio text',
+     'https://i.ibb.co/secret/avatar.webp', 'active', '{"discoverable": false}'::jsonb);
+
+  insert into public.groups (slug, name, description, privacy, owner_uid, cover_url) values
+    ('secret-guild', 'Secret Guild Name', 'Internal group description', 'private',
+     '${owner}', 'https://i.ibb.co/secret/cover.webp');
+
+  insert into public.shops (id, slug, name, owner_uid, status) values
+    ('eeeeeeee-5555-4555-8555-000000000001', 'open-shop', 'Open Shop', '${owner}', 'active');
+
+  insert into public.products (shop_id, slug, title, summary, description, price, status, images) values
+    ('eeeeeeee-5555-4555-8555-000000000001', 'draft-widget', 'Unreleased Draft Widget',
+     'Unreleased draft summary', 'Unreleased description', 1000, 'draft',
+     array['https://i.ibb.co/secret/widget.webp']);
+
+  insert into public.courses (slug, title, summary, description, cover_url, instructor_uid, status) values
+    ('draft-course', 'Secret Course Title', 'Draft course summary', 'Draft syllabus',
+     'https://i.ibb.co/secret/course.webp', '${owner}', 'draft');
+`);
+
+for (const [path, secret] of [
+  ['/@hidden_dev', 'Hidden Dev'],
+  ['/g/secret-guild', 'Secret Guild Name'],
+  ['/shop/draft-widget', 'Unreleased Draft Widget'],
+  ['/learn/draft-course', 'Secret Course Title'],
+]) {
+  const row = await asAnon(
+    db,
+    `select title, description, image_url, robots from public.seo_for_path('${path}')`,
+    `seo_for_path('${path}') redacts non-public metadata`,
+  );
+  const entry = row?.rows[0];
+  checks += 1;
+  const leaked =
+    !entry ||
+    entry.robots !== 'noindex' ||
+    String(entry.title).includes(secret) ||
+    String(entry.image_url).includes('i.ibb.co/secret');
+  if (!leaked) {
+    console.log(`ok    ${path} is noindexed and redacts non-public title and image`);
+  } else {
+    console.log(`FAIL  ${path} leaked private metadata: ${JSON.stringify(entry)}`);
+    process.exitCode = 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // a prefix names an area, not every word beginning with those letters
 // ---------------------------------------------------------------------------
 for (const path of ['/author/raha', '/authentic-tools', '/createbridge', '/cartography']) {
@@ -156,7 +207,9 @@ checks += 1;
 if (rows.length === 2 && malformed.length === 0) {
   console.log('ok    the live sitemap lists both projects as permalinks and no editor');
 } else {
-  console.log(`FAIL  the sitemap advertised something that is not a permalink — ${JSON.stringify(rows)}`);
+  console.log(
+    `FAIL  the sitemap advertised something that is not a permalink — ${JSON.stringify(rows)}`,
+  );
   process.exitCode = 1;
 }
 

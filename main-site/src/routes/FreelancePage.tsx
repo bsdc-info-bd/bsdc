@@ -20,7 +20,7 @@ import {
 import { useGigBoard } from '@/hooks/use-opportunities';
 import { formatSalaryRange, type Gig } from '@/lib/opportunities/opportunity-types';
 import { formatNumber } from '@/lib/format';
-import { ROUTES, gigPath } from '@/lib/site';
+import { ROUTES, SITE, gigPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -63,6 +63,26 @@ export default function FreelancePage() {
         title={t('freelance.metaTitle')}
         description={t('freelance.metaDescription')}
         path={ROUTES.freelance}
+        jsonLd={[
+          {
+            '@type': 'CollectionPage',
+            name: t('freelance.title'),
+            description: t('freelance.metaDescription'),
+            url: `${SITE.url}${ROUTES.freelance}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              itemListElement: board.gigs.slice(0, 20).map((gig, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                item: {
+                  '@type': 'Service',
+                  name: gig.title,
+                  url: `${SITE.url}${gigPath(gig.slug)}`,
+                },
+              })),
+            },
+          },
+        ]}
       />
 
       <div className="fab-container py-6 sm:py-10">

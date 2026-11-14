@@ -44,9 +44,10 @@
  * work is bounded per run so a backlog is drained over several minutes rather
  * than by one request that exceeds the subrequest limit.
  */
-import { callRpc, DatabaseUnavailable, type DeviceRow } from './api';
+import { callRpc, DatabaseUnavailable, type DeviceRow, type FcmDeviceRow } from './api';
 import { deliver, shouldRetry, type DeliveryKeys, type DeliveryOutcome } from './deliver';
-import { adminOrigins, vapidSubject, type Env } from './env';
+import { adminOrigins, fcmCredentials, siteOrigin, vapidSubject, type Env } from './env';
+import { getFcmAccessToken, sendFcmNotification } from './fcm';
 import {
   summarise,
   wordsFor,
@@ -155,7 +156,13 @@ export function deliveryKeys(env: Env): DeliveryKeys | null {
 }
 
 /** One notification row as the words module wants it. */
-export function toSource(row: DeviceRow, language: 'bn' | 'en'): NotificationSource {
+export function toSource(
+  row: Pick<
+    DeviceRow,
+    'notification_id' | 'kind' | 'actor_name' | 'body' | 'url' | 'conversation_id' | 'post_id'
+  >,
+  language: 'bn' | 'en',
+): NotificationSource {
   return {
     id: row.notification_id,
     kind: row.kind as NotificationKind,
@@ -168,14 +175,59 @@ export function toSource(row: DeviceRow, language: 'bn' | 'en'): NotificationSou
   };
 }
 
+export interface PlannedPush<T extends DeviceRow | FcmDeviceRow> {
+  words: NonNullable<ReturnType<typeof summarise>>;
+  rows: T[];
+}
+
+/**
+ * Groups pending rows per device by topic (`c-<conv>`, `p-<post>`, `n-<id>`).
+ * Up to 4 distinct topics stay separate so a direct message keeps its thread
+ * URL, messenger channel, and inline reply action instead of being swallowed
+ * into a low-priority generic summary beside a post like or reaction. Five or
+ * more topics collapse cleanly into a single digest notification.
+ */
+export function planDeviceDeliveries<
+  T extends Pick<
+    DeviceRow,
+    'notification_id' | 'kind' | 'actor_name' | 'body' | 'url' | 'conversation_id' | 'post_id'
+  >,
+>(rows: readonly T[], language: 'bn' | 'en'): PlannedPush<T & DeviceRow>[] {
+  if (rows.length === 0) return [];
+  const byTopic = new Map<string, { rows: T[]; sources: NotificationSource[] }>();
+  for (const row of rows) {
+    const src = toSource(row, language);
+    const topic = wordsFor(src).topic;
+    const bucket = byTopic.get(topic);
+    if (bucket === undefined) {
+      byTopic.set(topic, { rows: [row], sources: [src] });
+    } else {
+      bucket.rows.push(row);
+      bucket.sources.push(src);
+    }
+  }
+
+  if (byTopic.size <= 4) {
+    const out: PlannedPush<T & DeviceRow>[] = [];
+    for (const bucket of byTopic.values()) {
+      const words = summarise(bucket.sources, language);
+      if (words !== null) out.push({ words, rows: bucket.rows as (T & DeviceRow)[] });
+    }
+    return out;
+  }
+
+  const allSources = rows.map((row) => toSource(row, language));
+  const summary = summarise(allSources, language);
+  return summary === null ? [] : [{ words: summary, rows: rows as (T & DeviceRow)[] }];
+}
+
 /**
  * The engine.
  *
- * One run reads what is pending, groups it by device, sends one push per device
- * carrying either the single thing that happened or a summary of several, and
- * marks what was delivered. Grouping is the whole point: a member who was
- * mentioned nine times in a busy thread should get one notification that says
- * nine, not nine that each say one.
+ * One run reads what is pending for Web Push (`push_pending_devices`) and
+ * Firebase Cloud Messaging (`fcm_pending_devices`), groups per device by topic,
+ * sends encrypted Web Push and high-priority FCM notifications, and marks what
+ * was delivered.
  */
 export async function runPush(env: Env, options: { limit?: number } = {}): Promise<RunStats> {
   const started = Date.now();
@@ -186,141 +238,310 @@ export async function runPush(env: Env, options: { limit?: number } = {}): Promi
     throw new DatabaseUnavailable(503, 'PUSH_FLUSH_SECRET is not set to a long enough value');
   }
   const keys = deliveryKeys(env);
-  if (keys === null) {
+  const fcm = fcmCredentials(env);
+  if (keys === null && fcm === null) {
     throw new DatabaseUnavailable(503, 'the VAPID key pair is not configured');
   }
 
   const limit = runLimit(options.limit);
-  const pending = await callRpc<DeviceRow[] | null>(env, 'push_pending_devices', {
-    p_secret: secret,
-    p_limit: limit,
-    p_lookback_hours: LOOKBACK_HOURS,
-  });
 
-  const rows = Array.isArray(pending) ? pending : [];
-  stats.waiting = rows.length;
-  if (rows.length === 0) {
-    stats.milliseconds = Date.now() - started;
-    return stats;
-  }
-
-  // One push per device, not per notification.
-  const byEndpoint = new Map<string, DeviceRow[]>();
-  for (const row of rows) {
-    if (typeof row.endpoint !== 'string' || row.endpoint.length < 20) {
-      stats.skipped += 1;
-      continue;
-    }
-    const list = byEndpoint.get(row.endpoint);
-    if (list === undefined) byEndpoint.set(row.endpoint, [row]);
-    else list.push(row);
-  }
-  stats.devices = byEndpoint.size;
-
-  /** Notification ids whose device was reached, in whole or in part. */
-  const reached = new Set<string>();
-  /** Endpoints the push service says are gone. */
-  const dead = new Set<string>();
-  /** Endpoints whose keys were unusable. */
-  const invalid = new Set<string>();
-
-  await inWaves([...byEndpoint.entries()], CONCURRENCY, async ([endpoint, deviceRows]) => {
-    const first = deviceRows[0];
-    if (first === undefined) return;
-    const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
-
-    const sources = deviceRows.map((row) => toSource(row, language));
-    const words =
-      sources.length > 1
-        ? summarise(sources, language)
-        : sources[0] !== undefined
-          ? wordsFor(sources[0])
-          : null;
-    if (words === null) {
-      stats.skipped += deviceRows.length;
-      return;
-    }
-
-    const payload = {
-      title: words.title,
-      body: words.body,
-      url: words.url,
-      tag: words.tag,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/maskable-512.png',
-      ts: Date.now(),
-    };
-
-    const outcome: DeliveryOutcome = await deliver({
-      target: { endpoint, p256dh: first.p256dh ?? '', auth: first.auth ?? '' },
-      keys,
-      payload,
-      topic: words.topic,
-      // A message is worth interrupting for; a summary is not.
-      urgency: sources.length > 1 ? 'normal' : 'high',
-    });
-
-    switch (outcome) {
-      case 'sent':
-        stats.sent += 1;
-        for (const row of deviceRows) reached.add(row.notification_id);
-        break;
-      case 'dead':
-        stats.dead += 1;
-        dead.add(endpoint);
-        break;
-      case 'invalid':
-        stats.invalid += 1;
-        invalid.add(endpoint);
-        break;
-      case 'unauthorized':
-        stats.unauthorized += 1;
-        break;
-      case 'retry':
-        stats.retry += 1;
-        break;
-      default:
-        stats.failed += 1;
-        break;
-    }
-
-    if (shouldRetry(outcome)) {
-      // Nothing is marked: the next run picks these rows up again. That is how a
-      // push survived a push service's bad minute without a queue of its own.
-      return;
-    }
-  });
-
-  // Retiring a subscription is a database write with the secret, exactly like
-  // marking: no device row is deleted by a worker that cannot prove itself.
-  await Promise.all(
-    [...dead].map((endpoint) =>
-      callRpc(env, 'push_kill_device', { p_secret: secret, p_endpoint: endpoint }).catch(
-        () => null,
-      ),
-    ),
-  );
-
-  const ids = [...reached];
-  if (ids.length > 0) {
-    const marked = await callRpc<number>(env, 'push_mark_devices', {
+  // ---------------------------------------------------------------- Web Push
+  if (keys !== null) {
+    const pending = await callRpc<DeviceRow[] | null>(env, 'push_pending_devices', {
       p_secret: secret,
-      p_ids: ids,
+      p_limit: limit,
+      p_lookback_hours: LOOKBACK_HOURS,
     });
-    stats.marked = typeof marked === 'number' ? marked : 0;
+
+    const rows = Array.isArray(pending) ? pending : [];
+    stats.waiting += rows.length;
+    if (rows.length > 0) {
+      const byEndpoint = new Map<string, DeviceRow[]>();
+      for (const row of rows) {
+        if (typeof row.endpoint !== 'string' || row.endpoint.length < 20) {
+          stats.skipped += 1;
+          continue;
+        }
+        const list = byEndpoint.get(row.endpoint);
+        if (list === undefined) byEndpoint.set(row.endpoint, [row]);
+        else list.push(row);
+      }
+      stats.devices += byEndpoint.size;
+
+      const reached = new Set<string>();
+      const reachedPairs: { id: string; endpoint: string }[] = [];
+      const dead = new Set<string>();
+      const invalid = new Set<string>();
+      let webPartial = false;
+
+      await inWaves([...byEndpoint.entries()], CONCURRENCY, async ([endpoint, deviceRows]) => {
+        const first = deviceRows[0];
+        if (first === undefined) return;
+        const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
+        const plans = planDeviceDeliveries(deviceRows, language);
+        if (plans.length === 0) {
+          stats.skipped += deviceRows.length;
+          return;
+        }
+
+        for (const plan of plans) {
+          const { words } = plan;
+          const payload = {
+            title: words.title,
+            body: words.body,
+            url: words.url,
+            tag: words.tag,
+            icon: '/icons/icon-192.png',
+            badge: '/icons/maskable-512.png',
+            ts: Date.now(),
+          };
+
+          const outcome: DeliveryOutcome = await deliver({
+            target: { endpoint, p256dh: first.p256dh ?? '', auth: first.auth ?? '' },
+            keys,
+            payload,
+            topic: words.topic,
+            urgency: plans.length > 1 ? 'normal' : 'high',
+          });
+
+          switch (outcome) {
+            case 'sent':
+              stats.sent += 1;
+              for (const row of plan.rows) {
+                reached.add(row.notification_id);
+                reachedPairs.push({ id: row.notification_id, endpoint });
+              }
+              break;
+            case 'dead':
+              stats.dead += 1;
+              dead.add(endpoint);
+              return;
+            case 'invalid':
+              stats.invalid += 1;
+              invalid.add(endpoint);
+              return;
+            case 'unauthorized':
+              stats.unauthorized += 1;
+              webPartial = true;
+              break;
+            case 'retry':
+              stats.retry += 1;
+              webPartial = true;
+              break;
+            default:
+              stats.failed += 1;
+              webPartial = true;
+              break;
+          }
+
+          if (shouldRetry(outcome)) return;
+        }
+      });
+
+      await Promise.all(
+        [...dead].map((endpoint) =>
+          callRpc(env, 'push_kill_device', { p_secret: secret, p_endpoint: endpoint }).catch(
+            () => null,
+          ),
+        ),
+      );
+
+      await Promise.all(
+        [...invalid].map((endpoint) =>
+          callRpc(env, 'push_flag_invalid_device', {
+            p_secret: secret,
+            p_endpoint: endpoint,
+          }).catch(() => null),
+        ),
+      );
+
+      const ids = [...reached];
+      if (ids.length > 0) {
+        if (webPartial || rows.length >= limit) {
+          try {
+            const marked = await callRpc<number>(env, 'push_mark_device_deliveries', {
+              p_secret: secret,
+              p_pairs: reachedPairs,
+            });
+            stats.marked += typeof marked === 'number' ? marked : 0;
+          } catch (error) {
+            if (error instanceof DatabaseUnavailable && error.status === 404) {
+              const marked = await callRpc<number>(env, 'push_mark_devices', {
+                p_secret: secret,
+                p_ids: ids,
+              });
+              stats.marked += typeof marked === 'number' ? marked : 0;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const marked = await callRpc<number>(env, 'push_mark_devices', {
+            p_secret: secret,
+            p_ids: ids,
+          });
+          stats.marked += typeof marked === 'number' ? marked : 0;
+        }
+      }
+    }
   }
 
-  // A subscription with unusable keys is not marked dead, because the keys may
-  // be repairable when the browser opens again and re-registers. It is recorded
-  // so the member's own device list can show it, which is more honest than
-  // silently dropping the device.
-  await Promise.all(
-    [...invalid].map((endpoint) =>
-      callRpc(env, 'push_flag_invalid_device', { p_secret: secret, p_endpoint: endpoint }).catch(
-        () => null,
-      ),
-    ),
-  );
+  // ----------------------------------------------------------- FCM HTTP v1
+  if (fcm !== null) {
+    let fcmRows: FcmDeviceRow[] = [];
+    try {
+      const pendingFcm = await callRpc<FcmDeviceRow[] | null>(env, 'fcm_pending_devices', {
+        p_secret: secret,
+        p_limit: limit,
+        p_lookback_hours: LOOKBACK_HOURS,
+      });
+      if (Array.isArray(pendingFcm)) fcmRows = pendingFcm;
+    } catch (error) {
+      // A database that has not had 0085 applied yet answers 404 for
+      // fcm_pending_devices; keep Web Push working when VAPID is configured.
+      if (!(error instanceof DatabaseUnavailable && error.status === 404) && keys === null) {
+        throw error;
+      }
+    }
+
+    stats.waiting += fcmRows.length;
+    if (fcmRows.length > 0) {
+      const byToken = new Map<string, FcmDeviceRow[]>();
+      for (const row of fcmRows) {
+        if (typeof row.token !== 'string' || row.token.length < 20) {
+          stats.skipped += 1;
+          continue;
+        }
+        const list = byToken.get(row.token);
+        if (list === undefined) byToken.set(row.token, [row]);
+        else list.push(row);
+      }
+      stats.devices += byToken.size;
+
+      let accessToken: string | undefined;
+      try {
+        accessToken = await getFcmAccessToken(fcm);
+      } catch {
+        accessToken = undefined;
+      }
+
+      const fcmReached = new Set<string>();
+      const fcmReachedPairs: { id: string; token: string }[] = [];
+      const fcmDead = new Set<string>();
+      const fcmInvalid = new Set<string>();
+      const siteUrl = siteOrigin(env.SITE_URL);
+      let fcmPartial = false;
+
+      await inWaves([...byToken.entries()], CONCURRENCY, async ([token, deviceRows]) => {
+        const first = deviceRows[0];
+        if (first === undefined) return;
+        const language: 'bn' | 'en' = first.language === 'en' ? 'en' : 'bn';
+        const plans = planDeviceDeliveries(deviceRows, language);
+        if (plans.length === 0) {
+          stats.skipped += deviceRows.length;
+          return;
+        }
+
+        for (const plan of plans) {
+          const newest = plan.rows[plan.rows.length - 1] ?? first;
+          const outcome =
+            accessToken === undefined
+              ? ('unauthorized' as const)
+              : await sendFcmNotification({
+                  credentials: fcm,
+                  token,
+                  platform: first.platform,
+                  words: plan.words,
+                  siteUrl,
+                  urgency:
+                    first.platform === 'android' ? 'high' : plans.length > 1 ? 'normal' : 'high',
+                  notificationId: newest.notification_id,
+                  actorName: newest.actor_name,
+                  ...(plan.words.conversationId
+                    ? { conversationId: plan.words.conversationId }
+                    : newest.conversation_id
+                      ? { conversationId: newest.conversation_id }
+                      : {}),
+                  ...(newest.post_id ? { postId: newest.post_id } : {}),
+                  accessToken,
+                });
+
+          switch (outcome) {
+            case 'sent':
+              stats.sent += 1;
+              for (const row of plan.rows) {
+                fcmReached.add(row.notification_id);
+                fcmReachedPairs.push({ id: row.notification_id, token });
+              }
+              break;
+            case 'dead':
+              stats.dead += 1;
+              fcmDead.add(token);
+              return;
+            case 'invalid':
+              stats.invalid += 1;
+              fcmInvalid.add(token);
+              return;
+            case 'unauthorized':
+              stats.unauthorized += 1;
+              fcmPartial = true;
+              return;
+            case 'retry':
+              stats.retry += 1;
+              fcmPartial = true;
+              return;
+            default:
+              stats.failed += 1;
+              fcmPartial = true;
+              return;
+          }
+        }
+      });
+
+      await Promise.all(
+        [...fcmDead].map((token) =>
+          callRpc(env, 'fcm_kill_device', { p_secret: secret, p_token: token }).catch(() => null),
+        ),
+      );
+
+      await Promise.all(
+        [...fcmInvalid].map((token) =>
+          callRpc(env, 'fcm_flag_invalid_device', { p_secret: secret, p_token: token }).catch(
+            () => null,
+          ),
+        ),
+      );
+
+      const fcmIds = [...fcmReached];
+      if (fcmIds.length > 0) {
+        if (fcmPartial || fcmRows.length >= limit) {
+          try {
+            const marked = await callRpc<number>(env, 'fcm_mark_device_deliveries', {
+              p_secret: secret,
+              p_pairs: fcmReachedPairs,
+            });
+            stats.marked += typeof marked === 'number' ? marked : 0;
+          } catch (error) {
+            if (error instanceof DatabaseUnavailable && error.status === 404) {
+              const marked = await callRpc<number>(env, 'fcm_mark_devices', {
+                p_secret: secret,
+                p_ids: fcmIds,
+              });
+              stats.marked += typeof marked === 'number' ? marked : 0;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          const marked = await callRpc<number>(env, 'fcm_mark_devices', {
+            p_secret: secret,
+            p_ids: fcmIds,
+          });
+          stats.marked += typeof marked === 'number' ? marked : 0;
+        }
+      }
+    }
+  }
 
   stats.milliseconds = Date.now() - started;
   return stats;
@@ -394,13 +615,17 @@ export default {
 
     if (url.pathname === '/health' && request.method === 'GET') {
       const keys = deliveryKeys(env);
+      const fcm = fcmCredentials(env);
       return json(
         {
           worker: 'bsdc-push',
-          status: keys === null ? 'unconfigured' : 'ok',
+          status: keys === null && fcm === null ? 'unconfigured' : 'ok',
           vapid: keys !== null,
+          fcm: fcm !== null,
           secret: (env.PUSH_FLUSH_SECRET ?? '').trim().length >= 32,
-          database: env.SUPABASE_URL.trim().length > 0 && env.SUPABASE_ANON_KEY.trim().length > 0,
+          database:
+            (env.SUPABASE_URL ?? '').trim().length > 0 &&
+            (env.SUPABASE_ANON_KEY ?? '').trim().length > 0,
           time: new Date().toISOString(),
         },
         200,

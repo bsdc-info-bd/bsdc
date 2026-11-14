@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { IdTokenResult, User } from 'firebase/auth';
-import { claimsEndpoints, ensureCorporateDataAccess, signedRole } from './data-access';
+import {
+  claimsEndpoints,
+  ensureCorporateDataAccess,
+  mediaUploadEndpoints,
+  signedRole,
+} from './data-access';
 import type { CorporateEnv } from './env';
 
 const env: CorporateEnv = {
@@ -120,6 +125,11 @@ describe('corporate database access', () => {
       'https://www.bsdc.info.bd/api/auth/claims',
       'https://bsdc.info.bd/api/auth/claims',
       'https://bsdc.pages.dev/api/auth/claims',
+    ]);
+    expect(mediaUploadEndpoints('https://www.bsdc.info.bd')).toEqual([
+      'https://www.bsdc.info.bd/api/media/upload',
+      'https://bsdc.info.bd/api/media/upload',
+      'https://bsdc.pages.dev/api/media/upload',
     ]);
     const read = vi
       .fn()

@@ -6,7 +6,7 @@
  * browser cache headers. This eliminates hotlink/CORS/ISP throttling issues and
  * caches heavy historical images at the nearest Cloudflare edge location.
  */
-import { looksLikeImageBytes } from '../../src/lib/media/image-signature';
+import { IMAGE_SNIFF_BYTES, looksLikeImageBytes } from '../../src/lib/media/image-signature';
 import { isRepairableMediaHost, looksLikeDocument } from '../../src/lib/media/hosts';
 
 interface MediaEnv {
@@ -75,21 +75,61 @@ function clampTtl(value: string | null): number {
   return Math.min(Math.max(requested, 3_600), EDGE_TTL_SECONDS);
 }
 
+const MAX_REDIRECTS = 3;
+
+async function fetchAllowlisted(
+  method: 'GET' | 'HEAD',
+  source: URL,
+  signal: AbortSignal,
+): Promise<Response | null> {
+  let current = source;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop += 1) {
+    const response = await fetch(current.toString(), {
+      method,
+      headers: {
+        accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif,*/*;q=0.5',
+      },
+      redirect: 'manual',
+      signal,
+      cf: { cacheTtl: EDGE_TTL_SECONDS, cacheEverything: true },
+    } as RequestInit);
+
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get('location');
+      await response.body?.cancel().catch(() => undefined);
+      if (!location || hop === MAX_REDIRECTS) return null;
+      let resolved: string;
+      try {
+        resolved = new URL(location, current).toString();
+      } catch {
+        return null;
+      }
+      const next = parseSource(resolved);
+      if (next === null) return null;
+      current = next;
+      continue;
+    }
+
+    return response;
+  }
+  return null;
+}
+
 async function forward(request: Request, env: MediaEnv, source: URL): Promise<Response> {
   const limit = maxBytes(env);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
 
   try {
-    const upstream = await fetch(source.toString(), {
-      method: request.method === 'HEAD' ? 'HEAD' : 'GET',
-      headers: {
-        accept: 'image/avif,image/webp,image/png,image/jpeg,image/gif,*/*;q=0.5',
-      },
-      redirect: 'follow',
-      signal: controller.signal,
-      cf: { cacheTtl: EDGE_TTL_SECONDS, cacheEverything: true },
-    } as RequestInit);
+    const upstream = await fetchAllowlisted(
+      request.method === 'HEAD' ? 'HEAD' : 'GET',
+      source,
+      controller.signal,
+    );
+
+    if (upstream === null) {
+      return problem(502, 'disallowed redirect target');
+    }
 
     if (!upstream.ok) {
       return problem(upstream.status === 404 || upstream.status === 410 ? 404 : 502, 'upstream');
@@ -105,14 +145,16 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
     if (Number.isFinite(declared) && declared > limit) return problem(413, 'too large');
 
     if (request.method === 'HEAD') {
-      return new Response(null, {
-        status: 200,
-        headers: {
-          'content-type': type,
-          'cache-control': `public, max-age=${BROWSER_TTL_SECONDS}, s-maxage=${EDGE_TTL_SECONDS}, immutable`,
-          'x-content-type-options': 'nosniff',
-        },
-      });
+      const headHeaders: Record<string, string> = {
+        'content-type': type,
+        'cache-control': `public, max-age=${BROWSER_TTL_SECONDS}, s-maxage=${EDGE_TTL_SECONDS}, immutable`,
+        'x-content-type-options': 'nosniff',
+      };
+      if (type === 'image/svg+xml') {
+        headHeaders['content-security-policy'] =
+          "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+      }
+      return new Response(null, { status: 200, headers: headHeaders });
     }
 
     const reader = upstream.body?.getReader();
@@ -145,7 +187,7 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
     // HTML rate-limit page under `content-type: image/jpeg` would otherwise be
     // handed on — and cached here for a week, and in the member's browser for a
     // week — as the picture. That is the shape of "the images stopped loading".
-    if (!looksLikeImageBytes(body.subarray(0, 32))) {
+    if (!looksLikeImageBytes(body.subarray(0, IMAGE_SNIFF_BYTES))) {
       return problem(502, 'the source is not a picture');
     }
 
@@ -153,21 +195,27 @@ async function forward(request: Request, env: MediaEnv, source: URL): Promise<Re
       upstream.headers.get('cache-control')?.match(/max-age=(\d+)/)?.[1] ?? null,
     );
 
+    const responseHeaders: Record<string, string> = {
+      'content-type': type,
+      'content-length': String(received),
+      'cache-control': `public, max-age=${Math.min(ttl, BROWSER_TTL_SECONDS)}, s-maxage=${ttl}, stale-while-revalidate=86400, immutable`,
+      // The bytes are the same for every encoding, but the negotiation is
+      // real: a cache that ignores it can hand a WebP-only client a format it
+      // did not ask for.
+      vary: 'accept',
+      'x-content-type-options': 'nosniff',
+      'cross-origin-resource-policy': 'cross-origin',
+      'access-control-allow-origin': '*',
+      'x-bsdc-media-repair': '1',
+    };
+    if (type === 'image/svg+xml') {
+      responseHeaders['content-security-policy'] =
+        "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+    }
+
     return new Response(body, {
       status: 200,
-      headers: {
-        'content-type': type,
-        'content-length': String(received),
-        'cache-control': `public, max-age=${Math.min(ttl, BROWSER_TTL_SECONDS)}, s-maxage=${ttl}, stale-while-revalidate=86400, immutable`,
-        // The bytes are the same for every encoding, but the negotiation is
-        // real: a cache that ignores it can hand a WebP-only client a format it
-        // did not ask for.
-        vary: 'accept',
-        'x-content-type-options': 'nosniff',
-        'cross-origin-resource-policy': 'cross-origin',
-        'access-control-allow-origin': '*',
-        'x-bsdc-media-repair': '1',
-      },
+      headers: responseHeaders,
     });
   } catch {
     return problem(504, 'the source did not answer in time');

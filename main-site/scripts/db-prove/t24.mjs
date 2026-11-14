@@ -72,8 +72,8 @@ await check(
 );
 await check(
   `select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'`,
-  8,
-  'the realtime publication holds eight tables after the first pass',
+  10,
+  'the realtime publication holds ten tables after the first pass (0094 adds mk_orders and mk_order_events)',
 );
 await check(
   `select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -116,8 +116,8 @@ await check(
 );
 await check(
   `select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'`,
-  8,
-  'still eight tables in the publication',
+  10,
+  'still ten tables in the publication',
 );
 await check(
   `select count(*)::int from pg_publication_tables

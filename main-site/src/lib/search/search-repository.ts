@@ -1,7 +1,17 @@
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
-import type { SearchResultRow, SearchSuggestionRow, TrendingSearchRow } from '@/lib/supabase/types';
-import type { SearchKind, SearchResult, SearchSuggestion } from './search-types';
+import type {
+  RichSearchSuggestionRow,
+  SearchResultRow,
+  SearchSuggestionRow,
+  TrendingSearchRow,
+} from '@/lib/supabase/types';
+import type {
+  RichSearchSuggestion,
+  SearchKind,
+  SearchResult,
+  SearchSuggestion,
+} from './search-types';
 
 function toResult(row: SearchResultRow): SearchResult {
   return {
@@ -43,6 +53,34 @@ export async function fetchSuggestions(prefix: string, limit = 8): Promise<Searc
     .returns<SearchSuggestionRow[]>();
   if (error) throw toDataError(error);
   return (data ?? []).map((row) => ({ kind: row.kind, slug: row.slug, title: row.title }));
+}
+
+export async function fetchRichSuggestions(
+  prefix: string,
+  limit = 8,
+): Promise<RichSearchSuggestion[]> {
+  const { data, error } = await getSupabase()
+    .rpc('search_suggestions_rich', { p_prefix: prefix, p_limit: limit })
+    .returns<RichSearchSuggestionRow[]>();
+  if (!error) {
+    return (data ?? []).map((row) => ({
+      kind: row.kind,
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      subtitle: row.subtitle,
+      imageUrl: row.image_url,
+    }));
+  }
+  const fallback = await fetchSuggestions(prefix, limit);
+  return fallback.map((row, idx) => ({
+    kind: row.kind,
+    id: `${row.kind}-${row.slug}-${idx}`,
+    slug: row.slug,
+    title: row.title,
+    subtitle: '',
+    imageUrl: '',
+  }));
 }
 
 export async function fetchTrending(limit = 8): Promise<{ term: string; uses: number }[]> {

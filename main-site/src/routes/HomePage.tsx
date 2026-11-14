@@ -10,6 +10,7 @@ import {
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { Card, Countdown, ExternalLink, LinkButton, SectionHeading } from '@/design-system';
 import { FeedRail, TrendingTags } from '@/components/feed/FeedRail';
 import { FeedTabs } from '@/components/feed/FeedTabs';
@@ -43,6 +44,7 @@ export default function HomePage() {
             <>
               <FeedRail />
               <TrendingTags className="mt-6" />
+              <AdSlot placement="sidebar" className="mt-6" />
               {/* A member who follows nobody has no ranking signals, so the feed
                   is thin until they do. This is how they start, and on a wide
                   screen it belongs beside the feed rather than pushing it down. */}
@@ -101,6 +103,7 @@ export default function HomePage() {
           <>
             <FeedRail />
             <TrendingTags className="mt-6" />
+            <AdSlot placement="sidebar" className="mt-6" />
             <Card className="mt-6">
               <h2 className="text-base font-semibold">{t('home.feedJoin')}</h2>
               <p className="mt-1 text-sm text-muted">{t('home.feedBody')}</p>
@@ -116,10 +119,11 @@ export default function HomePage() {
           </>
         }
       >
-        <SectionHeading title={t('home.feedTitle')} description={t('home.feedBody')} />
-        <h2 id="public-feed" className="fab-sr-only">
-          {t('home.feedTitle')}
-        </h2>
+        <SectionHeading
+          headingId="public-feed-heading"
+          title={t('home.feedTitle')}
+          description={t('home.feedBody')}
+        />
         <div className="mt-4">
           <FeedTabs signedIn={false} />
         </div>
@@ -138,10 +142,7 @@ export default function HomePage() {
       )}
 
       <section className="fab-container pb-8" aria-labelledby="pillars">
-        <SectionHeading title={t('home.pillarsTitle')} />
-        <h2 id="pillars" className="fab-sr-only">
-          {t('home.pillarsTitle')}
-        </h2>
+        <SectionHeading headingId="pillars" title={t('home.pillarsTitle')} />
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
           {PILLARS.map((pillar) => (
             <Card as="li" key={pillar} interactive>
@@ -156,10 +157,11 @@ export default function HomePage() {
       </section>
 
       <section className="fab-container pb-10" aria-labelledby="ecosystem">
-        <SectionHeading title={t('home.ecosystemTitle')} description={t('home.ecosystemBody')} />
-        <h2 id="ecosystem" className="fab-sr-only">
-          {t('home.ecosystemTitle')}
-        </h2>
+        <SectionHeading
+          headingId="ecosystem"
+          title={t('home.ecosystemTitle')}
+          description={t('home.ecosystemBody')}
+        />
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {ECOSYSTEM_LINKS.map((link) => (
             <Card as="li" key={link.href} padded={false} className="p-3">

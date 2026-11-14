@@ -1,4 +1,14 @@
-import { Activity, FileText, Flag, Megaphone, Puzzle, Store, Users } from 'lucide-react';
+import {
+  Activity,
+  ExternalLink,
+  FileText,
+  Flag,
+  Megaphone,
+  Puzzle,
+  ShieldCheck,
+  Store,
+  Users,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
 import { Alert, Card, LinkButton, PageSkeleton, SectionHeading, StatCard } from '@/design-system';
@@ -6,6 +16,32 @@ import { useAdminOverview, useAuditLog, usePermissions } from '@/hooks/use-admin
 import { hasAnyPermission } from '@/lib/admin/admin-types';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import { ROUTES } from '@/lib/site';
+
+const CORPORATE_LINKS = [
+  { key: 'admin', prodUrl: 'https://admin.corporate.main.bsdc.info.bd', devPort: 5191 },
+  {
+    key: 'certificates',
+    prodUrl: 'https://certificate.corporate.main.bsdc.info.bd',
+    devPort: 5190,
+  },
+  { key: 'notices', prodUrl: 'https://notice.corporate.main.bsdc.info.bd', devPort: 5193 },
+  { key: 'people', prodUrl: 'https://uadmin.corporate.main.bsdc.info.bd', devPort: 5186 },
+  { key: 'config', prodUrl: 'https://config.corporate.main.bsdc.info.bd', devPort: 5185 },
+  { key: 'ip', prodUrl: 'https://ip.corporate.main.bsdc.info.bd', devPort: 5184 },
+  { key: 'performance', prodUrl: 'https://performance.corporate.main.bsdc.info.bd', devPort: 5183 },
+  { key: 'status', prodUrl: 'https://status.corporate.main.bsdc.info.bd', devPort: 5181 },
+] as const;
+
+function corporateHref(prodUrl: string, devPort: number): string {
+  if (typeof window === 'undefined') return prodUrl;
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `${window.location.protocol}//${host}:${devPort}`;
+  }
+  const e2bMatch = /^\d+-(.+\.e2b\.app)$/i.exec(host);
+  if (e2bMatch?.[1]) return `https://${devPort}-${e2bMatch[1]}`;
+  return prodUrl;
+}
 
 /** The admin landing page: what needs attention, and who did what. */
 export default function AdminPage() {
@@ -97,7 +133,41 @@ export default function AdminPage() {
                   {t('admin.goPeople')}
                 </LinkButton>
               ) : null}
+              {permissions.includes('moderation.read') ? (
+                <LinkButton to={ROUTES.adminReports} variant="secondary">
+                  {t('admin.goReports')}
+                </LinkButton>
+              ) : null}
+              {permissions.includes('audit.read') ? (
+                <LinkButton to={ROUTES.adminAnalytics} variant="secondary">
+                  {t('admin.goAnalytics')}
+                </LinkButton>
+              ) : null}
             </div>
+
+            {permissions.includes('audit.read') ? (
+              <Card className="mt-6">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <ShieldCheck size={18} aria-hidden="true" />
+                  {t('admin.corporateTitle')}
+                </h2>
+                <p className="mt-1 text-sm text-muted">{t('admin.corporateBody')}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {CORPORATE_LINKS.map((item) => (
+                    <a
+                      key={item.key}
+                      href={corporateHref(item.prodUrl, item.devPort)}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-medium text-foreground transition hover:border-accent hover:text-accent"
+                    >
+                      <span>{t(`admin.corporateConsoles.${item.key}`)}</span>
+                      <ExternalLink size={14} aria-hidden="true" />
+                    </a>
+                  ))}
+                </div>
+              </Card>
+            ) : null}
 
             {permissions.includes('audit.read') ? (
               <Card className="mt-6">

@@ -39,9 +39,17 @@ export default function JobPage() {
 
   if (detail.isError) {
     return (
-      <div className="fab-container py-6">
-        <Alert tone="danger" title={t('jobs.detail.failed')} />
-      </div>
+      <>
+        <Seo
+          title={t('jobs.detail.failed')}
+          description={t('jobs.detail.notFoundBody')}
+          path={jobPath(slug)}
+          noindex
+        />
+        <div className="fab-container py-6">
+          <Alert tone="danger" title={t('jobs.detail.failed')} />
+        </div>
+      </>
     );
   }
 

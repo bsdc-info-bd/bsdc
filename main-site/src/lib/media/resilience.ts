@@ -1,37 +1,19 @@
 /**
  * Why a picture stops loading, and the ladder that gets it back.
  *
- * This is the module that exists because of one reported symptom: every image
- * on the site loads, and after a few minutes none of them do, until the member
- * clears cookies and cache. "Clear your cache" is not a fix; it is a description
- * of a cache that was trusted when it should not have been. There are exactly
- * five ways a picture that used to load stops loading, and each one has a
- * different cure. This file names them and decides which cure applies, with no
- * network and no DOM, so every branch can be asserted in a test.
+ * Every picture loads straight from the browser's live network stack without a
+ * service-worker image cache in the way. When a request fails, this module
+ * names the cause and walks a short, bounded recovery ladder with no network
+ * and no DOM so every branch can be asserted in a test.
  *
- *   1. `transient`   The request failed with no status: offline, a dropped
- *                    connection, a DNS blink, a sleeping phone. Cure: retry the
- *                    same URL after a moment.
+ *   1. `transient`    No status: a dropped connection, DNS blink, or server 5xx.
+ *                     Cure: try the alternate size or retry the same URL.
  *   2. `rate-limited` 429 or 503 with a Retry-After. Cure: wait, then retry.
- *   3. `expired`     403 or 410 on a URL that carries a signature, an expiry or
- *                    a transform path. Providers issue signed delivery URLs that
- *                    die after a few minutes, which is precisely the reported
- *                    timing. Cure: ask the edge to re-resolve the asset.
- *   4. `forbidden`   401 or 403 without a signature: the host refused this
- *                    origin, usually because its CORS policy changed or because
- *                    a hotlink referrer check started applying. Cure: fetch the
- *                    bytes through the platform's own origin, which has no
- *                    referrer problem and is same-origin to the page.
- *   5. `poisoned`    200 with a body that is not a picture — an HTML error page,
- *                    a 0-byte file, a truncated write. The browser reports this
- *                    as a `decode` failure or as an error with a successful
- *                    status. Cure: re-request with a cache-busting parameter,
- *                    because the bad copy is in the HTTP cache and asking for
- *                    the same URL returns the same wrong answer.
- *
- * Anything else is `unknown`, and the ladder still runs: a retry costs one
- * request, and the empty state at the end of the ladder is a designed tile, not
- * a broken-image glyph.
+ *   3. `expired`      403 or 410 on a signed URL. Cure: re-resolve via `/media/i`.
+ *   4. `forbidden`    401 or 403 without a signature: hotlink/CORS refusal.
+ *                     Cure: fetch bytes through the site's same-origin proxy.
+ *   5. `poisoned`     200 with a body that cannot decode as a picture.
+ *                     Cure: request a fresh URL with a cache-busting query param.
  */
 
 export type ImageFailure =
@@ -56,10 +38,6 @@ export function isSignedUrl(url: string): boolean {
 
 /**
  * Classifies what a failed load actually was.
- *
- * `status` is 0 when no response arrived at all, which is what the browser
- * reports for offline, DNS failure and a connection reset — the three of them
- * are one failure from the page's point of view.
  */
 export function classifyImageFailure(
   status: number,
@@ -70,22 +48,16 @@ export function classifyImageFailure(
   if (status === 408 || status === 425) return 'transient';
   if (status === 429) return 'rate-limited';
   if (status === 503 && (options.contentType ?? '').includes('text/html')) {
-    // A hosting provider's "service unavailable" page served under an image
-    // URL is not a rate limit; it is an outage, and waiting is the cure.
     return 'transient';
   }
   if (status === 401) return 'forbidden';
   if (status === 403) return isSignedUrl(url) ? 'expired' : 'forbidden';
   if (status === 404 || status === 410) {
-    // A dead signature answers 410 as often as 403, and a deleted asset answers
-    // 404. Which one it is matters: a signed URL is repairable, a deleted file
-    // is not.
     if (isSignedUrl(url)) return 'expired';
     return 'missing';
   }
   if (status >= 500) return 'transient';
 
-  // A 2xx that the browser could not decode. The status lied; the bytes did not.
   if (status >= 200 && status < 300) {
     const type = (options.contentType ?? '').toLowerCase();
     if (type.length > 0 && !type.startsWith('image/')) return 'poisoned';
@@ -103,52 +75,23 @@ export interface RecoveryPlan {
   step: RecoveryStep;
   /** Milliseconds to wait before a `retry` or `retry-later`. */
   delayMs: number;
-  /** When true, the caller should paint its local offline tile instead. */
-  offline: boolean;
 }
 
-/**
- * The rungs for each kind of failure, in the order they are worth trying.
- *
- * This is a *list*, not a set of branches on an attempt counter, and that is the
- * whole point. The first version of this function branched on `attempt` inside
- * each failure kind, and two branches pointed at each other: a transient failure
- * with a fallback went `fallback` → `proxy` → `fallback` → `proxy` for as long as
- * the tab was open, because neither branch knew it had already run. A test that
- * walked the ladder twenty times found it. A list cannot do that: attempt `n`
- * reads rung `n`, the list is finite, and its last rung is `give-up`.
- *
- * A rung that the call cannot perform — a fallback when there is no second
- * address, a proxy when the host is not ours to repair — is removed before the
- * list is read, so the sequence is dense and no attempt is spent on a step that
- * would do nothing.
- */
 const RUNGS: Record<Exclude<ImageFailure, 'none'>, readonly RecoveryStep[]> = {
-  // The connection, not the address: ask the other size (free and immediate),
-  // then the same address quickly, then slowly, then through this origin.
   transient: ['fallback', 'retry', 'retry-later', 'proxy'],
-  // A host asking for patience. Waiting twice, then looking elsewhere.
   'rate-limited': ['retry-later', 'fallback', 'proxy'],
-  // A dead signature. Only the edge can re-resolve it, so it is asked first.
   expired: ['proxy', 'fallback'],
-  // The origin was refused; a same-origin fetch has no origin to refuse.
   forbidden: ['proxy', 'fallback'],
-  // A body that was not a picture is in a cache. A different URL is the only
-  // way to ask for different bytes.
   poisoned: ['bust', 'fallback', 'proxy'],
-  // The file is not there. A proxy cannot conjure a deleted asset, and a retry
-  // cannot either: the transform-free original is the only other thing to try.
   missing: ['fallback'],
   unknown: ['bust', 'fallback', 'proxy'],
 };
 
-/** The wait each rung asks for. Everything else is immediate. */
 const DELAY_MS: Partial<Record<RecoveryStep, number>> = {
   retry: 400,
   'retry-later': 2_500,
 };
 
-/** Keeps a rung the call can actually perform. */
 function rungAvailable(step: RecoveryStep, hasFallback: boolean, canProxy: boolean): boolean {
   switch (step) {
     case 'fallback':
@@ -164,11 +107,6 @@ function rungAvailable(step: RecoveryStep, hasFallback: boolean, canProxy: boole
   }
 }
 
-/**
- * The whole ladder for one failure, with the rungs this call cannot perform
- * removed. Exported because the list is the contract, and a contract with no
- * test that reads it is a contract nobody has checked.
- */
 export function recoveryRungs(input: {
   failure: Exclude<ImageFailure, 'none'>;
   hasFallback: boolean;
@@ -177,47 +115,24 @@ export function recoveryRungs(input: {
   const steps = RUNGS[input.failure].filter((step) =>
     rungAvailable(step, input.hasFallback, input.canProxy),
   );
-  // A ladder always ends with the same answer, whether or not any rung was
-  // available. That is what makes "the tile eventually settles" provable.
   return [...steps, 'give-up'];
 }
 
-/**
- * The ladder, step by step.
- *
- * `attempt` is zero-based and counts how many times this picture has already
- * failed. `online` comes from the browser's connectivity state; a member with no
- * connection should be told so instantly rather than watching a spinner retry
- * into a void.
- */
 export function planRecovery(input: {
   failure: ImageFailure;
   attempt: number;
-  online: boolean;
   hasFallback: boolean;
   canProxy: boolean;
 }): RecoveryPlan {
-  const { failure, attempt, online, hasFallback, canProxy } = input;
+  const { failure, attempt, hasFallback, canProxy } = input;
 
-  if (failure === 'none') return { step: 'give-up', delayMs: 0, offline: false };
-
-  if (!online) {
-    // Nothing to try until the connection returns. The tile says "offline"; the
-    // caller re-runs the ladder on the `online` event.
-    return { step: 'give-up', delayMs: 0, offline: true };
-  }
+  if (failure === 'none') return { step: 'give-up', delayMs: 0 };
 
   const rungs = recoveryRungs({ failure, hasFallback, canProxy });
   const step = rungs[Math.min(attempt, rungs.length - 1)] ?? 'give-up';
-  return { step, delayMs: DELAY_MS[step] ?? 0, offline: false };
+  return { step, delayMs: DELAY_MS[step] ?? 0 };
 }
 
-/**
- * Applies the cache-busting parameter to a URL.
- *
- * Idempotent: busting an already-busted URL with the same nonce changes
- * nothing, so a re-render does not invalidate a request in flight.
- */
 export function withBust(url: string, nonce: string): string {
   const [base, ...rest] = url.split('#');
   const hash = rest.length > 0 ? `#${rest.join('#')}` : '';
@@ -228,23 +143,10 @@ export function withBust(url: string, nonce: string): string {
   return `${path ?? url}?${kept.join('&')}${hash}`;
 }
 
-/**
- * The URL the proxy is asked for.
- *
- * The source URL travels in the query string, encoded once. The endpoint refuses
- * anything that is not on its allowlist, so this is a request, not a capability.
- */
 export function proxyUrlFor(url: string, path = '/media/i'): string {
   return `${path}?u=${encodeURIComponent(url)}`;
 }
 
-/**
- * The hard ceiling on ladder turns for one picture.
- *
- * The longest ladder in `RUNGS` has four rungs plus `give-up`, so this can never
- * truncate a real sequence; it exists so that a future edit to `RUNGS` cannot
- * introduce a loop that runs for as long as a tab is open.
- */
 export const MAX_RECOVERY_ATTEMPTS = 6;
 
 export interface RecoveryState {
@@ -252,49 +154,32 @@ export interface RecoveryState {
   failure: ImageFailure;
   /** The URL currently on the `<img>`. */
   url: string;
-  /** Set once the ladder hands the picture to the proxy or gives up. */
+  /** Set once the ladder gives up. */
   settled: boolean;
-  offline: boolean;
 }
 
 export function initialRecoveryState(url: string): RecoveryState {
-  return { attempt: 0, failure: 'none', url, settled: false, offline: false };
+  return { attempt: 0, failure: 'none', url, settled: false };
 }
 
-/**
- * One turn of the ladder.
- *
- * Pure: takes the current state and what happened, returns the next state. The
- * component is then a thin shell — `useEffect` that applies the state's URL to
- * an `<img>`, an `onError` that feeds a failure in, and a `setTimeout` for the
- * delay. Keeping the machine here is what makes "all images stop loading after a
- * few minutes" a testable claim rather than an anecdote.
- */
 export function advanceRecovery(
   state: RecoveryState,
   input: {
     failure: ImageFailure;
     status?: number;
-    online: boolean;
     fallbackUrl?: string;
-    /** The address the caller originally asked for. */
     primaryUrl?: string;
     canProxy: boolean;
     now?: number;
   },
 ): { state: RecoveryState; plan: RecoveryPlan } {
   const failure = input.failure === 'none' ? state.failure : input.failure;
-  // A fallback is the other size of the same picture, never the address that
-  // just failed. Comparing against the primary rather than against the current
-  // address matters: a ladder that reached the proxy is still allowed to spend
-  // its fallback rung on the other size.
   const hasFallback =
     (input.fallbackUrl ?? '').length > 0 && (input.fallbackUrl ?? '') !== input.primaryUrl;
 
   const plan = planRecovery({
     failure,
     attempt: state.attempt,
-    online: input.online,
     hasFallback,
     canProxy: input.canProxy,
   });
@@ -304,13 +189,11 @@ export function advanceRecovery(
     failure,
     url: state.url,
     settled: false,
-    offline: plan.offline,
   };
 
   switch (plan.step) {
     case 'retry':
     case 'retry-later':
-      // Same URL on purpose: the failure was the connection, not the address.
       break;
     case 'bust':
       next.url = withBust(state.url, `${(input.now ?? Date.now()).toString(36)}-${next.attempt}`);
@@ -319,9 +202,6 @@ export function advanceRecovery(
       next.url = input.fallbackUrl ?? state.url;
       break;
     case 'proxy':
-      // The proxy always fetches the caller's original address, not whatever
-      // cache-busted variant the last rung happened to build: a repair is a
-      // request for the picture, not for a string.
       next.url = proxyUrlFor(input.primaryUrl ?? state.url);
       break;
     case 'give-up':
@@ -336,14 +216,6 @@ export function advanceRecovery(
   return { state: next, plan };
 }
 
-/**
- * Whether a load that just succeeded should be trusted.
- *
- * Called with what the browser reports after a successful `load` event. If the
- * element has zero natural width, the bytes were not a picture, however happy
- * the HTTP response was. This is the check that catches a poisoned cache entry
- * the moment it is drawn instead of five minutes later.
- */
 export function isTrustworthyLoad(naturalWidth: number, naturalHeight: number): boolean {
   return naturalWidth > 0 && naturalHeight > 0;
 }
