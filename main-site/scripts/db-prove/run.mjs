@@ -112,6 +112,9 @@ const HARNESSES = [
     't64.mjs',
     'fresh-messenger reset: clears all conversations, messages, drafts, reactions, receipts, pins, stars, send requests, messenger reports, and messenger notifications atomically',
   ],
+  ['t65.mjs',
+    '0093: every real ad click is counted and billed, with per-identity double-tap, hourly, and daily spam guards',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

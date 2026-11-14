@@ -24,8 +24,11 @@ public class MarketBillingPolicyEngineTest {
 
     @Test
     public void formatCurrency_formatsBdtBilingually() {
-        assertEquals("BDT 450", MarketBillingPolicyEngine.formatCurrency(450L, "bdt", false));
-        assertEquals("৳450", MarketBillingPolicyEngine.formatCurrency(450L, "BDT", true));
+        assertEquals("BDT 4.50", MarketBillingPolicyEngine.formatCurrency(450L, "bdt", false));
+        assertEquals("৳120", MarketBillingPolicyEngine.formatCurrency(12000L, "BDT", true));
+        assertEquals("BDT 1,234.56", MarketBillingPolicyEngine.formatCurrency(123456L, "BDT", false));
+        assertEquals("BDT 0.05", MarketBillingPolicyEngine.formatCurrency(5L, "BDT", false));
+        assertEquals("BDT -4.50", MarketBillingPolicyEngine.formatCurrency(-450L, "BDT", false));
         assertEquals("USD 12", MarketBillingPolicyEngine.formatCurrency(12L, "usd", false));
     }
 }

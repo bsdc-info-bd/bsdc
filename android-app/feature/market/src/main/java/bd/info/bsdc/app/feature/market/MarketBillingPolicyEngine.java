@@ -10,12 +10,27 @@ public final class MarketBillingPolicyEngine {
 
     private MarketBillingPolicyEngine() {}
 
+    /**
+     * Formats a money amount. Every BDT amount the backend sends is in poisha
+     * (1 taka = 100 poisha), so BDT is always shown as taka: 450 poisha is
+     * "BDT 4.50" and 12000 poisha is "৳120". Other currencies are shown as
+     * their own minor-unit-free integer, unchanged.
+     */
     public static String formatCurrency(long amount, String currency, boolean bn) {
         String curr = (currency == null || currency.isBlank())
             ? "BDT"
             : currency.trim().toUpperCase(Locale.ROOT);
         if ("BDT".equals(curr)) {
-            return (bn ? "৳" : "BDT ") + amount;
+            long sign = amount < 0 ? -1L : 1L;
+            long absolute = Math.abs(amount);
+            long taka = absolute / 100L;
+            long paisa = absolute % 100L;
+            String grouped = String.format(Locale.US, "%,d", taka);
+            String body = paisa == 0L
+                ? grouped
+                : grouped + String.format(Locale.US, ".%02d", paisa);
+            String signed = (sign < 0 ? "-" : "") + body;
+            return (bn ? "৳" : "BDT ") + signed;
         }
         return curr + " " + amount;
     }

@@ -538,6 +538,10 @@ fun MarketHubScreen(
                                 BsdcBadge(label = c.status.uppercase(), tone = BsdcTone.INFO)
                             }
                             Text(text = "Impressions: ${c.impressions} • Clicks: ${c.clicks}")
+                            Text(
+                                text = "${if (bn) "বাজেট" else "Budget"}: ${MarketBillingPolicyEngine.formatCurrency(c.totalBudget, "BDT", bn)} • ${if (bn) "ব্যয়" else "Spent"}: ${MarketBillingPolicyEngine.formatCurrency(c.spent, "BDT", bn)}",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
                             if (c.status == "active" || c.status == "paused") {
                                 val isPaused = c.status == "paused"
                                 OutlinedButton(
