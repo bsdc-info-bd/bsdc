@@ -93,6 +93,7 @@ import bd.info.bsdc.app.feature.compose.CreateHubMode
 import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.discover.DiscoverHubScreen
 import bd.info.bsdc.app.feature.discover.DiscoverSection
+import bd.info.bsdc.app.feature.discover.JobDetailScreen
 import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.discover.ProjectDetailScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
@@ -159,6 +160,7 @@ fun BsdcAppShell(
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProjectSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeJobSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
     var marketSection by rememberSaveable { mutableStateOf(MarketSection.SHOP) }
     var pendingMessengerTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -438,6 +440,18 @@ fun BsdcAppShell(
                     onRouteEvaluated(LinkDestination.NativeRoute(destPath))
                 },
                 liveRefreshNonce = notificationsLiveNonce,
+            )
+            return
+        }
+        activeJobSlug != null -> {
+            JobDetailScreen(
+                slug = activeJobSlug!!,
+                viewerUid = authState.session?.uid,
+                repository = container.discoverRepository,
+                language = language,
+                onBack = { activeJobSlug = null },
+                onSignInRequired = { showAuthModal = true },
+                onOpenExternal = { url -> openInCustomTab(context, url) },
             )
             return
         }
@@ -850,6 +864,9 @@ fun BsdcAppShell(
                         },
                         onOpenProject = { slug ->
                             activeProjectSlug = slug
+                        },
+                        onOpenJob = { slug ->
+                            activeJobSlug = slug
                         },
                         onOpenVerifyCode = { code ->
                             localRouteNonce++

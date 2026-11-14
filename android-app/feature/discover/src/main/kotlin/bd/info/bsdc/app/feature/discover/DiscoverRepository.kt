@@ -286,6 +286,18 @@ class DiscoverRepository(
             }
         }
 
+    /** One job by slug. Null when it does not exist; my_status is filled in for a signed-in reader. */
+    suspend fun fetchJobDetail(slug: String): Result<JobDetailDto?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "job_detail",
+                params = buildJsonObject { put("p_slug", slug.trim()) },
+                requireAuth = false,
+            )
+            supabase.decode<List<JobDetailDto>>(raw).firstOrNull()
+        }
+    }
+
     suspend fun applyToJob(jobId: String, coverLetter: String, resumeUrl: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {

@@ -100,6 +100,7 @@ fun DiscoverHubScreen(
     onOpenPost: (String) -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenProject: (String) -> Unit = {},
+    onOpenJob: (String) -> Unit = {},
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
     onOpenMarketplace: () -> Unit = {},
@@ -707,7 +708,12 @@ fun DiscoverHubScreen(
                             BsdcBadge(label = job.workMode.uppercase(), tone = BsdcTone.INFO)
                             BsdcBadge(label = job.jobType.replace("_", " ").uppercase(), tone = BsdcTone.NEUTRAL)
                         }
-                        Text(text = job.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = job.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { onOpenJob(job.slug) },
+                        )
                         Text(
                             text = "${job.company} • ${job.city.ifBlank { "Bangladesh" }}",
                             style = MaterialTheme.typography.bodyMedium,

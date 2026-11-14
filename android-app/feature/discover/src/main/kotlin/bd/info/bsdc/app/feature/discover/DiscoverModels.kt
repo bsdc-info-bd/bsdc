@@ -112,6 +112,33 @@ data class JobBoardDto(
     @SerialName("my_status") val myStatus: String? = null,
 )
 
+/** One job in full, from the job_detail RPC. Salary bounds are whole taka or poisha as stored. */
+@Serializable
+data class JobDetailDto(
+    val id: String,
+    val slug: String,
+    val title: String,
+    val company: String = "",
+    val description: String = "",
+    @SerialName("job_type") val jobType: String = "full_time",
+    @SerialName("work_mode") val workMode: String = "remote",
+    val level: String = "mid",
+    val city: String = "",
+    val country: String = "",
+    @SerialName("salary_min") val salaryMin: Int? = null,
+    @SerialName("salary_max") val salaryMax: Int? = null,
+    @SerialName("salary_currency") val salaryCurrency: String = "BDT",
+    @SerialName("salary_period") val salaryPeriod: String = "month",
+    val skills: List<String> = emptyList(),
+    @SerialName("apply_url") val applyUrl: String = "",
+    val status: String = "open",
+    @SerialName("applications_count") val applicationsCount: Int = 0,
+    @SerialName("published_at") val publishedAt: String? = null,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("poster_uid") val posterUid: String = "",
+    @SerialName("my_status") val myStatus: String? = null,
+)
+
 @Serializable
 data class GigDto(
     val id: String,
