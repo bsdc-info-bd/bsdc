@@ -96,7 +96,7 @@ import bd.info.bsdc.app.feature.discover.DiscoverSection
 import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
-import bd.info.bsdc.app.feature.market.MarketHubScreen
+import bd.info.bsdc.app.feature.market.AdsDashboardScreen
 import bd.info.bsdc.app.feature.market.MarketSection
 import bd.info.bsdc.app.feature.market.MkMarketScreen
 import bd.info.bsdc.app.feature.messenger.LiveChannelStatus
@@ -485,13 +485,10 @@ fun BsdcAppShell(
         }
         showMarketScreen -> {
             if (showMarketAds || marketSection == MarketSection.ADS) {
-                // Ads keep their existing hub until the ads dashboard is rebuilt.
-                MarketHubScreen(
-                    repository = container.marketRepository,
-                    imageLoader = container.imageLoader,
-                    viewerUid = authState.session?.uid,
-                    language = language,
-                    initialSection = MarketSection.ADS,
+                AdsDashboardScreen(
+                    repository = container.adsRepository,
+                    bn = language == AppLanguage.BN,
+                    signedIn = authState.session != null,
                     onBack = {
                         showMarketAds = false
                         marketSection = MarketSection.SHOP

@@ -252,3 +252,12 @@ data class MkPlaceDto(
     val latitude: Double? get() = lat.toDoubleOrNull()
     val longitude: Double? get() = lon.toDoubleOrNull()
 }
+
+/** Top-level sections of the marketplace shell. Ads is its own dashboard, reached from the market. */
+enum class MarketSection {
+    SHOP,
+    CART,
+    ORDERS,
+    VENDOR,
+    ADS,
+}

@@ -42,10 +42,10 @@ object PushChannelManager {
             },
             NotificationChannel(
                 PushNotificationRouter.CHANNEL_ORDERS,
-                "Marketplace Orders & Payouts",
+                "Marketplace Orders",
                 NotificationManager.IMPORTANCE_HIGH,
             ).apply {
-                description = "Order updates, seller reviews, and vendor payouts (অর্ডার ও পেমেন্ট)"
+                description = "Order status updates and seller reviews (অর্ডারের আপডেট ও রিভিউ)"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
                 enableLights(true)
                 lightColor = BSDC_ACCENT_COLOR
