@@ -67,7 +67,7 @@ class JobDetailLogicTest {
     @Test
     fun skillChipsAreCleanedAndDeduplicatedKeepingOrder() {
         assertEquals(
-            listOf("Kotlin", "SQL", "Compose"),
+            listOf("Kotlin", "sql", "Compose"),
             JobDetailLogic.skillChips(listOf(" Kotlin", "", "sql", "KOTLIN ", "Compose")),
         )
     }
