@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { MediaImage } from '@/components/media/MediaImage';
 import { MediaGallery } from '@/components/media/MediaGallery';
 import { toGalleryItems } from '@/lib/media/gallery-items';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -195,6 +196,11 @@ export default function ProjectPage() {
                   ) : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <ShareLinkButton
+                    title={project.name}
+                    url={`${SITE.url}${projectPath(project.slug)}`}
+                    size="md"
+                  />
                   <Button
                     variant={project.starred ? 'secondary' : 'outline'}
                     size="md"

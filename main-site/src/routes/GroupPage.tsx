@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MediaImage } from '@/components/media/MediaImage';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Avatar,
@@ -252,6 +253,11 @@ export default function GroupPage() {
                 ) : null}
               </p>
             </div>
+            <ShareLinkButton
+              title={group.name}
+              url={`${SITE.url}${groupPath(group.slug)}`}
+              size="md"
+            />
             {action === 'closed' && group.myRole === null ? null : (
               <Button
                 variant={group.myRole === null ? 'primary' : 'secondary'}

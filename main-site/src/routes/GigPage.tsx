@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -217,6 +218,7 @@ export default function GigPage() {
               </ul>
 
               <div className="flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                <ShareLinkButton title={gig.title} url={`${SITE.url}${path}`} size="md" />
                 {detail.myProposalStatus !== null ? (
                   <p className="flex items-center gap-2 text-sm">
                     {t('freelance.detail.proposalStatus')}
