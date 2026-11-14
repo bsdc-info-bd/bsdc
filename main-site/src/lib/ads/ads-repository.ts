@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase/client';
+import type { Json } from '@/lib/supabase/types';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
   AdWalletHistoryRow,
@@ -9,6 +10,8 @@ import type {
 } from '@/lib/supabase/types';
 import type {
   AdEventKind,
+  AdPaymentInstructions,
+  AdPaymentRequest,
   AdPlacement,
   AdStatus,
   Campaign,
@@ -225,4 +228,78 @@ export async function setCampaignPaused(campaignId: string, paused: boolean): Pr
   });
   if (error) throw toDataError(error);
   return data;
+}
+
+// --- Self-service campaigns and bKash payments (0101) ----------------------
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toPaymentRequest(row: unknown): AdPaymentRequest {
+  const r = asObject(row);
+  const status = r.status === 'approved' || r.status === 'rejected' ? r.status : 'pending';
+  return {
+    id: String(r.id ?? ''),
+    campaignId: String(r.campaign_id ?? ''),
+    amountPoisha: Number(r.amount_poisha ?? 0),
+    txnId: String(r.txn_id ?? ''),
+    status,
+    reviewNote: String(r.review_note ?? ''),
+    createdAt: String(r.created_at ?? ''),
+    decidedAt: typeof r.decided_at === 'string' ? r.decided_at : null,
+  };
+}
+
+export async function fetchPaymentInstructions(): Promise<AdPaymentInstructions> {
+  const { data, error } = await getSupabase().rpc('ad_payment_instructions');
+  if (error) throw toDataError(error);
+  const r = asObject(data);
+  const bikash =
+    typeof r.bikash_number === 'string' && r.bikash_number.trim() !== '' ? r.bikash_number : null;
+  return {
+    bikashNumber: bikash,
+    minBudgetPoisha: Number(r.min_budget_poisha ?? 10000),
+    maxBudgetPoisha: Number(r.max_budget_poisha ?? 10000000),
+    minBidPoisha: Number(r.min_bid_poisha ?? 100),
+    maxBidPoisha: Number(r.max_bid_poisha ?? 1000000),
+    dailyCapMinPoisha: Number(r.daily_cap_min_poisha ?? 1000),
+  };
+}
+
+/** Builds a draft campaign with its one creative. Returns the new campaign id. */
+export async function createCampaign(payload: Json): Promise<string> {
+  const { data, error } = await getSupabase().rpc('ad_create_campaign', { p: payload });
+  if (error) throw toDataError(error);
+  const id = asObject(data).campaign_id;
+  if (typeof id !== 'string' || id === '') throw new Error('ads/no-campaign-id');
+  return id;
+}
+
+export async function submitPayment(
+  campaignId: string,
+  input: { sender: string; account: string; txn: string },
+): Promise<void> {
+  const { error } = await getSupabase().rpc('ad_submit_payment', {
+    p_campaign_id: campaignId,
+    p_sender: input.sender,
+    p_account: input.account.trim(),
+    p_txn: input.txn.trim(),
+  });
+  if (error) throw toDataError(error);
+}
+
+export async function fetchPaymentRequests(limit = 30): Promise<AdPaymentRequest[]> {
+  const { data, error } = await getSupabase().rpc('ad_my_payment_requests', { p_limit: limit });
+  if (error) throw toDataError(error);
+  return Array.isArray(data) ? data.map(toPaymentRequest) : [];
+}
+
+export async function sendForReview(campaignId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('ad_owner_submit_campaign', {
+    p_campaign_id: campaignId,
+  });
+  if (error) throw toDataError(error);
 }

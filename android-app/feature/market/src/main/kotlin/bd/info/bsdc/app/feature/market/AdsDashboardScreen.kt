@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.Payments
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -50,7 +51,6 @@ import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
-import bd.info.bsdc.app.core.model.BsdcHosts
 import kotlinx.coroutines.launch
 
 /**
@@ -76,6 +76,10 @@ fun AdsDashboardScreen(
     var actionError by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var selectedId by remember { mutableStateOf<String?>(null) }
+    var payments by remember { mutableStateOf<List<AdPaymentRequestDto>>(emptyList()) }
+    var builderOpen by remember { mutableStateOf(false) }
+    var paymentTarget by remember { mutableStateOf<Pair<String, Long>?>(null) }
+    var sendingId by remember { mutableStateOf<String?>(null) }
 
     suspend fun reload() {
         repository.fetchWalletBalance()
@@ -87,6 +91,8 @@ fun AdsDashboardScreen(
                 loadFailed = false
             }
             .onFailure { loadFailed = true }
+        repository.fetchPaymentRequests()
+            .onSuccess { payments = it }
         loading = false
     }
 
@@ -105,6 +111,39 @@ fun AdsDashboardScreen(
             ),
             actionLabel = mkText(bn, "Sign in", "সাইন ইন"),
             onAction = onSignInRequired,
+            modifier = modifier.fillMaxSize(),
+        )
+        return
+    }
+
+    if (builderOpen) {
+        AdsCampaignBuilderScreen(
+            repository = repository,
+            bn = bn,
+            onCreated = { id, budget ->
+                builderOpen = false
+                paymentTarget = id to budget
+                scope.launch { reload() }
+            },
+            onCancel = { builderOpen = false },
+            modifier = modifier.fillMaxSize(),
+        )
+        return
+    }
+
+    paymentTarget?.let { (campaignId, budget) ->
+        AdsPaymentScreen(
+            repository = repository,
+            campaignId = campaignId,
+            budgetPoisha = budget,
+            latest = payments.firstOrNull { it.campaignId == campaignId },
+            bn = bn,
+            onDone = {
+                paymentTarget = null
+                notice = mkText(bn, "Payment sent. Staff will check it shortly.", "পেমেন্ট পাঠানো হয়েছে। স্টাফ শীঘ্রই যাচাই করবেন।")
+                scope.launch { reload() }
+            },
+            onBack = { paymentTarget = null },
             modifier = modifier.fillMaxSize(),
         )
         return
@@ -263,6 +302,15 @@ fun AdsDashboardScreen(
         }
 
         item {
+            BsdcButton(
+                label = mkText(bn, "New campaign", "নতুন ক্যাম্পেইন"),
+                onClick = { builderOpen = true },
+                leadingIcon = Icons.Rounded.Add,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        item {
             BsdcSectionHeader(
                 title = mkText(bn, "Campaigns", "ক্যাম্পেইন"),
                 subtitle = mkText(bn, "${campaigns.size} in your account", "আপনার অ্যাকাউন্টে ${digits(campaigns.size.toString(), bn)}টি"),
@@ -276,16 +324,17 @@ fun AdsDashboardScreen(
                     title = mkText(bn, "No campaigns yet", "এখনো কোনো ক্যাম্পেইন নেই"),
                     subtitle = mkText(
                         bn,
-                        "Create a campaign on the web. Once it is approved, it starts running here.",
-                        "ওয়েবে ক্যাম্পেইন তৈরি করুন। অনুমোদনের পর এখানে চালু হবে।",
+                        "Fill in the campaign, pay the budget by bKash, and it goes to review once approved.",
+                        "ক্যাম্পেইন সাজান, বাজেট bKash-এ পাঠান, অনুমোদনের পর রিভিউয়ে যাবে।",
                     ),
-                    actionLabel = mkText(bn, "Create on web", "ওয়েবে তৈরি করুন"),
-                    onAction = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/ads") },
+                    actionLabel = mkText(bn, "New campaign", "নতুন ক্যাম্পেইন"),
+                    onAction = { builderOpen = true },
                 )
             }
         }
 
         items(campaigns, key = { it.id }) { campaign ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CampaignCard(
                 campaign = campaign,
                 bn = bn,
@@ -318,6 +367,35 @@ fun AdsDashboardScreen(
                     }
                 },
             )
+            if (campaign.status == "draft") {
+                AdsDraftFundingRow(
+                    latest = payments.firstOrNull { it.campaignId == campaign.id },
+                    bn = bn,
+                    sendBusy = sendingId == campaign.id,
+                    onPay = { paymentTarget = campaign.id to campaign.totalBudget },
+                    onSend = {
+                        scope.launch {
+                            sendingId = campaign.id
+                            actionError = null
+                            notice = null
+                            repository.sendForReview(campaign.id)
+                                .onSuccess {
+                                    notice = mkText(bn, "Sent for review.", "রিভিউয়ের জন্য পাঠানো হয়েছে।")
+                                    reload()
+                                }
+                                .onFailure {
+                                    actionError = mkText(
+                                        bn,
+                                        "Could not send this campaign. Check that its payment is approved.",
+                                        "ক্যাম্পেইনটি পাঠানো যায়নি। পেমেন্ট অনুমোদন হয়েছে কিনা দেখুন।",
+                                    )
+                                }
+                            sendingId = null
+                        }
+                    },
+                )
+            }
+            }
         }
 
         item { Spacer(Modifier.height(24.dp)) }

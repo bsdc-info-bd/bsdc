@@ -18,6 +18,9 @@ import {
   TextField,
   TextareaField,
 } from '@/design-system';
+import { CampaignPaymentPanel } from '@/components/ads/CampaignPaymentPanel';
+import { CreateCampaignForm } from '@/components/ads/CreateCampaignForm';
+import { useAdBuilder } from '@/hooks/use-ad-builder';
 import { useCampaignDetail, useCampaigns } from '@/hooks/use-ads';
 import {
   budgetProgress,
@@ -32,6 +35,7 @@ import {
   type CampaignCreative,
   type CreativeCopy,
 } from '@/lib/ads/ads-types';
+import type { AdPaymentRequest } from '@/lib/ads/ads-types';
 import { formatNumber } from '@/lib/format';
 import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
@@ -87,6 +91,26 @@ function Dashboard() {
   const { campaigns, balance, isLoading, isError, setPaused, editCopy, isSaving } = useCampaigns();
   const [openId, setOpenId] = useState<string | null>(null);
   const detail = useCampaignDetail(openId);
+  const builder = useAdBuilder();
+  const [building, setBuilding] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  // Requests arrive newest first, so the first match per campaign is the latest.
+  const latestByCampaign = new Map<string, AdPaymentRequest>();
+  for (const request of builder.requests) {
+    if (!latestByCampaign.has(request.campaignId)) {
+      latestByCampaign.set(request.campaignId, request);
+    }
+  }
+
+  async function sendForReview(campaignId: string): Promise<void> {
+    try {
+      await builder.sendForReview(campaignId);
+      toast.success(t('ads.builder.sendReviewDone'));
+    } catch (error) {
+      toast.error(t(dataErrorKey(error)));
+    }
+  }
 
   async function pause(campaignId: string, paused: boolean): Promise<void> {
     try {
@@ -102,6 +126,51 @@ function Dashboard() {
 
   return (
     <>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted">{t('ads.builder.formIntro')}</p>
+        {!building ? (
+          <Button
+            type="button"
+            onClick={() => {
+              setBuilding(true);
+              setPayingId(null);
+            }}
+          >
+            {t('ads.builder.newCampaign')}
+          </Button>
+        ) : null}
+      </div>
+
+      {building ? (
+        <div className="mt-4">
+          <CreateCampaignForm
+            onCreated={(id) => {
+              setBuilding(false);
+              setPayingId(id);
+            }}
+            onCancel={() => setBuilding(false)}
+          />
+        </div>
+      ) : null}
+
+      {payingId !== null && !building
+        ? (() => {
+            const campaign = campaigns.find((item) => item.id === payingId);
+            if (!campaign) return null;
+            return (
+              <div className="mt-4">
+                <CampaignPaymentPanel
+                  campaignId={campaign.id}
+                  budgetPoisha={campaign.totalBudget}
+                  language={language}
+                  latest={latestByCampaign.get(campaign.id) ?? null}
+                  onDone={() => setPayingId(null)}
+                />
+              </div>
+            );
+          })()
+        : null}
+
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <StatCard
           icon={<Megaphone size={16} />}
@@ -179,6 +248,17 @@ function Dashboard() {
                   {t(`ads.statuses.${campaign.status}`)}
                 </Badge>
               </div>
+              {campaign.status === 'draft' ? (
+                <DraftFunding
+                  latest={latestByCampaign.get(campaign.id) ?? null}
+                  busy={builder.isSending}
+                  onPay={() => {
+                    setBuilding(false);
+                    setPayingId(campaign.id);
+                  }}
+                  onSend={() => void sendForReview(campaign.id)}
+                />
+              ) : null}
               <div className="mt-3">
                 <ProgressBar
                   value={budgetProgress(campaign) * 100}
@@ -318,6 +398,53 @@ function Dashboard() {
         })}
       </ul>
     </>
+  );
+}
+
+/** Where a draft stands on the way to funding and review: pay, wait, or send. */
+function DraftFunding({
+  latest,
+  busy,
+  onPay,
+  onSend,
+}: {
+  latest: AdPaymentRequest | null;
+  busy: boolean;
+  onPay: () => void;
+  onSend: () => void;
+}) {
+  const { t } = useTranslation();
+  if (latest?.status === 'approved') {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-green-50 p-3 dark:bg-green-950/30">
+        <Badge tone="green">{t('ads.builder.statusPaymentApproved')}</Badge>
+        <p className="text-sm">{t('ads.builder.approvedHint')}</p>
+        <Button size="sm" onClick={onSend} loading={busy} disabled={busy}>
+          {t('ads.builder.sendReview')}
+        </Button>
+      </div>
+    );
+  }
+  if (latest?.status === 'pending') {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge tone="blue">{t('ads.builder.statusPaymentPending')}</Badge>
+        <p className="text-sm text-muted">{t('ads.builder.paymentPending')}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <Badge tone={latest?.status === 'rejected' ? 'danger' : 'warn'}>
+        {latest?.status === 'rejected'
+          ? t('ads.builder.statusPaymentRejected')
+          : t('ads.builder.statusNeedsPayment')}
+      </Badge>
+      <p className="text-sm text-muted">{t('ads.builder.needPayment')}</p>
+      <Button size="sm" variant="outline" onClick={onPay}>
+        {t('ads.builder.payNow')}
+      </Button>
+    </div>
   );
 }
 

@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -40,6 +41,75 @@ class AdsRepository(
                     put("p_campaign_id", campaignId)
                     put("p_paused", paused)
                 },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    /** Self-service campaigns and bKash payments (0101). Every call is an RPC that checks the caller itself. */
+    suspend fun fetchPaymentInstructions(): Result<AdPaymentInstructionsDto> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.decode<AdPaymentInstructionsDto>(
+                    supabase.rpcText("ad_payment_instructions", requireAuth = true),
+                )
+            }
+        }
+
+    /** Builds a draft with its creative and returns the new campaign id. */
+    suspend fun createCampaign(payload: JsonObject): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "ad_create_campaign",
+                params = buildJsonObject { put("p", payload) },
+                requireAuth = true,
+            )
+            val id = supabase.decode<AdCreatedDto>(raw).campaignId
+            check(id.isNotBlank()) { "ads/no-campaign-id" }
+            id
+        }
+    }
+
+    suspend fun submitPayment(
+        campaignId: String,
+        sender: String,
+        account: String,
+        txn: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "ad_submit_payment",
+                params = buildJsonObject {
+                    put("p_campaign_id", campaignId)
+                    put("p_sender", sender)
+                    put("p_account", account.trim())
+                    put("p_txn", txn.trim())
+                },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    suspend fun fetchPaymentRequests(limit: Int = 30): Result<List<AdPaymentRequestDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.decode<List<AdPaymentRequestDto>>(
+                    supabase.rpcText(
+                        "ad_my_payment_requests",
+                        params = buildJsonObject { put("p_limit", limit) },
+                        requireAuth = true,
+                    ),
+                )
+            }
+        }
+
+    suspend fun sendForReview(campaignId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "ad_owner_submit_campaign",
+                params = buildJsonObject { put("p_campaign_id", campaignId) },
                 requireAuth = true,
             )
             Unit

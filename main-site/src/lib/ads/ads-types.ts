@@ -292,3 +292,26 @@ export function takaToPoisha(input: string): number {
   if (!Number.isFinite(parsed) || parsed < 0) return -1;
   return Math.round(parsed * 100);
 }
+
+/** One bKash payment an advertiser reported for a campaign's budget. */
+export type AdPaymentStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AdPaymentRequest {
+  id: string;
+  campaignId: string;
+  amountPoisha: number;
+  txnId: string;
+  status: AdPaymentStatus;
+  reviewNote: string;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export interface AdPaymentInstructions {
+  bikashNumber: string | null;
+  minBudgetPoisha: number;
+  maxBudgetPoisha: number;
+  minBidPoisha: number;
+  maxBidPoisha: number;
+  dailyCapMinPoisha: number;
+}

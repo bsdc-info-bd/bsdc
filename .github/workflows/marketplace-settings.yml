@@ -1,0 +1,56 @@
+name: Marketplace settings
+
+# Keeps production settings that come from GitHub secrets in step with those
+# secrets on every push, with no manual run. Today this is the BSDC bKash
+# number that vendors and advertisers pay to (secret BSDC_BIKASH_NUMBER).
+#
+# It runs on every push from any branch, the same policy as the database
+# deploy, so a deploy always refreshes the value. It also runs on manual
+# dispatch. If the secret is unset the step changes nothing, so an existing
+# value is never blanked.
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: marketplace-settings-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  sync-bikash-number:
+    name: Sync the bKash number
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install the Postgres client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            for attempt in 1 2 3; do
+              sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client && break
+              echo "apt-get install failed (attempt $attempt); retrying..." >&2
+              sleep 5
+              sudo apt-get update --fix-missing || true
+            done
+          fi
+          command -v psql >/dev/null 2>&1
+
+      - name: Check the sync logic
+        run: node scripts/sync-bikash-number.mjs --self-test
+
+      - name: Copy the bKash number into the database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          BSDC_BIKASH_NUMBER: ${{ secrets.BSDC_BIKASH_NUMBER }}
+        run: node scripts/sync-bikash-number.mjs

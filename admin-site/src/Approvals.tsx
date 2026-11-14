@@ -77,6 +77,7 @@ export function Approvals(): ReactElement {
       </Banner>
       <Shops />
       <Campaigns />
+      <AdPayments />
     </div>
   );
 }
@@ -268,6 +269,133 @@ function Campaigns(): ReactElement {
         </div>
       ) : null}
     </Card>
+  );
+}
+
+interface PendingAdPaymentRow {
+  readonly id: string;
+  readonly owner_uid: string;
+  readonly campaign_id: string;
+  readonly amount_poisha: number;
+  readonly sender_number: string;
+  readonly account_holder: string;
+  readonly txn_id: string;
+  readonly status: string;
+  readonly created_at: string;
+}
+
+/**
+ * Advertisers pay BSDC by bKash, as vendors do. Staff check the transaction
+ * against the bKash statement. Approving credits the advertiser's wallet with
+ * the amount paid; rejecting asks for the reason, which the advertiser sees.
+ */
+function AdPayments(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    async () =>
+      oldestFirst(
+        await listRpc<PendingAdPaymentRow>(env, 'ad_admin_list_payment_requests', {
+          p_status: 'pending',
+          p_limit: 100,
+        }),
+      ),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  return (
+    <Card
+      title="Advertising payments waiting for approval"
+      description="Check each transaction on the bKash statement. Approving adds the amount to the advertiser's wallet."
+      actions={
+        <Button variant="quiet" size="small" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
+      {state.status === 'loading' ? <Loading label="Loading advertising payments." /> : null}
+      {state.status === 'error' ? (
+        <Banner tone="bad" title="The payment queue did not load">
+          <p className="kit-small">{state.message}</p>
+        </Banner>
+      ) : null}
+      {state.status === 'ready' && state.data.length === 0 ? (
+        <Empty>No advertising payments are waiting. A payment appears here once an advertiser reports it.</Empty>
+      ) : null}
+      {state.status === 'ready' && state.data.length > 0 ? (
+        <div className="kit-stack">
+          {state.data.map((payment) => (
+            <AdPaymentRow key={payment.id} payment={payment} onDecided={reload} />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function AdPaymentRow({
+  payment,
+  onDecided,
+}: {
+  payment: PendingAdPaymentRow;
+  onDecided: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const decide = (decision: 'approve' | 'reject'): void => {
+    if (decision === 'reject' && note.trim().length < 5) {
+      setError('Write the reason the advertiser will see, at least five characters.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    callRpc(env, 'ad_admin_decide_payment_request', {
+      p_request_id: payment.id,
+      p_decision: decision,
+      p_note: decision === 'reject' ? note.trim() : '',
+    })
+      .then(() => {
+        setNote('');
+        onDecided();
+      })
+      .catch((failure: unknown) => setError(messageOf(failure)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <strong>{money(payment.amount_poisha)}</strong> paid by bKash
+          <div className="kit-small kit-muted">
+            From {payment.sender_number} · account {payment.account_holder} · transaction{' '}
+            <code>{payment.txn_id}</code>
+          </div>
+          <div className="kit-small kit-muted">Campaign {payment.campaign_id.slice(0, 8)}</div>
+        </div>
+        <Badge tone={waitingTone(payment.created_at)}>waiting {waitingFor(payment.created_at)}</Badge>
+      </div>
+      <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
+        <TextArea
+          label="Reason, if you refuse"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="For example: transaction not found on the statement."
+        />
+        {error ? <Banner tone="bad" title="Not saved"><p className="kit-small">{error}</p></Banner> : null}
+        <div className="kit-row" style={{ justifyContent: 'flex-end' }}>
+          <Button variant="danger" size="small" disabled={busy} onClick={() => decide('reject')}>
+            Refuse
+          </Button>
+          <Button size="small" disabled={busy} onClick={() => decide('approve')}>
+            Approve and credit wallet
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 

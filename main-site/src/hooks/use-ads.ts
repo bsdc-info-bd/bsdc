@@ -25,7 +25,7 @@ const repository = () => {
 let firebaseModule: Promise<typeof FirebaseModule> | null = null;
 
 /** Never cache one Firebase user's answer under another user's query key. */
-async function forOwner<T>(uid: string | null, request: () => Promise<T>): Promise<T> {
+export async function forOwner<T>(uid: string | null, request: () => Promise<T>): Promise<T> {
   firebaseModule ??= import('@/lib/firebase').catch((error: unknown) => {
     firebaseModule = null;
     throw error;

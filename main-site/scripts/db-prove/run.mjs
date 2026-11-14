@@ -118,6 +118,8 @@ const HARNESSES = [
   ['t66.mjs',
     '0094: cash-on-delivery marketplace: vendor application, credits, listing, ordering, order lifecycle, reviews, and RLS',
   ],
+  ['t67.mjs',
+    '0101: self-service advertising: campaign builder, bKash payment reports, staff approval that credits the wallet, and money reserved once'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

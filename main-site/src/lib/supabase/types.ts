@@ -2652,6 +2652,19 @@ export type Database = {
       ad_wallet_balance: { Args: Record<never, never>; Returns: number };
       ad_wallet_history: { Args: { p_limit?: number }; Returns: AdWalletHistoryRow[] };
       my_campaigns: { Args: { p_limit?: number }; Returns: MyCampaignRow[] };
+      ad_payment_instructions: { Args: Record<never, never>; Returns: Json };
+      ad_create_campaign: { Args: { p: Json }; Returns: Json };
+      ad_submit_payment: {
+        Args: { p_campaign_id: string; p_sender: string; p_account: string; p_txn: string };
+        Returns: Json;
+      };
+      ad_my_payment_requests: { Args: { p_limit?: number }; Returns: Json };
+      ad_owner_submit_campaign: { Args: { p_campaign_id: string }; Returns: Json };
+      ad_admin_list_payment_requests: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      ad_admin_decide_payment_request: {
+        Args: { p_request_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
       campaign_creatives: { Args: { p_campaign_id: string }; Returns: CampaignCreativeRow[] };
       campaign_daily: {
         Args: { p_campaign_id: string; p_days?: number };

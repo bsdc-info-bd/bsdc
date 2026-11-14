@@ -377,11 +377,7 @@ jobs:
           PUSH_VAPID_SUBJECT: ${{ secrets.PUSH_VAPID_SUBJECT }}
         run: node scripts/sync-push-secrets.mjs --target db
 
-      - name: Sync the BSDC bKash number for marketplace vendors
-        env:
-          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-          BSDC_BIKASH_NUMBER: ${{ secrets.BSDC_BIKASH_NUMBER }}
-        run: node scripts/sync-bikash-number.mjs
+      # The bKash number is synced by marketplace-settings.yml on every push.
 
       - name: Record what the database now holds
         env:
