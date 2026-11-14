@@ -42,7 +42,7 @@ const en = {
   perOrder: 'per order',
   orders: 'orders',
   paymentTitle: 'Pay the credit package',
-  paymentStep1: 'Open bKash or Nagad and choose Send Money.',
+  paymentStep1: 'Open bKash and choose Send Money.',
   paymentStep2:
     'Send the exact amount to the BSDC number below. The cash-out charge is paid by you.',
   paymentStep3:
@@ -258,7 +258,7 @@ const bn: typeof en = {
   perOrder: 'প্রতি অর্ডার',
   orders: 'অর্ডার',
   paymentTitle: 'ক্রেডিট প্যাকেজের মূল্য দিন',
-  paymentStep1: 'bKash বা Nagad খুলে Send Money বেছে নিন।',
+  paymentStep1: 'bKash খুলে Send Money বেছে নিন।',
   paymentStep2: 'নিচের BSDC নম্বরে সঠিক পরিমাণ পাঠান। ক্যাশ-আউট চার্জ আপনি দেবেন।',
   paymentStep3:
     'এখানে ফিরে এসে যে নম্বর থেকে পাঠিয়েছেন, অ্যাকাউন্ট ধারকের নাম ও ট্রানজেকশন আইডি দিন।',

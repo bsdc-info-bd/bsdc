@@ -3,7 +3,7 @@
  *
  * Proves the business rules from the owner's brief:
  *  - applications need every agreement, a pinned Bangladesh location, a valid NID
- *    and mobile, and a credit package; a bKash/Nagad transaction ID is used once
+ *    and mobile, and a credit package; a bKash transaction ID is used once
  *  - the BSDC payment number is visible only to signed-in applicants
  *  - an applicant is not listed until staff approve, and approval grants credits
  *  - accepting an order consumes exactly one credit; declining consumes none
