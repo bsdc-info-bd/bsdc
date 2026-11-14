@@ -253,6 +253,18 @@ class DiscoverRepository(
         }
     }
 
+    /** One event by slug. Null when it does not exist. The join link is only sent to attendees. */
+    suspend fun fetchEventDetail(slug: String): Result<EventDetailDto?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "event_detail",
+                params = buildJsonObject { put("p_slug", slug.trim()) },
+                requireAuth = false,
+            )
+            supabase.decode<List<EventDetailDto>>(raw).firstOrNull()
+        }
+    }
+
     suspend fun rsvpEvent(eventId: String, status: String): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.rpcText(
@@ -263,7 +275,7 @@ class DiscoverRepository(
                 },
                 requireAuth = true,
             )
-            if (status != "not_going") supabase.wakePushDelivery("event-rsvp")
+            if (status != "declined") supabase.wakePushDelivery("event-rsvp")
             raw.trim().toIntOrNull() ?: 0
         }
     }

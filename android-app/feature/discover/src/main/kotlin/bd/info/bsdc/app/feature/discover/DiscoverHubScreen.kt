@@ -101,6 +101,7 @@ fun DiscoverHubScreen(
     onOpenProfile: (String) -> Unit,
     onOpenProject: (String) -> Unit = {},
     onOpenJob: (String) -> Unit = {},
+    onOpenEvent: (String) -> Unit = {},
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
     onOpenMarketplace: () -> Unit = {},
@@ -655,7 +656,7 @@ fun DiscoverHubScreen(
                                 thumbUrl = ev.coverUrl,
                                 contentDescription = ev.title,
                                 imageLoader = imageLoader,
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().clickable { onOpenEvent(ev.slug) },
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -663,12 +664,20 @@ fun DiscoverHubScreen(
                             val goingTxt = BanglaDigitFormatter.formatCount(ev.goingCount.toLong(), language)
                             BsdcBadge(label = if (bn) "${goingTxt} অংশগ্রহণ" else "$goingTxt going", tone = BsdcTone.OK)
                         }
-                        Text(text = ev.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = ev.title,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clickable { onOpenEvent(ev.slug) },
+                        )
                         val place = listOf(ev.venue, ev.city).filter { it.isNotBlank() }.joinToString(", ")
                         if (place.isNotBlank()) {
                             Text(text = place, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
-                        Text(text = ev.startsAt.take(16).replace("T", " "), style = MaterialTheme.typography.labelMedium)
+                        Text(
+                            text = EventDetailLogic.formatWhen(ev.startsAt, ev.endsAt, ev.timezone, bn),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("going" to (if (bn) "যাচ্ছি" else "Going"), "interested" to (if (bn) "আগ্রহী" else "Interested")).forEach { (st, lbl) ->
                                 FilterChip(

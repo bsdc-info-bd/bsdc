@@ -90,6 +90,29 @@ data class EventCalendarDto(
     val capacity: Int? = null,
     @SerialName("going_count") val goingCount: Int = 0,
     @SerialName("my_status") val myStatus: String? = null,
+    val timezone: String? = null,
+)
+
+/** One event in full, from the event_detail RPC. Text columns may be null, so they are nullable. */
+@Serializable
+data class EventDetailDto(
+    val id: String,
+    val slug: String,
+    val title: String,
+    val description: String? = null,
+    val mode: String = "online",
+    val venue: String? = null,
+    val city: String? = null,
+    @SerialName("join_url") val joinUrl: String? = null,
+    @SerialName("cover_url") val coverUrl: String? = null,
+    @SerialName("starts_at") val startsAt: String? = null,
+    @SerialName("ends_at") val endsAt: String? = null,
+    val timezone: String? = null,
+    val capacity: Int? = null,
+    @SerialName("going_count") val goingCount: Int = 0,
+    @SerialName("is_cancelled") val isCancelled: Boolean = false,
+    @SerialName("host_uid") val hostUid: String? = null,
+    @SerialName("my_status") val myStatus: String? = null,
 )
 
 @Serializable
