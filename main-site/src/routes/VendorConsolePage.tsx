@@ -1,5 +1,15 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, Clock3, CreditCard, Package, Star, Store, XCircle, ClipboardList, CheckCircle2 } from 'lucide-react';
+import {
+  ArrowRight,
+  Clock3,
+  CreditCard,
+  Package,
+  Star,
+  Store,
+  XCircle,
+  ClipboardList,
+  CheckCircle2,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Seo } from '@/components/seo/Seo';
@@ -29,7 +39,14 @@ export default function VendorConsolePage() {
   if (uid === null) {
     return (
       <div className="fab-container max-w-2xl py-12">
-        <EmptyState icon={<Store size={28} />} title={copy.consoleTitle} description={copy.noShop} action={<Button onClick={() => (window.location.href = ROUTES.login)}>{copy.openApply}</Button>} />
+        <EmptyState
+          icon={<Store size={28} />}
+          title={copy.consoleTitle}
+          description={copy.noShop}
+          action={
+            <Button onClick={() => (window.location.href = ROUTES.login)}>{copy.openApply}</Button>
+          }
+        />
       </div>
     );
   }
@@ -43,7 +60,12 @@ export default function VendorConsolePage() {
   if (!data?.has_shop || !data.vendor) {
     return (
       <div className="fab-container max-w-2xl py-12">
-        <Seo title={copy.consoleTitle} description={copy.applyLead} path={ROUTES.vendorConsole} noindex />
+        <Seo
+          title={copy.consoleTitle}
+          description={copy.applyLead}
+          path={ROUTES.vendorConsole}
+          noindex
+        />
         {pending?.status === 'submitted' ? (
           <Card padded className="text-center">
             <Clock3 className="mx-auto mb-3 text-blue" size={32} aria-hidden />
@@ -56,7 +78,10 @@ export default function VendorConsolePage() {
             title={copy.noShop}
             description={copy.applyLead}
             action={
-              <a href={ROUTES.vendorApply} className="inline-flex items-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800">
+              <a
+                href={ROUTES.vendorApply}
+                className="inline-flex items-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+              >
                 {copy.openApply} <ArrowRight size={16} aria-hidden />
               </a>
             }
@@ -73,7 +98,12 @@ export default function VendorConsolePage() {
 
   return (
     <div className="fab-container max-w-6xl space-y-6 py-6 sm:py-8">
-      <Seo title={copy.consoleTitle} description={copy.applyLead} path={ROUTES.vendorConsole} noindex />
+      <Seo
+        title={copy.consoleTitle}
+        description={copy.applyLead}
+        path={ROUTES.vendorConsole}
+        noindex
+      />
 
       <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -98,7 +128,13 @@ export default function VendorConsolePage() {
         <Alert tone="danger" title={copy.unlisted}>
           <p className="text-sm">{copy.creditsEmptyBody}</p>
           <div className="mt-3">
-            <Button size="sm" onClick={() => setTab('credits')} iconStart={<CreditCard size={16} />}>{copy.buyCredits}</Button>
+            <Button
+              size="sm"
+              onClick={() => setTab('credits')}
+              iconStart={<CreditCard size={16} />}
+            >
+              {copy.buyCredits}
+            </Button>
           </div>
         </Alert>
       ) : null}
@@ -109,14 +145,30 @@ export default function VendorConsolePage() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={<ClipboardList size={18} />} label={copy.pendingOrders} value={String(data.orders_pending ?? 0)} />
-        <StatCard icon={<Package size={18} />} label={copy.ordersToday} value={String(data.orders_today ?? 0)} />
-        <StatCard icon={<CreditCard size={18} />} label={copy.creditsLeft} value={String(credits)} />
+        <StatCard
+          icon={<ClipboardList size={18} />}
+          label={copy.pendingOrders}
+          value={String(data.orders_pending ?? 0)}
+        />
+        <StatCard
+          icon={<Package size={18} />}
+          label={copy.ordersToday}
+          value={String(data.orders_today ?? 0)}
+        />
+        <StatCard
+          icon={<CreditCard size={18} />}
+          label={copy.creditsLeft}
+          value={String(credits)}
+        />
         <StatCard
           icon={<Star size={18} />}
           label={copy.rating}
           value={data.rating ? data.rating.toFixed(1) : '—'}
-          hint={data.delivered_poisha ? `${copy.delivered}: ${formatTaka(data.delivered_poisha, language)}` : ''}
+          hint={
+            data.delivered_poisha
+              ? `${copy.delivered}: ${formatTaka(data.delivered_poisha, language)}`
+              : ''
+          }
         />
       </div>
 
@@ -134,7 +186,11 @@ export default function VendorConsolePage() {
                 className="relative shrink-0 rounded-xl px-4 py-2 text-sm font-semibold text-muted transition hover:text-text"
               >
                 {active && !reduceMotion ? (
-                  <motion.span layoutId="vendor-tab" className="absolute inset-0 rounded-xl bg-surface shadow-sm" transition={{ type: 'spring', stiffness: 380, damping: 32 }} />
+                  <motion.span
+                    layoutId="vendor-tab"
+                    className="absolute inset-0 rounded-xl bg-surface shadow-sm"
+                    transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                  />
                 ) : active ? (
                   <span className="absolute inset-0 rounded-xl bg-surface shadow-sm" />
                 ) : null}
@@ -156,11 +212,16 @@ export default function VendorConsolePage() {
           {tab === 'orders' ? <OrdersPanel copy={copy} language={language} enabled /> : null}
           {tab === 'products' ? <CatalogPanel copy={copy} language={language} enabled /> : null}
           {tab === 'shop' ? <ShopProfilePanel copy={copy} shop={shop} /> : null}
-          {tab === 'credits' ? <CreditsPanel copy={copy} language={language} credits={credits} purchases={data.purchases ?? []} /> : null}
+          {tab === 'credits' ? (
+            <CreditsPanel
+              copy={copy}
+              language={language}
+              credits={credits}
+              purchases={data.purchases ?? []}
+            />
+          ) : null}
         </motion.div>
       </AnimatePresence>
-
     </div>
   );
 }
-

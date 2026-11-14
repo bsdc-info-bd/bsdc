@@ -207,7 +207,13 @@ export function LocationPicker({ value, onChange, language, labels }: LocationPi
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button type="button" variant="secondary" size="sm" iconStart={<LocateFixed size={16} />} onClick={useCurrent}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          iconStart={<LocateFixed size={16} />}
+          onClick={useCurrent}
+        >
           {labels.useCurrent}
         </Button>
         {value ? (
@@ -220,7 +226,11 @@ export function LocationPicker({ value, onChange, language, labels }: LocationPi
         )}
       </div>
 
-      {message ? <p role="status" className="text-sm text-danger">{message}</p> : null}
+      {message ? (
+        <p role="status" className="text-sm text-danger">
+          {message}
+        </p>
+      ) : null}
     </div>
   );
 }

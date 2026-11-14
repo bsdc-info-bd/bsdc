@@ -4,7 +4,13 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, EmptyState, Modal, TextField } from '@/design-system';
 import { useSetOrderStatus, useVendorOrders } from '@/hooks/use-mk';
-import { formatTaka, ORDER_STATUSES, vendorActionsFor, type Language, type OrderStatus } from '@/lib/mk/mk-logic';
+import {
+  formatTaka,
+  ORDER_STATUSES,
+  vendorActionsFor,
+  type Language,
+  type OrderStatus,
+} from '@/lib/mk/mk-logic';
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import type { MkVendorOrder } from '@/lib/mk/mk-types';
 
@@ -62,11 +68,19 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
   return (
     <section aria-labelledby="orders-h" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="orders-h" className="text-lg font-semibold text-text">{copy.tabs.orders}</h2>
-        <Badge tone="green" icon={<Bell size={14} />}>{copy.liveUpdates}</Badge>
+        <h2 id="orders-h" className="text-lg font-semibold text-text">
+          {copy.tabs.orders}
+        </h2>
+        <Badge tone="green" icon={<Bell size={14} />}>
+          {copy.liveUpdates}
+        </Badge>
       </div>
 
-      <div role="radiogroup" aria-label={copy.tabs.orders} className="flex gap-2 overflow-x-auto pb-1">
+      <div
+        role="radiogroup"
+        aria-label={copy.tabs.orders}
+        className="flex gap-2 overflow-x-auto pb-1"
+      >
         {(['all', ...ORDER_STATUSES] as const).map((status) => {
           const active = filter === status;
           const label = status === 'all' ? copy.tabs.orders : copy.statusLabels[status];
@@ -78,7 +92,9 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
               aria-checked={active}
               onClick={() => setFilter(status)}
               className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition ${
-                active ? 'border-green-700 bg-green-700 text-white' : 'border-border bg-surface text-text hover:bg-surface-2'
+                active
+                  ? 'border-green-700 bg-green-700 text-white'
+                  : 'border-border bg-surface text-text hover:bg-surface-2'
               }`}
             >
               {label}
@@ -90,7 +106,11 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
       {orders.isLoading ? <p className="text-sm text-muted">{copy.loading}</p> : null}
 
       {!orders.isLoading && list.length === 0 ? (
-        <EmptyState icon={<Package size={28} />} title={copy.tabs.orders} description={copy.noOrders} />
+        <EmptyState
+          icon={<Package size={28} />}
+          title={copy.tabs.orders}
+          description={copy.noOrders}
+        />
       ) : null}
 
       <ul className="grid gap-4 xl:grid-cols-2">
@@ -109,14 +129,23 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-mono text-xs text-muted">#{order.code}</p>
-                    <p className="text-xs text-muted">{new Date(order.placed_at).toLocaleString(language === 'bn' ? 'bn-BD' : 'en-GB')}</p>
+                    <p className="text-xs text-muted">
+                      {new Date(order.placed_at).toLocaleString(
+                        language === 'bn' ? 'bn-BD' : 'en-GB',
+                      )}
+                    </p>
                   </div>
                   <Badge tone={STATUS_TONE[order.status]}>{copy.statusLabels[order.status]}</Badge>
                 </div>
 
                 <div className="mt-3 grid gap-2 text-sm">
-                  <p className="font-semibold text-text">{copy.customer}: {order.customer_name}</p>
-                  <a href={`tel:${order.customer_phone}`} className="inline-flex items-center gap-2 text-green-700 hover:underline">
+                  <p className="font-semibold text-text">
+                    {copy.customer}: {order.customer_name}
+                  </p>
+                  <a
+                    href={`tel:${order.customer_phone}`}
+                    className="inline-flex items-center gap-2 text-green-700 hover:underline"
+                  >
                     <Phone size={14} aria-hidden /> {order.customer_phone}
                   </a>
                   <p className="flex items-start gap-2 text-text">
@@ -124,7 +153,9 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
                     <span className="min-w-0">
                       {order.address_line}
                       {order.landmark ? ` · ${order.landmark}` : ''}
-                      {order.distance_km !== null ? ` · ${order.distance_km.toFixed(1)} ${copy.distance}` : ''}
+                      {order.distance_km !== null
+                        ? ` · ${order.distance_km.toFixed(1)} ${copy.distance}`
+                        : ''}
                     </span>
                   </p>
                   <a
@@ -135,21 +166,32 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
                   >
                     {copy.openMap}
                   </a>
-                  {order.note ? <p className="rounded-lg bg-surface-2 p-2 text-xs text-muted">{order.note}</p> : null}
+                  {order.note ? (
+                    <p className="rounded-lg bg-surface-2 p-2 text-xs text-muted">{order.note}</p>
+                  ) : null}
                 </div>
 
                 <ul className="mt-3 divide-y divide-border rounded-xl border border-border text-sm">
                   {order.items.map((item) => (
-                    <li key={`${item.name}-${item.unit_price}`} className="flex items-center justify-between gap-2 p-2">
-                      <span className="min-w-0 truncate">{item.qty} × {item.name}</span>
-                      <span className="shrink-0 font-medium">{formatTaka(item.line_total, language)}</span>
+                    <li
+                      key={`${item.name}-${item.unit_price}`}
+                      className="flex items-center justify-between gap-2 p-2"
+                    >
+                      <span className="min-w-0 truncate">
+                        {item.qty} × {item.name}
+                      </span>
+                      <span className="shrink-0 font-medium">
+                        {formatTaka(item.line_total, language)}
+                      </span>
                     </li>
                   ))}
                 </ul>
 
                 <div className="mt-3 flex items-center justify-between text-sm">
                   <span className="text-muted">{copy.total}</span>
-                  <span className="text-lg font-bold text-text">{formatTaka(order.total_poisha, language)}</span>
+                  <span className="text-lg font-bold text-text">
+                    {formatTaka(order.total_poisha, language)}
+                  </span>
                 </div>
 
                 {actions.length > 0 ? (
@@ -157,7 +199,13 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
                     {actions.map((next) => {
                       if (next === 'cancelled') {
                         return (
-                          <Button key={next} type="button" variant="ghost" size="sm" onClick={() => setDeclining(order)}>
+                          <Button
+                            key={next}
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeclining(order)}
+                          >
                             {order.status === 'placed' ? copy.decline : copy.cancelOrder}
                           </Button>
                         );
@@ -189,7 +237,9 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
         closeLabel={copy.cancel}
         footer={
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="ghost" onClick={() => setDeclining(null)}>{copy.cancel}</Button>
+            <Button type="button" variant="ghost" onClick={() => setDeclining(null)}>
+              {copy.cancel}
+            </Button>
             <Button
               type="button"
               variant="danger"
@@ -202,7 +252,11 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
           </div>
         }
       >
-        <TextField label={copy.reasonPlaceholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+        <TextField
+          label={copy.reasonPlaceholder}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
       </Modal>
     </section>
   );

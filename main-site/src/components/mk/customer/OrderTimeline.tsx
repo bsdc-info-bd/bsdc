@@ -16,14 +16,19 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
   const reduce = useReducedMotion() ?? false;
   if (status === 'cancelled') {
     return (
-      <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600">{copy.statusLabels.cancelled}</p>
+      <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600">
+        {copy.statusLabels.cancelled}
+      </p>
     );
   }
   const current = timelineIndex(status);
   const progress = current / (STEPS.length - 1);
   return (
     <ol aria-label={copy.statusLabels[status]} className="relative grid grid-cols-5 gap-1">
-      <div className="absolute left-[10%] right-[10%] top-4 h-1 rounded-full bg-surface-2" aria-hidden />
+      <div
+        className="absolute left-[10%] right-[10%] top-4 h-1 rounded-full bg-surface-2"
+        aria-hidden
+      />
       <motion.div
         className="absolute left-[10%] top-4 h-1 origin-left rounded-full bg-green-600"
         style={{ width: '80%' }}
@@ -40,14 +45,22 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
           <li key={step.status} className="relative flex flex-col items-center gap-1 text-center">
             <motion.span
               className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${
-                done ? 'border-green-600 bg-green-600 text-white' : 'border-border bg-surface text-muted'
+                done
+                  ? 'border-green-600 bg-green-600 text-white'
+                  : 'border-border bg-surface text-muted'
               }`}
               animate={active && !reduce ? { scale: [1, 1.15, 1] } : { scale: 1 }}
-              transition={{ duration: 1.4, repeat: active && !reduce ? Infinity : 0, repeatDelay: 0.6 }}
+              transition={{
+                duration: 1.4,
+                repeat: active && !reduce ? Infinity : 0,
+                repeatDelay: 0.6,
+              }}
             >
               <Icon size={14} aria-hidden />
             </motion.span>
-            <span className={`text-[11px] leading-tight ${done ? 'font-semibold text-text' : 'text-muted'}`}>
+            <span
+              className={`text-[11px] leading-tight ${done ? 'font-semibold text-text' : 'text-muted'}`}
+            >
               {copy.statusLabels[step.status]}
             </span>
           </li>

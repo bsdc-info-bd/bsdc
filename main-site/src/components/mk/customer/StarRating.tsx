@@ -14,11 +14,19 @@ export function StarRating({
 }) {
   const editable = onChange !== undefined;
   return (
-    <div role={editable ? 'radiogroup' : 'img'} aria-label={`${label}: ${value}/5`} className="inline-flex gap-1">
+    <div
+      role={editable ? 'radiogroup' : 'img'}
+      aria-label={`${label}: ${value}/5`}
+      className="inline-flex gap-1"
+    >
       {[1, 2, 3, 4, 5].map((n) => {
         const filled = n <= Math.round(value);
         const icon = (
-          <Star size={size} className={filled ? 'fill-amber-400 text-amber-400' : 'text-muted'} aria-hidden />
+          <Star
+            size={size}
+            className={filled ? 'fill-amber-400 text-amber-400' : 'text-muted'}
+            aria-hidden
+          />
         );
         if (!editable) return <span key={n}>{icon}</span>;
         return (

@@ -10,9 +10,24 @@ export function MarketNav({ copy }: { copy: MkCopy }) {
   const cart = useMyCart();
   const count = (cart.data ?? []).reduce((sum, line) => sum + line.qty, 0);
   const items = [
-    { to: ROUTES.market, label: copy.buyer.marketTitle, icon: Store, match: (p: string) => p === ROUTES.market },
-    { to: ROUTES.marketCart, label: copy.buyer.cartTitle, icon: ShoppingBag, match: (p: string) => p === ROUTES.marketCart },
-    { to: ROUTES.marketOrders, label: copy.buyer.myOrders, icon: ClipboardList, match: (p: string) => p === ROUTES.marketOrders },
+    {
+      to: ROUTES.market,
+      label: copy.buyer.marketTitle,
+      icon: Store,
+      match: (p: string) => p === ROUTES.market,
+    },
+    {
+      to: ROUTES.marketCart,
+      label: copy.buyer.cartTitle,
+      icon: ShoppingBag,
+      match: (p: string) => p === ROUTES.marketCart,
+    },
+    {
+      to: ROUTES.marketOrders,
+      label: copy.buyer.myOrders,
+      icon: ClipboardList,
+      match: (p: string) => p === ROUTES.marketOrders,
+    },
   ];
   return (
     <nav aria-label={copy.buyer.marketTitle} className="mb-6">
@@ -31,7 +46,9 @@ export function MarketNav({ copy }: { copy: MkCopy }) {
                 <Icon size={16} aria-hidden />
                 {label}
                 {to === ROUTES.marketCart && count > 0 ? (
-                  <span className="ml-1 rounded-full bg-green-700 px-2 py-0.5 text-xs font-bold text-white tabular-nums">{count}</span>
+                  <span className="ml-1 rounded-full bg-green-700 px-2 py-0.5 text-xs font-bold text-white tabular-nums">
+                    {count}
+                  </span>
                 ) : null}
               </Link>
             </li>

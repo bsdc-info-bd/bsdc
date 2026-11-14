@@ -45,7 +45,8 @@ export default function AdminMarketplacePage() {
   const decideApp = useMutation({
     mutationFn: (input: { id: string; decision: 'approve' | 'reject'; note: string }) =>
       repo.decideApplication(input.id, input.decision, input.note),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mk', 'admin', 'applications'] }),
+    onSuccess: () =>
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'admin', 'applications'] }),
   });
   const decideBuy = useMutation({
     mutationFn: (input: { id: string; decision: 'approve' | 'reject'; note: string }) =>
@@ -57,7 +58,11 @@ export default function AdminMarketplacePage() {
   if (!canReview) {
     return (
       <div className="fab-container py-12">
-        <EmptyState icon={<Store size={28} />} title="Access denied" description="You need the marketplace review permission." />
+        <EmptyState
+          icon={<Store size={28} />}
+          title="Access denied"
+          description="You need the marketplace review permission."
+        />
       </div>
     );
   }
@@ -71,7 +76,9 @@ export default function AdminMarketplacePage() {
     try {
       if (kind === 'applications') await decideApp.mutateAsync({ id, decision, note });
       else await decideBuy.mutateAsync({ id, decision, note });
-      toast.success(decision === 'approve' ? copy.purchaseStatus.approved : copy.purchaseStatus.rejected);
+      toast.success(
+        decision === 'approve' ? copy.purchaseStatus.approved : copy.purchaseStatus.rejected,
+      );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.errorGeneric);
     }
@@ -82,10 +89,18 @@ export default function AdminMarketplacePage() {
 
   return (
     <div className="fab-container max-w-6xl space-y-6 py-6">
-      <Seo title="Marketplace review" description="Review vendor applications and credit purchases." path={ROUTES.admin} noindex />
+      <Seo
+        title="Marketplace review"
+        description="Review vendor applications and credit purchases."
+        path={ROUTES.admin}
+        noindex
+      />
       <header>
         <h1 className="text-2xl font-bold text-text">Marketplace review</h1>
-        <p className="text-sm text-muted">Check each bKash transaction before you approve. Approving a shop makes it eligible to list; approving a purchase adds its orders.</p>
+        <p className="text-sm text-muted">
+          Check each bKash transaction before you approve. Approving a shop makes it eligible to
+          list; approving a purchase adds its orders.
+        </p>
       </header>
 
       <div role="tablist" className="flex gap-2">
@@ -98,32 +113,65 @@ export default function AdminMarketplacePage() {
             onClick={() => setQueue(id)}
             className={`rounded-xl border px-4 py-2 text-sm font-semibold ${queue === id ? 'border-green-700 bg-green-700 text-white' : 'border-border bg-surface'}`}
           >
-            {id === 'applications' ? `Applications (${apps.length})` : `Credit purchases (${buys.length})`}
+            {id === 'applications'
+              ? `Applications (${apps.length})`
+              : `Credit purchases (${buys.length})`}
           </button>
         ))}
       </div>
 
       {queue === 'applications' ? (
         <ul className="grid gap-4 lg:grid-cols-2">
-          {apps.length === 0 ? <EmptyState icon={<Store size={28} />} title="Nothing waiting" description="No vendor applications are waiting for review." /> : null}
+          {apps.length === 0 ? (
+            <EmptyState
+              icon={<Store size={28} />}
+              title="Nothing waiting"
+              description="No vendor applications are waiting for review."
+            />
+          ) : null}
           {apps.map((a) => (
             <li key={a.id}>
               <Card padded className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-semibold">{SHOP_TYPE_EMOJI[a.vendor_type]} {a.shop_name}</p>
-                    <p className="text-sm text-muted">{a.full_name} · {a.mobile}</p>
+                    <p className="truncate text-lg font-semibold">
+                      {SHOP_TYPE_EMOJI[a.vendor_type]} {a.shop_name}
+                    </p>
+                    <p className="text-sm text-muted">
+                      {a.full_name} · {a.mobile}
+                    </p>
                   </div>
                   <Badge tone="warn">{copy.underReview}</Badge>
                 </div>
                 <dl className="grid grid-cols-2 gap-2 text-sm">
-                  <div><dt className="text-xs text-muted">{copy.nid}</dt><dd className="font-mono">{a.nid_number}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.tradeLicence}</dt><dd>{a.trade_license_no || '—'}</dd></div>
-                  <div className="col-span-2"><dt className="text-xs text-muted">{copy.addressLine}</dt><dd>{a.address_line}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.sender}</dt><dd className="font-mono">{a.payment_sender}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.txnId}</dt><dd className="font-mono">{a.payment_txn_id}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.holder}</dt><dd>{a.payment_holder}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.packageTitle}</dt><dd>{a.package_code}</dd></div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.nid}</dt>
+                    <dd className="font-mono">{a.nid_number}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.tradeLicence}</dt>
+                    <dd>{a.trade_license_no || '—'}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-xs text-muted">{copy.addressLine}</dt>
+                    <dd>{a.address_line}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.sender}</dt>
+                    <dd className="font-mono">{a.payment_sender}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.txnId}</dt>
+                    <dd className="font-mono">{a.payment_txn_id}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.holder}</dt>
+                    <dd>{a.payment_holder}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.packageTitle}</dt>
+                    <dd>{a.package_code}</dd>
+                  </div>
                 </dl>
                 <a
                   className="text-xs text-green-700 hover:underline"
@@ -133,10 +181,29 @@ export default function AdminMarketplacePage() {
                 >
                   {copy.openMap} · {a.place_label || `${a.lat.toFixed(4)}, ${a.lng.toFixed(4)}`}
                 </a>
-                <TextField label="Note (required to reject)" value={notes[a.id] ?? ''} onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })} />
+                <TextField
+                  label="Note (required to reject)"
+                  value={notes[a.id] ?? ''}
+                  onChange={(e) => setNotes({ ...notes, [a.id]: e.target.value })}
+                />
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="danger" size="sm" iconStart={<XCircle size={14} />} onClick={() => void act('applications', a.id, 'reject')}>Reject</Button>
-                  <Button type="button" size="sm" iconStart={<CheckCircle2 size={14} />} onClick={() => void act('applications', a.id, 'approve')}>Approve</Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    iconStart={<XCircle size={14} />}
+                    onClick={() => void act('applications', a.id, 'reject')}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    iconStart={<CheckCircle2 size={14} />}
+                    onClick={() => void act('applications', a.id, 'approve')}
+                  >
+                    Approve
+                  </Button>
                 </div>
               </Card>
             </li>
@@ -144,23 +211,57 @@ export default function AdminMarketplacePage() {
         </ul>
       ) : (
         <ul className="grid gap-4 lg:grid-cols-2">
-          {buys.length === 0 ? <EmptyState icon={<Store size={28} />} title="Nothing waiting" description="No credit purchases are waiting for review." /> : null}
+          {buys.length === 0 ? (
+            <EmptyState
+              icon={<Store size={28} />}
+              title="Nothing waiting"
+              description="No credit purchases are waiting for review."
+            />
+          ) : null}
           {buys.map((p) => (
             <li key={p.id}>
               <Card padded className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-semibold">{p.orders} {copy.orders} · {formatTaka(p.price_poisha, language)}</p>
+                  <p className="font-semibold">
+                    {p.orders} {copy.orders} · {formatTaka(p.price_poisha, language)}
+                  </p>
                   <Badge tone="warn">{copy.purchaseStatus.pending}</Badge>
                 </div>
                 <dl className="grid grid-cols-2 gap-2 text-sm">
-                  <div><dt className="text-xs text-muted">{copy.sender}</dt><dd className="font-mono">{p.sender_number}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.txnId}</dt><dd className="font-mono">{p.txn_id}</dd></div>
-                  <div><dt className="text-xs text-muted">{copy.holder}</dt><dd>{p.account_holder}</dd></div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.sender}</dt>
+                    <dd className="font-mono">{p.sender_number}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.txnId}</dt>
+                    <dd className="font-mono">{p.txn_id}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">{copy.holder}</dt>
+                    <dd>{p.account_holder}</dd>
+                  </div>
                 </dl>
-                <TextField label="Note (required to reject)" value={notes[p.id] ?? ''} onChange={(e) => setNotes({ ...notes, [p.id]: e.target.value })} />
+                <TextField
+                  label="Note (required to reject)"
+                  value={notes[p.id] ?? ''}
+                  onChange={(e) => setNotes({ ...notes, [p.id]: e.target.value })}
+                />
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="danger" size="sm" onClick={() => void act('purchases', p.id, 'reject')}>Reject</Button>
-                  <Button type="button" size="sm" onClick={() => void act('purchases', p.id, 'approve')}>Approve</Button>
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() => void act('purchases', p.id, 'reject')}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => void act('purchases', p.id, 'approve')}
+                  >
+                    Approve
+                  </Button>
                 </div>
               </Card>
             </li>

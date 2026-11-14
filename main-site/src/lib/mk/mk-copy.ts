@@ -6,7 +6,8 @@ import type { Language } from './mk-logic';
  */
 const en = {
   applyTitle: 'Open your shop',
-  applyLead: 'Apply once, pay the credit package, and our team reviews everything before your shop goes live.',
+  applyLead:
+    'Apply once, pay the credit package, and our team reviews everything before your shop goes live.',
   steps: {
     identity: 'You',
     shop: 'Shop',
@@ -42,8 +43,10 @@ const en = {
   orders: 'orders',
   paymentTitle: 'Pay the credit package',
   paymentStep1: 'Open bKash or Nagad and choose Send Money.',
-  paymentStep2: 'Send the exact amount to the BSDC number below. The cash-out charge is paid by you.',
-  paymentStep3: 'Come back here and enter the number you sent from, the account holder name, and the transaction ID.',
+  paymentStep2:
+    'Send the exact amount to the BSDC number below. The cash-out charge is paid by you.',
+  paymentStep3:
+    'Come back here and enter the number you sent from, the account holder name, and the transaction ID.',
   copyNumber: 'Copy number',
   copied: 'Copied',
   sender: 'The number you sent money from',
@@ -92,7 +95,8 @@ const en = {
   listed: 'Listed',
   unlisted: 'Hidden — buy credits to go live',
   creditsLeft: 'Order credits left',
-  creditsEmptyBody: 'Your shop is hidden and cannot take orders. Buy a package; it goes live when our team approves it.',
+  creditsEmptyBody:
+    'Your shop is hidden and cannot take orders. Buy a package; it goes live when our team approves it.',
   creditsLowBody: 'Credits are running low. Buy a package before you run out.',
   tabs: { orders: 'Orders', products: 'Products', shop: 'Shop', credits: 'Credits' },
   pendingOrders: 'Waiting for you',
@@ -218,7 +222,8 @@ const en = {
 
 const bn: typeof en = {
   applyTitle: 'আপনার দোকান খুলুন',
-  applyLead: 'একবার আবেদন করুন, ক্রেডিট প্যাকেজের মূল্য দিন, আমাদের টিম সবকিছু যাচাই করার পর দোকান চালু হবে।',
+  applyLead:
+    'একবার আবেদন করুন, ক্রেডিট প্যাকেজের মূল্য দিন, আমাদের টিম সবকিছু যাচাই করার পর দোকান চালু হবে।',
   steps: {
     identity: 'আপনি',
     shop: 'দোকান',
@@ -255,7 +260,8 @@ const bn: typeof en = {
   paymentTitle: 'ক্রেডিট প্যাকেজের মূল্য দিন',
   paymentStep1: 'bKash বা Nagad খুলে Send Money বেছে নিন।',
   paymentStep2: 'নিচের BSDC নম্বরে সঠিক পরিমাণ পাঠান। ক্যাশ-আউট চার্জ আপনি দেবেন।',
-  paymentStep3: 'এখানে ফিরে এসে যে নম্বর থেকে পাঠিয়েছেন, অ্যাকাউন্ট ধারকের নাম ও ট্রানজেকশন আইডি দিন।',
+  paymentStep3:
+    'এখানে ফিরে এসে যে নম্বর থেকে পাঠিয়েছেন, অ্যাকাউন্ট ধারকের নাম ও ট্রানজেকশন আইডি দিন।',
   copyNumber: 'নম্বর কপি করুন',
   copied: 'কপি হয়েছে',
   sender: 'যে নম্বর থেকে টাকা পাঠিয়েছেন',
@@ -304,7 +310,8 @@ const bn: typeof en = {
   listed: 'চালু আছে',
   unlisted: 'লুকানো — ক্রেডিট কিনলে চালু হবে',
   creditsLeft: 'বাকি অর্ডার ক্রেডিট',
-  creditsEmptyBody: 'আপনার দোকান লুকানো আছে এবং অর্ডার নিতে পারবে না। একটি প্যাকেজ কিনুন; অনুমোদনের পর চালু হবে।',
+  creditsEmptyBody:
+    'আপনার দোকান লুকানো আছে এবং অর্ডার নিতে পারবে না। একটি প্যাকেজ কিনুন; অনুমোদনের পর চালু হবে।',
   creditsLowBody: 'ক্রেডিট কমে আসছে। শেষ হওয়ার আগে নতুন প্যাকেজ কিনুন।',
   tabs: { orders: 'অর্ডার', products: 'পণ্য', shop: 'দোকান', credits: 'ক্রেডিট' },
   pendingOrders: 'আপনার অপেক্ষায়',
@@ -357,7 +364,11 @@ const bn: typeof en = {
   saved: 'সংরক্ষিত হয়েছে',
   buyCredits: 'অর্ডার ক্রেডিট কিনুন',
   purchases: 'আপনার ক্রয়সমূহ',
-  purchaseStatus: { pending: 'অনুমোদনের অপেক্ষায়', approved: 'অনুমোদিত', rejected: 'প্রত্যাখ্যাত' },
+  purchaseStatus: {
+    pending: 'অনুমোদনের অপেক্ষায়',
+    approved: 'অনুমোদিত',
+    rejected: 'প্রত্যাখ্যাত',
+  },
   orderCredits: 'অর্ডার',
   noShop: 'আপনার এখনো কোনো দোকান নেই।',
   openApply: 'দোকান খুলুন',

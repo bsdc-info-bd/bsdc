@@ -5,15 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import { LocationPicker, type PinnedLocation } from '@/components/mk/LocationPicker';
-import {
-  Alert,
-  Badge,
-  Button,
-  Card,
-  PageSkeleton,
-  Stepper,
-  TextField,
-} from '@/design-system';
+import { Alert, Badge, Button, Card, PageSkeleton, Stepper, TextField } from '@/design-system';
 import { useMyApplication, usePaymentInstructions, useSubmitApplication } from '@/hooks/use-mk';
 import {
   AGREEMENT_KEYS,
@@ -46,7 +38,14 @@ function readDraft(): ApplicationDraft {
     const raw = sessionStorage.getItem(DRAFT_KEY);
     if (raw === null) return EMPTY_APPLICATION;
     const saved = JSON.parse(raw) as Partial<ApplicationDraft>;
-    return { ...EMPTY_APPLICATION, ...saved, nid: '', paymentSender: '', paymentHolder: '', paymentTxnId: '' };
+    return {
+      ...EMPTY_APPLICATION,
+      ...saved,
+      nid: '',
+      paymentSender: '',
+      paymentHolder: '',
+      paymentTxnId: '',
+    };
   } catch {
     return EMPTY_APPLICATION;
   }
@@ -104,14 +103,24 @@ export default function ShopApplyPage() {
   if (existing !== null && existing.status === 'submitted') {
     return (
       <Shell copy={copy}>
-        <StatusCard tone="info" icon={<Clock3 size={28} />} title={copy.underReview} body={copy.submittedBody} />
+        <StatusCard
+          tone="info"
+          icon={<Clock3 size={28} />}
+          title={copy.underReview}
+          body={copy.submittedBody}
+        />
       </Shell>
     );
   }
   if (existing !== null && existing.status === 'approved') {
     return (
       <Shell copy={copy}>
-        <StatusCard tone="success" icon={<CheckCircle2 size={28} />} title={copy.submitted} body={copy.approvedBody}>
+        <StatusCard
+          tone="success"
+          icon={<CheckCircle2 size={28} />}
+          title={copy.submitted}
+          body={copy.approvedBody}
+        >
           <Button className="mt-4" onClick={() => (window.location.href = ROUTES.vendor)}>
             {copy.openApply}
           </Button>
@@ -128,7 +137,12 @@ export default function ShopApplyPage() {
           animate={{ opacity: 1, scale: 1 }}
           transition={{ type: 'spring', stiffness: 220, damping: 18 }}
         >
-          <StatusCard tone="success" icon={<CheckCircle2 size={28} />} title={copy.submitted} body={copy.submittedBody} />
+          <StatusCard
+            tone="success"
+            icon={<CheckCircle2 size={28} />}
+            title={copy.submitted}
+            body={copy.submittedBody}
+          />
         </motion.div>
       </Shell>
     );
@@ -261,7 +275,9 @@ export default function ShopApplyPage() {
                               : 'border-border bg-surface hover:bg-surface-2'
                           }`}
                         >
-                          <span aria-hidden className="text-lg">{SHOP_TYPE_EMOJI[type]}</span>
+                          <span aria-hidden className="text-lg">
+                            {SHOP_TYPE_EMOJI[type]}
+                          </span>
                           <span>{copy.typeLabels[type]}</span>
                         </button>
                       );
@@ -292,7 +308,10 @@ export default function ShopApplyPage() {
                       lat: pin.lat,
                       lng: pin.lng,
                       placeLabel: pin.label,
-                      addressLine: draft.addressLine.trim() === '' && pin.label !== '' ? pin.label : draft.addressLine,
+                      addressLine:
+                        draft.addressLine.trim() === '' && pin.label !== ''
+                          ? pin.label
+                          : draft.addressLine,
                     })
                   }
                   labels={{
@@ -328,7 +347,10 @@ export default function ShopApplyPage() {
                       className="mt-1 h-4 w-4 accent-green-700"
                       checked={draft.agreements[key]}
                       onChange={(e) =>
-                        setDraft({ ...draft, agreements: { ...draft.agreements, [key]: e.target.checked } })
+                        setDraft({
+                          ...draft,
+                          agreements: { ...draft.agreements, [key]: e.target.checked },
+                        })
                       }
                     />
                     <span>{copy.agreementLabels[key]}</span>
@@ -359,13 +381,18 @@ export default function ShopApplyPage() {
                         aria-pressed={selected}
                         onClick={() => setDraft({ ...draft, packageCode: pkg.code })}
                         className={`rounded-2xl border p-4 text-left transition ${
-                          selected ? 'border-green-700 bg-green-700/10 ring-2 ring-green-700/30' : 'border-border bg-surface'
+                          selected
+                            ? 'border-green-700 bg-green-700/10 ring-2 ring-green-700/30'
+                            : 'border-border bg-surface'
                         }`}
                       >
                         <p className="text-2xl font-bold text-text">
-                          {pkg.orders} <span className="text-sm font-medium text-muted">{copy.orders}</span>
+                          {pkg.orders}{' '}
+                          <span className="text-sm font-medium text-muted">{copy.orders}</span>
                         </p>
-                        <p className="mt-1 text-lg font-semibold text-green-700">{formatTaka(pkg.price_poisha, language)}</p>
+                        <p className="mt-1 text-lg font-semibold text-green-700">
+                          {formatTaka(pkg.price_poisha, language)}
+                        </p>
                         <p className="text-xs text-muted">
                           {formatTaka(perOrder, language)} {copy.perOrder}
                         </p>
@@ -409,7 +436,9 @@ export default function ShopApplyPage() {
                   {selectedPackage ? (
                     <p className="mt-3 text-sm text-muted">
                       {copy.packageTitle}: {selectedPackage.orders} {copy.orders} ·{' '}
-                      <strong className="text-text">{formatTaka(selectedPackage.price_poisha, language)}</strong>
+                      <strong className="text-text">
+                        {formatTaka(selectedPackage.price_poisha, language)}
+                      </strong>
                     </p>
                   ) : null}
                 </div>
@@ -441,14 +470,21 @@ export default function ShopApplyPage() {
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <Row label={copy.fullName} value={draft.fullName} />
                   <Row label={copy.shopName} value={draft.shopName} />
-                  <Row label={copy.shopType} value={draft.shopType ? copy.typeLabels[draft.shopType] : '—'} />
+                  <Row
+                    label={copy.shopType}
+                    value={draft.shopType ? copy.typeLabels[draft.shopType] : '—'}
+                  />
                   <Row label={copy.addressLine} value={draft.addressLine} />
                   <Row label={copy.mobile} value={normaliseBdMobile(draft.mobile)} />
                   <Row label={copy.sender} value={normaliseBdMobile(draft.paymentSender)} />
                   <Row label={copy.txnId} value={draft.paymentTxnId} />
                   <Row
                     label={copy.packageTitle}
-                    value={selectedPackage ? `${selectedPackage.orders} ${copy.orders} · ${formatTaka(selectedPackage.price_poisha, language)}` : '—'}
+                    value={
+                      selectedPackage
+                        ? `${selectedPackage.orders} ${copy.orders} · ${formatTaka(selectedPackage.price_poisha, language)}`
+                        : '—'
+                    }
                   />
                 </dl>
                 <Badge tone="green" icon={<ShieldCheck size={14} />}>
@@ -485,12 +521,17 @@ export default function ShopApplyPage() {
           )}
         </div>
       </Card>
-
     </Shell>
   );
 }
 
-function Shell({ children, copy }: { children: React.ReactNode; copy: { applyTitle: string; applyLead: string } }) {
+function Shell({
+  children,
+  copy,
+}: {
+  children: React.ReactNode;
+  copy: { applyTitle: string; applyLead: string };
+}) {
   return (
     <div className="fab-container max-w-3xl py-6 sm:py-10">
       <header className="mb-6 rounded-3xl bg-gradient-to-br from-green-700 to-green-500 p-6 text-white shadow-lg">
@@ -517,7 +558,9 @@ function StatusCard({
 }) {
   return (
     <Card padded className="text-center">
-      <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${tone === 'success' ? 'bg-green-700/10 text-green-700' : 'bg-surface-2 text-blue'}`}>
+      <div
+        className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${tone === 'success' ? 'bg-green-700/10 text-green-700' : 'bg-surface-2 text-blue'}`}
+      >
         {icon}
       </div>
       <h2 className="text-xl font-semibold text-text">{title}</h2>

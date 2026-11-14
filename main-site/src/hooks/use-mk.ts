@@ -74,14 +74,10 @@ export function useVendorOrders(enabled: boolean) {
     if (uid === null || !enabled) return undefined;
     const channel = getSupabase()
       .channel(`mk-vendor-orders-${uid}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mk_orders' },
-        () => {
-          void queryClient.invalidateQueries({ queryKey: KEYS.orders });
-          void queryClient.invalidateQueries({ queryKey: KEYS.dashboard });
-        },
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mk_orders' }, () => {
+        void queryClient.invalidateQueries({ queryKey: KEYS.orders });
+        void queryClient.invalidateQueries({ queryKey: KEYS.dashboard });
+      })
       .subscribe();
     return () => {
       void getSupabase().removeChannel(channel);
@@ -157,7 +153,11 @@ export function useBuyCredits() {
   });
 }
 
-export function useListedShops(type: string | null, query: string, origin: { lat: number; lng: number } | null) {
+export function useListedShops(
+  type: string | null,
+  query: string,
+  origin: { lat: number; lng: number } | null,
+) {
   return useQuery({
     queryKey: [...KEYS.shops, type, query, origin?.lat ?? null, origin?.lng ?? null],
     queryFn: () => repo.listShops(type, query, origin),
@@ -198,7 +198,8 @@ export function useMyCart() {
 export function useSetCartQty() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { productId: string; qty: number }) => repo.setCartQty(input.productId, input.qty),
+    mutationFn: (input: { productId: string; qty: number }) =>
+      repo.setCartQty(input.productId, input.qty),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ['mk', 'cart'] });
     },
@@ -253,7 +254,8 @@ export function useMyOrders() {
 export function useCancelMyOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { orderId: string; reason: string }) => repo.cancelMyOrder(input.orderId, input.reason),
+    mutationFn: (input: { orderId: string; reason: string }) =>
+      repo.cancelMyOrder(input.orderId, input.reason),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] }),
   });
 }

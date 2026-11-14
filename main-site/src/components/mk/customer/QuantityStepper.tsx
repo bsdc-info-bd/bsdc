@@ -13,7 +13,11 @@ interface Props {
 export function QuantityStepper({ value, min = 0, max, onChange, label, disabled = false }: Props) {
   const clamp = (n: number) => Math.min(max, Math.max(min, n));
   return (
-    <div role="group" aria-label={label} className="inline-flex items-center rounded-xl border border-border bg-surface">
+    <div
+      role="group"
+      aria-label={label}
+      className="inline-flex items-center rounded-xl border border-border bg-surface"
+    >
       <button
         type="button"
         aria-label={`−1 ${label}`}
@@ -23,7 +27,10 @@ export function QuantityStepper({ value, min = 0, max, onChange, label, disabled
       >
         <Minus size={14} aria-hidden />
       </button>
-      <output aria-live="polite" className="min-w-[2.25rem] text-center text-sm font-semibold tabular-nums">
+      <output
+        aria-live="polite"
+        className="min-w-[2.25rem] text-center text-sm font-semibold tabular-nums"
+      >
         {value}
       </output>
       <button

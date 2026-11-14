@@ -39,7 +39,12 @@ export default function MarketOrdersPage() {
 
   return (
     <div className="fab-container max-w-4xl space-y-6 py-6 sm:py-8">
-      <Seo title={copy.buyer.myOrders} description={copy.buyer.trackOrder} path={ROUTES.marketOrders} noindex />
+      <Seo
+        title={copy.buyer.myOrders}
+        description={copy.buyer.trackOrder}
+        path={ROUTES.marketOrders}
+        noindex
+      />
       <MarketNav copy={copy} />
 
       <div className="flex items-center justify-between gap-3">
@@ -57,13 +62,19 @@ export default function MarketOrdersPage() {
             onClick={() => setTab(id)}
             className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${tab === id ? 'border-green-700 bg-green-700 text-white' : 'border-border bg-surface hover:bg-surface-2'}`}
           >
-            {id === 'active' ? `${copy.buyer.activeOrders} (${active.length})` : `${copy.buyer.pastOrders} (${past.length})`}
+            {id === 'active'
+              ? `${copy.buyer.activeOrders} (${active.length})`
+              : `${copy.buyer.pastOrders} (${past.length})`}
           </button>
         ))}
       </div>
 
       {shown.length === 0 ? (
-        <EmptyState icon={<ClipboardList size={28} />} title={copy.buyer.myOrders} description={copy.buyer.noOrders} />
+        <EmptyState
+          icon={<ClipboardList size={28} />}
+          title={copy.buyer.myOrders}
+          description={copy.buyer.noOrders}
+        />
       ) : null}
 
       <ul className="space-y-4">
@@ -85,7 +96,15 @@ export default function MarketOrdersPage() {
   );
 }
 
-function OrderCard({ order, language, copy }: { order: MkCustomerOrder; language: Language; copy: ReturnType<typeof mkCopy> }) {
+function OrderCard({
+  order,
+  language,
+  copy,
+}: {
+  order: MkCustomerOrder;
+  language: Language;
+  copy: ReturnType<typeof mkCopy>;
+}) {
   const cancel = useCancelMyOrder();
   const review = useSubmitReview();
   const [reason, setReason] = useState('');
@@ -121,14 +140,22 @@ function OrderCard({ order, language, copy }: { order: MkCustomerOrder; language
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-surface-2">
-            {order.vendor.logo_url ? <img src={order.vendor.logo_url} alt="" className="h-full w-full object-cover" /> : <Store className="m-2.5 text-muted" size={24} aria-hidden />}
+            {order.vendor.logo_url ? (
+              <img src={order.vendor.logo_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <Store className="m-2.5 text-muted" size={24} aria-hidden />
+            )}
           </div>
           <div className="min-w-0">
             <p className="truncate font-semibold text-text">{order.vendor.name}</p>
-            <p className="font-mono text-xs text-muted">{copy.buyer.orderNumberLabel} {order.code}</p>
+            <p className="font-mono text-xs text-muted">
+              {copy.buyer.orderNumberLabel} {order.code}
+            </p>
           </div>
         </div>
-        <span className="text-right text-sm font-bold tabular-nums">{formatTaka(order.total_poisha, language)}</span>
+        <span className="text-right text-sm font-bold tabular-nums">
+          {formatTaka(order.total_poisha, language)}
+        </span>
       </div>
 
       <OrderTimeline status={order.status} copy={copy} />
@@ -136,7 +163,9 @@ function OrderCard({ order, language, copy }: { order: MkCustomerOrder; language
       <ul className="space-y-1 text-sm text-muted">
         {order.items.map((item, i) => (
           <li key={`${item.name}-${i}`} className="flex justify-between gap-3">
-            <span className="min-w-0 truncate">{item.qty} × {item.name}</span>
+            <span className="min-w-0 truncate">
+              {item.qty} × {item.name}
+            </span>
             <span className="shrink-0 tabular-nums">{formatTaka(item.line_total, language)}</span>
           </li>
         ))}
@@ -155,12 +184,28 @@ function OrderCard({ order, language, copy }: { order: MkCustomerOrder; language
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
               />
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(null)}>{copy.cancel}</Button>
-                <Button type="button" variant="danger" size="sm" loading={cancel.isPending} onClick={() => void doCancel()}>{copy.buyer.cancelOrder}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(null)}>
+                  {copy.cancel}
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  loading={cancel.isPending}
+                  onClick={() => void doCancel()}
+                >
+                  {copy.buyer.cancelOrder}
+                </Button>
               </div>
             </div>
           ) : (
-            <Button type="button" variant="ghost" size="sm" iconStart={<XCircle size={14} />} onClick={() => setOpen('cancel')}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              iconStart={<XCircle size={14} />}
+              onClick={() => setOpen('cancel')}
+            >
               {copy.buyer.cancelOrder}
             </Button>
           )}
@@ -170,19 +215,42 @@ function OrderCard({ order, language, copy }: { order: MkCustomerOrder; language
       {order.status === 'delivered' ? (
         <div>
           {order.reviewed ? (
-            <p className="inline-flex items-center gap-2 text-sm font-semibold text-green-700"><Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />{copy.buyer.reviewed}</p>
+            <p className="inline-flex items-center gap-2 text-sm font-semibold text-green-700">
+              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />
+              {copy.buyer.reviewed}
+            </p>
           ) : open === 'review' ? (
             <div className="space-y-3 rounded-xl bg-surface-2 p-3">
               <p className="text-sm font-semibold text-text">{copy.buyer.reviewTitle}</p>
               <StarRating value={rating} onChange={setRating} label={copy.buyer.rating} size={26} />
-              <TextareaField label={copy.buyer.reviewBody} value={body} onChange={(e) => setBody(e.target.value)} />
+              <TextareaField
+                label={copy.buyer.reviewBody}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(null)}>{copy.cancel}</Button>
-                <Button type="button" size="sm" disabled={rating < 1} loading={review.isPending} onClick={() => void doReview()}>{copy.buyer.submitReview}</Button>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(null)}>
+                  {copy.cancel}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={rating < 1}
+                  loading={review.isPending}
+                  onClick={() => void doReview()}
+                >
+                  {copy.buyer.submitReview}
+                </Button>
               </div>
             </div>
           ) : (
-            <Button type="button" variant="secondary" size="sm" iconStart={<MessageSquarePlus size={14} />} onClick={() => setOpen('review')}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              iconStart={<MessageSquarePlus size={14} />}
+              onClick={() => setOpen('review')}
+            >
               {copy.buyer.leaveReview}
             </Button>
           )}

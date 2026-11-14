@@ -2368,7 +2368,13 @@ export type Database = {
         Returns: Json;
       };
       mk_list_vendors: {
-        Args: { p_type?: string | null; p_query?: string; p_lat?: number | null; p_lng?: number | null; p_limit?: number };
+        Args: {
+          p_type?: string | null;
+          p_query?: string;
+          p_lat?: number | null;
+          p_lng?: number | null;
+          p_limit?: number;
+        };
         Returns: Json;
       };
       mk_admin_list_applications: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
@@ -2376,7 +2382,10 @@ export type Database = {
         Args: { p_application_id: string; p_decision: string; p_note?: string };
         Returns: Json;
       };
-      mk_admin_list_credit_purchases: { Args: { p_status?: string; p_limit?: number }; Returns: Json };
+      mk_admin_list_credit_purchases: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: Json;
+      };
       mk_admin_decide_credit_purchase: {
         Args: { p_purchase_id: string; p_decision: string; p_note?: string };
         Returns: Json;
@@ -2393,7 +2402,10 @@ export type Database = {
       };
       mk_my_orders: { Args: { p_limit?: number }; Returns: Json };
       mk_customer_cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: Json };
-      mk_submit_review: { Args: { p_order_id: string; p_rating: number; p_body?: string }; Returns: Json };
+      mk_submit_review: {
+        Args: { p_order_id: string; p_rating: number; p_body?: string };
+        Returns: Json;
+      };
       mk_admin_set_package: {
         Args: { p_code: string; p_orders: number; p_price_poisha: number; p_is_active?: boolean };
         Returns: Json;

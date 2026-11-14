@@ -43,7 +43,11 @@ export default function MarketProductPage() {
   if (!data) {
     return (
       <div className="fab-container max-w-3xl py-12">
-        <EmptyState icon={<ShoppingBag size={28} />} title={copy.buyer.products} description={copy.buyer.noShops} />
+        <EmptyState
+          icon={<ShoppingBag size={28} />}
+          title={copy.buyer.products}
+          description={copy.buyer.noShops}
+        />
       </div>
     );
   }
@@ -68,9 +72,16 @@ export default function MarketProductPage() {
 
   return (
     <div className="fab-container max-w-5xl space-y-6 py-6 sm:py-8">
-      <Seo title={data.name} description={data.description.slice(0, 150)} path={`/marketplace/product/${id}`} />
+      <Seo
+        title={data.name}
+        description={data.description.slice(0, 150)}
+        path={`/marketplace/product/${id}`}
+      />
       <MarketNav copy={copy} />
-      <Link to={`/marketplace/shop/${shopSlug}`} className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-text">
+      <Link
+        to={`/marketplace/shop/${shopSlug}`}
+        className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-text"
+      >
         <ArrowLeft size={14} aria-hidden /> {data.vendor.name}
       </Link>
 
@@ -89,7 +100,11 @@ export default function MarketProductPage() {
                 className="absolute inset-0 h-full w-full object-cover"
               />
             </AnimatePresence>
-            {images.length === 0 ? <span className="grid h-full place-items-center text-muted"><ImageOff size={40} aria-hidden /></span> : null}
+            {images.length === 0 ? (
+              <span className="grid h-full place-items-center text-muted">
+                <ImageOff size={40} aria-hidden />
+              </span>
+            ) : null}
           </div>
           {images.length > 1 ? (
             <div className="flex gap-2 overflow-x-auto">
@@ -113,12 +128,17 @@ export default function MarketProductPage() {
           <div>
             <h1 className="text-2xl font-bold text-text sm:text-3xl">{data.name}</h1>
             <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />{data.rating.toFixed(1)}
+              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />
+              {data.rating.toFixed(1)}
             </p>
           </div>
-          <p className="text-3xl font-extrabold text-green-700 tabular-nums">{formatTaka(data.price_poisha, language)}</p>
+          <p className="text-3xl font-extrabold text-green-700 tabular-nums">
+            {formatTaka(data.price_poisha, language)}
+          </p>
 
-          <p className={`text-sm font-semibold ${data.in_stock ? 'text-green-700' : 'text-red-600'}`}>
+          <p
+            className={`text-sm font-semibold ${data.in_stock ? 'text-green-700' : 'text-red-600'}`}
+          >
             {data.in_stock ? `${data.stock} ${copy.buyer.stockLeft}` : copy.buyer.outOfStock}
           </p>
 
@@ -126,23 +146,47 @@ export default function MarketProductPage() {
             <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-text">{copy.buyer.qty}</span>
-                <QuantityStepper value={picked} min={1} max={maxQty} onChange={setPicked} label={copy.buyer.qty} />
+                <QuantityStepper
+                  value={picked}
+                  min={1}
+                  max={maxQty}
+                  onChange={setPicked}
+                  label={copy.buyer.qty}
+                />
               </div>
               <div className="flex flex-col gap-2 sm:flex-row">
-                <Button type="button" variant="secondary" className="flex-1" loading={setQty.isPending} iconStart={added ? <Check size={16} /> : <ShoppingBag size={16} />} onClick={() => void addToCart()}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="flex-1"
+                  loading={setQty.isPending}
+                  iconStart={added ? <Check size={16} /> : <ShoppingBag size={16} />}
+                  onClick={() => void addToCart()}
+                >
                   {added ? copy.buyer.inCart : copy.buyer.addToCart}
                 </Button>
-                <Button type="button" className="flex-1" iconStart={<Zap size={16} />} onClick={buyNow}>
+                <Button
+                  type="button"
+                  className="flex-1"
+                  iconStart={<Zap size={16} />}
+                  onClick={buyNow}
+                >
                   {copy.buyer.buyNow}
                 </Button>
               </div>
-              {inCart > 0 ? <p className="text-xs text-muted">{copy.buyer.inCart}: {inCart}</p> : null}
+              {inCart > 0 ? (
+                <p className="text-xs text-muted">
+                  {copy.buyer.inCart}: {inCart}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
           <div>
             <h2 className="mb-2 text-sm font-semibold text-text">{copy.buyer.description}</h2>
-            <p className="whitespace-pre-line text-sm leading-relaxed text-muted">{data.description || '—'}</p>
+            <p className="whitespace-pre-line text-sm leading-relaxed text-muted">
+              {data.description || '—'}
+            </p>
           </div>
           <p className="rounded-xl bg-surface-2 p-3 text-xs text-muted">{copy.buyer.codNote}</p>
         </section>

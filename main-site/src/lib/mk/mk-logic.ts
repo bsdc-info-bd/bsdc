@@ -191,7 +191,10 @@ export const WIZARD_STEPS = [
 export type WizardStep = (typeof WIZARD_STEPS)[number];
 
 /** Errors for the fields a step owns. An empty object means the step may advance. */
-export function stepErrors(step: WizardStep, draft: ApplicationDraft): Partial<Record<string, FieldError>> {
+export function stepErrors(
+  step: WizardStep,
+  draft: ApplicationDraft,
+): Partial<Record<string, FieldError>> {
   const errors: Partial<Record<string, FieldError>> = {};
   switch (step) {
     case 'identity':

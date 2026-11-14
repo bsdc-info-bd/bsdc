@@ -73,7 +73,9 @@ export async function fetchVendorDashboard(): Promise<MkVendorDashboard> {
   return asJson<MkVendorDashboard>(data);
 }
 
-export async function fetchVendorOrders(status: OrderStatus | null = null): Promise<MkVendorOrder[]> {
+export async function fetchVendorOrders(
+  status: OrderStatus | null = null,
+): Promise<MkVendorOrder[]> {
   const { data, error } = await getSupabase().rpc('mk_vendor_orders', {
     p_status: status ?? '',
     p_limit: 100,
@@ -102,7 +104,11 @@ export async function fetchVendorCatalog(): Promise<MkVendorCatalog> {
   return asJson<MkVendorCatalog>(data);
 }
 
-export async function saveVendorCategory(id: string | null, name: string, sort: number): Promise<string> {
+export async function saveVendorCategory(
+  id: string | null,
+  name: string,
+  sort: number,
+): Promise<string> {
   const { data, error } = await getSupabase().rpc('mk_vendor_save_category', {
     p_id: id ?? null,
     p_name: name,
@@ -122,7 +128,10 @@ export interface ProductPayload {
   images: string[];
 }
 
-export async function saveVendorProduct(id: string | null, payload: ProductPayload): Promise<string> {
+export async function saveVendorProduct(
+  id: string | null,
+  payload: ProductPayload,
+): Promise<string> {
   const { data, error } = await getSupabase().rpc('mk_vendor_save_product', {
     p_id: id ?? null,
     p: payload as unknown as Json,
@@ -221,7 +230,10 @@ export async function decidePurchase(
   if (error) throw error;
 }
 
-export async function setAdminSetting(key: 'bikash_number' | 'delivery_fee_poisha' | 'order_credit_price_poisha', value: string): Promise<void> {
+export async function setAdminSetting(
+  key: 'bikash_number' | 'delivery_fee_poisha' | 'order_credit_price_poisha',
+  value: string,
+): Promise<void> {
   const { error } = await getSupabase().rpc('mk_admin_set_setting', { p_key: key, p_value: value });
   if (error) throw error;
 }
@@ -243,7 +255,6 @@ export async function setAdminPackage(
 
 // Customer -------------------------------------------------------------------
 
-
 export async function fetchVendorPage(slug: string): Promise<MkVendorPageData | null> {
   const { data, error } = await getSupabase().rpc('mk_vendor_page', { p_slug: slug });
   if (error) throw error;
@@ -253,7 +264,7 @@ export async function fetchVendorPage(slug: string): Promise<MkVendorPageData | 
 export async function fetchVendorRef(slug: string): Promise<string | null> {
   const { data, error } = await getSupabase().rpc('mk_vendor_ref', { p_slug: slug });
   if (error) throw error;
-  return (data) ?? null;
+  return data ?? null;
 }
 
 export async function fetchProductDetail(productId: string): Promise<MkProductDetail | null> {
@@ -263,7 +274,10 @@ export async function fetchProductDetail(productId: string): Promise<MkProductDe
 }
 
 export async function setCartQty(productId: string, qty: number): Promise<number> {
-  const { data, error } = await getSupabase().rpc('mk_cart_set', { p_product_id: productId, p_qty: qty });
+  const { data, error } = await getSupabase().rpc('mk_cart_set', {
+    p_product_id: productId,
+    p_qty: qty,
+  });
   if (error) throw error;
   return data;
 }

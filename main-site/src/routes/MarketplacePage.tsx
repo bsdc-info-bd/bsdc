@@ -9,7 +9,13 @@ import { OrderTimeline } from '@/components/mk/customer/OrderTimeline';
 import { EmptyState, PageSkeleton } from '@/design-system';
 import { useListedShops, useMyOrders } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { isBdPoint, SHOP_TYPE_EMOJI, SHOP_TYPES, type Language, type ShopType } from '@/lib/mk/mk-logic';
+import {
+  isBdPoint,
+  SHOP_TYPE_EMOJI,
+  SHOP_TYPES,
+  type Language,
+  type ShopType,
+} from '@/lib/mk/mk-logic';
 import type { MkListedShop } from '@/lib/mk/mk-types';
 import { ROUTES } from '@/lib/site';
 
@@ -54,7 +60,11 @@ export default function MarketplacePage() {
 
   return (
     <div className="fab-container max-w-6xl py-6 sm:py-8">
-      <Seo title={copy.buyer.marketTitle} description={copy.buyer.marketLead} path={ROUTES.market} />
+      <Seo
+        title={copy.buyer.marketTitle}
+        description={copy.buyer.marketLead}
+        path={ROUTES.market}
+      />
       <MarketNav copy={copy} />
 
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg sm:p-8">
@@ -68,7 +78,11 @@ export default function MarketplacePage() {
         <p className="relative mt-2 max-w-xl text-sm text-white/90">{copy.buyer.marketLead}</p>
         <div className="relative mt-4 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
-            <Search size={16} aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <Search
+              size={16}
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted"
+            />
             <input
               type="search"
               value={query}
@@ -99,10 +113,17 @@ export default function MarketplacePage() {
             className="mb-6 overflow-hidden"
             aria-label={copy.buyer.activeOrders}
           >
-            <Link to={ROUTES.marketOrders} className="block rounded-2xl border border-green-600/30 bg-green-600/5 p-4 transition hover:bg-green-600/10">
+            <Link
+              to={ROUTES.marketOrders}
+              className="block rounded-2xl border border-green-600/30 bg-green-600/5 p-4 transition hover:bg-green-600/10"
+            >
               <div className="mb-3 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-text">{copy.buyer.activeOrders}: {active.length}</p>
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700">{copy.buyer.trackOrder} <ArrowRight size={12} aria-hidden /></span>
+                <p className="text-sm font-semibold text-text">
+                  {copy.buyer.activeOrders}: {active.length}
+                </p>
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700">
+                  {copy.buyer.trackOrder} <ArrowRight size={12} aria-hidden />
+                </span>
               </div>
               <OrderTimeline status={active[0]?.status ?? 'placed'} copy={copy} />
             </Link>
@@ -110,17 +131,34 @@ export default function MarketplacePage() {
         ) : null}
       </AnimatePresence>
 
-      <div role="radiogroup" aria-label={copy.typeLabels.other} className="mb-6 flex gap-2 overflow-x-auto pb-1">
-        <TypeChip label={copy.buyer.allTypes} selected={type === null} onClick={() => setType(null)} />
+      <div
+        role="radiogroup"
+        aria-label={copy.typeLabels.other}
+        className="mb-6 flex gap-2 overflow-x-auto pb-1"
+      >
+        <TypeChip
+          label={copy.buyer.allTypes}
+          selected={type === null}
+          onClick={() => setType(null)}
+        />
         {SHOP_TYPES.map((t) => (
-          <TypeChip key={t} label={`${SHOP_TYPE_EMOJI[t]} ${copy.typeLabels[t]}`} selected={type === t} onClick={() => setType(t)} />
+          <TypeChip
+            key={t}
+            label={`${SHOP_TYPE_EMOJI[t]} ${copy.typeLabels[t]}`}
+            selected={type === t}
+            onClick={() => setType(t)}
+          />
         ))}
       </div>
 
       {shops.isLoading ? <PageSkeleton label={copy.loading} /> : null}
 
       {!shops.isLoading && (shops.data ?? []).length === 0 ? (
-        <EmptyState icon={<Store size={28} />} title={copy.buyer.marketTitle} description={copy.buyer.noShops} />
+        <EmptyState
+          icon={<Store size={28} />}
+          title={copy.buyer.marketTitle}
+          description={copy.buyer.noShops}
+        />
       ) : null}
 
       <motion.ul layout className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -132,7 +170,15 @@ export default function MarketplacePage() {
   );
 }
 
-function TypeChip({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
+function TypeChip({
+  label,
+  selected,
+  onClick,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"
@@ -140,7 +186,9 @@ function TypeChip({ label, selected, onClick }: { label: string; selected: boole
       aria-checked={selected}
       onClick={onClick}
       className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
-        selected ? 'border-green-700 bg-green-700 text-white shadow-sm' : 'border-border bg-surface text-text hover:bg-surface-2'
+        selected
+          ? 'border-green-700 bg-green-700 text-white shadow-sm'
+          : 'border-border bg-surface text-text hover:bg-surface-2'
       }`}
     >
       {label}
@@ -148,7 +196,15 @@ function TypeChip({ label, selected, onClick }: { label: string; selected: boole
   );
 }
 
-function ShopCard({ shop, index, copy }: { shop: MkListedShop; index: number; copy: ReturnType<typeof mkCopy> }) {
+function ShopCard({
+  shop,
+  index,
+  copy,
+}: {
+  shop: MkListedShop;
+  index: number;
+  copy: ReturnType<typeof mkCopy>;
+}) {
   const reduce = useReducedMotion() ?? false;
   return (
     <motion.li
@@ -162,7 +218,14 @@ function ShopCard({ shop, index, copy }: { shop: MkListedShop; index: number; co
         className="group block overflow-hidden rounded-3xl border border-border bg-surface shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
       >
         <div className="relative h-32 overflow-hidden bg-gradient-to-br from-green-700/80 to-green-400/60">
-          {shop.cover_url ? <img src={shop.cover_url} alt="" loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" /> : null}
+          {shop.cover_url ? (
+            <img
+              src={shop.cover_url}
+              alt=""
+              loading="lazy"
+              className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+            />
+          ) : null}
           <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
             {SHOP_TYPE_EMOJI[shop.vendor_type]} {copy.typeLabels[shop.vendor_type]}
           </span>
@@ -170,23 +233,41 @@ function ShopCard({ shop, index, copy }: { shop: MkListedShop; index: number; co
         <div className="-mt-8 px-4 pb-4">
           <div className="flex items-end gap-3">
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
-              {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : <Store className="m-4 text-muted" aria-hidden />}
+              {shop.logo_url ? (
+                <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <Store className="m-4 text-muted" aria-hidden />
+              )}
             </div>
             <div className="min-w-0 pb-1">
               <p className="truncate font-bold text-text">{shop.name}</p>
-              <p className="flex items-center gap-1 truncate text-xs text-muted"><MapPin size={12} aria-hidden />{shop.place_label}</p>
+              <p className="flex items-center gap-1 truncate text-xs text-muted">
+                <MapPin size={12} aria-hidden />
+                {shop.place_label}
+              </p>
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-muted">
-            <span className="inline-flex items-center gap-1"><Star size={12} className="fill-amber-400 text-amber-400" aria-hidden />{shop.rating.toFixed(1)} · {shop.review_count} {copy.buyer.reviews}</span>
-            {shop.distance_km !== null ? <span className="font-semibold text-green-700">{shop.distance_km.toFixed(1)} {copy.buyer.kmAway}</span> : <span>{shop.product_count} {copy.buyer.products}</span>}
+            <span className="inline-flex items-center gap-1">
+              <Star size={12} className="fill-amber-400 text-amber-400" aria-hidden />
+              {shop.rating.toFixed(1)} · {shop.review_count} {copy.buyer.reviews}
+            </span>
+            {shop.distance_km !== null ? (
+              <span className="font-semibold text-green-700">
+                {shop.distance_km.toFixed(1)} {copy.buyer.kmAway}
+              </span>
+            ) : (
+              <span>
+                {shop.product_count} {copy.buyer.products}
+              </span>
+            )}
           </div>
           <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-green-700">
-            {copy.buyer.products} <ArrowRight size={14} aria-hidden className="transition group-hover:translate-x-1" />
+            {copy.buyer.products}{' '}
+            <ArrowRight size={14} aria-hidden className="transition group-hover:translate-x-1" />
           </span>
         </div>
       </Link>
     </motion.li>
   );
 }
-
