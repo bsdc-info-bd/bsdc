@@ -211,54 +211,32 @@ const pinNotif = (
 check(pinNotif?.body.startsWith('Pinned:'), 'toggle_message_pin notifies thread members', pinNotif?.body);
 
 // ---------------------------------------------------------------------------
-// 4. Marketplace order, cancellation, review, payout, event, job, course & cert
+// 4. Legacy store and vendor payouts are retired (0100). Cash on delivery means
+//    the vendor keeps the money, so no client role can request or decide a payout,
+//    run the legacy cart or checkout, or read or write the payout tables.
 // ---------------------------------------------------------------------------
-const shopId = (
-  await db.query(`insert into public.shops (owner_uid, slug, name, status) values ('${rahim}', 'rahim-shop', 'Rahim Shop', 'active') returning id`)
-).rows[0].id;
-const prodId = (
-  await db.query(`insert into public.products (shop_id, slug, title, summary, price, stock, status, images) values ('${shopId}', 'mech-kb', 'Mech Keyboard', 'Great mechanical keyboard for devs', 250000, 10, 'active', array['https://i.ibb.co/x/kb.jpg']) returning id`)
-).rows[0].id;
-const addrId = (
-  await db.query(`insert into public.addresses (uid, label, recipient, phone, line1, city) values ('${ada}', 'Home', 'Ada First', '01700000000', 'Road 1', 'Dhaka') returning id`)
-).rows[0].id;
+const retiredFunctions = [
+  'request_payout', 'decide_payout', 'shop_payouts', 'place_order', 'add_to_cart',
+  'advance_order', 'open_shop', 'submit_review', 'mark_order_paid', 'product_catalog',
+];
+const clientExecute = await db.query(`
+  select coalesce(string_agg(p.proname, ', '), '') as open
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname = any(array[${retiredFunctions.map((f) => `'${f}'`).join(', ')}]::text[])
+     and (has_function_privilege('anon', p.oid, 'execute')
+          or has_function_privilege('authenticated', p.oid, 'execute'))`);
+check(clientExecute.rows[0].open === '', 'retired store and payout RPCs are not executable by anon or authenticated', clientExecute.rows[0].open);
 
-await as('authenticated', ada, 'member', `select public.add_to_cart('${prodId}', 1)`);
-const placed = (await as('authenticated', ada, 'member', `select * from public.place_order('${addrId}')`)).rows[0];
-const vendorOrderNotif = (
-  await db.query(`select kind::text, target_url from public.notifications where uid = '${rahim}' and kind = 'order'`)
-).rows[0];
-check(vendorOrderNotif?.kind === 'order' && vendorOrderNotif?.target_url === '/vendor', 'place_order emits order kind targeting /vendor');
+const payoutTableAccess = await db.query(`
+  select coalesce(string_agg(t, ', '), '') as open from (
+    select 'payouts' as t where has_table_privilege('authenticated', 'public.payouts', 'select,insert,update,delete')
+                              or has_table_privilege('anon', 'public.payouts', 'select,insert,update,delete')
+    union all
+    select 'payout_accounts' where has_table_privilege('authenticated', 'public.payout_accounts', 'select,insert,update,delete')
+                                or has_table_privilege('anon', 'public.payout_accounts', 'select,insert,update,delete')
+  ) x`);
+check(payoutTableAccess.rows[0].open === '', 'payout tables are closed to anon and authenticated', payoutTableAccess.rows[0].open);
 
-await as('authenticated', rahim, 'vendor', `select public.advance_order('${placed.order_id}', 'confirmed')`);
-await as('authenticated', rahim, 'vendor', `select public.advance_order('${placed.order_id}', 'packed')`);
-await as('authenticated', rahim, 'vendor', `select public.advance_order('${placed.order_id}', 'shipped')`);
-await as('authenticated', rahim, 'vendor', `select public.advance_order('${placed.order_id}', 'delivered')`);
-const buyerOrderNotif = (
-  await db.query(`select kind::text, target_url, body from public.notifications where uid = '${ada}' and kind = 'order'`)
-).rows[0];
-check(buyerOrderNotif?.target_url === '/orders' && buyerOrderNotif?.body.includes('delivered'), 'advance_order notifies buyer with /orders');
-
-await as('authenticated', ada, 'member', `select public.submit_review('${prodId}', 5, 'Super tactile!')`);
-const reviewNotif = (
-  await db.query(`select kind::text, target_url, body from public.notifications where uid = '${rahim}' and kind = 'review'`)
-).rows[0];
-check(reviewNotif?.kind === 'review' && reviewNotif?.target_url === '/shop/mech-kb' && reviewNotif?.body.includes('5/5'), 'submit_review notifies shop owner with review kind');
-
-const accountId = (
-  await db.query(`insert into public.payout_accounts (shop_id, method, account_name, account_ref) values ('${shopId}', 'bkash', 'Main bKash', '01711111111') returning id`)
-).rows[0].id;
-const payoutId = (await as('authenticated', rahim, 'vendor', `select public.request_payout('${accountId}', 10000) as id`)).rows[0].id;
-const adminPayoutNotif = (
-  await db.query(`select kind::text from public.notifications where uid = '${adminUid}' and kind = 'payout'`)
-).rows;
-check(adminPayoutNotif.length === 1, 'request_payout notifies active admin/owner staff');
-
-await as('authenticated', adminUid, 'owner', `select public.decide_payout('${payoutId}', true, 'TXN99')`);
-const vendorPayoutNotif = (
-  await db.query(`select kind::text, body from public.notifications where uid = '${rahim}' and kind = 'payout'`)
-).rows[0];
-check(vendorPayoutNotif?.body.includes('TXN99'), 'decide_payout notifies shop owner');
 
 // Event RSVP, Job application, Project star, Page follow, Course enroll/quiz, Report & Certificate
 const eventId = (
@@ -333,7 +311,7 @@ const pendingFcm = (
 ).rows;
 check(
   pendingFcm.some((r) => r.kind === 'certificate' && r.url === `/verify?code=${certCode}`) &&
-    pendingFcm.some((r) => r.kind === 'order' && r.url === '/orders'),
+    pendingFcm.length > 0 && pendingFcm.every((r) => typeof r.url === 'string' && r.url.startsWith('/')),
   'fcm_pending_devices returns unified target_url paths across new kinds',
 );
 

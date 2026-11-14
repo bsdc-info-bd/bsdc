@@ -33,7 +33,7 @@ import {
   type CreativeCopy,
 } from '@/lib/ads/ads-types';
 import { formatNumber } from '@/lib/format';
-import { formatMoney } from '@/lib/market/market-types';
+import { formatTaka } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
@@ -94,7 +94,7 @@ function Dashboard() {
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.walletBalance')}
-          value={formatMoney(balance, 'BDT', language)}
+          value={formatTaka(balance, language)}
           hint={t('ads.walletHint')}
         />
         <StatCard
@@ -108,9 +108,8 @@ function Dashboard() {
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.totalSpend')}
-          value={formatMoney(
+          value={formatTaka(
             campaigns.reduce((total, campaign) => total + campaign.spent, 0),
-            'BDT',
             language,
           )}
           hint={t('ads.shownCampaignsHint')}
@@ -148,9 +147,8 @@ function Dashboard() {
                     {' · '}
                     {campaign.clicks > 0
                       ? t('ads.costPerClick', {
-                          amount: formatMoney(
+                          amount: formatTaka(
                             effectiveCostPerClick(campaign.spent, campaign.clicks),
-                            'BDT',
                             language,
                           ),
                         })
@@ -173,13 +171,13 @@ function Dashboard() {
                 <ProgressBar
                   value={budgetProgress(campaign) * 100}
                   label={t('ads.budgetUsed', {
-                    spent: formatMoney(campaign.spent, 'BDT', language),
-                    total: formatMoney(campaign.totalBudget, 'BDT', language),
+                    spent: formatTaka(campaign.spent, language),
+                    total: formatTaka(campaign.totalBudget, language),
                   })}
                 />
                 <p className="mt-1 text-xs text-muted">
                   {t('ads.remaining', {
-                    amount: formatMoney(budgetRemaining(campaign), 'BDT', language),
+                    amount: formatTaka(budgetRemaining(campaign), language),
                   })}
                 </p>
               </div>
@@ -248,7 +246,7 @@ function Dashboard() {
                                   <td className="py-2">{day.day}</td>
                                   <td>{formatNumber(day.impressions, language)}</td>
                                   <td>{formatNumber(day.clicks, language)}</td>
-                                  <td>{formatMoney(day.spend, 'BDT', language)}</td>
+                                  <td>{formatTaka(day.spend, language)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -342,7 +340,7 @@ function Creative({
           impressions: formatNumber(creative.impressions, language),
           clicks: formatNumber(creative.clicks, language),
         })}{' '}
-        · {formatMoney(creative.spend, 'BDT', language)}
+        · {formatTaka(creative.spend, language)}
       </p>
       {editable && !editing ? (
         <Button

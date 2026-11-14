@@ -121,7 +121,7 @@ export default function ShopApplyPage() {
           title={copy.submitted}
           body={copy.approvedBody}
         >
-          <Button className="mt-4" onClick={() => (window.location.href = ROUTES.vendor)}>
+          <Button className="mt-4" onClick={() => (window.location.href = ROUTES.vendorConsole)}>
             {copy.openApply}
           </Button>
         </StatusCard>
