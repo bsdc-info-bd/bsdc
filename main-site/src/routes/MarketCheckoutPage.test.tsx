@@ -194,4 +194,27 @@ describe('MarketCheckoutPage', () => {
     expect(await screen.findByText('BSDC-ABC123')).toBeTruthy();
     expect(screen.getByText(copy.buyer.orderPlaced)).toBeTruthy();
   });
+
+  it('shows the shop, the items and the total in the order summary', async () => {
+    state.product = { id: 'prod-9', name: 'Woven mat', price_poisha: 20000 };
+    renderAt('/marketplace/checkout/sylhet-crafts?product=prod-9&qty=3');
+    expect((await screen.findAllByText('Sylhet Crafts')).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(copy.buyer.summaryTitle)).toBeTruthy();
+    expect(screen.getByText('৳750')).toBeTruthy();
+  });
+
+  it('keeps the place-order button disabled while the cart has nothing to order', async () => {
+    state.cart = [];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    const button = await screen.findByRole('button', { name: copy.buyer.placeOrder });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(copy.buyer.cartEmpty)).toBeTruthy();
+  });
+
+  it('marks the details step done once the contact and address are filled', async () => {
+    state.cart = [cartLine({})];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    await fillForm();
+    expect((await screen.findAllByText(copy.buyer.sectionReady)).length).toBeGreaterThanOrEqual(1);
+  });
 });
