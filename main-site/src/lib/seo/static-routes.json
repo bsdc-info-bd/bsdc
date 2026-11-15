@@ -42,13 +42,13 @@
       "type": "website"
     },
     {
-      "path": "/shop",
-      "title": "Marketplace — tools and services by Bangladeshi developers",
-      "description": "Buy templates, components, courses and services from developers and studios in Bangladesh, with verified reviews from people who actually bought them.",
+      "path": "/marketplace",
+      "title": "Marketplace — shops and products from Bangladeshi developers",
+      "description": "Shop products and services from developers and studios across Bangladesh. Browse shops, read verified reviews and pay cash on delivery.",
       "changefreq": "daily",
       "priority": 0.9,
       "heading": "Marketplace",
-      "summary": "Digital and physical goods sold by members, with reviews only from verified purchases.",
+      "summary": "Products and services from members, sold direct with cash on delivery and reviews from verified buyers.",
       "type": "website"
     },
     {
@@ -152,6 +152,9 @@
     "/offline",
     "/api",
     "/auth",
-    "/*/*/edit"
+    "/*/*/edit",
+    "/marketplace/cart",
+    "/marketplace/checkout",
+    "/marketplace/orders"
   ]
 }

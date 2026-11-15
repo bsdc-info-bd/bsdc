@@ -139,9 +139,6 @@ const router = createBrowserRouter([
           { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
           { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
           { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
-          { path: ROUTES.market, element: withSuspense(<MarketplacePage />) },
-          { path: '/marketplace/shop/:slug', element: withSuspense(<MarketShopPage />) },
-          { path: '/marketplace/product/:id', element: withSuspense(<MarketProductPage />) },
           { path: ROUTES.marketCart, element: withSuspense(<MarketCartPage />) },
           { path: '/marketplace/checkout/:slug', element: withSuspense(<MarketCheckoutPage />) },
           { path: ROUTES.marketOrders, element: withSuspense(<MarketOrdersPage />) },
@@ -150,6 +147,12 @@ const router = createBrowserRouter([
           { path: '/vendor/payouts', element: <Navigate to={ROUTES.vendorConsole} replace /> },
         ],
       },
+
+      // The marketplace catalogue is public: shops and products are for anybody to
+      // browse, and crawlers index them. Only the cart, checkout and orders are private.
+      { path: ROUTES.market, element: withSuspense(<MarketplacePage />) },
+      { path: '/marketplace/shop/:slug', element: withSuspense(<MarketShopPage />) },
+      { path: '/marketplace/product/:id', element: withSuspense(<MarketProductPage />) },
 
       // Communities are public surfaces; privacy is enforced by the database.
       { path: ROUTES.groups, element: withSuspense(<GroupsPage />) },

@@ -136,6 +136,10 @@ const HARNESSES = [
     't70.mjs',
     '0105: the main administrator can approve a vendor, and the owner holds every permission',
   ],
+  [
+    't71.mjs',
+    '0106: marketplace products and shops are public, listed in the sitemap, and described to crawlers',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

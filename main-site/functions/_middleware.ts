@@ -57,6 +57,8 @@ interface RedirectRow {
 const RECORD_PAGES = [
   /^\/p\/[^/]+$/,
   /^\/shop\/[^/]+$/,
+  /^\/marketplace\/shop\/[^/]+$/,
+  /^\/marketplace\/product\/[^/]+$/,
   /^\/learn\/[^/]+$/,
   /^\/g\/[^/]+$/,
   /^\/projects\/[^/]+$/,
@@ -204,7 +206,7 @@ function edgeRecordShell(meta: SeoRow, origin: string): string {
   const base = origin.replace(/\/+$/, '');
   const sections = [
     ['/', 'Home'],
-    ['/shop', 'Marketplace'],
+    ['/marketplace', 'Marketplace'],
     ['/jobs', 'Jobs'],
     ['/freelance', 'Freelance'],
     ['/projects', 'Projects'],
