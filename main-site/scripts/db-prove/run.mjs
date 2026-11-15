@@ -132,6 +132,10 @@ const HARNESSES = [
     't69.mjs',
     '0103: listing skills are stored in one normalised form, so a skill filter finds jobs and gigs whatever case they were typed in',
   ],
+  [
+    't70.mjs',
+    '0105: the main administrator can approve a vendor, and the owner holds every permission',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
