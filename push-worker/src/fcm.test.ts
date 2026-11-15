@@ -5,6 +5,7 @@ import {
   classifyFcmError,
   clearFcmTokenCache,
   getFcmAccessToken,
+  isNewOrderAlarm,
   resolveAndroidChannelId,
   sendFcmNotification,
 } from './fcm';
@@ -216,6 +217,52 @@ describe('FCM HTTP v1 delivery', () => {
     expect(resolveAndroidChannelId({ tag: 'bsdc-summary', url: '/notifications' })).toBe(
       'bsdc_general',
     );
+  });
+
+  it('marks only a brand-new order for the Android looping alarm', async () => {
+    const sent: Record<string, unknown>[] = [];
+    const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      sent.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+      return new Response('{}', { status: 200 });
+    }) as unknown as typeof fetch;
+    const base = {
+      credentials: fcmCredentials(baseEnv())!,
+      token: 'fcm-token-0123456789abcdefghijk',
+      platform: 'android' as const,
+      siteUrl: 'https://www.bsdc.info.bd',
+      urgency: 'normal' as const,
+      accessToken: 'cached-token',
+      fetcher,
+    };
+    const alarmWords = {
+      title: 'Order BSDC-1 · New',
+      body: 'Order BSDC-1 · Placed',
+      url: '/vendor/console?alarm=new',
+      tag: 'bsdc-order-n1',
+      topic: 'n-n1',
+      kind: 'order' as const,
+    };
+    await sendFcmNotification({ ...base, words: alarmWords });
+    await sendFcmNotification({
+      ...base,
+      words: { ...alarmWords, url: '/vendor/console', tag: 'bsdc-order-n2', topic: 'n-n2' },
+    });
+    await sendFcmNotification({
+      ...base,
+      platform: 'web',
+      words: { ...alarmWords, tag: 'bsdc-order-n3', topic: 'n-n3' },
+    });
+
+    const data = (index: number) =>
+      (sent[index]?.['message'] as Record<string, unknown>)['data'] as Record<string, string>;
+    expect(data(0)['alarm']).toBe('order_loop');
+    expect(data(1)['alarm']).toBeUndefined();
+    expect(data(2)['alarm']).toBeUndefined();
+
+    expect(isNewOrderAlarm({ kind: 'order', url: '/vendor/console?alarm=new' })).toBe(true);
+    expect(isNewOrderAlarm({ kind: 'message', url: '/vendor/console?alarm=new' })).toBe(false);
+    expect(isNewOrderAlarm({ kind: 'order', url: '/vendor/console?alarm=newer' })).toBe(false);
+    expect(isNewOrderAlarm({ kind: 'order', url: '/vendor/console' })).toBe(false);
   });
 
   it('posts WebPush notification wrapper for web FCM registrations', async () => {

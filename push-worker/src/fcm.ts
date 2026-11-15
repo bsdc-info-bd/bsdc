@@ -168,6 +168,15 @@ export function resolveAndroidChannelId(words: Pick<PushWords, 'tag' | 'url'>): 
   return 'bsdc_general';
 }
 
+/**
+ * A brand-new order for a shop. The database links that notification to
+ * `/vendor/console?alarm=new` (0109), and only that one. The Android app plays
+ * its looping order alarm for it; every other order update stays a plain alert.
+ */
+export function isNewOrderAlarm(words: { kind: string; url: string }): boolean {
+  return words.kind === 'order' && /[?&]alarm=new(?:&|$)/.test(words.url);
+}
+
 export async function sendFcmNotification(request: FcmSendRequest): Promise<DeliveryOutcome> {
   const fetcher = request.fetcher ?? fetch;
   let bearerToken: string;
@@ -200,6 +209,12 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
   if (request.actorName) data.actor_name = request.actorName;
   if (resolvedConversationId) data.conversation_id = resolvedConversationId;
   if (request.postId) data.post_id = request.postId;
+  if (
+    request.platform === 'android' &&
+    isNewOrderAlarm({ kind: resolvedKind, url: request.words.url })
+  ) {
+    data.alarm = 'order_loop';
+  }
 
   // CRITICAL: Android tokens MUST receive a pure data-only HIGH priority payload
   // without top-level `notification` or `android.notification` blocks. When an

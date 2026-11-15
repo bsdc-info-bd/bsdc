@@ -42,6 +42,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +55,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.push.OrderAlarmService
 import coil3.ImageLoader
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -84,6 +86,7 @@ fun MkVendorConsoleScreen(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var dashboard by remember { mutableStateOf<MkVendorDashboardDto?>(null) }
     var orders by remember { mutableStateOf<List<MkVendorOrderDto>>(emptyList()) }
     var filter by rememberSaveable { mutableStateOf("") }
@@ -305,6 +308,7 @@ fun MkVendorConsoleScreen(
                         scope.launch {
                             actionBusy = true
                             repository.setVendorOrderStatus(order.id, target)
+                                .onSuccess { OrderAlarmService.stop(context) }
                                 .onFailure { error = it.message ?: "update_failed" }
                             reload(filter)
                             actionBusy = false
@@ -342,6 +346,7 @@ fun MkVendorConsoleScreen(
                         scope.launch {
                             actionBusy = true
                             repository.setVendorOrderStatus(id, "cancelled", why)
+                                .onSuccess { OrderAlarmService.stop(context) }
                                 .onFailure { error = it.message ?: "update_failed" }
                             reload(filter)
                             actionBusy = false

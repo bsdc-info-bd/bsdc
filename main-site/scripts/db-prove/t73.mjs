@@ -1,7 +1,7 @@
 // 0108: each shop chooses its delivery area (all Bangladesh, or a radius in whole
 // km rounded up, around a centre it picks on the map) and its own delivery charge
 // (0 to 150 taka, default 150). Admins read and edit the credit package prices.
-import { makeDb, as, asAnon, expectFail, summary } from './lib.mjs';
+import { makeDb, as, asAnon, expectFail, summary, check } from './lib.mjs';
 
 const db = await makeDb();
 
@@ -51,7 +51,7 @@ const address = (pin) =>
 const start = await db.query(
   `select delivery_scope, delivery_radius_km, delivery_fee_poisha from public.mk_vendors`,
 );
-console.log(JSON.stringify(start.rows[0]));
+check(JSON.stringify(start.rows[0]));
 
 await as(
   db,
@@ -127,9 +127,9 @@ await as(
 );
 const saved = await db.query(`select delivery_scope, delivery_fee_poisha from public.mk_vendors`);
 console.log(
-  saved.rows[0]?.delivery_scope === 'all_bd' && Number(saved.rows[0]?.delivery_fee_poisha) === 0
-    ? 'ok    the saved area and charge are stored (all_bd, 0 poisha)'
-    : 'FAIL  the saved area and charge are stored',
+  saved.rows[0]?.delivery_scope === 'all_bd' && Number(saved.rows[0]?.delivery_fee_poisha) === 0,
+  'the saved area and charge are stored (all_bd, 0 poisha)',
+  'see the database value',
 );
 
 // A customer far away is accepted on all-Bangladesh delivery, at the shop's charge (0).
@@ -139,10 +139,23 @@ const farOrder = await as(
   `select public.mk_place_order('${vendor}', '${address(FAR)}'::jsonb, null) as o`,
   'an all-Bangladesh shop takes a far pin',
 );
-console.log(
-  Number(farOrder?.rows[0]?.o?.delivery_fee_poisha) === 0
-    ? 'ok    the order uses the shop charge, 0 taka'
-    : `FAIL  the order uses the shop charge -> ${JSON.stringify(farOrder?.rows[0]?.o)}`,
+check(
+  Number(farOrder?.rows[0]?.o?.delivery_fee_poisha) === 0,
+  'the order uses the shop charge, 0 taka',
+  'see the database value',
+);
+
+// 0109: the vendor's notification for a brand-new order is the alarm target.
+const alarmRow = await db.query(
+  `select target_url from public.notifications
+    where uid = 'shop-owner' and kind = 'order'
+    order by created_at desc, id desc limit 1`,
+);
+const alarmTarget = alarmRow.rows[0]?.target_url ?? '';
+check(
+  alarmTarget === '/vendor/console?alarm=new',
+  'a new order links the vendor to the alarm target',
+  'see the database value',
 );
 
 // The buyer adds again, for the radius tests.
@@ -189,10 +202,10 @@ const inside = await as(
   `select public.mk_place_order('${vendor}', '${address(INSIDE)}'::jsonb, null) as o`,
   'a pin 4.5 km away is accepted (rounded up to 5 km)',
 );
-console.log(
-  Number(inside?.rows[0]?.o?.delivery_fee_poisha) === 15000
-    ? 'ok    the order carries the shop charge, 150 taka'
-    : `FAIL  the order carries the shop charge -> ${JSON.stringify(inside?.rows[0]?.o)}`,
+check(
+  Number(inside?.rows[0]?.o?.delivery_fee_poisha) === 15000,
+  'the order carries the shop charge, 150 taka',
+  'see the database value',
 );
 
 // --- Centre moved on the map ----------------------------------------------------
@@ -236,12 +249,12 @@ const page = await asAnon(
   'a visitor can read the shop page with its delivery settings',
 );
 const delivery = page?.rows[0]?.p?.vendor?.delivery;
-console.log(
+check(
   delivery?.scope === 'radius' &&
     delivery?.radius_km === 5 &&
-    Number(delivery?.fee_poisha) === 15000
-    ? 'ok    the shop page shows the area, radius and charge'
-    : `FAIL  the shop page shows the area, radius and charge -> ${JSON.stringify(delivery)}`,
+    Number(delivery?.fee_poisha) === 15000,
+  'the shop page shows the area, radius and charge',
+  'see the database value',
 );
 
 const mine = await as(
@@ -250,10 +263,10 @@ const mine = await as(
   `select public.mk_vendor_delivery() as d`,
   'the owner reads back their delivery settings',
 );
-console.log(
-  mine?.rows[0]?.d?.radius_km === 5
-    ? 'ok    the console reads the saved settings'
-    : 'FAIL  the console reads the saved settings',
+check(
+  mine?.rows[0]?.d?.radius_km === 5,
+  'the console reads the saved settings',
+  'see the database value',
 );
 
 // --- Packages: the admin reads and edits prices; others cannot -----------------
@@ -265,10 +278,10 @@ const packages = await as(
   ADMIN,
 );
 const codes = (packages?.rows[0]?.p ?? []).map((p) => p.code);
-console.log(
-  ['10', '50', '100'].every((c) => codes.includes(c)) && codes.length === 3
-    ? 'ok    the packages are 10, 50 and 100 orders'
-    : `FAIL  the packages are 10, 50 and 100 orders -> ${codes.join(',')}`,
+check(
+  ['10', '50', '100'].every((c) => codes.includes(c)) && codes.length === 3,
+  'the packages are 10, 50 and 100 orders',
+  'see the database value',
 );
 
 await expectFail(
@@ -306,10 +319,10 @@ await as(
 const after = await db.query(
   `select price_poisha from public.mk_credit_packages where code = '50'`,
 );
-console.log(
-  Number(after.rows[0]?.price_poisha) === 60000
-    ? 'ok    the 50-order price is stored as 60000 poisha'
-    : `FAIL  the 50-order price is stored -> ${after.rows[0]?.price_poisha}`,
+check(
+  Number(after.rows[0]?.price_poisha) === 60000,
+  'the 50-order price is stored as 60000 poisha',
+  'see the database value',
 );
 
 // The shop page lists only active packages for buying; switching one off hides it.
@@ -327,10 +340,10 @@ const buyable = await as(
   'the owner reads the payment instructions',
 );
 const shown = (buyable?.rows[0]?.i?.packages ?? []).map((p) => p.code);
-console.log(
-  !shown.includes('10') && shown.includes('50') && shown.includes('100')
-    ? 'ok    a switched-off package is not offered for purchase'
-    : `FAIL  a switched-off package is not offered -> ${shown.join(',')}`,
+check(
+  !shown.includes('10') && shown.includes('50') && shown.includes('100'),
+  'a switched-off package is not offered for purchase',
+  'see the database value',
 );
 
 const failed = summary();

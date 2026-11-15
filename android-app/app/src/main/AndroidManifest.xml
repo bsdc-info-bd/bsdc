@@ -9,6 +9,13 @@
     <!-- Push Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- New-order sound alarm: a media foreground service that keeps the loop playing
+         with the screen off or the app closed, and a full-screen alert on a locked device -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
     <!-- QR Scanner & Composer Camera Capture -->
     <uses-permission android:name="android.permission.CAMERA" />
 
@@ -112,6 +119,11 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <service
+            android:name="bd.info.bsdc.app.core.push.OrderAlarmService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
 
         <receiver
             android:name="bd.info.bsdc.app.core.push.NotificationReplyReceiver"

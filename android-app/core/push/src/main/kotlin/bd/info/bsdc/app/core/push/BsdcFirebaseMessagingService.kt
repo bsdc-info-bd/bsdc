@@ -84,6 +84,19 @@ class BsdcFirebaseMessagingService : FirebaseMessagingService() {
             ),
         )
 
+        // A new order rings the shop's alarm until it is accepted or stopped. The
+        // alarm replaces the ordinary alert, so the same order does not ring twice.
+        when (data["alarm"]) {
+            OrderAlarmService.ALARM_ORDER_LOOP -> {
+                OrderAlarmService.start(applicationContext)
+                return
+            }
+            OrderAlarmService.ALARM_STOP -> {
+                OrderAlarmService.stop(applicationContext)
+                return
+            }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             val granted = ContextCompat.checkSelfPermission(
                 this,

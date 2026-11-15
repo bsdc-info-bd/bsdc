@@ -812,9 +812,10 @@ const vendorLink = await db.query(
   `select target_url from public.notifications where uid = $1 and kind = 'order' and body like 'Order % · New order%' order by created_at desc limit 1`,
   [vendorUid],
 );
+// 0109: a new order opens the shop console and marks the alarm (?alarm=new)
 check(
-  vendorLink.rows[0]?.target_url === '/vendor/console',
-  'a new order opens the shop console for the vendor',
+  vendorLink.rows[0]?.target_url === '/vendor/console?alarm=new',
+  'a new order opens the shop console for the vendor, with the alarm mark',
   vendorLink.rows[0]?.target_url ?? '',
 );
 const customerLink = await db.query(
