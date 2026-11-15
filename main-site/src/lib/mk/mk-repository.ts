@@ -239,6 +239,51 @@ export async function setAdminSetting(
   if (error) throw asDatabaseError(error);
 }
 
+export interface MkAdminPackage {
+  code: '10' | '50' | '100';
+  orders: number;
+  price_poisha: number;
+  is_active: boolean;
+}
+
+export async function listAdminPackages(): Promise<MkAdminPackage[]> {
+  const { data, error } = await getSupabase().rpc('mk_admin_list_packages');
+  if (error) throw asDatabaseError(error);
+  return (data ?? []) as unknown as MkAdminPackage[];
+}
+
+export interface MkVendorDelivery {
+  scope: 'radius' | 'all_bd';
+  radius_km: number;
+  fee_poisha: number;
+  center_lat: number;
+  center_lng: number;
+  shop_lat: number;
+  shop_lng: number;
+}
+
+export async function fetchVendorDelivery(): Promise<MkVendorDelivery> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_delivery');
+  if (error) throw asDatabaseError(error);
+  return data as unknown as MkVendorDelivery;
+}
+
+export async function setVendorDelivery(input: {
+  scope: 'radius' | 'all_bd';
+  radiusKm: number;
+  feeTaka: number;
+  center: { lat: number; lng: number } | null;
+}): Promise<void> {
+  const { error } = await getSupabase().rpc('mk_vendor_set_delivery', {
+    p_scope: input.scope,
+    p_radius_km: input.radiusKm,
+    p_fee_taka: input.feeTaka,
+    p_center_lat: input.center?.lat ?? null,
+    p_center_lng: input.center?.lng ?? null,
+  });
+  if (error) throw asDatabaseError(error);
+}
+
 export async function setAdminPackage(
   code: '10' | '50' | '100',
   orders: number,

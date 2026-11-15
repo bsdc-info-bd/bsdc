@@ -138,6 +138,50 @@ export function useUpdateShopProfile() {
   });
 }
 
+export function useVendorDelivery() {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  return useQuery({
+    queryKey: [...KEYS.dashboard, 'delivery', uid],
+    queryFn: repo.fetchVendorDelivery,
+    enabled: uid !== null,
+    staleTime: 15_000,
+  });
+}
+
+export function useSetVendorDelivery() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: repo.setVendorDelivery,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.dashboard });
+    },
+  });
+}
+
+export function useAdminPackages(enabled: boolean) {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  return useQuery({
+    queryKey: ['mk', 'admin', 'packages', uid],
+    queryFn: repo.listAdminPackages,
+    enabled: uid !== null && enabled,
+  });
+}
+
+export function useSetAdminPackage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      code: '10' | '50' | '100';
+      orders: number;
+      pricePoisha: number;
+      isActive: boolean;
+    }) => repo.setAdminPackage(input.code, input.orders, input.pricePoisha, input.isActive),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'admin', 'packages'] });
+    },
+  });
+}
+
 export function useBuyCredits() {
   const queryClient = useQueryClient();
   return useMutation({

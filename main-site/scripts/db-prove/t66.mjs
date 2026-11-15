@@ -96,18 +96,21 @@ const appJson = (p) => `'${JSON.stringify(p).replace(/'/g, "''")}'::jsonb`;
 
 // 1. Payment number is for signed-in applicants only
 const anonPay = await run(`select public.mk_payment_instructions()`, null);
-check(code(anonPay) === '42501', 'anonymous visitors cannot see the BSDC payment number', code(anonPay));
+check(
+  code(anonPay) === '42501',
+  'anonymous visitors cannot see the BSDC payment number',
+  code(anonPay),
+);
 
-await db.exec(`insert into public.mk_settings (key, value) values ('bikash_number', '') on conflict (key) do nothing;`);
+await db.exec(
+  `insert into public.mk_settings (key, value) values ('bikash_number', '') on conflict (key) do nothing;`,
+);
 const memberSet = await run(
   `select public.mk_admin_set_setting('bikash_number', '01711111111')`,
   vendorUid,
 );
 check(code(memberSet) === '42501', 'a member cannot change the bKash number', code(memberSet));
-const badSet = await run(
-  `select public.mk_admin_set_setting('bikash_number', '12345')`,
-  staff,
-);
+const badSet = await run(`select public.mk_admin_set_setting('bikash_number', '12345')`, staff);
 check(code(badSet) === '22023', 'the bKash number must be a valid Bangladesh mobile', code(badSet));
 const setBikash = await run(
   `select public.mk_admin_set_setting('bikash_number', '01711111111')`,
@@ -141,7 +144,11 @@ const badNid = await run(
   `select public.mk_submit_vendor_application(${appJson(application({ nid_number: '12345' }))})`,
   vendorUid,
 );
-check(code(badNid) === '22023' || code(badNid) === '23514', 'an invalid NID number is rejected', code(badNid));
+check(
+  code(badNid) === '22023' || code(badNid) === '23514',
+  'an invalid NID number is rejected',
+  code(badNid),
+);
 
 const badPkg = await run(
   `select public.mk_submit_vendor_application(${appJson(application({ package_code: '7' }))})`,
@@ -160,26 +167,50 @@ const submit = await run(
   vendorUid,
 );
 const appId = submit.rows[0]?.r?.application_id;
-check(submit.rows[0]?.r?.status === 'submitted' && Boolean(appId), 'a complete application is submitted', submit.error?.message);
+check(
+  submit.rows[0]?.r?.status === 'submitted' && Boolean(appId),
+  'a complete application is submitted',
+  submit.error?.message,
+);
 
 const dupApp = await run(
   `select public.mk_submit_vendor_application(${appJson(application({ shop_name: 'Second Shop' }))})`,
   vendorUid,
 );
-check(code(dupApp) === '23505', 'a second open application from the same person is refused', code(dupApp));
+check(
+  code(dupApp) === '23505',
+  'a second open application from the same person is refused',
+  code(dupApp),
+);
 
 const dupTxn = await run(
-  `select public.mk_submit_vendor_application(${appJson(application({
-    full_name: 'Other Person', shop_name: 'Other Shop', mobile: '01999000111',
-    payment_txn_id: 'txn-a-0001', nid_number: '9876543210987',
-  }))})`,
+  `select public.mk_submit_vendor_application(${appJson(
+    application({
+      full_name: 'Other Person',
+      shop_name: 'Other Shop',
+      mobile: '01999000111',
+      payment_txn_id: 'txn-a-0001',
+      nid_number: '9876543210987',
+    }),
+  )})`,
   applicant2,
 );
-check(code(dupTxn) === '23505', 'a transaction ID already used cannot be reused, case-insensitively', code(dupTxn));
+check(
+  code(dupTxn) === '23505',
+  'a transaction ID already used cannot be reused, case-insensitively',
+  code(dupTxn),
+);
 
 // 3. Not listed before approval
-const beforeApprove = await run(`select public.mk_list_vendors(null, '', null, null, 50) as v`, null);
-check(beforeApprove.rows[0]?.v?.length === 0, 'an unapproved applicant is not listed', JSON.stringify(beforeApprove.rows[0]?.v));
+const beforeApprove = await run(
+  `select public.mk_list_vendors(null, '', null, null, 50) as v`,
+  null,
+);
+check(
+  beforeApprove.rows[0]?.v?.length === 0,
+  'an unapproved applicant is not listed',
+  JSON.stringify(beforeApprove.rows[0]?.v),
+);
 
 const memberDecide = await run(
   `select public.mk_admin_decide_application('${appId}', 'approve', '')`,
@@ -191,14 +222,22 @@ const rejectShort = await run(
   `select public.mk_admin_decide_application('${appId}', 'reject', 'no')`,
   staff,
 );
-check(code(rejectShort) === '22023', 'a rejection needs a reason of at least 5 characters', code(rejectShort));
+check(
+  code(rejectShort) === '22023',
+  'a rejection needs a reason of at least 5 characters',
+  code(rejectShort),
+);
 
 const approve = await run(
   `select public.mk_admin_decide_application('${appId}', 'approve', 'Documents verified') as r`,
   staff,
 );
 const vendorId = approve.rows[0]?.r?.vendor_id;
-check(approve.rows[0]?.r?.status === 'approved' && Boolean(vendorId), 'staff approve creates the shop', approve.error?.message);
+check(
+  approve.rows[0]?.r?.status === 'approved' && Boolean(vendorId),
+  'staff approve creates the shop',
+  approve.error?.message,
+);
 
 const dash = await run(`select public.mk_vendor_dashboard() as d`, vendorUid);
 check(
@@ -219,8 +258,12 @@ check(Boolean(catId), 'vendor creates a category', catSave.error?.message);
 
 const httpImg = await run(
   `select public.mk_vendor_save_product(null, ${appJson({
-    name: 'Nazirshail Rice 5kg', price_poisha: 45000, stock: 5, status: 'active',
-    category_id: catId, images: ['http://insecure.example/rice.jpg'],
+    name: 'Nazirshail Rice 5kg',
+    price_poisha: 45000,
+    stock: 5,
+    status: 'active',
+    category_id: catId,
+    images: ['http://insecure.example/rice.jpg'],
   })})`,
   vendorUid,
 );
@@ -228,17 +271,29 @@ check(code(httpImg) === '22023', 'product images must be https links', code(http
 
 const prodSave = await run(
   `select public.mk_vendor_save_product(null, ${appJson({
-    name: 'Nazirshail Rice 5kg', description: 'Premium Sylhet rice', price_poisha: 45000,
-    stock: 5, status: 'active', category_id: catId, images: ['https://i.ibb.co/demo/rice.webp'],
+    name: 'Nazirshail Rice 5kg',
+    description: 'Premium Sylhet rice',
+    price_poisha: 45000,
+    stock: 5,
+    status: 'active',
+    category_id: catId,
+    images: ['https://i.ibb.co/demo/rice.webp'],
   })}) as id`,
   vendorUid,
 );
 const productId = prodSave.rows[0]?.id;
-check(Boolean(productId), 'vendor publishes a product with stock 5 at 450 taka', prodSave.error?.message);
+check(
+  Boolean(productId),
+  'vendor publishes a product with stock 5 at 450 taka',
+  prodSave.error?.message,
+);
 
 const oilSave = await run(
   `select public.mk_vendor_save_product(null, ${appJson({
-    name: 'Soybean Oil 1L', price_poisha: 18000, stock: 10, status: 'active',
+    name: 'Soybean Oil 1L',
+    price_poisha: 18000,
+    stock: 10,
+    status: 'active',
     images: ['https://i.ibb.co/demo/oil.webp'],
   })}) as id`,
   vendorUid,
@@ -257,8 +312,14 @@ await run(
   `select public.mk_vendor_save_product('${productId}', ${appJson({ name: 'Nazirshail Rice 5kg', price_poisha: 45000 })})`,
   vendorUid,
 );
-const kept = await db.query(`select status, array_length(images, 1) as n from public.mk_products where id = $1`, [productId]);
-check(kept.rows[0]?.status === 'active' && kept.rows[0]?.n === 1, 'updating a product keeps its status and images when omitted');
+const kept = await db.query(
+  `select status, array_length(images, 1) as n from public.mk_products where id = $1`,
+  [productId],
+);
+check(
+  kept.rows[0]?.status === 'active' && kept.rows[0]?.n === 1,
+  'updating a product keeps its status and images when omitted',
+);
 
 // 5. Cart and direct order
 const cartAdd = await run(`select public.mk_cart_set('${productId}', 2) as q`, cust1);
@@ -267,12 +328,19 @@ const cartBad = await run(`select public.mk_cart_set('${productId}', 99)`, cust1
 check(code(cartBad) === '22023', 'cart quantity above 50 is refused', code(cartBad));
 
 const cart = await run(`select public.mk_my_cart() as c`, cust1);
-check(cart.rows[0]?.c?.[0]?.orderable === true, 'cart line is orderable', JSON.stringify(cart.rows[0]?.c));
+check(
+  cart.rows[0]?.c?.[0]?.orderable === true,
+  'cart line is orderable',
+  JSON.stringify(cart.rows[0]?.c),
+);
 
 const addrBad = await run(
   `select public.mk_place_order('${vendorId}', ${appJson({
-    customer_name: 'Karim', customer_phone: '0171', address_line: 'Sylhet Sadar road',
-    lat: 24.9, lng: 91.87,
+    customer_name: 'Karim',
+    customer_phone: '0171',
+    address_line: 'Sylhet Sadar road',
+    lat: 24.9,
+    lng: 91.87,
   })}, null)`,
   cust1,
 );
@@ -295,12 +363,16 @@ const placeCart = await run(
 );
 const order1 = placeCart.rows[0]?.o;
 check(
-  order1?.subtotal_poisha === 90000 && order1?.delivery_fee_poisha === 15000 && order1?.total_poisha === 105000,
+  order1?.subtotal_poisha === 90000 &&
+    order1?.delivery_fee_poisha === 15000 &&
+    order1?.total_poisha === 105000,
   'cart order totals 900 taka plus the 150-taka delivery fee, priced by the database',
   placeCart.error?.message ?? JSON.stringify(order1),
 );
 
-const stockAfter1 = await db.query(`select stock from public.mk_products where id = $1`, [productId]);
+const stockAfter1 = await db.query(`select stock from public.mk_products where id = $1`, [
+  productId,
+]);
 check(stockAfter1.rows[0]?.stock === 3, 'placing an order decrements stock (5 to 3)');
 
 const cartAfter = await run(`select public.mk_my_cart() as c`, cust1);
@@ -310,16 +382,22 @@ check((cartAfter.rows[0]?.c ?? []).length === 0, 'ordered items leave the cart')
 const vOrders = await run(`select public.mk_vendor_orders(null, 50) as o`, vendorUid);
 const seen = vOrders.rows[0]?.o?.[0];
 check(
-  seen?.customer_phone === '01555123456' && seen?.landmark === 'Opposite the mosque' && seen?.distance_km > 0,
+  seen?.customer_phone === '01555123456' &&
+    seen?.landmark === 'Opposite the mosque' &&
+    seen?.distance_km > 0,
   'vendor sees the customer phone, landmark, location, and distance',
   vOrders.error?.message,
 );
 const orderId = seen?.id;
 
 const c2Orders = await run(`select public.mk_my_orders(30) as o`, cust2);
-check((c2Orders.rows[0]?.o ?? []).length === 0, 'customer two sees none of customer one\'s orders');
+check((c2Orders.rows[0]?.o ?? []).length === 0, "customer two sees none of customer one's orders");
 const c2Cancel = await run(`select public.mk_customer_cancel_order('${orderId}', 'mine') `, cust2);
-check(code(c2Cancel) === 'P0002', 'customer two cannot cancel customer one\'s order', code(c2Cancel));
+check(
+  code(c2Cancel) === 'P0002',
+  "customer two cannot cancel customer one's order",
+  code(c2Cancel),
+);
 
 const directOrder = await run(
   `select public.mk_place_order('${vendorId}', ${appJson(addr)}, '[{"product_id":"${productId}","qty":1},{"product_id":"${productId}","qty":1}]') as o`,
@@ -331,7 +409,9 @@ check(
   directOrder.error?.message ?? JSON.stringify(directOrder.rows[0]?.o),
 );
 const order2 = directOrder.rows[0]?.o?.order_id;
-const stockAfter2 = await db.query(`select stock from public.mk_products where id = $1`, [productId]);
+const stockAfter2 = await db.query(`select stock from public.mk_products where id = $1`, [
+  productId,
+]);
 check(stockAfter2.rows[0]?.stock === 1, 'direct order takes stock to 1');
 
 const overStock = await run(
@@ -345,8 +425,14 @@ const decline = await run(
   `select public.mk_vendor_set_order_status('${order2}', 'cancelled', 'Out of stock on this line') as r`,
   vendorUid,
 );
-check(decline.rows[0]?.r?.credits_left === 10, 'declining an order consumes no credit', decline.error?.message);
-const stockAfterDecline = await db.query(`select stock from public.mk_products where id = $1`, [productId]);
+check(
+  decline.rows[0]?.r?.credits_left === 10,
+  'declining an order consumes no credit',
+  decline.error?.message,
+);
+const stockAfterDecline = await db.query(`select stock from public.mk_products where id = $1`, [
+  productId,
+]);
 check(stockAfterDecline.rows[0]?.stock === 3, 'declining restores the reserved stock (1 to 3)');
 
 const declineNoReason = await run(
@@ -360,7 +446,11 @@ const acceptEarly = await run(
   `select public.mk_vendor_set_order_status('${orderId}', 'packaged', '')`,
   vendorUid,
 );
-check(code(acceptEarly) === '22023', 'an order cannot skip straight from placed to packaged', code(acceptEarly));
+check(
+  code(acceptEarly) === '22023',
+  'an order cannot skip straight from placed to packaged',
+  code(acceptEarly),
+);
 
 const review1 = await run(`select public.mk_submit_review('${orderId}', 5, 'Great')`, cust1);
 check(code(review1) === '22023', 'a review is refused before delivery', code(review1));
@@ -369,13 +459,21 @@ const accept = await run(
   `select public.mk_vendor_set_order_status('${orderId}', 'accepted', '') as r`,
   vendorUid,
 );
-check(accept.rows[0]?.r?.credits_left === 9, 'accepting consumes exactly one credit (10 to 9)', accept.error?.message);
+check(
+  accept.rows[0]?.r?.credits_left === 9,
+  'accepting consumes exactly one credit (10 to 9)',
+  accept.error?.message,
+);
 
 const acceptAgain = await run(
   `select public.mk_vendor_set_order_status('${orderId}', 'accepted', '')`,
   vendorUid,
 );
-check(code(acceptAgain) === '22023', 'an accepted order cannot be accepted again (no double charge)', code(acceptAgain));
+check(
+  code(acceptAgain) === '22023',
+  'an accepted order cannot be accepted again (no double charge)',
+  code(acceptAgain),
+);
 
 const creditRows = await db.query(
   `select count(*)::int as n from public.mk_credit_ledger where order_id = $1 and kind = 'order'`,
@@ -392,7 +490,10 @@ for (const next of ['packaged', 'out_for_delivery', 'delivered']) {
 }
 
 // 8. Reviews after delivery, once
-const review = await run(`select public.mk_submit_review('${orderId}', 5, 'Fresh and on time') as r`, cust1);
+const review = await run(
+  `select public.mk_submit_review('${orderId}', 5, 'Fresh and on time') as r`,
+  cust1,
+);
 check(review.rows[0]?.r?.rating === 5, 'customer reviews a delivered order', review.error?.message);
 const reviewTwice = await run(`select public.mk_submit_review('${orderId}', 4, 'again')`, cust1);
 check(code(reviewTwice) === '23505', 'an order can be reviewed only once', code(reviewTwice));
@@ -404,7 +505,11 @@ const cancelAccepted = await run(
   `select public.mk_customer_cancel_order('${order2}', 'changed my mind')`,
   cust2,
 );
-check(code(cancelAccepted) === '22023', 'a cancelled order cannot be cancelled again by the customer', code(cancelAccepted));
+check(
+  code(cancelAccepted) === '22023',
+  'a cancelled order cannot be cancelled again by the customer',
+  code(cancelAccepted),
+);
 
 const newOrder = await run(
   `select public.mk_place_order('${vendorId}', ${appJson(addr)}, '[{"product_id":"${oilId}","qty":2}]') as o`,
@@ -419,14 +524,23 @@ check(ok(selfCancel), 'customer cancels a placed order', selfCancel.error?.messa
 const oilStock = await db.query(`select stock from public.mk_products where id = $1`, [oilId]);
 check(oilStock.rows[0]?.stock === 10, 'customer cancel restores stock');
 
-// 10. Delivery fee is admin-editable and applies to new orders
-const setFee = await run(`select public.mk_admin_set_setting('delivery_fee_poisha', '20000')`, staff);
+// 10. The platform fee setting is still editable; orders use the shop's own charge
+const setFee = await run(
+  `select public.mk_admin_set_setting('delivery_fee_poisha', '20000')`,
+  staff,
+);
 check(ok(setFee), 'staff change the delivery fee to 200 taka', setFee.error?.message);
 const feeOrder = await run(
   `select public.mk_place_order('${vendorId}', ${appJson(addr)}, '[{"product_id":"${oilId}","qty":1}]') as o`,
   cust1,
 );
-check(feeOrder.rows[0]?.o?.delivery_fee_poisha === 20000, 'new orders use the new fee', feeOrder.error?.message);
+// Each shop sets its own charge (0 to 150 taka, default 150). The platform setting
+// no longer decides what a customer pays, so a new order carries the shop's charge.
+check(
+  feeOrder.rows[0]?.o?.delivery_fee_poisha === 15000,
+  "new orders carry the shop's own charge, not the platform setting",
+  feeOrder.error?.message,
+);
 await run(`select public.mk_admin_set_setting('delivery_fee_poisha', '15000')`, staff);
 
 // 11. Credits run out: shop unlisted, cannot take orders
@@ -441,7 +555,11 @@ await db.exec(`
   values ('${vendorId}', 'adjustment', -9, 'test: spend remaining credits');
 `);
 const zero = await run(`select public.mk_vendor_dashboard() as d`, vendorUid);
-check(zero.rows[0]?.d?.credits === 0 && zero.rows[0]?.d?.listed === false, 'at zero credits the shop is unlisted', JSON.stringify(zero.rows[0]?.d));
+check(
+  zero.rows[0]?.d?.credits === 0 && zero.rows[0]?.d?.listed === false,
+  'at zero credits the shop is unlisted',
+  JSON.stringify(zero.rows[0]?.d),
+);
 
 const hidden = await run(`select public.mk_list_vendors(null, '', null, null, 50) as v`, null);
 check(hidden.rows[0]?.v?.length === 0, 'an unlisted shop disappears from the marketplace');
@@ -451,7 +569,11 @@ const blockedOrder = await run(
   `select public.mk_place_order('${vendorId}', ${appJson(addr)}, '[{"product_id":"${oilId}","qty":1}]')`,
   cust2,
 );
-check(code(blockedOrder) === 'P0002', 'customers cannot order from an unlisted shop', code(blockedOrder));
+check(
+  code(blockedOrder) === 'P0002',
+  'customers cannot order from an unlisted shop',
+  code(blockedOrder),
+);
 const blockedAccept = await run(
   `select public.mk_vendor_set_order_status('${pendingOrder}', 'accepted', '')`,
   vendorUid,
@@ -461,32 +583,56 @@ check(
   'a vendor with no credits cannot accept an order',
   code(blockedAccept),
 );
-const stillPlaced = await db.query(`select status::text from public.mk_orders where id = $1`, [pendingOrder]);
-check(stillPlaced.rows[0]?.status === 'placed', 'the order stays placed when acceptance is refused');
+const stillPlaced = await db.query(`select status::text from public.mk_orders where id = $1`, [
+  pendingOrder,
+]);
+check(
+  stillPlaced.rows[0]?.status === 'placed',
+  'the order stays placed when acceptance is refused',
+);
 
 // 12. Re-purchase: unlisted until staff approve
 const rebuy = await run(
   `select public.mk_vendor_buy_credits('50', '01888000111', 'Rahim Uddin', 'TXN-B-0050') as r`,
   vendorUid,
 );
-check(rebuy.rows[0]?.r?.status === 'pending', 'vendor buys a 50-order package (pending)', rebuy.error?.message);
+check(
+  rebuy.rows[0]?.r?.status === 'pending',
+  'vendor buys a 50-order package (pending)',
+  rebuy.error?.message,
+);
 const rebuyTxnDup = await run(
   `select public.mk_vendor_buy_credits('10', '01888000111', 'Rahim Uddin', 'txn-b-0050')`,
   vendorUid,
 );
-check(code(rebuyTxnDup) === '23505', 'a repeated transaction ID on a re-purchase is refused', code(rebuyTxnDup));
+check(
+  code(rebuyTxnDup) === '23505',
+  'a repeated transaction ID on a re-purchase is refused',
+  code(rebuyTxnDup),
+);
 const stillOff = await run(`select public.mk_list_vendors(null, '', null, null, 50) as v`, null);
 check(stillOff.rows[0]?.v?.length === 0, 'a pending purchase does not relist the shop');
 
-const pendingList = await run(`select public.mk_admin_list_credit_purchases('pending', 50) as p`, staff);
+const pendingList = await run(
+  `select public.mk_admin_list_credit_purchases('pending', 50) as p`,
+  staff,
+);
 const purchaseId = pendingList.rows[0]?.p?.find((p) => p.txn_id === 'TXN-B-0050')?.id;
-check(Boolean(purchaseId), 'staff see the pending purchase with payment details', pendingList.error?.message);
+check(
+  Boolean(purchaseId),
+  'staff see the pending purchase with payment details',
+  pendingList.error?.message,
+);
 
 const approvePurchase = await run(
   `select public.mk_admin_decide_credit_purchase('${purchaseId}', 'approve', '') as r`,
   staff,
 );
-check(approvePurchase.rows[0]?.r?.status === 'approved', 'staff approve the purchase', approvePurchase.error?.message);
+check(
+  approvePurchase.rows[0]?.r?.status === 'approved',
+  'staff approve the purchase',
+  approvePurchase.error?.message,
+);
 const relisted = await run(`select public.mk_vendor_dashboard() as d`, vendorUid);
 check(
   relisted.rows[0]?.d?.credits === 50 && relisted.rows[0]?.d?.listed === true,
@@ -498,16 +644,29 @@ const acceptAfter = await run(
   `select public.mk_vendor_set_order_status('${pendingOrder}', 'accepted', '') as r`,
   vendorUid,
 );
-check(acceptAfter.rows[0]?.r?.credits_left === 49, 'the pending order is accepted once credits return (50 to 49)', acceptAfter.error?.message);
+check(
+  acceptAfter.rows[0]?.r?.credits_left === 49,
+  'the pending order is accepted once credits return (50 to 49)',
+  acceptAfter.error?.message,
+);
 
 // 13. A second vendor's application cannot be decided with the first one's purchase
 const app2 = await run(
-  `select public.mk_submit_vendor_application(${appJson(application({
-    full_name: 'Second Vendor', shop_name: 'Book Corner', nid_number: '9876543210987',
-    mobile: '01999000111', vendor_type: 'books', package_code: '100',
-    payment_sender: '01999000111', payment_holder: 'Second Vendor', payment_txn_id: 'TXN-C-0100',
-    lat: 24.90, lng: 91.87,
-  }))}) as r`,
+  `select public.mk_submit_vendor_application(${appJson(
+    application({
+      full_name: 'Second Vendor',
+      shop_name: 'Book Corner',
+      nid_number: '9876543210987',
+      mobile: '01999000111',
+      vendor_type: 'books',
+      package_code: '100',
+      payment_sender: '01999000111',
+      payment_holder: 'Second Vendor',
+      payment_txn_id: 'TXN-C-0100',
+      lat: 24.9,
+      lng: 91.87,
+    }),
+  )}) as r`,
   applicant2,
 );
 const app2Id = app2.rows[0]?.r?.application_id;
@@ -515,33 +674,59 @@ const rejectApp2 = await run(
   `select public.mk_admin_decide_application('${app2Id}', 'reject', 'Trade licence unclear')`,
   staff,
 );
-check(rejectApp2.error === null, 'staff reject an application with a reason', rejectApp2.error?.message);
+check(
+  rejectApp2.error === null,
+  'staff reject an application with a reason',
+  rejectApp2.error?.message,
+);
 const pendingAfterReject = await db.query(
   `select status::text from public.mk_credit_purchases where txn_id = 'TXN-C-0100'`,
 );
-check(pendingAfterReject.rows[0]?.status === 'rejected', 'a rejected application rejects its payment record');
+check(
+  pendingAfterReject.rows[0]?.status === 'rejected',
+  'a rejected application rejects its payment record',
+);
 
 // 14. Customers cannot read orders table directly beyond their own rows
 const directRead = await run(`select count(*)::int as n from public.mk_orders`, cust2);
 check(
   directRead.error === null && directRead.rows[0]?.n === 2,
-  'direct table read returns only the signed-in customer\'s own orders (RLS)',
+  "direct table read returns only the signed-in customer's own orders (RLS)",
   directRead.error?.message ?? String(directRead.rows[0]?.n),
 );
 const applicantsDirect = await run(`select count(*) from public.mk_vendor_applications`, cust1);
-check(applicantsDirect.error !== null, 'applications (NID numbers) are not readable directly by members', '');
+check(
+  applicantsDirect.error !== null,
+  'applications (NID numbers) are not readable directly by members',
+  '',
+);
 
 // 15. Read models for the new screens (0095)
 const myApp = await run(`select public.mk_my_application() as a`, applicant2);
-check(myApp.rows[0]?.a?.status === 'rejected' && myApp.rows[0]?.a?.review_note?.length > 0,
-  'an applicant sees the rejection and the reviewer note', myApp.error?.message);
+check(
+  myApp.rows[0]?.a?.status === 'rejected' && myApp.rows[0]?.a?.review_note?.length > 0,
+  'an applicant sees the rejection and the reviewer note',
+  myApp.error?.message,
+);
 const noApp = await run(`select public.mk_my_application() as a`, 'mk-nobody');
-check(noApp.rows[0]?.a === null, 'a person with no application gets null, not an error', noApp.error?.message);
+check(
+  noApp.rows[0]?.a === null,
+  'a person with no application gets null, not an error',
+  noApp.error?.message,
+);
 const catalog = await run(`select public.mk_vendor_catalog() as c`, vendorUid);
-check((catalog.rows[0]?.c?.products ?? []).length >= 2 && (catalog.rows[0]?.c?.categories ?? []).length === 1,
-  'vendor catalogue lists every product and category', catalog.error?.message);
+check(
+  (catalog.rows[0]?.c?.products ?? []).length >= 2 &&
+    (catalog.rows[0]?.c?.categories ?? []).length === 1,
+  'vendor catalogue lists every product and category',
+  catalog.error?.message,
+);
 const catalogAnon = await run(`select public.mk_vendor_catalog()`, cust2);
-check(code(catalogAnon) === '42501', 'a customer cannot read the vendor catalogue', code(catalogAnon));
+check(
+  code(catalogAnon) === '42501',
+  'a customer cannot read the vendor catalogue',
+  code(catalogAnon),
+);
 
 // 16. Order notifications (0096)
 const orderCode = await db.query(`select code from public.mk_orders where id = $1`, [orderId]);
@@ -550,47 +735,97 @@ const vendorNew = await db.query(
   `select count(*)::int as n from public.notifications where uid = $1 and kind = 'order' and body like 'Order % · New order%'`,
   [vendorUid],
 );
-check(vendorNew.rows[0]?.n >= 1, 'the vendor is told at once when an order is placed', String(vendorNew.rows[0]?.n));
+check(
+  vendorNew.rows[0]?.n >= 1,
+  'the vendor is told at once when an order is placed',
+  String(vendorNew.rows[0]?.n),
+);
 const customerSelf = await db.query(
   `select count(*)::int as n from public.notifications where uid = $1 and body like '%New order%'`,
   [cust1],
 );
-check(customerSelf.rows[0]?.n === 0, 'the customer is not notified of their own placement', String(customerSelf.rows[0]?.n));
+check(
+  customerSelf.rows[0]?.n === 0,
+  'the customer is not notified of their own placement',
+  String(customerSelf.rows[0]?.n),
+);
 const customerAccepted = await db.query(
   `select count(*)::int as n from public.notifications where uid = $1 and body like $2`,
   [cust1, `Order ${orderCode.rows[0]?.code} · Accepted%`],
 );
-check(customerAccepted.rows[0]?.n >= 1, 'the customer is told when the shop accepts their order', String(customerAccepted.rows[0]?.n));
+check(
+  customerAccepted.rows[0]?.n >= 1,
+  'the customer is told when the shop accepts their order',
+  String(customerAccepted.rows[0]?.n),
+);
 const vendorCancelled = await db.query(
   `select count(*)::int as n from public.notifications where uid = $1 and body like $2`,
   [cust2, `Order ${cancelledCode.rows[0]?.code} · Cancelled%`],
 );
-check(vendorCancelled.rows[0]?.n >= 1, 'a shop cancellation reaches the customer, with the reason', String(vendorCancelled.rows[0]?.n));
-const ownInbox = await run(`select count(*)::int as n from public.notifications where kind = 'order'`, cust1);
-check(ownInbox.error === null && ownInbox.rows[0]?.n >= 2, 'the customer reads their own order notifications through RLS', ownInbox.error?.message ?? String(ownInbox.rows[0]?.n));
-const otherInbox = await run(`select count(*)::int as n from public.notifications where uid = '${cust2}'`, cust1);
-check(otherInbox.error === null && otherInbox.rows[0]?.n === 0, 'another customer cannot read these notifications', String(otherInbox.rows[0]?.n));
+check(
+  vendorCancelled.rows[0]?.n >= 1,
+  'a shop cancellation reaches the customer, with the reason',
+  String(vendorCancelled.rows[0]?.n),
+);
+const ownInbox = await run(
+  `select count(*)::int as n from public.notifications where kind = 'order'`,
+  cust1,
+);
+check(
+  ownInbox.error === null && ownInbox.rows[0]?.n >= 2,
+  'the customer reads their own order notifications through RLS',
+  ownInbox.error?.message ?? String(ownInbox.rows[0]?.n),
+);
+const otherInbox = await run(
+  `select count(*)::int as n from public.notifications where uid = '${cust2}'`,
+  cust1,
+);
+check(
+  otherInbox.error === null && otherInbox.rows[0]?.n === 0,
+  'another customer cannot read these notifications',
+  String(otherInbox.rows[0]?.n),
+);
 
 // 17. Checkout reference (0097)
 const shopSlug = await db.query(`select slug from public.mk_vendors where id = $1`, [vendorId]);
 const refOk = await run(`select public.mk_vendor_ref('${shopSlug.rows[0]?.slug}') as id`, cust1);
-check(refOk.rows[0]?.id === vendorId, 'a listed shop resolves to its id for checkout', refOk.error?.message ?? '');
+check(
+  refOk.rows[0]?.id === vendorId,
+  'a listed shop resolves to its id for checkout',
+  refOk.error?.message ?? '',
+);
 const refAnon = await run(`select public.mk_vendor_ref('${shopSlug.rows[0]?.slug}') as id`, null);
-check(refAnon.rows[0]?.id === vendorId, 'a listed shop resolves for a visitor too', refAnon.error?.message ?? '');
+check(
+  refAnon.rows[0]?.id === vendorId,
+  'a listed shop resolves for a visitor too',
+  refAnon.error?.message ?? '',
+);
 const refMissing = await run(`select public.mk_vendor_ref('no-such-shop') as id`, cust1);
-check(refMissing.error === null && refMissing.rows[0]?.id === null, 'an unknown slug resolves to null', refMissing.error?.message ?? '');
+check(
+  refMissing.error === null && refMissing.rows[0]?.id === null,
+  'an unknown slug resolves to null',
+  refMissing.error?.message ?? '',
+);
 
 // 18. Order notifications open the right screen (0098)
 const vendorLink = await db.query(
   `select target_url from public.notifications where uid = $1 and kind = 'order' and body like 'Order % · New order%' order by created_at desc limit 1`,
   [vendorUid],
 );
-check(vendorLink.rows[0]?.target_url === '/vendor/console', 'a new order opens the shop console for the vendor', vendorLink.rows[0]?.target_url ?? '');
+check(
+  vendorLink.rows[0]?.target_url === '/vendor/console',
+  'a new order opens the shop console for the vendor',
+  vendorLink.rows[0]?.target_url ?? '',
+);
 const customerLink = await db.query(
   `select target_url from public.notifications where uid = $1 and kind = 'order' and body like $2 limit 1`,
   [cust1, `Order ${orderCode.rows[0]?.code} · Accepted%`],
 );
-check(customerLink.rows[0]?.target_url === '/marketplace/orders', 'a status update opens the customer tracker', customerLink.rows[0]?.target_url ?? '');
+check(
+  customerLink.rows[0]?.target_url === '/marketplace/orders',
+  'a status update opens the customer tracker',
+  customerLink.rows[0]?.target_url ?? '',
+);
 
 console.log(`\n${pass} passed, ${bad.length} failed`);
 if (bad.length > 0) {

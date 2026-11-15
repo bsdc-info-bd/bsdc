@@ -16,6 +16,7 @@ import { Seo } from '@/components/seo/Seo';
 import { CatalogPanel } from '@/components/mk/vendor/CatalogPanel';
 import { OrdersPanel } from '@/components/mk/vendor/OrdersPanel';
 import { CreditsPanel, ShopProfilePanel } from '@/components/mk/vendor/ShopPanels';
+import { DeliveryPanel } from '@/components/mk/vendor/DeliveryPanel';
 import { Alert, Button, Card, EmptyState, PageSkeleton, StatCard } from '@/design-system';
 import { useMyApplication, useVendorDashboard } from '@/hooks/use-mk';
 import { useAuthStore } from '@/store/auth-store';
@@ -23,8 +24,8 @@ import { creditState, formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import { ROUTES } from '@/lib/site';
 
-type Tab = 'orders' | 'products' | 'shop' | 'credits';
-const TABS: readonly Tab[] = ['orders', 'products', 'shop', 'credits'];
+type Tab = 'orders' | 'products' | 'delivery' | 'shop' | 'credits';
+const TABS: readonly Tab[] = ['orders', 'products', 'delivery', 'shop', 'credits'];
 
 export default function VendorConsolePage() {
   const { i18n } = useTranslation();
@@ -211,6 +212,9 @@ export default function VendorConsolePage() {
         >
           {tab === 'orders' ? <OrdersPanel copy={copy} language={language} enabled /> : null}
           {tab === 'products' ? <CatalogPanel copy={copy} language={language} enabled /> : null}
+          {tab === 'delivery' ? (
+            <DeliveryPanel copy={copy} language={language} shop={shop} />
+          ) : null}
           {tab === 'shop' ? <ShopProfilePanel copy={copy} shop={shop} /> : null}
           {tab === 'credits' ? (
             <CreditsPanel

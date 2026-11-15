@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Store, XCircle } from 'lucide-react';
 import { useState } from 'react';
+import { PackagePricesPanel } from '@/components/mk/admin/PackagePricesPanel';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
@@ -89,6 +90,11 @@ export default function AdminMarketplacePage() {
 
   return (
     <div className="fab-container max-w-6xl space-y-6 py-6">
+      <PackagePricesPanel
+        copy={copy}
+        language={language}
+        enabled={permissions.includes('marketplace.settings')}
+      />
       <Seo
         title="Marketplace review"
         description="Review vendor applications and credit purchases."

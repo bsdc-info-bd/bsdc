@@ -2410,6 +2410,19 @@ export type Database = {
         Args: { p_code: string; p_orders: number; p_price_poisha: number; p_is_active?: boolean };
         Returns: Json;
       };
+      // Delivery areas and admin package list (0108).
+      mk_admin_list_packages: { Args: never; Returns: Json };
+      mk_vendor_delivery: { Args: never; Returns: Json };
+      mk_vendor_set_delivery: {
+        Args: {
+          p_scope: string;
+          p_radius_km: number;
+          p_fee_taka: number;
+          p_center_lat?: number | null;
+          p_center_lng?: number | null;
+        };
+        Returns: Json;
+      };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.

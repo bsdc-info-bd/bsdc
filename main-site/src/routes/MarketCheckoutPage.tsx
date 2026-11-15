@@ -167,7 +167,8 @@ export default function MarketCheckoutPage() {
     );
   }
 
-  const fee = payment.data?.delivery_fee_poisha ?? 0;
+  // Each shop sets its own delivery charge; the server charges this same amount.
+  const fee = shop.data?.vendor.delivery?.fee_poisha ?? 0;
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
   const total = subtotal + fee;
   const shopName = shop.data?.vendor.name ?? '';

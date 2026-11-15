@@ -170,6 +170,17 @@ data class MkVendorInfoDto(
     val place_label: String = "",
     val lat: Double? = null,
     val lng: Double? = null,
+    val delivery: MkShopDeliveryDto? = null,
+)
+
+/** A shop's delivery area and charge. [fee_poisha] is the charge a customer pays. */
+@Serializable
+data class MkShopDeliveryDto(
+    val scope: String = "all_bd",
+    val radius_km: Int = 1,
+    val fee_poisha: Long = 15000,
+    val center_lat: Double? = null,
+    val center_lng: Double? = null,
 )
 
 @Serializable

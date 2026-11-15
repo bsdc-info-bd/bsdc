@@ -51,7 +51,21 @@ vi.mock('@/lib/mk/mk-repository', () => ({
 
 vi.mock('@/hooks/use-mk', () => ({
   usePaymentInstructions: () => ({ data: { delivery_fee_poisha: 15000 }, isLoading: false }),
-  useVendorPage: () => ({ data: { vendor: { name: 'Sylhet Crafts' } }, isLoading: false }),
+  useVendorPage: () => ({
+    data: {
+      vendor: {
+        name: 'Sylhet Crafts',
+        delivery: {
+          scope: 'all_bd',
+          radius_km: 1,
+          fee_poisha: 15000,
+          center_lat: 24.9,
+          center_lng: 91.87,
+        },
+      },
+    },
+    isLoading: false,
+  }),
   useProductDetail: () => ({ data: state.product, isLoading: false }),
   useMyCart: () => ({ data: state.cart, isLoading: false }),
   usePlaceOrder: () => ({ mutateAsync: state.place, isPending: state.placing }),

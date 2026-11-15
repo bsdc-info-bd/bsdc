@@ -168,6 +168,15 @@ export interface MkListedShop {
 
 // Customer side ---------------------------------------------------------------
 
+/** A shop's delivery area and charge, as shown to customers. */
+export interface MkShopDelivery {
+  scope: 'radius' | 'all_bd';
+  radius_km: number;
+  fee_poisha: number;
+  center_lat: number;
+  center_lng: number;
+}
+
 export interface MkVendorPageData {
   vendor: {
     slug: string;
@@ -179,6 +188,7 @@ export interface MkVendorPageData {
     place_label: string;
     lat: number;
     lng: number;
+    delivery: MkShopDelivery;
   };
   categories: { id: string; name: string }[];
   products: MkStorefrontProduct[];

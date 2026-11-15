@@ -1,6 +1,6 @@
 import { LocateFixed, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Map as LeafletMap, Marker } from 'leaflet';
+import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 import { Button, TextField } from '@/design-system';
 import { BD_CENTER, isBdPoint, type Language, SYLHET_CENTER } from '@/lib/mk/mk-logic';
 
@@ -15,6 +15,8 @@ interface LocationPickerProps {
   onChange: (next: PinnedLocation) => void;
   language: Language;
   labels: { title: string; hint: string; search: string; useCurrent: string; outside: string };
+  /** Optional delivery radius in km, drawn as a circle around the pin. */
+  radiusKm?: number | null;
 }
 
 interface NominatimHit {
@@ -38,10 +40,17 @@ const PIN_SVG =
  * stylesheet load only when the picker mounts, so the rest of the app pays
  * nothing for the map. Search results are restricted to Bangladesh.
  */
-export function LocationPicker({ value, onChange, language, labels }: LocationPickerProps) {
+export function LocationPicker({
+  value,
+  onChange,
+  language,
+  labels,
+  radiusKm = null,
+}: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
+  const circleRef = useRef<Circle | null>(null);
   const onChangeRef = useRef(onChange);
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<NominatimHit[]>([]);
@@ -92,6 +101,7 @@ export function LocationPicker({ value, onChange, language, labels }: LocationPi
       });
       mapRef.current = map;
       markerRef.current = marker;
+      circleRef.current = null;
       setReady(true);
       // Leaflet measures the container on creation; re-measure after layout.
       setTimeout(() => map.invalidateSize(), 0);
@@ -102,10 +112,29 @@ export function LocationPicker({ value, onChange, language, labels }: LocationPi
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
+      circleRef.current = null;
     };
     // The map is created once; later value changes move the marker below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Draw or remove the delivery radius circle around the pin.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map === null || !ready) return;
+    void (async () => {
+      const L = await import('leaflet');
+      circleRef.current?.remove();
+      circleRef.current = null;
+      if (radiusKm === null || value === null) return;
+      circleRef.current = L.circle([value.lat, value.lng], {
+        radius: radiusKm * 1000,
+        color: '#2563eb',
+        weight: 2,
+        fillOpacity: 0.12,
+      }).addTo(map);
+    })();
+  }, [radiusKm, value, ready]);
 
   // Keep the marker in step with the value the parent holds.
   useEffect(() => {

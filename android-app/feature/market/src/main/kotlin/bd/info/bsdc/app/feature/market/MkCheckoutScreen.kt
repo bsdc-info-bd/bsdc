@@ -98,11 +98,15 @@ fun MkCheckoutScreen(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var placedCode by remember { mutableStateOf<String?>(null) }
+    var shopFee by remember { mutableStateOf(MkLogic.DEFAULT_DELIVERY_FEE_POISHA) }
 
     // Resolve the vendor id and the price of what is being bought.
     LaunchedEffect(vendorSlug) {
         vendorChecked = false
         vendorId = repository.fetchVendorRef(vendorSlug).getOrNull()
+        // The shop sets its own delivery charge; the server charges the same amount.
+        shopFee = repository.fetchVendorPage(vendorSlug).getOrNull()?.vendor?.delivery?.fee_poisha
+            ?: MkLogic.DEFAULT_DELIVERY_FEE_POISHA
         if (directItems == null) {
             val lines = repository.fetchMyCart().getOrNull().orEmpty()
                 .filter { it.vendor_slug == vendorSlug && it.orderable }
@@ -188,7 +192,7 @@ fun MkCheckoutScreen(
         }
     }
 
-    val fee = MkLogic.DEFAULT_DELIVERY_FEE_POISHA
+    val fee = shopFee
     val sub = subtotal ?: 0L
 
     Box(modifier.fillMaxSize()) {
