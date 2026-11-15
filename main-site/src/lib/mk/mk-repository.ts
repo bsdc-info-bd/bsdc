@@ -1,3 +1,4 @@
+import { asDatabaseError } from '@/lib/supabase/errors';
 import { getSupabase } from '@/lib/supabase/client';
 import type { Json } from '@/lib/supabase/types';
 import type { OrderStatus } from './mk-logic';
@@ -29,13 +30,13 @@ function asJson<T>(data: Json | null): T {
 
 export async function fetchPaymentInstructions(): Promise<MkPaymentInstructions> {
   const { data, error } = await getSupabase().rpc('mk_payment_instructions');
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkPaymentInstructions>(data);
 }
 
 export async function fetchMyApplication(): Promise<MkMyApplication | null> {
   const { data, error } = await getSupabase().rpc('mk_my_application');
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkMyApplication | null>(data);
 }
 
@@ -63,13 +64,13 @@ export async function submitVendorApplication(
   const { data, error } = await getSupabase().rpc('mk_submit_vendor_application', {
     p: payload as unknown as Json,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<{ application_id: string; status: string }>(data);
 }
 
 export async function fetchVendorDashboard(): Promise<MkVendorDashboard> {
   const { data, error } = await getSupabase().rpc('mk_vendor_dashboard');
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkVendorDashboard>(data);
 }
 
@@ -80,7 +81,7 @@ export async function fetchVendorOrders(
     p_status: status ?? '',
     p_limit: 100,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkVendorOrder[]>(data);
 }
 
@@ -94,13 +95,13 @@ export async function setVendorOrderStatus(
     p_next: next,
     p_reason: reason,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<{ status: OrderStatus; credits_left: number }>(data);
 }
 
 export async function fetchVendorCatalog(): Promise<MkVendorCatalog> {
   const { data, error } = await getSupabase().rpc('mk_vendor_catalog');
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkVendorCatalog>(data);
 }
 
@@ -114,7 +115,7 @@ export async function saveVendorCategory(
     p_name: name,
     p_sort: sort,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return data;
 }
 
@@ -136,7 +137,7 @@ export async function saveVendorProduct(
     p_id: id ?? null,
     p: payload as unknown as Json,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return data;
 }
 
@@ -149,7 +150,7 @@ export async function updateVendorProfile(payload: {
   const { error } = await getSupabase().rpc('mk_vendor_update_profile', {
     p: payload as unknown as Json,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 export async function buyCredits(
@@ -164,7 +165,7 @@ export async function buyCredits(
     p_holder: holder,
     p_txn_id: txnId,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<{ purchase_id: string; status: string }>(data);
 }
 
@@ -180,7 +181,7 @@ export async function listShops(
     p_lng: origin?.lng ?? null,
     p_limit: 40,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkListedShop[]>(data);
 }
 
@@ -191,7 +192,7 @@ export async function listAdminApplications(status: string): Promise<MkAdminAppl
     p_status: status,
     p_limit: 100,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkAdminApplication[]>(data);
 }
 
@@ -205,7 +206,7 @@ export async function decideApplication(
     p_decision: decision,
     p_note: note,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 export async function listAdminPurchases(status: string): Promise<MkAdminPurchase[]> {
@@ -213,7 +214,7 @@ export async function listAdminPurchases(status: string): Promise<MkAdminPurchas
     p_status: status,
     p_limit: 100,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkAdminPurchase[]>(data);
 }
 
@@ -227,7 +228,7 @@ export async function decidePurchase(
     p_decision: decision,
     p_note: note,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 export async function setAdminSetting(
@@ -235,7 +236,7 @@ export async function setAdminSetting(
   value: string,
 ): Promise<void> {
   const { error } = await getSupabase().rpc('mk_admin_set_setting', { p_key: key, p_value: value });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 export async function setAdminPackage(
@@ -250,26 +251,26 @@ export async function setAdminPackage(
     p_price_poisha: pricePoisha,
     p_is_active: isActive,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 // Customer -------------------------------------------------------------------
 
 export async function fetchVendorPage(slug: string): Promise<MkVendorPageData | null> {
   const { data, error } = await getSupabase().rpc('mk_vendor_page', { p_slug: slug });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkVendorPageData | null>(data);
 }
 
 export async function fetchVendorRef(slug: string): Promise<string | null> {
   const { data, error } = await getSupabase().rpc('mk_vendor_ref', { p_slug: slug });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return data ?? null;
 }
 
 export async function fetchProductDetail(productId: string): Promise<MkProductDetail | null> {
   const { data, error } = await getSupabase().rpc('mk_product_detail', { p_product_id: productId });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkProductDetail | null>(data);
 }
 
@@ -278,13 +279,13 @@ export async function setCartQty(productId: string, qty: number): Promise<number
     p_product_id: productId,
     p_qty: qty,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return data;
 }
 
 export async function fetchMyCart(): Promise<MkCartLine[]> {
   const { data, error } = await getSupabase().rpc('mk_my_cart');
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkCartLine[]>(data);
 }
 
@@ -298,13 +299,13 @@ export async function placeOrder(
     p_address: address as unknown as Json,
     p_items: directItems === null ? null : (directItems as unknown as Json),
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkPlacedOrder>(data);
 }
 
 export async function fetchMyOrders(): Promise<MkCustomerOrder[]> {
   const { data, error } = await getSupabase().rpc('mk_my_orders', { p_limit: 40 });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
   return asJson<MkCustomerOrder[]>(data);
 }
 
@@ -313,7 +314,7 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<vo
     p_order_id: orderId,
     p_reason: reason,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }
 
 export async function submitReview(orderId: string, rating: number, body: string): Promise<void> {
@@ -322,5 +323,5 @@ export async function submitReview(orderId: string, rating: number, body: string
     p_rating: rating,
     p_body: body,
   });
-  if (error) throw error;
+  if (error) throw asDatabaseError(error);
 }

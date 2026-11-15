@@ -140,6 +140,7 @@ const HARNESSES = [
     't71.mjs',
     '0106: marketplace products and shops are public, listed in the sitemap, and described to crawlers',
   ],
+  ['t72.mjs', '0107: no live database function deletes without a WHERE clause (safe-update)'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
