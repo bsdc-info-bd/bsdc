@@ -1,4 +1,5 @@
 import { getSupabase } from '@/lib/supabase/client';
+import type { Json } from '@/lib/supabase/types';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
   AdWalletHistoryRow,
@@ -9,6 +10,8 @@ import type {
 } from '@/lib/supabase/types';
 import type {
   AdEventKind,
+  AdPaymentInstructions,
+  AdPaymentRequest,
   AdPlacement,
   AdStatus,
   Campaign,
@@ -26,9 +29,14 @@ function toServed(row: ServedAdRow): ServedAd {
     headline: row.headline,
     body: row.body,
     imageUrl: row.image_url,
+    ...(row.thumb_url ? { thumbUrl: row.thumb_url } : {}),
+    ...(row.image_alt ? { imageAlt: row.image_alt } : {}),
     ctaLabel: row.cta_label,
     targetUrl: row.target_url,
     placement: row.placement,
+    ...(row.layout ? { layout: row.layout } : {}),
+    ...(row.accent_color ? { accentColor: row.accent_color } : {}),
+    ...(row.badge_label ? { badgeLabel: row.badge_label } : {}),
   };
 }
 
@@ -59,8 +67,14 @@ function toCreative(row: CampaignCreativeRow): CampaignCreative {
     headline: row.headline,
     body: row.body,
     imageUrl: row.image_url,
+    ...(row.thumb_url ? { thumbUrl: row.thumb_url } : {}),
+    ...(row.image_alt ? { imageAlt: row.image_alt } : {}),
     ctaLabel: row.cta_label,
     targetUrl: row.target_url,
+    ...(row.layout ? { layout: row.layout } : {}),
+    ...(row.accent_color ? { accentColor: row.accent_color } : {}),
+    ...(row.badge_label ? { badgeLabel: row.badge_label } : {}),
+    ...(row.platforms ? { platforms: row.platforms } : {}),
     isEnabled: row.is_enabled,
     impressions: row.impressions,
     clicks: row.clicks,
@@ -68,11 +82,66 @@ function toCreative(row: CampaignCreativeRow): CampaignCreative {
   };
 }
 
+const VIEWER_TOKEN_KEY = 'bsdc_ad_viewer_v1';
+let sessionViewerToken = '';
+
+function createViewerToken(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  return `${Date.now().toString(36)}-${Math.floor(performance.now() * 1000).toString(36)}`;
+}
+
+export function getOrCreateAdViewerToken(): string {
+  if (sessionViewerToken.length >= 16) return sessionViewerToken;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const existing = window.localStorage.getItem(VIEWER_TOKEN_KEY)?.trim() ?? '';
+      if (/^[A-Za-z0-9_-]{16,80}$/.test(existing)) {
+        sessionViewerToken = existing;
+        return sessionViewerToken;
+      }
+      const next = createViewerToken();
+      window.localStorage.setItem(VIEWER_TOKEN_KEY, next);
+      sessionViewerToken = next;
+      return next;
+    }
+  } catch {
+    // Storage blocked: fall back to per-tab token below.
+  }
+  sessionViewerToken = createViewerToken();
+  return sessionViewerToken;
+}
+
+export interface ServeAdsOptions {
+  language?: 'bn' | 'en';
+  topic?: string;
+  city?: string;
+}
+
 /** Ads for one slot. Guests are served too; the function leaks no bids. */
-export async function fetchAds(placement: AdPlacement, limit = 1): Promise<ServedAd[]> {
-  const { data, error } = await getSupabase()
-    .rpc('serve_ads', { p_placement: placement, p_limit: limit })
-    .returns<ServedAdRow[]>();
+export async function fetchAds(
+  placement: AdPlacement,
+  limit = 1,
+  options: ServeAdsOptions = {},
+): Promise<ServedAd[]> {
+  const args: {
+    p_placement: AdPlacement;
+    p_limit: number;
+    p_platform: 'web';
+    p_language?: string;
+    p_topic?: string;
+    p_city?: string;
+  } = {
+    p_placement: placement,
+    p_limit: limit,
+    p_platform: 'web',
+  };
+  if (options.language) args.p_language = options.language;
+  if (options.topic && options.topic.trim().length > 0) args.p_topic = options.topic.trim();
+  if (options.city && options.city.trim().length > 0) args.p_city = options.city.trim();
+
+  const { data, error } = await getSupabase().rpc('serve_ads', args).returns<ServedAdRow[]>();
   if (error) throw toDataError(error);
   return (data ?? []).map(toServed);
 }
@@ -85,6 +154,7 @@ export async function recordEvent(creativeId: string, kind: AdEventKind): Promis
   const { data, error } = await getSupabase().rpc('record_ad_event', {
     p_creative_id: creativeId,
     p_kind: kind,
+    p_viewer_token: getOrCreateAdViewerToken(),
   });
   if (error) throw toDataError(error);
   return data === true;
@@ -158,4 +228,78 @@ export async function setCampaignPaused(campaignId: string, paused: boolean): Pr
   });
   if (error) throw toDataError(error);
   return data;
+}
+
+// --- Self-service campaigns and bKash payments (0101) ----------------------
+
+function asObject(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toPaymentRequest(row: unknown): AdPaymentRequest {
+  const r = asObject(row);
+  const status = r.status === 'approved' || r.status === 'rejected' ? r.status : 'pending';
+  return {
+    id: String(r.id ?? ''),
+    campaignId: String(r.campaign_id ?? ''),
+    amountPoisha: Number(r.amount_poisha ?? 0),
+    txnId: String(r.txn_id ?? ''),
+    status,
+    reviewNote: String(r.review_note ?? ''),
+    createdAt: String(r.created_at ?? ''),
+    decidedAt: typeof r.decided_at === 'string' ? r.decided_at : null,
+  };
+}
+
+export async function fetchPaymentInstructions(): Promise<AdPaymentInstructions> {
+  const { data, error } = await getSupabase().rpc('ad_payment_instructions');
+  if (error) throw toDataError(error);
+  const r = asObject(data);
+  const bikash =
+    typeof r.bikash_number === 'string' && r.bikash_number.trim() !== '' ? r.bikash_number : null;
+  return {
+    bikashNumber: bikash,
+    minBudgetPoisha: Number(r.min_budget_poisha ?? 10000),
+    maxBudgetPoisha: Number(r.max_budget_poisha ?? 10000000),
+    minBidPoisha: Number(r.min_bid_poisha ?? 100),
+    maxBidPoisha: Number(r.max_bid_poisha ?? 1000000),
+    dailyCapMinPoisha: Number(r.daily_cap_min_poisha ?? 1000),
+  };
+}
+
+/** Builds a draft campaign with its one creative. Returns the new campaign id. */
+export async function createCampaign(payload: Json): Promise<string> {
+  const { data, error } = await getSupabase().rpc('ad_create_campaign', { p: payload });
+  if (error) throw toDataError(error);
+  const id = asObject(data).campaign_id;
+  if (typeof id !== 'string' || id === '') throw new Error('ads/no-campaign-id');
+  return id;
+}
+
+export async function submitPayment(
+  campaignId: string,
+  input: { sender: string; account: string; txn: string },
+): Promise<void> {
+  const { error } = await getSupabase().rpc('ad_submit_payment', {
+    p_campaign_id: campaignId,
+    p_sender: input.sender,
+    p_account: input.account.trim(),
+    p_txn: input.txn.trim(),
+  });
+  if (error) throw toDataError(error);
+}
+
+export async function fetchPaymentRequests(limit = 30): Promise<AdPaymentRequest[]> {
+  const { data, error } = await getSupabase().rpc('ad_my_payment_requests', { p_limit: limit });
+  if (error) throw toDataError(error);
+  return Array.isArray(data) ? data.map(toPaymentRequest) : [];
+}
+
+export async function sendForReview(campaignId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('ad_owner_submit_campaign', {
+    p_campaign_id: campaignId,
+  });
+  if (error) throw toDataError(error);
 }

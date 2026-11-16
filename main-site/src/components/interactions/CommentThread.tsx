@@ -119,6 +119,7 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
 
   return (
     <article
+      id={`comment-${node.id}`}
       className={cn(
         'rounded-xl border border-line bg-surface p-3',
         node.isAnswer && 'border-green-500',

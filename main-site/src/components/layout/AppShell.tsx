@@ -1,22 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
 import { Toaster } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { chromeFor } from '@/lib/layout/chrome';
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey';
+import { useNotificationRealtime } from '@/hooks/use-notification-realtime';
 import { usePublishPresence } from '@/hooks/use-presence';
 import { useSystemThemeSync } from '@/hooks/use-system-theme-sync';
 import { AppBar } from './AppBar';
 import { BottomNav } from './BottomNav';
-import { CommandPalette } from './CommandPalette';
 import { Footer } from './Footer';
-import { OfflineBanner } from './OfflineBanner';
 import { RouteProgress } from './RouteProgress';
 import { SkipLink } from './SkipLink';
 
 /**
- * The application shell: skip link, app bar, route progress, offline banner,
- * main region, footer, mobile tab bar, command palette and toasts.
+ * The application shell: skip link, app bar, route progress, main region,
+ * footer, mobile tab bar, command palette and toasts.
  * Bottom padding reserves space for the mobile tab bar so content never hides.
  *
  * Not every route gets all of it. `chromeFor` decides, and a conversation
@@ -25,8 +25,13 @@ import { SkipLink } from './SkipLink';
  * is what makes a chat on a phone feel like a web page that happens to have a
  * chat in it.
  */
+const CommandPalette = lazy(() =>
+  import('./CommandPalette').then((module) => ({ default: module.CommandPalette })),
+);
+
 export function AppShell() {
   useCommandPaletteHotkey();
+  useNotificationRealtime();
   usePublishPresence();
   useSystemThemeSync();
   const chrome = chromeFor(useLocation().pathname);
@@ -35,7 +40,6 @@ export function AppShell() {
     <div className="flex min-h-[100dvh] flex-col">
       <SkipLink />
       <RouteProgress />
-      <OfflineBanner />
       {chrome.appBar ? <AppBar /> : null}
       <VerifyEmailBanner />
       <main
@@ -52,7 +56,9 @@ export function AppShell() {
       </main>
       {chrome.footer ? <Footer /> : null}
       {chrome.bottomNav ? <BottomNav /> : null}
-      <CommandPalette />
+      <Suspense fallback={null}>
+        <CommandPalette />
+      </Suspense>
       <Toaster />
       <ScrollRestoration />
     </div>

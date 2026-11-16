@@ -1,9 +1,11 @@
-import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useFocusTrap } from '@/hooks/use-focus-trap';
 import { cn } from '@/lib/cn';
+import { downloadImage } from '@/lib/media/download';
 import { MediaImage } from './MediaImage';
 import type { GalleryItem } from './MediaGallery';
 
@@ -31,6 +33,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
   const panelRef = useRef<HTMLDivElement>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
 
   const total = items.length;
   const current = items[Math.min(Math.max(index, 0), total - 1)];
@@ -120,15 +123,33 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
           {total > 1 ? `${position + 1} / ${total}` : null}
         </span>
         <div className="flex items-center gap-1">
-          <a
-            href={current.url}
-            download
-            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10"
+          <button
+            type="button"
+            disabled={downloading}
+            onClick={() => {
+              if (downloading) return;
+              setDownloading(true);
+              void downloadImage(current.url, current.altText)
+                .then(() => {
+                  toast.success(t('media.lightbox.downloaded'));
+                })
+                .catch(() => {
+                  toast.error(t('media.lightbox.downloadFailed'));
+                })
+                .finally(() => {
+                  setDownloading(false);
+                });
+            }}
+            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-60"
             aria-label={t('media.lightbox.download')}
             title={t('media.lightbox.download')}
           >
-            <Download size={18} aria-hidden="true" />
-          </a>
+            {downloading ? (
+              <Loader2 size={18} className="animate-spin" aria-hidden="true" />
+            ) : (
+              <Download size={18} aria-hidden="true" />
+            )}
+          </button>
           <button
             type="button"
             onClick={onClose}
@@ -219,15 +240,12 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
                   : 'border-white/25 opacity-70 hover:opacity-100',
               )}
             >
-              <img
+              <MediaImage
                 src={item.thumbUrl.length > 0 ? item.thumbUrl : item.url}
+                fallbackSrc={item.url}
                 alt=""
                 loading="lazy"
                 decoding="async"
-                // Same referrer policy as every other picture: the host is never
-                // told where the request came from, so a hotlink rule at the
-                // picture host cannot break the strip.
-                referrerPolicy="no-referrer"
                 className="h-full w-full object-cover"
               />
             </button>

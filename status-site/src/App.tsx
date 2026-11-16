@@ -7,6 +7,7 @@ import {
   Empty,
   Field,
   Loading,
+  PublicShell,
   Select,
   TextArea,
   callRpc,
@@ -50,40 +51,13 @@ const WINDOW_DAYS = 90;
  */
 export function App(): ReactElement {
   return (
-    <div className="kit-shell">
-      <header className="kit-header">
-        <div className="kit-brand">
-          <strong>BSDC service status</strong>
-          <span>Bangladesh Software Development Community</span>
-        </div>
-        <SessionBadge />
-      </header>
-      <main className="kit-main">
-        <Status />
-      </main>
-      <footer className="kit-footer">
-        Uptime is computed from recorded checks over the last {WINDOW_DAYS} days.
-      </footer>
-    </div>
-  );
-}
-
-function SessionBadge(): ReactElement | null {
-  const { state, signOut } = useSession();
-  if (state.status !== 'authenticated') return null;
-  return (
-    <div className="kit-who">
-      <span>{state.profile.displayName}</span>
-      <Button
-        size="small"
-        variant="quiet"
-        onClick={() => {
-          void signOut();
-        }}
-      >
-        Sign out
-      </Button>
-    </div>
+    <PublicShell
+      appId="bsdc-status"
+      title="BSDC Service Status"
+      footerText={`Uptime is computed from recorded checks over the last ${WINDOW_DAYS} days.`}
+    >
+      <Status />
+    </PublicShell>
   );
 }
 

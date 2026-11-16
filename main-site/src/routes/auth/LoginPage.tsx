@@ -76,12 +76,16 @@ export default function LoginPage() {
         noindex
       />
       <AuthCard
+        showcase
         title={t('auth.login.title')}
         subtitle={t('auth.login.subtitle')}
         footer={
           <>
             {t('auth.login.noAccount')}{' '}
-            <Link to={signupHref} className="font-semibold text-green-700 underline">
+            <Link
+              to={signupHref}
+              className="font-semibold text-green-700 underline underline-offset-4 hover:text-green-800"
+            >
               {t('auth.signUp')}
             </Link>
           </>

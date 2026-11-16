@@ -3,6 +3,7 @@ import { Check, Clock, Eye, MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { AdSlot } from '@/components/ads/AdSlot';
 import { MediaImage } from '@/components/media/MediaImage';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { CommentThread } from '@/components/interactions/CommentThread';
@@ -24,19 +25,11 @@ import {
 } from '@/design-system';
 import { isConfigured } from '@/lib/env';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { profilePath, ROUTES, SITE } from '@/lib/site';
+import { buildPostJsonLd } from '@/lib/seo/post-schema';
+import { profilePath, ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/auth-store';
-
-const JSON_LD_TYPE: Record<string, string> = {
-  article: 'Article',
-  question: 'QAPage',
-  snippet: 'TechArticle',
-  post: 'DiscussionForumPosting',
-  poll: 'DiscussionForumPosting',
-  media: 'DiscussionForumPosting',
-};
 
 export default function PostPage() {
   const { t, i18n } = useTranslation();
@@ -49,7 +42,7 @@ export default function PostPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { data, isPending, isError, error } = useQuery({
-    queryKey: ['post', slug],
+    queryKey: ['post', user?.uid ?? 'anon', slug],
     queryFn: async () => {
       const { fetchPostBySlug } = await import('@/lib/content/post-repository');
       return fetchPostBySlug(slug);
@@ -68,7 +61,7 @@ export default function PostPage() {
     onSuccess: () => {
       setConfirmingDelete(false);
       toast.success(t('post.movedToTrash'));
-      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
       navigate(ROUTES.trash);
     },
@@ -100,7 +93,7 @@ export default function PostPage() {
     },
     onSuccess: () => {
       toast.success(t('trash.restored'));
-      void queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      void queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
     onError: (error) => {
@@ -117,13 +110,23 @@ export default function PostPage() {
     enabled: postId.length > 0 && Boolean(user) && (data?.poll.length ?? 0) > 0,
   });
 
+  const { data: questionComments } = useQuery({
+    queryKey: ['comments', postId, user?.uid ?? null],
+    queryFn: async () => {
+      const { fetchComments } = await import('@/lib/interactions/interaction-repository');
+      return fetchComments(postId, user?.uid ?? null);
+    },
+    enabled: postId.length > 0 && data?.kind === 'question' && isConfigured.supabase,
+    staleTime: 20_000,
+  });
+
   const vote = useMutation({
     mutationFn: async (optionId: string) => {
       const { castPollVote } = await import('@/lib/content/post-repository');
       await castPollVote(postId, optionId);
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['post', slug] });
+      await queryClient.invalidateQueries({ queryKey: ['post', user?.uid ?? 'anon', slug] });
       await queryClient.invalidateQueries({ queryKey: ['poll-vote', postId] });
     },
   });
@@ -138,9 +141,17 @@ export default function PostPage() {
 
   if (!isConfigured.supabase) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t('data.errors.notConfigured')} />
-      </div>
+      <>
+        <Seo
+          title={`${t('post.notFoundTitle')} — ${t('common.brand')}`}
+          description={t('post.metaFallback')}
+          path={slug ? `/p/${slug}` : '/'}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t('data.errors.notConfigured')} />
+        </div>
+      </>
     );
   }
 
@@ -148,26 +159,42 @@ export default function PostPage() {
 
   if (isError) {
     return (
-      <div className="fab-container py-10">
-        <Alert tone="danger" title={t(dataErrorKey(error))} />
-      </div>
+      <>
+        <Seo
+          title={`${t('post.notFoundTitle')} — ${t('common.brand')}`}
+          description={t('post.metaFallback')}
+          path={slug ? `/p/${slug}` : '/'}
+          noindex
+        />
+        <div className="fab-container py-10">
+          <Alert tone="danger" title={t(dataErrorKey(error))} />
+        </div>
+      </>
     );
   }
 
   if (!data) {
     return (
-      <div className="fab-container py-10">
-        <EmptyState
-          icon={<MessageSquare size={32} />}
-          title={t('post.notFoundTitle')}
+      <>
+        <Seo
+          title={`${t('post.notFoundTitle')} — ${t('common.brand')}`}
           description={t('post.notFoundBody')}
-          action={
-            <Link to="/">
-              <Button variant="secondary">{t('common.backHome')}</Button>
-            </Link>
-          }
+          path={slug ? `/p/${slug}` : '/'}
+          noindex
         />
-      </div>
+        <div className="fab-container py-10">
+          <EmptyState
+            icon={<MessageSquare size={32} />}
+            title={t('post.notFoundTitle')}
+            description={t('post.notFoundBody')}
+            action={
+              <Link to="/">
+                <Button variant="secondary">{t('common.backHome')}</Button>
+              </Link>
+            }
+          />
+        </div>
+      </>
     );
   }
 
@@ -176,6 +203,15 @@ export default function PostPage() {
 
   const published = post.publishedAt ?? post.createdAt;
   const totalVotes = post.poll.reduce((sum, option) => sum + option.votes, 0);
+  const seoImage =
+    post.coverUrl.length > 0
+      ? post.coverUrl
+      : post.media.length > 0
+        ? (post.media[0]?.url ?? '')
+        : '';
+
+  const isNoindex =
+    post.visibility !== 'public' || post.status !== 'published' || post.deletedAt !== null;
 
   return (
     <>
@@ -184,29 +220,9 @@ export default function PostPage() {
         description={post.excerpt.length > 0 ? post.excerpt : t('post.metaFallback')}
         path={`/p/${post.slug}`}
         type="article"
-        {...(post.coverUrl.length > 0 ? { image: post.coverUrl } : {})}
-        noindex={post.visibility !== 'public' || post.status !== 'published'}
-        jsonLd={[
-          {
-            '@type': JSON_LD_TYPE[post.kind] ?? 'DiscussionForumPosting',
-            headline: post.title.length > 0 ? post.title : post.excerpt.slice(0, 110),
-            description: post.excerpt,
-            datePublished: published,
-            ...(post.editedAt ? { dateModified: post.editedAt } : {}),
-            inLanguage: post.language,
-            url: `${SITE.url}/p/${post.slug}`,
-            keywords: post.tags.join(', '),
-            ...(post.author
-              ? {
-                  author: {
-                    '@type': 'Person',
-                    name: post.author.displayName,
-                    url: `${SITE.url}${profilePath(post.author.username)}`,
-                  },
-                }
-              : {}),
-          },
-        ]}
+        {...(seoImage.length > 0 ? { image: seoImage } : {})}
+        noindex={isNoindex}
+        jsonLd={isNoindex ? [] : [buildPostJsonLd(post, questionComments ?? [])]}
       />
 
       <article className="fab-container py-6 sm:py-10">
@@ -386,6 +402,8 @@ export default function PostPage() {
               }}
             />
           </div>
+
+          <AdSlot placement="article" topic={post.tags[0]} className="mt-6" />
 
           <div className="mt-8">
             <CommentThread

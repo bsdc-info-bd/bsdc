@@ -39,6 +39,7 @@ function event(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
     coverUrl: '',
     startsAt: '2026-10-05T10:00:00.000Z',
     endsAt: '2026-10-05T12:00:00.000Z',
+    timezone: 'Asia/Dhaka',
     capacity: null,
     going: 0,
     groupId: null,
@@ -145,16 +146,19 @@ describe('events', () => {
   it('groups by calendar day in chronological order', () => {
     const days = groupEventsByDay([
       event({
+        timezone: 'UTC',
         id: 'late',
         startsAt: '2026-10-06T09:00:00.000Z',
         endsAt: '2026-10-06T10:00:00.000Z',
       }),
       event({
+        timezone: 'UTC',
         id: 'early',
         startsAt: '2026-10-05T09:00:00.000Z',
         endsAt: '2026-10-05T10:00:00.000Z',
       }),
       event({
+        timezone: 'UTC',
         id: 'same-day',
         startsAt: '2026-10-05T18:00:00.000Z',
         endsAt: '2026-10-05T19:00:00.000Z',

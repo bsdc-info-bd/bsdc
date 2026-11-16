@@ -80,6 +80,68 @@ const HARNESSES = [
   ['t54.mjs', 'accurate performance reports, private receipts and faithful certificate reprints'],
   ['t55.mjs', 'current corporate authority for campaigns, certificates and reports'],
   ['t56.mjs', 'messenger retries, private drafts, safe replies and membership boundaries'],
+  [
+    't57.mjs',
+    '0085: push re-wake on repeated activity, follower post alerts, feed_new_count and FCM tokens',
+  ],
+  [
+    't58.mjs',
+    '0086: certificate/notice editing & revision history, templates, CLI macros, and bulk governance',
+  ],
+  [
+    't59.mjs',
+    '0087/0088: complete A-to-Z notification coverage, unified routing, @mentions, and push dispatch',
+  ],
+  [
+    't60.mjs',
+    '0089: rich creative customization, platform/language/topic targeting, guest telemetry, and staff editing',
+  ],
+  [
+    't61.mjs',
+    '0090: per-device push delivery receipts, multi-device partial failures, push_content window, and seq-scoped instant trigger',
+  ],
+  [
+    't62.mjs',
+    '0091: certificate issuance, editing, amendment/reissue, revocation, and template RPC validation without 23514/23503 leaks',
+  ],
+  [
+    't63.mjs',
+    '0092: follower privacy (`showFollowers`), profile social lists, rich autocomplete, chat member picker, and group creation',
+  ],
+  [
+    't64.mjs',
+    'fresh-messenger reset: clears all conversations, messages, drafts, reactions, receipts, pins, stars, send requests, messenger reports, and messenger notifications atomically',
+  ],
+  [
+    't65.mjs',
+    '0093: every real ad click is counted and billed, with per-identity double-tap, hourly, and daily spam guards',
+  ],
+  [
+    't66.mjs',
+    '0094: cash-on-delivery marketplace: vendor application, credits, listing, ordering, order lifecycle, reviews, and RLS',
+  ],
+  [
+    't67.mjs',
+    '0101: self-service advertising: campaign builder, bKash payment reports, staff approval that credits the wallet, and money reserved once',
+  ],
+  [
+    't68.mjs',
+    "0102: the event calendar returns each event's own time zone, with its grants unchanged",
+  ],
+  [
+    't69.mjs',
+    '0103: listing skills are stored in one normalised form, so a skill filter finds jobs and gigs whatever case they were typed in',
+  ],
+  [
+    't70.mjs',
+    '0105: the main administrator can approve a vendor, and the owner holds every permission',
+  ],
+  [
+    't71.mjs',
+    '0106: marketplace products and shops are public, listed in the sitemap, and described to crawlers',
+  ],
+  ['t72.mjs', '0107: no live database function deletes without a WHERE clause (safe-update)'],
+  ['t73.mjs', '0108: shop delivery areas and charges, and admin-editable credit package prices'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

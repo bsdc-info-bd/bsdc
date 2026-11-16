@@ -26,6 +26,30 @@ import {
   type PendingCampaignRow,
   type PendingShopRow,
 } from './approvals';
+import {
+  LAYOUT_LABELS,
+  PLACEMENT_LABELS,
+  PLATFORM_LABELS,
+  type AdLayout,
+  type AdPlacement,
+  type AdPlatform,
+} from './campaigns';
+
+interface PendingCreativePreviewRow {
+  readonly creative_id: string;
+  readonly placement: AdPlacement;
+  readonly headline: string;
+  readonly body: string;
+  readonly image_url: string;
+  readonly thumb_url: string;
+  readonly image_alt: string;
+  readonly cta_label: string;
+  readonly target_url: string;
+  readonly is_enabled: boolean;
+  readonly layout: AdLayout;
+  readonly badge_label: string;
+  readonly platforms: readonly AdPlatform[];
+}
 
 /**
  * The two review queues.
@@ -53,6 +77,7 @@ export function Approvals(): ReactElement {
       </Banner>
       <Shops />
       <Campaigns />
+      <AdPayments />
     </div>
   );
 }
@@ -68,8 +93,8 @@ function Shops(): ReactElement {
 
   return (
     <Card
-      title="Shops waiting for review"
-      description="Opening a shop creates products but no storefront until somebody approves it."
+      title="Vendor applications waiting for review"
+      description="Check the bKash payment before approving. Approval unlocks the shop, its products and its order credits."
       actions={
         <Button variant="quiet" size="small" onClick={reload}>
           Refresh
@@ -146,6 +171,34 @@ function ShopRow({
             {shop.owner_name}
             {shop.slug.length > 0 ? ` · /shop/${shop.slug}` : ''}
           </div>
+          <dl
+            className="kit-small"
+            style={{
+              margin: 'var(--sp-2) 0 0',
+              display: 'grid',
+              gridTemplateColumns: 'max-content 1fr',
+              gap: '2px var(--sp-2)',
+            }}
+          >
+            <dt className="kit-muted">Mobile</dt>
+            <dd style={{ margin: 0 }}>{shop.mobile}</dd>
+            <dt className="kit-muted">Address</dt>
+            <dd style={{ margin: 0 }}>{shop.address_line}</dd>
+            {shop.trade_license_no.length > 0 ? (
+              <>
+                <dt className="kit-muted">Trade licence</dt>
+                <dd style={{ margin: 0 }}>{shop.trade_license_no}</dd>
+              </>
+            ) : null}
+            <dt className="kit-muted">Credit package</dt>
+            <dd style={{ margin: 0 }}>{shop.package_code} orders</dd>
+            <dt className="kit-muted">bKash sender</dt>
+            <dd style={{ margin: 0 }}>
+              {shop.payment_sender} · {shop.payment_holder}
+            </dd>
+            <dt className="kit-muted">Transaction ID</dt>
+            <dd style={{ margin: 0 }}>{shop.payment_txn_id}</dd>
+          </dl>
         </div>
         <Badge tone={waitingTone(shop.created_at)}>waiting {waitingFor(shop.created_at)}</Badge>
       </div>
@@ -247,6 +300,141 @@ function Campaigns(): ReactElement {
   );
 }
 
+interface PendingAdPaymentRow {
+  readonly id: string;
+  readonly owner_uid: string;
+  readonly campaign_id: string;
+  readonly amount_poisha: number;
+  readonly sender_number: string;
+  readonly account_holder: string;
+  readonly txn_id: string;
+  readonly status: string;
+  readonly created_at: string;
+}
+
+/**
+ * Advertisers pay BSDC by bKash, as vendors do. Staff check the transaction
+ * against the bKash statement. Approving credits the advertiser's wallet with
+ * the amount paid; rejecting asks for the reason, which the advertiser sees.
+ */
+function AdPayments(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    async () =>
+      oldestFirst(
+        await listRpc<PendingAdPaymentRow>(env, 'ad_admin_list_payment_requests', {
+          p_status: 'pending',
+          p_limit: 100,
+        }),
+      ),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  return (
+    <Card
+      title="Advertising payments waiting for approval"
+      description="Check each transaction on the bKash statement. Approving adds the amount to the advertiser's wallet."
+      actions={
+        <Button variant="quiet" size="small" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
+      {state.status === 'loading' ? <Loading label="Loading advertising payments." /> : null}
+      {state.status === 'error' ? (
+        <Banner tone="bad" title="The payment queue did not load">
+          <p className="kit-small">{state.message}</p>
+        </Banner>
+      ) : null}
+      {state.status === 'ready' && state.data.length === 0 ? (
+        <Empty>
+          No advertising payments are waiting. A payment appears here once an advertiser reports it.
+        </Empty>
+      ) : null}
+      {state.status === 'ready' && state.data.length > 0 ? (
+        <div className="kit-stack">
+          {state.data.map((payment) => (
+            <AdPaymentRow key={payment.id} payment={payment} onDecided={reload} />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function AdPaymentRow({
+  payment,
+  onDecided,
+}: {
+  payment: PendingAdPaymentRow;
+  onDecided: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const decide = (decision: 'approve' | 'reject'): void => {
+    if (decision === 'reject' && note.trim().length < 5) {
+      setError('Write the reason the advertiser will see, at least five characters.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    callRpc(env, 'ad_admin_decide_payment_request', {
+      p_request_id: payment.id,
+      p_decision: decision,
+      p_note: decision === 'reject' ? note.trim() : '',
+    })
+      .then(() => {
+        setNote('');
+        onDecided();
+      })
+      .catch((failure: unknown) => setError(messageOf(failure)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <strong>{money(payment.amount_poisha)}</strong> paid by bKash
+          <div className="kit-small kit-muted">
+            From {payment.sender_number} · account {payment.account_holder} · transaction{' '}
+            <code>{payment.txn_id}</code>
+          </div>
+          <div className="kit-small kit-muted">Campaign {payment.campaign_id.slice(0, 8)}</div>
+        </div>
+        <Badge tone={waitingTone(payment.created_at)}>
+          waiting {waitingFor(payment.created_at)}
+        </Badge>
+      </div>
+      <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
+        <TextArea
+          label="Reason, if you refuse"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="For example: transaction not found on the statement."
+        />
+        {error ? (
+          <Banner tone="bad" title="Not saved">
+            <p className="kit-small">{error}</p>
+          </Banner>
+        ) : null}
+        <div className="kit-row" style={{ justifyContent: 'flex-end' }}>
+          <Button variant="danger" size="small" disabled={busy} onClick={() => decide('reject')}>
+            Refuse
+          </Button>
+          <Button size="small" disabled={busy} onClick={() => decide('approve')}>
+            Approve and credit wallet
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CampaignRow({
   campaign,
   onDecided,
@@ -259,6 +447,22 @@ function CampaignRow({
   const [confirming, setConfirming] = useState<'approve' | 'refuse' | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showCreatives, setShowCreatives] = useState(false);
+  const [creatives, setCreatives] = useState<readonly PendingCreativePreviewRow[] | null>(null);
+  const [creativesError, setCreativesError] = useState('');
+
+  const toggleCreatives = (): void => {
+    const next = !showCreatives;
+    setShowCreatives(next);
+    if (next && creatives === null) {
+      setCreativesError('');
+      listRpc<PendingCreativePreviewRow>(env, 'campaign_creative_details', {
+        p_campaign_id: campaign.id,
+      })
+        .then((rows) => setCreatives(rows))
+        .catch((failure: unknown) => setCreativesError(messageOf(failure)));
+    }
+  };
 
   const submit = (approve: boolean): void => {
     const problems = decisionProblems(approve, draft);
@@ -311,6 +515,51 @@ function CampaignRow({
         </Banner>
       ) : null}
 
+      {showCreatives ? (
+        <div className="kit-stack">
+          {creativesError !== '' ? (
+            <Banner tone="bad" title="Could not load creatives">
+              <p className="kit-small">{creativesError}</p>
+            </Banner>
+          ) : creatives === null ? (
+            <Loading label="Loading creatives." />
+          ) : (
+            creatives.map((item) => (
+              <div key={item.creative_id} className="kit-adpreview">
+                <div className="kit-adpreview-head">
+                  <span className="kit-badge">
+                    {item.badge_label || 'Sponsored'} · {PLACEMENT_LABELS[item.placement]} ·{' '}
+                    {LAYOUT_LABELS[item.layout] ?? item.layout}
+                  </span>
+                  <span className="kit-small kit-muted">
+                    {(item.platforms ?? ['web', 'android'])
+                      .map((p) => PLATFORM_LABELS[p])
+                      .join(' + ')}
+                  </span>
+                </div>
+                <div className="kit-adpreview-body">
+                  {item.image_url !== '' ? (
+                    <img
+                      src={item.thumb_url || item.image_url}
+                      alt={item.image_alt || item.headline}
+                      className="kit-adpreview-media"
+                    />
+                  ) : null}
+                  <div className="kit-stack" style={{ gap: '4px' }}>
+                    <strong>{item.headline}</strong>
+                    {item.body !== '' ? <p className="kit-small">{item.body}</p> : null}
+                    <span className="kit-small kit-muted">
+                      {item.cta_label ? `[${item.cta_label}] → ` : ''}
+                      {item.target_url}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
+
       {error.length > 0 ? (
         <Banner tone="bad" title="That did not work">
           <p className="kit-small">{error}</p>
@@ -329,6 +578,11 @@ function CampaignRow({
           <Button size="small" variant="quiet" onClick={() => setConfirming('refuse')}>
             Refuse
           </Button>
+          {campaign.creative_count > 0 ? (
+            <Button size="small" variant="quiet" onClick={toggleCreatives}>
+              {showCreatives ? 'Hide creatives' : 'Preview creatives'}
+            </Button>
+          ) : null}
         </div>
       ) : (
         <div className="kit-stack">

@@ -1,0 +1,166 @@
+package bd.info.bsdc.app.feature.market
+
+/**
+ * Pure marketplace rules shared by the customer and vendor screens.
+ * Mirrors main-site/src/lib/mk/mk-logic.ts so Android and web agree on money, status and phone rules.
+ */
+object MkLogic {
+
+    const val DEFAULT_DELIVERY_FEE_POISHA: Long = 15000
+
+    /** Bangladesh bounding box used by the database for every pinned location. */
+    const val BD_LAT_MIN = 20.5
+    const val BD_LAT_MAX = 26.7
+    const val BD_LNG_MIN = 88.0
+    const val BD_LNG_MAX = 92.7
+
+    /** Sylhet city centre, used as the map fallback when location is unavailable. */
+    const val SYLHET_LAT = 24.8949
+    const val SYLHET_LNG = 91.8687
+
+    private val BD_MOBILE = Regex("^01[3-9][0-9]{8}$")
+
+    /** Taka label, e.g. 15000 poisha becomes ৳150. Lakh grouping and Bangla digits when [bn] is true. */
+    fun formatTaka(poisha: Long, bn: Boolean): String {
+        val negative = poisha < 0
+        val absolute = kotlin.math.abs(poisha)
+        val taka = absolute / 100
+        val paisa = absolute % 100
+        val body = buildString {
+            append(groupLakh(taka.toString()))
+            if (paisa != 0L) {
+                append('.')
+                append(paisa.toString().padStart(2, '0'))
+            }
+        }
+        val digits = if (bn) toBanglaDigits(body) else body
+        return "${if (negative) "-" else ""}৳$digits"
+    }
+
+    /** Strips spaces, dashes and the +880 / 880 country prefix from a mobile number. */
+    fun normaliseBdMobile(input: String): String {
+        val digits = input.filterNot { it == ' ' || it == '-' }
+        return when {
+            digits.startsWith("+880") -> "0" + digits.substring(4)
+            digits.startsWith("880") && digits.length == 13 -> "0" + digits.substring(3)
+            else -> digits
+        }
+    }
+
+    fun isBdMobile(input: String): Boolean = BD_MOBILE.matches(normaliseBdMobile(input))
+
+    fun isInsideBangladesh(lat: Double, lng: Double): Boolean =
+        lat in BD_LAT_MIN..BD_LAT_MAX && lng in BD_LNG_MIN..BD_LNG_MAX
+
+    /** What a vendor can do next to an order, given its current status. */
+    fun vendorActionsFor(status: String): List<String> = when (status) {
+        "placed" -> listOf("accepted", "cancelled")
+        "accepted" -> listOf("packaged", "cancelled")
+        "packaged" -> listOf("out_for_delivery", "cancelled")
+        "out_for_delivery" -> listOf("delivered", "cancelled")
+        else -> emptyList()
+    }
+
+    /** Position on the customer timeline (0 to 4). Cancelled is off the line and returns -1. */
+    fun timelineIndex(status: String): Int = when (status) {
+        "placed" -> 0
+        "accepted" -> 1
+        "packaged" -> 2
+        "out_for_delivery" -> 3
+        "delivered" -> 4
+        else -> -1
+    }
+
+    /** Orders still moving through the line. These keep a status notification on the device. */
+    fun isActiveOrderStatus(status: String): Boolean =
+        status == "placed" || status == "accepted" || status == "packaged" || status == "out_for_delivery"
+
+    /** Bilingual status text, the same wording the server writes into order notifications. */
+    fun orderStatusLabel(status: String): String = when (status) {
+        "placed" -> "New order | নতুন অর্ডার"
+        "accepted" -> "Accepted | গ্রহণ করা হয়েছে"
+        "packaged" -> "Packaged | প্যাকেট হয়েছে"
+        "out_for_delivery" -> "Out for delivery | ডেলিভারিতে"
+        "delivered" -> "Delivered | পৌঁছে গেছে"
+        "cancelled" -> "Cancelled | বাতিল"
+        else -> status
+    }
+
+    /** A review is allowed only after delivery and only once. */
+    fun canReview(status: String, reviewed: Boolean): Boolean = status == "delivered" && !reviewed
+
+    /** Matches mk_customer_cancel_order: only a placed order can be cancelled by the customer. */
+    fun canCustomerCancel(status: String): Boolean = status == "placed"
+
+    /** Agreement keys the server stores, same as mk-logic.ts AGREEMENT_KEYS. Every one must be ticked. */
+    val AGREEMENT_KEYS: List<String> = listOf(
+        "terms", "privacy", "vendor_policy", "cod_policy", "self_delivery", "accuracy",
+    )
+
+    /** NID is 10, 13 or 17 digits, matching the database check. */
+    fun isNid(input: String): Boolean = NID_PATTERN.matches(input.trim())
+
+    /** Transaction IDs are 4 to 40 characters. */
+    fun isTxnId(input: String): Boolean = input.trim().length in 4..40
+
+    /**
+     * Parses a taka amount typed by a vendor ("150", "12.5", "১২০.৫০") into poisha.
+     * Returns null for anything that is not a positive amount with at most two decimals.
+     */
+    fun parseTakaToPoisha(input: String): Long? {
+        val normalised = input.trim().replace(",", "").map { ch ->
+            if (ch in '\u09E6'..'\u09EF') ('0' + (ch - '\u09E6')) else ch
+        }.joinToString("")
+        val match = TAKA_PATTERN.matchEntire(normalised) ?: return null
+        val taka = match.groupValues[1].toLong()
+        val paisa = match.groupValues[2].padEnd(2, '0').toLong()
+        val total = taka * 100 + paisa
+        return if (total > 0) total else null
+    }
+
+    private val NID_PATTERN = Regex("""[0-9]{10}|[0-9]{13}|[0-9]{17}""")
+    private val TAKA_PATTERN = Regex("""(\d{1,7})(?:\.(\d{1,2}))?""")
+
+    /** Shop categories, same keys as the database and the web (mk-logic.ts SHOP_TYPES). */
+    val SHOP_TYPES: List<String> = listOf(
+        "grocery", "restaurant", "bakery", "pharmacy", "electronics", "fashion", "beauty",
+        "stationery", "home_kitchen", "books", "handicraft", "other",
+    )
+
+    fun shopTypeLabel(type: String, bn: Boolean): String {
+        val en = mapOf(
+            "grocery" to "Grocery", "restaurant" to "Restaurant & food", "bakery" to "Bakery & sweets",
+            "pharmacy" to "Pharmacy", "electronics" to "Electronics", "fashion" to "Fashion",
+            "beauty" to "Beauty", "stationery" to "Stationery", "home_kitchen" to "Home & kitchen",
+            "books" to "Books", "handicraft" to "Handicraft", "other" to "Other",
+        )
+        val bnLabels = mapOf(
+            "grocery" to "মুদি", "restaurant" to "রেস্তোরাঁ ও খাবার", "bakery" to "বেকারি ও মিষ্টি",
+            "pharmacy" to "ফার্মেসি", "electronics" to "ইলেকট্রনিক্স", "fashion" to "ফ্যাশন",
+            "beauty" to "বিউটি", "stationery" to "স্টেশনারি", "home_kitchen" to "ঘর ও রান্নাঘর",
+            "books" to "বই", "handicraft" to "হস্তশিল্প", "other" to "অন্যান্য",
+        )
+        return if (bn) bnLabels[type] ?: type else en[type] ?: type
+    }
+
+    /** Lakh grouping for a plain digit string, e.g. 1000000 becomes 10,00,000. */
+    internal fun groupLakh(digits: String): String {
+        if (digits.length <= 3) return digits
+        val head = digits.substring(0, digits.length - 3)
+        val tail = digits.substring(digits.length - 3)
+        val groups = mutableListOf<String>()
+        var rest = head
+        while (rest.length > 2) {
+            groups.add(0, rest.substring(rest.length - 2))
+            rest = rest.substring(0, rest.length - 2)
+        }
+        if (rest.isNotEmpty()) groups.add(0, rest)
+        return groups.joinToString(",") + "," + tail
+    }
+
+    internal fun toBanglaDigits(text: String): String = buildString(text.length) {
+        for (c in text) {
+            if (c in '0'..'9') append('০' + (c - '0')) else append(c)
+        }
+    }
+}

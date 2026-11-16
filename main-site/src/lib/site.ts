@@ -32,7 +32,6 @@ export const ROUTES = {
   about: '/about',
   guidelines: '/guidelines',
   contact: '/contact',
-  offline: '/offline',
   // The page that proves the platform is working, with evidence a member can
   // copy into a support message. Public on purpose: a visitor whose pictures do
   // not load should be able to answer the question without signing in.
@@ -67,9 +66,12 @@ export const ROUTES = {
   adminPeople: '/admin/people',
   ads: '/ads',
   vendor: '/vendor',
-  vendorProducts: '/vendor/products',
-  vendorOrders: '/vendor/orders',
-  vendorPayouts: '/vendor/payouts',
+  vendorApply: '/vendor/apply',
+  vendorConsole: '/vendor/console',
+  adminMarketplace: '/admin/marketplace',
+  market: '/marketplace',
+  marketCart: '/marketplace/cart',
+  marketOrders: '/marketplace/orders',
   search: '/search',
   learn: '/learn',
   verifyCertificate: '/verify',

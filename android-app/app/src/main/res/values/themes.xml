@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Bsdc.App" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/bsdc_splash_bg</item>
+    </style>
+
+    <style name="Theme.Bsdc.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/bsdc_splash_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Bsdc.App</item>
+    </style>
+
+    <color name="bsdc_splash_bg">#1B4332</color>
+</resources>

@@ -603,5 +603,7 @@ export function downloadPdf(bytes: Uint8Array, filename: string): void {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Keep the object URL alive long enough for Firefox/Safari/mobile WebViews
+  // to start reading the blob before revoking.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }

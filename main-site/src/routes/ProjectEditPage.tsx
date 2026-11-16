@@ -120,6 +120,14 @@ export default function ProjectEditPage() {
   }
 
   async function save() {
+    if (screenshots.pending.length > 0) {
+      toast.info(t('compose.mediaPending', { count: screenshots.pending.length }));
+      return;
+    }
+    if (screenshots.failed.length > 0) {
+      toast.error(t('compose.mediaFailed', { count: screenshots.failed.length }));
+      return;
+    }
     const found = validateProjectDraft(draft);
     setIssues(found);
     if (found.length > 0) {

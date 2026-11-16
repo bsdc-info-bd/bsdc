@@ -25,6 +25,7 @@
  */
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
+import type { FcmDeviceRow } from '@/lib/supabase/types';
 
 /** A row of `my_push_devices()`, exactly as Postgres returns it. */
 export interface PushDeviceRow {
@@ -152,4 +153,57 @@ export async function fetchMyPushDevices(): Promise<PushDevice[]> {
  */
 export function countLiveDevices(devices: readonly PushDevice[]): number {
   return devices.filter((device) => device.state === 'live').length;
+}
+
+export const FCM_DEVICE_PREFIX = 'fcm:';
+
+function fromFcmDevice(row: FcmDeviceRow): PushDevice {
+  return {
+    endpoint: `${FCM_DEVICE_PREFIX}${row.token_hash}`,
+    userAgent: row.user_agent ?? '',
+    language: toLanguage(row.language),
+    createdAt: row.created_at,
+    lastUsedAt: row.last_used_at ?? null,
+    state: toState(row.state),
+  };
+}
+
+export async function registerFcmToken(
+  token: string,
+  platform: 'web' | 'android' | 'ios',
+  language: string,
+  userAgent: string,
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc('register_fcm_token', {
+    p_token: token,
+    p_platform: platform,
+    p_user_agent: userAgent.slice(0, 400),
+    p_language: language === 'en' ? 'en' : 'bn',
+  });
+  if (error) throw toDataError(error);
+  return typeof data === 'string' ? data : '';
+}
+
+export async function forgetFcmToken(token: string): Promise<void> {
+  const { error } = await getSupabase().rpc('forget_fcm_token', { p_token: token });
+  if (error && !missingFunction(error.message)) throw toDataError(error);
+}
+
+export async function forgetFcmDevice(tokenHash: string): Promise<void> {
+  const { error } = await getSupabase().rpc('forget_fcm_device', { p_token_hash: tokenHash });
+  if (error && !missingFunction(error.message)) throw toDataError(error);
+}
+
+export async function fetchMyFcmDevices(): Promise<PushDevice[]> {
+  const { data, error } = await getSupabase().rpc('my_fcm_devices').returns<FcmDeviceRow[]>();
+  if (error) {
+    if (missingFunction(error.message)) return [];
+    throw toDataError(error);
+  }
+  return (data ?? []).map(fromFcmDevice);
+}
+
+export async function fetchAllPushDevices(): Promise<PushDevice[]> {
+  const [webPush, fcm] = await Promise.all([fetchMyPushDevices(), fetchMyFcmDevices()]);
+  return [...webPush, ...fcm].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

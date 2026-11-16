@@ -75,6 +75,7 @@ export function coercePrivacy(value: unknown): PrivacyPrefs {
     discoverable: flag(value, 'discoverable', DEFAULT_PRIVACY.discoverable),
     showActivity: flag(value, 'showActivity', DEFAULT_PRIVACY.showActivity),
     showEmail: flag(value, 'showEmail', DEFAULT_PRIVACY.showEmail),
+    showFollowers: flag(value, 'showFollowers', DEFAULT_PRIVACY.showFollowers),
   };
 }
 

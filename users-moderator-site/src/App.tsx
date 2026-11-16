@@ -12,6 +12,7 @@ import {
   Table,
   formatCardCode,
   listRpc,
+  rowsToCsv,
   useAsync,
   useCorporateEnv,
 } from '@kit';
@@ -56,15 +57,47 @@ function useDirectory(): ReturnType<typeof useAsync<readonly StaffRow[]>> {
 function Directory(): ReactElement {
   const { state } = useDirectory();
   const [term, setTerm] = useState('');
+  const [deptFilter, setDeptFilter] = useState('all');
   const [sort, setSort] = useState<SortKey>('staff_no');
+
+  const departments = useMemo(() => {
+    if (state.status !== 'ready') return [] as string[];
+    return [...new Set(state.data.map((r) => r.department).filter(Boolean))].sort();
+  }, [state]);
 
   const rows = useMemo(() => {
     if (state.status !== 'ready') return [] as readonly StaffRow[];
     return sortRows(
-      state.data.filter((row) => matches(row, term)),
+      state.data.filter(
+        (row) => matches(row, term) && (deptFilter === 'all' || row.department === deptFilter),
+      ),
       sort,
     );
-  }, [state, term, sort]);
+  }, [state, term, deptFilter, sort]);
+
+  const exportCsv = (): void => {
+    const csv = rowsToCsv(
+      ['staff_no', 'display_name', 'username', 'role', 'department', 'shift', 'card_code'],
+      rows.map((r) => [
+        r.staff_no,
+        r.display_name,
+        r.username ?? '',
+        r.role,
+        r.department,
+        r.shift,
+        r.card_code ?? '',
+      ]),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bsdc-staff-directory.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
 
   if (state.status === 'loading') return <Loading label="Loading the directory." />;
   if (state.status === 'error')
@@ -93,6 +126,13 @@ function Directory(): ReactElement {
       <Card
         title="Find somebody"
         description="Search a name, username, staff number, department or role."
+        actions={
+          rows.length > 0 ? (
+            <Button size="small" variant="quiet" onClick={exportCsv}>
+              Export CSV ({rows.length})
+            </Button>
+          ) : undefined
+        }
       >
         <div className="kit-grid">
           <Field
@@ -101,6 +141,15 @@ function Directory(): ReactElement {
             onChange={(event) => {
               setTerm(event.target.value);
             }}
+          />
+          <Select
+            label="Department"
+            value={deptFilter}
+            onChange={(e) => setDeptFilter(e.target.value)}
+            options={[
+              { value: 'all', label: 'All departments' },
+              ...departments.map((d) => ({ value: d, label: d })),
+            ]}
           />
           <Select
             label="Order by"

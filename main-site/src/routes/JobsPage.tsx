@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -12,9 +13,9 @@ import {
   Chip,
   EmptyState,
   LinkButton,
+  ListHero,
   Modal,
   PageSkeleton,
-  SectionHeading,
   SelectField,
   TextareaField,
   TextField,
@@ -60,38 +61,49 @@ export default function JobsPage() {
         title={t('jobs.metaTitle')}
         description={t('jobs.metaDescription')}
         path={ROUTES.jobs}
-        jsonLd={board.jobs.slice(0, 20).map((job) => ({
-          '@type': 'JobPosting',
-          title: job.title,
-          hiringOrganization: { '@type': 'Organization', name: job.company },
-          employmentType: job.jobType.toUpperCase(),
-          jobLocationType: job.workMode === 'remote' ? 'TELECOMMUTE' : undefined,
-          ...(job.publishedAt !== null ? { datePosted: job.publishedAt } : {}),
-          jobLocation: {
-            '@type': 'Place',
-            address: { '@type': 'PostalAddress', addressLocality: job.city, addressCountry: 'BD' },
+        jsonLd={[
+          {
+            '@type': 'CollectionPage',
+            name: t('jobs.title'),
+            description: t('jobs.metaDescription'),
+            url: `${SITE.url}${ROUTES.jobs}`,
+            mainEntity: {
+              '@type': 'ItemList',
+              itemListElement: board.jobs.slice(0, 20).map((job, index) => ({
+                '@type': 'ListItem',
+                position: index + 1,
+                url: `${SITE.url}${jobPath(job.slug)}`,
+                name: `${job.title} — ${job.company}`,
+              })),
+            },
           },
-          url: `${SITE.url}${jobPath(job.slug)}`,
-        }))}
+        ]}
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <SectionHeading
+        <ListHero
           title={t('jobs.title')}
           description={t('jobs.description')}
-          action={
+          icon={<Briefcase size={22} />}
+          actions={
             <LinkButton
               to={`${ROUTES.create}?kind=job`}
-              variant="outline"
+              variant="secondary"
               size="sm"
               iconStart={<Briefcase size={14} />}
             >
               {t('create.submit.job')}
             </LinkButton>
           }
+          footer={
+            <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-200" />
+              {t('jobs.openCount', { total: formatNumber(board.jobs.length, language) })}
+            </p>
+          }
         />
 
-        <Card className="mt-4">
+        <Card className="mt-4 rounded-2xl p-3 sm:p-4">
           <div className="grid gap-3 sm:grid-cols-3">
             <TextField
               label={t('jobs.search')}
@@ -193,7 +205,10 @@ export default function JobsPage() {
                             <Chip
                               selected={board.filters.skill === skill}
                               onClick={() => {
-                                board.setFilters({ ...board.filters, skill });
+                                board.setFilters({
+                                  ...board.filters,
+                                  skill: board.filters.skill === skill ? null : skill,
+                                });
                               }}
                             >
                               {skill}
@@ -218,6 +233,7 @@ export default function JobsPage() {
                   ) : (
                     <p className="text-xs text-muted">{t('jobs.signInToApply')}</p>
                   )}
+                  <ShareLinkButton title={job.title} url={`${SITE.url}${jobPath(job.slug)}`} />
                 </div>
               </Card>
             );

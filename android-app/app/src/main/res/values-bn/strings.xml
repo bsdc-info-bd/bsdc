@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BSDC</string>
+    <string name="app_tagline">বাংলাদেশের উন্মুক্ত ডেভেলপার কমিউনিটি</string>
+    <string name="tab_home">হোম</string>
+    <string name="tab_verify">যাচাই</string>
+    <string name="tab_create">লিখুন</string>
+    <string name="tab_messenger">বার্তা</string>
+    <string name="tab_explore">অন্বেষণ</string>
+</resources>

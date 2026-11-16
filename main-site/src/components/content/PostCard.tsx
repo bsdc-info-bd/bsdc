@@ -8,7 +8,24 @@ import type { Post } from '@/lib/content/post-repository';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { placementFor } from '@/lib/media/arrangement';
 import { toGalleryItems } from '@/lib/media/gallery-items';
+import { isRepairableMediaHost } from '@/lib/media/hosts';
 import { profilePath } from '@/lib/site';
+
+function safeCoverUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:') return parsed.toString();
+    if (parsed.protocol.startsWith('http') && isRepairableMediaHost(parsed.hostname)) {
+      parsed.protocol = 'https:';
+      return parsed.toString();
+    }
+    return '';
+  } catch {
+    return '';
+  }
+}
 
 /**
  * One post, as a reader meets it in the feed.
@@ -44,11 +61,11 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
    * for, and an author who set a cover saw it nowhere. One image, one place.
    */
   const gallery = toGalleryItems(post.media);
-  const cover = post.coverUrl.trim();
+  const cover = safeCoverUrl(post.coverUrl);
   const pictures =
     gallery.length > 0
       ? gallery
-      : /^https:\/\//.test(cover)
+      : cover.length > 0
         ? [
             {
               id: `cover-${post.id}`,

@@ -46,14 +46,16 @@ If `VITE_FB_AUTH_DOMAIN` differs, the callback must instead use that exact host.
 
 ### Browsers blocking third-party storage
 
-This patch includes a fixed-upstream Pages proxy at `/__/auth/*` and excludes it from the offline app-shell fallback and database SEO redirects. To use same-origin redirect auth on the main production domain:
+This patch includes a fixed-upstream Pages proxy at `/__/auth/*` and excludes it from the offline app-shell fallback and database SEO redirects.
 
-1. Deploy the proxy first.
-2. Register `https://www.bsdc.info.bd/__/auth/handler` with **all three providers** and ensure the domain is authorized in Firebase.
+When `VITE_FB_AUTH_DOMAIN` is still the cross-origin default (`bsdc-bd.firebaseapp.com`), non-webview mobile browsers (Safari, Chrome, Samsung Internet) use `signInWithPopup` first so third-party storage partitioning does not drop `getRedirectResult(auth)` across origins. To use same-origin redirect auth on the main production domain:
+
+1. Deploy the proxy first (`/__/auth/*`).
+2. Register `https://www.bsdc.info.bd/__/auth/handler` with **all three providers** (Google, GitHub, Yahoo) and ensure the domain is authorized in Firebase.
 3. Set `VITE_FB_AUTH_DOMAIN=www.bsdc.info.bd` and redeploy.
-4. Test on Safari/a browser blocking third-party cookies. Main-domain same-origin setup does not automatically make a separate `pages.dev` host same-origin.
+4. Test on Safari/Chrome on a handset. Main-domain same-origin setup does not automatically make a separate `pages.dev` host same-origin.
 
-The patch deliberately does not silently change the auth domain: doing so before updating provider callbacks would break otherwise valid provider registrations. The proxy forwards only to the fixed `bsdc-bd` Firebase project, strips app authorization/cookies, and does not cache responses.
+If an in-app webview or strict privacy browser drops redirect state (`getRedirectResult(auth)` returning `null` with no active user), the client surfaces `auth.errors.redirectLost` with actionable guidance instead of silently returning to the login form.
 
 ## Supabase profile access
 

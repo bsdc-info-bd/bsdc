@@ -1,6 +1,8 @@
 import type {
   DbAdEventKind,
+  DbAdLayout,
   DbAdPlacement,
+  DbAdPlatform,
   DbAdPricing,
   DbAdStatus,
   DbAdWalletKind,
@@ -8,6 +10,8 @@ import type {
 
 export type AdStatus = DbAdStatus;
 export type AdPlacement = DbAdPlacement;
+export type AdLayout = DbAdLayout;
+export type AdPlatform = DbAdPlatform;
 export type AdPricing = DbAdPricing;
 export type AdEventKind = DbAdEventKind;
 export type AdWalletKind = DbAdWalletKind;
@@ -26,9 +30,14 @@ export interface ServedAd {
   headline: string;
   body: string;
   imageUrl: string;
+  thumbUrl?: string;
+  imageAlt?: string;
   ctaLabel: string;
   targetUrl: string;
   placement: AdPlacement;
+  layout?: AdLayout;
+  accentColor?: string;
+  badgeLabel?: string;
 }
 
 export interface Campaign {
@@ -55,8 +64,14 @@ export interface CampaignCreative {
   headline: string;
   body: string;
   imageUrl: string;
+  thumbUrl?: string;
+  imageAlt?: string;
   ctaLabel: string;
   targetUrl: string;
+  layout?: AdLayout;
+  accentColor?: string;
+  badgeLabel?: string;
+  platforms?: readonly AdPlatform[];
   isEnabled: boolean;
   impressions: number;
   clicks: number;
@@ -276,4 +291,27 @@ export function takaToPoisha(input: string): number {
   const parsed = Number.parseFloat(input);
   if (!Number.isFinite(parsed) || parsed < 0) return -1;
   return Math.round(parsed * 100);
+}
+
+/** One bKash payment an advertiser reported for a campaign's budget. */
+export type AdPaymentStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AdPaymentRequest {
+  id: string;
+  campaignId: string;
+  amountPoisha: number;
+  txnId: string;
+  status: AdPaymentStatus;
+  reviewNote: string;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export interface AdPaymentInstructions {
+  bikashNumber: string | null;
+  minBudgetPoisha: number;
+  maxBudgetPoisha: number;
+  minBidPoisha: number;
+  maxBidPoisha: number;
+  dailyCapMinPoisha: number;
 }

@@ -1,6 +1,7 @@
 import { Award, GraduationCap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -28,7 +29,6 @@ export default function LearnPage() {
   const mine = useMyCertificates();
 
   const itemList = {
-    '@context': 'https://schema.org',
     '@type': 'ItemList',
     name: t('learn.title'),
     itemListElement: catalog.courses.slice(0, 20).map((course, index) => ({
@@ -112,6 +112,21 @@ export default function LearnPage() {
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {catalog.courses.map((course) => (
             <Card as="li" key={course.id}>
+              {course.coverUrl.trim().length > 0 ? (
+                <Link
+                  to={coursePath(course.slug)}
+                  className="-mx-3 -mt-3 mb-3 block aspect-[16/9] overflow-hidden rounded-t-card bg-surface-2 sm:-mx-4 sm:-mt-4"
+                >
+                  <MediaImage
+                    src={course.coverUrl}
+                    alt={course.title}
+                    slotWidth={420}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
+                </Link>
+              ) : null}
               <div className="flex items-start justify-between gap-2">
                 <h2 className="min-w-0 text-lg font-semibold">
                   <Link to={coursePath(course.slug)} className="fab-link">

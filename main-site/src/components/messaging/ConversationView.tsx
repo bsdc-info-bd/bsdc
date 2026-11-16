@@ -81,7 +81,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
   useErrorToast(settings.errorKey, settings.dismissError);
   const leave = useLeaveConversation();
 
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => conversation.initialDraft);
   const draftLoaded = useRef(false);
   const draftDirty = useRef(false);
   const draftBeforeEdit = useRef('');
@@ -134,8 +134,10 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
   useEffect(() => {
     if (draftLoaded.current || conversation.state === null) return;
     draftLoaded.current = true;
-    if (!draftDirty.current && conversation.state.draftBody.length > 0)
-      setDraft(conversation.state.draftBody);
+    const serverDraft = conversation.state.draftBody;
+    if (!draftDirty.current && serverDraft.length > 0) {
+      setDraft((current) => (current.length === 0 ? serverDraft : current));
+    }
     setFirstReadMark(conversation.state.lastReadAt);
   }, [conversation.state]);
 

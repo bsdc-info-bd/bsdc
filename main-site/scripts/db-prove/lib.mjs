@@ -102,6 +102,13 @@ export async function expectFail(db, sub, sql, expected, label, claims = {}) {
 export async function asOwner(db, sql) {
   await db.exec(sql);
 }
+/** A plain true/false check that counts toward the summary, like expectFail. */
+export function check(ok, label, detail = '') {
+  record(
+    label,
+    ok ? null : { code: 'CHECK', message: String(detail || 'the condition was false') },
+  );
+}
 export function summary() {
   console.log(`SUMMARY: ${passes} passed, ${failures.length} failed`);
   for (const f of failures) console.log('  failed: ' + f);

@@ -1,6 +1,8 @@
 import { ArrowLeft, CalendarDays, Globe, MapPin, Users, Video } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
+import { EventShareActions } from '@/components/communities/EventShareActions';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -14,6 +16,7 @@ import {
 } from '@/design-system';
 import { useEventDetail } from '@/hooks/use-communities';
 import { isEventFull, isEventLive, type RsvpStatus } from '@/lib/communities/community-types';
+import { calendarFileForDetail } from '@/lib/communities/event-calendar-file';
 import { formatNumber } from '@/lib/format';
 import { eventJsonLd, formatInZone, safeExternalUrl } from '@/lib/listings/listing-schema';
 import { ROUTES, SITE, eventPath } from '@/lib/site';
@@ -35,9 +38,17 @@ export default function EventPage() {
 
   if (detail.isError) {
     return (
-      <div className="fab-container py-6">
-        <Alert tone="danger" title={t('events.detail.failed')} />
-      </div>
+      <>
+        <Seo
+          title={t('events.detail.failed')}
+          description={t('events.detail.notFoundBody')}
+          path={eventPath(slug)}
+          noindex
+        />
+        <div className="fab-container py-6">
+          <Alert tone="danger" title={t('events.detail.failed')} />
+        </div>
+      </>
     );
   }
 
@@ -93,8 +104,9 @@ export default function EventPage() {
         title={t('events.detail.metaTitle', { title: event.title })}
         description={summary.length > 0 ? summary : event.title}
         path={path}
+        {...(event.coverUrl.trim().length > 0 ? { image: event.coverUrl.trim() } : {})}
         noindex={event.isCancelled}
-        jsonLd={[eventJsonLd(event, url)]}
+        jsonLd={event.isCancelled ? [] : [eventJsonLd(event, url)]}
       />
 
       <article className="fab-container py-5 sm:py-8">
@@ -111,8 +123,20 @@ export default function EventPage() {
 
           {event.isCancelled ? <Alert tone="danger" title={t('events.detail.cancelled')} /> : null}
 
-          <Card>
-            <div className="flex flex-col gap-3">
+          <Card padded={false} className="overflow-hidden">
+            {event.coverUrl.trim().length > 0 ? (
+              <div className="aspect-[16/7] w-full bg-surface-2">
+                <MediaImage
+                  src={event.coverUrl.trim()}
+                  alt={event.title}
+                  slotWidth={960}
+                  loading="eager"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-3 p-4 sm:p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="blue">{t(`events.modes.${event.mode}`)}</Badge>
                 {live ? <Badge tone="green">{t('events.live')}</Badge> : null}
@@ -126,6 +150,7 @@ export default function EventPage() {
               {isHost ? (
                 <p className="text-sm text-muted">{t('events.detail.hostedByYou')}</p>
               ) : null}
+              <EventShareActions event={calendarFileForDetail(event, url)} size="md" />
 
               <ul className="grid gap-2 text-sm sm:grid-cols-2">
                 <li className="flex items-start gap-2">

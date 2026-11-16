@@ -31,6 +31,22 @@ export interface DeviceRow {
   created_at: string;
 }
 
+export interface FcmDeviceRow {
+  notification_id: string;
+  uid: string;
+  token: string;
+  platform: 'web' | 'android' | 'ios';
+  language: string;
+  kind: string;
+  body: string;
+  actor_name: string;
+  actor_avatar: string;
+  url: string;
+  post_id: string | null;
+  conversation_id: string | null;
+  created_at: string;
+}
+
 /**
  * The headers PostgREST wants.
  *
@@ -67,8 +83,11 @@ export async function callRpc<T>(
   name: string,
   args: Record<string, unknown>,
 ): Promise<T> {
-  const base = env.SUPABASE_URL.trim().replace(/\/+$/, '');
-  if (base.length === 0) throw new DatabaseUnavailable(503, 'SUPABASE_URL is not set');
+  const base = (env.SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
+  const anonKey = (env.SUPABASE_ANON_KEY ?? '').trim();
+  if (base.length === 0 || anonKey.length === 0) {
+    throw new DatabaseUnavailable(503, 'SUPABASE_URL or SUPABASE_ANON_KEY is not set');
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
@@ -76,7 +95,7 @@ export async function callRpc<T>(
     const response = await fetch(`${base}/rest/v1/rpc/${name}`, {
       method: 'POST',
       headers: {
-        ...postgrestHeaders(env.SUPABASE_ANON_KEY),
+        ...postgrestHeaders(anonKey),
         'content-type': 'application/json',
         'x-bsdc-app': 'push-worker',
       },

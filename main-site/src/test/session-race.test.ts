@@ -1,8 +1,11 @@
 import type * as FirebaseModule from '@/lib/firebase';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { QueryClient } from '@tanstack/react-query';
 import { getRedirectResult, type IdTokenResult, type User } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
+import { clearPendingOAuthRedirect, markPendingOAuthRedirect } from '@/lib/auth/oauth-state';
 import { startAuthListener } from '@/lib/auth/session';
+import { registerQueryClient } from '@/lib/query-client';
 import { useAuthStore, DEFAULT_CLAIMS } from '@/store/auth-store';
 
 const mocks = vi.hoisted(() => ({
@@ -47,8 +50,13 @@ const flush = async () => {
   for (let i = 0; i < 10; i++) await Promise.resolve();
 };
 
+const testQueryClient = new QueryClient();
+registerQueryClient(testQueryClient);
+
 beforeEach(() => {
   vi.clearAllMocks();
+  clearPendingOAuthRedirect();
+  testQueryClient.clear();
   mocks.auth.currentUser = user;
   mocks.profile.mockResolvedValue({ uid: user.uid });
 });
@@ -174,6 +182,34 @@ describe('redirect completion errors', () => {
     const stop = startAuthListener(callbacks);
     await flush();
     expect(callbacks.onRedirectError).toHaveBeenCalledWith('auth.errors.unauthorizedDomain');
+    stop();
+  });
+
+  it('reports redirectLost when getRedirectResult returns null after a pending OAuth redirect', async () => {
+    mocks.auth.currentUser = null;
+    markPendingOAuthRedirect('google');
+    vi.mocked(getRedirectResult).mockResolvedValueOnce(null);
+    const callbacks = handlers();
+    const stop = startAuthListener(callbacks);
+    await flush();
+    expect(callbacks.onRedirectError).toHaveBeenCalledWith('auth.errors.redirectLost');
+    stop();
+  });
+
+  it('clears cached queries when switching between two accounts', async () => {
+    mocks.ensure.mockResolvedValue(token);
+    testQueryClient.setQueryData(['feed', 'alice'], ['alice-only']);
+    const callbacks = handlers();
+    const stop = startAuthListener(callbacks);
+    mocks.authCallback(user);
+    await flush();
+    expect(testQueryClient.getQueryData(['feed', 'alice'])).toEqual(['alice-only']);
+
+    const bob = { uid: 'bob' } as User;
+    mocks.auth.currentUser = bob;
+    mocks.authCallback(bob);
+    await flush();
+    expect(testQueryClient.getQueryData(['feed', 'alice'])).toBeUndefined();
     stop();
   });
 

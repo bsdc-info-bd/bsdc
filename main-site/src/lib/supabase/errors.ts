@@ -65,6 +65,34 @@ export class DataError extends Error {
   }
 }
 
+/**
+ * supabase-js returns a PostgREST error as a plain object, not an `Error`, and
+ * `if (error) throw error` then throws that object. A catch that asks
+ * `instanceof Error` does not see the message and shows a generic line instead
+ * of the reason. This keeps the message and code and returns a real `Error`.
+ */
+export function asDatabaseError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? String((error as { message: unknown }).message)
+      : 'data/unknown';
+  return Object.assign(new Error(message || 'data/unknown'), {
+    code:
+      typeof error === 'object' && error !== null && 'code' in error
+        ? String((error as { code: unknown }).code ?? '')
+        : '',
+    details:
+      typeof error === 'object' && error !== null && 'details' in error
+        ? (error as { details: unknown }).details
+        : null,
+    hint:
+      typeof error === 'object' && error !== null && 'hint' in error
+        ? (error as { hint: unknown }).hint
+        : null,
+  });
+}
+
 /** Normalises anything thrown by the database layer into a DataError. */
 export function toDataError(cause: unknown): DataError {
   return cause instanceof DataError ? cause : new DataError(cause);

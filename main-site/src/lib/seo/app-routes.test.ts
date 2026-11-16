@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ROUTES } from '@/lib/site';
-import { APP_ROUTES, HANDLE_ROUTE, matchAppRoute } from './app-routes';
+import { APP_ROUTES, HANDLE_ROUTE, isEdgeNoindexPath, matchAppRoute } from './app-routes';
 import staticRoutes from './static-routes.json';
 
 /**
@@ -76,7 +76,15 @@ describe('matching an address', () => {
     expect(matchAppRoute('/jobs/one/two/three')).toBeNull();
   });
 
-  it('ignores a trailing slash', () => {
+  it('ignores a trailing slash and matches static segments case-insensitively', () => {
     expect(matchAppRoute('/about/')).toEqual({ kind: 'static', path: '/about' });
+    expect(matchAppRoute('/About')).toEqual({ kind: 'static', path: '/about' });
+    expect(matchAppRoute('/JOBS/senior-backend')).toEqual({
+      kind: 'param',
+      pattern: '/jobs/:slug',
+    });
+    expect(isEdgeNoindexPath('/SEARCH')).toBe(true);
+    expect(isEdgeNoindexPath('/projects/edit')).toBe(false);
+    expect(isEdgeNoindexPath('/projects/my-app/edit')).toBe(true);
   });
 });

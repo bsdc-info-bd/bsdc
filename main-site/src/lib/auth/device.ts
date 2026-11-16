@@ -46,6 +46,17 @@ export function isPhoneSized(signals: Pick<DeviceSignals, 'width' | 'touch'>): b
 }
 
 /**
+ * Whether `authDomain` matches the page's own hostname, meaning `/__/auth/*`
+ * runs same-origin (first-party storage) instead of across third-party storage
+ * boundaries that iOS Safari and modern mobile browsers partition.
+ */
+export function isSameOriginAuthDomain(authDomain: string, hostname: string): boolean {
+  const domain = authDomain.trim().toLowerCase();
+  const host = hostname.trim().toLowerCase();
+  return domain.length > 0 && host.length > 0 && domain === host;
+}
+
+/**
  * Whether sign-in should navigate away instead of opening a popup.
  *
  * An installed PWA is the exception: it has no browser chrome to come back to,
@@ -56,6 +67,27 @@ export function prefersRedirectFlow(signals: DeviceSignals): boolean {
   if (signals.standalone) return false;
   if (signals.inApp) return true;
   return isPhoneSized(signals);
+}
+
+/**
+ * Runtime OAuth flow selection aware of storage partitioning.
+ *
+ * On phones, `signInWithRedirect` against a cross-origin `*.firebaseapp.com`
+ * `authDomain` drops its pending state on iOS Safari, Firefox ETP and Android
+ * Chrome with storage partitioning (`getRedirectResult` returns `null`).
+ * Standard mobile browsers therefore try `signInWithPopup` first when
+ * `authDomain` is cross-origin (falling back to redirect only if blocked), and
+ * go straight to redirect when `authDomain` is same-origin (`/__/auth/*` proxy)
+ * or inside an in-app webview where popups cannot open.
+ */
+export function shouldPreferRedirectAuth(
+  signals: DeviceSignals,
+  options: { sameOriginAuth?: boolean } = {},
+): boolean {
+  if (signals.standalone) return false;
+  if (signals.inApp) return true;
+  if (isPhoneSized(signals)) return options.sameOriginAuth === true;
+  return false;
 }
 
 /** Reads the signals from the current browser, or null outside one. */

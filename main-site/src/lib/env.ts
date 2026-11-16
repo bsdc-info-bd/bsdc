@@ -60,12 +60,22 @@ const raw: PublicEnv = {
 
 export const env: PublicEnv = envSchema.parse(raw);
 
+export function effectivePushVapidConfig(
+  push: PublicEnv['push'],
+): { mode: 'webpush' | 'fcm'; publicKey: string } | null {
+  const webPush = push.webPushPublicKey.trim();
+  if (webPush.length > 0) return { mode: 'webpush', publicKey: webPush };
+  const fcm = push.vapidPublicKey.trim();
+  if (fcm.length > 0) return { mode: 'fcm', publicKey: fcm };
+  return null;
+}
+
 /** Service clients are only constructed when their configuration is present. */
 export const isConfigured = {
   firebase: raw.firebase.apiKey.length > 0 && raw.firebase.projectId.length > 0,
   supabase: raw.supabase.url.length > 0 && raw.supabase.publishableKey.length > 0,
-  // Push is configured when this site holds a key of its own. A Firebase key is
-  // not one: it only signs for Firebase's own service.
-  push: raw.push.webPushPublicKey.length > 0,
+  // Push is configured when either this site's VAPID key or Firebase's FCM
+  // Web Push certificate key is present.
+  push: raw.push.webPushPublicKey.length > 0 || raw.push.vapidPublicKey.length > 0,
   oneSignal: raw.oneSignalAppId.length > 0,
 } as const;

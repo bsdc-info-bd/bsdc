@@ -1,93 +1,47 @@
-# BSDC for Android
+# BSDC Native Android (`bd.info.bsdc.app`)
 
-A Capacitor shell around `www.bsdc.info.bd`. It exists for three things the
-web cannot do well on Android — a launcher icon, delivered push
-notifications, and verified app links — and for nothing else. There is no
-second implementation of the product in here; every screen the user sees is
-the same web application that is served to every other visitor, which is
-why there is no second set of bugs to fix.
+100% pure native Android application for the **Bangladesh Software Development Community (BSDC)** built from scratch with **Kotlin 2.0 + Java 21 + Jetpack Compose (Material 3)**.
 
-## What is in this package
+Zero Capacitor, zero Flutter, zero web wrappers, zero Cloudinary, zero legacy VAPID, and zero admin panels.
 
-| Path                  | What it is                                                                   |
-| --------------------- | ---------------------------------------------------------------------------- |
-| `capacitor.config.ts` | App id, name, native chrome and plugin configuration.                        |
-| `src/links.ts`        | Every routing decision the shell makes, as pure functions with tests.        |
-| `src/shell.ts`        | The only file that touches a native plugin; it delegates decisions to above. |
-| `.env.example`        | The variables a release build needs. None of them are committed.             |
+## Architecture Overview
 
-The native project itself (`android/`) is **generated**, not committed. It
-is produced by `npx cap add android` from this configuration, so the
-checked-in state is the configuration rather than a hundred Gradle files
-nobody reads and everybody merges badly.
+- `:app` — Application shell (`bd.info.bsdc.app`), edge-to-edge `MainActivity`, adaptive `NavigationBar` / `NavigationRail`, verified Android App Links (`www.bsdc.info.bd`, `bsdc.info.bd`, `vf.main.bsdc.info.bd`, `vf.bsdc.info.bd`, `news.bsdc.info.bd`, `bsdc://`), R8 release configuration, and environment-driven Play Store signing.
+- `:core:model` — Pure domain contracts, verification states, reaction enums, ImgBB-only media contracts, notification taxonomy, and route destinations.
+- `:core:common` — Deterministic **Java 21** core engines:
+  - `DocCodeChecksum.java` (100% parity with `vf-site` / Postgres `bsdc.card_check_digit()`, automatic `O -> 4` / `I -> 8` repair)
+  - `AppLinkUriRouter.java` (strict host validation routing BSDC & `vf.*` natively, `news.bsdc.info.bd` to isolated `NewsReaderScreen`, blocking `/admin*`, routing external domains to Chrome Custom Tabs)
+  - `PdfSha256Verifier.java` (streaming `SHA-256` performance report verifier)
+  - `BanglaDigitFormatter.java` (`০–৯` localization)
+  - `AppVersionResolver.java` (tag/CI version computation)
+- `:core:designsystem` — Exact BSDC light/dark emerald color system matching `main-site/src/styles/base.css`, vector shield mark matching `Logo.tsx`, reduced-motion physics, shimmer skeletons, and reusable Compose primitives.
+- `:core:permissions` — Play-Store-compliant runtime permission state machine (`PermissionStateMachine.java`), DataStore request tracking, `PermissionCoordinator`, persistent non-blocking readiness banner, and Android Settings fallback sheet (`POST_NOTIFICATIONS`, `LOCATION`, `CAMERA`, `RECORD_AUDIO` exclusively for Voice Search).
+- `:core:network` — Ktor OkHttp client (`BsdcHttpClientFactory`), PostgREST + RPC client (`SupabaseRestClient`), 2-decimal city rounding (`GeoCoordinatePrivacy.java`), fault-tolerant `ProfileRowCoercer`, and `BsdcPlatformApi` (`/api/auth/claims`, `/api/geo/reverse`, `profiles`, `claim_username`).
+- `:core:auth` — Firebase Auth (`Email/Password`, Credential Manager `Google`, `GitHub OAuth`), single-flight JWT `role = "authenticated"` bootstrap (`DataAccessBootstrapManager`), password scorer & username/claims validators (`AuthDomainValidators.java`), and atomic sign-out.
+- `:core:media` — ImgBB-only media pipeline (`ImageSignatureInspector.java` magic bytes, `ImgbbUrlAllowlist.java` host guard + Cloudinary/audio blocker, `ImageResizeTranscoder.java` EXIF + WebP compression, `/api/media/upload` + `record_media_asset`, Coil 3 `BsdcImgbbImage` + pinch-zoom lightbox).
+- `:core:database` — Room SQLite offline-first store (`CachedPostEntity`, `BookmarkEntity`, `PendingDraftEntity`, `PendingOutboxMessageEntity`, `CachedThreadEntity`, `CachedMessageEntity`, `VerificationHistoryEntity`, `SavedSearchEntity`) + atomic sign-out wipe.
+- `:core:sync` — WorkManager smart offline feed prefetcher (`OfflineSyncPolicy.java`, `OfflineSyncPreferencesStore`, `FeedPrefetchService`, `FeedAutoSyncWorker`, `SyncScheduler`) + outbox message flush (`send_message_once`).
+- `:feature:onboarding` — Bilingual Sign In / Sign Up (4-bar strength bar) / Password Reset / Email Verification gate + 4-step Profile & Device Readiness onboarding wizard with one-tap approximate city lookup.
+- `:feature:feed` — Native Home Feed (`FeedRankingEngine.java` 4-stage parity with `main-site`), horizontal algorithm/format tabs (`For You`, `Following`, `Latest`, `Questions`, `Polls`, `Snippets`), Trash Bin recovery sheet, pull-to-refresh, new-post badge, animated 5-reaction spring dock (`ReactionDock`), interactive Poll voting, Markdown & copyable syntax-highlighted code snippets, native `PostDetailScreen` with nested threaded Comments (`depth <= 3`), accepted-answer toggle, Follow/Block/Report abuse modal, and offline Room/Bookmark integration.
+- `:feature:compose` — Rich bilingual Post/Article/Question/Poll/Snippet Composer & Unified Directory Hub (`ComposerValidationEngine.java`, live Markdown preview, Room draft auto-save/resume, ImgBB multi-photo uploader with progress & retry, curated tag autocomplete & `#tag`/`@mention` extraction, plus Event, Job, Freelance Gig, Open-Source Project w/ screenshots, and Community Group creation).
+- `:feature:messenger` — Native Real-Time Messenger (`MessengerEngine.java`, Supabase Phoenix Realtime WebSocket transport + polling fallback, Room `threads_cache`/`messages_cache`/`pending_outbox_messages` w/ `send_message_once` UUID idempotency, direct & group chat creation, live typing signal, swipe-to-reply, 6-emoji reactions, pins, starred saved messages, in-thread search highlights, code snippets, and ImgBB photo chat — zero voice/audio notes).
+- `:core:push` & `:feature:notifications` — Native FCM HTTP v1 Engine (`BsdcFirebaseMessagingService`, `BsdcPushRegistrationManager` w/ `register_fcm_token('android')` + Firestore mirror, 5 Android O+ channels aligned with `push-worker/src/fcm.ts`, `MessagingStyle` grouped alerts + `RemoteInput` inline lock-screen reply, `OPEN_URL` safe deep-link router, and bilingual Notifications Inbox w/ per-category mute & device revocation).
+- `:feature:verify` — Merged Native `vf-site` Verification Hub (`VerificationInputEngine.java`, live CameraX + MLKit Barcode QR scanner w/ torch toggle & runtime camera permission flow, `verify_code` RPC + `DocCodeChecksum` offline guard + ZXing QR share card, `verify_performance_report` + streaming PDF SHA-256 verification via `PdfSha256Verifier.java`, `notice_feed` + `acknowledge_notice` notice board, and Room offline `verification_history`).
+- `:feature:discover` — Native Discover, Search + Voice Search & Opportunities Hub (`DiscoverSearchEngine.java`, `global_search` + Android `RecognizerIntent` voice query + Room `saved_searches` + GPS city reverse-geocode `/api/geo/reverse`, Groups join/leave, Events RSVP, Jobs application, Freelance Gigs bidding, Open-Source Projects starring, Courses + interactive Quizzes + Certificates, and native `/@username` Member Profiles w/ Follow/Block/Edit).
+- `:feature:market` — Play-Store-Compliant Marketplace & Storefront (`MarketBillingPolicyEngine.java` enforcing physical COD checkout + blocking non-Play third-party digital payment redirects, `product_catalog`, `my_cart`, `addresses`, `place_order`, `my_orders`/`cancel_order`, non-admin `my_shop`/`shop_orders`/`advance_order`, and `my_campaigns`/`ad_wallet_balance`/`set_campaign_paused`).
+- `:feature:news` — Isolated Sandboxed Smart News Reader + System Diagnostics (`NewsWebSecurityEngine.java` enforcing strict `https://news.bsdc.info.bd` navigation isolation with zero `@JavascriptInterface` token bridge, font zoom, share sheet, and native App Settings/Diagnostics).
 
-## The rule the shell enforces
+## Building & Signing (GitHub Actions / Android Studio)
 
-A link opens inside the app only if it belongs to BSDC — `www.bsdc.info.bd`,
-`bsdc.info.bd`, or `vf.main.bsdc.info.bd`. Everything else opens in the
-system browser, where the address bar is visible. A shell that renders an
-arbitrary origin inside its own chrome, with its own icon in the task
-switcher, is a phishing toolkit; `src/links.test.ts` holds that line with
-cases for look-alike hosts such as `bsdc.info.bd.attacker.test`.
-
-The same file decides where a notification tap lands. A payload that
-carries no destination is reported as having none rather than quietly
-opening the home page, because a notification that wastes a tap teaches
-people to turn notifications off.
-
-## Building a release
-
-**In CI, which is the normal way.** `.github/workflows/android.yml` builds a
-debug APK on every change and a signed APK and AAB on an `android-v*` tag,
-attaching both to a GitHub release and printing the signing certificate's
-SHA-256 fingerprint into the run summary. The native project is generated
-there and configured by `scripts/configure-android.mjs`, whose decisions —
-intent filters, version, signing, Firebase file — are pure functions in
-`src/android-config.ts` with tests beside them. See `docs/deploying.md`.
-
-**By hand.** The commands below need the Android SDK and a JDK.
-
-```bash
-# 1. Build the web application the shell wraps.
-cd ../main-site && npm ci && npm run build && cd ../android-app
-
-# 2. Install, generate the native project and copy the build into it.
-npm ci
-npx cap add android      # first time only
-npm run sync
-node scripts/configure-android.mjs   # app links, version, signing, Firebase
-
-# 3. Open it in Android Studio, or build from the command line.
-npm run open
-cd android && ./gradlew bundleRelease
-```
-
-Signing credentials come from the environment described in `.env.example`
-and are injected by CI from repository secrets. They are never written to
-a file in the repository, and `android/` is ignored by Git precisely so a
-`keystore.properties` cannot be committed by accident.
-
-## App links
-
-Android only treats `https://www.bsdc.info.bd/...` as belonging to this app
-once it has verified `/.well-known/assetlinks.json` on that origin. That
-file is served by `main-site/functions/.well-known/assetlinks.json.ts` from
-the `ANDROID_CERT_FINGERPRINT` environment variable on the Pages project.
-Until a release key exists the endpoint serves an empty statement list,
-which is the honest answer: the site vouches for no app yet. After signing,
-set the variable to the SHA-256 fingerprint of the release certificate:
-
-```bash
-keytool -list -v -keystore release.keystore -alias bsdc | grep 'SHA256:'
-```
-
-## Push notifications
-
-Messaging uses the same Firebase project as the web application
-(`bsdc-bd`). `google-services.json` is **not** committed; it is written by
-CI into `android/app/` from a secret before the Gradle build, and a local
-developer places their own copy there. The token returned at startup is
-handed to the host application through `ShellHost.onToken`, which stores it
-against the signed-in member in Firebase Realtime Database alongside the
-web push subscriptions — the shell itself never talks to Supabase, holds no
-key, and knows nothing about who is signed in.
+- **Android Studio:** Open `android-app/` directly (JDK 21 + Android SDK 35). Debug builds generate a non-secret placeholder `app/google-services.json` via `node scripts/prepare-firebase.mjs`.
+- **Debug APK & Unit Tests:**
+  ```bash
+  node scripts/prepare-firebase.mjs
+  gradle test testDebugUnitTest :app:lintDebug :app:assembleDebug
+  ```
+- **Signed Release APK & Play Store AAB:**
+  Requires real `ANDROID_GOOGLE_SERVICES_JSON` and signing keystore variables (`BSDC_KEYSTORE_PATH`, `BSDC_KEYSTORE_PASSWORD`, `BSDC_KEY_ALIAS`, `BSDC_KEY_PASSWORD`):
+  ```bash
+  node scripts/prepare-firebase.mjs --require-real-firebase
+  gradle assembleRelease bundleRelease
+  ```

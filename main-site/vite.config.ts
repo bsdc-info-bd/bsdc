@@ -1,67 +1,50 @@
 import { fileURLToPath, URL } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { VitePWA } from 'vite-plugin-pwa';
+import { build as viteBuild, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 
-export default defineConfig({
-  plugins: [
-    react(),
-    VitePWA({
-      // The worker is written, not generated: `src/sw.ts` answers push, and a
-      // generated worker cannot listen for anything. Everything the generated one
-      // did — the precache manifest, the app-shell fallback and its denylist, the
-      // image and font caches — is in that file, with the same limits.
-      strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw.ts',
-      registerType: 'prompt',
-      injectRegister: null,
-      // Asks for a new worker on every load rather than trusting a 24-hour HTTP
-      // cache: a fix that a browser will not fetch for a day is not a fix.
-      // `public/_headers` sets the same intent at the edge.
-      injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        // The largest single chunk the build makes is the Firebase one; the
-        // default ceiling of 2 MiB would leave it out of the precache and the
-        // site would not survive an offline reload of a page that needs it.
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-      },
-      includeAssets: ['favicon.svg', 'icons/*.png'],
-      manifest: {
-        id: '/',
-        name: 'Bangladesh Software Development Community',
-        short_name: 'BSDC',
-        description:
-          'The open community platform for Bangladeshi and worldwide software developers.',
-        lang: 'bn',
-        dir: 'ltr',
-        start_url: '/',
-        scope: '/',
-        display: 'standalone',
-        orientation: 'any',
-        background_color: '#FFFFFF',
-        theme_color: '#1B4332',
-        categories: ['social', 'education', 'developer'],
-        icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          {
-            src: '/icons/maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
+/**
+ * Compiles the push-only service worker (`src/sw.ts`) into `dist/sw.js` with
+ * zero Workbox precaching and zero fetch/image/offline interception.
+ */
+function pushServiceWorkerPlugin(): Plugin {
+  return {
+    name: 'bsdc-push-service-worker',
+    apply: 'build',
+    async closeBundle() {
+      await viteBuild({
+        configFile: false,
+        logLevel: 'silent',
+        resolve: {
+          alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
+        },
+        define: {
+          'import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY': JSON.stringify(
+            process.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '',
+          ),
+        },
+        build: {
+          outDir: fileURLToPath(new URL('./dist', import.meta.url)),
+          emptyOutDir: false,
+          sourcemap: false,
+          minify: 'esbuild',
+          target: 'es2022',
+          rollupOptions: {
+            input: fileURLToPath(new URL('./src/sw.ts', import.meta.url)),
+            output: {
+              entryFileNames: 'sw.js',
+              format: 'iife',
+              inlineDynamicImports: true,
+            },
           },
-        ],
-        shortcuts: [
-          { name: 'Feed', url: '/', icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }] },
-          { name: 'Search', url: '/search' },
-          { name: 'Messages', url: '/messages' },
-          { name: 'Notifications', url: '/notifications' },
-        ],
-      },
-      devOptions: { enabled: false },
-    }),
-  ],
+        },
+      });
+    },
+  };
+}
+
+export default defineConfig({
+  plugins: [react(), pushServiceWorkerPlugin()],
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
@@ -80,7 +63,8 @@ export default defineConfig({
       output: {
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-motion': ['framer-motion'],
+          // framer-motion is used only by lazy routes, so it loads with them instead of on
+          // every first paint (it was preloaded by index.html and counted against the budget).
           'vendor-i18n': ['i18next', 'react-i18next'],
         },
       },

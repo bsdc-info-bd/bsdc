@@ -28,7 +28,9 @@ interface AuthState {
   /** True once the Firestore profile document has been loaded at least once. */
   profileLoaded: boolean;
   redirectError: string | null;
+  redirectResolving: boolean;
   setRedirectError: (error: string | null) => void;
+  setRedirectResolving: (resolving: boolean) => void;
   setSession: (user: User | null, claims: SessionClaims) => void;
   setUnavailable: () => void;
   setProfileLoaded: (loaded: boolean) => void;
@@ -41,7 +43,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   claims: DEFAULT_CLAIMS,
   profileLoaded: false,
   redirectError: null,
+  redirectResolving: false,
   setRedirectError: (redirectError) => set({ redirectError }),
+  setRedirectResolving: (redirectResolving) => set({ redirectResolving }),
   setSession: (user, claims) =>
     set((state) => ({
       user,
@@ -59,6 +63,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       claims: DEFAULT_CLAIMS,
       profileLoaded: true,
       redirectError: null,
+      redirectResolving: false,
     }),
 }));
 

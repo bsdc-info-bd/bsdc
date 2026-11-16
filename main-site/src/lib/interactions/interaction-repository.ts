@@ -1,4 +1,5 @@
 import { POST_SELECT, toPost, type JoinedPostRow, type Post } from '@/lib/content/post-repository';
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -70,12 +71,14 @@ export async function toggleReaction(postId: string, reaction: Reaction): Promis
 
   const row = data?.[0];
   if (row === undefined) return { reacted: false, reaction, total: 0 };
+  if (row.reacted) wakePushDelivery();
   return { reacted: row.reacted, reaction: row.reaction, total: row.total };
 }
 
 export async function toggleBookmark(postId: string): Promise<boolean> {
   const { data, error } = await getSupabase().rpc('toggle_bookmark', { p_post_id: postId });
   if (error) throw toDataError(error);
+  if (data === true) wakePushDelivery();
   return data === true;
 }
 
@@ -85,6 +88,7 @@ export async function recordShare(postId: string, channel: ShareChannel): Promis
     p_channel: channel,
   });
   if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 // ------------------------------ comments -----------------------------------
@@ -160,6 +164,7 @@ export async function createComment(
     .select(COMMENT_SELECT)
     .single<JoinedCommentRow>();
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return toComment(data, false);
 }
 
@@ -202,12 +207,15 @@ export async function toggleCommentReaction(
     .rpc('toggle_comment_reaction', { p_comment_id: commentId })
     .returns<ToggleCommentReactionRow[]>();
   if (error) throw toDataError(error);
-  return data?.[0] ?? { reacted: false, total: 0 };
+  const res = data?.[0] ?? { reacted: false, total: 0 };
+  if (res.reacted) wakePushDelivery();
+  return res;
 }
 
 export async function markAnswer(commentId: string): Promise<boolean> {
   const { data, error } = await getSupabase().rpc('mark_answer', { p_comment_id: commentId });
   if (error) throw toDataError(error);
+  if (data === true) wakePushDelivery();
   return data === true;
 }
 

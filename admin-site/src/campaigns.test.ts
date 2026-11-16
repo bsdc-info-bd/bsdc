@@ -5,11 +5,14 @@ import {
   activationRefusal,
   bestCreative,
   campaignArgs,
+  creativeArgs,
   setupArgs,
   dateToIso,
   eventCost,
   forecastEvents,
   funded,
+  isHexColor,
+  isImgbbUrl,
   money,
   needsAttention,
   oldestFirst,
@@ -17,6 +20,8 @@ import {
   poishaToTaka,
   seriesBars,
   takaToPoisha,
+  updateCampaignArgs,
+  updateCreativeArgs,
   validateCreative,
   validateDraft,
   type CampaignDraft,
@@ -395,5 +400,76 @@ describe('bestCreative', () => {
 
   it('says nothing when there is nothing to compare', () => {
     expect(bestCreative([{ headline: 'A', impressions: 1000, clicks: 10 }])).toBeNull();
+  });
+});
+
+describe('creative image, customization, and edit RPC args', () => {
+  it('enforces ImgBB HTTPS hosts and valid 6-digit hex colors', () => {
+    expect(isImgbbUrl('https://i.ibb.co/demo/banner.webp')).toBe(true);
+    expect(isImgbbUrl('https://i.ibb.co.com/demo/banner.webp')).toBe(true);
+    expect(isImgbbUrl('http://i.ibb.co/demo/banner.webp')).toBe(false);
+    expect(isImgbbUrl('https://res.cloudinary.com/demo/image.png')).toBe(false);
+    expect(isHexColor('#15803d')).toBe(true);
+    expect(isHexColor('')).toBe(true);
+    expect(isHexColor('#fff')).toBe(false);
+  });
+
+  it('validates custom creative image, thumb, accent hex, and platforms', () => {
+    const badImage = validateCreative({
+      ...CREATIVE,
+      imageUrl: 'https://example.com/ad.png',
+    });
+    expect(badImage.map((p) => p.field)).toContain('imageUrl');
+
+    const badHex = validateCreative({ ...CREATIVE, accentColor: 'green' });
+    expect(badHex.map((p) => p.field)).toContain('accentColor');
+
+    const noPlatforms = validateCreative({ ...CREATIVE, platforms: [] });
+    expect(noPlatforms.map((p) => p.field)).toContain('platforms');
+
+    expect(
+      validateCreative({
+        ...CREATIVE,
+        imageUrl: 'https://i.ibb.co/demo/banner.webp',
+        thumbUrl: 'https://i.ibb.co/demo/thumb.webp',
+        imageAlt: 'Workshop banner',
+        layout: 'banner',
+        accentColor: '#15803d',
+        badgeLabel: 'Featured',
+        platforms: ['web', 'android'],
+      }),
+    ).toEqual([]);
+  });
+
+  it('builds complete setupArgs, creativeArgs, updateCampaignArgs, and updateCreativeArgs payloads', () => {
+    const richCreative = {
+      ...CREATIVE,
+      imageUrl: 'https://i.ibb.co/demo/card.webp',
+      thumbUrl: 'https://i.ibb.co/demo/card-sm.webp',
+      imageAlt: 'Card graphic',
+      layout: 'native' as const,
+      accentColor: '#1d4ed8',
+      badgeLabel: 'Hiring',
+      platforms: ['android'] as const,
+      isEnabled: true,
+    };
+    const setup = setupArgs(DRAFT, richCreative);
+    expect(setup.p_layout).toBe('native');
+    expect(setup.p_thumb_url).toBe('https://i.ibb.co/demo/card-sm.webp');
+    expect(setup.p_platforms).toEqual(['android']);
+
+    const added = creativeArgs('cmp-1', richCreative);
+    expect(added.p_campaign_id).toBe('cmp-1');
+    expect(added.p_accent_color).toBe('#1d4ed8');
+
+    const editedCampaign = updateCampaignArgs('cmp-1', { ...DRAFT, endsAt: '' });
+    expect(editedCampaign.p_campaign_id).toBe('cmp-1');
+    expect(editedCampaign.p_clear_end).toBe(true);
+    expect(editedCampaign.p_ends_at).toBeNull();
+
+    const editedCreative = updateCreativeArgs('cr-1', { ...richCreative, isEnabled: false });
+    expect(editedCreative.p_creative_id).toBe('cr-1');
+    expect(editedCreative.p_is_enabled).toBe(false);
+    expect(editedCreative.p_badge_label).toBe('Hiring');
   });
 });

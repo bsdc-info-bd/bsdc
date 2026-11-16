@@ -33,7 +33,7 @@ export async function proxyFirebaseAuth(request: Request): Promise<Response> {
     const location = result.headers.get('location');
     if (location) {
       const destination = new URL(location, upstream);
-      if (destination.origin === AUTH_ORIGIN) {
+      if (destination.origin === AUTH_ORIGIN || destination.origin === 'https://bsdc-bd.web.app') {
         result.headers.set(
           'location',
           `${url.origin}${destination.pathname}${destination.search}${destination.hash}`,

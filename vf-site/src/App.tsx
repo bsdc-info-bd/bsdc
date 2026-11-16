@@ -6,6 +6,7 @@ import {
   Card,
   Field,
   Loading,
+  PublicShell,
   callPublicRpc,
   docKindLabel,
   formatDocCode,
@@ -124,111 +125,102 @@ export function App(): ReactElement {
   const parsed = parseDocCode(code);
 
   return (
-    <div className="kit-shell">
-      <header className="kit-header">
-        <div className="kit-brand">
-          <strong>BSDC verification</strong>
-          <span>Bangladesh Software Development Community</span>
-        </div>
-      </header>
+    <PublicShell
+      appId="bsdc-vf"
+      title="BSDC Verification"
+      footerText="This desk answers about one document at a time and never lists the registry."
+    >
+      <div className="kit-stack" style={{ maxWidth: '46rem', margin: '0 auto', width: '100%' }}>
+        {reportBusy && <Loading label="Checking the report receipt." />}
+        {reportError !== '' && (
+          <Banner tone="bad" title="Report verification unavailable">
+            {reportError}
+          </Banner>
+        )}
+        {report && <ReportResult report={report} />}
 
-      <main className="kit-main">
-        <div className="kit-stack" style={{ maxWidth: '46rem', margin: '0 auto', width: '100%' }}>
-          {reportBusy && <Loading label="Checking the report receipt." />}
-          {reportError !== '' && (
-            <Banner tone="bad" title="Report verification unavailable">
-              {reportError}
-            </Banner>
-          )}
-          {report && <ReportResult report={report} />}
-
-          <Card
-            title="Check a BSDC document"
-            description="Certificates, notices and staff identity cards all carry a code. Type it here, or scan the code printed beside it."
+        <Card
+          title="Check a BSDC document"
+          description="Certificates, notices and staff identity cards all carry a code. Type it here, or scan the code printed beside it."
+        >
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              check(code);
+            }}
           >
-            <form
-              onSubmit={(event) => {
-                event.preventDefault();
-                check(code);
+            <Field
+              label="Document code"
+              placeholder="BSDC-CT-4A7C21B9-6"
+              autoComplete="off"
+              spellCheck={false}
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value);
               }}
-            >
-              <Field
-                label="Document code"
-                placeholder="BSDC-CT-4A7C21B9-6"
-                autoComplete="off"
-                spellCheck={false}
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value);
-                }}
-                hint={
-                  code.trim() === ''
-                    ? 'The code is printed under the QR square.'
-                    : parsed.ok
-                      ? `Reads as a ${docKindLabel(parsed.kind).toLowerCase()}.`
-                      : ''
-                }
-              />
-              <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
-                <Button type="submit" disabled={busy || code.trim() === ''}>
-                  {busy ? 'Checking' : 'Check this document'}
+              hint={
+                code.trim() === ''
+                  ? 'The code is printed under the QR square.'
+                  : parsed.ok
+                    ? `Reads as a ${docKindLabel(parsed.kind).toLowerCase()}.`
+                    : ''
+              }
+            />
+            <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
+              <Button type="submit" disabled={busy || code.trim() === ''}>
+                {busy ? 'Checking' : 'Check this document'}
+              </Button>
+              {result && (
+                <Button
+                  variant="quiet"
+                  onClick={() => {
+                    setCode('');
+                    setResult(null);
+                    if (typeof window !== 'undefined') {
+                      window.history.replaceState(null, '', window.location.pathname);
+                    }
+                  }}
+                >
+                  Check another
                 </Button>
-                {result && (
-                  <Button
-                    variant="quiet"
-                    onClick={() => {
-                      setCode('');
-                      setResult(null);
-                      if (typeof window !== 'undefined') {
-                        window.history.replaceState(null, '', window.location.pathname);
-                      }
-                    }}
-                  >
-                    Check another
-                  </Button>
-                )}
-              </div>
-            </form>
+              )}
+            </div>
+          </form>
+        </Card>
+
+        {error !== '' && (
+          <Banner tone="bad" title="The desk could not answer">
+            <p className="kit-small">{error}</p>
+          </Banner>
+        )}
+
+        {busy && <Loading label="Asking the registry." />}
+
+        {result && !busy && <Result result={result} />}
+
+        {recent.length > 1 && (
+          <Card title="Checked from this device">
+            <div className="kit-row">
+              {recent.map((item) => (
+                <Button
+                  key={item}
+                  size="small"
+                  variant="quiet"
+                  onClick={() => {
+                    setCode(item);
+                    check(item);
+                  }}
+                >
+                  {formatDocCode(item)}
+                </Button>
+              ))}
+            </div>
           </Card>
+        )}
 
-          {error !== '' && (
-            <Banner tone="bad" title="The desk could not answer">
-              <p className="kit-small">{error}</p>
-            </Banner>
-          )}
-
-          {busy && <Loading label="Asking the registry." />}
-
-          {result && !busy && <Result result={result} />}
-
-          {recent.length > 1 && (
-            <Card title="Checked from this device">
-              <div className="kit-row">
-                {recent.map((item) => (
-                  <Button
-                    key={item}
-                    size="small"
-                    variant="quiet"
-                    onClick={() => {
-                      setCode(item);
-                      check(item);
-                    }}
-                  >
-                    {formatDocCode(item)}
-                  </Button>
-                ))}
-              </div>
-            </Card>
-          )}
-
-          <Explainer />
-        </div>
-      </main>
-
-      <footer className="kit-footer">
-        This desk answers about one document at a time and never lists the registry.
-      </footer>
-    </div>
+        <Explainer />
+      </div>
+    </PublicShell>
   );
 }
 

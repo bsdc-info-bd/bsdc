@@ -59,6 +59,7 @@ function useEntries(): ReturnType<typeof useAsync<readonly ConfigEntry[]>> {
 
 function Settings(): ReactElement {
   const { state, reload } = useEntries();
+  const [search, setSearch] = useState('');
 
   if (state.status === 'loading') return <Loading label="Loading configuration." />;
   if (state.status === 'error')
@@ -69,6 +70,16 @@ function Settings(): ReactElement {
     );
 
   const drift = feedWeightDrift(state.data);
+  const q = search.trim().toLowerCase();
+  const filtered =
+    q === ''
+      ? state.data
+      : state.data.filter(
+          (e) =>
+            e.key.toLowerCase().includes(q) ||
+            e.label.toLowerCase().includes(q) ||
+            e.description.toLowerCase().includes(q),
+        );
 
   return (
     <div className="kit-stack">
@@ -80,15 +91,30 @@ function Settings(): ReactElement {
           </p>
         </Banner>
       )}
-      {groupConfig(state.data).map((group) => (
-        <Card key={group.name} title={group.name}>
-          <div className="kit-grid">
-            {group.entries.map((entry) => (
-              <Setting key={entry.key} entry={entry} onSaved={reload} />
-            ))}
-          </div>
-        </Card>
-      ))}
+      <Card
+        title={`Search Settings (${filtered.length} / ${state.data.length})`}
+        description="Filter across configuration keys, labels, and descriptions."
+      >
+        <Field
+          label="Search keys"
+          placeholder="e.g. feed.weight, ad., security..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </Card>
+      {filtered.length === 0 ? (
+        <Empty>No settings match “{search}”.</Empty>
+      ) : (
+        groupConfig(filtered).map((group) => (
+          <Card key={group.name} title={group.name}>
+            <div className="kit-grid">
+              {group.entries.map((entry) => (
+                <Setting key={entry.key} entry={entry} onSaved={reload} />
+              ))}
+            </div>
+          </Card>
+        ))
+      )}
     </div>
   );
 }

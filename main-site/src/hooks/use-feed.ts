@@ -75,6 +75,8 @@ export interface UseFeedResult {
   isError: boolean;
   /** Why the feed is empty, so the member is told the truth rather than a shrug. */
   emptyReason: FeedEmptyReason;
+  /** True when the member's feed filters hid every other author's posts, leaving only their own. */
+  onlyOwnByPreferences: boolean;
   /** Reads the posts this member has already seen, which the feed hides by default. */
   showSeen: () => void;
   includeSeen: boolean;
@@ -95,9 +97,24 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
   // A member who has read everything is offered the posts back rather than an
   // empty room; asking for them is a choice made in the UI, not a default.
   const [includeSeen, setIncludeSeen] = useState(false);
+  const reported = useRef(new Set<string>());
+
+  useEffect(() => {
+    setIncludeSeen(false);
+    reported.current.clear();
+  }, [uid]);
+
   const effective = useMemo<FeedPreferences>(
     () => ({ ...preferences, algorithm, hideSeen: includeSeen ? false : preferences.hideSeen }),
     [preferences, algorithm, includeSeen],
+  );
+  const mutedKey = useMemo(
+    () =>
+      [...effective.mutedTags]
+        .map((tag) => tag.toLowerCase())
+        .sort()
+        .join(','),
+    [effective.mutedTags],
   );
 
   const query = useInfiniteQuery({
@@ -106,6 +123,7 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
       uid,
       algorithm,
       effective.languages.join(','),
+      mutedKey,
       effective.showSensitive,
       effective.hideSeen,
     ],
@@ -114,11 +132,21 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
       const candidates = await fetchCandidates(CANDIDATE_PAGE_SIZE, pageParam);
       let { ranked, report } = rankFeedWithReport(candidates, effective, uid);
 
-      // The fallback stage two has always promised: when hiding what the
-      // member has read removes every candidate, read it again without that
-      // rule. A feed that repeats itself is still a feed; an empty one looks
-      // like the community has nothing to say, which is not what happened.
-      if (ranked.length === 0 && candidates.length > 0 && effective.hideSeen) {
+      // Own posts always bypass hideSeen in stage 2. Without checking whether
+      // any OTHER member's post survived, an active author who read the feed
+      // would become trapped seeing only their own posts and zero community
+      // posts, because ranked.length > 0 prevented the hideSeen retry.
+      const onlyOwnPostsSurvived =
+        uid !== null &&
+        ranked.length > 0 &&
+        ranked.every((item) => item.authorUid === uid) &&
+        report.removed.seen > 0;
+
+      if (
+        (ranked.length === 0 || onlyOwnPostsSurvived) &&
+        candidates.length > 0 &&
+        effective.hideSeen
+      ) {
         const retry = rankFeedWithReport(candidates, { ...effective, hideSeen: false }, uid);
         ranked = retry.ranked;
         report = retry.report;
@@ -154,10 +182,20 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
     () => (firstReport === null ? 'nothing' : emptyReason(firstReport, ranked.length)),
     [firstReport, ranked.length],
   );
+  const onlyOwnByPreferences = useMemo(() => {
+    if (uid === null || posts.length === 0 || firstReport === null) return false;
+    if (!posts.every((post) => post.author?.uid === uid)) return false;
+    const removedOther =
+      firstReport.removed.language +
+      firstReport.removed.muted +
+      firstReport.removed.following +
+      firstReport.removed.sensitive;
+    return removedOther > 0;
+  }, [uid, posts, firstReport]);
 
   const firstPublishedAt = posts[0]?.publishedAt ?? null;
   const { data: newPostCount = 0 } = useQuery({
-    queryKey: ['feed-new-count', firstPublishedAt],
+    queryKey: ['feed-new-count', uid, firstPublishedAt],
     queryFn: () => fetchNewPostCount(firstPublishedAt ?? new Date().toISOString()),
     enabled: firstPublishedAt !== null,
     refetchInterval: NEW_POST_POLL_MS,
@@ -165,7 +203,6 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
   });
 
   // Impressions: one per post per session, only after it is really visible.
-  const reported = useRef(new Set<string>());
   const observer = useRef<IntersectionObserver | null>(null);
   const pending = useRef(new Map<Element, string>());
 
@@ -215,6 +252,7 @@ export function useFeed(algorithm: FeedAlgorithm): UseFeedResult {
     hasNextPage: query.hasNextPage,
     isError: query.isError,
     emptyReason: query.isError ? 'nothing' : reason,
+    onlyOwnByPreferences,
     includeSeen,
     showSeen: () => {
       setIncludeSeen(true);

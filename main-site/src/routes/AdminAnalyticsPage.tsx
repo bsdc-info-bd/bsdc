@@ -21,7 +21,7 @@ import {
   trendPercent,
 } from '@/lib/analytics/analytics-types';
 import { formatNumber } from '@/lib/format';
-import { formatMoney } from '@/lib/market/market-types';
+import { formatTaka } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
 
 const WINDOWS = [7, 14, 30, 90, 180];
@@ -142,11 +142,10 @@ export default function AdminAnalyticsPage() {
               <StatCard
                 icon={<TrendingUp size={16} />}
                 label={t('analytics.platformRevenue')}
-                value={formatMoney(sum(platform), 'BDT', language)}
+                value={formatTaka(sum(platform), language)}
                 hint={t('analytics.turnover', {
-                  amount: formatMoney(
+                  amount: formatTaka(
                     sum(analytics.revenue.map((point) => point.grossSales)),
-                    'BDT',
                     language,
                   ),
                 })}

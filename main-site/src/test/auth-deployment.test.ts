@@ -22,22 +22,13 @@ describe('production browser policy', () => {
     expect(directive('connect-src')).toContain('https://*.firebasedatabase.app');
     expect(directive('connect-src')).toContain('wss://*.firebasedatabase.app');
   });
-  it('keeps auth helper navigations out of the offline app-shell fallback', () => {
-    // The worker is written rather than generated, so the denylist lives in the
-    // worker itself. It is the same list the plugin used to be configured with,
-    // and the auth helper is the reason `/__/` is in it: a Firebase redirect that
-    // is answered with the application shell is a sign-in that never completes.
+  it('leaves auth helper navigations unintercepted with no fetch handler or offline shell', () => {
     const worker = readFileSync('src/sw.ts', 'utf8');
-    for (const denied of [
-      '/^\\/api\\//',
-      '/^\\/__\\//',
-      '/^\\/sitemap/',
-      '/^\\/rss/',
-      '/^\\/robots\\.txt$/',
-    ]) {
-      expect(worker).toContain(denied);
-    }
-    expect(worker).toContain("createHandlerBoundToURL('/index.html')");
+    expect(worker).not.toMatch(/from\s+['"]workbox-/);
+    expect(worker).not.toContain('precacheAndRoute');
+    expect(worker).not.toContain('NavigationRoute');
+    expect(worker).not.toContain("addEventListener('fetch'");
+    expect(worker).not.toContain('createHandlerBoundToURL');
   });
 });
 

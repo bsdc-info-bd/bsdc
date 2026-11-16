@@ -93,12 +93,14 @@ export async function fetchFeedPreferences(uid: string): Promise<FeedPreferences
   if (error && error.code !== 'PGRST116') throw toDataError(error);
   if (!data) return DEFAULT_FEED_PREFERENCES;
 
+  const algorithm: FeedAlgorithm =
+    data.algorithm === 'following' || data.algorithm === 'latest' ? data.algorithm : 'ranked';
   return {
-    algorithm: data.algorithm as FeedAlgorithm,
-    languages: data.languages,
-    mutedTags: data.muted_tags,
-    showSensitive: data.show_sensitive,
-    hideSeen: data.hide_seen,
+    algorithm,
+    languages: Array.isArray(data.languages) ? data.languages : DEFAULT_FEED_PREFERENCES.languages,
+    mutedTags: Array.isArray(data.muted_tags) ? data.muted_tags : [],
+    showSensitive: Boolean(data.show_sensitive),
+    hideSeen: data.hide_seen !== false,
   };
 }
 

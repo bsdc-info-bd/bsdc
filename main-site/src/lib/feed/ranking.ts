@@ -67,7 +67,9 @@ export const WEIGHTS = {
 const RECENCY_HALF_LIFE_HOURS = 6;
 
 export function recencyScore(publishedAt: string, now: number): number {
-  const ageHours = Math.max(0, (now - new Date(publishedAt).getTime()) / 3_600_000);
+  const ms = new Date(publishedAt).getTime();
+  if (!Number.isFinite(ms)) return 0;
+  const ageHours = Math.max(0, (now - ms) / 3_600_000);
   return Math.pow(0.5, ageHours / RECENCY_HALF_LIFE_HOURS);
 }
 
@@ -244,7 +246,9 @@ export function diversify(
 
   for (const candidate of ordered) {
     const authorSeen = authorCount.get(candidate.authorUid) ?? 0;
-    const tagExceeded = candidate.tags.some((tag) => (tagCount.get(tag) ?? 0) >= limits.maxPerTag);
+    const tagExceeded = candidate.tags.some(
+      (tag) => (tagCount.get(tag.toLowerCase()) ?? 0) >= limits.maxPerTag,
+    );
 
     if (authorSeen >= limits.maxPerAuthor || tagExceeded) {
       overflow.push(candidate);
@@ -252,7 +256,10 @@ export function diversify(
     }
 
     authorCount.set(candidate.authorUid, authorSeen + 1);
-    for (const tag of candidate.tags) tagCount.set(tag, (tagCount.get(tag) ?? 0) + 1);
+    for (const tag of candidate.tags) {
+      const normalised = tag.toLowerCase();
+      tagCount.set(normalised, (tagCount.get(normalised) ?? 0) + 1);
+    }
     primary.push(candidate);
   }
 

@@ -15,7 +15,11 @@ export interface DecisionDraft {
 
 export const EMPTY_DECISION: DecisionDraft = { note: '' };
 
-/** A row of `admin_pending_shops()`, named exactly as the function returns it. */
+/**
+ * A row of `admin_pending_shops()`, named exactly as the function returns it.
+ * Each row is a submitted COD vendor application (migration 0104), so it carries
+ * the payment details staff check against the bKash account before approving.
+ */
 export interface PendingShopRow {
   id: string;
   slug: string;
@@ -25,6 +29,14 @@ export interface PendingShopRow {
   owner_uid: string;
   owner_name: string;
   created_at: string;
+  mobile: string;
+  payment_sender: string;
+  payment_holder: string;
+  payment_txn_id: string;
+  package_code: string;
+  address_line: string;
+  place_label: string;
+  trade_license_no: string;
 }
 
 /** A row of `admin_pending_campaigns()`, named exactly as the function returns it. */
@@ -52,7 +64,7 @@ export interface PendingCampaignRow {
  */
 export function decisionProblems(approve: boolean, draft: DecisionDraft): readonly string[] {
   if (approve) return [];
-  return draft.note.trim().length < 4
+  return draft.note.trim().length < 5
     ? ['Say why it was refused. The applicant sees this note.']
     : [];
 }

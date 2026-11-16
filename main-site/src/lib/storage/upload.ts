@@ -1,5 +1,6 @@
 import {
   chooseProvider,
+  effectiveMimeType,
   kindOf,
   MAX_BYTES,
   type MediaKind,
@@ -78,7 +79,7 @@ export async function readImageSize(file: Blob): Promise<{ width: number; height
 }
 
 export function assertUploadable(file: File): MediaKind {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (!kind) throw new MediaError('media.errors.unsupported');
   if (file.size > MAX_BYTES[kind]) throw new MediaError('media.errors.tooLarge');
   if (file.size === 0) throw new MediaError('media.errors.empty');
@@ -133,7 +134,15 @@ function postForm(options: XhrOptions): Promise<XhrOutcome> {
     request.onabort = () => fail('media.errors.cancelled');
     request.onload = () => {
       cleanup();
-      resolve({ status: request.status, body: request.response });
+      let body: unknown = request.response;
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          body = null;
+        }
+      }
+      resolve({ status: request.status, body });
     };
     options.signal?.addEventListener('abort', abort, { once: true });
     request.send(options.body);
@@ -165,6 +174,7 @@ const UPLOAD_MAX_EDGE: Record<MediaPurpose, number> = {
   'post-image': 1600,
   'comment-image': 1440,
   'product-image': 1600,
+  'ad-creative': 1200,
 };
 
 const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
@@ -175,6 +185,7 @@ const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
   'post-image': 0.84,
   'comment-image': 0.84,
   'product-image': 0.85,
+  'ad-creative': 0.88,
 };
 
 async function encodeCanvasWebp(
@@ -220,16 +231,17 @@ export async function shrinkForUpload(
 ): Promise<{ blob: Blob; name: string; width?: number; height?: number }> {
   const maxEdge = UPLOAD_MAX_EDGE[purpose] ?? 1600;
   const quality = UPLOAD_QUALITY[purpose] ?? 0.84;
+  const mime = effectiveMimeType(file);
   const unchanged: { blob: Blob; name: string } = { blob: file, name: file.name };
-  if (file.type === 'image/gif' || file.type === 'image/svg+xml') return unchanged;
+  if (mime === 'image/gif' || mime === 'image/svg+xml') return unchanged;
   if (typeof createImageBitmap !== 'function') return unchanged;
-  if (file.type === 'image/webp' && file.size <= 48 * 1024) return unchanged;
+  if (mime === 'image/webp' && file.size <= 48 * 1024) return unchanged;
 
   let bitmap: ImageBitmap | null = null;
   try {
     bitmap = await createImageBitmap(file);
     const longest = Math.max(bitmap.width, bitmap.height);
-    if (file.type === 'image/webp' && longest <= maxEdge && file.size <= 180 * 1024) {
+    if (mime === 'image/webp' && longest <= maxEdge && file.size <= 180 * 1024) {
       return { blob: file, name: file.name, width: bitmap.width, height: bitmap.height };
     }
     const scale = longest > maxEdge ? maxEdge / longest : 1;
@@ -466,6 +478,7 @@ interface ProxyErrorBody {
  *     proxy's 502). That is `failed`, not `notConfigured`.
  */
 function endpointMissing(status: number, body: unknown): boolean {
+  if (status === 0) return false;
   if (status === 404 || status === 405 || status === 501) return true;
   if (status >= 400) return false;
   return body === null || typeof body !== 'object';
@@ -474,11 +487,25 @@ function endpointMissing(status: number, body: unknown): boolean {
 /**
  * The member's own Firebase ID token, or an empty string.
  */
-async function idToken(): Promise<string> {
+async function idToken(forceRefresh = false): Promise<string> {
   try {
     const { getFirebaseAuth } = await import('@/lib/firebase');
-    const user = getFirebaseAuth().currentUser;
-    if (user !== null) return await user.getIdToken();
+    const auth = getFirebaseAuth() as {
+      currentUser: { getIdToken?: (forceRefresh?: boolean) => Promise<string> } | null;
+      authStateReady?: () => Promise<void>;
+    };
+    await auth.authStateReady?.();
+    const user = auth.currentUser;
+    if (user !== null && typeof user.getIdToken === 'function') {
+      try {
+        const token = await user.getIdToken(forceRefresh);
+        if (token.length > 0) return token;
+      } catch {
+        if (!forceRefresh) {
+          return await user.getIdToken(true);
+        }
+      }
+    }
   } catch {
     // Fall back to the active auth-store user when Firebase SDK is mocked.
   }
@@ -486,7 +513,7 @@ async function idToken(): Promise<string> {
     const { useAuthStore } = await import('@/store/auth-store');
     const fallbackUser = useAuthStore.getState().user;
     if (fallbackUser !== null && typeof fallbackUser.getIdToken === 'function') {
-      return await fallbackUser.getIdToken();
+      return await fallbackUser.getIdToken(forceRefresh);
     }
   } catch {
     // Ignore.
@@ -518,34 +545,57 @@ async function postWithRetry(options: XhrOptions): Promise<XhrOutcome> {
   }
 }
 
+function isSignalAborted(signal?: AbortSignal): boolean {
+  return signal?.aborted === true;
+}
+
 async function uploadThroughProxy(
   file: File,
   purpose: MediaPurpose,
   onProgress?: (percent: number) => void,
   signal?: AbortSignal,
 ): Promise<UploadResult> {
-  const token = await idToken();
+  const token = await idToken(false);
   if (token.length === 0) throw new MediaError('media.errors.signInRequired');
 
+  const normalizedType = effectiveMimeType(file);
   const prepared = await shrinkForUpload(file, purpose);
   const outgoing =
-    prepared.blob instanceof File && prepared.name === prepared.blob.name
+    prepared.blob instanceof File &&
+    prepared.name === prepared.blob.name &&
+    prepared.blob.type === normalizedType
       ? prepared.blob
       : new File([prepared.blob], prepared.name, {
-          type: prepared.blob.type || file.type,
+          type: prepared.blob.type || normalizedType,
         });
 
-  const body = new FormData();
-  body.append('file', outgoing);
-  body.append('purpose', purpose);
+  const buildBody = (): FormData => {
+    const form = new FormData();
+    form.append('file', outgoing);
+    form.append('purpose', purpose);
+    return form;
+  };
 
-  const outcome = await postWithRetry({
+  let outcome = await postWithRetry({
     url: UPLOAD_ENDPOINT,
-    body,
+    body: buildBody(),
     headers: { authorization: `Bearer ${token}` },
     ...(onProgress ? { onProgress } : {}),
     ...(signal ? { signal } : {}),
   });
+
+  if (outcome.status === 401 && !isSignalAborted(signal)) {
+    const refreshedToken = await idToken(true);
+    if (refreshedToken.length > 0 && !isSignalAborted(signal)) {
+      outcome = await postWithRetry({
+        url: UPLOAD_ENDPOINT,
+        body: buildBody(),
+        headers: { authorization: `Bearer ${refreshedToken}` },
+        ...(onProgress ? { onProgress } : {}),
+        ...(signal ? { signal } : {}),
+      });
+    }
+  }
 
   const payload = outcome.body as ProxySuccessBody | ProxyErrorBody | null;
 

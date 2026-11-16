@@ -148,7 +148,7 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.online',
           'Connection',
           'warn',
-          'The device reports no connection. Cached pages still work; everything else waits.',
+          'The device reports no internet connection.',
         ),
   );
 
@@ -355,7 +355,7 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.worker',
           'Background support',
           'fail',
-          'This browser has no service worker, so offline pages and notifications cannot work here.',
+          'This browser has no service worker, so push notifications cannot work here.',
         )
       : result(
           'browser.worker',
@@ -374,42 +374,54 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
         'This browser cannot be woken while it is closed.',
       ),
     );
-  } else if (!config.webPushKey) {
-    checks.push(
-      result(
-        'push.support',
-        'Notifications',
-        'fail',
-        'This build has no VAPID public key, so no device can ask to be woken.',
-      ),
-    );
-  } else if (capabilities.notificationPermission === 'denied') {
-    checks.push(
-      result(
-        'push.support',
-        'Notifications',
-        'warn',
-        'Notification permission was refused in this browser. It has to be granted in the browser’s own settings.',
-      ),
-    );
-  } else if (capabilities.notificationPermission === 'granted') {
-    checks.push(
-      result(
-        'push.support',
-        'Notifications',
-        'ok',
-        'This device can be woken while the browser is closed.',
-      ),
-    );
   } else {
-    checks.push(
-      result(
-        'push.support',
-        'Notifications',
-        'warn',
-        'Notifications have not been turned on for this device yet.',
-      ),
-    );
+    let runtimePushConfigured = config.webPushKey;
+    if (!runtimePushConfigured) {
+      const runtimeCfg = await probes.api('/api/push/config').catch(() => ({
+        status: 0,
+        body: null,
+      }));
+      const body = runtimeCfg.body as { enabled?: unknown } | null;
+      runtimePushConfigured = runtimeCfg.status === 200 && body?.enabled === true;
+    }
+
+    if (!runtimePushConfigured) {
+      checks.push(
+        result(
+          'push.support',
+          'Notifications',
+          'fail',
+          'This build has no VAPID public key, so no device can ask to be woken.',
+        ),
+      );
+    } else if (capabilities.notificationPermission === 'denied') {
+      checks.push(
+        result(
+          'push.support',
+          'Notifications',
+          'warn',
+          'Notification permission was refused in this browser. It has to be granted in the browser’s own settings.',
+        ),
+      );
+    } else if (capabilities.notificationPermission === 'granted') {
+      checks.push(
+        result(
+          'push.support',
+          'Notifications',
+          'ok',
+          'This device can be woken while the browser is closed.',
+        ),
+      );
+    } else {
+      checks.push(
+        result(
+          'push.support',
+          'Notifications',
+          'warn',
+          'Notifications have not been turned on for this device yet.',
+        ),
+      );
+    }
   }
 
   checks.push(
@@ -418,13 +430,13 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'browser.storage',
           'On-device storage',
           'ok',
-          'The browser allows this site to keep a cache and a session.',
+          'The browser allows this site to keep a session.',
         )
       : result(
           'browser.storage',
           'On-device storage',
           'warn',
-          'The browser is blocking storage. Nothing is remembered here: you will be signed out on reload and pictures will not be cached.',
+          'The browser is blocking storage. Nothing is remembered here: you will be signed out on reload.',
         ),
   );
 

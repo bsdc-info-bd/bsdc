@@ -2,6 +2,7 @@ import { useCallback, useState, type ReactElement } from 'react';
 import {
   Badge,
   Banner,
+  BulkBar,
   Button,
   Card,
   Empty,
@@ -12,11 +13,12 @@ import {
   callRpc,
   listRpc,
   messageOf,
+  roleRank,
+  rowsToCsv,
   useAsync,
   useCorporateEnv,
   useProfile,
 } from '@kit';
-import { roleRank } from '@kit';
 import {
   ROLES,
   STATUSES,
@@ -32,81 +34,155 @@ import {
 } from './people';
 
 /**
- * Roles and account standing, for every member and not only staff.
- *
- * `set_user_role()` and `set_account_status()` have existed since 0024 and were
- * reachable only from the community site's own admin page — so an owner working
- * in the corporate consoles, which is where every other staff action lives, could
- * not promote a moderator or suspend an abusive account without going back to the
- * member site and finding a different page.
- *
- * The rules are shown, not assumed: a control that the database would refuse is
- * disabled with the reason beside it, because an operator who is offered an action
- * and then refused it stops trusting the screen. The database still refuses:
- * a disabled button is not a permission check.
+ * Roles, standing, and batch user governance across all BSDC members and staff.
  */
 export function People(): ReactElement {
   const env = useCorporateEnv();
   const profile = useProfile();
   const [search, setSearch] = useState('');
   const [term, setTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [bulkRole, setBulkRole] = useState<PersonRole>('member');
+  const [bulkStatus, setBulkStatus] = useState<PersonStatus>('active');
+  const [bulkReason, setBulkReason] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg] = useState('');
 
   const load = useCallback(
-    () => listRpc<PersonRow>(env, 'admin_people', { p_search: term, p_limit: 100 }),
+    () => listRpc<PersonRow>(env, 'admin_people', { p_search: term, p_limit: 120 }),
     [env, term],
   );
   const { state, reload } = useAsync(load, [env, term]);
 
-  const people = state.status === 'ready' ? rankPeople(state.data, term) : [];
+  const allPeople = state.status === 'ready' ? rankPeople(state.data, term) : [];
+  const people = roleFilter === 'all' ? allPeople : allPeople.filter((p) => p.role === roleFilter);
+
+  const toggle = (uid: string): void => {
+    setSelected((prev) => (prev.includes(uid) ? prev.filter((x) => x !== uid) : [...prev, uid]));
+  };
+
+  const applyBulkRole = async (): Promise<void> => {
+    if (selected.length === 0) return;
+    setBulkBusy(true);
+    setBulkMsg('');
+    try {
+      const count = await callRpc<number>(env, 'bulk_people_role', {
+        p_uids: selected,
+        p_role: bulkRole,
+      });
+      setBulkMsg(`Updated role to "${bulkRole}" on ${count} account(s).`);
+      setSelected([]);
+      reload();
+    } catch (cause) {
+      setBulkMsg(messageOf(cause));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const applyBulkStatus = async (): Promise<void> => {
+    if (selected.length === 0) return;
+    setBulkBusy(true);
+    setBulkMsg('');
+    try {
+      const count = await callRpc<number>(env, 'bulk_people_status', {
+        p_uids: selected,
+        p_status: bulkStatus,
+        p_reason: bulkReason.trim(),
+      });
+      setBulkMsg(`Updated standing to "${bulkStatus}" on ${count} account(s).`);
+      setSelected([]);
+      setBulkReason('');
+      reload();
+    } catch (cause) {
+      setBulkMsg(messageOf(cause));
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const exportCsv = (): void => {
+    const csv = rowsToCsv(
+      ['uid', 'display_name', 'username', 'role', 'status'],
+      people.map((p) => [p.uid, p.display_name, p.username ?? '', p.role, p.status]),
+    );
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bsdc-people-governance.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
 
   return (
     <div className="kit-stack">
       <Banner tone="warn" title="A role takes effect on the next sign-in">
         <p className="kit-small">
           Changing a role writes the database row immediately. The token that every permission check
-          reads is minted from that row when somebody signs in, so a promotion is not visible to
-          them until they do. Nothing here is reversible by accident: every change is in the audit
-          log with your name on it.
+          reads is minted on sign-in, and every change is recorded in the immutable audit log.
         </p>
       </Banner>
 
       <Card
-        title="Find somebody"
-        description="A handle, part of a name, or nothing for recent accounts."
+        title="Find and Filter Accounts"
+        description="Search a handle, display name, or filter by role clearance."
+        actions={
+          people.length > 0 ? (
+            <Button size="small" variant="quiet" onClick={exportCsv}>
+              Export CSV ({people.length})
+            </Button>
+          ) : undefined
+        }
       >
         <form
-          className="kit-row"
-          style={{ gap: 'var(--sp-2)', alignItems: 'flex-end' }}
+          className="kit-grid"
           onSubmit={(event) => {
             event.preventDefault();
             setTerm(searchTerm(search));
           }}
         >
-          <div style={{ flex: 1 }}>
-            <Field
-              label="Search"
-              type="search"
-              value={search}
-              maxLength={60}
-              onChange={(event) => {
-                setSearch(event.target.value);
-              }}
-            />
+          <Field
+            label="Search"
+            type="search"
+            value={search}
+            maxLength={60}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <Select
+            label="Filter by role"
+            value={roleFilter}
+            options={[
+              { value: 'all', label: 'All roles' },
+              ...ROLES.map((r) => ({ value: r, label: r })),
+            ]}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          />
+          <div className="kit-row" style={{ alignItems: 'flex-end' }}>
+            <Button type="submit">Search</Button>
+            {term !== '' && (
+              <Button
+                variant="quiet"
+                onClick={() => {
+                  setSearch('');
+                  setTerm('');
+                }}
+              >
+                Clear
+              </Button>
+            )}
           </div>
-          <Button type="submit">Search</Button>
-          {term !== '' ? (
-            <Button
-              variant="quiet"
-              onClick={() => {
-                setSearch('');
-                setTerm('');
-              }}
-            >
-              Clear
-            </Button>
-          ) : null}
         </form>
       </Card>
+
+      {bulkMsg !== '' && (
+        <Banner tone="neutral" title="Bulk Update">
+          <p className="kit-small">{bulkMsg}</p>
+        </Banner>
+      )}
 
       {state.status === 'loading' ? <Loading label="Loading people." /> : null}
       {state.status === 'error' ? (
@@ -116,30 +192,75 @@ export function People(): ReactElement {
       ) : null}
       {state.status === 'ready' && people.length === 0 ? (
         <Empty>
-          {term === ''
-            ? 'There are no accounts to show. On a new deployment this means no member has signed in yet.'
-            : `No account matches “${term}”.`}
+          {term === '' ? 'No accounts match the active filter.' : `No account matches “${term}”.`}
         </Empty>
       ) : null}
 
       {state.status === 'ready' && people.length > 0 ? (
         <Card
           title={`${String(people.length)} account${people.length === 1 ? '' : 's'}`}
-          description="Every row says what you may do to it, and why not when you may not."
+          description="Select multiple accounts for batch role/standing changes or edit rows individually."
         >
-          <Table caption="" head={['Person', 'Role', 'Standing', 'Change role', 'Standing change']}>
+          <Table
+            caption=""
+            head={['', 'Person', 'Role', 'Standing', 'Change role', 'Standing change']}
+          >
             {people.map((person) => (
               <PersonTableRow
                 key={person.uid}
                 person={person}
                 actorRole={profile?.role ?? 'member'}
                 actorUid={profile?.uid ?? ''}
+                selected={selected.includes(person.uid)}
+                canSelect={canActOn(profile?.role ?? 'member', profile?.uid ?? '', person).allowed}
+                onToggleSelect={() => toggle(person.uid)}
                 onChanged={reload}
               />
             ))}
           </Table>
         </Card>
       ) : null}
+
+      <BulkBar selectedCount={selected.length} onClear={() => setSelected([])}>
+        <Select
+          label="Role"
+          value={bulkRole}
+          options={ROLES.filter((r) => roleRank(r) < roleRank(profile?.role ?? 'member')).map(
+            (r) => ({ value: r, label: r }),
+          )}
+          onChange={(e) => setBulkRole(e.target.value as PersonRole)}
+        />
+        <Button
+          size="small"
+          disabled={bulkBusy}
+          onClick={() => {
+            void applyBulkRole();
+          }}
+        >
+          Set Role
+        </Button>
+        <Select
+          label="Standing"
+          value={bulkStatus}
+          options={STATUSES.map((s) => ({ value: s, label: s }))}
+          onChange={(e) => setBulkStatus(e.target.value as PersonStatus)}
+        />
+        <Field
+          label="Reason (for suspend)"
+          value={bulkReason}
+          onChange={(e) => setBulkReason(e.target.value)}
+        />
+        <Button
+          size="small"
+          variant={bulkStatus === 'suspended' ? 'danger' : 'quiet'}
+          disabled={bulkBusy || (bulkStatus !== 'active' && bulkReason.trim().length < 4)}
+          onClick={() => {
+            void applyBulkStatus();
+          }}
+        >
+          Apply Standing
+        </Button>
+      </BulkBar>
     </div>
   );
 }
@@ -148,11 +269,17 @@ function PersonTableRow({
   person,
   actorRole,
   actorUid,
+  selected,
+  canSelect,
+  onToggleSelect,
   onChanged,
 }: {
   person: PersonRow;
   actorRole: string;
   actorUid: string;
+  selected: boolean;
+  canSelect: boolean;
+  onToggleSelect: () => void;
   onChanged: () => void;
 }): ReactElement {
   const env = useCorporateEnv();
@@ -214,6 +341,15 @@ function PersonTableRow({
 
   return (
     <tr>
+      <td>
+        <input
+          type="checkbox"
+          disabled={!canSelect}
+          aria-label={`Select ${person.display_name}`}
+          checked={selected}
+          onChange={onToggleSelect}
+        />
+      </td>
       <td>
         <div style={{ fontWeight: 600 }}>{person.display_name}</div>
         <div className="kit-small kit-muted kit-mono">

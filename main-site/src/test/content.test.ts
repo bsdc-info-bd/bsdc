@@ -83,10 +83,16 @@ describe('renderMarkdown', () => {
     expect(internal).not.toContain('target="_blank"');
   });
 
-  it('turns mentions and hashtags into links', () => {
-    const html = renderMarkdown('hi @rafi_dev about #react');
+  it('turns mentions and hashtags into links in prose while leaving code untouched', () => {
+    const html = renderMarkdown(
+      'hi @rafi_dev about #react and `@ignored` or `#ff0000`\n\n```ts\n// @decorator #123\nconst color = "#ff0000";\n```',
+    );
     expect(html).toContain('href="/@rafi_dev"');
     expect(html).toContain('href="/tag/react"');
+    expect(html).not.toContain('href="/@ignored"');
+    expect(html).not.toContain('href="/tag/ff0000"');
+    expect(html).not.toContain('href="/@decorator"');
+    expect(html).toContain('@decorator');
   });
 
   it('escapes code blocks instead of executing them', () => {

@@ -15,6 +15,7 @@ import {
   getDb,
   listRpc,
   messageOf,
+  rowsToCsv,
   toDataError,
   useAsync,
   useCorporateEnv,
@@ -90,7 +91,33 @@ function Rules(): ReactElement {
       {state.data.length === 0 ? (
         <Empty>No rules are in force. Every address is allowed.</Empty>
       ) : (
-        <Card title="Rules in force" description="The most specific matching range decides.">
+        <Card
+          title={`Rules in force (${state.data.length})`}
+          description="The most specific matching range decides."
+          actions={
+            <Button
+              size="small"
+              variant="quiet"
+              onClick={() => {
+                const csv = rowsToCsv(
+                  ['cidr', 'kind', 'reason', 'expires_at'],
+                  state.data.map((r) => [r.cidr, r.kind, r.reason, r.expiresAt ?? '']),
+                );
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'bsdc-ip-rules.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              }}
+            >
+              Export CSV
+            </Button>
+          }
+        >
           <Table caption="Newest first." head={['Range', 'Kind', 'Reason', 'Lifetime', 'Remove']}>
             {state.data.map((rule) => (
               <tr key={rule.id}>

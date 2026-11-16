@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
 import {
   AppShell,
   Badge,
@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   Empty,
+  Field,
   Loading,
   TextArea,
   checkDraft,
@@ -86,6 +87,7 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
   const env = useCorporateEnv();
   const profile = useProfile();
   const [messages, setMessages] = useState<readonly ChatMessage[]>([]);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [seenAt, setSeenAt] = useState<number | null>(null);
@@ -93,6 +95,7 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
   useEffect(() => {
     setReady(false);
     setError('');
+    setSearch('');
     let stop = (): void => undefined;
     try {
       stop = subscribeMessages(
@@ -118,6 +121,13 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
   }, [env, channel.id]);
 
   const unread = unreadCount(messages, seenAt);
+  const visibleMessages = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (q === '') return messages;
+    return messages.filter(
+      (m) => m.body.toLowerCase().includes(q) || m.authorName.toLowerCase().includes(q),
+    );
+  }, [messages, search]);
 
   return (
     <Card
@@ -130,6 +140,14 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
         </span>
       }
     >
+      <div style={{ marginBottom: 'var(--sp-3)' }}>
+        <Field
+          label="Search messages"
+          placeholder="Filter by keyword or sender..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
       {error !== '' && (
         <Banner tone="bad" title="This channel is not available">
           {error}
@@ -137,11 +155,13 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
       )}
       {!ready ? (
         <Loading label="Loading messages." />
-      ) : messages.length === 0 ? (
-        <Empty>No messages yet. Say what you need.</Empty>
+      ) : visibleMessages.length === 0 ? (
+        <Empty>
+          {search.trim() === '' ? 'No messages yet. Say what you need.' : 'No matching messages.'}
+        </Empty>
       ) : (
         <div className="kit-chat">
-          {groupMessages(messages).map((group) => (
+          {groupMessages(visibleMessages).map((group) => (
             <div key={`${group.authorUid}-${group.startedAt}`} className="kit-chat-group">
               <p className="kit-chat-meta">
                 {group.authorName} — {messageTime(group.startedAt)}

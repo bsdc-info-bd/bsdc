@@ -4,9 +4,11 @@ import {
   canPersistSession,
   isInAppBrowser,
   isPhoneSized,
+  isSameOriginAuthDomain,
   POPUP_MIN_WIDTH,
   prefersRedirectFlow,
   readDeviceSignals,
+  shouldPreferRedirectAuth,
   type DeviceSignals,
 } from './device';
 import { authErrorKey, isStorageFailure, shouldFallbackToRedirect } from './errors';
@@ -83,6 +85,18 @@ describe('which OAuth flow a device gets', () => {
   it('keeps the popup in an installed app, which has nowhere to redirect back to', () => {
     expect(prefersRedirectFlow(signals({ width: 390, touch: true, standalone: true }))).toBe(false);
     expect(prefersRedirectFlow(signals({ inApp: true, standalone: true }))).toBe(false);
+  });
+
+  it('tries popup first on phones when authDomain is cross-origin to avoid partitioned storage loss', () => {
+    expect(isSameOriginAuthDomain('www.bsdc.info.bd', 'www.bsdc.info.bd')).toBe(true);
+    expect(isSameOriginAuthDomain('bsdc-bd.firebaseapp.com', 'www.bsdc.info.bd')).toBe(false);
+
+    const phone = signals({ width: 390, touch: true, userAgent: PHONE });
+    expect(shouldPreferRedirectAuth(phone, { sameOriginAuth: false })).toBe(false);
+    expect(shouldPreferRedirectAuth(phone, { sameOriginAuth: true })).toBe(true);
+    expect(shouldPreferRedirectAuth(signals({ inApp: true }), { sameOriginAuth: false })).toBe(
+      true,
+    );
   });
 });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DataError,
   cardCheckDigit,
   formatDocCode,
   isValidDocCode,
@@ -13,14 +14,27 @@ import {
 import { escapePdfText, hexToRgb, textWidth, toLatin, wrapText } from '@kit/pdf';
 import {
   EMPTY_DRAFT,
+  MAX_BODY,
+  MAX_RECIPIENT_NAME,
+  MAX_REVOKE_REASON,
+  MAX_SUBJECT,
+  MAX_TEMPLATE_BODY,
+  MAX_TEMPLATE_HEADING,
+  MAX_TEMPLATE_NAME,
+  MAX_TEMPLATE_PURPOSE,
   certificateFilename,
   draftProblems,
   draftToArgs,
+  editCertificateProblems,
   fillTemplate,
+  formatCertificateError,
   longDate,
   parseBatch,
   registryState,
   resolvedBody,
+  resolvedEditBody,
+  revokeCertificateProblems,
+  templateDraftProblems,
   type RegistryRow,
   type TemplateRow,
 } from './model';
@@ -300,5 +314,176 @@ describe('the verification QR', () => {
     expect(qrPath(matrix).match(/M/g)).toHaveLength(dark);
     const svg = qrSvg(url, { quietZone: 4 });
     expect(svg).toContain(`viewBox="0 0 ${matrix.size + 8} ${matrix.size + 8}"`);
+  });
+});
+
+describe('live certificate editing and template studio validation', () => {
+  it('enforces audit reason and date consistency when amending an issued certificate', () => {
+    const validEdit = {
+      recipientName: 'Ayesha Rahman',
+      subject: 'Frontend Track',
+      body: 'Body copy',
+      recipientUid: '',
+      issuedOn: '2026-03-10',
+      expiresOn: '',
+      reason: 'Typo fixed per identity card',
+    };
+    expect(editCertificateProblems(validEdit)).toEqual([]);
+    expect(editCertificateProblems({ ...validEdit, reason: 'ok' })[0]).toContain('minimum 3');
+    expect(editCertificateProblems({ ...validEdit, expiresOn: '2026-03-01' })[0]).toContain(
+      'cannot be earlier',
+    );
+  });
+
+  it('validates custom template studio slugs and hex colors', () => {
+    const draft = {
+      key: 'mentor-2026',
+      name: 'Mentor Recognition',
+      purpose: 'Recognizes mentors',
+      heading: 'Certificate of Mentorship',
+      bodyTemplate: 'Awarded to {recipient}',
+      accent: '#0f766e',
+      orientation: 'landscape' as const,
+      signatureName: 'Director',
+      signatureTitle: 'BSDC',
+      isActive: true,
+    };
+    expect(templateDraftProblems(draft)).toEqual([]);
+    expect(templateDraftProblems({ ...draft, key: 'Bad Key!', accent: 'red' }).length).toBe(2);
+
+    expect(templateDraftProblems({ ...draft, name: 'N'.repeat(MAX_TEMPLATE_NAME) })).toEqual([]);
+    expect(
+      templateDraftProblems({ ...draft, name: 'N'.repeat(MAX_TEMPLATE_NAME + 1) })[0],
+    ).toContain(`at most ${MAX_TEMPLATE_NAME}`);
+    expect(
+      templateDraftProblems({ ...draft, purpose: 'P'.repeat(MAX_TEMPLATE_PURPOSE + 1) })[0],
+    ).toContain(`at most ${MAX_TEMPLATE_PURPOSE}`);
+    expect(
+      templateDraftProblems({ ...draft, heading: 'H'.repeat(MAX_TEMPLATE_HEADING + 1) })[0],
+    ).toContain(`at most ${MAX_TEMPLATE_HEADING}`);
+    expect(
+      templateDraftProblems({ ...draft, bodyTemplate: 'B'.repeat(MAX_TEMPLATE_BODY + 1) })[0],
+    ).toContain(`at most ${MAX_TEMPLATE_BODY}`);
+  });
+
+  it('enforces database upper limits on issue, edit, batch, and revocation before hitting Postgres', () => {
+    const validEdit = {
+      recipientName: 'Ayesha Rahman',
+      subject: 'Frontend Track',
+      body: 'Body copy',
+      recipientUid: '',
+      issuedOn: '2026-03-10',
+      expiresOn: '',
+      reason: 'Typo fixed per identity card',
+    };
+
+    expect(
+      editCertificateProblems({
+        ...validEdit,
+        recipientName: 'A'.repeat(MAX_RECIPIENT_NAME),
+        subject: 'S'.repeat(MAX_SUBJECT),
+        body: 'B'.repeat(MAX_BODY),
+      }),
+    ).toEqual([]);
+
+    expect(
+      editCertificateProblems({
+        ...validEdit,
+        recipientName: 'A'.repeat(MAX_RECIPIENT_NAME + 1),
+      })[0],
+    ).toContain(`at most ${MAX_RECIPIENT_NAME}`);
+    expect(
+      editCertificateProblems({ ...validEdit, subject: 'S'.repeat(MAX_SUBJECT + 1) })[0],
+    ).toContain(`at most ${MAX_SUBJECT}`);
+    expect(editCertificateProblems({ ...validEdit, body: 'B'.repeat(MAX_BODY + 1) })[0]).toContain(
+      `at most ${MAX_BODY}`,
+    );
+
+    // Placeholder expansion pushing body over 1200 chars must be caught pre-submit
+    expect(
+      editCertificateProblems({
+        ...validEdit,
+        recipientName: 'A'.repeat(100),
+        subject: 'S'.repeat(180),
+        body: `${'{recipient} {subject} '.repeat(5)}`,
+      })[0],
+    ).toContain(`at most ${MAX_BODY}`);
+
+    // Blank body falls back to template wording with placeholders resolved
+    expect(
+      resolvedEditBody(
+        {
+          ...validEdit,
+          recipientName: 'Rafi',
+          subject: 'Backend',
+          body: '',
+        },
+        template,
+      ),
+    ).toBe('This certifies that Rafi has completed Backend on 10 Mar 2026.');
+
+    // Invalid calendar dates like Feb 31 are rejected
+    expect(editCertificateProblems({ ...validEdit, issuedOn: '2026-02-31' })[0]).toContain(
+      'valid YYYY-MM-DD',
+    );
+
+    // Revocation reason boundary
+    expect(revokeCertificateProblems('R'.repeat(MAX_REVOKE_REASON))).toEqual([]);
+    expect(revokeCertificateProblems('R'.repeat(MAX_REVOKE_REASON + 1))[0]).toContain(
+      `at most ${MAX_REVOKE_REASON}`,
+    );
+
+    // Issue draft and batch checks mirror the same bounds
+    expect(
+      draftProblems(
+        {
+          ...EMPTY_DRAFT,
+          templateKey: template.key,
+          recipientName: 'A'.repeat(MAX_RECIPIENT_NAME + 1),
+          subject: 'S'.repeat(MAX_SUBJECT + 1),
+          issuedOn: '2026-03-10',
+        },
+        template,
+      ).length,
+    ).toBe(2);
+
+    const longBatch = parseBatch(
+      `${'N'.repeat(MAX_RECIPIENT_NAME + 1)}, Frontend\nAyesha, ${'S'.repeat(MAX_SUBJECT + 1)}`,
+      template,
+    );
+    expect(longBatch.rows).toHaveLength(0);
+    expect(longBatch.problems).toHaveLength(2);
+  });
+
+  it('translates residual 23514 and 23503 database errors into readable explanations', () => {
+    expect(
+      formatCertificateError(
+        new DataError(
+          'The value did not pass a database check.',
+          '23514',
+          'issued_certificates_body_check',
+        ),
+      ),
+    ).toContain('1200 characters');
+
+    expect(
+      formatCertificateError(
+        new DataError(
+          'The value did not pass a database check.',
+          '23514',
+          'issued_certificates_recipient_name_check',
+        ),
+      ),
+    ).toContain('2 and 120');
+
+    expect(
+      formatCertificateError(
+        new DataError(
+          'insert or update violates fk',
+          '23503',
+          'issued_certificates_recipient_uid_fkey',
+        ),
+      ),
+    ).toContain('No member account matches');
   });
 });

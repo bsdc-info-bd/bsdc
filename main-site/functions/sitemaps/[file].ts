@@ -9,7 +9,8 @@ import { escapeXml, rpc, siteOrigin, xmlResponse, type RpcEnv } from '../_rpc';
  */
 const SECTIONS = [
   'posts',
-  'products',
+  'marketproducts',
+  'shops',
   'courses',
   'groups',
   'events',

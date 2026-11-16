@@ -1,4 +1,4 @@
-import { getSupabase } from '@/lib/supabase/client';
+import { getSupabase, resetSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type { ProfileInsert, ProfileRow, ProfileUpdate } from '@/lib/supabase/types';
 import { coerceProfile } from './coerce';
@@ -99,12 +99,43 @@ function unwrap<T>(data: T | null, error: { message: string; code: string } | nu
   return data;
 }
 
+function isTransientJwtError(error: { message?: string; code?: string } | null): boolean {
+  if (!error) return false;
+  if (error.code === 'PGRST301' || error.code === 'PGRST302' || error.code === 'PGRST303') {
+    return true;
+  }
+  const msg = (error.message ?? '').toLowerCase();
+  return msg.includes('jwt') || msg.includes('jws') || msg.includes('expired');
+}
+
+async function refreshActiveFirebaseToken(): Promise<boolean> {
+  try {
+    const { isConfigured } = await import('@/lib/env');
+    if (!isConfigured.firebase) return false;
+    const { getFirebaseAuth } = await import('@/lib/firebase');
+    const user = getFirebaseAuth().currentUser;
+    if (!user) return false;
+    await user.getIdToken(true);
+    resetSupabase();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchProfile(uid: string): Promise<Profile | null> {
-  const { data, error } = await getSupabase()
+  let { data, error } = await getSupabase()
     .from('profiles')
     .select('*')
     .eq('uid', uid)
     .maybeSingle();
+  if (error && isTransientJwtError(error) && (await refreshActiveFirebaseToken())) {
+    ({ data, error } = await getSupabase()
+      .from('profiles')
+      .select('*')
+      .eq('uid', uid)
+      .maybeSingle());
+  }
   const row = unwrap(data, error);
   return row ? rowToProfile(row) : null;
 }
@@ -207,12 +238,20 @@ async function updateProfileFields(uid: string, fields: ProfileFields): Promise<
  */
 async function ensureProfile(uid: string, seed: ProfileSeed): Promise<void> {
   const displayName = seed.displayName.trim().slice(0, 60) || 'Member';
-  const { error } = await getSupabase()
+  let { error } = await getSupabase()
     .from('profiles')
     .upsert(
       { uid, username: null, display_name: displayName },
       { onConflict: 'uid', ignoreDuplicates: true },
     );
+  if (error && isTransientJwtError(error) && (await refreshActiveFirebaseToken())) {
+    ({ error } = await getSupabase()
+      .from('profiles')
+      .upsert(
+        { uid, username: null, display_name: displayName },
+        { onConflict: 'uid', ignoreDuplicates: true },
+      ));
+  }
   if (error) throw toDataError(error);
 }
 

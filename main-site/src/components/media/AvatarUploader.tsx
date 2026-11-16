@@ -3,6 +3,7 @@ import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar, Button, ProgressBar } from '@/design-system';
 import { isConfigured } from '@/lib/env';
+import { DataError } from '@/lib/supabase/errors';
 
 export interface AvatarUploaderProps {
   uid: string;
@@ -35,17 +36,23 @@ export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderP
         throw error instanceof MediaError ? error : new Error('media.errors.failed');
       });
 
-      onUploaded(result.url);
-
       if (isConfigured.supabase) {
         const { recordMediaAsset } = await import('@/lib/data/media-repository');
-        await recordMediaAsset(uid, result).catch(() => undefined);
+        const row = await recordMediaAsset(uid, result);
+        if (row === null) throw new Error('media.errors.recordFailed');
       }
+
+      onUploaded(result.url);
     } catch (error) {
-      const key =
-        error instanceof Error && error.message.startsWith('media.')
-          ? error.message
-          : 'media.errors.failed';
+      let key = 'media.errors.failed';
+      if (error instanceof DataError) {
+        key =
+          error.messageKey === 'data.errors.signInRequired'
+            ? 'media.errors.signInRequired'
+            : 'media.errors.recordFailed';
+      } else if (error instanceof Error && error.message.startsWith('media.')) {
+        key = error.message;
+      }
       setErrorKey(key);
     } finally {
       setProgress(null);

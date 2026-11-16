@@ -25,7 +25,10 @@ describe('isolated playground response', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(await response.text()).toContain('<script src="/playground/runner.js" defer>');
   });
-  it('keeps the runner out of the offline application-shell fallback', () => {
-    expect(readFileSync('src/sw.ts', 'utf8')).toContain('/^\\/playground\\/runner$/');
+  it('never intercepts the runner in a service worker fetch or navigation fallback', () => {
+    const worker = readFileSync('src/sw.ts', 'utf8');
+    expect(worker).not.toContain("addEventListener('fetch'");
+    expect(worker).not.toContain('NavigationRoute');
+    expect(worker).not.toContain('precacheAndRoute');
   });
 });

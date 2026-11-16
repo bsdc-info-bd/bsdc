@@ -14,6 +14,7 @@
  */
 import { createGroup } from '@/lib/communities/community-repository';
 import { uniqueSlug } from '@/lib/content/text';
+import { normaliseSkills } from '@/lib/opportunities/skills';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -72,7 +73,7 @@ export async function createJob(posterUid: string, draft: JobDraftInput): Promis
       salary_max: draft.salaryMax,
       salary_currency: 'BDT',
       salary_period: draft.salaryPeriod,
-      skills: draft.skills,
+      skills: normaliseSkills(draft.skills),
       apply_url: draft.applyUrl.trim(),
       status: 'open',
       poster_uid: posterUid,
@@ -97,7 +98,7 @@ export async function createGig(clientUid: string, draft: GigDraftInput): Promis
       currency: 'BDT',
       is_hourly: draft.isHourly,
       duration_days: draft.durationDays,
-      skills: draft.skills,
+      skills: normaliseSkills(draft.skills),
       status: 'open',
       client_uid: clientUid,
       published_at: new Date().toISOString(),

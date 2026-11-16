@@ -86,6 +86,7 @@ describe('the words a notification is made of', () => {
       'certificate',
       'mention_group',
       'group_invite',
+      'feedback',
     ];
     for (const kind of kinds) {
       for (const language of ['bn', 'en'] as const) {
@@ -143,6 +144,33 @@ describe('several things at once', () => {
   it('returns the one notification unchanged when there is only one', () => {
     const only = source();
     expect(summarise([only], 'en')?.body).toBe(wordsFor(only).body);
+  });
+
+  it('preserves conversation metadata when summarising multiple messages in the same thread', () => {
+    const msgs = [
+      source({
+        id: 'm1',
+        kind: 'message',
+        actorName: 'Rafiq',
+        preview: 'First line',
+        url: '/messages/conv-42',
+        conversationId: 'conv-42',
+      }),
+      source({
+        id: 'm2',
+        kind: 'message',
+        actorName: 'Rafiq',
+        preview: 'Latest reply here',
+        url: '/messages/conv-42',
+        conversationId: 'conv-42',
+      }),
+    ];
+    const summary = summarise(msgs, 'en');
+    expect(summary?.topic).toBe('c-conv-42');
+    expect(summary?.url).toBe('/messages/conv-42');
+    expect(summary?.kind).toBe('message');
+    expect(summary?.conversationId).toBe('conv-42');
+    expect(summary?.body).toBe('Latest reply here');
   });
 
   it('has nothing to say about nothing', () => {

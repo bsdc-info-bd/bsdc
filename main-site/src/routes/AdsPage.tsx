@@ -2,6 +2,7 @@ import { Megaphone } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Seo } from '@/components/seo/Seo';
 import {
   Alert,
@@ -17,6 +18,9 @@ import {
   TextField,
   TextareaField,
 } from '@/design-system';
+import { CampaignPaymentPanel } from '@/components/ads/CampaignPaymentPanel';
+import { CreateCampaignForm } from '@/components/ads/CreateCampaignForm';
+import { useAdBuilder } from '@/hooks/use-ad-builder';
 import { useCampaignDetail, useCampaigns } from '@/hooks/use-ads';
 import {
   budgetProgress,
@@ -31,11 +35,24 @@ import {
   type CampaignCreative,
   type CreativeCopy,
 } from '@/lib/ads/ads-types';
+import type { AdPaymentRequest } from '@/lib/ads/ads-types';
 import { formatNumber } from '@/lib/format';
-import { formatMoney } from '@/lib/market/market-types';
+import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
+
+/** A calendar day in Bangladesh time, for campaign schedules. Empty when the date cannot be read. */
+function formatDay(iso: string, language: Language): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat(language === 'bn' ? 'bn-BD' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Dhaka',
+  }).format(date);
+}
 
 /** A private performance page, not a self-service campaign builder. */
 export default function AdsPage() {
@@ -74,6 +91,26 @@ function Dashboard() {
   const { campaigns, balance, isLoading, isError, setPaused, editCopy, isSaving } = useCampaigns();
   const [openId, setOpenId] = useState<string | null>(null);
   const detail = useCampaignDetail(openId);
+  const builder = useAdBuilder();
+  const [building, setBuilding] = useState(false);
+  const [payingId, setPayingId] = useState<string | null>(null);
+
+  // Requests arrive newest first, so the first match per campaign is the latest.
+  const latestByCampaign = new Map<string, AdPaymentRequest>();
+  for (const request of builder.requests) {
+    if (!latestByCampaign.has(request.campaignId)) {
+      latestByCampaign.set(request.campaignId, request);
+    }
+  }
+
+  async function sendForReview(campaignId: string): Promise<void> {
+    try {
+      await builder.sendForReview(campaignId);
+      toast.success(t('ads.builder.sendReviewDone'));
+    } catch (error) {
+      toast.error(t(dataErrorKey(error)));
+    }
+  }
 
   async function pause(campaignId: string, paused: boolean): Promise<void> {
     try {
@@ -89,11 +126,56 @@ function Dashboard() {
 
   return (
     <>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-muted">{t('ads.builder.formIntro')}</p>
+        {!building ? (
+          <Button
+            type="button"
+            onClick={() => {
+              setBuilding(true);
+              setPayingId(null);
+            }}
+          >
+            {t('ads.builder.newCampaign')}
+          </Button>
+        ) : null}
+      </div>
+
+      {building ? (
+        <div className="mt-4">
+          <CreateCampaignForm
+            onCreated={(id) => {
+              setBuilding(false);
+              setPayingId(id);
+            }}
+            onCancel={() => setBuilding(false)}
+          />
+        </div>
+      ) : null}
+
+      {payingId !== null && !building
+        ? (() => {
+            const campaign = campaigns.find((item) => item.id === payingId);
+            if (!campaign) return null;
+            return (
+              <div className="mt-4">
+                <CampaignPaymentPanel
+                  campaignId={campaign.id}
+                  budgetPoisha={campaign.totalBudget}
+                  language={language}
+                  latest={latestByCampaign.get(campaign.id) ?? null}
+                  onDone={() => setPayingId(null)}
+                />
+              </div>
+            );
+          })()
+        : null}
+
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.walletBalance')}
-          value={formatMoney(balance, 'BDT', language)}
+          value={formatTaka(balance, language)}
           hint={t('ads.walletHint')}
         />
         <StatCard
@@ -107,9 +189,8 @@ function Dashboard() {
         <StatCard
           icon={<Megaphone size={16} />}
           label={t('ads.totalSpend')}
-          value={formatMoney(
+          value={formatTaka(
             campaigns.reduce((total, campaign) => total + campaign.spent, 0),
-            'BDT',
             language,
           )}
           hint={t('ads.shownCampaignsHint')}
@@ -147,9 +228,8 @@ function Dashboard() {
                     {' · '}
                     {campaign.clicks > 0
                       ? t('ads.costPerClick', {
-                          amount: formatMoney(
+                          amount: formatTaka(
                             effectiveCostPerClick(campaign.spent, campaign.clicks),
-                            'BDT',
                             language,
                           ),
                         })
@@ -168,20 +248,58 @@ function Dashboard() {
                   {t(`ads.statuses.${campaign.status}`)}
                 </Badge>
               </div>
+              {campaign.status === 'draft' ? (
+                <DraftFunding
+                  latest={latestByCampaign.get(campaign.id) ?? null}
+                  busy={builder.isSending}
+                  onPay={() => {
+                    setBuilding(false);
+                    setPayingId(campaign.id);
+                  }}
+                  onSend={() => void sendForReview(campaign.id)}
+                />
+              ) : null}
               <div className="mt-3">
                 <ProgressBar
                   value={budgetProgress(campaign) * 100}
                   label={t('ads.budgetUsed', {
-                    spent: formatMoney(campaign.spent, 'BDT', language),
-                    total: formatMoney(campaign.totalBudget, 'BDT', language),
+                    spent: formatTaka(campaign.spent, language),
+                    total: formatTaka(campaign.totalBudget, language),
                   })}
                 />
                 <p className="mt-1 text-xs text-muted">
                   {t('ads.remaining', {
-                    amount: formatMoney(budgetRemaining(campaign), 'BDT', language),
+                    amount: formatTaka(budgetRemaining(campaign), language),
                   })}
                 </p>
               </div>
+              <ul className="mt-3 grid gap-1 text-xs text-muted" aria-label={t('ads.factsTitle')}>
+                <li>
+                  {t('ads.bidLine', {
+                    amount: formatTaka(campaign.bid, language),
+                    pricing: t(`ads.pricings.${campaign.pricing}`),
+                  })}
+                </li>
+                <li>
+                  {campaign.endsAt
+                    ? t('ads.scheduleRange', {
+                        start: formatDay(campaign.startsAt, language),
+                        end: formatDay(campaign.endsAt, language),
+                      })
+                    : t('ads.scheduleOpen', { start: formatDay(campaign.startsAt, language) })}
+                </li>
+                <li>
+                  {campaign.dailyBudget > 0
+                    ? t('ads.dailyCapLine', {
+                        spent: formatTaka(campaign.spendToday, language),
+                        cap: formatTaka(campaign.dailyBudget, language),
+                      })
+                    : t('ads.dailyNoCap', { spent: formatTaka(campaign.spendToday, language) })}
+                </li>
+                <li>
+                  {t('ads.creatives', { total: formatNumber(campaign.creativeCount, language) })}
+                </li>
+              </ul>
               {campaign.reviewNote.length > 0 ? (
                 <Alert tone="warning" title={t('ads.reviewNote')} className="mt-3">
                   {campaign.reviewNote}
@@ -247,7 +365,7 @@ function Dashboard() {
                                   <td className="py-2">{day.day}</td>
                                   <td>{formatNumber(day.impressions, language)}</td>
                                   <td>{formatNumber(day.clicks, language)}</td>
-                                  <td>{formatMoney(day.spend, 'BDT', language)}</td>
+                                  <td>{formatTaka(day.spend, language)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -280,6 +398,53 @@ function Dashboard() {
         })}
       </ul>
     </>
+  );
+}
+
+/** Where a draft stands on the way to funding and review: pay, wait, or send. */
+function DraftFunding({
+  latest,
+  busy,
+  onPay,
+  onSend,
+}: {
+  latest: AdPaymentRequest | null;
+  busy: boolean;
+  onPay: () => void;
+  onSend: () => void;
+}) {
+  const { t } = useTranslation();
+  if (latest?.status === 'approved') {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-green-50 p-3 dark:bg-green-950/30">
+        <Badge tone="green">{t('ads.builder.statusPaymentApproved')}</Badge>
+        <p className="text-sm">{t('ads.builder.approvedHint')}</p>
+        <Button size="sm" onClick={onSend} loading={busy} disabled={busy}>
+          {t('ads.builder.sendReview')}
+        </Button>
+      </div>
+    );
+  }
+  if (latest?.status === 'pending') {
+    return (
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge tone="blue">{t('ads.builder.statusPaymentPending')}</Badge>
+        <p className="text-sm text-muted">{t('ads.builder.paymentPending')}</p>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <Badge tone={latest?.status === 'rejected' ? 'danger' : 'warn'}>
+        {latest?.status === 'rejected'
+          ? t('ads.builder.statusPaymentRejected')
+          : t('ads.builder.statusNeedsPayment')}
+      </Badge>
+      <p className="text-sm text-muted">{t('ads.builder.needPayment')}</p>
+      <Button size="sm" variant="outline" onClick={onPay}>
+        {t('ads.builder.payNow')}
+      </Button>
+    </div>
   );
 }
 
@@ -321,15 +486,27 @@ function Creative({
 
   return (
     <li className="rounded-card border border-border p-3">
+      {creative.imageUrl.length > 0 ? (
+        <MediaImage
+          src={creative.imageUrl}
+          variantSrc={creative.thumbUrl ?? ''}
+          alt={creative.imageAlt?.trim() || creative.headline}
+          slotWidth={320}
+          loading="lazy"
+          decoding="async"
+          className="mb-2 h-28 w-full rounded-card object-cover"
+        />
+      ) : null}
       <p className="font-medium">{creative.headline}</p>
       {creative.body ? <p className="mt-1 text-sm">{creative.body}</p> : null}
       <p className="mt-1 text-xs text-muted">
-        {t(`ads.placements.${creative.placement}`)} ·{' '}
+        {t(`ads.placements.${creative.placement}`)}
+        {creative.layout ? ` · ${t(`ads.layouts.${creative.layout}`)}` : ''} ·{' '}
         {t('ads.counted', {
           impressions: formatNumber(creative.impressions, language),
           clicks: formatNumber(creative.clicks, language),
         })}{' '}
-        · {formatMoney(creative.spend, 'BDT', language)}
+        · {formatTaka(creative.spend, language)}
       </p>
       {editable && !editing ? (
         <Button

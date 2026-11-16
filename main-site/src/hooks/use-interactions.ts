@@ -57,7 +57,7 @@ export function usePostInteractions(postId: string, initialLikes: number): PostI
     staleTime: 30_000,
   });
 
-  const likesKey = ['post-likes', postId];
+  const likesKey = ['post-likes', uid, postId];
   const { data: likes = initialLikes } = useQuery({
     queryKey: likesKey,
     queryFn: () => initialLikes,

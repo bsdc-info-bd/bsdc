@@ -722,6 +722,8 @@ alter table public.ad_creatives drop constraint if exists ad_creatives_target_ur
 alter table public.ad_creatives add constraint ad_creatives_target_url_check
   check (char_length(target_url) between 12 and 500 and target_url ~ '^https://[^\s]+$');
 
+drop function if exists public.admin_pending_shops(integer);
+
 create or replace function public.admin_pending_shops(p_limit integer default 50)
 returns table (
   id          uuid,

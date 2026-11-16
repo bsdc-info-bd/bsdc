@@ -1,3 +1,4 @@
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
@@ -115,6 +116,7 @@ export async function fetchCourse(slug: string): Promise<CourseDetail | null> {
 export async function enrol(courseId: string): Promise<string> {
   const { data, error } = await getSupabase().rpc('enroll_in_course', { p_course_id: courseId });
   if (error) throw toDataError(error);
+  wakePushDelivery();
   return typeof data === 'string' ? data : '';
 }
 
@@ -164,6 +166,7 @@ export async function gradeQuiz(quizId: string, answers: AnswerSheet): Promise<G
   if (row === undefined) {
     return { score: 0, earnedMarks: 0, totalMarks: 0, passed: false, certificateCode: null };
   }
+  if (row.passed || row.certificate_code) wakePushDelivery();
   return {
     score: row.score,
     earnedMarks: row.earned_marks,

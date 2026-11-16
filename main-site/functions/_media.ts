@@ -9,6 +9,7 @@
 import { IMAGE_SNIFF_BYTES, looksLikeImageBytes } from '../src/lib/media/image-signature';
 import {
   chooseProvider,
+  effectiveMimeType,
   kindOf,
   MAX_BYTES,
   type MediaKind,
@@ -19,6 +20,8 @@ import {
 export interface MediaEnv {
   /** ImgBB's API key. A secret: it is never sent to a browser. */
   IMGBB_API_KEY?: string;
+  /** Optional deployment alias for the server-only ImgBB API key. */
+  BSDC_IMGBB_API_KEY?: string;
 }
 
 export interface HostCredentials {
@@ -35,7 +38,7 @@ function first(...values: (string | undefined)[]): string {
 /** The ImgBB credential this deployment holds. */
 export function credentialsOf(env: MediaEnv): HostCredentials {
   return {
-    imgbbKey: first(env.IMGBB_API_KEY),
+    imgbbKey: first(env.IMGBB_API_KEY, env.BSDC_IMGBB_API_KEY),
   };
 }
 
@@ -58,7 +61,7 @@ export interface MediaFailure {
 }
 
 export function reject(file: File, purpose: MediaPurpose, env: MediaEnv): MediaFailure | null {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (kind === null) return { errorKey: 'media.errors.unsupported', status: 415 };
   if (file.size === 0) return { errorKey: 'media.errors.empty', status: 400 };
   if (file.size > MAX_BYTES[kind]) return { errorKey: 'media.errors.tooLarge', status: 413 };
@@ -124,6 +127,7 @@ export const UPLOAD_LIFETIME_SECONDS: Record<MediaPurpose, number> = {
   'post-image': 0,
   'comment-image': 0,
   'product-image': 0,
+  'ad-creative': 0,
 };
 
 /** ISO string for `seconds` from now, or null when the host keeps it forever. */
@@ -192,24 +196,71 @@ const UPSTREAM_TIMEOUT_MS = 25_000;
 /** Upload attempts, including the first. A 5xx or a timeout is retried once. */
 const UPSTREAM_ATTEMPTS = 2;
 
-/** Statuses worth trying again: the host is busy or restarting, not refusing. */
-function retryable(status: number): boolean {
-  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+/** Statuses worth trying again: the host is busy, rate-limiting, or transiently blocking at an edge WAF. */
+function retryable(status: number, body: string): boolean {
+  if (status === 429 || status === 500 || status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+  return status === 403 && looksLikeHtmlBody(body);
+}
+
+function looksLikeHtmlBody(body: string): boolean {
+  return /^\s*</.test(body) && /<!doctype|<html|<head|<title/i.test(body);
 }
 
 /**
  * Whether ImgBB's own words name the credential.
  *
- * ImgBB answers an invalid or expired key with a 400 whose body carries a
- * message about the API key. That is a deployment problem, and it is the one
- * case where the member should be told "not available right now" rather than
- * "the upload failed" — the first is true for everybody until an administrator
- * acts, and the second invites a retry that cannot work.
+ * ImgBB answers an invalid or expired key with a 400 JSON payload whose error
+ * message mentions the API key (`Invalid API v1 key.` / error code 100). A WAF
+ * or edge rate-limit HTML page with HTTP 403 is a transient failure, NOT a
+ * missing secret — conflating the two blames a healthy deployment with
+ * "Picture uploads are unavailable right now".
  */
-function keyWasRefused(status: number, body: string): boolean {
-  if (status === 401 || status === 403) return true;
-  return /invalid.{0,20}(api)?\s*key|api key|key.{0,10}(invalid|expired|missing)/i.test(body);
+export function keyWasRefused(status: number, body: string): boolean {
+  if (looksLikeHtmlBody(body)) return false;
+
+  let message = body;
+  let code: number | null = null;
+  try {
+    const parsed = JSON.parse(body) as {
+      status_code?: unknown;
+      error?: { message?: unknown; code?: unknown };
+    };
+    if (typeof parsed.error?.message === 'string') message = parsed.error.message;
+    if (typeof parsed.error?.code === 'number') code = parsed.error.code;
+  } catch {
+    // Plain-text response; evaluate raw body below.
+  }
+
+  if (code === 100 && /key/i.test(message)) return true;
+  if (
+    /invalid.{0,24}(api)?\s*key|expired.{0,12}(api)?\s*key|missing.{0,12}(api)?\s*key/i.test(
+      message,
+    )
+  ) {
+    return true;
+  }
+  return status === 401 && /key|auth|token|credential/i.test(message);
 }
+
+function ensureHttpsUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return '';
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'https:' && parsed.protocol.startsWith('http')) {
+      parsed.protocol = 'https:';
+      return parsed.toString();
+    }
+    return parsed.toString();
+  } catch {
+    return trimmed;
+  }
+}
+
+/** Threshold above which multipart Blob upload avoids doubling heap via base64 strings. */
+const MULTIPART_BLOB_THRESHOLD_BYTES = 2 * 1024 * 1024;
 
 async function sendToImgbb(
   file: File,
@@ -218,11 +269,10 @@ async function sendToImgbb(
   bytes: Uint8Array | undefined,
   now = Date.now(),
 ): Promise<EdgeUploadResult> {
-  const base64 = bytesToBase64(bytes ?? new Uint8Array(await file.arrayBuffer()));
-  const body = new FormData();
-  body.append('image', base64);
+  const rawBytes = bytes ?? new Uint8Array(await file.arrayBuffer());
+  const useBinaryMultipart = rawBytes.byteLength > MULTIPART_BLOB_THRESHOLD_BYTES;
+  const base64 = useBinaryMultipart ? '' : bytesToBase64(rawBytes);
   const lifetime = UPLOAD_LIFETIME_SECONDS[purpose] ?? 0;
-  if (lifetime > 0) body.append('expiration', String(lifetime));
 
   const endpoint = `https://api.imgbb.com/1/upload?key=${encodeURIComponent(key)}`;
 
@@ -232,17 +282,26 @@ async function sendToImgbb(
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
     try {
-      // Rebuilt each attempt: a FormData body can be re-sent, a consumed
-      // Request cannot, and the bytes are the same bytes.
+      // Rebuilt on every attempt so a retry never reuses a consumed multipart
+      // body stream in Workers/undici.
+      const body = new FormData();
+      if (useBinaryMultipart) {
+        const mime = effectiveMimeType(file) || 'image/webp';
+        body.append('image', new Blob([rawBytes], { type: mime }), file.name || 'image.webp');
+      } else {
+        body.append('image', base64);
+      }
+      if (lifetime > 0) body.append('expiration', String(lifetime));
       response = await fetch(endpoint, { method: 'POST', body, signal: controller.signal });
       text = await response.text();
     } catch {
       response = null;
+      text = '';
     } finally {
       clearTimeout(timeout);
     }
 
-    if (response !== null && !retryable(response.status)) break;
+    if (response !== null && !retryable(response.status, text)) break;
     if (attempt < UPSTREAM_ATTEMPTS) {
       await new Promise((resolve) => setTimeout(resolve, 400));
     }
@@ -263,15 +322,18 @@ async function sendToImgbb(
   } catch {
     throw new HostError('media.errors.failed', 502);
   }
-  const fullUrl = payload.data?.image?.url ?? payload.data?.display_url ?? payload.data?.url ?? '';
+  const rawFullUrl =
+    payload.data?.image?.url ?? payload.data?.display_url ?? payload.data?.url ?? '';
+  const fullUrl = ensureHttpsUrl(rawFullUrl);
   if (fullUrl.length === 0) throw new HostError('media.errors.failed', 502);
 
   // ImgBB's `thumb` is a 180x180 square crop suited only for small avatars;
   // `medium` (~640px wide) preserves aspect ratio for feed cards and previews.
-  const thumbUrl =
+  const rawThumbUrl =
     purpose === 'avatar'
       ? (payload.data?.thumb?.url ?? payload.data?.medium?.url ?? fullUrl)
       : (payload.data?.medium?.url ?? payload.data?.display_url ?? fullUrl);
+  const thumbUrl = ensureHttpsUrl(rawThumbUrl) || fullUrl;
 
   return {
     provider: 'imgbb',
@@ -282,7 +344,7 @@ async function sendToImgbb(
     width: toNumber(payload.data?.width) ?? toNumber(payload.data?.image?.width),
     height: toNumber(payload.data?.height) ?? toNumber(payload.data?.image?.height),
     bytes: toNumber(payload.data?.size) ?? file.size,
-    mimeType: payload.data?.image?.mime ?? file.type,
+    mimeType: payload.data?.image?.mime ?? (effectiveMimeType(file) || file.type),
     expiresAt: expiresAtFor(purpose, now),
   };
 }
@@ -297,7 +359,7 @@ export async function sendToHost(
   /** The bytes, when the caller already read them to check the signature. */
   bytes?: Uint8Array,
 ): Promise<EdgeUploadResult> {
-  const kind = kindOf(file.type);
+  const kind = kindOf(effectiveMimeType(file));
   if (kind === null) throw new HostError('media.errors.unsupported', 415);
 
   const credentials = credentialsOf(env);

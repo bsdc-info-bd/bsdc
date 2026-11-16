@@ -18,9 +18,14 @@ import {
   type UserCredential,
 } from 'firebase/auth';
 import { applyPersistence, getFirebaseAuth } from '@/lib/firebase';
+import { env } from '@/lib/env';
+import { clearQueryCache } from '@/lib/query-client';
 import { SITE } from '@/lib/site';
-import { prefersRedirectFlow, readDeviceSignals } from './device';
+import { useAuthStore } from '@/store/auth-store';
+import { useProfileStore } from '@/store/profile-store';
+import { isSameOriginAuthDomain, readDeviceSignals, shouldPreferRedirectAuth } from './device';
 import { shouldFallbackToRedirect } from './errors';
+import { clearPendingOAuthRedirect, markPendingOAuthRedirect } from './oauth-state';
 
 /** The exact provider set approved by the owner. No MFA, no phone sign-in. */
 export const OAUTH_PROVIDERS = ['google', 'github', 'yahoo'] as const;
@@ -108,29 +113,48 @@ export async function signInWithEmail(input: {
  * Pure so it can be tested; `readDeviceSignals` is the only part that touches
  * a browser.
  */
-export function oauthFlowFor(signals: ReturnType<typeof readDeviceSignals>): 'redirect' | 'popup' {
-  return signals !== null && prefersRedirectFlow(signals) ? 'redirect' : 'popup';
+export function oauthFlowFor(
+  signals: ReturnType<typeof readDeviceSignals>,
+  authDomain: string = env.firebase.authDomain,
+  hostname: string = typeof window !== 'undefined' ? window.location.hostname : '',
+): 'redirect' | 'popup' {
+  if (signals === null) return 'popup';
+  return shouldPreferRedirectAuth(signals, {
+    sameOriginAuth: isSameOriginAuthDomain(authDomain, hostname),
+  })
+    ? 'redirect'
+    : 'popup';
 }
 
 export async function signInWithProvider(
   id: OAuthProviderId,
   remember = true,
 ): Promise<UserCredential | null> {
-  await applyPersistence(remember);
   const auth = getFirebaseAuth();
   const provider = providerFor(id);
 
-  // A phone or an in-app browser gets the redirect first: a popup there is
-  // either refused or opened somewhere it cannot come back from.
+  // In-app webviews and same-origin mobile redirects use redirect directly.
   if (oauthFlowFor(readDeviceSignals()) === 'redirect') {
+    await applyPersistence(remember);
+    markPendingOAuthRedirect(id);
     await signInWithRedirect(auth, provider);
     return null;
   }
 
+  // When keeping the user signed in (the default), invoke signInWithPopup
+  // immediately inside the click gesture so iOS Safari and Android Chrome do
+  // not lose transient user activation awaiting async IndexedDB persistence.
+  if (!remember) await applyPersistence(false);
+
   try {
-    return await signInWithPopup(auth, provider);
+    const credential = await signInWithPopup(auth, provider);
+    clearPendingOAuthRedirect();
+    if (remember) await applyPersistence(true);
+    return credential;
   } catch (error) {
     if (shouldFallbackToRedirect(error)) {
+      await applyPersistence(remember);
+      markPendingOAuthRedirect(id);
       await signInWithRedirect(auth, provider);
       return null;
     }
@@ -158,7 +182,14 @@ export async function changePassword(current: string, next: string): Promise<voi
 }
 
 export async function logout(): Promise<void> {
+  clearPendingOAuthRedirect();
   await signOut(getFirebaseAuth());
+  clearQueryCache();
+  useProfileStore.getState().setProfile(null);
+  useAuthStore.getState().reset();
+  void import('@/lib/supabase/client')
+    .then(({ resetSupabase }) => resetSupabase())
+    .catch(() => undefined);
 }
 
 export async function updateDisplayName(displayName: string): Promise<void> {

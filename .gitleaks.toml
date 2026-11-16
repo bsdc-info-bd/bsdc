@@ -16,6 +16,14 @@
 #
 #   claims.ts               parses a PEM private key, so it contains the literal
 #                           header and footer lines of one.
+#   _fcm.ts                 parses a Firebase service-account PEM private key
+#                           in pemToPkcs8(); commit 5e9c4a2 contained the literal
+#                           header and footer lines before switching to a regex.
+#   fcm.ts                  parses a Firebase service-account PEM private key
+#                           in pemToPkcs8(), so it contains the literal header
+#                           and footer lines of one.
+#   fcm.test.ts             generates an ephemeral Web Crypto RSA keypair per
+#                           test run and wraps it with PEM header/footer lines.
 #   claims-core.ts          assembles service-account credentials *from
 #                           environment variables*; the generic-api-key rule reads
 #                           the env-var names FB_PRIVATE_KEY / FB2_PRIVATE_KEY on
@@ -26,9 +34,9 @@
 #   support.test.ts         a synthetic public VAPID value for a parser test.
 #   db-prove/*.mjs          a local-only sentinel flush secret in in-process
 #                           PGlite proofs, never used for a real delivery. The same
-#                           literal appears in t31, t45, t46 and t47 because each
-#                           harness seeds the setting the routine compares against,
-#                           and `run.mjs` runs them as one suite.
+#                           literal appears in t31, t45, t46, t47, t57, and t61 because
+#                           each harness seeds the setting the routine compares
+#                           against, and `run.mjs` runs them as one suite.
 #
 # Everything else is scanned normally, over the whole history rather than the
 # working tree.
@@ -41,10 +49,12 @@ description = "PEM headers and env-var names documented in code, plus synthetic 
 paths = [
   '''main-site/functions/api/auth/claims\.ts$''',
   '''main-site/functions/api/auth/claims-core\.ts$''',
+  '''main-site/functions/_fcm\.ts$''',
+  '''push-worker/src/fcm\.ts$''',
+  '''push-worker/src/fcm\.test\.ts$''',
   '''docs/deploying\.md$''',
   '''main-site/src/lib/push/support\.test\.ts$''',
-  '''main-site/scripts/db-prove/t3[0-9]\.mjs$''',
-  '''main-site/scripts/db-prove/t4[0-9]\.mjs$''',
+  '''main-site/scripts/db-prove/t[3-9][0-9]\.mjs$''',
 ]
 
 # This exact public alphabet appeared as one literal in the historical
