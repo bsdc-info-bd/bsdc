@@ -597,6 +597,7 @@ private fun DeliveryAndScheduleCard(
                 lat = centerLat,
                 lng = centerLng,
                 radiusKm = if (deliveryScope == "radius") parsedRadius else null,
+                bn = bn,
                 onPin = { plat, plng ->
                     if (MkLogic.isInsideBangladesh(plat, plng)) {
                         centerLat = plat

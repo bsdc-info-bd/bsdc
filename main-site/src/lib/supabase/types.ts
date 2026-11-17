@@ -834,10 +834,19 @@ export type JobApplicationRow = {
   created_at: string;
 };
 
+/**
+ * A proposal, as `gig_proposal_queue()` returns it (0112): the bid row plus the
+ * freelancer's public card. The table itself has no name or avatar columns —
+ * the queue RPC joins them and derives `verified` from `role`.
+ */
 export type GigProposalRow = {
   id: string;
   gig_id: string;
   freelancer_uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  verified: boolean;
   pitch: string;
   bid_amount: number;
   delivery_days: number;
@@ -2927,6 +2936,24 @@ export type Database = {
       post_interaction_state: {
         Args: { p_post_ids: string[] };
         Returns: InteractionStateRow[];
+      };
+      /** Every proposal on a gig, with the freelancer's public card (0112). */
+      gig_proposal_queue: {
+        Args: { p_gig_id: string; p_limit?: number };
+        Returns: GigProposalRow[];
+      };
+      gig_proposal_count: {
+        Args: { p_gig_id: string };
+        Returns: number;
+      };
+      decide_gig_proposal: {
+        Args: { p_proposal_id: string; p_status: DbApplicationStatus };
+        Returns: undefined;
+      };
+      /** Every application on a job, with the applicant's public card (0113). */
+      job_application_queue: {
+        Args: { p_job_id: string; p_limit?: number };
+        Returns: JobApplicationRow[];
       };
     };
     Enums: {

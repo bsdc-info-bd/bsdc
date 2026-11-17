@@ -191,18 +191,41 @@ data class GigProposalProfileDto(
     val verified: Boolean = false,
 )
 
+/**
+ * One proposal, from `gig_proposal_queue()`.
+ *
+ * The freelancer's card arrives flat (`display_name`, `avatar_url`, `verified`) because the
+ * server does the join. [profiles] is kept so a row carrying the older embedded shape still
+ * deserialises, and [freelancer] resolves either shape into the one the screens read.
+ */
 @Serializable
 data class GigProposalDto(
     val id: String = "",
     @SerialName("gig_id") val gigId: String = "",
     @SerialName("freelancer_uid") val freelancerUid: String = "",
+    val username: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val verified: Boolean = false,
     val pitch: String = "",
     @SerialName("bid_amount") val bidAmount: Int = 0,
     @SerialName("delivery_days") val deliveryDays: Int = 7,
     val status: String = "submitted",
     @SerialName("created_at") val createdAt: String? = null,
     val profiles: GigProposalProfileDto? = null,
-)
+) {
+    /** The freelancer's public card, whichever shape the server sent. Never null. */
+    val freelancer: GigProposalProfileDto
+        get() = profiles ?: GigProposalProfileDto(
+            uid = freelancerUid,
+            username = username,
+            displayName = displayName,
+            avatarUrl = avatarUrl,
+            verified = verified,
+        )
+}
+
+
 
 @Serializable
 data class ProjectMediaAssetDto(
@@ -261,13 +284,29 @@ data class JobApplicationDto(
     val id: String = "",
     @SerialName("job_id") val jobId: String = "",
     @SerialName("applicant_uid") val applicantUid: String = "",
+    // Flat columns from `job_application_queue()` (migration 0113).
+    val username: String? = null,
+    @SerialName("display_name") val displayName: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    val verified: Boolean = false,
     @SerialName("cover_letter") val coverLetter: String = "",
     @SerialName("resume_url") val resumeUrl: String = "",
     val status: String = "submitted",
     @SerialName("decided_at") val decidedAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
+    // Older embedded shape, still accepted so a cached payload deserialises.
     @SerialName("profiles:applicant_uid") val applicant: ApplicationProfileDto? = null,
-)
+) {
+    /** The applicant's public card, whichever shape the server sent. Never null. */
+    val applicantCard: ApplicationProfileDto
+        get() = applicant ?: ApplicationProfileDto(
+            uid = applicantUid,
+            username = username,
+            displayName = displayName,
+            avatarUrl = avatarUrl,
+            verified = verified,
+        )
+}
 
 /** A saved opportunity, kept on the device so the shelf survives a cold start offline. */
 @Serializable

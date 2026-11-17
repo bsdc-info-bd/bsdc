@@ -26,18 +26,27 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.designsystem.bsdcShimmerPlaceholder
+import bd.info.bsdc.app.core.media.ImgbbUrlAllowlist
+import bd.info.bsdc.app.core.model.BsdcHosts
 import coil3.ImageLoader
-import coil3.compose.AsyncImage
+import coil3.compose.SubcomposeAsyncImage
+import coil3.request.ImageRequest
 
 /** Picks the Bangla or English string. Keeps every marketplace label bilingual in one place. */
 internal fun mkText(bn: Boolean, en: String, bnText: String): String = if (bn) bnText else en
@@ -138,7 +147,14 @@ fun MkStars(rating: Double, modifier: Modifier = Modifier) {
     }
 }
 
-/** Rounded product or shop image with a soft placeholder while loading or when no URL exists. */
+/**
+ * Rounded product, shop or post image.
+ *
+ * Three states, all visibly different, because a blank tile used to mean three unrelated
+ * things at once: still downloading, broken URL, or no URL at all. It also retries through
+ * BSDC's own edge cache (`/media/i`) when ImgBB refuses the device directly, which is the
+ * common failure on mobile networks in Bangladesh.
+ */
 @Composable
 fun MkImage(
     url: String,
@@ -146,26 +162,57 @@ fun MkImage(
     imageLoader: ImageLoader,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
+    fallbackIcon: ImageVector = Icons.Rounded.Storefront,
 ) {
+    val context = LocalContext.current
+    val normalized = remember(url) {
+        ImgbbUrlAllowlist.normalizeImageUrl(url).ifEmpty { url.trim() }
+    }
+    var viaProxy by remember(normalized) { mutableStateOf(false) }
+    var failed by remember(normalized) { mutableStateOf(false) }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .background(BsdcThemeTokens.colors.brandSoft),
         contentAlignment = Alignment.Center,
     ) {
-        if (url.isBlank()) {
+        val active = when {
+            normalized.isBlank() -> ""
+            viaProxy -> ImgbbUrlAllowlist.edgeRepairUrl(BsdcHosts.SITE_ORIGIN, normalized)
+            else -> normalized
+        }
+        if (active.isBlank() || failed) {
             Icon(
-                imageVector = Icons.Rounded.Storefront,
-                contentDescription = null,
+                imageVector = fallbackIcon,
+                contentDescription = contentDescription,
                 tint = BsdcThemeTokens.colors.mutedText,
             )
         } else {
-            AsyncImage(
-                model = url,
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(context).data(active).build(),
                 contentDescription = contentDescription,
                 imageLoader = imageLoader,
                 contentScale = contentScale,
+                onError = {
+                    // One repair attempt through the edge cache, then show the empty state.
+                    if (!viaProxy && ImgbbUrlAllowlist.isRepairableImageUrl(normalized)) {
+                        viaProxy = true
+                    } else {
+                        failed = true
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
+                loading = {
+                    Box(modifier = Modifier.fillMaxSize().bsdcShimmerPlaceholder())
+                },
+                error = {
+                    Icon(
+                        imageVector = fallbackIcon,
+                        contentDescription = contentDescription,
+                        tint = BsdcThemeTokens.colors.mutedText,
+                    )
+                },
             )
         }
     }

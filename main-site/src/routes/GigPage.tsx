@@ -1,7 +1,7 @@
 import { ArrowLeft, Banknote, CalendarClock, HandCoins, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
@@ -20,7 +20,7 @@ import {
 import { useGigDetail } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { formatSalaryRange } from '@/lib/opportunities/opportunity-types';
-import { ROUTES, SITE, gigPath } from '@/lib/site';
+import { ROUTES, SITE, gigPath, gigProposalsPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -202,7 +202,18 @@ export default function GigPage() {
                 <li className="flex items-start gap-2">
                   <Users size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-muted" />
                   <span>
-                    {t('freelance.proposalCount', { total: formatNumber(gig.proposals, language) })}
+                    {isOwner ? (
+                      <Link
+                        to={gigProposalsPath(slug)}
+                        className="text-green-700 underline decoration-dotted hover:text-green-800"
+                      >
+                        {t('freelance.proposalCount', {
+                          total: formatNumber(gig.proposals, language),
+                        })}
+                      </Link>
+                    ) : (
+                      t('freelance.proposalCount', { total: formatNumber(gig.proposals, language) })
+                    )}
                   </span>
                 </li>
                 {gig.publishedAt !== null ? (

@@ -21,6 +21,7 @@ import type {
   ProjectScreenshotDraft,
   ProjectUpdate,
 } from '@/lib/opportunities/opportunity-repository';
+import type { GigProposal, ProposalStatus } from '@/lib/opportunities/opportunity-types';
 
 const repository = () => import('@/lib/opportunities/opportunity-repository');
 
@@ -443,6 +444,54 @@ export function useJobDetail(slug: string): JobDetailResult {
       await mutation.mutateAsync({ jobId: target, coverLetter });
     },
     isApplying: mutation.isPending,
+  };
+}
+
+export interface GigProposalsResult {
+  proposals: GigProposal[];
+  isLoading: boolean;
+  isError: boolean;
+  /** Move one proposal to a decided status; resolves when the server has written it. */
+  decide: (proposalId: string, status: ProposalStatus) => Promise<void>;
+  isDeciding: boolean;
+  decidingId: string | null;
+}
+
+/**
+ * The proposal queue for one gig the reader posted.
+ *
+ * Never fetched for a gig the reader does not own: `gig_proposal_queue()` refuses
+ * it on the server, and asking would turn an ordinary page view into a 403.
+ */
+export function useGigProposals(gigId: string | null, enabled: boolean): GigProposalsResult {
+  const queryClient = useQueryClient();
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+
+  const query = useQuery({
+    queryKey: ['gig-proposals', gigId],
+    queryFn: async () => (await repository()).fetchGigProposals(gigId ?? ''),
+    enabled: enabled && gigId !== null,
+    staleTime: 30_000,
+  });
+
+  async function decide(proposalId: string, status: ProposalStatus): Promise<void> {
+    setDecidingId(proposalId);
+    try {
+      await (await repository()).decideGigProposal(proposalId, status);
+      await queryClient.invalidateQueries({ queryKey: ['gig-proposals', gigId] });
+      await queryClient.invalidateQueries({ queryKey: ['gig-detail'] });
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
+  return {
+    proposals: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    decide,
+    isDeciding: decidingId !== null,
+    decidingId,
   };
 }
 

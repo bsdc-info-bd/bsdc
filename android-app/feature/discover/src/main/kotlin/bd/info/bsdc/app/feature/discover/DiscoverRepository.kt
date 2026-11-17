@@ -538,18 +538,22 @@ class DiscoverRepository(
             }
         }
 
-    /** Every application on a job the reader posted. RLS hides other members' rows. */
+    /**
+     * Every application on a job the reader posted. RLS hides other members' rows.
+     *
+     * Same repair as [fetchGigProposalsForClient]: `profiles` has no `verified` column, so the
+     * embedded select was a 400 and an employer's queue never rendered. The join now happens
+     * in `job_application_queue()` (migration 0113), where `verified` is derived from `role`.
+     */
     suspend fun fetchJobApplications(jobId: String): Result<List<JobApplicationDto>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val raw = supabase.getJsonText(
-                    table = "job_applications",
-                    queryPairs = listOf(
-                        "select" to "*,profiles:applicant_uid(uid,username,display_name,avatar_url,verified,bio)",
-                        "job_id" to "eq.$jobId",
-                        "order" to "status.asc,created_at.desc",
-                        "limit" to "100",
-                    ),
+                val raw = supabase.rpcText(
+                    "job_application_queue",
+                    params = buildJsonObject {
+                        put("p_job_id", jobId)
+                        put("p_limit", 100)
+                    },
                     requireAuth = true,
                 )
                 supabase.decode<List<JobApplicationDto>>(raw)
@@ -653,17 +657,24 @@ class DiscoverRepository(
         }
 
     /** All proposals submitted on a gig owned by the signed-in client (protected by RLS). */
+    /**
+     * Every proposal on a gig the reader posted.
+     *
+     * This used to ask PostgREST for `profiles:freelancer_uid(...,verified)`. `profiles` has
+     * no `verified` column — it is derived from `role` on the server — and an unknown column
+     * in a `select=` list is a 400, so the whole queue failed and the client saw nothing.
+     * `gig_proposal_queue()` (migration 0112) does the join and the derivation server-side,
+     * behind the same "client of the gig or staff" check that guards a decision.
+     */
     suspend fun fetchGigProposalsForClient(gigId: String): Result<List<GigProposalDto>> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val raw = supabase.getJsonText(
-                    table = "gig_proposals",
-                    queryPairs = listOf(
-                        "select" to "*,profiles:freelancer_uid(uid,username,display_name,avatar_url,verified)",
-                        "gig_id" to "eq.$gigId",
-                        "order" to "created_at.desc",
-                        "limit" to "100",
-                    ),
+                val raw = supabase.rpcText(
+                    "gig_proposal_queue",
+                    params = buildJsonObject {
+                        put("p_gig_id", gigId)
+                        put("p_limit", 100)
+                    },
                     requireAuth = true,
                 )
                 supabase.decode<List<GigProposalDto>>(raw)

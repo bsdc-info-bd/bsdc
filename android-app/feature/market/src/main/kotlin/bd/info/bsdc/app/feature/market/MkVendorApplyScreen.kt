@@ -614,6 +614,7 @@ private fun ApplyLocationStep(
         MkOsmPinMap(
             lat = d.lat,
             lng = d.lng,
+            bn = bn,
             onPin = { la, ln ->
                 if (MkLogic.isInsideBangladesh(la, ln)) {
                     locationError = null

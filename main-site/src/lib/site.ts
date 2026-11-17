@@ -119,6 +119,11 @@ export function gigPath(slug: string): string {
   return `${ROUTES.freelance}/${encodeURIComponent(slug.trim())}`;
 }
 
+/** The proposal queue for one gig: /freelance/<slug>/proposals. */
+export function gigProposalsPath(slug: string): string {
+  return `${gigPath(slug)}/proposals`;
+}
+
 /** Event permalink: /events/slug. */
 export function eventPath(slug: string): string {
   return `${ROUTES.events}/${encodeURIComponent(slug.trim())}`;

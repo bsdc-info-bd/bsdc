@@ -39,8 +39,14 @@ fun MkOsmPinMap(
     radiusKm: Int? = null,
     circleCenterLat: Double? = null,
     circleCenterLng: Double? = null,
+    bn: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
+    val mapErrorText = if (bn) {
+        "মানচিত্রের টাইল লোড হয়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
+    } else {
+        "Map tiles could not load. Check your internet connection and try again."
+    }
     val latestOnPin by rememberUpdatedState(onPin)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     val state = remember { PinMapState(initial = if (lat != null && lng != null) lat to lng else null) }
@@ -58,15 +64,26 @@ fun MkOsmPinMap(
                 settings.domStorageEnabled = false
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
-                // The map is a single page. Any link inside it stays where it is.
+                // The map is one bundled page loaded from the site origin. Nothing in it navigates,
+                // so the WebView must not hand any URL off to a browser.
                 webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean = true
+                    // Only the map's own document may load. The attribution link would otherwise
+                    // navigate the WebView off the map and leave the member on a web page.
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        val uri = request?.url ?: return true
+                        val base = BsdcHosts.SITE_ORIGIN.trimEnd('/')
+                        return !uri.toString().startsWith(base)
+                    }
 
                     // OpenStreetMap refuses tile requests without an identifying User-Agent and Referer, which a
-                    // WebView does not reliably send. Tiles are fetched here instead, and only from the tile host.
+                    // WebView does not reliably send. Tiles are fetched here instead, and only from tile hosts.
+                    //
+                    // The page asks for a plain `tile.openstreetmap.org` URL, but OSM answers by redirecting to
+                    // one of its `a.`/`b.`/`c.` shards, so every shard host has to be accepted too. A strict
+                    // `host ==` test dropped those requests and left the canvas blank white.
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         val uri = request?.url ?: return null
-                        if (uri.scheme != "https" || uri.host != OSM_TILE_HOST) return null
+                        if (!isOsmTileRequest(uri.scheme, uri.host)) return null
                         return fetchTile(uri.toString())
                     }
 
@@ -103,6 +120,7 @@ fun MkOsmPinMap(
                         hasPin = lat != null && lng != null,
                         leafletJs = leafletJs,
                         leafletCss = leafletCss,
+                        mapErrorText = mapErrorText,
                     ),
                     "text/html",
                     "utf-8",
@@ -161,8 +179,27 @@ private class PinBridge(private val onChanged: (Double, Double) -> Unit) {
 private const val OSM_TILE_HOST = "tile.openstreetmap.org"
 private const val TILE_USER_AGENT = "BSDC-Android/1.0 (+https://www.bsdc.info.bd)"
 
+/**
+ * Whether a request is for an OpenStreetMap raster tile.
+ *
+ * The page itself asks for [OSM_TILE_HOST], but OSM serves those from the `a.`/`b.`/`c.`
+ * shards and redirects there, so the bare host and any `*.tile.openstreetmap.org`
+ * subdomain both have to be recognised. Anything else is left to the WebView.
+ */
+internal fun isOsmTileRequest(scheme: String?, host: String?): Boolean {
+    if (!scheme.equals("https", ignoreCase = true)) return false
+    val clean = host?.trim()?.lowercase() ?: return false
+    return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
+}
+
 /** Fetches one OSM tile with the app's identity. Runs on the WebView's background thread. Null means the tile is skipped. */
 private fun fetchTile(url: String): WebResourceResponse? = runCatching {
+    // A tile is ~10 KB. Without a cache the map re-downloads every visible tile on every scroll,
+    // which is what made the blank canvas slow to fill and expensive on mobile data.
+    val cached = tileCache[url]
+    if (cached != null) {
+        return@runCatching WebResourceResponse("image/png", null, cached.inputStream())
+    }
     val connection = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = 8_000
         readTimeout = 8_000
@@ -174,9 +211,34 @@ private fun fetchTile(url: String): WebResourceResponse? = runCatching {
         connection.disconnect()
         null
     } else {
-        WebResourceResponse("image/png", "binary", connection.inputStream)
+        val bytes = runCatching { connection.inputStream.use { it.readBytes() } }.getOrNull()
+        connection.disconnect()
+        // A zero-byte or oversized body is a broken tile, not a picture: let Leaflet retry it.
+        if (bytes == null || bytes.isEmpty() || bytes.size > MAX_TILE_BYTES) {
+            null
+        } else {
+            tileCache.put(url, bytes)
+            WebResourceResponse("image/png", null, bytes.inputStream())
+        }
     }
 }.getOrNull()
+
+/** Small lock-free LRU of decoded tile bytes, capped so a long pan cannot grow the heap. */
+private object tileCache {
+    private const val MAX_ENTRIES = 256
+    private val entries = object : LinkedHashMap<String, ByteArray>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean =
+            size > MAX_ENTRIES
+    }
+
+    operator fun get(key: String): ByteArray? = synchronized(entries) { entries[key] }
+
+    fun put(key: String, value: ByteArray) {
+        synchronized(entries) { entries[key] = value }
+    }
+}
+
+private const val MAX_TILE_BYTES = 512 * 1024
 
 private const val DHAKA_LAT = 23.8103
 private const val DHAKA_LNG = 90.4125
@@ -192,6 +254,7 @@ private fun mapPage(
     hasPin: Boolean,
     leafletJs: String,
     leafletCss: String,
+    mapErrorText: String,
 ): String = """
 <!doctype html>
 <html>
@@ -207,23 +270,34 @@ $leafletCss
 </head>
 <body>
 <div id="map"></div>
+<div id="bsdc-map-error" style="display:none;position:absolute;inset:0;z-index:1000;background:#e5e3df;color:#374151;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:13px;line-height:1.45">
+  $mapErrorText
+</div>
 <script>
 $leafletJs
 </script>
 <script>
   var map = L.map('map', { zoomControl: true }).setView([$lat, $lng], ${if (hasPin) 16 else 13});
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
+  // A blank white canvas tells nobody anything. If tiles never arrive, say so on the map itself.
+  var tileErrors = 0, tileOk = 0;
+  tiles.on('tileerror', function () {
+    tileErrors++;
+    if (tileOk === 0 && tileErrors >= 4) {
+      var box = document.getElementById('bsdc-map-error');
+      if (box) { box.style.display = 'flex'; }
+    }
+  });
+  tiles.on('tileload', function () {
+    tileOk++;
+    var box = document.getElementById('bsdc-map-error');
+    if (box) { box.style.display = 'none'; }
+  });
   var marker = null;
   var radiusCircle = null;
-  var PIN_ICON = L.divIcon({
-    className: 'bsdc-pin',
-    html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>',
-    iconSize: [30, 40],
-    iconAnchor: [15, 40]
-  });
   function setRadiusCircle(la, ln, metres) {
     if (!radiusCircle) {
       radiusCircle = L.circle([la, ln], {
@@ -243,6 +317,12 @@ $leafletJs
       radiusCircle = null;
     }
   }
+  var PIN_ICON = L.divIcon({
+    className: 'bsdc-pin',
+    html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>',
+    iconSize: [30, 40],
+    iconAnchor: [15, 40]
+  });
   function place(la, ln) {
     if (!marker) {
       marker = L.marker([la, ln], { draggable: true, icon: PIN_ICON }).addTo(map);

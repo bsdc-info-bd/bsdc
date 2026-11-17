@@ -363,6 +363,7 @@ fun MkCheckoutScreen(
                         radiusKm = shopDelivery?.takeIf { it.scope == "radius" }?.radius_km,
                         circleCenterLat = shopDelivery?.center_lat,
                         circleCenterLng = shopDelivery?.center_lng,
+                        bn = bn,
                         onPin = { plat, plng ->
                             if (MkLogic.isInsideBangladesh(plat, plng)) {
                                 pinLat = plat

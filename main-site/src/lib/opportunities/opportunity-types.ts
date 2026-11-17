@@ -51,6 +51,30 @@ export interface Gig {
   status: ListingStatus;
 }
 
+/** One freelancer's bid on a gig, as the gig's client sees it. */
+export interface GigProposal {
+  id: string;
+  freelancerUid: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  verified: boolean;
+  pitch: string;
+  bidAmount: number;
+  deliveryDays: number;
+  status: ProposalStatus;
+  createdAt: string;
+}
+
+/** The lifecycle of a proposal, matching the `bsdc_application_status` enum. */
+export type ProposalStatus =
+  | 'submitted'
+  | 'reviewing'
+  | 'shortlisted'
+  | 'rejected'
+  | 'hired'
+  | 'withdrawn';
+
 export type ProjectSort = 'popular' | 'recent';
 
 export interface Project {

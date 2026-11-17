@@ -37,6 +37,7 @@ const JobsPage = lazy(() => import('@/routes/JobsPage'));
 const JobPage = lazy(() => import('@/routes/JobPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const GigPage = lazy(() => import('@/routes/GigPage'));
+const GigProposalsPage = lazy(() => import('@/routes/GigProposalsPage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
 const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
@@ -165,6 +166,10 @@ const router = createBrowserRouter([
       { path: `${ROUTES.jobs}/:slug`, element: withSuspense(<JobPage />) },
       { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
       { path: `${ROUTES.freelance}/:slug`, element: withSuspense(<GigPage />) },
+      {
+        path: `${ROUTES.freelance}/:slug/proposals`,
+        element: withSuspense(<GigProposalsPage />),
+      },
       { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
       { path: `${ROUTES.projects}/:slug`, element: withSuspense(<ProjectPage />) },
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },

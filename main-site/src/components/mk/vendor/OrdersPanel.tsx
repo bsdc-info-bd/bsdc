@@ -1,8 +1,14 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Bell, MapPin, Phone, Package } from 'lucide-react';
+import { Bell, MapPin, Navigation, Phone, Package } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Badge, Button, EmptyState, Modal, TextField } from '@/design-system';
+import {
+  DeliveryMap,
+  DeliveryMapDialog,
+  DeliveryMapExpandButton,
+} from '@/components/mk/DeliveryMap';
+import { googleMapsDirectionsUrl } from '@/lib/mk/maps';
 import { useSetOrderStatus, useVendorOrders } from '@/hooks/use-mk';
 import {
   formatTaka,
@@ -51,6 +57,7 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
   const [filter, setFilter] = useState<OrderStatus | 'all'>('all');
   const [declining, setDeclining] = useState<MkVendorOrder | null>(null);
   const [reason, setReason] = useState('');
+  const [mapOrder, setMapOrder] = useState<MkVendorOrder | null>(null);
 
   const list = (orders.data ?? []).filter((o) => filter === 'all' || o.status === filter);
 
@@ -158,14 +165,37 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
                         : ''}
                     </span>
                   </p>
-                  <a
-                    href={`https://www.openstreetmap.org/?mlat=${order.lat}&mlon=${order.lng}#map=17/${order.lat}/${order.lng}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-green-700 hover:underline"
-                  >
-                    {copy.openMap}
-                  </a>
+                  <div className="relative">
+                    <DeliveryMap
+                      lat={order.lat}
+                      lng={order.lng}
+                      language={language}
+                      label={`${order.customer_name} · ${order.address_line}`}
+                    />
+                    <DeliveryMapExpandButton
+                      language={language}
+                      onClick={() => setMapOrder(order)}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <a
+                      href={googleMapsDirectionsUrl(order.lat, order.lng)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 font-medium text-green-700 hover:underline"
+                    >
+                      <Navigation size={13} aria-hidden />
+                      {copy.goToGoogleMaps}
+                    </a>
+                    <a
+                      href={`https://www.openstreetmap.org/?mlat=${order.lat}&mlon=${order.lng}#map=17/${order.lat}/${order.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-700 hover:underline"
+                    >
+                      {copy.openMap}
+                    </a>
+                  </div>
                   {order.note ? (
                     <p className="rounded-lg bg-surface-2 p-2 text-xs text-muted">{order.note}</p>
                   ) : null}
@@ -258,6 +288,21 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
           onChange={(e) => setReason(e.target.value)}
         />
       </Modal>
+
+      <DeliveryMapDialog
+        open={mapOrder !== null}
+        onClose={() => setMapOrder(null)}
+        lat={mapOrder?.lat ?? null}
+        lng={mapOrder?.lng ?? null}
+        language={language}
+        heading={
+          mapOrder
+            ? `${mapOrder.customer_name} · ${mapOrder.address_line}${
+                mapOrder.landmark ? ` · ${mapOrder.landmark}` : ''
+              }`
+            : undefined
+        }
+      />
     </section>
   );
 }
