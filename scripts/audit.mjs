@@ -1040,7 +1040,15 @@ check('D-08', 'Safety', 'The native Android app disables cleartext traffic, back
 });
 
 check('D-09', 'Safety', 'No Firebase service configuration is committed for Android', () => {
-  const tracked = shLines(`git ls-files | grep -i "google-services.json\\|keystore"`);
+  // Credential *files*, not source that mentions them. The original pattern also
+  // matched android-app/scripts/prepare-release-keystore.mjs, which is the code
+  // that decodes the keystore from CI secrets — a file whose whole purpose is to
+  // avoid committing one. It reads every password from the environment and holds
+  // no key of its own, so matching it was a false positive that would have been
+  // "fixed" by renaming an honest script.
+  const tracked = shLines(
+    `git ls-files | grep -iE "google-services\\.json$|\\.(jks|keystore|p12|p8|pem|mobileprovision)$" | grep -v "\\.example$"`,
+  );
   return {
     ok: tracked.length === 0,
     evidence: tracked.length === 0 ? 'none; both arrive from CI secrets' : tracked.join(', '),
