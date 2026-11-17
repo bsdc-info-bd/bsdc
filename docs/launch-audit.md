@@ -113,9 +113,50 @@ workflow:
    file — the escaping is fixed and the config now says why the entries
    exist.
 
+### Findings from the last full pass
+
+Each of these was a live defect found by running the checks rather than by reading
+the code, and each is now fixed with a test or a check that would catch it again.
+
+- **Image priority was never set.** Every page hero carried `loading="eager"` and
+  still lost the race, because eager loading moves a request earlier in time and not
+  earlier in the browser's queue. `fetchpriority="high"` appeared nowhere in the
+  source. `MediaImage` now takes one `priority` prop that sets both, so a caller
+  cannot set half of the pair.
+- **The product hero bypassed image recovery entirely.** `MarketProductPage` rendered
+  a bare `<motion.img>`, so the one picture a buyer came to see had no retry ladder,
+  no `srcset` and no edge-proxy fallback while the thumbnails around it recovered.
+  Same for `ProductCard` and the vendor catalogue — the two most repeated images in
+  the marketplace.
+- **Every product thumbnail downloaded the full-size original.** The upload endpoint
+  has always returned a ~640px variant, and `mk_products` kept only the original.
+  Migration 0116 stores the variant map and emits it from the three read models;
+  the existing arrays are untouched.
+- **Editing a product would have erased its variants.** The edit form opened without
+  the map and saved it empty, so correcting a name would have quietly undone 0116.
+  Removing a picture also left its variant behind.
+- **Five tables' `updated_at` never advanced.** `mk_cart_items`, `mk_settings`,
+  `mk_credit_packages`, `admin_saved_macros` and `topic_affinity` had the column and
+  no touch trigger, so an edited package price was indistinguishable from a seeded
+  one. Migration 0117 installs the missing triggers.
+- **Shop types and the checkout stepper used emoji as chrome.** Device-dependent
+  pictures, font-dependent baselines, and announced as words to a screen reader; the
+  pencil was a text-presentation glyph that renders as an outline on some builds.
+  Replaced with vector icons that inherit `currentColor`.
+- **The deploy workflow raced the deployment it was checking.** The upload-endpoint
+  assertion was the one check in its step with no retry, so it sometimes ran while
+  the static assets were live and the Functions were not yet at the edge, failing a
+  commit whose functions were fine.
+- **Four checks were measuring the wrong thing.** C-05 scanned a vendored Leaflet file
+  for a fixed width that cannot reach a page layout; D-09 matched the *script* that
+  keeps the keystore out of the repository; C-01 and E-11/E-12 were reported failing
+  without a `dist` to read. The first two are now scoped to what they meant to test,
+  and the last three pass once a build exists. C-01's two real findings were fixed
+  rather than exempted.
+
 ## Checkpoints
 
-Current result: **104 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Current result: **108 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
