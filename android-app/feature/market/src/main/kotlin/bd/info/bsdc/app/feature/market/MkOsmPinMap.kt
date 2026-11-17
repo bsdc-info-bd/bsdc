@@ -16,8 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -278,7 +279,7 @@ fun MkOsmViewMapDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = BsdcThemeTokens.colors.surface) {
+        Surface(modifier = Modifier.fillMaxSize(), color = BsdcThemeTokens.colors.surfaceElevated) {
             Column(modifier = Modifier.fillMaxSize()) {
                 Row(
                     modifier = Modifier
@@ -321,7 +322,7 @@ fun MkOsmViewMapDialog(
                         label = if (bn) "গুগল ম্যাপে যান" else "Open in Google Maps",
                         onClick = onOpenGoogleMaps,
                         modifier = Modifier.fillMaxWidth(),
-                        leadingIcon = Icons.Rounded.Map,
+                        leadingIcon = Icons.Rounded.LocationOn,
                     )
                 }
             }
