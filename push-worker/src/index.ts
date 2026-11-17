@@ -47,7 +47,7 @@
 import { callRpc, DatabaseUnavailable, type DeviceRow, type FcmDeviceRow } from './api';
 import { deliver, shouldRetry, type DeliveryKeys, type DeliveryOutcome } from './deliver';
 import { adminOrigins, fcmCredentials, siteOrigin, vapidSubject, type Env } from './env';
-import { getFcmAccessToken, sendFcmNotification } from './fcm';
+import { getFcmAccessToken, isNewOrderAlarm, sendFcmNotification } from './fcm';
 import {
   summarise,
   wordsFor,
@@ -194,8 +194,27 @@ export function planDeviceDeliveries<
   >,
 >(rows: readonly T[], language: 'bn' | 'en'): PlannedPush<T & DeviceRow>[] {
   if (rows.length === 0) return [];
-  const byTopic = new Map<string, { rows: T[]; sources: NotificationSource[] }>();
+
+  // Never collapse a brand-new order alarm (`?alarm=new`) into a generic summary
+  // digest: each new order must arrive with `data.alarm = "order_loop"` intact.
+  const alarmPlans: PlannedPush<T & DeviceRow>[] = [];
+  const regularRows: T[] = [];
   for (const row of rows) {
+    if (isNewOrderAlarm({ kind: row.kind, url: row.url })) {
+      const src = toSource(row, language);
+      const words = summarise([src], language);
+      if (words !== null) {
+        alarmPlans.push({ words, rows: [row] as (T & DeviceRow)[] });
+      }
+    } else {
+      regularRows.push(row);
+    }
+  }
+
+  if (regularRows.length === 0) return alarmPlans;
+
+  const byTopic = new Map<string, { rows: T[]; sources: NotificationSource[] }>();
+  for (const row of regularRows) {
     const src = toSource(row, language);
     const topic = wordsFor(src).topic;
     const bucket = byTopic.get(topic);
@@ -208,7 +227,7 @@ export function planDeviceDeliveries<
   }
 
   if (byTopic.size <= 4) {
-    const out: PlannedPush<T & DeviceRow>[] = [];
+    const out: PlannedPush<T & DeviceRow>[] = [...alarmPlans];
     for (const bucket of byTopic.values()) {
       const words = summarise(bucket.sources, language);
       if (words !== null) out.push({ words, rows: bucket.rows as (T & DeviceRow)[] });
@@ -216,9 +235,11 @@ export function planDeviceDeliveries<
     return out;
   }
 
-  const allSources = rows.map((row) => toSource(row, language));
+  const allSources = regularRows.map((row) => toSource(row, language));
   const summary = summarise(allSources, language);
-  return summary === null ? [] : [{ words: summary, rows: rows as (T & DeviceRow)[] }];
+  return summary === null
+    ? alarmPlans
+    : [...alarmPlans, { words: summary, rows: regularRows as (T & DeviceRow)[] }];
 }
 
 /**

@@ -70,6 +70,42 @@ public class AppLinkUriRouterTest {
     }
 
     @Test
+    public void pushDestinationsCoverGigsAndTheirDecisions() {
+        assertEquals(
+            new LinkDestination.NativeRoute("/freelance"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "gig_proposal"))
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/freelance"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "gig_proposal_decision"))
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/freelance"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "gig"))
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/jobs"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "application_decision"))
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/events"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "event"))
+        );
+    }
+
+    @Test
+    public void aDeepGigLinkReachesTheGigRatherThanTheDirectory() {
+        assertEquals(
+            new LinkDestination.NativeRoute("/freelance/logo-redesign"),
+            AppLinkUriRouter.resolveLink("https://www.bsdc.info.bd/freelance/logo-redesign")
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/jobs/senior-dev"),
+            AppLinkUriRouter.resolveLink("https://bsdc.info.bd/jobs/senior-dev")
+        );
+    }
+
+    @Test
     public void validatesImgBbOnlyMediaHostsAndRejectsCloudinary() {
         assertTrue(AppLinkUriRouter.isImgBbUrl("https://i.ibb.co/abc123/photo.webp"));
         assertTrue(AppLinkUriRouter.isImgBbUrl("https://i.ibb.co.com/xyz/avatar.png"));

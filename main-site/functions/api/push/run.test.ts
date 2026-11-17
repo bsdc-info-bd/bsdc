@@ -95,6 +95,37 @@ describe('GET /api/push/config', () => {
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ enabled: false, vapidPublicKey: null });
   });
+
+  it('falls back to the public push_public_config RPC when runtime VAPID env is unset', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes('/rest/v1/rpc/push_public_config')) {
+          return new Response(
+            JSON.stringify({ enabled: true, vapid_public_key: 'BDbStoredVapidPublicKey987654321' }),
+            { status: 200 },
+          );
+        }
+        return new Response('', { status: 404 });
+      }),
+    );
+
+    const res = await onConfigGet({
+      request: new Request('https://www.bsdc.info.bd/api/push/config'),
+      env: {
+        SUPABASE_URL: 'https://proj.supabase.co',
+        SUPABASE_ANON_KEY: 'sb_publishable_key',
+      },
+    } as Parameters<typeof onConfigGet>[0]);
+
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({
+      enabled: true,
+      vapidPublicKey: 'BDbStoredVapidPublicKey987654321',
+    });
+    vi.unstubAllGlobals();
+  });
 });
 
 describe('POST /api/push/wake and FCM fallback', () => {
@@ -325,5 +356,176 @@ describe('POST /api/push/wake and FCM fallback', () => {
     expect(pairCall?.body['p_pairs']).toEqual([
       { id: 'n-multi-1', token: 'android-fcm-token-ok-1234567890' },
     ]);
+  });
+
+  it('parses FIREBASE_SERVICE_ACCOUNT_BSDC_BD JSON and isolates ?alarm=new order alarms from summary digests', async () => {
+    installNodeWebCrypto();
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const pem = privateKey.export({ type: 'pkcs8', format: 'pem' }).toString();
+    const sentBodies: Record<string, unknown>[] = [];
+
+    const rows = [
+      {
+        notification_id: 'n-order-alarm',
+        uid: 'u-vendor',
+        token: 'android-vendor-token-1234567890',
+        platform: 'android',
+        language: 'en',
+        kind: 'order',
+        body: 'BSDC-1001 · ৳550',
+        actor_name: 'Buyer One',
+        actor_avatar: '',
+        url: '/vendor/console?tab=orders&alarm=new',
+        post_id: null,
+        conversation_id: null,
+        created_at: new Date().toISOString(),
+      },
+      ...Array.from({ length: 5 }, (_, idx) => ({
+        notification_id: `n-like-${idx}`,
+        uid: 'u-vendor',
+        token: 'android-vendor-token-1234567890',
+        platform: 'android',
+        language: 'en',
+        kind: 'like',
+        body: '',
+        actor_name: `Member ${idx}`,
+        actor_avatar: '',
+        url: `/posts/p-${idx}`,
+        post_id: `p-${idx}`,
+        conversation_id: null,
+        created_at: new Date().toISOString(),
+      })),
+    ];
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url === 'https://oauth2.googleapis.com/token') {
+          return new Response(JSON.stringify({ access_token: 'oauth-token' }), { status: 200 });
+        }
+        if (url.includes('/rest/v1/rpc/fcm_pending_devices')) {
+          return new Response(JSON.stringify(rows), { status: 200 });
+        }
+        if (url.includes('/rest/v1/rpc/')) {
+          return new Response('6', { status: 200 });
+        }
+        if (url.includes('fcm.googleapis.com/v1/')) {
+          sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>);
+          return new Response(JSON.stringify({ name: 'msg-ok' }), { status: 200 });
+        }
+        return new Response('', { status: 404 });
+      }),
+    );
+
+    const outcome = await executePushRun(
+      {
+        SUPABASE_URL: 'https://proj.supabase.co',
+        SUPABASE_ANON_KEY: 'sb_publishable_key',
+        PUSH_FLUSH_SECRET: 's'.repeat(48),
+        FIREBASE_SERVICE_ACCOUNT_BSDC_BD: JSON.stringify({
+          project_id: 'bsdc-bd',
+          client_email: 'fcm@bsdc-bd.iam.gserviceaccount.com',
+          private_key: pem,
+        }),
+      },
+      { limit: 50 },
+    );
+
+    expect(outcome.status).toBe(200);
+    expect(sentBodies).toHaveLength(2);
+    const alarmMsg = sentBodies
+      .map((b) => b['message'] as { data?: Record<string, string> })
+      .find((m) => m.data?.['alarm'] === 'order_loop');
+    expect(alarmMsg?.data?.['kind']).toBe('order');
+    expect(alarmMsg?.data?.['url']).toBe('/vendor/console?tab=orders&alarm=new');
+  });
+
+  it('sends RFC 8291 aes128gcm encrypted Web Push payloads in local fallback', async () => {
+    installNodeWebCrypto();
+    // Generate P-256 VAPID keypair + P-256 browser subscription keypair + 16-byte auth secret.
+    const vapidPair = await webcrypto.subtle.generateKey(
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      true,
+      ['sign', 'verify'],
+    );
+    const vapidPublicRaw = new Uint8Array(
+      await webcrypto.subtle.exportKey('raw', vapidPair.publicKey),
+    );
+    const vapidJwk = await webcrypto.subtle.exportKey('jwk', vapidPair.privateKey);
+    const vapidPublicB64 = Buffer.from(vapidPublicRaw).toString('base64url');
+    const vapidPrivateB64 = vapidJwk.d ?? '';
+
+    const subPair = await webcrypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveBits'],
+    );
+    const subPublicRaw = new Uint8Array(await webcrypto.subtle.exportKey('raw', subPair.publicKey));
+    const p256dh = Buffer.from(subPublicRaw).toString('base64url');
+    const auth = Buffer.from(webcrypto.getRandomValues(new Uint8Array(16))).toString('base64url');
+
+    const pushedHeaders: Record<string, string> = {};
+    let pushedBodyLength = 0;
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/rest/v1/rpc/push_pending_devices')) {
+          return new Response(
+            JSON.stringify([
+              {
+                notification_id: 'n-web-1',
+                uid: 'u1',
+                endpoint: 'https://fcm.googleapis.com/fcm/send/sub-1',
+                p256dh,
+                auth,
+                language: 'en',
+                kind: 'order',
+                body: 'BSDC-2002 · ৳900',
+                actor_name: 'Nadia',
+                actor_avatar: '',
+                url: '/vendor/console?tab=orders&alarm=new',
+                post_id: null,
+                conversation_id: null,
+                created_at: new Date().toISOString(),
+              },
+            ]),
+            { status: 200 },
+          );
+        }
+        if (url.includes('/rest/v1/rpc/push_mark_devices')) {
+          return new Response('1', { status: 200 });
+        }
+        if (url.startsWith('https://fcm.googleapis.com/fcm/send/')) {
+          new Headers(init?.headers).forEach((value, key) => {
+            pushedHeaders[key.toLowerCase()] = value;
+          });
+          const rawBody = init?.body as Uint8Array | ArrayBuffer | undefined;
+          pushedBodyLength = rawBody ? rawBody.byteLength : 0;
+          return new Response('', { status: 201 });
+        }
+        return new Response('[]', { status: 200 });
+      }),
+    );
+
+    const outcome = await executePushRun(
+      {
+        SUPABASE_URL: 'https://proj.supabase.co',
+        SUPABASE_ANON_KEY: 'sb_publishable_key',
+        PUSH_FLUSH_SECRET: 's'.repeat(48),
+        PUSH_VAPID_PUBLIC_KEY: vapidPublicB64,
+        PUSH_VAPID_PRIVATE_KEY: vapidPrivateB64,
+        PUSH_VAPID_SUBJECT: 'mailto:hello@bsdc.info.bd',
+      },
+      { limit: 20 },
+    );
+
+    expect(outcome.status).toBe(200);
+    expect(outcome.body['sent']).toBe(1);
+    expect(pushedHeaders['content-encoding']).toBe('aes128gcm');
+    expect(pushedHeaders['urgency']).toBe('high');
+    expect(pushedBodyLength).toBeGreaterThan(86);
   });
 });

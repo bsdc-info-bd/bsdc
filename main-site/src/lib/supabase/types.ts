@@ -2420,9 +2420,19 @@ export type Database = {
           p_fee_taka: number;
           p_center_lat?: number | null;
           p_center_lng?: number | null;
+          p_fee_mode?: string | null;
+          p_per_km_taka?: number | null;
         };
         Returns: Json;
       };
+      mk_vendor_set_schedule: {
+        Args: {
+          p_enabled: boolean;
+          p_days: Json;
+        };
+        Returns: Json;
+      };
+      push_public_config: { Args: never; Returns: Json };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.

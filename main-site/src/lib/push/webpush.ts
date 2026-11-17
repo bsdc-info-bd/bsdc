@@ -84,6 +84,42 @@ export interface SignVapidInput {
 
 export const VAPID_MAX_TTL_SECONDS = 24 * 60 * 60;
 
+async function importVapidPrivateKey(
+  privateKey: string,
+  publicKey: string,
+): Promise<CryptoKey | null> {
+  const privBytes = urlBase64ToUint8Array(privateKey);
+  if (privBytes.byteLength === 32) {
+    const pubBytes = uncompressedP256Point(urlBase64ToUint8Array(publicKey));
+    if (pubBytes.byteLength === 65 && pubBytes[0] === 0x04) {
+      const x = uint8ArrayToUrlBase64(pubBytes.subarray(1, 33));
+      const y = uint8ArrayToUrlBase64(pubBytes.subarray(33, 65));
+      try {
+        return await crypto.subtle.importKey(
+          'jwk',
+          { kty: 'EC', crv: 'P-256', x, y, d: privateKey.trim(), ext: false },
+          { name: 'ECDSA', namedCurve: 'P-256' },
+          false,
+          ['sign'],
+        );
+      } catch {
+        return null;
+      }
+    }
+  }
+  try {
+    return await crypto.subtle.importKey(
+      'pkcs8',
+      privBytes,
+      { name: 'ECDSA', namedCurve: 'P-256' },
+      false,
+      ['sign'],
+    );
+  } catch {
+    return null;
+  }
+}
+
 /** Signs the token. Returns null when the key cannot be read, so the caller
  *  can skip the send rather than POST an unsigned request. */
 export async function signVapidJwt(input: SignVapidInput): Promise<string | null> {
@@ -93,13 +129,8 @@ export async function signVapidJwt(input: SignVapidInput): Promise<string | null
   );
   const nowSeconds = Math.floor((input.now ?? Date.now()) / 1000);
   try {
-    const key = await crypto.subtle.importKey(
-      'pkcs8',
-      urlBase64ToUint8Array(input.privateKey),
-      { name: 'ECDSA', namedCurve: 'P-256' },
-      false,
-      ['sign'],
-    );
+    const key = await importVapidPrivateKey(input.privateKey, input.publicKey);
+    if (key === null) return null;
     const parts = vapidJwtParts({
       aud: input.audience,
       exp: nowSeconds + lifetime,
@@ -139,4 +170,120 @@ export function vapidSubject(contactEmail: string): string {
   const trimmed = contactEmail.trim();
   const address = trimmed.length > 0 ? trimmed : 'admin@bsdc.info.bd';
   return address.startsWith('mailto:') ? address : `mailto:${address}`;
+}
+
+const RECORD_SIZE = 4096;
+const HEADER_SALT_BYTES = 16;
+const HEADER_RS_BYTES = 4;
+const HEADER_IDLEN_BYTES = 1;
+
+function concatUint8(...parts: readonly Uint8Array[]): Uint8Array {
+  const total = parts.reduce((sum, part) => sum + part.byteLength, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    out.set(part, offset);
+    offset += part.byteLength;
+  }
+  return out;
+}
+
+function uncompressedP256Point(raw: Uint8Array): Uint8Array {
+  if (raw.byteLength === 65 && raw[0] === 0x04) return raw;
+  if (raw.byteLength === 64) return concatUint8(new Uint8Array([0x04]), raw);
+  return raw;
+}
+
+async function hkdfSha256(
+  salt: Uint8Array | null,
+  ikm: Uint8Array,
+  info: Uint8Array,
+  length: number,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey('raw', ikm, 'HKDF', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: 'HKDF',
+      hash: 'SHA-256',
+      salt: salt ?? new Uint8Array(0),
+      info,
+    } as unknown as Parameters<SubtleCrypto['deriveBits']>[0],
+    key,
+    length * 8,
+  );
+  return new Uint8Array(bits);
+}
+
+/**
+ * RFC 8291 (`aes128gcm`) payload encryption for Web Push subscriptions that carry
+ * `p256dh` + `auth` key material, allowing Pages Functions local fallback to deliver
+ * notification title/body/url directly without requiring a separate `/api/push/content`
+ * round-trip on wake.
+ */
+export async function encryptWebPushPayload(input: {
+  p256dh: string;
+  auth: string;
+  plaintext: string;
+}): Promise<{ body: Uint8Array; contentEncoding: 'aes128gcm' } | null> {
+  if (!input.p256dh.trim() || !input.auth.trim()) return null;
+  try {
+    const uaPublic = uncompressedP256Point(urlBase64ToUint8Array(input.p256dh.trim()));
+    const authSecret = urlBase64ToUint8Array(input.auth.trim());
+
+    const receiverKey = await crypto.subtle.importKey(
+      'raw',
+      uaPublic,
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      [],
+    );
+    const ephemeralRaw = await crypto.subtle.generateKey(
+      { name: 'ECDH', namedCurve: 'P-256' },
+      true,
+      ['deriveBits'],
+    );
+    if (!('privateKey' in ephemeralRaw) || !('publicKey' in ephemeralRaw)) return null;
+
+    const ecdhSecret = new Uint8Array(
+      await crypto.subtle.deriveBits(
+        { name: 'ECDH', public: receiverKey } as unknown as Parameters<
+          SubtleCrypto['deriveBits']
+        >[0],
+        ephemeralRaw.privateKey,
+        256,
+      ),
+    );
+    const exportedSender = await crypto.subtle.exportKey('raw', ephemeralRaw.publicKey);
+    if (!(exportedSender instanceof ArrayBuffer)) return null;
+    const senderPublicRaw = uncompressedP256Point(new Uint8Array(exportedSender));
+    const salt = crypto.getRandomValues(new Uint8Array(HEADER_SALT_BYTES));
+
+    const keyInfo = concatUint8(textEncoder.encode('WebPush: info\0'), uaPublic, senderPublicRaw);
+    const ikm = await hkdfSha256(authSecret, ecdhSecret, keyInfo, 32);
+    const cek = await hkdfSha256(
+      salt,
+      ikm,
+      textEncoder.encode('Content-Encoding: aes128gcm\0'),
+      16,
+    );
+    const nonce = await hkdfSha256(salt, ikm, textEncoder.encode('Content-Encoding: nonce\0'), 12);
+
+    const record = concatUint8(textEncoder.encode(input.plaintext), new Uint8Array([0x02]));
+    const aesKey = await crypto.subtle.importKey('raw', cek, 'AES-GCM', false, ['encrypt']);
+    const ciphertext = new Uint8Array(
+      await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, tagLength: 128 }, aesKey, record),
+    );
+
+    const header = new Uint8Array(HEADER_SALT_BYTES + HEADER_RS_BYTES + HEADER_IDLEN_BYTES);
+    header.set(salt, 0);
+    new DataView(header.buffer).setUint32(HEADER_SALT_BYTES, RECORD_SIZE, false);
+    header[HEADER_SALT_BYTES + HEADER_RS_BYTES] = senderPublicRaw.byteLength;
+
+    return {
+      body: concatUint8(header, senderPublicRaw, ciphertext),
+      contentEncoding: 'aes128gcm',
+    };
+  } catch {
+    return null;
+  }
 }

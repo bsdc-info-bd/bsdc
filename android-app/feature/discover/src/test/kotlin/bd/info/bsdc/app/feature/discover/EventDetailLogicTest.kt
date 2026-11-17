@@ -77,4 +77,68 @@ class EventDetailLogicTest {
 
         assertEquals("", EventDetailLogic.formatWhen(null, end, "Asia/Dhaka", bn = false))
     }
+
+    @Test
+    fun countdownRoundsUpSoItNeverSaysZeroMinutes() {
+        assertEquals(
+            "Starts in 1 min",
+            EventDetailLogic.startCountdown("2026-11-14T14:00:20Z", end, now, bn = false),
+        )
+        assertEquals(
+            "Starts in 2 min",
+            EventDetailLogic.startCountdown("2026-11-14T14:01:01Z", end, now, bn = false),
+        )
+    }
+
+    @Test
+    fun countdownSwitchesToHoursAndDays() {
+        assertEquals(
+            "Starts in 5 h",
+            EventDetailLogic.startCountdown("2026-11-14T19:00:00Z", end, now, bn = false),
+        )
+        assertEquals(
+            "Starts in 3 days",
+            EventDetailLogic.startCountdown("2026-11-17T14:00:00Z", end, now, bn = false),
+        )
+    }
+
+    @Test
+    fun countdownIsBlankOnceStartedOrWithoutAStart() {
+        // Already over: no countdown to give.
+        assertEquals(
+            "",
+            EventDetailLogic.startCountdown("2026-11-14T10:00:00Z", "2026-11-14T11:00:00Z", now, bn = false),
+        )
+        assertEquals("", EventDetailLogic.startCountdown(null, end, now, bn = false))
+        // The live window wins over any countdown text.
+        assertEquals(
+            "Happening now",
+            EventDetailLogic.startCountdown("2026-11-14T13:00:00Z", end, now, bn = false),
+        )
+    }
+
+    @Test
+    fun countdownUsesBanglaDigitsAndWords() {
+        assertEquals(
+            "২ মিনিট বাকি",
+            EventDetailLogic.startCountdown("2026-11-14T14:01:01Z", end, now, bn = true),
+        )
+        assertEquals(
+            "৩ দিন বাকি",
+            EventDetailLogic.startCountdown("2026-11-17T14:00:00Z", end, now, bn = true),
+        )
+        assertEquals(
+            "এখন চলছে",
+            EventDetailLogic.startCountdown("2026-11-14T13:00:00Z", end, now, bn = true),
+        )
+    }
+
+    @Test
+    fun seatsLeftIsNullWithoutCapacityAndNeverNegative() {
+        assertNull(EventDetailLogic.seatsLeft(null, 10))
+        assertNull(EventDetailLogic.seatsLeft(0, 10))
+        assertEquals(15, EventDetailLogic.seatsLeft(50, 35))
+        assertEquals(0, EventDetailLogic.seatsLeft(50, 80))
+        assertEquals(0, EventDetailLogic.seatsLeft(50, 50))
+    }
 }

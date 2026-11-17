@@ -134,10 +134,13 @@ public final class AppLinkUriRouter {
                 case "course":
                     return routeNativePath("/courses");
                 case "job":
+                case "application_decision":
                     return routeNativePath("/jobs");
                 case "event":
                     return routeNativePath("/events");
+                case "gig":
                 case "gig_proposal":
+                case "gig_proposal_decision":
                     return routeNativePath("/freelance");
                 case "project_star":
                     return routeNativePath("/projects");

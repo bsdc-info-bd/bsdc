@@ -60,6 +60,7 @@ class MkRepository(
                     put("p_reason", reason)
                 },
             )
+            supabase.wakePushDelivery("mk_order_status")
             Unit
         }
 
@@ -150,6 +151,7 @@ class MkRepository(
                 if (itemsJson == null) put("p_items", JsonNull) else put("p_items", itemsJson)
             },
         )
+        supabase.wakePushDelivery("mk_place_order")
         supabase.decode<MkPlacedOrderDto>(raw)
     }
 
@@ -167,6 +169,7 @@ class MkRepository(
                 put("p_reason", reason)
             },
         )
+        supabase.wakePushDelivery("mk_cancel_order")
         Unit
     }
 
@@ -180,6 +183,7 @@ class MkRepository(
                 put("p_body", body)
             },
         )
+        supabase.wakePushDelivery("mk_review")
         Unit
     }
 
@@ -271,6 +275,65 @@ class MkRepository(
     /** Resolves a vendor slug to its id for mk_place_order. Null when the shop is closed or out of credits. */
     suspend fun fetchVendorRef(slug: String): Result<String?> = call {
         supabase.decode<String?>(rpc("mk_vendor_ref", buildJsonObject { put("p_slug", slug) }, requireAuth = false))
+    }
+
+    /** Reads the signed-in vendor's 3-mode delivery configuration + Asia/Dhaka opening schedule. */
+    suspend fun fetchVendorDelivery(): Result<MkVendorDeliveryDto> = call {
+        supabase.decode<MkVendorDeliveryDto>(rpc("mk_vendor_delivery", buildJsonObject { }))
+    }
+
+    /** Saves the signed-in vendor's delivery scope, radius, 3-mode fee (`default`, `fixed`, `per_km`), and centre pin. */
+    suspend fun setVendorDelivery(
+        scope: String,
+        radiusKm: Int,
+        feeMode: String,
+        feeTaka: Int,
+        perKmTaka: Int,
+        centerLat: Double?,
+        centerLng: Double?,
+    ): Result<Unit> = call {
+        rpc(
+            "mk_vendor_set_delivery",
+            buildJsonObject {
+                put("p_scope", scope)
+                put("p_radius_km", radiusKm)
+                put("p_fee_taka", feeTaka)
+                put("p_center_lat", centerLat.orNullNumber() ?: JsonNull)
+                put("p_center_lng", centerLng.orNullNumber() ?: JsonNull)
+                put("p_fee_mode", feeMode)
+                put("p_per_km_taka", perKmTaka)
+            },
+        )
+        Unit
+    }
+
+    /** Saves the signed-in vendor's daily opening & closing schedule in Bangladesh time (`Asia/Dhaka`). */
+    suspend fun setVendorSchedule(
+        enabled: Boolean,
+        days: Map<String, MkDayHoursDto>,
+    ): Result<MkShopScheduleDto> = call {
+        val daysJson = buildJsonObject {
+            for (key in MkLogic.DAY_KEYS) {
+                val row = days[key] ?: MkDayHoursDto()
+                put(
+                    key,
+                    buildJsonObject {
+                        put("open", row.open)
+                        put("start", row.start)
+                        put("end", row.end)
+                    },
+                )
+            }
+        }
+        supabase.decode<MkShopScheduleDto>(
+            rpc(
+                "mk_vendor_set_schedule",
+                buildJsonObject {
+                    put("p_enabled", enabled)
+                    put("p_days", daysJson)
+                },
+            ),
+        )
     }
 
     /**

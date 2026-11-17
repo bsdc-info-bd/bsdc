@@ -7,12 +7,16 @@ import {
   customerCanCancel,
   customerCanReview,
   distanceKm,
+  evaluateShopDelivery,
+  formatHhMm,
   formatTaka,
   isBdMobile,
   isBdPoint,
   isHttpsUrl,
   isNid,
+  isValidHhMm,
   normaliseBdMobile,
+  roundedDistanceKm,
   stepErrors,
   timelineIndex,
   vendorActionsFor,
@@ -181,5 +185,101 @@ describe('https links', () => {
     expect(isHttpsUrl('http://insecure.example/a.jpg')).toBe(false);
     expect(isHttpsUrl('javascript:alert(1)')).toBe(false);
     expect(isHttpsUrl('')).toBe(false);
+  });
+});
+
+describe('3-mode delivery fees and schedule helpers', () => {
+  const center = { lat: 24.8949, lng: 91.8687 };
+
+  it('rounds great-circle distance up to whole kilometres', () => {
+    expect(roundedDistanceKm(center, center)).toBe(0);
+    // ~2.8 km north-east -> ceil = 3 km
+    expect(roundedDistanceKm(center, { lat: 24.915, lng: 91.885 })).toBe(3);
+  });
+
+  it('evaluates default, custom fixed (above ৳150), and custom per-km fees accurately', () => {
+    const defaultMode = evaluateShopDelivery(
+      {
+        scope: 'all_bd',
+        radius_km: 10,
+        fee_mode: 'default',
+        fee_poisha: 15000,
+        default_fee_poisha: 15000,
+        center_lat: center.lat,
+        center_lng: center.lng,
+      },
+      null,
+    );
+    expect(defaultMode.feePoisha).toBe(15000);
+    expect(defaultMode.needsPinForFee).toBe(false);
+
+    const fixedMode = evaluateShopDelivery(
+      {
+        scope: 'all_bd',
+        radius_km: 10,
+        fee_mode: 'fixed',
+        fee_poisha: 45000,
+        fixed_fee_poisha: 45000,
+        center_lat: center.lat,
+        center_lng: center.lng,
+      },
+      null,
+    );
+    expect(fixedMode.feePoisha).toBe(45000);
+
+    const perKmNoPin = evaluateShopDelivery(
+      {
+        scope: 'radius',
+        radius_km: 10,
+        fee_mode: 'per_km',
+        fee_poisha: 15000,
+        per_km_rate_poisha: 2500,
+        center_lat: center.lat,
+        center_lng: center.lng,
+      },
+      null,
+    );
+    expect(perKmNoPin.needsPinForFee).toBe(true);
+    expect(perKmNoPin.feePoisha).toBe(0);
+
+    const perKmPinned = evaluateShopDelivery(
+      {
+        scope: 'radius',
+        radius_km: 10,
+        fee_mode: 'per_km',
+        fee_poisha: 15000,
+        per_km_rate_poisha: 2500,
+        center_lat: center.lat,
+        center_lng: center.lng,
+      },
+      { lat: 24.915, lng: 91.885 },
+    );
+    expect(perKmPinned.roundedKm).toBe(3);
+    expect(perKmPinned.feePoisha).toBe(7500);
+    expect(perKmPinned.withinArea).toBe(true);
+
+    const outOfRadius = evaluateShopDelivery(
+      {
+        scope: 'radius',
+        radius_km: 2,
+        fee_mode: 'fixed',
+        fee_poisha: 10000,
+        fixed_fee_poisha: 10000,
+        center_lat: center.lat,
+        center_lng: center.lng,
+      },
+      { lat: 24.915, lng: 91.885 },
+    );
+    expect(outOfRadius.withinArea).toBe(false);
+  });
+
+  it('validates and formats HH:MM schedule times in English and Bangla', () => {
+    expect(isValidHhMm('09:00')).toBe(true);
+    expect(isValidHhMm('24:00', false)).toBe(false);
+    expect(isValidHhMm('24:00', true)).toBe(true);
+    expect(isValidHhMm('25:00', true)).toBe(false);
+    expect(formatHhMm('09:30', 'en')).toBe('9:30 AM');
+    expect(formatHhMm('21:05', 'en')).toBe('9:05 PM');
+    expect(formatHhMm('09:30', 'bn')).toContain('পূর্বাহ্ণ');
   });
 });

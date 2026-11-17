@@ -2,7 +2,8 @@
 
 > **Package:** `bd.info.bsdc.app`  
 > **Counting Rule:** Consistent with `scripts/count-registry.mjs` and `docs/bsdc-master-implementation-prompt.md`, every numbered item (`AND-xxxx`) below represents one distinct, implementable engineering capability — a screen, interactive control, state machine, Supabase RPC contract, Room table/query, Edge/Worker route, permission gate, hardware sensor hook, animation, security guard, or automated verification target. Nothing is duplicated or padded artificially.  
-> **Scope Exclusion:** Zero admin or corporate staff console features (`admin-site`, `/admin*`, `bsdc-second`) appear in this catalog or binary.
+> **Scope Exclusion:** Zero admin or corporate staff console features (`admin-site`, `/admin*`, `bsdc-second`) appear in this catalog or binary.  
+> **Addendum:** `AND-0481` – `AND-0508` record the ultra-modern redesign pass. They sit outside the `17` planned domains because they replace interaction layers that already existed rather than opening new product areas. Every one of them is wired to a live RPC, a Room table or a pure rule with a passing unit test — the runnable proof is listed per item.
 
 ---
 
@@ -571,6 +572,55 @@
 
 ---
 
+## Addendum — Ultra-Modern Redesign, Browsing Rules & Serialization Hardening (`AND-0481` – `AND-0508`)
+
+The items below were built after the 17 planned domains were counted. They do not add new product surface: each one replaces a plain list, a chip row or a decode path that already shipped, which is why the domain table above still reads `480`. Proof commands are listed per item; `node scripts/count-registry.mjs` reproduces the delivered totals.
+
+### Marketplace browsing (`MkLogic`, `MkSavedStore`, shop and vendor screens)
+
+- `AND-0481`: Storefront sort engine `MkLogic.sortStorefront` with `FEATURED` (lifts in-stock rows above sold-out ones while keeping the shop's own order), `PRICE_LOW`, `PRICE_HIGH` and `NAME` (case-insensitive). Proof: `MkLogicTest.priceLowBreaksTiesByName`, `sortDoesNotMutateInput`.
+- `AND-0482`: Storefront filter engine `MkLogic.filterStorefront` applying an in-stock-only switch, a taka price band and a name query; taka bounds are converted to poisha once, inside the rule, instead of at every call site. Proof: `MkLogicTest.priceBandIsComparedInTakaEvenThoughProductsStorePoisha`.
+- `AND-0483`: `ProductFilter.isActive` marker so the UI can show a "filters on" affordance only when a constraint is really applied. Proof: `MkLogicTest.anyConstraintMarksTheFilterActive`.
+- `AND-0484`: Product comparison table `MkLogic.compareRows(products, bn, keepSame)` over at most three products — price, stock and photo availability, with rows that agree across every product dropped unless `keepSame` is set. Proof: `MkLogicTest.compareDropsRowsThatAgreeAcrossProducts`, `compareCapsAtThreeProducts`.
+- `AND-0485`: Comparison summary `cheapestOf` and `savingsAgainstPriciest` (max − min, clamped at zero) rendered as "Cheapest is X — you save ৳N". Proof: `MkLogicTest.cheapestAndSavingsFollowThePriceSpread`.
+- `AND-0486`: Compare mode in `MkVendorPageScreen`: a `BsdcFilterPill` toggle with a live selection count, tiles that add/remove themselves from the tray instead of navigating, and a per-row Clear action.
+- `AND-0487`: `MkSavedStore` (`SharedPreferences` name `bsdc_market_saved`) exposing `wishlist` and `recentlyViewed` `StateFlow`s with JSON persistence, `toggleWishlist` returning the new state, `recordView` capped at `RECENT_CAP = 6`, and `clear()`.
+- `AND-0488`: Wish-list bookmark on every storefront tile and on the product page, both backed by the same store, with a confirmation banner on the product page.
+- `AND-0489`: Recently-viewed shelf on `/shop` — the product page records the view, so the row still reads correctly after the catalogue moves on.
+- `AND-0490`: Shop-list hero banner reporting the live shop count and the saved-item count, plus skeleton loading rows (`BsdcDirectorySkeletonCard`) instead of a bare spinner.
+- `AND-0491`: "Open now" client-side filter on `/shop` computed from each shop's `schedule.is_open`, with a dedicated empty state when every shop is closed.
+- `AND-0492`: Saved-item cleanup on sign-out — `MkSavedStore.get(context).clear()` runs inside the existing `atomicSignOut` cleanup block, so a shared phone does not leak the previous account's wish list.
+
+### Creator hub and composer (`CreateHubScreen`)
+
+- `AND-0493`: Create Hub type picker: the bare chip strip became a `LazyColumn` of `BsdcActionTile` entries (POST/EVENT/JOB/GIG/PROJECT/GROUP) with a "Change type" chip that re-opens it.
+- `AND-0494`: `JobCreateForm` rebuilt on `BsdcCard` + `BsdcSectionHeader` with a live preview card, a `ChecklistRow` requirement list, digit-filtered salary fields and a publish button bound to `enabled = issues.isEmpty()`.
+- `AND-0495`: `GigCreateForm` rebuilt the same way, adding scope idea chips, budget-in-taka validation, duration in days, a 20-skill cap and the same blocking checklist.
+
+### Discover detail screens
+
+- `AND-0496`: Event hero pill — `EventDetailLogic.startCountdown` renders "Starts in N min / N h / N days" with minutes rounded **up**, switches to "Happening now" inside the live window, and returns blank once the event is over. Proof: `EventDetailLogicTest.countdownRoundsUpSoItNeverSaysZeroMinutes`, `countdownSwitchesToHoursAndDays`, `countdownIsBlankOnceStartedOrWithoutAStart`.
+- `AND-0497`: Self-advancing countdown — a 60-second `LaunchedEffect` clock re-reads `System.currentTimeMillis()`, so the pill stays truthful for as long as the page is open without a network round trip.
+- `AND-0498`: Seat availability `EventDetailLogic.seatsLeft(capacity, goingCount)` — null without a capacity, never negative, zero when over-subscribed — shown as a "Seats" card with a `LinearProgressIndicator`, and as an "Only N seats left" pill at 1–10 remaining. Proof: `EventDetailLogicTest.seatsLeftIsNullWithoutCapacityAndNeverNegative`.
+- `AND-0499`: Bangla countdown output — `startCountdown` formats its number through `BanglaDigitFormatter`, so `bn` readers see `২ মিনিট বাকি`, not Latin digits. Proof: `EventDetailLogicTest.countdownUsesBanglaDigitsAndWords`.
+- `AND-0500`: Group roster search `GroupDetailLogic.searchMembers(members, query, nameOf, handleOf)` matching both display name and `@handle`, case-insensitively, with an empty query keeping the whole roster. Proof: `GroupDetailLogicTest.memberSearchMatchesNameAndHandleIgnoringCase`.
+- `AND-0501`: Group tab strip converted from `FilterChip` to `BsdcFilterPill` carrying live channel and member counts, plus a member search field with a Clear action and a "No member matches" empty state that offers to clear the query.
+- `AND-0502`: `GroupDetailLogic.channelTitle` guarantees exactly one `#` on a channel row, so a channel stored as `# general` does not render `# # general`. Proof: `GroupDetailLogicTest.channelTitleHasExactlyOneHash`.
+
+### Serialization hardening
+
+- `AND-0503`: `BsdcHttpClientFactory.sharedJson` is the single decoder for every repository (`sharedJson` is referenced by 16 call sites) and sets `ignoreUnknownKeys`, `isLenient`, `encodeDefaults`, `explicitNulls = false` and `coerceInputValues = true` — the last two are what stopped PostgREST `null` in `budget_min`/`budget_max`/`currency`/`duration_days`/`skills` from failing a whole gig list decode.
+- `AND-0504`: Contract test `sharedJsonCoercesNullNumericTextAndArrayColumnsFromPostgrest` pins that behaviour, so a future `Json { }` block added elsewhere cannot silently reintroduce the bug.
+- `AND-0505`: DTO audit over every `@Serializable` class in `core/model`, `feature/discover`, `feature/compose`, `feature/market` and `feature/verify`: response DTOs that can arrive partial carry defaults (`MkStorefrontProductDto.price_poisha = 0`, `in_stock = false`, `DiscoverModels` rows with `= ""` / `= null`), while non-defaulted fields remain only where the backend column is `NOT NULL`.
+
+### Verification harness
+
+- `AND-0506`: `MkLogicTest` (18 tests) — the first test class for the market module, run under the same stubbed-JUnit harness as the discover rules. It covers sort order and tie-breaking, filter activation, taka↔poisha conversion, comparison row dropping and capping, cheapest/savings arithmetic, and both-language sort labels.
+- `AND-0507`: `GroupDetailLogicTest` is now actually **executed** by the runner (it was compiled but never listed in the `Runner` argument list), bringing the discover suite to 81 passing tests, and `EventDetailLogicTest` grew 4 countdown/seat tests.
+- `AND-0508`: Catalog accounting invariant — `480` unique `AND-xxxx` codes remain inside the 17 planned domains and the 28 addendum codes sit outside the domain table, so `scripts/count-registry.mjs` and this document cannot drift apart by double-counting a redesign as a new feature.
+
+---
+
 ## Verified Summary Count
 
 | Domain | Scope | Counted Capabilities (`AND-*`) | Target Phases |
@@ -593,3 +643,4 @@
 | 16 | Marketplace, Cart, Orders, Vendor & Creator Ads | 30 | Phase 10 |
 | 17 | Settings, Diagnostics & Platform Info | 24 | Phase 10 |
 | **Total** | **Verified Non-Duplicated Native Capabilities** | **480** | **Phases 1 – 10** |
+| **Addendum** | **Redesign, browsing rules & serialization hardening** (documented separately, not added to the domain totals) | **28** | **Post-Phase 10** |

@@ -150,6 +150,27 @@ export interface MkAdminPurchase {
   created_at: string;
 }
 
+export type MkFeeMode = 'default' | 'fixed' | 'per_km';
+
+export interface MkDayHours {
+  open: boolean;
+  start: string;
+  end: string;
+}
+
+export interface MkShopSchedule {
+  enabled: boolean;
+  timezone: string;
+  is_open: boolean;
+  today_day: number;
+  today_open: boolean;
+  today_start: string;
+  today_end: string;
+  closes_at: string | null;
+  next_open: { day: number; start: string } | null;
+  days: Record<string, MkDayHours>;
+}
+
 /** A shop as a customer sees it on the marketplace (mk_list_vendors). */
 export interface MkListedShop {
   slug: string;
@@ -164,6 +185,8 @@ export interface MkListedShop {
   product_count: number;
   rating: number;
   review_count: number;
+  delivery?: MkShopDelivery;
+  schedule?: MkShopSchedule;
 }
 
 // Customer side ---------------------------------------------------------------
@@ -172,7 +195,11 @@ export interface MkListedShop {
 export interface MkShopDelivery {
   scope: 'radius' | 'all_bd';
   radius_km: number;
+  fee_mode?: MkFeeMode;
   fee_poisha: number;
+  fixed_fee_poisha?: number;
+  per_km_rate_poisha?: number;
+  default_fee_poisha?: number;
   center_lat: number;
   center_lng: number;
 }
@@ -189,6 +216,7 @@ export interface MkVendorPageData {
     lat: number;
     lng: number;
     delivery: MkShopDelivery;
+    schedule?: MkShopSchedule;
   };
   categories: { id: string; name: string }[];
   products: MkStorefrontProduct[];
@@ -214,7 +242,12 @@ export interface MkProductDetail {
   in_stock: boolean;
   stock: number;
   images: string[];
-  vendor: { slug: string; name: string };
+  vendor: {
+    slug: string;
+    name: string;
+    delivery?: MkShopDelivery;
+    schedule?: MkShopSchedule;
+  };
   rating: number;
 }
 
@@ -226,6 +259,7 @@ export interface MkCartLine {
   stock: number;
   product_status: string;
   orderable: boolean;
+  vendor_open?: boolean;
   vendor_id: string;
   vendor_slug: string;
   vendor_name: string;

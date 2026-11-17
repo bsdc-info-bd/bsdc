@@ -10,9 +10,12 @@ import { EmptyState, PageSkeleton } from '@/design-system';
 import { useListedShops, useMyOrders } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import {
+  formatHhMm,
+  formatTaka,
   isBdPoint,
   SHOP_TYPE_EMOJI,
   SHOP_TYPES,
+  type DayKey,
   type Language,
   type ShopType,
 } from '@/lib/mk/mk-logic';
@@ -163,7 +166,7 @@ export default function MarketplacePage() {
 
       <motion.ul layout className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {(shops.data ?? []).map((shop, i) => (
-          <ShopCard key={shop.slug} shop={shop} index={i} copy={copy} />
+          <ShopCard key={shop.slug} shop={shop} index={i} copy={copy} language={language} />
         ))}
       </motion.ul>
     </div>
@@ -200,12 +203,30 @@ function ShopCard({
   shop,
   index,
   copy,
+  language,
 }: {
   shop: MkListedShop;
   index: number;
   copy: ReturnType<typeof mkCopy>;
+  language: Language;
 }) {
   const reduce = useReducedMotion() ?? false;
+  const sched = shop.schedule;
+  const isOpen = sched ? sched.is_open : true;
+  const nextOpenLabel =
+    sched && !sched.is_open && sched.next_open
+      ? copy.schedule.opensNextLabel(
+          copy.schedule.days[String(sched.next_open.day) as DayKey] ?? '',
+          formatHhMm(sched.next_open.start, language),
+        )
+      : copy.schedule.closedNow;
+  const deliveryBadge =
+    shop.delivery?.fee_mode === 'per_km'
+      ? copy.delivery.perKmBadge(formatTaka(shop.delivery.per_km_rate_poisha ?? 2000, language))
+      : shop.delivery
+        ? formatTaka(shop.delivery.fee_poisha, language)
+        : null;
+
   return (
     <motion.li
       layout
@@ -225,6 +246,15 @@ function ShopCard({
               loading="lazy"
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
+          ) : null}
+          {sched?.enabled ? (
+            <span
+              className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur ${
+                isOpen ? 'bg-emerald-600/85' : 'bg-rose-600/90'
+              }`}
+            >
+              {isOpen ? copy.schedule.openNow : nextOpenLabel}
+            </span>
           ) : null}
           <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
             {SHOP_TYPE_EMOJI[shop.vendor_type]} {copy.typeLabels[shop.vendor_type]}
@@ -255,6 +285,10 @@ function ShopCard({
             {shop.distance_km !== null ? (
               <span className="font-semibold text-green-700">
                 {shop.distance_km.toFixed(1)} {copy.buyer.kmAway}
+              </span>
+            ) : deliveryBadge ? (
+              <span className="font-medium text-muted">
+                {copy.buyer.deliveryFee}: {deliveryBadge}
               </span>
             ) : (
               <span>

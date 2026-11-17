@@ -19,12 +19,15 @@ import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -69,6 +72,7 @@ fun MkVendorShopPanel(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        DeliveryAndScheduleCard(repository, bn, onChanged)
         ProfileCard(repository, mediaRepository, imageLoader, bn, vendor, onChanged)
         CreditsCard(repository, bn, credits, listed, onChanged)
         PurchasesCard(bn, purchases)
@@ -432,6 +436,370 @@ private fun PurchasesCard(bn: Boolean, purchases: List<MkPurchaseDto>) {
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DeliveryAndScheduleCard(
+    repository: MkRepository,
+    bn: Boolean,
+    onChanged: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var loaded by remember { mutableStateOf(false) }
+
+    var deliveryScope by rememberSaveable { mutableStateOf("radius") }
+    var radiusText by rememberSaveable { mutableStateOf("10") }
+    var feeMode by rememberSaveable { mutableStateOf("default") }
+    var fixedFeeText by rememberSaveable { mutableStateOf("150") }
+    var perKmText by rememberSaveable { mutableStateOf("20") }
+    var centerLat by rememberSaveable { mutableStateOf<Double?>(null) }
+    var centerLng by rememberSaveable { mutableStateOf<Double?>(null) }
+    var shopLat by rememberSaveable { mutableStateOf(MkLogic.SYLHET_LAT) }
+    var shopLng by rememberSaveable { mutableStateOf(MkLogic.SYLHET_LNG) }
+    var deliveryBusy by remember { mutableStateOf(false) }
+    var deliverySaved by remember { mutableStateOf<String?>(null) }
+    var deliveryError by remember { mutableStateOf<String?>(null) }
+
+    var scheduleEnabled by rememberSaveable { mutableStateOf(false) }
+    var scheduleDays by remember { mutableStateOf(MkLogic.defaultScheduleDays()) }
+    var liveSchedule by remember { mutableStateOf<MkShopScheduleDto?>(null) }
+    var scheduleBusy by remember { mutableStateOf(false) }
+    var scheduleSaved by remember { mutableStateOf<String?>(null) }
+    var scheduleError by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        repository.fetchVendorDelivery().onSuccess { d ->
+            deliveryScope = d.scope
+            radiusText = d.radius_km.toString()
+            feeMode = d.fee_mode
+            fixedFeeText = ((d.fixed_fee_poisha.takeIf { it >= 0L } ?: d.fee_poisha) / 100L).toString()
+            perKmText = (d.per_km_rate_poisha / 100L).toString()
+            centerLat = d.center_lat
+            centerLng = d.center_lng
+            shopLat = d.shop_lat
+            shopLng = d.shop_lng
+            d.schedule?.let { sched ->
+                liveSchedule = sched
+                scheduleEnabled = sched.enabled
+                val nextDays = MkLogic.defaultScheduleDays().toMutableMap()
+                for (key in MkLogic.DAY_KEYS) {
+                    sched.days[key]?.let { nextDays[key] = it }
+                }
+                scheduleDays = nextDays
+            }
+        }
+        loaded = true
+    }
+
+    if (!loaded) return
+
+    val parsedRadius = radiusText.trim().toIntOrNull()
+    val showCentreMap = deliveryScope == "radius" || feeMode == "per_km"
+
+    BsdcCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            mkText(bn, "Delivery area & charge", "ডেলিভারি এলাকা ও চার্জ"),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            mkText(
+                bn,
+                "Choose per-km, custom fixed fee, or platform default (৳150).",
+                "প্রতি কিমি, নির্ধারিত চার্জ, অথবা প্ল্যাটফর্ম ডিফল্ট (৳১৫০) বেছে নিন।",
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = BsdcThemeTokens.colors.mutedText,
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(
+                selected = deliveryScope == "radius",
+                onClick = { deliveryScope = "radius" },
+                label = { Text(mkText(bn, "Within radius", "ব্যাসার্ধের মধ্যে")) },
+            )
+            FilterChip(
+                selected = deliveryScope == "all_bd",
+                onClick = { deliveryScope = "all_bd" },
+                label = { Text(mkText(bn, "All Bangladesh", "সারা বাংলাদেশ")) },
+            )
+        }
+        if (deliveryScope == "radius") {
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = radiusText,
+                onValueChange = { radiusText = it.filter(Char::isDigit).take(3) },
+                label = { Text(mkText(bn, "Radius (km, 1–500)", "ব্যাসার্ধ (কিমি, ১–৫০০)")) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        Text(
+            mkText(bn, "Delivery fee mode", "ডেলিভারি চার্জের ধরন"),
+            style = MaterialTheme.typography.labelLarge,
+        )
+        Spacer(Modifier.height(4.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            listOf(
+                "per_km" to mkText(bn, "Custom per-km fee", "কাস্টম প্রতি কিমি চার্জ"),
+                "fixed" to mkText(bn, "Custom fixed fee", "কাস্টম নির্ধারিত চার্জ"),
+                "default" to mkText(bn, "Platform default (৳150)", "প্ল্যাটফর্ম ডিফল্ট (৳১৫০)"),
+            ).forEach { (modeKey, modeTitle) ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(selected = feeMode == modeKey, onClick = { feeMode = modeKey })
+                    Text(modeTitle, style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+        if (feeMode == "fixed") {
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = fixedFeeText,
+                onValueChange = { fixedFeeText = it.filter(Char::isDigit).take(6) },
+                label = { Text(mkText(bn, "Fixed charge (taka, 0–100,000)", "নির্ধারিত চার্জ (টাকা, ০–১,০০,০০০)")) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else if (feeMode == "per_km") {
+            Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = perKmText,
+                onValueChange = { perKmText = it.filter(Char::isDigit).take(5) },
+                label = { Text(mkText(bn, "Per-km rate (taka / km, 0–10,000)", "প্রতি কিমি রেট (টাকা / কিমি, ০–১০,০০০)")) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                mkText(
+                    bn,
+                    "Whole km rounded up from delivery centre (e.g. 4.2 km → 5 km).",
+                    "ডেলিভারি কেন্দ্র থেকে ওপরের দিকে পূর্ণ কিমি হিসাব হয় (যেমন ৪.২ কিমি → ৫ কিমি)।",
+                ),
+                style = MaterialTheme.typography.labelSmall,
+                color = BsdcThemeTokens.colors.mutedText,
+            )
+        }
+        if (showCentreMap) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                mkText(bn, "Delivery area centre", "ডেলিভারি এলাকার কেন্দ্র"),
+                style = MaterialTheme.typography.labelLarge,
+            )
+            Spacer(Modifier.height(6.dp))
+            MkOsmPinMap(
+                lat = centerLat,
+                lng = centerLng,
+                radiusKm = if (deliveryScope == "radius") parsedRadius else null,
+                onPin = { plat, plng ->
+                    if (MkLogic.isInsideBangladesh(plat, plng)) {
+                        centerLat = plat
+                        centerLng = plng
+                    }
+                },
+            )
+            Spacer(Modifier.height(6.dp))
+            OutlinedButton(
+                onClick = {
+                    centerLat = shopLat
+                    centerLng = shopLng
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(mkText(bn, "Use shop location as centre", "দোকানকে কেন্দ্র হিসেবে ব্যবহার করুন"))
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = {
+                val rKm = parsedRadius ?: 10
+                if (rKm !in 1..500) {
+                    deliveryError = mkText(bn, "Radius must be 1–500 km.", "ব্যাসার্ধ ১–৫০০ কিমি হতে হবে।")
+                    return@Button
+                }
+                val fTaka = fixedFeeText.trim().toIntOrNull() ?: 150
+                val pkTaka = perKmText.trim().toIntOrNull() ?: 20
+                if (feeMode == "fixed" && fTaka !in 0..100_000) {
+                    deliveryError = mkText(bn, "Fixed charge must be 0–100,000 taka.", "নির্ধারিত চার্জ ০–১,০০,০০০ টাকা হতে হবে।")
+                    return@Button
+                }
+                if (feeMode == "per_km" && pkTaka !in 0..10_000) {
+                    deliveryError = mkText(bn, "Per-km rate must be 0–10,000 taka.", "প্রতি কিমি রেট ০–১০,০০০ টাকা হতে হবে।")
+                    return@Button
+                }
+                if (showCentreMap && (centerLat == null || centerLng == null)) {
+                    deliveryError = mkText(bn, "Pin your delivery centre on the map.", "মানচিত্রে ডেলিভারি কেন্দ্র পিন করুন।")
+                    return@Button
+                }
+                scope.launch {
+                    deliveryBusy = true
+                    deliveryError = null
+                    deliverySaved = null
+                    repository.setVendorDelivery(
+                        scope = deliveryScope,
+                        radiusKm = rKm,
+                        feeMode = feeMode,
+                        feeTaka = fTaka.coerceIn(0, 100_000),
+                        perKmTaka = pkTaka.coerceIn(0, 10_000),
+                        centerLat = centerLat,
+                        centerLng = centerLng,
+                    ).onSuccess {
+                        deliverySaved = mkText(bn, "Delivery settings saved.", "ডেলিভারি সেটিংস সংরক্ষিত হয়েছে।")
+                        onChanged()
+                    }.onFailure {
+                        deliveryError = it.message ?: mkText(bn, "Could not save delivery settings.", "সংরক্ষণ করা যায়নি।")
+                    }
+                    deliveryBusy = false
+                }
+            },
+            enabled = !deliveryBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(mkText(bn, "Save delivery settings", "ডেলিভারি সেটিংস সংরক্ষণ করুন"))
+        }
+        deliverySaved?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Saved", "সংরক্ষিত"), body = it, tone = BsdcTone.OK)
+        }
+        deliveryError?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Not saved", "সংরক্ষণ হয়নি"), body = it, tone = BsdcTone.BAD)
+        }
+    }
+
+    BsdcCard(modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    mkText(bn, "Opening hours (BD time)", "দোকান খোলার সময়সূচি"),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                liveSchedule?.let { sched ->
+                    MkLogic.scheduleBadgeLabel(sched, bn)?.let { label ->
+                        Spacer(Modifier.height(2.dp))
+                        BsdcBadge(
+                            label = label,
+                            tone = if (sched.is_open) BsdcTone.OK else BsdcTone.WARN,
+                        )
+                    }
+                }
+            }
+            Switch(
+                checked = scheduleEnabled,
+                onCheckedChange = { scheduleEnabled = it },
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        if (!scheduleEnabled) {
+            Text(
+                mkText(
+                    bn,
+                    "Turned off: your shop accepts orders 24 hours a day.",
+                    "বন্ধ থাকলে আপনার দোকান ২৪ ঘণ্টাই অর্ডার গ্রহণ করবে।",
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = BsdcThemeTokens.colors.mutedText,
+            )
+        } else {
+            MkLogic.DAY_KEYS.forEach { dayKey ->
+                val row = scheduleDays[dayKey] ?: MkDayHoursDto()
+                Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(
+                            checked = row.open,
+                            onCheckedChange = { checked ->
+                                scheduleDays = scheduleDays.toMutableMap().apply {
+                                    put(dayKey, row.copy(open = checked))
+                                }
+                            },
+                        )
+                        Text(
+                            MkLogic.dayLabel(dayKey, bn),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                    if (row.open) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = row.start,
+                                onValueChange = { next ->
+                                    scheduleDays = scheduleDays.toMutableMap().apply {
+                                        put(dayKey, row.copy(start = next.take(5)))
+                                    }
+                                },
+                                label = { Text(mkText(bn, "Opens (HH:MM)", "খোলে (HH:MM)")) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedTextField(
+                                value = row.end,
+                                onValueChange = { next ->
+                                    scheduleDays = scheduleDays.toMutableMap().apply {
+                                        put(dayKey, row.copy(end = next.take(5)))
+                                    }
+                                },
+                                label = { Text(mkText(bn, "Closes (HH:MM)", "বন্ধ (HH:MM)")) },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(10.dp))
+        Button(
+            onClick = {
+                for (key in MkLogic.DAY_KEYS) {
+                    val row = scheduleDays[key] ?: MkDayHoursDto()
+                    if (!MkLogic.isValidHhMm(row.start, allow24 = false) ||
+                        !MkLogic.isValidHhMm(row.end, allow24 = true) ||
+                        (row.open && row.start == row.end)
+                    ) {
+                        scheduleError = mkText(
+                            bn,
+                            "Use valid HH:MM times and distinct open/close times.",
+                            "সঠিক HH:MM সময় দিন এবং খোলা ও বন্ধের সময় আলাদা রাখুন।",
+                        )
+                        return@Button
+                    }
+                }
+                scope.launch {
+                    scheduleBusy = true
+                    scheduleError = null
+                    scheduleSaved = null
+                    repository.setVendorSchedule(scheduleEnabled, scheduleDays)
+                        .onSuccess { updated ->
+                            liveSchedule = updated
+                            scheduleSaved = mkText(bn, "Opening hours saved.", "সময়সূচি সংরক্ষিত হয়েছে।")
+                            onChanged()
+                        }
+                        .onFailure {
+                            scheduleError = it.message ?: mkText(bn, "Could not save opening hours.", "সংরক্ষণ করা যায়নি।")
+                        }
+                    scheduleBusy = false
+                }
+            },
+            enabled = !scheduleBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(mkText(bn, "Save opening hours", "সময়সূচি সংরক্ষণ করুন"))
+        }
+        scheduleSaved?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Saved", "সংরক্ষিত"), body = it, tone = BsdcTone.OK)
+        }
+        scheduleError?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Not saved", "সংরক্ষণ হয়নি"), body = it, tone = BsdcTone.BAD)
         }
     }
 }

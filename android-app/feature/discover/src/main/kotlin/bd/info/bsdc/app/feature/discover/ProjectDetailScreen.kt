@@ -1,5 +1,8 @@
 package bd.info.bsdc.app.feature.discover
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -12,12 +15,18 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
@@ -44,6 +53,8 @@ import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
+import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
@@ -80,6 +91,7 @@ fun ProjectDetailScreen(
     var starBusy by remember(slug) { mutableStateOf(false) }
     var actionError by remember(slug) { mutableStateOf<String?>(null) }
     var reloadNonce by remember(slug) { mutableStateOf(0) }
+    var saved by remember(slug) { mutableStateOf(false) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -96,6 +108,7 @@ fun ProjectDetailScreen(
         if (loaded != null && !uid.isNullOrBlank()) {
             repository.fetchViewerStarred(loaded.id, uid)
                 .onSuccess { starred = it }
+            repository.isOpportunitySaved("project", loaded.id).onSuccess { saved = it }
         }
     }
 
@@ -131,6 +144,11 @@ fun ProjectDetailScreen(
         context.startActivity(Intent.createChooser(intent, if (bn) "প্রজেক্ট শেয়ার করুন" else "Share project"))
     }
 
+    fun copyLink(current: ProjectDto) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText("BSDC project", ProjectDetailLogic.webUrl(current.slug)))
+    }
+
     val current = project
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -154,6 +172,34 @@ fun ProjectDetailScreen(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            current?.let { loaded ->
+                IconButton(onClick = { copyLink(loaded) }) {
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = if (bn) "লিংক কপি" else "Copy link")
+                }
+                IconButton(
+                    onClick = {
+                        if (viewerUid.isNullOrBlank()) {
+                            onSignInRequired()
+                        } else {
+                            scope.launch {
+                                repository.toggleSavedOpportunity(
+                                    kind = "project",
+                                    remoteId = loaded.id,
+                                    slug = loaded.slug,
+                                    title = loaded.name,
+                                    subtitle = loaded.tagline,
+                                    nowMillis = System.currentTimeMillis(),
+                                ).onSuccess { saved = it }
+                            }
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (saved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                        contentDescription = if (bn) "সংরক্ষণ" else "Save",
+                    )
+                }
+            }
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -220,35 +266,91 @@ fun ProjectDetailScreen(
                         }
 
                         item {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(
-                                    text = current.name,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
+                            BsdcHeroBanner(
+                                title = current.name,
+                                subtitle = current.tagline.ifBlank {
+                                    if (bn) "কমিউনিটি ওপেন-সোর্স প্রজেক্ট" else "A community open-source project"
+                                },
+                                eyebrow = if (bn) "ওপেন সোর্স" else "Open source",
+                                icon = Icons.Rounded.Code,
+                                stats = listOf(
+                                    (if (bn) "স্টার" else "Stars") to
+                                        BanglaDigitFormatter.formatCount(stars.toLong(), language),
+                                    (if (bn) "লাইসেন্স" else "License") to current.license.ifBlank { "MIT" },
+                                ),
+                            )
+                        }
+
+                        item {
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                BsdcInfoPill(
+                                    text = if (bn) {
+                                        "স্টার ${BanglaDigitFormatter.formatCount(stars.toLong(), language)}"
+                                    } else {
+                                        "${BanglaDigitFormatter.formatCount(stars.toLong(), language)} stars"
+                                    },
+                                    tone = BsdcTone.INFO,
+                                    icon = Icons.Rounded.Star,
                                 )
-                                if (current.tagline.isNotBlank()) {
-                                    Text(
-                                        text = current.tagline,
-                                        style = MaterialTheme.typography.bodyLarge,
+                                BsdcInfoPill(text = current.license.ifBlank { "MIT" })
+                                if (current.lookingForContributors) {
+                                    BsdcInfoPill(
+                                        text = if (bn) "অবদানকারী প্রয়োজন" else "Looking for contributors",
+                                        tone = BsdcTone.OK,
                                     )
                                 }
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    BsdcBadge(
-                                        label = if (bn) "স্টার ${BanglaDigitFormatter.formatCount(stars.toLong(), language)}" else "Stars ${BanglaDigitFormatter.formatCount(stars.toLong(), language)}",
-                                        tone = BsdcTone.INFO,
+                                if (saved) {
+                                    BsdcInfoPill(
+                                        text = if (bn) "সংরক্ষিত" else "Saved",
+                                        tone = BsdcTone.OK,
+                                        icon = Icons.Rounded.Bookmark,
                                     )
-                                    BsdcBadge(
-                                        label = current.license.ifBlank { "MIT" },
-                                        tone = BsdcTone.NEUTRAL,
+                                }
+                            }
+                        }
+
+                        // The project's own screenshots, in the order the owner arranged them.
+                        val shots = remember(current.projectMedia) {
+                            ProjectDetailLogic.galleryUrls(
+                                current.projectMedia?.map { join ->
+                                    ProjectGalleryItem(
+                                        url = join.mediaAssets?.url.orEmpty(),
+                                        thumbUrl = join.mediaAssets?.thumbUrl.orEmpty(),
+                                        altText = join.altText,
+                                        position = join.position,
                                     )
-                                    if (current.lookingForContributors) {
-                                        BsdcBadge(
-                                            label = if (bn) "অবদানকারী প্রয়োজন" else "Looking for contributors",
-                                            tone = BsdcTone.OK,
-                                        )
+                                }.orEmpty(),
+                            )
+                        }
+                        if (shots.isNotEmpty()) {
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    BsdcSectionHeader(
+                                        title = if (bn) "স্ক্রিনশট" else "Screenshots",
+                                        subtitle = if (bn) {
+                                            "${shots.size}টি ছবি"
+                                        } else {
+                                            "${shots.size} image${if (shots.size == 1) "" else "s"}"
+                                        },
+                                    )
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        items(shots, key = { it.url }) { shot ->
+                                            BsdcImgbbImage(
+                                                fullUrl = shot.url,
+                                                thumbUrl = shot.thumbUrl,
+                                                contentDescription = shot.altText.ifBlank { current.name },
+                                                imageLoader = imageLoader,
+                                                modifier = Modifier
+                                                    .width(260.dp)
+                                                    .height(160.dp)
+                                                    .clickable { onOpenExternal(shot.url) },
+                                                targetWidthPx = 720,
+                                                cornerRadiusDp = 14,
+                                            )
+                                        }
                                     }
                                 }
                             }

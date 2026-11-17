@@ -184,6 +184,10 @@ function language(): 'bn' | 'en' {
   return tag.startsWith('en') ? 'en' : 'bn';
 }
 
+function isOrderAlarmUrl(url: string): boolean {
+  return /[?&]alarm=new(?:&|#|$)/.test(url);
+}
+
 async function show(
   title: string,
   body: string,
@@ -191,7 +195,12 @@ async function show(
   tag: string,
   icon?: string,
 ): Promise<void> {
-  await self.registration.showNotification(title, {
+  const alarm = isOrderAlarmUrl(url);
+  const options: NotificationOptions & {
+    renotify?: boolean;
+    requireInteraction?: boolean;
+    vibrate?: number[];
+  } = {
     body,
     tag,
     icon: icon !== undefined && icon.length > 0 ? icon : ICON,
@@ -199,8 +208,14 @@ async function show(
     lang: language(),
     dir: 'ltr',
     silent: false,
-    data: { url },
-  });
+    renotify: alarm,
+    requireInteraction: alarm,
+    data: { url, alarm },
+  };
+  if (alarm) {
+    options.vibrate = [400, 200, 400, 200, 600];
+  }
+  await self.registration.showNotification(title, options);
 }
 
 async function notifyOpenClients(url: string, tag: string): Promise<void> {
@@ -237,7 +252,21 @@ async function handlePush(event: PushEvent): Promise<void> {
 
   if (answer.ok && answer.items.length === 0) return;
 
-  const summary = summarize(answer.items);
+  const alarmItems = answer.items.filter((item) => isOrderAlarmUrl(item.url));
+  const otherItems = answer.items.filter((item) => !isOrderAlarmUrl(item.url));
+
+  for (const item of alarmItems) {
+    await show(
+      notificationTitle(item),
+      notificationBody(item),
+      item.url,
+      notificationTag(item),
+      item.actorAvatar,
+    );
+    await notifyOpenClients(item.url, notificationTag(item));
+  }
+
+  const summary = summarize(otherItems);
   if (summary !== null) {
     await Promise.all([
       show(summary.title, summary.body, summary.url, `bsdc-summary-${Date.now()}`),
@@ -246,8 +275,8 @@ async function handlePush(event: PushEvent): Promise<void> {
     return;
   }
 
-  if (answer.items.length > 0) {
-    for (const item of answer.items) {
+  if (otherItems.length > 0) {
+    for (const item of otherItems) {
       await show(
         notificationTitle(item),
         notificationBody(item),
@@ -256,9 +285,11 @@ async function handlePush(event: PushEvent): Promise<void> {
         item.actorAvatar,
       );
     }
-    await notifyOpenClients(answer.items[0]!.url, notificationTag(answer.items[0]!));
+    await notifyOpenClients(otherItems[0]!.url, notificationTag(otherItems[0]!));
     return;
   }
+
+  if (alarmItems.length > 0) return;
 
   await Promise.all([
     show(

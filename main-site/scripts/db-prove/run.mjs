@@ -142,6 +142,14 @@ const HARNESSES = [
   ],
   ['t72.mjs', '0107: no live database function deletes without a WHERE clause (safe-update)'],
   ['t73.mjs', '0108: shop delivery areas and charges, and admin-editable credit package prices'],
+  [
+    't74.mjs',
+    '0110: shop opening hours, 3-mode custom delivery fees, and self-healing push registration',
+  ],
+  [
+    't75.mjs',
+    '0111: a gig client answers a proposal, and only that client — with the status column still server-owned',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

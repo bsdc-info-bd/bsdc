@@ -13,6 +13,11 @@ const MESSAGE_MAP: Record<string, string> = {
   'profile/not-found': 'data.errors.notFound',
   'profile/missing': 'data.errors.profileMissing',
   'auth/required': 'data.errors.signInRequired',
+  'push/auth-required': 'data.errors.signInRequired',
+  'push/account-inactive': 'data.errors.forbidden',
+  'push/invalid-endpoint': 'push.errors.failed',
+  'push/invalid-key': 'push.errors.failed',
+  'push/invalid-token': 'push.errors.failed',
   // Raised by apply_to_job / submit_proposal when the unique key resolves the
   // second request instead of the constraint doing it: a member who submits
   // twice is told they already have, not that a value is "already in use".
@@ -112,6 +117,15 @@ export function dataErrorKey(error: unknown): string {
     if (mapped) return mapped;
     if (error.name === 'DataAccessBootstrapError') return 'data.errors.accessUnavailable';
     if (error.name === 'SupabaseNotConfiguredError') return 'data.errors.notConfigured';
+    if (
+      error.name === 'InvalidStateError' ||
+      error.name === 'InvalidAccessError' ||
+      error.name === 'AbortError' ||
+      error.name === 'NotSupportedError'
+    ) {
+      return 'push.errors.failed';
+    }
+    if (error.name === 'NotAllowedError') return 'push.errors.permissionDenied';
     if (error.name === 'TypeError') return 'data.errors.offline';
   }
   return 'data.errors.generic';

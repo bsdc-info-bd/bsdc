@@ -319,8 +319,15 @@ check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
   // proves itself to a routine that has no member to ask. `bsdc.role_rank` is a
   // pure comparison and is not one, so the pattern names the secret check
   // explicitly rather than matching anything under the `bsdc.` namespace.
+  //
+  // `bsdc.mk_require_uid()` (0094) and `bsdc.mk_require_staff_permission()`
+  // (0094) are the marketplace's own guards: the first raises `42501` when
+  // `current_uid()` is null, the second performs `bsdc.require_permission`.
+  // Naming them costs nothing and keeps the evidence honest — a `mk_*` RPC that
+  // begins with `perform bsdc.mk_require_uid()` refuses anonymous callers just
+  // as firmly as one that spells the check out inline.
   const guarded = blocks.filter((block) =>
-    /require_permission|has_permission|current_uid\(\)|push_secret_matches/.test(
+    /require_permission|has_permission|current_uid\(\)|push_secret_matches|mk_require_uid|mk_require_staff_permission/.test(
       block.slice(0, 2500),
     ),
   );

@@ -106,8 +106,8 @@ export function isHttpsUrl(input: string): boolean {
   }
 }
 
-/** Great-circle distance in kilometres, rounded to 2 dp (matches mk_km in SQL). */
-export function distanceKm(
+/** Great-circle distance in kilometres, unrounded (matches bsdc.mk_distance_km in SQL). */
+export function rawDistanceKm(
   from: { lat: number; lng: number },
   to: { lat: number; lng: number },
 ): number {
@@ -117,7 +117,136 @@ export function distanceKm(
   const a =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(rad(from.lat)) * Math.cos(rad(to.lat)) * Math.sin(dLng / 2) ** 2;
-  return Math.round(2 * 6371 * Math.asin(Math.sqrt(a)) * 100) / 100;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/** Great-circle distance in kilometres, rounded to 2 dp (matches mk_km in SQL). */
+export function distanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+): number {
+  return Math.round(rawDistanceKm(from, to) * 100) / 100;
+}
+
+/** Rounded-up whole kilometres (matches ceil(bsdc.mk_distance_km(...)) in SQL). */
+export function roundedDistanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number },
+): number {
+  return Math.max(0, Math.ceil(rawDistanceKm(from, to)));
+}
+
+/**
+ * Evaluates a shop's 3-mode delivery charge and radius eligibility for an optional
+ * customer pin, matching `bsdc.mk_compute_delivery_fee` and `mk_place_order` in SQL.
+ */
+export function evaluateShopDelivery(
+  delivery:
+    | {
+        scope: 'radius' | 'all_bd';
+        radius_km: number;
+        fee_mode?: 'default' | 'fixed' | 'per_km';
+        fee_poisha: number;
+        fixed_fee_poisha?: number;
+        per_km_rate_poisha?: number;
+        default_fee_poisha?: number;
+        center_lat: number;
+        center_lng: number;
+      }
+    | undefined,
+  pin: { lat: number; lng: number } | null,
+): {
+  feePoisha: number;
+  roundedKm: number | null;
+  withinArea: boolean;
+  needsPinForFee: boolean;
+} {
+  if (!delivery) {
+    return {
+      feePoisha: DELIVERY_FEE_POISHA_DEFAULT,
+      roundedKm: null,
+      withinArea: true,
+      needsPinForFee: false,
+    };
+  }
+  const mode = delivery.fee_mode ?? 'fixed';
+  const center = { lat: delivery.center_lat, lng: delivery.center_lng };
+  const roundedKm = pin ? roundedDistanceKm(center, pin) : null;
+  const withinArea =
+    delivery.scope === 'all_bd' || roundedKm === null || roundedKm <= delivery.radius_km;
+
+  if (mode === 'per_km') {
+    const rate = Math.max(0, delivery.per_km_rate_poisha ?? 0);
+    if (roundedKm === null) {
+      return { feePoisha: 0, roundedKm: null, withinArea, needsPinForFee: true };
+    }
+    return {
+      feePoisha: roundedKm * rate,
+      roundedKm,
+      withinArea,
+      needsPinForFee: false,
+    };
+  }
+
+  if (mode === 'fixed') {
+    return {
+      feePoisha: Math.max(0, delivery.fixed_fee_poisha ?? delivery.fee_poisha),
+      roundedKm,
+      withinArea,
+      needsPinForFee: false,
+    };
+  }
+
+  return {
+    feePoisha: Math.max(
+      0,
+      delivery.default_fee_poisha ?? delivery.fee_poisha ?? DELIVERY_FEE_POISHA_DEFAULT,
+    ),
+    roundedKm,
+    withinArea,
+    needsPinForFee: false,
+  };
+}
+
+export const DAY_KEYS = ['0', '1', '2', '3', '4', '5', '6'] as const;
+export type DayKey = (typeof DAY_KEYS)[number];
+
+export function defaultDayHoursMap(): Record<
+  DayKey,
+  { open: boolean; start: string; end: string }
+> {
+  return {
+    '0': { open: true, start: '09:00', end: '22:00' },
+    '1': { open: true, start: '09:00', end: '22:00' },
+    '2': { open: true, start: '09:00', end: '22:00' },
+    '3': { open: true, start: '09:00', end: '22:00' },
+    '4': { open: true, start: '09:00', end: '22:00' },
+    '5': { open: true, start: '09:00', end: '22:00' },
+    '6': { open: true, start: '09:00', end: '22:00' },
+  };
+}
+
+export function isValidHhMm(value: string, allow24 = false): boolean {
+  if (allow24 && value === '24:00') return true;
+  return /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(value);
+}
+
+/** Formats 24-hour "HH:MM" into friendly 12-hour EN/BN clock text. */
+export function formatHhMm(hhmm: string, language: Language): string {
+  const [hStr = '0', mStr = '00'] = hhmm.split(':');
+  const rawHour = Number(hStr);
+  const minute = Number(mStr);
+  if (!Number.isFinite(rawHour) || !Number.isFinite(minute)) return hhmm;
+  const normalized = rawHour % 24;
+  const isPm = normalized >= 12 && rawHour !== 24;
+  const hour12 = normalized % 12 === 0 ? 12 : normalized % 12;
+  const locale = language === 'bn' ? 'bn-BD' : 'en-BD';
+  const hFmt = new Intl.NumberFormat(locale).format(hour12);
+  const mFmt = new Intl.NumberFormat(locale, { minimumIntegerDigits: 2 }).format(minute);
+  if (language === 'bn') {
+    return `${hFmt}:${mFmt} ${isPm ? 'অপরাহ্ণ' : 'পূর্বাহ্ণ'}`;
+  }
+  return `${hFmt}:${mFmt} ${isPm ? 'PM' : 'AM'}`;
 }
 
 /** Field-level error codes. The screens turn codes into bilingual copy. */

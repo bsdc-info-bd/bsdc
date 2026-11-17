@@ -160,6 +160,63 @@ data class MkStorefrontProductDto(
 )
 
 @Serializable
+data class MkDayHoursDto(
+    val open: Boolean = true,
+    val start: String = "09:00",
+    val end: String = "22:00",
+)
+
+@Serializable
+data class MkNextOpenDto(
+    val day: Int = 0,
+    val start: String = "09:00",
+)
+
+@Serializable
+data class MkShopScheduleDto(
+    val enabled: Boolean = false,
+    val timezone: String = "Asia/Dhaka",
+    val is_open: Boolean = true,
+    val today_day: Int = 0,
+    val today_open: Boolean = true,
+    val today_start: String = "09:00",
+    val today_end: String = "22:00",
+    val closes_at: String? = null,
+    val next_open: MkNextOpenDto? = null,
+    val days: Map<String, MkDayHoursDto> = emptyMap(),
+)
+
+/** A shop's delivery area and 3-mode charge (`default`, `fixed`, `per_km`). */
+@Serializable
+data class MkShopDeliveryDto(
+    val scope: String = "all_bd",
+    val radius_km: Int = 1,
+    val fee_mode: String = "fixed",
+    val fee_poisha: Long = 15000,
+    val fixed_fee_poisha: Long = 15000,
+    val per_km_rate_poisha: Long = 2000,
+    val default_fee_poisha: Long = 15000,
+    val center_lat: Double? = null,
+    val center_lng: Double? = null,
+)
+
+@Serializable
+data class MkVendorDeliveryDto(
+    val scope: String = "radius",
+    val radius_km: Int = 10,
+    val fee_mode: String = "default",
+    val fee_poisha: Long = 15000,
+    val fixed_fee_poisha: Long = 15000,
+    val per_km_rate_poisha: Long = 2000,
+    val default_fee_poisha: Long = 15000,
+    val center_lat: Double = MkLogic.SYLHET_LAT,
+    val center_lng: Double = MkLogic.SYLHET_LNG,
+    val shop_lat: Double = MkLogic.SYLHET_LAT,
+    val shop_lng: Double = MkLogic.SYLHET_LNG,
+    val schedule: MkShopScheduleDto? = null,
+)
+
+@Serializable
 data class MkVendorInfoDto(
     val slug: String = "",
     val name: String = "",
@@ -171,16 +228,7 @@ data class MkVendorInfoDto(
     val lat: Double? = null,
     val lng: Double? = null,
     val delivery: MkShopDeliveryDto? = null,
-)
-
-/** A shop's delivery area and charge. [fee_poisha] is the charge a customer pays. */
-@Serializable
-data class MkShopDeliveryDto(
-    val scope: String = "all_bd",
-    val radius_km: Int = 1,
-    val fee_poisha: Long = 15000,
-    val center_lat: Double? = null,
-    val center_lng: Double? = null,
+    val schedule: MkShopScheduleDto? = null,
 )
 
 @Serializable
@@ -196,6 +244,8 @@ data class MkVendorPageDto(
 data class MkProductVendorDto(
     val slug: String = "",
     val name: String = "",
+    val delivery: MkShopDeliveryDto? = null,
+    val schedule: MkShopScheduleDto? = null,
 )
 
 @Serializable
@@ -220,6 +270,7 @@ data class MkCartLineDto(
     val stock: Int = 0,
     val product_status: String = "",
     val orderable: Boolean = false,
+    val vendor_open: Boolean = true,
     val vendor_id: String = "",
     val vendor_slug: String = "",
     val vendor_name: String = "",
@@ -300,6 +351,8 @@ data class MkListedShopDto(
     val product_count: Int = 0,
     val rating: Double = 0.0,
     val review_count: Int = 0,
+    val delivery: MkShopDeliveryDto? = null,
+    val schedule: MkShopScheduleDto? = null,
 )
 
 /** One Nominatim search hit. Nominatim returns coordinates as strings. */

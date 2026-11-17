@@ -1,6 +1,7 @@
 package bd.info.bsdc.app.feature.discover
 
 import bd.info.bsdc.app.core.database.BsdcDatabase
+import bd.info.bsdc.app.core.database.SavedOpportunityEntity
 import bd.info.bsdc.app.core.database.SavedSearchEntity
 import bd.info.bsdc.app.core.media.ImgbbUrlAllowlist
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -104,6 +105,65 @@ class DiscoverRepository(
     suspend fun clearRecentSearches() = withContext(Dispatchers.IO) {
         database.savedSearchDao().deleteAll()
     }
+
+    // ---- Saved opportunities (gigs, jobs, projects, events) ----
+
+    /** Every opportunity the member has kept, newest first, as a live shelf. */
+    fun observeSavedOpportunities(kind: String? = null): Flow<List<SavedOpportunityEntity>> =
+        if (kind.isNullOrBlank()) {
+            database.savedOpportunityDao().observeAll()
+        } else {
+            database.savedOpportunityDao().observeKind(kind)
+        }
+
+    /** Whether this exact opportunity is already on the shelf. */
+    suspend fun isOpportunitySaved(kind: String, remoteId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching { database.savedOpportunityDao().contains(savedKey(kind, remoteId)) }
+                .getOrDefault(false)
+        }
+
+    /**
+     * Adds or removes one opportunity from the shelf. The key is `kind:id`, so the same gig
+     * cannot be saved twice and a tap always toggles what the button shows.
+     */
+    suspend fun toggleSavedOpportunity(
+        kind: String,
+        remoteId: String,
+        slug: String,
+        title: String,
+        subtitle: String,
+        nowMillis: Long,
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        runCatching {
+            val key = savedKey(kind, remoteId)
+            val dao = database.savedOpportunityDao()
+            if (dao.contains(key)) {
+                dao.delete(key)
+                false
+            } else {
+                dao.upsert(
+                    SavedOpportunityEntity(
+                        key = key,
+                        kind = kind,
+                        remoteId = remoteId,
+                        slug = slug,
+                        title = title,
+                        subtitle = subtitle,
+                        savedAtEpochMs = nowMillis,
+                    ),
+                )
+                true
+            }
+        }
+    }
+
+    suspend fun clearSavedOpportunities(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching { database.savedOpportunityDao().deleteAll() }
+    }
+
+    private fun savedKey(kind: String, remoteId: String): String =
+        kind.trim().lowercase() + ":" + remoteId.trim()
 
     suspend fun resolveCityFromCoords(
         latitude: Double,
@@ -388,6 +448,17 @@ class DiscoverRepository(
         }
     }
 
+    suspend fun recordJobView(jobId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "increment_job_view",
+                params = buildJsonObject { put("p_job_id", jobId) },
+                requireAuth = false,
+            )
+            Unit
+        }
+    }
+
     suspend fun applyToJob(jobId: String, coverLetter: String, resumeUrl: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -405,7 +476,102 @@ class DiscoverRepository(
             }
         }
 
-    suspend fun fetchGigs(limit: Int = 40): Result<List<GigDto>> = withContext(Dispatchers.IO) {
+    /**
+     * A signed-in applicant retracts their application on this job. The decision RPC takes an
+     * application id, so the caller's own live row is read first — the read is scoped to the
+     * caller's uid and `job_applications_read_parties` scopes it again in the database.
+     */
+    suspend fun withdrawMyJobApplication(jobId: String, applicantUid: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "job_applications",
+                    queryPairs = listOf(
+                        "select" to "id,status",
+                        "job_id" to "eq.$jobId",
+                        "applicant_uid" to "eq.$applicantUid",
+                        "limit" to "1",
+                    ),
+                    requireAuth = true,
+                )
+                val applicationId = supabase.decode<List<JobApplicationDto>>(raw).firstOrNull()?.id
+                    ?: error("no application to withdraw")
+                supabase.rpcText(
+                    "withdraw_application",
+                    params = buildJsonObject { put("p_application_id", applicationId) },
+                    requireAuth = true,
+                )
+                Unit
+            }
+        }
+
+    /** A signed-in applicant retracts their own application (`withdraw_application`). */
+    suspend fun withdrawApplication(applicationId: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "withdraw_application",
+                    params = buildJsonObject { put("p_application_id", applicationId) },
+                    requireAuth = true,
+                )
+                Unit
+            }
+        }
+
+    /** The employer's decision on one application: `reviewing`, `shortlisted`, `hired` or `rejected`. */
+    suspend fun decideApplication(applicationId: String, status: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "decide_application",
+                    params = buildJsonObject {
+                        put("p_application_id", applicationId)
+                        put("p_status", status)
+                    },
+                    requireAuth = true,
+                )
+                supabase.wakePushDelivery("application-decision")
+                Unit
+            }
+        }
+
+    /** Every application on a job the reader posted. RLS hides other members' rows. */
+    suspend fun fetchJobApplications(jobId: String): Result<List<JobApplicationDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "job_applications",
+                    queryPairs = listOf(
+                        "select" to "*,profiles:applicant_uid(uid,username,display_name,avatar_url,verified,bio)",
+                        "job_id" to "eq.$jobId",
+                        "order" to "status.asc,created_at.desc",
+                        "limit" to "100",
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<JobApplicationDto>>(raw)
+            }
+        }
+
+    /** The signed-in member's own applications, newest first, with the job they were sent to. */
+    suspend fun fetchMyApplications(applicantUid: String, limit: Int = 40): Result<List<JobApplicationDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "job_applications",
+                    queryPairs = listOf(
+                        "select" to "*,job_id",
+                        "applicant_uid" to "eq.$applicantUid",
+                        "order" to "created_at.desc",
+                        "limit" to limit.toString(),
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<JobApplicationDto>>(raw)
+            }
+        }
+
+    suspend fun fetchGigs(limit: Int = 60): Result<List<GigDto>> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.getJsonText(
                 table = "gigs",
@@ -419,6 +585,139 @@ class DiscoverRepository(
             supabase.decode<List<GigDto>>(raw)
         }
     }
+
+    suspend fun fetchMyGigs(clientUid: String, limit: Int = 40): Result<List<GigDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "gigs",
+                    queryPairs = listOf(
+                        "client_uid" to "eq.$clientUid",
+                        "order" to "created_at.desc.nullslast",
+                        "limit" to limit.toString(),
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<GigDto>>(raw)
+            }
+        }
+
+    /** One gig by slug or UUID. RLS allows open gigs to everyone and closed/draft to the client. */
+    suspend fun fetchGigDetail(slugOrId: String): Result<GigDto?> = withContext(Dispatchers.IO) {
+        runCatching {
+            val clean = slugOrId.trim()
+            val bySlug = supabase.getJsonText(
+                table = "gigs",
+                queryPairs = listOf(
+                    "slug" to "eq.$clean",
+                    "limit" to "1",
+                ),
+                requireAuth = false,
+            )
+            val found = supabase.decode<List<GigDto>>(bySlug).firstOrNull()
+            if (found != null) {
+                found
+            } else {
+                val byId = supabase.getJsonText(
+                    table = "gigs",
+                    queryPairs = listOf(
+                        "id" to "eq.$clean",
+                        "limit" to "1",
+                    ),
+                    requireAuth = false,
+                )
+                supabase.decode<List<GigDto>>(byId).firstOrNull()
+            }
+        }
+    }
+
+    /** The signed-in freelancer's own proposal on this gig, if any. */
+    suspend fun fetchMyGigProposal(gigId: String, uid: String): Result<GigProposalDto?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "gig_proposals",
+                    queryPairs = listOf(
+                        "select" to "*",
+                        "gig_id" to "eq.$gigId",
+                        "freelancer_uid" to "eq.$uid",
+                        "limit" to "1",
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<GigProposalDto>>(raw).firstOrNull()
+            }
+        }
+
+    /** All proposals submitted on a gig owned by the signed-in client (protected by RLS). */
+    suspend fun fetchGigProposalsForClient(gigId: String): Result<List<GigProposalDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "gig_proposals",
+                    queryPairs = listOf(
+                        "select" to "*,profiles:freelancer_uid(uid,username,display_name,avatar_url,verified)",
+                        "gig_id" to "eq.$gigId",
+                        "order" to "created_at.desc",
+                        "limit" to "100",
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<GigProposalDto>>(raw)
+            }
+        }
+
+    /** Retracts the signed-in freelancer's own proposal (`gig_proposals_delete_own` RLS policy). */
+    suspend fun withdrawGigProposal(proposalId: String, uid: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.deleteRows(
+                    table = "gig_proposals",
+                    queryPairs = listOf(
+                        "id" to "eq.$proposalId",
+                        "freelancer_uid" to "eq.$uid",
+                    ),
+                )
+                Unit
+            }
+        }
+
+    /**
+     * The gig client's decision on one proposal: `reviewing`, `shortlisted`, `hired` or
+     * `rejected`. Goes through `decide_gig_proposal`, so the status column itself is never
+     * writable from a client.
+     */
+    suspend fun decideGigProposal(proposalId: String, status: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "decide_gig_proposal",
+                    params = buildJsonObject {
+                        put("p_proposal_id", proposalId)
+                        put("p_status", status)
+                    },
+                    requireAuth = true,
+                )
+                supabase.wakePushDelivery("gig-proposal-decision")
+                Unit
+            }
+        }
+
+    /** Allows the gig client to update their gig status (`open`, `paused`, `closed`). */
+    suspend fun updateGigStatus(gigId: String, clientUid: String, nextStatus: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.patchJson(
+                    table = "gigs",
+                    body = buildJsonObject { put("status", nextStatus) },
+                    queryPairs = listOf(
+                        "id" to "eq.$gigId",
+                        "client_uid" to "eq.$clientUid",
+                    ),
+                )
+                Unit
+            }
+        }
 
     suspend fun submitProposal(
         gigId: String,
@@ -442,26 +741,33 @@ class DiscoverRepository(
         }
     }
 
-    suspend fun fetchProjects(limit: Int = 40): Result<List<ProjectDto>> = withContext(Dispatchers.IO) {
-        runCatching {
-            val raw = supabase.getJsonText(
-                table = "projects",
-                queryPairs = listOf(
-                    "order" to "stars_count.desc",
-                    "limit" to limit.toString(),
-                ),
-                requireAuth = false,
-            )
-            supabase.decode<List<ProjectDto>>(raw)
+    suspend fun fetchProjects(sort: String = "popular", limit: Int = 50): Result<List<ProjectDto>> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val orderClause = if (sort == "recent") {
+                    "created_at.desc"
+                } else {
+                    "stars_count.desc,created_at.desc"
+                }
+                val raw = supabase.getJsonText(
+                    table = "projects",
+                    queryPairs = listOf(
+                        "order" to orderClause,
+                        "limit" to limit.toString(),
+                    ),
+                    requireAuth = false,
+                )
+                supabase.decode<List<ProjectDto>>(raw)
+            }
         }
-    }
 
-    /** One project by its slug, readable without signing in. Null when no such project exists. */
+    /** One project by its slug, including attached gallery screenshots. */
     suspend fun fetchProject(slug: String): Result<ProjectDto?> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.getJsonText(
                 table = "projects",
                 queryPairs = listOf(
+                    "select" to "*,project_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))",
                     "slug" to "eq.${slug.trim()}",
                     "limit" to "1",
                 ),

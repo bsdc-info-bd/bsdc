@@ -11,6 +11,18 @@ const state = vi.hoisted(() => ({
   uid: 'user-1' as string | null,
   cart: [] as unknown[],
   product: null as null | { id: string; name: string; price_poisha: number },
+  delivery: {
+    scope: 'all_bd' as 'all_bd' | 'radius',
+    radius_km: 1,
+    fee_mode: 'default' as 'default' | 'fixed' | 'per_km',
+    fee_poisha: 15000,
+    fixed_fee_poisha: 15000,
+    per_km_rate_poisha: 2000,
+    default_fee_poisha: 15000,
+    center_lat: 23.8,
+    center_lng: 90.4,
+  },
+  schedule: undefined as undefined | { enabled: boolean; is_open: boolean },
   place: vi.fn(),
   placing: false,
 }));
@@ -55,13 +67,8 @@ vi.mock('@/hooks/use-mk', () => ({
     data: {
       vendor: {
         name: 'Sylhet Crafts',
-        delivery: {
-          scope: 'all_bd',
-          radius_km: 1,
-          fee_poisha: 15000,
-          center_lat: 24.9,
-          center_lng: 91.87,
-        },
+        delivery: state.delivery,
+        schedule: state.schedule,
       },
     },
     isLoading: false,
@@ -119,6 +126,18 @@ describe('MarketCheckoutPage', () => {
     state.uid = 'user-1';
     state.cart = [];
     state.product = null;
+    state.delivery = {
+      scope: 'all_bd',
+      radius_km: 1,
+      fee_mode: 'default',
+      fee_poisha: 15000,
+      fixed_fee_poisha: 15000,
+      per_km_rate_poisha: 2000,
+      default_fee_poisha: 15000,
+      center_lat: 23.8,
+      center_lng: 90.4,
+    };
+    state.schedule = undefined;
     state.place = vi.fn(() =>
       Promise.resolve({
         order_id: 'o1',
@@ -230,5 +249,34 @@ describe('MarketCheckoutPage', () => {
     renderAt('/marketplace/checkout/sylhet-crafts');
     await fillForm();
     expect((await screen.findAllByText(copy.buyer.sectionReady)).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('computes live per-km delivery fee once the buyer drops a pin', async () => {
+    state.cart = [cartLine({ qty: 1, line_total: 25000 })];
+    state.delivery = {
+      ...state.delivery,
+      scope: 'radius',
+      radius_km: 10,
+      fee_mode: 'per_km',
+      per_km_rate_poisha: 3000, // ৳30/km
+      center_lat: 23.8,
+      center_lng: 90.4,
+    };
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    expect(await screen.findByText(copy.delivery.pinToCalculate)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick-pin' }));
+    // Pin at (23.81, 90.41) is ~1.5 km from (23.80, 90.40) -> ceil = 2 km -> ৳60 fee -> ৳310 total
+    expect(await screen.findByText('৳60')).toBeTruthy();
+    expect(screen.getByText('৳310')).toBeTruthy();
+  });
+
+  it('blocks checkout when the shop is closed on its Dhaka opening schedule', async () => {
+    state.cart = [cartLine({})];
+    state.schedule = { enabled: true, is_open: false };
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    expect(await screen.findByText(copy.schedule.closedBanner)).toBeTruthy();
+    const button = screen.getByRole('button', { name: copy.buyer.placeOrder });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 });

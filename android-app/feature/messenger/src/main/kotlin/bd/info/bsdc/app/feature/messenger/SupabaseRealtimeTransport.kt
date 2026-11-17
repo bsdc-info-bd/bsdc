@@ -59,8 +59,17 @@ class SupabaseRealtimeTransport(
         fun onStatusChanged(status: LiveChannelStatus)
     }
 
+    data class LiveNotificationRecord(
+        val id: String,
+        val kind: String,
+        val url: String,
+        val body: String,
+        val read: Boolean,
+    )
+
     interface NotificationStreamListener {
         fun onNotificationChange()
+        fun onNotificationInserted(record: LiveNotificationRecord) {}
         fun onStatusChanged(status: LiveChannelStatus)
     }
 
@@ -533,6 +542,31 @@ class SupabaseRealtimeTransport(
                                 val st = (root["payload"] as? JsonObject)?.get("status")?.jsonPrimitive?.contentOrNull
                                 if (st == "ok") listener.onStatusChanged(LiveChannelStatus.LIVE)
                             } else if (event == "postgres_changes") {
+                                val payload = root["payload"] as? JsonObject
+                                val dataObj = payload?.get("data") as? JsonObject ?: payload
+                                val changeType = dataObj?.get("type")?.jsonPrimitive?.contentOrNull
+                                    ?: dataObj?.get("eventType")?.jsonPrimitive?.contentOrNull
+                                val record = dataObj?.get("record") as? JsonObject
+                                    ?: dataObj?.get("new") as? JsonObject
+                                if (changeType.equals("INSERT", ignoreCase = true) && record != null) {
+                                    val recId = record["id"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                    val recKind = record["kind"]?.jsonPrimitive?.contentOrNull
+                                        ?: record["type"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                    val recUrl = record["url"]?.jsonPrimitive?.contentOrNull
+                                        ?: record["target_url"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                    val recBody = record["body"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                                    val isRead = record["read"]?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
+                                        ?: (record["read_at"]?.jsonPrimitive?.contentOrNull != null)
+                                    listener.onNotificationInserted(
+                                        LiveNotificationRecord(
+                                            id = recId,
+                                            kind = recKind,
+                                            url = recUrl,
+                                            body = recBody,
+                                            read = isRead,
+                                        ),
+                                    )
+                                }
                                 listener.onNotificationChange()
                             }
                         }

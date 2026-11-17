@@ -54,8 +54,13 @@ export default function MarketProductPage() {
 
   const images = data.images.filter(Boolean);
   const shopSlug = data.vendor.slug;
+  const shopOpen = data.vendor.schedule ? data.vendor.schedule.is_open : true;
 
   async function addToCart(): Promise<void> {
+    if (!shopOpen) {
+      toast.error(copy.schedule.closedBanner);
+      return;
+    }
     try {
       await setQty.mutateAsync({ productId: id, qty: inCart + picked });
       setAdded(true);
@@ -66,6 +71,10 @@ export default function MarketProductPage() {
   }
 
   function buyNow(): void {
+    if (!shopOpen) {
+      toast.error(copy.schedule.closedBanner);
+      return;
+    }
     const params = new URLSearchParams({ product: id, qty: String(picked) });
     navigate(`/marketplace/checkout/${shopSlug}?${params.toString()}`);
   }
@@ -142,6 +151,12 @@ export default function MarketProductPage() {
             {data.in_stock ? `${data.stock} ${copy.buyer.stockLeft}` : copy.buyer.outOfStock}
           </p>
 
+          {!shopOpen ? (
+            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-800 dark:text-rose-200">
+              {copy.schedule.closedBanner}
+            </p>
+          ) : null}
+
           {data.in_stock ? (
             <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-3">
@@ -159,6 +174,7 @@ export default function MarketProductPage() {
                   type="button"
                   variant="secondary"
                   className="flex-1"
+                  disabled={!shopOpen}
                   loading={setQty.isPending}
                   iconStart={added ? <Check size={16} /> : <ShoppingBag size={16} />}
                   onClick={() => void addToCart()}
@@ -168,6 +184,7 @@ export default function MarketProductPage() {
                 <Button
                   type="button"
                   className="flex-1"
+                  disabled={!shopOpen}
                   iconStart={<Zap size={16} />}
                   onClick={buyNow}
                 >

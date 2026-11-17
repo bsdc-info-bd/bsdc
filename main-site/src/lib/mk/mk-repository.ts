@@ -1,13 +1,17 @@
 import { asDatabaseError } from '@/lib/supabase/errors';
+import { wakePushDelivery } from '@/lib/push/wake';
 import { getSupabase } from '@/lib/supabase/client';
 import type { Json } from '@/lib/supabase/types';
 import type { OrderStatus } from './mk-logic';
 import type {
   MkAdminApplication,
   MkAdminPurchase,
+  MkDayHours,
+  MkFeeMode,
   MkListedShop,
   MkMyApplication,
   MkPaymentInstructions,
+  MkShopSchedule,
   MkVendorCatalog,
   MkVendorDashboard,
   MkVendorOrder,
@@ -96,6 +100,7 @@ export async function setVendorOrderStatus(
     p_reason: reason,
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
   return asJson<{ status: OrderStatus; credits_left: number }>(data);
 }
 
@@ -207,6 +212,7 @@ export async function decideApplication(
     p_note: note,
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
 }
 
 export async function listAdminPurchases(status: string): Promise<MkAdminPurchase[]> {
@@ -229,6 +235,7 @@ export async function decidePurchase(
     p_note: note,
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
 }
 
 export async function setAdminSetting(
@@ -255,11 +262,16 @@ export async function listAdminPackages(): Promise<MkAdminPackage[]> {
 export interface MkVendorDelivery {
   scope: 'radius' | 'all_bd';
   radius_km: number;
+  fee_mode?: MkFeeMode;
   fee_poisha: number;
+  fixed_fee_poisha?: number;
+  per_km_rate_poisha?: number;
+  default_fee_poisha?: number;
   center_lat: number;
   center_lng: number;
   shop_lat: number;
   shop_lng: number;
+  schedule?: MkShopSchedule;
 }
 
 export async function fetchVendorDelivery(): Promise<MkVendorDelivery> {
@@ -271,7 +283,9 @@ export async function fetchVendorDelivery(): Promise<MkVendorDelivery> {
 export async function setVendorDelivery(input: {
   scope: 'radius' | 'all_bd';
   radiusKm: number;
+  feeMode: MkFeeMode;
   feeTaka: number;
+  perKmTaka: number;
   center: { lat: number; lng: number } | null;
 }): Promise<void> {
   const { error } = await getSupabase().rpc('mk_vendor_set_delivery', {
@@ -280,8 +294,22 @@ export async function setVendorDelivery(input: {
     p_fee_taka: input.feeTaka,
     p_center_lat: input.center?.lat ?? null,
     p_center_lng: input.center?.lng ?? null,
+    p_fee_mode: input.feeMode,
+    p_per_km_taka: input.perKmTaka,
   });
   if (error) throw asDatabaseError(error);
+}
+
+export async function setVendorSchedule(input: {
+  enabled: boolean;
+  days: Record<string, MkDayHours>;
+}): Promise<MkShopSchedule> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_set_schedule', {
+    p_enabled: input.enabled,
+    p_days: input.days as unknown as Json,
+  });
+  if (error) throw asDatabaseError(error);
+  return asJson<MkShopSchedule>(data);
 }
 
 export async function setAdminPackage(
@@ -345,6 +373,7 @@ export async function placeOrder(
     p_items: directItems === null ? null : (directItems as unknown as Json),
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
   return asJson<MkPlacedOrder>(data);
 }
 
@@ -360,6 +389,7 @@ export async function cancelMyOrder(orderId: string, reason: string): Promise<vo
     p_reason: reason,
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
 }
 
 export async function submitReview(orderId: string, rating: number, body: string): Promise<void> {
@@ -369,4 +399,5 @@ export async function submitReview(orderId: string, rating: number, body: string
     p_body: body,
   });
   if (error) throw asDatabaseError(error);
+  wakePushDelivery();
 }

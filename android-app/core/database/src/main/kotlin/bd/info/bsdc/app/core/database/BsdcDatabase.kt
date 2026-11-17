@@ -16,8 +16,9 @@ import androidx.room.withTransaction
         CachedMessageEntity::class,
         VerificationHistoryEntity::class,
         SavedSearchEntity::class,
+        SavedOpportunityEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 abstract class BsdcDatabase : RoomDatabase() {
@@ -28,6 +29,7 @@ abstract class BsdcDatabase : RoomDatabase() {
     abstract fun messengerCacheDao(): MessengerCacheDao
     abstract fun verificationHistoryDao(): VerificationHistoryDao
     abstract fun savedSearchDao(): SavedSearchDao
+    abstract fun savedOpportunityDao(): SavedOpportunityDao
 
     /**
      * Wipes user-owned offline caches on atomic sign-out / account switch so
@@ -42,6 +44,7 @@ abstract class BsdcDatabase : RoomDatabase() {
             messengerCacheDao().deleteAllThreads()
             postDao().deleteAll()
             savedSearchDao().deleteAll()
+            savedOpportunityDao().deleteAll()
         }
     }
 

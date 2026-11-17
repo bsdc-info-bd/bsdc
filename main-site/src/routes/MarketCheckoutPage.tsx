@@ -34,7 +34,13 @@ import {
 } from '@/hooks/use-mk';
 import * as repo from '@/lib/mk/mk-repository';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { formatTaka, isBdMobile, normaliseBdMobile, type Language } from '@/lib/mk/mk-logic';
+import {
+  evaluateShopDelivery,
+  formatTaka,
+  isBdMobile,
+  normaliseBdMobile,
+  type Language,
+} from '@/lib/mk/mk-logic';
 import type { MkAddress, MkPlacedOrder } from '@/lib/mk/mk-types';
 
 interface Draft {
@@ -167,21 +173,31 @@ export default function MarketCheckoutPage() {
     );
   }
 
-  // Each shop sets its own delivery charge; the server charges this same amount.
-  const fee = shop.data?.vendor.delivery?.fee_poisha ?? 0;
+  // Evaluate 3-mode delivery charge (`default`, `fixed`, `per_km`), radius eligibility,
+  // and live Dhaka opening schedule identically to `mk_place_order` on the server.
+  const deliveryConfig = shop.data?.vendor.delivery;
+  const deliveryEval = evaluateShopDelivery(
+    deliveryConfig,
+    draft.pin ? { lat: draft.pin.lat, lng: draft.pin.lng } : null,
+  );
+  const fee = deliveryEval.feePoisha;
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
   const total = subtotal + fee;
   const shopName = shop.data?.vendor.name ?? '';
+  const shopSchedule = shop.data?.vendor.schedule;
+  const shopOpen = shopSchedule ? shopSchedule.is_open : true;
 
   const errors = {
     name: draft.name.trim().length < 2,
     phone: !isBdMobile(draft.phone),
     address: draft.address.trim().length < 5,
     pin: draft.pin === null,
+    area: !deliveryEval.withinArea,
+    closed: !shopOpen,
   };
   const contactDone = !errors.name && !errors.phone;
   const addressDone = !errors.address;
-  const pinDone = !errors.pin;
+  const pinDone = !errors.pin && !errors.area;
   const valid = !Object.values(errors).some(Boolean) && lines.length > 0;
 
   // Where the buyer is in the flow: details first, then the pin, then confirm.
@@ -352,6 +368,12 @@ export default function MarketCheckoutPage() {
               language={language}
               value={draft.pin}
               onChange={(pin) => setDraft({ ...draft, pin })}
+              radiusKm={deliveryConfig?.scope === 'radius' ? deliveryConfig.radius_km : null}
+              circleCenter={
+                deliveryConfig
+                  ? { lat: deliveryConfig.center_lat, lng: deliveryConfig.center_lng }
+                  : null
+              }
               labels={{
                 title: copy.buyer.pinTitle,
                 hint: copy.buyer.pinHint,
@@ -360,9 +382,19 @@ export default function MarketCheckoutPage() {
                 outside: copy.fieldErrors.location_outside_bd,
               }}
             />
+            {deliveryEval.roundedKm !== null ? (
+              <p className="mt-2 text-xs text-muted">
+                {copy.delivery.distanceRounded(deliveryEval.roundedKm)}
+              </p>
+            ) : null}
             {showErrors && errors.pin ? (
               <p role="alert" className="mt-3 text-sm font-medium text-danger">
                 {copy.buyer.pinRequired}
+              </p>
+            ) : null}
+            {!errors.pin && errors.area && deliveryConfig ? (
+              <p role="alert" className="mt-3 text-sm font-medium text-danger">
+                {copy.delivery.outsideRadius(deliveryConfig.radius_km)}
               </p>
             ) : null}
           </FormSection>
@@ -427,9 +459,13 @@ export default function MarketCheckoutPage() {
                   <dt className="text-muted">{copy.buyer.subtotal}</dt>
                   <dd className="tabular-nums text-text">{formatTaka(subtotal, language)}</dd>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-2">
                   <dt className="text-muted">{copy.buyer.deliveryFee}</dt>
-                  <dd className="tabular-nums text-text">{formatTaka(fee, language)}</dd>
+                  <dd className="text-right tabular-nums text-text">
+                    {deliveryEval.needsPinForFee
+                      ? copy.delivery.pinToCalculate
+                      : formatTaka(fee, language)}
+                  </dd>
                 </div>
                 <div className="flex items-baseline justify-between border-t border-border pt-3">
                   <dt className="font-bold text-text">{copy.buyer.total}</dt>
@@ -439,12 +475,21 @@ export default function MarketCheckoutPage() {
                 </div>
               </dl>
 
+              {!shopOpen ? (
+                <p
+                  role="alert"
+                  className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-800 dark:text-rose-200"
+                >
+                  {copy.schedule.closedBanner}
+                </p>
+              ) : null}
+
               <Button
                 type="button"
                 className="w-full rounded-2xl py-3.5 text-base shadow-lg shadow-green-700/25"
                 size="lg"
                 loading={place.isPending}
-                disabled={lines.length === 0}
+                disabled={lines.length === 0 || !shopOpen || errors.area}
                 onClick={() => void submit()}
               >
                 {copy.buyer.placeOrder}

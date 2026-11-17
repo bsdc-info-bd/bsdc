@@ -20,7 +20,7 @@ import {
   readPushEnvironment,
   type PushBlock,
 } from '@/lib/push/support';
-import { urlBase64ToUint8Array } from '@/lib/push/webpush';
+import { uint8ArrayToUrlBase64, urlBase64ToUint8Array } from '@/lib/push/webpush';
 import type { PushDevice } from '@/lib/push/push-repository';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
@@ -45,26 +45,97 @@ export interface PushControl {
   busy: boolean;
   errorKey: string | null;
   dismissError: () => void;
-  enable: () => Promise<void>;
-  disable: () => Promise<void>;
+  enable: () => Promise<boolean>;
+  disable: () => Promise<boolean>;
   removeDevice: (endpoint: string) => Promise<void>;
+}
+
+const SW_READY_TIMEOUT_MS = 10_000;
+
+async function readyServiceWorker(): Promise<ServiceWorkerRegistration | null> {
+  const sw = globalThis.navigator?.serviceWorker;
+  if (!sw) return null;
+
+  try {
+    const existing = await sw.getRegistration('/');
+    if (!existing && typeof sw.register === 'function') {
+      await sw.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => undefined);
+    }
+  } catch {
+    // Proceed to sw.ready check below.
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      sw.ready,
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), SW_READY_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /** Reads the subscription this browser already holds, asking for nothing. */
 async function currentSubscription(): Promise<PushSubscription | null> {
-  const registration = await globalThis.navigator.serviceWorker.ready;
+  const registration = await readyServiceWorker();
+  if (registration === null) return null;
   return registration.pushManager.getSubscription();
 }
 
-async function subscribeHere(publicKey: string): Promise<PushSubscription | null> {
-  const navigation = globalThis.navigator;
-  const registration = await navigation.serviceWorker.ready;
+function sameServerKey(existing: PushSubscription, expectedPublicKey: string): boolean {
+  const appKey = existing.options?.applicationServerKey;
+  if (!appKey) return true;
+  try {
+    const actual = uint8ArrayToUrlBase64(new Uint8Array(appKey));
+    const expected = uint8ArrayToUrlBase64(urlBase64ToUint8Array(expectedPublicKey));
+    return actual === expected;
+  } catch {
+    return true;
+  }
+}
+
+async function subscribeHere(
+  publicKey: string,
+  store?: Awaited<ReturnType<typeof repository>>,
+): Promise<PushSubscription | null> {
+  const registration = await readyServiceWorker();
+  if (registration === null) return null;
+
   const existing = await registration.pushManager.getSubscription();
-  if (existing !== null) return existing;
-  return registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
-  });
+  if (existing !== null) {
+    if (sameServerKey(existing, publicKey)) return existing;
+    const oldEndpoint = existing.endpoint;
+    await existing.unsubscribe().catch(() => false);
+    if (store && oldEndpoint) {
+      await store.unregisterPushSubscription(oldEndpoint).catch(() => undefined);
+    }
+  }
+
+  const keyBytes = urlBase64ToUint8Array(publicKey);
+  try {
+    return await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: keyBytes,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'InvalidStateError' || error.message.includes('applicationServerKey'))
+    ) {
+      const stale = await registration.pushManager.getSubscription().catch(() => null);
+      if (stale !== null) {
+        await stale.unsubscribe().catch(() => false);
+      }
+      return registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes,
+      });
+    }
+    throw error;
+  }
 }
 
 async function fetchRuntimeVapidConfig(): Promise<{
@@ -73,21 +144,35 @@ async function fetchRuntimeVapidConfig(): Promise<{
 } | null> {
   const staticConfig = effectivePushVapidConfig(env.push);
   if (staticConfig !== null) return staticConfig;
-  if (typeof fetch !== 'function') return null;
-  try {
-    const response = await fetch('/api/push/config', { cache: 'no-store' });
-    if (!response.ok) return null;
-    const payload = (await response.json()) as { enabled?: unknown; vapidPublicKey?: unknown };
-    if (
-      payload.enabled === true &&
-      typeof payload.vapidPublicKey === 'string' &&
-      payload.vapidPublicKey.trim().length > 0
-    ) {
-      return { mode: 'webpush', publicKey: payload.vapidPublicKey.trim() };
+  if (typeof fetch === 'function') {
+    try {
+      const response = await fetch('/api/push/config', { cache: 'no-store' });
+      if (response.ok) {
+        const payload = (await response.json()) as { enabled?: unknown; vapidPublicKey?: unknown };
+        if (
+          payload.enabled === true &&
+          typeof payload.vapidPublicKey === 'string' &&
+          payload.vapidPublicKey.trim().length > 0
+        ) {
+          return { mode: 'webpush', publicKey: payload.vapidPublicKey.trim() };
+        }
+      }
+    } catch {
+      // Fall through to database public config RPC below.
     }
-  } catch {
-    // Ignore when /api/push/config is unreachable (e.g. offline or standalone preview).
   }
+
+  if (isConfigured.supabase) {
+    try {
+      const dbKey = await (await repository()).fetchPublicPushConfigFromDb();
+      if (dbKey !== null) {
+        return { mode: 'webpush', publicKey: dbKey };
+      }
+    } catch {
+      // Ignore if database is unreachable.
+    }
+  }
+
   return null;
 }
 
@@ -100,7 +185,7 @@ async function registerCurrentBrowser(
   const store = await repository();
 
   if (config.mode === 'webpush') {
-    const subscription = await subscribeHere(config.publicKey);
+    const subscription = await subscribeHere(config.publicKey, store);
     if (subscription === null) return false;
     await store.registerPushSubscription(subscription, language, globalThis.navigator.userAgent);
     return true;
@@ -184,10 +269,14 @@ export function usePush(): PushControl {
     })();
   }, [uid, i18n.language, queryClient, activeKey, pushConfig]);
 
-  const enable = useCallback(async () => {
-    if (uid === null || block !== 'ok') {
+  const enable = useCallback(async (): Promise<boolean> => {
+    if (uid === null) {
+      setErrorKey('data.errors.signInRequired');
+      return false;
+    }
+    if (block !== 'ok') {
       setErrorKey(PUSH_BLOCK_KEYS[block]);
-      return;
+      return false;
     }
     setBusy(true);
     try {
@@ -195,25 +284,27 @@ export function usePush(): PushControl {
       setPermission(asked);
       if (asked !== 'granted') {
         setErrorKey('push.errors.permissionDenied');
-        return;
+        return false;
       }
       const registered = await registerCurrentBrowser(uid, i18n.language, pushConfig);
       if (!registered) {
         setErrorKey('push.errors.failed');
-        return;
+        return false;
       }
       refreshedFor.current = `${uid}:${i18n.language === 'en' ? 'en' : 'bn'}`;
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
+      return true;
     } catch (error) {
       setErrorKey(dataErrorKey(error));
+      return false;
     } finally {
       setBusy(false);
     }
   }, [uid, block, i18n.language, queryClient, pushConfig]);
 
-  const disable = useCallback(async () => {
-    if (uid === null) return;
+  const disable = useCallback(async (): Promise<boolean> => {
+    if (uid === null) return false;
     setBusy(true);
     try {
       // Reading only: a "turn off" that had to subscribe first would be a
@@ -245,8 +336,10 @@ export function usePush(): PushControl {
 
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
+      return true;
     } catch (error) {
       setErrorKey(dataErrorKey(error));
+      return false;
     } finally {
       setBusy(false);
     }

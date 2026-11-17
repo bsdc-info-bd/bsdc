@@ -28,7 +28,10 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Explore
+import androidx.compose.material.icons.rounded.HandCoins
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Mic
@@ -72,8 +75,13 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
+import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
+import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
+import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
@@ -95,18 +103,21 @@ fun DiscoverHubScreen(
     imageLoader: ImageLoader,
     viewerUid: String?,
     language: AppLanguage,
+    viewerSkills: List<String> = emptyList(),
     initialSection: DiscoverSection = DiscoverSection.SEARCH,
     onSignInRequired: () -> Unit,
     onOpenPost: (String) -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenProject: (String) -> Unit = {},
     onOpenJob: (String) -> Unit = {},
+    onOpenGig: (String) -> Unit = {},
     onOpenGroup: (String) -> Unit = {},
     onOpenEvent: (String) -> Unit = {},
     onOpenVerifyCode: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
     onOpenMarketplace: () -> Unit = {},
     onOpenNewsReader: () -> Unit = {},
+    onOpenCreateHub: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -114,6 +125,7 @@ fun DiscoverHubScreen(
     val scope = rememberCoroutineScope()
     val permissionCoordinator = rememberPermissionCoordinator()
     val recentSearches by repository.observeRecentSearches().collectAsState(initial = emptyList())
+    val savedShelf by repository.observeSavedOpportunities().collectAsState(initial = emptyList())
 
     var section by rememberSaveable { mutableStateOf(initialSection) }
     LaunchedEffect(initialSection) {
@@ -152,16 +164,19 @@ fun DiscoverHubScreen(
     var listBusy by remember { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var bannerTone by remember { mutableStateOf(BsdcTone.INFO) }
+    // "Mine" narrows the gig and job directories to the listings this member owns.
+    var mineOnly by rememberSaveable { mutableStateOf(false) }
+    var projectSort by rememberSaveable { mutableStateOf("popular") }
+    var projectTech by rememberSaveable { mutableStateOf<String?>(null) }
+    val viewerSkillsSafe = remember(viewerSkills) { DiscoverSearchEngine.normaliseSkills(viewerSkills) }
 
     // Interactive modals: Job apply, Gig proposal, Course outline & quiz
     var applyingJob by remember { mutableStateOf<JobBoardDto?>(null) }
     var coverLetterInput by remember { mutableStateOf("") }
     var resumeUrlInput by remember { mutableStateOf("") }
 
-    var biddingGig by remember { mutableStateOf<GigDto?>(null) }
-    var proposalPitch by remember { mutableStateOf("") }
-    var proposalBid by remember { mutableStateOf("") }
-    var proposalDays by remember { mutableStateOf("7") }
+    // Bidding happens on GigDetailScreen, where the brief, the payout estimate and the
+    // reader's own proposal status are all visible together.
 
     var activeCourse by remember { mutableStateOf<CourseCatalogDto?>(null) }
     var courseLessons by remember { mutableStateOf<List<CourseOutlineRowDto>>(emptyList()) }
@@ -262,20 +277,25 @@ fun DiscoverHubScreen(
         item {
             BsdcCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Explore,
-                            contentDescription = null,
-                            tint = BsdcThemeTokens.colors.brandStrong,
-                        )
-                        Text(
-                            text = if (bn) "অন্বেষণ, সুযোগ ও কমিউনিটি" else "Discover, Opportunities & Learning",
-                            style = MaterialTheme.typography.titleLarge,
-                        )
-                    }
+                    BsdcHeroBanner(
+                        title = if (bn) "অন্বেষণ" else "Discover",
+                        subtitle = if (bn) {
+                            "চাকরি, ফ্রিল্যান্স গিগ, প্রজেক্ট, ইভেন্ট ও কোর্স — সব এক জায়গায়।"
+                        } else {
+                            "Jobs, freelance gigs, projects, events and courses in one place."
+                        },
+                        eyebrow = if (bn) "বাংলাদেশি ডেভেলপার নেটওয়ার্ক" else "Bangladesh's developer network",
+                        icon = Icons.Rounded.Explore,
+                        stats = buildList {
+                            add((if (bn) "চাকরি" else "Jobs") to BanglaDigitFormatter.formatCount(jobs.size.toLong(), language))
+                            add((if (bn) "গিগ" else "Gigs") to BanglaDigitFormatter.formatCount(gigs.size.toLong(), language))
+                            add((if (bn) "প্রজেক্ট" else "Projects") to BanglaDigitFormatter.formatCount(projects.size.toLong(), language))
+                        },
+                        primaryActionLabel = if (bn) "গিগ দেখুন" else "Browse gigs",
+                        onPrimaryAction = { section = DiscoverSection.GIGS },
+                        secondaryActionLabel = if (bn) "চাকরি" else "Find jobs",
+                        onSecondaryAction = { section = DiscoverSection.JOBS },
+                    )
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -465,6 +485,89 @@ fun DiscoverHubScreen(
                                 Icon(Icons.Rounded.LocationOn, contentDescription = null)
                                 Spacer(modifier = Modifier.size(4.dp))
                                 Text(nearMeCity ?: (if (bn) "নিকটস্থ" else "Near me"))
+                            }
+                        }
+                    }
+                }
+
+                if (savedShelf.isNotEmpty() && searchResults.isEmpty()) {
+                    item {
+                        BsdcCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                BsdcSectionHeader(
+                                    title = if (bn) "সংরক্ষিত" else "Saved",
+                                    subtitle = if (bn) {
+                                        "${savedShelf.size}টি সুযোগ — অফলাইনেও থাকবে।"
+                                    } else {
+                                        "${savedShelf.size} opportunit${if (savedShelf.size == 1) "y" else "ies"} — kept on this device."
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                                IconButton(
+                                    onClick = { scope.launch { repository.clearSavedOpportunities() } },
+                                ) {
+                                    Icon(Icons.Rounded.DeleteSweep, contentDescription = if (bn) "সব মুছুন" else "Clear")
+                                }
+                            }
+                            savedShelf.take(8).forEach { saved ->
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = BsdcThemeTokens.colors.surfaceElevated,
+                                    border = BorderStroke(1.dp, BsdcThemeTokens.colors.border),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            when (saved.kind) {
+                                                "job" -> onOpenJob(saved.slug.ifBlank { saved.remoteId })
+                                                "gig" -> onOpenGig(saved.slug.ifBlank { saved.remoteId })
+                                                "project" -> onOpenProject(saved.slug.ifBlank { saved.remoteId })
+                                                "event" -> onOpenEvent(saved.slug.ifBlank { saved.remoteId })
+                                                else -> Unit
+                                            }
+                                        },
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = when (saved.kind) {
+                                                "job" -> Icons.Rounded.Work
+                                                "gig" -> Icons.Rounded.HandCoins
+                                                "project" -> Icons.Rounded.Code
+                                                else -> Icons.Rounded.Event
+                                            },
+                                            contentDescription = null,
+                                            tint = BsdcThemeTokens.colors.brandStrong,
+                                        )
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = saved.title,
+                                                style = MaterialTheme.typography.titleSmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                            if (saved.subtitle.isNotBlank()) {
+                                                Text(
+                                                    text = saved.subtitle,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = BsdcThemeTokens.colors.mutedText,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                        }
+                                        BsdcBadge(
+                                            label = saved.kind.uppercase(),
+                                            tone = BsdcTone.INFO,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -708,31 +811,74 @@ fun DiscoverHubScreen(
             }
 
             DiscoverSection.JOBS -> {
+                item {
+                    BsdcHeroBanner(
+                        title = if (bn) "চাকরি" else "Jobs",
+                        subtitle = if (bn) {
+                            "বাংলাদেশি টেক কোম্পানির ইঞ্জিনিয়ারিং ও সফটওয়্যার পদ।"
+                        } else {
+                            "Engineering and software roles at Bangladeshi tech companies."
+                        },
+                        eyebrow = if (bn) "কর্মসংস্থান" else "Employment",
+                        icon = Icons.Rounded.Work,
+                        stats = buildList {
+                            add((if (bn) "খোলা" else "Open") to BanglaDigitFormatter.formatCount(jobs.size.toLong(), language))
+                            add(
+                                (if (bn) "আবেদন" else "Applied") to
+                                    BanglaDigitFormatter.formatCount(jobs.count { it.myStatus != null }.toLong(), language),
+                            )
+                        },
+                        primaryActionLabel = if (bn) "চাকরি পোস্ট করুন" else "Post a job",
+                        onPrimaryAction = onOpenCreateHub,
+                    )
+                }
                 if (jobs.isEmpty() && !listBusy) {
+                    item {
+                        BsdcDirectorySkeletonCard()
+                    }
                     item {
                         BsdcEmptyState(
                             icon = Icons.Rounded.Work,
                             title = if (bn) "কোনো চাকরির বিজ্ঞপ্তি নেই" else "No open job listings",
-                            subtitle = if (bn) "বাংলাদেশি টেক কোম্পানির চাকরির খবর এখানে পাবেন।" else "Engineering & software positions appear here.",
+                            subtitle = if (bn) {
+                                "বাংলাদেশি টেক কোম্পানির চাকরির খবর এখানে পাবেন।"
+                            } else {
+                                "Engineering and software positions appear here."
+                            },
+                            actionLabel = if (bn) "চাকরি পোস্ট করুন" else "Post the first job",
+                            onAction = onOpenCreateHub,
                         )
                     }
                 }
                 items(jobs, key = { it.id }) { job ->
-                    BsdcCard {
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            BsdcBadge(label = job.workMode.uppercase(), tone = BsdcTone.INFO)
-                            BsdcBadge(label = job.jobType.replace("_", " ").uppercase(), tone = BsdcTone.NEUTRAL)
+                    val match = DiscoverSearchEngine.skillMatchPercent(job.skills, viewerSkillsSafe)
+                    BsdcCard(onClick = { onOpenJob(job.slug) }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = job.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = "${job.company} • ${job.city.ifBlank { if (bn) "বাংলাদেশ" else "Bangladesh" }}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = BsdcThemeTokens.colors.mutedText,
+                                )
+                            }
+                            job.myStatus?.takeIf { JobDetailLogic.isApplied(it) }?.let { status ->
+                                BsdcBadge(
+                                    label = JobDetailLogic.applicationStatusLabel(status, bn),
+                                    tone = BsdcTone.OK,
+                                )
+                            }
                         }
-                        Text(
-                            text = job.title,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.clickable { onOpenJob(job.slug) },
-                        )
-                        Text(
-                            text = "${job.company} • ${job.city.ifBlank { "Bangladesh" }}",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
                         Text(
                             text = DiscoverSearchEngine.formatCompensation(
                                 job.salaryMin,
@@ -744,64 +890,221 @@ fun DiscoverHubScreen(
                             style = MaterialTheme.typography.labelLarge,
                             color = BsdcThemeTokens.colors.brandStrong,
                         )
-                        if (job.myStatus != null) {
-                            BsdcBadge(label = "Status: ${job.myStatus}", tone = BsdcTone.OK)
-                        } else {
-                            BsdcButton(
-                                label = if (bn) "আবেদন করুন" else "Apply Now",
-                                onClick = {
-                                    if (viewerUid.isNullOrBlank()) {
-                                        onSignInRequired()
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            BsdcInfoPill(text = job.workMode.uppercase(), tone = BsdcTone.INFO)
+                            BsdcInfoPill(text = job.jobType.replace("_", " ").uppercase())
+                            if (job.applicationsCount > 0) {
+                                BsdcInfoPill(
+                                    text = if (bn) {
+                                        "${BanglaDigitFormatter.formatCount(job.applicationsCount.toLong(), language)} আবেদন"
                                     } else {
-                                        applyingJob = job
-                                        coverLetterInput = ""
-                                        resumeUrlInput = ""
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth(),
+                                        "${job.applicationsCount} applicant${if (job.applicationsCount == 1) "" else "s"}"
+                                    },
+                                )
+                            }
+                            if (match > 0) {
+                                BsdcInfoPill(
+                                    text = if (bn) "$match% মিল" else "$match% match",
+                                    tone = BsdcTone.OK,
+                                )
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BsdcButton(
+                                label = if (bn) "বিস্তারিত" else "View role",
+                                onClick = { onOpenJob(job.slug) },
+                                secondary = true,
+                                modifier = Modifier.weight(1f),
                             )
+                            if (job.myStatus == null) {
+                                BsdcButton(
+                                    label = if (bn) "আবেদন" else "Apply",
+                                    onClick = {
+                                        if (viewerUid.isNullOrBlank()) {
+                                            onSignInRequired()
+                                        } else {
+                                            applyingJob = job
+                                            coverLetterInput = ""
+                                            resumeUrlInput = ""
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                )
+                            }
                         }
                     }
                 }
             }
 
             DiscoverSection.GIGS -> {
-                if (gigs.isEmpty() && !listBusy) {
+                if (viewerUid.isNullOrBlank()) {
                     item {
-                        BsdcEmptyState(
-                            icon = Icons.Rounded.Work,
-                            title = if (bn) "কোনো ফ্রিল্যান্স গিগ নেই" else "No open freelance gigs",
-                            subtitle = if (bn) "কনট্রাক্ট ও ফ্রিল্যান্স কাজের প্রস্তাব দিন।" else "Freelance contracts appear here.",
+                        BsdcStatusBanner(
+                            title = if (bn) "প্রস্তাব দিতে সাইন ইন করুন" else "Sign in to send a proposal",
+                            body = if (bn) {
+                                "গিগ দেখা যায় সবার জন্য; প্রস্তাব পাঠাতে অ্যাকাউন্ট লাগে।"
+                            } else {
+                                "Anyone can read a gig; sending a proposal needs an account."
+                            },
+                            tone = BsdcTone.INFO,
+                            actionLabel = if (bn) "সাইন ইন" else "Sign in",
+                            onAction = onSignInRequired,
                         )
                     }
                 }
-                items(gigs, key = { it.id }) { gig ->
-                    BsdcCard {
-                        Text(text = gig.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            text = DiscoverSearchEngine.formatCompensation(
-                                gig.budgetMin,
-                                gig.budgetMax,
-                                gig.currency,
-                                if (gig.isHourly) "hr" else "fixed",
-                                bn,
-                            ),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = BsdcThemeTokens.colors.brandStrong,
+                if (viewerUid.isNullOrBlank()) {
+                    item {
+                        BsdcFilterPill(
+                            label = if (bn) "সব গিগ" else "All gigs",
+                            selected = true,
+                            onClick = {},
+                            leadingIcon = Icons.Rounded.Work,
                         )
+                    }
+                } else {
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            BsdcFilterPill(
+                                label = if (bn) "সব গিগ" else "All gigs",
+                                selected = !mineOnly,
+                                onClick = {
+                                    mineOnly = false
+                                    scope.launch {
+                                        listBusy = true
+                                        repository.fetchGigs().onSuccess { gigs = it }
+                                        listBusy = false
+                                    }
+                                },
+                                leadingIcon = Icons.Rounded.Work,
+                            )
+                            BsdcFilterPill(
+                                label = if (bn) "আমার গিগ" else "My gigs",
+                                selected = mineOnly,
+                                onClick = {
+                                    mineOnly = true
+                                    scope.launch {
+                                        listBusy = true
+                                        repository.fetchMyGigs(viewerUid)
+                                            .onSuccess { gigs = it }
+                                            .onFailure { err ->
+                                                showInfo(
+                                                    err.localizedMessage
+                                                        ?: if (bn) "লোড ব্যর্থ হয়েছে।" else "Failed to load.",
+                                                    BsdcTone.BAD,
+                                                )
+                                            }
+                                        listBusy = false
+                                    }
+                                },
+                                leadingIcon = Icons.Rounded.HandCoins,
+                            )
+                        }
+                    }
+                }
+
+                if (gigs.isEmpty() && !listBusy) {
+                    item {
+                        BsdcDirectorySkeletonCard()
+                    }
+                    item {
+                        BsdcEmptyState(
+                            icon = Icons.Rounded.HandCoins,
+                            title = if (bn) "কোনো ফ্রিল্যান্স গিগ নেই" else "No open freelance gigs",
+                            subtitle = if (bn) {
+                                "কনট্রাক্ট ও ফ্রিল্যান্স কাজের প্রস্তাব দিন।"
+                            } else {
+                                "Freelance contracts appear here."
+                            },
+                            actionLabel = if (bn) "গিগ তৈরি করুন" else "Post a gig",
+                            onAction = { section = DiscoverSection.GIGS },
+                        )
+                    }
+                }
+
+                items(gigs, key = { it.id }) { gig ->
+                    val match = DiscoverSearchEngine.skillMatchPercent(gig.skills, viewerSkillsSafe)
+                    BsdcCard(onClick = { onOpenGig(gig.slug.ifBlank { gig.id }) }) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Top,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = gig.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = DiscoverSearchEngine.formatBudget(
+                                        gig.budgetMin,
+                                        gig.budgetMax,
+                                        gig.currency,
+                                        gig.isHourly,
+                                        gig.durationDays,
+                                        bn,
+                                    ),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = BsdcThemeTokens.colors.brandStrong,
+                                )
+                            }
+                            BsdcBadge(
+                                label = GigDetailLogic.gigStatusLabel(gig.status, bn).uppercase(),
+                                tone = if (GigDetailLogic.isAcceptingProposals(gig.status)) BsdcTone.OK else BsdcTone.WARN,
+                            )
+                        }
                         if (gig.description.isNotBlank()) {
-                            Text(text = gig.description.take(180), style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                text = gig.description.replace(Regex("\\s+"), " ").take(180),
+                                style = MaterialTheme.typography.bodySmall,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (gig.proposalsCount > 0) {
+                                BsdcInfoPill(
+                                    text = if (bn) {
+                                        "${BanglaDigitFormatter.formatCount(gig.proposalsCount.toLong(), language)} প্রস্তাব"
+                                    } else {
+                                        "${gig.proposalsCount} proposal${if (gig.proposalsCount == 1) "" else "s"}"
+                                    },
+                                    icon = Icons.Rounded.Work,
+                                )
+                            }
+                            if (match > 0) {
+                                BsdcInfoPill(
+                                    text = if (bn) "$match% মিল" else "$match% match",
+                                    tone = BsdcTone.OK,
+                                )
+                            }
+                        }
+                        if (gig.skills.isNotEmpty()) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                DiscoverSearchEngine.normaliseSkills(gig.skills).take(6).forEach { skill ->
+                                    val have = viewerSkillsSafe.contains(skill)
+                                    BsdcInfoPill(
+                                        text = skill,
+                                        tone = if (have) BsdcTone.OK else BsdcTone.NEUTRAL,
+                                    )
+                                }
+                            }
                         }
                         BsdcButton(
-                            label = if (bn) "প্রস্তাব পাঠান" else "Submit Proposal",
+                            label = if (bn) "বিস্তারিত ও প্রস্তাব" else "Open and propose",
                             onClick = {
                                 if (viewerUid.isNullOrBlank()) {
                                     onSignInRequired()
                                 } else {
-                                    biddingGig = gig
-                                    proposalBid = gig.budgetMin.toString()
-                                    proposalDays = gig.durationDays.coerceAtLeast(1).toString()
-                                    proposalPitch = ""
+                                    onOpenGig(gig.slug.ifBlank { gig.id })
                                 }
                             },
                             modifier = Modifier.fillMaxWidth(),
@@ -811,26 +1114,128 @@ fun DiscoverHubScreen(
             }
 
             DiscoverSection.PROJECTS -> {
-                if (projects.isEmpty() && !listBusy) {
+                item {
+                    BsdcHeroBanner(
+                        title = if (bn) "ওপেন-সোর্স প্রজেক্ট" else "Open-source projects",
+                        subtitle = if (bn) {
+                            "বাংলাদেশি ডেভেলপারদের প্রজেক্ট — স্টার দিন, অবদান রাখুন।"
+                        } else {
+                            "Projects built by Bangladeshi developers — star them, contribute to them."
+                        },
+                        eyebrow = if (bn) "কোড ও কমিউনিটি" else "Code and community",
+                        icon = Icons.Rounded.Code,
+                        stats = buildList {
+                            add((if (bn) "প্রজেক্ট" else "Projects") to BanglaDigitFormatter.formatCount(projects.size.toLong(), language))
+                            add(
+                                (if (bn) "অবদান চায়" else "Seeking help") to
+                                    BanglaDigitFormatter.formatCount(projects.count { it.lookingForContributors }.toLong(), language),
+                            )
+                        },
+                        primaryActionLabel = if (bn) "প্রজেক্ট যোগ করুন" else "Add a project",
+                        onPrimaryAction = onOpenCreateHub,
+                    )
+                }
+
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BsdcFilterPill(
+                            label = if (bn) "জনপ্রিয়" else "Popular",
+                            selected = projectSort == "popular",
+                            onClick = {
+                                projectSort = "popular"
+                                scope.launch {
+                                    listBusy = true
+                                    repository.fetchProjects(sort = "popular").onSuccess { projects = it }
+                                    listBusy = false
+                                }
+                            },
+                            leadingIcon = Icons.Rounded.Star,
+                        )
+                        BsdcFilterPill(
+                            label = if (bn) "নতুন" else "Recent",
+                            selected = projectSort == "recent",
+                            onClick = {
+                                projectSort = "recent"
+                                scope.launch {
+                                    listBusy = true
+                                    repository.fetchProjects(sort = "recent").onSuccess { projects = it }
+                                    listBusy = false
+                                }
+                            },
+                            leadingIcon = Icons.Rounded.Explore,
+                        )
+                    }
+                }
+
+                val techFacets = remember(projects) {
+                    projects.flatMap { it.tech }
+                        .groupingBy { it.trim().lowercase() }
+                        .eachCount()
+                        .entries
+                        .filter { it.value >= 1 }
+                        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                        .take(10)
+                        .map { it.key }
+                }
+                if (techFacets.isNotEmpty()) {
+                    item {
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            BsdcFilterPill(
+                                label = if (bn) "সব প্রযুক্তি" else "All tech",
+                                selected = projectTech == null,
+                                onClick = { projectTech = null },
+                            )
+                            techFacets.forEach { tech ->
+                                BsdcFilterPill(
+                                    label = tech,
+                                    selected = projectTech == tech,
+                                    onClick = { projectTech = if (projectTech == tech) null else tech },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val visibleProjects = remember(projects, projectTech) {
+                    val tech = projectTech
+                    if (tech == null) {
+                        projects
+                    } else {
+                        projects.filter { project -> project.tech.any { it.trim().lowercase() == tech } }
+                    }
+                }
+
+                if (visibleProjects.isEmpty() && !listBusy) {
+                    item {
+                        BsdcDirectorySkeletonCard()
+                    }
                     item {
                         BsdcEmptyState(
                             icon = Icons.Rounded.Code,
                             title = if (bn) "কোনো ওপেন-সোর্স প্রজেক্ট নেই" else "No showcase projects yet",
-                            subtitle = if (bn) "বাংলাদেশি ডেভেলপারদের ওপেন-সোর্স প্রজেক্ট।" else "Community open-source projects appear here.",
+                            subtitle = if (bn) {
+                                "বাংলাদেশি ডেভেলপারদের ওপেন-সোর্স প্রজেক্ট।"
+                            } else {
+                                "Community open-source projects appear here."
+                            },
+                            actionLabel = if (bn) "প্রজেক্ট যোগ করুন" else "Add the first project",
+                            onAction = onOpenCreateHub,
                         )
                     }
                 }
-                items(projects, key = { it.id }) { proj ->
-                    BsdcCard {
+
+                items(visibleProjects, key = { it.id }) { proj ->
+                    BsdcCard(onClick = { onOpenProject(proj.slug) }) {
                         if (proj.coverUrl.isNotBlank()) {
                             BsdcImgbbImage(
                                 fullUrl = proj.coverUrl,
                                 thumbUrl = proj.coverUrl,
                                 contentDescription = proj.name,
                                 imageLoader = imageLoader,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onOpenProject(proj.slug) },
+                                modifier = Modifier.fillMaxWidth().clickable { onOpenProject(proj.slug) },
                             )
                         }
                         Row(
@@ -843,10 +1248,17 @@ fun DiscoverHubScreen(
                                     text = proj.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.clickable { onOpenProject(proj.slug) },
                                 )
                                 if (proj.tagline.isNotBlank()) {
-                                    Text(text = proj.tagline, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        text = proj.tagline,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 }
                             }
                             OutlinedButton(
@@ -857,7 +1269,9 @@ fun DiscoverHubScreen(
                                         scope.launch {
                                             repository.toggleProjectStar(proj.id)
                                                 .onSuccess { loadSectionData(DiscoverSection.PROJECTS) }
-                                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
+                                                .onFailure { err ->
+                                                    showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD)
+                                                }
                                         }
                                     }
                                 },
@@ -867,10 +1281,18 @@ fun DiscoverHubScreen(
                                 Text(BanglaDigitFormatter.formatCount(proj.starsCount.toLong(), language))
                             }
                         }
-                        val repo = DiscoverSearchEngine.safeHttpUrlOrEmpty(proj.repoUrl)
-                        if (repo.isNotBlank()) {
-                            TextButton(onClick = { onOpenExternal(repo) }) {
-                                Text(repo)
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            if (proj.lookingForContributors) {
+                                BsdcInfoPill(
+                                    text = if (bn) "অবদানকারী চায়" else "Seeking contributors",
+                                    tone = BsdcTone.OK,
+                                )
+                            }
+                            ProjectDetailLogic.techChips(proj.tech).take(8).forEach { tech ->
+                                BsdcInfoPill(text = tech, tone = BsdcTone.NEUTRAL)
                             }
                         }
                     }
@@ -1029,58 +1451,6 @@ fun DiscoverHubScreen(
             },
             dismissButton = {
                 TextButton(onClick = { applyingJob = null }) { Text(if (bn) "বাতিল" else "Cancel") }
-            },
-        )
-    }
-
-    // Bid on Freelance Gig dialog
-    biddingGig?.let { gig ->
-        AlertDialog(
-            onDismissRequest = { biddingGig = null },
-            title = { Text(gig.title) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = proposalPitch,
-                        onValueChange = { proposalPitch = it },
-                        label = { Text(if (bn) "আপনার প্রস্তাব" else "Proposal pitch") },
-                        minLines = 3,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = proposalBid,
-                        onValueChange = { proposalBid = it },
-                        label = { Text(if (bn) "বাজেট (${gig.currency})" else "Bid (${gig.currency})") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = proposalDays,
-                        onValueChange = { proposalDays = it },
-                        label = { Text(if (bn) "সময় (দিন)" else "Delivery days") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            val bid = proposalBid.toIntOrNull() ?: gig.budgetMin
-                            val days = (proposalDays.toIntOrNull() ?: 7).coerceAtLeast(1)
-                            repository.submitProposal(gig.id, proposalPitch, bid, days)
-                                .onSuccess {
-                                    biddingGig = null
-                                    showInfo(if (bn) "প্রস্তাব পাঠানো হয়েছে।" else "Proposal submitted.")
-                                }
-                                .onFailure { err -> showInfo(err.localizedMessage ?: "Failed", BsdcTone.BAD) }
-                        }
-                    },
-                ) { Text(if (bn) "পাঠান" else "Send") }
-            },
-            dismissButton = {
-                TextButton(onClick = { biddingGig = null }) { Text(if (bn) "বাতিল" else "Cancel") }
             },
         )
     }

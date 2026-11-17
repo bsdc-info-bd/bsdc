@@ -36,6 +36,9 @@ fun MkOsmPinMap(
     lat: Double?,
     lng: Double?,
     onPin: (Double, Double) -> Unit,
+    radiusKm: Int? = null,
+    circleCenterLat: Double? = null,
+    circleCenterLng: Double? = null,
     modifier: Modifier = Modifier,
 ) {
     val latestOnPin by rememberUpdatedState(onPin)
@@ -73,6 +76,13 @@ fun MkOsmPinMap(
                         if (view != null && pin != null) {
                             view.evaluateJavascript("setPin(${pin.first},${pin.second})", null)
                         }
+                        val circle = state.appliedCircle
+                        if (view != null && circle != null) {
+                            view.evaluateJavascript(
+                                "setRadiusCircle(${circle.first},${circle.second},${circle.third})",
+                                null,
+                            )
+                        }
                     }
                 }
                 addJavascriptInterface(
@@ -107,6 +117,24 @@ fun MkOsmPinMap(
                 state.applied = target
                 view.evaluateJavascript("setPin(${target.first},${target.second})", null)
             }
+            val anchorLat = circleCenterLat ?: lat
+            val anchorLng = circleCenterLng ?: lng
+            val nextCircle = if (radiusKm != null && radiusKm > 0 && anchorLat != null && anchorLng != null) {
+                Triple(anchorLat, anchorLng, radiusKm * 1000)
+            } else {
+                null
+            }
+            if (state.loaded && nextCircle != state.appliedCircle) {
+                state.appliedCircle = nextCircle
+                if (nextCircle == null) {
+                    view.evaluateJavascript("clearRadiusCircle()", null)
+                } else {
+                    view.evaluateJavascript(
+                        "setRadiusCircle(${nextCircle.first},${nextCircle.second},${nextCircle.third})",
+                        null,
+                    )
+                }
+            }
         },
         onRelease = { view ->
             view.stopLoading()
@@ -115,10 +143,11 @@ fun MkOsmPinMap(
     )
 }
 
-/** Remembers the last pin known to both sides, so a map echo does not trigger a redundant move. */
+/** Remembers the last pin and optional radius circle known to both sides. */
 private class PinMapState(initial: Pair<Double, Double>?) {
     var loaded: Boolean = false
     var applied: Pair<Double, Double>? = initial
+    var appliedCircle: Triple<Double, Double, Int>? = null
 }
 
 /** The only object the map page can reach. It accepts coordinates and does nothing else. */
@@ -188,12 +217,32 @@ $leafletJs
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
   var marker = null;
+  var radiusCircle = null;
   var PIN_ICON = L.divIcon({
     className: 'bsdc-pin',
     html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>',
     iconSize: [30, 40],
     iconAnchor: [15, 40]
   });
+  function setRadiusCircle(la, ln, metres) {
+    if (!radiusCircle) {
+      radiusCircle = L.circle([la, ln], {
+        radius: metres,
+        color: '#2563eb',
+        weight: 2,
+        fillOpacity: 0.12
+      }).addTo(map);
+    } else {
+      radiusCircle.setLatLng([la, ln]);
+      radiusCircle.setRadius(metres);
+    }
+  }
+  function clearRadiusCircle() {
+    if (radiusCircle) {
+      radiusCircle.remove();
+      radiusCircle = null;
+    }
+  }
   function place(la, ln) {
     if (!marker) {
       marker = L.marker([la, ln], { draggable: true, icon: PIN_ICON }).addTo(map);

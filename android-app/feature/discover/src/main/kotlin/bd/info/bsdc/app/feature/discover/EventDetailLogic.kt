@@ -1,5 +1,7 @@
 package bd.info.bsdc.app.feature.discover
 
+import bd.info.bsdc.app.core.common.BanglaDigitFormatter
+import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
 import java.net.URLEncoder
 import java.time.DateTimeException
@@ -14,6 +16,8 @@ object EventDetailLogic {
     const val DEFAULT_ZONE = "Asia/Dhaka"
 
     private const val ONE_HOUR_MILLIS = 60L * 60L * 1000L
+    private const val MINUTE_MILLIS = 60_000L
+    private const val MINUTES_PER_DAY = 24L * 60L
 
     fun webUrl(slug: String): String {
         val encoded = URLEncoder.encode(slug.trim(), Charsets.UTF_8.name()).replace("+", "%20")
@@ -53,6 +57,47 @@ object EventDetailLogic {
     /** RSVP needs a signed-in reader, and an event that is still on and not cancelled. */
     fun canRsvp(signedIn: Boolean, isCancelled: Boolean, ended: Boolean): Boolean =
         signedIn && !isCancelled && !ended
+
+    /**
+     * How the start line should read right now: a countdown before it begins, "live" during it,
+     * and nothing once it is over. Minutes are rounded **up**, so a reader never sees "starts in
+     * 0 minutes" for an event that is still 20 seconds away.
+     */
+    fun startCountdown(startsAt: String?, endsAt: String?, nowMillis: Long, bn: Boolean): String {
+        val start = JobDetailLogic.parseTimestampMillis(startsAt) ?: return ""
+        if (isHappeningNow(startsAt, endsAt, nowMillis)) {
+            return if (bn) "এখন চলছে" else "Happening now"
+        }
+        val remaining = start - nowMillis
+        if (remaining <= 0L) return ""
+        val minutes = (remaining + MINUTE_MILLIS - 1) / MINUTE_MILLIS
+        return when {
+            minutes < 60L -> {
+                val n = BanglaDigitFormatter.formatCount(minutes, if (bn) AppLanguage.BN else AppLanguage.EN)
+                if (bn) "$n মিনিট বাকি" else "Starts in $n min"
+            }
+            minutes < MINUTES_PER_DAY -> {
+                val hours = minutes / 60L
+                val n = BanglaDigitFormatter.formatCount(hours, if (bn) AppLanguage.BN else AppLanguage.EN)
+                if (bn) "$n ঘণ্টা বাকি" else "Starts in $n h"
+            }
+            else -> {
+                val days = minutes / MINUTES_PER_DAY
+                val n = BanglaDigitFormatter.formatCount(days, if (bn) AppLanguage.BN else AppLanguage.EN)
+                if (bn) "$n দিন বাকি" else "Starts in $n days"
+            }
+        }
+    }
+
+    /**
+     * Seats left, or null when the event has no capacity. Never negative, and zero when the
+     * event is full so the label does not read "5 seats left" for an over-subscribed event.
+     */
+    fun seatsLeft(capacity: Int?, goingCount: Int): Int? {
+        val cap = capacity ?: return null
+        if (cap <= 0) return null
+        return (cap - goingCount).coerceAtLeast(0)
+    }
 
     /**
      * The calendar entry's start and end in epoch millis. A missing or backwards end becomes

@@ -85,6 +85,7 @@ export default function MarketCartPage() {
             0,
           );
           const orderable = group.lines.some((line) => line.orderable);
+          const shopClosed = group.lines.some((line) => line.vendor_open === false);
           return (
             <motion.div
               key={group.slug}
@@ -102,8 +103,16 @@ export default function MarketCartPage() {
                     <Store size={16} aria-hidden />
                     <span className="truncate">{group.name}</span>
                   </Link>
-                  <span className="text-xs text-muted">{copy.buyer.deliveryPromise}</span>
+                  <span className="text-xs text-muted">
+                    {shopClosed ? copy.schedule.closedNow : copy.buyer.deliveryPromise}
+                  </span>
                 </div>
+
+                {shopClosed ? (
+                  <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-800 dark:text-rose-200">
+                    {copy.schedule.closedBanner}
+                  </p>
+                ) : null}
 
                 <ul className="divide-y divide-border">
                   <AnimatePresence initial={false}>
@@ -137,7 +146,9 @@ export default function MarketCartPage() {
                           </p>
                           {!line.orderable ? (
                             <p className="text-xs font-semibold text-red-600">
-                              {copy.buyer.outOfStock}
+                              {line.vendor_open === false
+                                ? copy.schedule.closedNow
+                                : copy.buyer.outOfStock}
                             </p>
                           ) : null}
                         </div>
