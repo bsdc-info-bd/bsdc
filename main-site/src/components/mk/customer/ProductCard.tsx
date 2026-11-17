@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { ImageOff, Check } from 'lucide-react';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Link } from 'react-router-dom';
 import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import type { MkCopy } from '@/lib/mk/mk-copy';
@@ -30,10 +31,15 @@ export function ProductCard({ product, language, copy, inCart, onChangeQty, busy
         className="relative block aspect-square overflow-hidden bg-surface-2"
       >
         {product.image_url ? (
-          <img
+          // MediaImage, not a bare <img>: the card is the most repeated element in
+          // the marketplace, so it is where a missing srcset costs the most bytes,
+          // and where a bare image has no retry when ImgBB is slow. The hover scale
+          // lives on the wrapper below because MediaImage owns its own class list.
+          <MediaImage
             src={product.image_url}
+            variantSrc={product.image_variant ?? ''}
             alt=""
-            loading="lazy"
+            slotWidth={320}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
         ) : (

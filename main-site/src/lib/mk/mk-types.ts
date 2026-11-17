@@ -106,6 +106,14 @@ export interface MkCatalogProduct {
   status: 'draft' | 'active' | 'archived';
   category_id: string | null;
   images: string[];
+  /**
+   * Original image URL -> ImgBB's ~640px variant of the same picture.
+   *
+   * Optional because a row written before migration 0116 has no map, and because a
+   * picture ImgBB could not shrink has no entry. A caller that ignores it still
+   * renders correctly, just with the full-size file.
+   */
+  image_variants?: Record<string, string>;
 }
 
 export interface MkVendorCatalog {
@@ -232,6 +240,14 @@ export interface MkStorefrontProduct {
   in_stock: boolean;
   category_id: string | null;
   image_url: string;
+  /**
+   * The ~640px variant of `image_url`, or `''` when the shop recorded none.
+   *
+   * A catalogue grid is the place this matters most: thirty cards on one screen,
+   * each rendered from a slot a hundred and fifty pixels wide, was thirty
+   * full-size downloads before this existed.
+   */
+  image_variant?: string;
 }
 
 export interface MkProductDetail {
@@ -242,6 +258,8 @@ export interface MkProductDetail {
   in_stock: boolean;
   stock: number;
   images: string[];
+  /** See `MkCatalogProduct.image_variants`. */
+  image_variants?: Record<string, string>;
   vendor: {
     slug: string;
     name: string;

@@ -278,7 +278,7 @@ export const en = {
       },
       camera: {
         title: 'Camera and microphone',
-        body: 'Two permissions in the Android app are easy to misread from the store listing, so here is exactly what they do. The camera is used to scan a QR code and, when you choose to, to take a photo for a post or a listing; no photo is taken until you press the button, and pictures are stored the same way as any other upload. The microphone is used only while you hold the voice search button, to turn your speech into a search query. No audio is recorded to a file, kept after the search, or sent anywhere except the speech service that performs the transcription.',
+        body: 'Two permissions in the Android app are easy to misread from the store listing, so here is exactly what they do. The camera is used to scan a QR code and, when you choose to, to take a photo for a post or a listing; no photo is taken until you press the button, and pictures are stored the same way as every other upload. The microphone is used only while you hold the voice search button, to turn your speech into a search query. No audio is recorded to a file, kept after the search, or sent anywhere except the speech service that performs the transcription.',
       },
       cookies: {
         title: 'Cookies and local storage',

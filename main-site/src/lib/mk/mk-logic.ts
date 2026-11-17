@@ -435,3 +435,27 @@ export const SHOP_TYPE_EMOJI: Record<ShopType, string> = {
   handicraft: '🧵',
   other: '🏪',
 };
+
+/**
+ * The ~640px variant of a picture, if the shop recorded one.
+ *
+ * `image_variants` is keyed by the original URL rather than by array position, so
+ * a catalogue whose pictures were reordered still resolves the right variant.
+ * Anything unusable — a missing map, a key that is not in `images`, a value that
+ * is not an https link — resolves to `''`, which `MediaImage` reads as "no lighter
+ * copy, use the original". Returning the original here would defeat the point of
+ * the lookup by making two different-looking answers identical.
+ */
+export function variantFor(
+  images: readonly string[],
+  variants: Record<string, string> | null | undefined,
+  url: string,
+): string {
+  if (variants === null || variants === undefined) return '';
+  if (!images.includes(url)) return '';
+  const variant = variants[url];
+  if (typeof variant !== 'string') return '';
+  const trimmed = variant.trim();
+  if (!trimmed.startsWith('https://') || trimmed === url) return '';
+  return trimmed;
+}

@@ -132,6 +132,13 @@ export interface ProductPayload {
   status: 'draft' | 'active' | 'archived';
   category_id: string | null;
   images: string[];
+  /**
+   * Original URL -> the ~640px variant returned by the same upload.
+   *
+   * Optional so an older caller compiles unchanged; migration 0116 accepts the
+   * field being absent and leaves the stored map alone.
+   */
+  image_variants?: Record<string, string>;
 }
 
 export async function saveVendorProduct(

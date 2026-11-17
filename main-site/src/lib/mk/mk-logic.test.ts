@@ -18,6 +18,7 @@ import {
   normaliseBdMobile,
   roundedDistanceKm,
   stepErrors,
+  variantFor,
   timelineIndex,
   vendorActionsFor,
   WIZARD_STEPS,
@@ -281,5 +282,45 @@ describe('3-mode delivery fees and schedule helpers', () => {
     expect(formatHhMm('09:30', 'en')).toBe('9:30 AM');
     expect(formatHhMm('21:05', 'en')).toBe('9:05 PM');
     expect(formatHhMm('09:30', 'bn')).toContain('পূর্বাহ্ণ');
+  });
+});
+
+describe('variantFor', () => {
+  const full = 'https://i.ibb.co/aaa111/full.jpg';
+  const medium = 'https://i.ibb.co/bbb222/medium.jpg';
+  const images = [full, 'https://i.ibb.co/ccc333/second.jpg'];
+
+  it('returns the recorded lighter copy', () => {
+    expect(variantFor(images, { [full]: medium }, full)).toBe(medium);
+  });
+
+  it('resolves by url, not by position', () => {
+    // The catalogue lets a vendor reorder pictures, so the map cannot be indexed
+    // by array position; a second picture's variant must survive a reorder.
+    const second = images[1]!;
+    const variants = { [second]: 'https://i.ibb.co/ddd444/second-medium.jpg' };
+    expect(variantFor([...images].reverse(), variants, second)).toBe(
+      'https://i.ibb.co/ddd444/second-medium.jpg',
+    );
+  });
+
+  it('returns empty when there is nothing usable to return', () => {
+    expect(variantFor(images, undefined, full)).toBe('');
+    expect(variantFor(images, null, full)).toBe('');
+    expect(variantFor(images, {}, full)).toBe('');
+    // A row written before 0116 has no map at all; the page must still render.
+    expect(variantFor([], {}, full)).toBe('');
+  });
+
+  it('ignores a key that is not one of the images on this product', () => {
+    const stale = { ['https://i.ibb.co/zzz999/removed.jpg']: medium };
+    expect(variantFor(images, stale, full)).toBe('');
+  });
+
+  it('refuses a variant that is not https, or that is the original', () => {
+    expect(variantFor(images, { [full]: 'http://i.ibb.co/bbb222/medium.jpg' }, full)).toBe('');
+    // Identical values would make the srcset advertise the same file twice.
+    expect(variantFor(images, { [full]: full }, full)).toBe('');
+    expect(variantFor(images, { [full]: '' }, full)).toBe('');
   });
 });

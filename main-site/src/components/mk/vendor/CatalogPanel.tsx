@@ -13,7 +13,7 @@ import {
   TextareaField,
 } from '@/design-system';
 import { useCatalogMutations, useVendorCatalog } from '@/hooks/use-mk';
-import { formatTaka, isHttpsUrl, type Language } from '@/lib/mk/mk-logic';
+import { formatTaka, isHttpsUrl, variantFor, type Language } from '@/lib/mk/mk-logic';
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import type { ProductPayload } from '@/lib/mk/mk-repository';
 import type { MkCatalogProduct } from '@/lib/mk/mk-types';
@@ -66,6 +66,10 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
         status: product.status,
         category_id: product.category_id,
         images: product.images,
+        // Carried through the edit. Without this, saving any change to an existing
+        // product would send an empty map and erase the lighter copies 0116 exists
+        // to keep — the shop would get slower every time a name was corrected.
+        image_variants: { ...(product.image_variants ?? {}) },
       },
       priceText: String(product.price_poisha / 100),
     });
@@ -89,16 +93,25 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
     try {
       const { uploadMedia } = await import('@/lib/storage/upload');
       const added: string[] = [];
+      const variants: Record<string, string> = { ...(editing.draft.image_variants ?? {}) };
       for (const file of Array.from(files)) {
         const result = await uploadMedia(file, { purpose: 'product-image' });
         added.push(result.url);
+        // The upload already produced a ~640px copy; discarding it here is what
+        // made every catalogue thumbnail download the full-size original.
+        if (result.thumbUrl.length > 0 && result.thumbUrl !== result.url) {
+          variants[result.url] = result.thumbUrl;
+        }
+      }
+      const images = [...new Set([...editing.draft.images, ...added])].slice(0, 8);
+      // Drop variants for pictures that the slice just removed, so the stored map
+      // cannot grow past the images it describes.
+      for (const url of Object.keys(variants)) {
+        if (!images.includes(url)) delete variants[url];
       }
       setEditing({
         ...editing,
-        draft: {
-          ...editing.draft,
-          images: [...new Set([...editing.draft.images, ...added])].slice(0, 8),
-        },
+        draft: { ...editing.draft, images, image_variants: variants },
       });
     } catch {
       toast.error(copy.errorGeneric);
@@ -196,10 +209,11 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
           >
             <div className="relative aspect-[4/3] bg-surface-2">
               {product.images[0] ? (
-                <img
+                <MediaImage
                   src={product.images[0]}
+                  variantSrc={variantFor(product.images, product.image_variants, product.images[0])}
                   alt=""
-                  loading="lazy"
+                  slotWidth={400}
                   className="h-full w-full object-cover transition group-hover:scale-105"
                 />
               ) : (
@@ -367,6 +381,11 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
                           draft: {
                             ...editing.draft,
                             images: editing.draft.images.filter((u) => u !== url),
+                            image_variants: Object.fromEntries(
+                              Object.entries(editing.draft.image_variants ?? {}).filter(
+                                ([key]) => key !== url,
+                              ),
+                            ),
                           },
                         })
                       }

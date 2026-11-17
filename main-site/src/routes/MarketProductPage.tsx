@@ -11,7 +11,7 @@ import { QuantityStepper } from '@/components/mk/customer/QuantityStepper';
 import { Button, EmptyState, PageSkeleton } from '@/design-system';
 import { useMyCart, useProductDetail, useSetCartQty } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { formatTaka, type Language } from '@/lib/mk/mk-logic';
+import { formatTaka, variantFor, type Language } from '@/lib/mk/mk-logic';
 
 export default function MarketProductPage() {
   const { id = '' } = useParams();
@@ -117,6 +117,7 @@ export default function MarketProductPage() {
               >
                 <MediaImage
                   src={images[active] ?? ''}
+                  variantSrc={variantFor(images, data.image_variants, images[active] ?? '')}
                   alt={data.name}
                   slotWidth={640}
                   priority={active === 0}
@@ -144,6 +145,7 @@ export default function MarketProductPage() {
                 >
                   <MediaImage
                     src={url}
+                    variantSrc={variantFor(images, data.image_variants, url)}
                     alt=""
                     slotWidth={96}
                     className="h-full w-full object-cover"
