@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ArrowLeft, Check, ImageOff, ShoppingBag, Star, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,7 +127,12 @@ export default function MarketProductPage() {
                   onClick={() => setActive(i)}
                   className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${active === i ? 'border-green-700' : 'border-transparent'}`}
                 >
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <MediaImage
+                    src={url}
+                    alt=""
+                    slotWidth={96}
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>

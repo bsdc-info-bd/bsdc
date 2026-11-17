@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Clock, ArrowRight, MapPin, ShoppingBag, Star, Store } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -123,7 +124,12 @@ export default function MarketShopPage() {
         <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:gap-5">
           <div className="-mt-14 h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-lg">
             {data.vendor.logo_url ? (
-              <img src={data.vendor.logo_url} alt="" className="h-full w-full object-cover" />
+              <MediaImage
+                src={data.vendor.logo_url}
+                alt=""
+                slotWidth={96}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <Store className="m-6 text-muted" aria-hidden />
             )}

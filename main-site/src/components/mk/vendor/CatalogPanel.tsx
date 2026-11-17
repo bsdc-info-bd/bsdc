@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ImagePlus, Pencil, Plus, Tag, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -350,7 +351,12 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
                     key={url}
                     className="relative h-16 w-16 overflow-hidden rounded-lg border border-border"
                   >
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <MediaImage
+                      src={url}
+                      alt=""
+                      slotWidth={64}
+                      className="h-full w-full object-cover"
+                    />
                     <button
                       type="button"
                       aria-label={copy.cancel}

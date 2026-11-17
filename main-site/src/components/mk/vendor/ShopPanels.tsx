@@ -1,4 +1,5 @@
 import { CreditCard, ImageUp, Save, ShieldCheck, Store } from 'lucide-react';
+import { MediaImage } from '@/components/media/MediaImage';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, Badge, Button, Card, TextField, TextareaField } from '@/design-system';
@@ -72,7 +73,9 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
 
       <div className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
         <div className="relative h-40 bg-gradient-to-br from-green-700 to-green-500 sm:h-52">
-          {cover ? <img src={cover} alt="" className="h-full w-full object-cover" /> : null}
+          {cover ? (
+            <MediaImage src={cover} alt="" slotWidth={960} className="h-full w-full object-cover" />
+          ) : null}
           <label className="absolute right-3 top-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70">
             <ImageUp size={14} aria-hidden /> {copy.coverUrl}
             <input
@@ -89,7 +92,7 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
         <div className="flex items-end gap-4 px-5 pb-5">
           <div className="-mt-12 relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
             {logo ? (
-              <img src={logo} alt="" className="h-full w-full object-cover" />
+              <MediaImage src={logo} alt="" slotWidth={96} className="h-full w-full object-cover" />
             ) : (
               <Store className="m-6 text-muted" aria-hidden />
             )}

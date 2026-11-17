@@ -1,4 +1,5 @@
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ArrowRight, LocateFixed, MapPin, Search, Star, Store } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -264,7 +265,12 @@ function ShopCard({
           <div className="flex items-end gap-3">
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
               {shop.logo_url ? (
-                <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+                <MediaImage
+                  src={shop.logo_url}
+                  alt=""
+                  slotWidth={64}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <Store className="m-4 text-muted" aria-hidden />
               )}
