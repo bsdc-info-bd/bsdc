@@ -225,8 +225,6 @@ data class GigProposalDto(
         )
 }
 
-
-
 @Serializable
 data class ProjectMediaAssetDto(
     val url: String = "",

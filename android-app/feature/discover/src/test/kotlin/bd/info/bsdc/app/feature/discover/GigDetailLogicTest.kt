@@ -127,11 +127,30 @@ class GigDetailLogicTest {
         assertFalse(GigDetailLogic.isOpenProposal("withdrawn"))
     }
 
+    private fun proposal(
+        id: String,
+        freelancerUid: String,
+        bidAmount: Int,
+        status: String,
+        createdAt: String,
+    ) = GigProposalDto(
+        id = id,
+        gigId = "g",
+        freelancerUid = freelancerUid,
+        pitch = "pitch",
+        bidAmount = bidAmount,
+        deliveryDays = 5,
+        status = status,
+        createdAt = createdAt,
+    )
+
     @Test
     fun sortProposalsForClientPutsLiveBidsFirstThenNewest() {
-        val live = GigProposalDto("a", "g", "u1", "pitch", 5000, 5, "submitted", "2026-11-01T00:00:00Z")
-        val hired = GigProposalDto("b", "g", "u2", "pitch", 9000, 5, "hired", "2026-11-15T00:00:00Z")
-        val newer = GigProposalDto("c", "g", "u3", "pitch", 4000, 5, "shortlisted", "2026-11-10T00:00:00Z")
+        // Named arguments: the flat freelancer fields were inserted into this DTO, so a
+        // positional call silently shifted `pitch` into `username` and stopped compiling.
+        val live = proposal("a", "u1", 5000, "submitted", "2026-11-01T00:00:00Z")
+        val hired = proposal("b", "u2", 9000, "hired", "2026-11-15T00:00:00Z")
+        val newer = proposal("c", "u3", 4000, "shortlisted", "2026-11-10T00:00:00Z")
         val sorted = GigDetailLogic.sortProposalsForClient(listOf(hired, live, newer))
         assertEquals(listOf("c", "a", "b"), sorted.map { it.id })
     }

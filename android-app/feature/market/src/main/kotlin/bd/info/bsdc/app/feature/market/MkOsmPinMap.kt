@@ -83,7 +83,7 @@ fun MkOsmPinMap(
                     // `host ==` test dropped those requests and left the canvas blank white.
                     override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                         val uri = request?.url ?: return null
-                        if (!isOsmTileRequest(uri.scheme, uri.host)) return null
+                        if (!MkLogic.isOsmTileRequest(uri.scheme, uri.host)) return null
                         return fetchTile(uri.toString())
                     }
 
@@ -176,21 +176,7 @@ private class PinBridge(private val onChanged: (Double, Double) -> Unit) {
     }
 }
 
-private const val OSM_TILE_HOST = "tile.openstreetmap.org"
 private const val TILE_USER_AGENT = "BSDC-Android/1.0 (+https://www.bsdc.info.bd)"
-
-/**
- * Whether a request is for an OpenStreetMap raster tile.
- *
- * The page itself asks for [OSM_TILE_HOST], but OSM serves those from the `a.`/`b.`/`c.`
- * shards and redirects there, so the bare host and any `*.tile.openstreetmap.org`
- * subdomain both have to be recognised. Anything else is left to the WebView.
- */
-internal fun isOsmTileRequest(scheme: String?, host: String?): Boolean {
-    if (!scheme.equals("https", ignoreCase = true)) return false
-    val clean = host?.trim()?.lowercase() ?: return false
-    return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
-}
 
 /** Fetches one OSM tile with the app's identity. Runs on the WebView's background thread. Null means the tile is skipped. */
 private fun fetchTile(url: String): WebResourceResponse? = runCatching {

@@ -417,4 +417,25 @@ object MkLogic {
             if (c in '0'..'9') append('০' + (c - '0')) else append(c)
         }
     }
+
+    /** OpenStreetMap's canonical tile host. The map page requests this one. */
+    const val OSM_TILE_HOST: String = "tile.openstreetmap.org"
+
+    /**
+     * Whether a request is for an OpenStreetMap raster tile.
+     *
+     * The page asks for [OSM_TILE_HOST], but OSM answers by redirecting to its `a.`/`b.`/`c.`
+     * shards, so the bare host and any `*.tile.openstreetmap.org` subdomain both have to be
+     * recognised. A strict `host ==` test dropped every sharded tile and left the Android map
+     * a blank white canvas while the web map loaded fine.
+     *
+     * Lives here, beside the other pure rules, so it can be unit tested: `MkOsmPinMap.kt`
+     * imports `android.webkit.WebView`, and a JVM unit test that touched a declaration in that
+     * file would drag the Android stubs in with it.
+     */
+    internal fun isOsmTileRequest(scheme: String?, host: String?): Boolean {
+        if (!scheme.equals("https", ignoreCase = true)) return false
+        val clean = host?.trim()?.lowercase() ?: return false
+        return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
+    }
 }

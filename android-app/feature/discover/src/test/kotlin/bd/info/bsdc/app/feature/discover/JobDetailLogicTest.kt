@@ -127,11 +127,30 @@ class JobDetailLogicTest {
         assertTrue(JobDetailLogic.employerActionsFor("withdrawn").isEmpty())
     }
 
+    private fun application(
+        id: String,
+        applicantUid: String,
+        status: String,
+        createdAt: String,
+    ) = JobApplicationDto(
+        id = id,
+        jobId = "j",
+        applicantUid = applicantUid,
+        coverLetter = "",
+        resumeUrl = "",
+        status = status,
+        decidedAt = null,
+        createdAt = createdAt,
+        applicant = null,
+    )
+
     @Test
     fun sortApplicationsForEmployerPutsUndecidedFirstThenNewest() {
-        val decided = JobApplicationDto("a", "j", "u1", "", "", "hired", null, "2026-11-15T00:00:00Z", null)
-        val older = JobApplicationDto("b", "j", "u2", "", "", "submitted", null, "2026-11-01T00:00:00Z", null)
-        val newer = JobApplicationDto("c", "j", "u3", "", "", "reviewing", null, "2026-11-10T00:00:00Z", null)
+        // Named arguments: the flat applicant fields were inserted into this DTO, so a
+        // positional call shifted every later argument and stopped compiling.
+        val decided = application("a", "u1", "hired", "2026-11-15T00:00:00Z")
+        val older = application("b", "u2", "submitted", "2026-11-01T00:00:00Z")
+        val newer = application("c", "u3", "reviewing", "2026-11-10T00:00:00Z")
         val out = JobDetailLogic.sortApplicationsForEmployer(listOf(decided, older, newer))
         assertEquals(listOf("c", "b", "a"), out.map { it.id })
     }
