@@ -343,9 +343,25 @@ jobs:
           # the key sits correctly in Cloudflare. 401 + a JSON errorKey is the
           # only correct answer, and it is the only way to tell the two apart
           # from outside.
-          UPLOAD_CODE=$(curl -sS -o /tmp/bsdc-upload-check.json -w "%{http_code}" \
-            -X POST -H "content-type: application/json" --data '{}' \
-            "$DEPLOYMENT_URL/api/media/upload" || echo "000")
+          #
+          # Retried while the answer is a 404/5xx, because a brand-new deployment
+          # serves its static assets before its Functions are active at the edge.
+          # An unretried POST caught that window and failed the deploy with
+          # "Upload endpoint missing" while the endpoint was in fact deploying —
+          # a red build with nothing wrong in the code. The retry only rides out
+          # propagation: a genuinely missing endpoint still answers 404 after it.
+          UPLOAD_CODE=000
+          for attempt in 1 2 3 4 5; do
+            UPLOAD_CODE=$(curl -sS -o /tmp/bsdc-upload-check.json -w "%{http_code}" \
+              -X POST -H "content-type: application/json" --data '{}' \
+              "$DEPLOYMENT_URL/api/media/upload" || echo "000")
+            case "$UPLOAD_CODE" in
+              404|000|5??) ;;
+              *) break ;;
+            esac
+            echo "Attempt $attempt: /api/media/upload answered HTTP $UPLOAD_CODE; waiting for the Functions to become active."
+            sleep $((attempt * 5))
+          done
           if [ "$UPLOAD_CODE" != "401" ]; then
             echo "::error title=Upload endpoint missing::POST $DEPLOYMENT_URL/api/media/upload answered HTTP $UPLOAD_CODE instead of 401. The Pages Functions were not deployed with this site; uploads cannot work."
             cat /tmp/bsdc-upload-check.json || true
