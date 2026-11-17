@@ -31,7 +31,6 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Explore
-import androidx.compose.material.icons.rounded.HandCoins
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Mic
@@ -169,6 +168,26 @@ fun DiscoverHubScreen(
     var projectSort by rememberSaveable { mutableStateOf("popular") }
     var projectTech by rememberSaveable { mutableStateOf<String?>(null) }
     val viewerSkillsSafe = remember(viewerSkills) { DiscoverSearchEngine.normaliseSkills(viewerSkills) }
+
+    /**
+     * Derived on every recomposition rather than memoised inside the list builder: a
+     * `LazyListScope` lambda is not composable, so `remember` cannot be called there. Both are
+     * a few hundred string comparisons at most, far cheaper than the bug it would hide.
+     */
+    val techFacets: List<String> = projects
+        .flatMap { it.tech }
+        .groupingBy { it.trim().lowercase() }
+        .eachCount()
+        .filter { it.value >= 1 }
+        .entries
+        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+        .take(10)
+        .map { it.key }
+
+    val visibleProjects: List<ProjectDto> = projectTech?.let { tech ->
+        projects.filter { project -> project.tech.any { item -> item.trim().lowercase() == tech } }
+    } ?: projects
+
 
     // Interactive modals: Job apply, Gig proposal, Course outline & quiz
     var applyingJob by remember { mutableStateOf<JobBoardDto?>(null) }
@@ -538,7 +557,7 @@ fun DiscoverHubScreen(
                                         Icon(
                                             imageVector = when (saved.kind) {
                                                 "job" -> Icons.Rounded.Work
-                                                "gig" -> Icons.Rounded.HandCoins
+                                                "gig" -> Icons.Rounded.Work
                                                 "project" -> Icons.Rounded.Code
                                                 else -> Icons.Rounded.Event
                                             },
@@ -999,7 +1018,7 @@ fun DiscoverHubScreen(
                                         listBusy = false
                                     }
                                 },
-                                leadingIcon = Icons.Rounded.HandCoins,
+                                leadingIcon = Icons.Rounded.Work,
                             )
                         }
                     }
@@ -1011,7 +1030,7 @@ fun DiscoverHubScreen(
                     }
                     item {
                         BsdcEmptyState(
-                            icon = Icons.Rounded.HandCoins,
+                            icon = Icons.Rounded.Work,
                             title = if (bn) "কোনো ফ্রিল্যান্স গিগ নেই" else "No open freelance gigs",
                             subtitle = if (bn) {
                                 "কনট্রাক্ট ও ফ্রিল্যান্স কাজের প্রস্তাব দিন।"
@@ -1167,16 +1186,6 @@ fun DiscoverHubScreen(
                     }
                 }
 
-                val techFacets = remember(projects) {
-                    projects.flatMap { it.tech }
-                        .groupingBy { it.trim().lowercase() }
-                        .eachCount()
-                        .entries
-                        .filter { it.value >= 1 }
-                        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
-                        .take(10)
-                        .map { it.key }
-                }
                 if (techFacets.isNotEmpty()) {
                     item {
                         FlowRow(
@@ -1196,15 +1205,6 @@ fun DiscoverHubScreen(
                                 )
                             }
                         }
-                    }
-                }
-
-                val visibleProjects = remember(projects, projectTech) {
-                    val tech = projectTech
-                    if (tech == null) {
-                        projects
-                    } else {
-                        projects.filter { project -> project.tech.any { it.trim().lowercase() == tech } }
                     }
                 }
 

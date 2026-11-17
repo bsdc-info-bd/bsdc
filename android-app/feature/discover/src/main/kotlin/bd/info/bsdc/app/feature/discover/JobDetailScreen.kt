@@ -23,8 +23,8 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
-import androidx.compose.material.icons.rounded.People
-import androidx.compose.material.icons.rounded.TrendingUp
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.AlertDialog
@@ -378,7 +378,7 @@ fun JobDetailScreen(
                                             current.salaryPeriod,
                                             bn,
                                         ),
-                                        icon = Icons.Rounded.TrendingUp,
+                                        icon = Icons.Rounded.Star,
                                         tone = BsdcTone.OK,
                                     )
                                     val yearly = JobDetailLogic.yearlyEquivalent(

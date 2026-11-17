@@ -26,12 +26,11 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.HandCoins
-import androidx.compose.material.icons.rounded.HourglassEmpty
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -322,7 +321,7 @@ fun GigDetailScreen(
         if (failed || current == null) {
             Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
                 BsdcEmptyState(
-                    icon = Icons.Rounded.HandCoins,
+                    icon = Icons.Rounded.Work,
                     title = if (bn) "গিগটি পাওয়া যায়নি" else "This gig is not available",
                     subtitle = if (bn) {
                         "লিংকটি ভুল হতে পারে, অথবা গিগটি সরিয়ে নেওয়া হয়েছে।"
@@ -365,7 +364,7 @@ fun GigDetailScreen(
                         title = current.title,
                         subtitle = budgetLong,
                         eyebrow = if (bn) "ফ্রিল্যান্স সুযোগ" else "Freelance opportunity",
-                        icon = Icons.Rounded.HandCoins,
+                        icon = Icons.Rounded.Work,
                         stats = buildList {
                             add((if (bn) "প্রস্তাব" else "Proposals") to BanglaDigitFormatter.formatCount(current.proposalsCount.toLong(), language))
                             val posted = GigDetailLogic.postedAgo(current.publishedAt ?: current.createdAt, System.currentTimeMillis(), bn)
@@ -440,13 +439,13 @@ fun GigDetailScreen(
                         ) {
                             BsdcInfoPill(
                                 text = budgetLong,
-                                icon = Icons.Rounded.HandCoins,
+                                icon = Icons.Rounded.Work,
                                 tone = BsdcTone.OK,
                             )
                             current.durationDays?.let { window ->
                                 BsdcInfoPill(
                                     text = if (bn) "$window দিনে ডেলিভারি" else "$window-day delivery",
-                                    icon = Icons.Rounded.HourglassEmpty,
+                                    icon = Icons.Rounded.Schedule,
                                     tone = BsdcTone.NEUTRAL,
                                 )
                             }
@@ -582,7 +581,7 @@ fun GigDetailScreen(
                                     val icon = when (next) {
                                         "open" -> Icons.Rounded.PlayArrow
                                         "paused" -> Icons.Rounded.Pause
-                                        else -> Icons.Rounded.Stop
+                                        else -> Icons.Rounded.Block
                                     }
                                     BsdcButton(
                                         label = GigDetailLogic.gigStatusLabel(next, bn),
@@ -613,12 +612,12 @@ fun GigDetailScreen(
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 BsdcInfoPill(
                                     text = DiscoverSearchEngine.formatBudgetShort(mine.bidAmount, mine.bidAmount, current.currency, bn),
-                                    icon = Icons.Rounded.HandCoins,
+                                    icon = Icons.Rounded.Work,
                                     tone = BsdcTone.OK,
                                 )
                                 BsdcInfoPill(
                                     text = if (bn) "${mine.deliveryDays} দিন" else "${mine.deliveryDays} days",
-                                    icon = Icons.Rounded.HourglassEmpty,
+                                    icon = Icons.Rounded.Schedule,
                                 )
                             }
                             if (DiscoverSearchEngine.proposalAction(mine.status) == "withdraw") {

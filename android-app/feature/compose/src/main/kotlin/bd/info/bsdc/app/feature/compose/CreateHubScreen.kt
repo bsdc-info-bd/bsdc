@@ -25,8 +25,7 @@ import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.HandCoins
-import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material.icons.rounded.Publish
 import androidx.compose.material3.FilterChip
@@ -130,7 +129,7 @@ fun CreateHubScreen(
                         } else {
                             "Writing, code snippets, questions, polls and photos — one composer."
                         },
-                        icon = Icons.Rounded.Image,
+                        icon = Icons.Rounded.PhotoLibrary,
                         onClick = {
                             mode = CreateHubMode.POST
                             showPicker = false
@@ -178,7 +177,7 @@ fun CreateHubScreen(
                         } else {
                             "Scope one piece of work and freelancers send proposals."
                         },
-                        icon = Icons.Rounded.HandCoins,
+                        icon = Icons.Rounded.Work,
                         tone = BsdcTone.OK,
                         onClick = {
                             mode = CreateHubMode.GIG

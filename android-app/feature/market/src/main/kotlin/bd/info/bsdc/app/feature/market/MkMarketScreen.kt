@@ -23,7 +23,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.FilterAlt
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
@@ -773,7 +773,7 @@ fun MkVendorPageScreen(
                         compareMode = !compareMode
                         if (!compareMode) compareIds.clear()
                     },
-                    leadingIcon = Icons.Rounded.FilterAlt,
+                    leadingIcon = Icons.Rounded.Tune,
                     countLabel = if (compareIds.isNotEmpty()) compareIds.size.toString() else null,
                 )
                 Spacer(Modifier.weight(1f))

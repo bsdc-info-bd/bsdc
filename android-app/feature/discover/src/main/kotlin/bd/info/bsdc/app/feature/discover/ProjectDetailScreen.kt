@@ -151,6 +151,24 @@ fun ProjectDetailScreen(
 
     val current = project
 
+    /**
+     * The project's own screenshots, in the order the owner arranged them. Resolved here
+     * rather than inside the list builder, because `remember` is not legal in a
+     * `LazyListScope` lambda.
+     */
+    val shots = remember(current?.projectMedia) {
+        ProjectDetailLogic.galleryUrls(
+            current?.projectMedia?.map { join ->
+                ProjectGalleryItem(
+                    url = join.mediaAssets?.url.orEmpty(),
+                    thumbUrl = join.mediaAssets?.thumbUrl.orEmpty(),
+                    altText = join.altText,
+                    position = join.position,
+                )
+            }.orEmpty(),
+        )
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -312,19 +330,6 @@ fun ProjectDetailScreen(
                             }
                         }
 
-                        // The project's own screenshots, in the order the owner arranged them.
-                        val shots = remember(current.projectMedia) {
-                            ProjectDetailLogic.galleryUrls(
-                                current.projectMedia?.map { join ->
-                                    ProjectGalleryItem(
-                                        url = join.mediaAssets?.url.orEmpty(),
-                                        thumbUrl = join.mediaAssets?.thumbUrl.orEmpty(),
-                                        altText = join.altText,
-                                        position = join.position,
-                                    )
-                                }.orEmpty(),
-                            )
-                        }
                         if (shots.isNotEmpty()) {
                             item {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -116,11 +116,14 @@ class DiscoverRepository(
             database.savedOpportunityDao().observeKind(kind)
         }
 
-    /** Whether this exact opportunity is already on the shelf. */
-    suspend fun isOpportunitySaved(kind: String, remoteId: String): Boolean =
+    /**
+     * Whether this exact opportunity is already on the shelf. A `Result` rather than a plain
+     * `Boolean` so a caller can tell "not saved" apart from "the lookup failed", and so the
+     * three detail screens can drive a bookmark from one `isSuccess`/`getOrDefault` path.
+     */
+    suspend fun isOpportunitySaved(kind: String, remoteId: String): Result<Boolean> =
         withContext(Dispatchers.IO) {
             runCatching { database.savedOpportunityDao().contains(savedKey(kind, remoteId)) }
-                .getOrDefault(false)
         }
 
     /**
