@@ -75,6 +75,7 @@ export const en = {
     learn: 'Learn',
     projects: 'Projects',
     guidelines: 'Guidelines',
+    privacy: 'Privacy',
     contact: 'Contact',
     create: 'Create',
   },
@@ -220,6 +221,93 @@ export const en = {
     appealTitle: 'Appeals',
     appealBody:
       'If you believe an action was wrong, submit an appeal from the notification you received or write to the team. Appeals are reviewed by a different staff member than the one who acted.',
+  },
+  privacy: {
+    metaTitle: 'Privacy Policy — BSDC',
+    metaDescription:
+      'What BSDC stores, why it stores it, who can see it, and how to have it removed. Written from the data model, not from a template.',
+    heading: 'Privacy policy',
+    intro:
+      'This policy covers the BSDC website and the BSDC Android app. It describes the personal data the platform actually holds, which is a short list because the platform is built that way: there is no analytics tag, no advertising pixel and no third-party session recorder on any page.',
+    updated: 'Last updated 16 November 2026.',
+    sections: {
+      whatWeCollect: {
+        title: 'What we collect',
+        body: 'We collect only what a feature needs in order to work. If you never use a feature, the data behind it is never created.',
+        items: [
+          'Account: your name, username, email address and profile photo. A phone number is stored only if you add one, and it is not shown publicly by default.',
+          'Contact and delivery: addresses you save, and the address attached to an order. A vendor sees the address of an order you place with them, and nothing else.',
+          'Content you publish: posts, comments, messages, messages you pin or star, photos you upload, gigs you post, proposals you send and job applications you submit.',
+          'Marketplace: your orders, order items and order status history, plus the running credit ledger for a vendor account.',
+          'Payments: a record that a payment request was made and whether it was approved or rejected, together with the reference you send us. We do not store card numbers, and no card details ever reach our servers.',
+          'Advertising: ad credit purchases, and the reason recorded when a request is rejected, so the decision can be explained to you.',
+          'Devices: a push notification token for each device you enable notifications on, and the language you choose.',
+        ],
+      },
+      whyWeHoldIt: {
+        title: 'Why we hold it',
+        body: 'Each item above exists to make one thing work: signing you in, showing your order to the vendor fulfilling it, delivering a notification, or keeping a payment auditable. We do not build advertising profiles, we do not infer sensitive characteristics, and we do not sell or rent personal data to anyone.',
+      },
+      whoSeesIt: {
+        title: 'Who can see it',
+        body: 'Most of what you store is visible only to you. The rest is visible to the specific people a feature needs to reach.',
+        items: [
+          'Your public profile: name, username, photo and the posts you publish. Your email address and phone number are not part of it.',
+          'A vendor sees the items, delivery address and contact details of an order you place with them.',
+          'An employer sees the application you submit to their job, including your cover letter and any resume link you attach.',
+          'A client sees the proposals submitted to their own gig, including your bid and pitch.',
+          'Moderators and staff see reported content and the accounts involved, through a console that records who took which action. They do not browse private messages as a matter of course.',
+          'Our infrastructure providers process data on our behalf: Supabase for the database and storage, Firebase for sign-in and push delivery. They are bound to use it only to run those services.',
+        ],
+      },
+      payments: {
+        title: 'Payments and bKash',
+        body: 'Advertising credit and marketplace credit are paid by bKash. You send the money through bKash yourself and submit the transaction reference to us; a staff member checks that reference against the bKash statement and approves or rejects the request. Rejection always carries a reason, and we message it to you. We store the reference and the decision, not your bKash PIN, your bKash password or any bank credential. We will never ask for those, in the app or by message, and a message asking for them is not from us.',
+      },
+      messages: {
+        title: 'Private messages',
+        body: 'Direct messages are stored so they can be delivered, and are readable by the people in the conversation. They are not end-to-end encrypted, so we do not claim that they are. Staff read a message only when it is reported, when it is required to investigate fraud or a legal order, and every such access is tied to a named account in an audit log.',
+      },
+      location: {
+        title: 'Location',
+        body: 'A map is shown for a delivery address that you or a customer typed or picked. The Android app asks for location permission only at the moment you tap the button that uses it, and you can search for an address instead. The app does not track your location in the background, and it does not build a history of where you have been.',
+      },
+      photos: {
+        title: 'Photos',
+        body: 'Photos you upload are resized and stripped of their embedded metadata before they are stored, so a picture of your desk does not carry the coordinates of your desk. Uploaded photos are served from our storage, and a photo you delete is removed from it rather than merely hidden.',
+      },
+      cookies: {
+        title: 'Cookies and local storage',
+        body: 'We set no advertising or analytics cookies. The site uses your browser local storage for four things: the language you chose, a draft of a post you have not sent yet, a rate limit that stops a form being submitted twice, and a single anonymous viewer token used to count an advertisement view once. Sign-in is a Firebase session rather than a cookie we control. Clearing your browser storage signs you out and resets those local values; nothing on the server is affected.',
+      },
+      retention: {
+        title: 'How long we keep it',
+        body: 'Content stays until you delete it. Deleting a post or a message removes it from the service; a copy can remain in an encrypted backup for up to 30 days before the backup rotates away. Order and payment records are kept as long as the marketplace needs them for accounting and dispute resolution. When you delete your account, your profile, posts, messages and device tokens are deleted; order and payment records that belong to the other party to a transaction are retained in a form that no longer identifies you.',
+      },
+      yourRights: {
+        title: 'Your rights',
+        body: 'You can exercise these from the app or by writing to us, and we do not charge for it.',
+        items: [
+          'See what we hold: your profile, your content and your order history are visible to you in the app.',
+          'Correct it: your name, username, photo, phone number and addresses can be edited at any time.',
+          'Delete it: you can delete individual posts, messages, addresses and photos, or ask us to delete your account.',
+          'Export it: ask for a machine-readable copy of your account data and we will provide it.',
+          'Object or ask a question: write to the contact address below and a person will answer.',
+        ],
+      },
+      children: {
+        title: 'Children',
+        body: 'The platform is not intended for anyone under 13, and an account found to belong to a younger child is closed. If you believe a child has created an account, tell us and we will remove it.',
+      },
+      changes: {
+        title: 'Changes to this policy',
+        body: 'A change that affects what we collect or who can see it is announced in the app before it takes effect. The date at the top of this page always reflects the version in force.',
+      },
+      contact: {
+        title: 'Contact',
+        body: 'Questions about this policy, or a request about your data, go to the support address on our contact page. We answer data requests within 30 days, and we will tell you if a request needs more time and why.',
+      },
+    },
   },
   contact: {
     metaTitle: 'Contact BSDC',

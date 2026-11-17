@@ -12,6 +12,7 @@ export const APP_ROUTES: readonly string[] = [
   '/',
   '/about',
   '/guidelines',
+  '/privacy',
   '/contact',
   '/system-check',
   '/auth/login',

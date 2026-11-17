@@ -12,6 +12,7 @@ import RouteErrorBoundary from '@/routes/RouteErrorBoundary';
 const HomePage = lazy(() => import('@/routes/HomePage'));
 const AboutPage = lazy(() => import('@/routes/AboutPage'));
 const GuidelinesPage = lazy(() => import('@/routes/GuidelinesPage'));
+const PrivacyPage = lazy(() => import('@/routes/PrivacyPage'));
 const ContactPage = lazy(() => import('@/routes/ContactPage'));
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage'));
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
@@ -83,6 +84,7 @@ const router = createBrowserRouter([
       { path: ROUTES.home, element: withSuspense(<HomePage />) },
       { path: ROUTES.about, element: withSuspense(<AboutPage />) },
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
+      { path: ROUTES.privacy, element: withSuspense(<PrivacyPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
       { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 

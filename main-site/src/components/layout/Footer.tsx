@@ -7,6 +7,7 @@ import { ECOSYSTEM_LINKS, ROUTES, SITE } from '@/lib/site';
 const PLATFORM_LINKS = [
   { to: ROUTES.about, labelKey: 'nav.about' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
+  { to: ROUTES.privacy, labelKey: 'nav.privacy' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
 ] as const;
 
