@@ -43,6 +43,7 @@ export const APP_ROUTES: readonly string[] = [
   '/vendor/apply',
   '/vendor/console',
   '/admin/marketplace',
+  '/admin/ads',
   '/marketplace',
   '/marketplace/shop/:slug',
   '/marketplace/product/:id',

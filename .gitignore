@@ -65,3 +65,7 @@ package-lock.json
 
 # Browser smoke evidence
 main-site/.browser-evidence/
+
+# Python bytecode from scripts/sql-schema-check.py
+__pycache__/
+*.pyc

@@ -2955,6 +2955,23 @@ export type Database = {
         Args: { p_job_id: string; p_limit?: number };
         Returns: JobApplicationRow[];
       };
+      // Advertising credits: 1 credit = 1 taka, minimum 500, paid by bKash (0115).
+      request_ad_credits: {
+        Args: { p_credits: number; p_sender_number: string; p_txn_id: string };
+        Returns: Json;
+      };
+      my_ad_credit_requests: {
+        Args: { p_limit?: number };
+        Returns: Json;
+      };
+      ad_credit_queue: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: Json;
+      };
+      decide_ad_credit_request: {
+        Args: { p_purchase_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
+      };
     };
     Enums: {
       bsdc_role: DbRole;

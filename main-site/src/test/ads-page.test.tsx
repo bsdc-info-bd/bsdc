@@ -43,6 +43,19 @@ vi.mock('@/hooks/use-ad-builder', () => ({
     isSending: false,
   }),
 }));
+// The credit wallet owns a query client of its own and has its own suite
+// (src/lib/ads/ad-credits.test.ts). Mocking the module keeps this file about
+// the campaign list, and keeps these tests free of a QueryClientProvider they
+// have no other reason to need.
+vi.mock('@/components/ads/AdCreditsPanel', () => ({
+  AdCreditsPanel: () => null,
+}));
+vi.mock('@/hooks/use-ad-credits', () => ({
+  useAdBikashNumber: () => '01712345678',
+  useAdCreditRequests: () => ({ requests: [], isLoading: false, isError: false }),
+  useRequestAdCredits: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useMyAdCredits: () => ({ credits: 0, isLoading: false }),
+}));
 vi.mock('@/hooks/use-ads', () => ({
   useCampaigns: () => ({
     campaigns: mocks.campaigns,

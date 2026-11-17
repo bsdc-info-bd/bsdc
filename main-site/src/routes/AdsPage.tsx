@@ -18,9 +18,11 @@ import {
   TextField,
   TextareaField,
 } from '@/design-system';
+import { AdCreditsPanel } from '@/components/ads/AdCreditsPanel';
 import { CampaignPaymentPanel } from '@/components/ads/CampaignPaymentPanel';
 import { CreateCampaignForm } from '@/components/ads/CreateCampaignForm';
 import { useAdBuilder } from '@/hooks/use-ad-builder';
+import { useAdBikashNumber } from '@/hooks/use-ad-credits';
 import { useCampaignDetail, useCampaigns } from '@/hooks/use-ads';
 import {
   budgetProgress,
@@ -92,6 +94,7 @@ function Dashboard() {
   const [openId, setOpenId] = useState<string | null>(null);
   const detail = useCampaignDetail(openId);
   const builder = useAdBuilder();
+  const bikashNumber = useAdBikashNumber(true);
   const [building, setBuilding] = useState(false);
   const [payingId, setPayingId] = useState<string | null>(null);
 
@@ -195,6 +198,10 @@ function Dashboard() {
           )}
           hint={t('ads.shownCampaignsHint')}
         />
+      </div>
+
+      <div className="mt-6">
+        <AdCreditsPanel language={language} bikashNumber={bikashNumber} enabled />
       </div>
 
       {campaigns.length === 0 ? (

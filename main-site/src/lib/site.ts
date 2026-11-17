@@ -69,6 +69,7 @@ export const ROUTES = {
   vendorApply: '/vendor/apply',
   vendorConsole: '/vendor/console',
   adminMarketplace: '/admin/marketplace',
+  adminAds: '/admin/ads',
   market: '/marketplace',
   marketCart: '/marketplace/cart',
   marketOrders: '/marketplace/orders',

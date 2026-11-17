@@ -1456,6 +1456,30 @@ check('J-04', 'Docs', 'The audit and the registry are reproducible commands, not
     'node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record',
 }));
 
+check('J-05', 'Data', 'Every migration names only tables, columns and functions that exist', () => {
+  // A migration that references `profiles.verified` (which is derived, not a
+  // column) or calls a helper that was never created fails at runtime inside a
+  // SECURITY DEFINER function — so a member sees an empty list, not an error,
+  // and review cannot see it. scripts/sql-schema-check.py settles it instead.
+  let detail = '';
+  try {
+    detail = sh('python3 scripts/sql-schema-check.py');
+  } catch (error) {
+    detail = String(error.stdout ?? error.message);
+  }
+  const problems = detail
+    .split('\n')
+    .filter((line) => line.startsWith('PROBLEM'))
+    .slice(0, 5);
+  return {
+    ok: problems.length === 0,
+    evidence:
+      problems.length === 0
+        ? detail.split('\n').pop() ?? 'every migration resolves against the schema'
+        : problems.join('; '),
+  };
+});
+
 /* ------------------------------------------------------------------ *
  * Report
  * ------------------------------------------------------------------ */

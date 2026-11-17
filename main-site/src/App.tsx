@@ -38,6 +38,7 @@ const JobPage = lazy(() => import('@/routes/JobPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const GigPage = lazy(() => import('@/routes/GigPage'));
 const GigProposalsPage = lazy(() => import('@/routes/GigProposalsPage'));
+const AdminAdsPage = lazy(() => import('@/routes/AdminAdsPage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
 const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
@@ -140,6 +141,7 @@ const router = createBrowserRouter([
           { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
           { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
           { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
+          { path: ROUTES.adminAds, element: withSuspense(<AdminAdsPage />) },
           { path: ROUTES.marketCart, element: withSuspense(<MarketCartPage />) },
           { path: '/marketplace/checkout/:slug', element: withSuspense(<MarketCheckoutPage />) },
           { path: ROUTES.marketOrders, element: withSuspense(<MarketOrdersPage />) },
