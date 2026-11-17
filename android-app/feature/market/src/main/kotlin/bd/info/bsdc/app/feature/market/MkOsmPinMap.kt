@@ -6,6 +6,7 @@ import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +84,11 @@ fun MkOsmPinMap(
             WebView(context).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
+                // Leaflet sizes its canvas from the layout viewport. Without these the page
+                // is laid out at a fixed width and the map can come up as an empty canvas.
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 // The map is one bundled page loaded from the site origin. Nothing in it navigates,
@@ -214,6 +220,11 @@ fun MkOsmViewMap(
             WebView(ctx).apply {
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = false
+                // Leaflet sizes its canvas from the layout viewport. Without these the page
+                // is laid out at a fixed width and the map can come up as an empty canvas.
+                settings.useWideViewPort = true
+                settings.loadWithOverviewMode = true
+                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 // Nothing in this page navigates: it draws one pin and stops.
@@ -358,16 +369,23 @@ private fun fetchTile(url: String): WebResourceResponse? = runCatching {
     val connection = (URL(url).openConnection() as HttpURLConnection).apply {
         connectTimeout = 8_000
         readTimeout = 8_000
+        // OSM answers with a redirect to a shard host, and following it inline drops the
+        // identifying headers, so the hop is taken by hand in followTileRedirect.
+        instanceFollowRedirects = false
         setRequestProperty("User-Agent", TILE_USER_AGENT)
         setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
         setRequestProperty("Accept", "image/png,image/*;q=0.8")
     }
-    if (connection.responseCode != HttpURLConnection.HTTP_OK) {
+    val resolved = followTileRedirect(connection)
+    if (resolved == null) {
         connection.disconnect()
         null
+    } else if (resolved.responseCode != HttpURLConnection.HTTP_OK) {
+        resolved.disconnect()
+        null
     } else {
-        val bytes = runCatching { connection.inputStream.use { it.readBytes() } }.getOrNull()
-        connection.disconnect()
+        val bytes = runCatching { resolved.inputStream.use { it.readBytes() } }.getOrNull()
+        resolved.disconnect()
         // A zero-byte or oversized body is a broken tile, not a picture: let Leaflet retry it.
         if (bytes == null || bytes.isEmpty() || bytes.size > MAX_TILE_BYTES) {
             null
@@ -391,6 +409,47 @@ private object tileCache {
     fun put(key: String, value: ByteArray) {
         synchronized(entries) { entries[key] = value }
     }
+}
+
+/**
+ * Follows the shard redirect by hand so the identifying headers survive it.
+ *
+ * `tile.openstreetmap.org` answers with a 302 to `a.`/`b.`/`c.tile.openstreetmap.org`. Letting
+ * HttpURLConnection follow it inline sends the next request without the User-Agent and Referer
+ * that OSM requires, and the shard answers 403 — which reads on screen as a blank map. Returns
+ * the connection holding the final response, or null if the chain leaves the tile hosts or loops.
+ */
+private fun followTileRedirect(start: HttpURLConnection): HttpURLConnection? {
+    var current = start
+    var hops = 0
+    while (hops < 4) {
+        val code = runCatching { current.responseCode }.getOrNull()
+        val isRedirect = code == HttpURLConnection.HTTP_MOVED_TEMP ||
+            code == HttpURLConnection.HTTP_MOVED_PERM ||
+            code == 307 || code == 308
+        if (!isRedirect) return current
+        val location = runCatching { current.getHeaderField("Location") }.getOrNull() ?: return null
+        runCatching { current.disconnect() }
+        val next = runCatching {
+            (URL(URL(start.url), location).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 8_000
+                readTimeout = 8_000
+                instanceFollowRedirects = false
+                setRequestProperty("User-Agent", TILE_USER_AGENT)
+                setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
+                setRequestProperty("Accept", "image/png,image/*;q=0.8")
+            }
+        }.getOrNull() ?: return null
+        // A redirect that leaves the tile hosts is not a tile; refusing it keeps this from
+        // becoming a general-purpose fetcher on the app's behalf.
+        if (!MkLogic.isOsmTileRequest(next.url.protocol, next.url.host)) {
+            runCatching { next.disconnect() }
+            return null
+        }
+        current = next
+        hops++
+    }
+    return null
 }
 
 private const val MAX_TILE_BYTES = 512 * 1024
@@ -421,7 +480,8 @@ private fun viewMapPage(
 <style>
 $leafletCss
 
-  html,body,#map{height:100%;margin:0;padding:0;background:#e5e3df;font-family:sans-serif}
+  html,body{height:100%;margin:0;padding:0;background:#e5e3df}
+  #map{position:absolute;inset:0;background:#e5e3df;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>
@@ -448,6 +508,9 @@ $leafletJs
     if (el) { el.style.display = 'flex'; }
   });
   L.marker([$lat, $lng]).addTo(map);
+  // Leaflet measures its container once, at init. A WebView can report a zero-size
+  // viewport on the first pass, and a map that measured zero stays blank forever.
+  setTimeout(function () { map.invalidateSize(); }, 120);
 </script>
 </body>
 </html>
@@ -474,7 +537,8 @@ private fun mapPage(
 <style>
 $leafletCss
 
-  html,body,#map{height:100%;margin:0;padding:0;background:#e5e3df;font-family:sans-serif}
+  html,body{height:100%;margin:0;padding:0;background:#e5e3df}
+  #map{position:absolute;inset:0;background:#e5e3df;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>
@@ -553,6 +617,8 @@ $leafletJs
     BsdcPin.pinChanged(e.latlng.lat, e.latlng.lng);
   });
   if (${if (hasPin) "true" else "false"}) { place($lat, $lng); }
+  // Same reason as the read-only page: re-measure once the WebView has a real viewport.
+  setTimeout(function () { map.invalidateSize(); }, 120);
 </script>
 </body>
 </html>
