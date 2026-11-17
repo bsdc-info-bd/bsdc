@@ -27,6 +27,7 @@ const SECTION_KEYS = [
   'messages',
   'location',
   'photos',
+  'camera',
   'cookies',
   'retention',
   'yourRights',
@@ -60,6 +61,17 @@ describe('privacy policy page', () => {
     for (const key of SECTION_KEYS) {
       expect(bn.privacy.sections[key]?.title, `bn title for ${key}`).toBeTruthy();
       expect(bn.privacy.sections[key]?.body, `bn body for ${key}`).toBeTruthy();
+    }
+  });
+
+  it('covers every permission that touches personal data', () => {
+    // The Android manifest declares camera and microphone alongside location.
+    // A policy that explains location and stays silent about the other two
+    // understates what the app asks for, which is the exact thing a Play data
+    // safety review checks. Each of these must be addressed by name.
+    const policy = JSON.stringify(en.privacy.sections) + JSON.stringify(bn.privacy.sections);
+    for (const permission of ['camera', 'microphone', 'location']) {
+      expect(policy.toLowerCase()).toContain(permission);
     }
   });
 

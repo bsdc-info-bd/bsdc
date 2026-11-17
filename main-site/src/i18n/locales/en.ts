@@ -276,6 +276,10 @@ export const en = {
         title: 'Photos',
         body: 'Photos you upload are resized and stripped of their embedded metadata before they are stored, so a picture of your desk does not carry the coordinates of your desk. Uploaded photos are served from our storage, and a photo you delete is removed from it rather than merely hidden.',
       },
+      camera: {
+        title: 'Camera and microphone',
+        body: 'Two permissions in the Android app are easy to misread from the store listing, so here is exactly what they do. The camera is used to scan a QR code and, when you choose to, to take a photo for a post or a listing; no photo is taken until you press the button, and pictures are stored the same way as any other upload. The microphone is used only while you hold the voice search button, to turn your speech into a search query. No audio is recorded to a file, kept after the search, or sent anywhere except the speech service that performs the transcription.',
+      },
       cookies: {
         title: 'Cookies and local storage',
         body: 'We set no advertising or analytics cookies. The site uses your browser local storage for four things: the language you chose, a draft of a post you have not sent yet, a rate limit that stops a form being submitted twice, and a single anonymous viewer token used to count an advertisement view once. Sign-in is a Firebase session rather than a cookie we control. Clearing your browser storage signs you out and resets those local values; nothing on the server is affected.',

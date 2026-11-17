@@ -26,6 +26,7 @@ const SECTION_KEYS = [
   'messages',
   'location',
   'photos',
+  'camera',
   'cookies',
   'retention',
   'yourRights',
