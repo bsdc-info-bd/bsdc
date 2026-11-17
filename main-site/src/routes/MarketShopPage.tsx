@@ -11,14 +11,9 @@ import { ProductCard } from '@/components/mk/customer/ProductCard';
 import { EmptyState, PageSkeleton } from '@/design-system';
 import { useMyCart, useSetCartQty, useVendorPage } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import {
-  formatHhMm,
-  formatTaka,
-  SHOP_TYPE_EMOJI,
-  type DayKey,
-  type Language,
-} from '@/lib/mk/mk-logic';
+import { formatHhMm, formatTaka, type DayKey, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 
 export default function MarketShopPage() {
   const { slug = '' } = useParams();
@@ -139,8 +134,8 @@ export default function MarketShopPage() {
               {data.vendor.name}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-              <span>
-                {SHOP_TYPE_EMOJI[data.vendor.vendor_type]}{' '}
+              <span className="inline-flex items-center gap-1">
+                <ShopTypeIcon type={data.vendor.vendor_type} size={14} />
                 {copy.typeLabels[data.vendor.vendor_type]}
               </span>
               <span className="inline-flex items-center gap-1">

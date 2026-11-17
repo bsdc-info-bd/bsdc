@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Store,
   UserRound,
+  Check,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useMemo, useState } from 'react';
@@ -290,7 +291,7 @@ export default function MarketCheckoutPage() {
                     )}
                     aria-hidden
                   >
-                    {step.done ? '✓' : index + 1}
+                    {step.done ? <Check size={12} strokeWidth={3} /> : index + 1}
                   </span>
                   <span className={cn('truncate', !step.done && !current && 'text-white/70')}>
                     {step.label}

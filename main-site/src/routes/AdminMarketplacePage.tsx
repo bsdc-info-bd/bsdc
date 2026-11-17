@@ -1,3 +1,4 @@
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { CheckCircle2, Store, XCircle } from 'lucide-react';
 import { useState } from 'react';
@@ -7,7 +8,7 @@ import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import { Badge, Button, Card, EmptyState, PageSkeleton, TextField } from '@/design-system';
 import { usePermissions } from '@/hooks/use-admin';
-import { formatTaka, SHOP_TYPE_EMOJI, type Language } from '@/lib/mk/mk-logic';
+import { formatTaka, type Language } from '@/lib/mk/mk-logic';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import * as repo from '@/lib/mk/mk-repository';
 import type { MkAdminApplication, MkAdminPurchase } from '@/lib/mk/mk-types';
@@ -140,8 +141,9 @@ export default function AdminMarketplacePage() {
               <Card padded className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-semibold">
-                      {SHOP_TYPE_EMOJI[a.vendor_type]} {a.shop_name}
+                    <p className="flex items-center gap-2 truncate text-lg font-semibold">
+                      <ShopTypeIcon type={a.vendor_type} size={18} />
+                      {a.shop_name}
                     </p>
                     <p className="text-sm text-muted">
                       {a.full_name} · {a.mobile}

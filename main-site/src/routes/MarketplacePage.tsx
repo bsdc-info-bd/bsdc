@@ -14,7 +14,6 @@ import {
   formatHhMm,
   formatTaka,
   isBdPoint,
-  SHOP_TYPE_EMOJI,
   SHOP_TYPES,
   type DayKey,
   type Language,
@@ -22,6 +21,7 @@ import {
 } from '@/lib/mk/mk-logic';
 import type { MkListedShop } from '@/lib/mk/mk-types';
 import { ROUTES } from '@/lib/site';
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -148,7 +148,8 @@ export default function MarketplacePage() {
         {SHOP_TYPES.map((t) => (
           <TypeChip
             key={t}
-            label={`${SHOP_TYPE_EMOJI[t]} ${copy.typeLabels[t]}`}
+            label={copy.typeLabels[t]}
+            icon={<ShopTypeIcon type={t} size={14} />}
             selected={type === t}
             onClick={() => setType(t)}
           />
@@ -176,10 +177,12 @@ export default function MarketplacePage() {
 
 function TypeChip({
   label,
+  icon,
   selected,
   onClick,
 }: {
   label: string;
+  icon?: React.ReactNode;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -195,7 +198,10 @@ function TypeChip({
           : 'border-border bg-surface text-text hover:bg-surface-2'
       }`}
     >
-      {label}
+      <span className="inline-flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
     </button>
   );
 }
@@ -257,8 +263,9 @@ function ShopCard({
               {isOpen ? copy.schedule.openNow : nextOpenLabel}
             </span>
           ) : null}
-          <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
-            {SHOP_TYPE_EMOJI[shop.vendor_type]} {copy.typeLabels[shop.vendor_type]}
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+            <ShopTypeIcon type={shop.vendor_type} size={12} />
+            {copy.typeLabels[shop.vendor_type]}
           </span>
         </div>
         <div className="-mt-8 px-4 pb-4">

@@ -1,3 +1,19 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  BookOpen,
+  Croissant,
+  Home,
+  Pencil,
+  Pill,
+  Plug,
+  Scissors,
+  Shirt,
+  ShoppingBasket,
+  Sparkles,
+  Store,
+  UtensilsCrossed,
+} from 'lucide-react';
+
 /**
  * Pure rules for the cash-on-delivery marketplace. Nothing here touches the
  * network or the DOM: the database is the authority, and this module exists so
@@ -420,20 +436,33 @@ export function customerCanReview(status: OrderStatus, alreadyReviewed: boolean)
   return status === 'delivered' && !alreadyReviewed;
 }
 
-/** Maps a shop type to its emoji for cards. Keeps the list and the icons in one place. */
-export const SHOP_TYPE_EMOJI: Record<ShopType, string> = {
-  grocery: '🛒',
-  restaurant: '🍽️',
-  bakery: '🥐',
-  pharmacy: '💊',
-  electronics: '🔌',
-  fashion: '👕',
-  beauty: '💄',
-  stationery: '✏️',
-  home_kitchen: '🏠',
-  books: '📚',
-  handicraft: '🧵',
-  other: '🏪',
+/**
+ * The icon for a shop type.
+ *
+ * These were emoji, which render as one of three different pictures depending on
+ * the member's device, sit on a baseline chosen by the font rather than the layout,
+ * announce themselves as words to a screen reader, and cannot inherit the theme
+ * colour. `pencil` was the worst of them: it is a text-presentation glyph that some
+ * Android builds draw as a bare monochrome outline and others as a colour image.
+ *
+ * A Lucide component is a vector that inherits `currentColor`, lines up with the
+ * text beside it, and is `aria-hidden` by default. Kept as a map of components
+ * rather than a switch so a new shop type is a compile error here, not a blank
+ * square at runtime.
+ */
+export const SHOP_TYPE_ICONS: Record<ShopType, LucideIcon> = {
+  grocery: ShoppingBasket,
+  restaurant: UtensilsCrossed,
+  bakery: Croissant,
+  pharmacy: Pill,
+  electronics: Plug,
+  fashion: Shirt,
+  beauty: Sparkles,
+  stationery: Pencil, // was an emoji with a text-presentation variant
+  home_kitchen: Home,
+  books: BookOpen,
+  handicraft: Scissors,
+  other: Store,
 };
 
 /**

@@ -424,8 +424,13 @@ check('C-04', 'Front end', 'Nothing logs to the console in shipped code', () => 
 });
 
 check('C-05', 'Front end', 'Nothing can force a horizontal scrollbar', () => {
+  // Scoped to the sites the browser ships. The Android tree carries a vendored
+  // leaflet.css whose `width: 1600px` is Leaflet's own Safari tile-container
+  // hack, which runs inside a WebView on a map canvas, not in a page layout — a
+  // horizontal scrollbar cannot reach it, and editing a third-party file to
+  // satisfy a layout rule would be the wrong repair.
   const wide = shLines(
-    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v "@media"`,
+    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=android-app "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v "@media"`,
   );
   const css = ['base.css', 'components.css', 'fabric.css', 'index.css']
     .filter((name) => has(`main-site/src/styles/${name}`))

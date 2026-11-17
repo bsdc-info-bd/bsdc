@@ -14,7 +14,6 @@ import {
   EMPTY_APPLICATION,
   formatTaka,
   normaliseBdMobile,
-  SHOP_TYPE_EMOJI,
   SHOP_TYPES,
   stepErrors,
   WIZARD_STEPS,
@@ -24,6 +23,7 @@ import {
 import { mkCopy } from '@/lib/mk/mk-copy';
 import type { ApplicationSubmission } from '@/lib/mk/mk-repository';
 import { ROUTES } from '@/lib/site';
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 
 const APPLY_PATH = ROUTES.vendorApply;
 
@@ -275,9 +275,7 @@ export default function ShopApplyPage() {
                               : 'border-border bg-surface hover:bg-surface-2'
                           }`}
                         >
-                          <span aria-hidden className="text-lg">
-                            {SHOP_TYPE_EMOJI[type]}
-                          </span>
+                          <ShopTypeIcon type={type} size={18} />
                           <span>{copy.typeLabels[type]}</span>
                         </button>
                       );
