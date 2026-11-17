@@ -79,16 +79,16 @@ class MkSavedStore private constructor(context: Context) {
             buildList {
                 for (index in 0 until array.length()) {
                     val row = array.optJSONObject(index) ?: continue
-                    val id = row.optString("id").orEmpty()
+                    val id = row.optString("id")
                     if (id.isBlank()) continue
                     add(
                         MkSavedProduct(
                             id = id,
-                            name = row.optString("name").orEmpty(),
-                            shopSlug = row.optString("shopSlug").orEmpty(),
-                            shopName = row.optString("shopName").orEmpty(),
+                            name = row.optString("name"),
+                            shopSlug = row.optString("shopSlug"),
+                            shopName = row.optString("shopName"),
                             pricePoisha = row.optLong("pricePoisha"),
-                            imageUrl = row.optString("imageUrl").orEmpty(),
+                            imageUrl = row.optString("imageUrl"),
                             savedAtEpochMs = row.optLong("savedAtEpochMs"),
                         ),
                     )

@@ -107,53 +107,70 @@ public final class AppLinkUriRouter {
         }
         String kind = data.getOrDefault("kind", "").trim();
         String id = data.getOrDefault("id", "").trim();
-        if (!id.isEmpty()) {
-            switch (kind) {
-                case "message":
-                    return routeNativePath("/messages/" + id);
-                case "post":
-                case "comment":
-                case "reply":
-                case "reaction":
-                case "mention":
-                case "bookmark":
-                case "share":
-                case "post_published":
-                case "poll_vote":
-                case "comment_reaction":
-                case "answer_accepted":
-                    return routeNativePath("/p/" + id);
-                case "follow":
-                    return routeNativePath("/@" + id);
-                case "order":
-                case "review":
-                case "payout":
-                    return routeNativePath("/orders");
-                case "certificate":
-                    return routeNativePath("/verify/" + id);
-                case "course":
-                    return routeNativePath("/courses");
-                case "job":
-                case "application_decision":
-                    return routeNativePath("/jobs");
-                case "event":
-                    return routeNativePath("/events");
-                case "gig":
-                case "gig_proposal":
-                case "gig_proposal_decision":
-                    return routeNativePath("/freelance");
-                case "project_star":
-                    return routeNativePath("/projects");
-                case "group_invite":
-                case "mention_group":
-                    return routeNativePath("/groups");
-                case "moderation":
-                    return routeNativePath("/notifications");
-                default:
-                    break;
-            }
+
+        // Kinds whose whole meaning is an id. Without one there is no page to open, and
+        // guessing (the directory, the inbox) would put the member somewhere they did not ask
+        // to be, so these fall through to Ignored rather than a substituted route.
+        switch (kind) {
+            case "message":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no conversation.")
+                    : routeNativePath("/messages/" + id);
+            case "post":
+            case "comment":
+            case "reply":
+            case "reaction":
+            case "mention":
+            case "bookmark":
+            case "share":
+            case "post_published":
+            case "poll_vote":
+            case "comment_reaction":
+            case "answer_accepted":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no post.")
+                    : routeNativePath("/p/" + id);
+            case "follow":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no member.")
+                    : routeNativePath("/@" + id);
+            case "certificate":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no certificate.")
+                    : routeNativePath("/verify/" + id);
+            default:
+                break;
         }
-        return new LinkDestination.Ignored("The notification carried no destination.");
+
+        // Directory kinds: the payload names a section, not a row, so an id is optional. A
+        // proposal or application decision still opens the board it was decided on; the board
+        // then shows the member's own row, which is the same place the website sends them.
+        switch (kind) {
+            case "order":
+            case "review":
+            case "payout":
+                return routeNativePath("/orders");
+            case "course":
+                return routeNativePath("/courses");
+            case "job":
+            case "application_decision":
+                return routeNativePath("/jobs");
+            case "event":
+                return routeNativePath("/events");
+            case "gig":
+            case "gig_proposal":
+            case "gig_proposal_decision":
+                return routeNativePath("/freelance");
+            case "project_star":
+                return routeNativePath("/projects");
+            case "group_invite":
+            case "mention_group":
+                return routeNativePath("/groups");
+            case "moderation":
+                return routeNativePath("/notifications");
+            default:
+                return new LinkDestination.Ignored("The notification carried no destination.");
+        }
     }
 
     public static boolean isImgBbUrl(String rawUrl) {
