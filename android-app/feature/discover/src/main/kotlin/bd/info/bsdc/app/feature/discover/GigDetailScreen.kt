@@ -657,18 +657,21 @@ fun GigDetailScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                             ) {
+                                // `freelancer` resolves the flat queue columns and the older
+                                // embedded `profiles` shape to one card, so a row built from
+                                // gig_proposal_queue() still shows who bid.
                                 BsdcAvatar(
-                                    avatarUrl = proposal.profiles?.avatarUrl,
-                                    displayName = proposal.profiles?.displayName
-                                        ?: proposal.profiles?.username
+                                    avatarUrl = proposal.freelancer.avatarUrl,
+                                    displayName = proposal.freelancer.displayName
+                                        ?: proposal.freelancer.username
                                         ?: (if (bn) "ফ্রিল্যান্সার" else "Freelancer"),
                                     imageLoader = imageLoader,
                                     size = 42.dp,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = proposal.profiles?.displayName
-                                            ?: proposal.profiles?.username
+                                        text = proposal.freelancer.displayName
+                                            ?: proposal.freelancer.username
                                             ?: (if (bn) "ফ্রিল্যান্সার" else "Freelancer"),
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.SemiBold,
@@ -693,7 +696,7 @@ fun GigDetailScreen(
                                 color = BsdcThemeTokens.colors.mutedText,
                             )
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                proposal.profiles?.uid?.takeIf { it.isNotBlank() }?.let { uid ->
+                                proposal.freelancer.uid.takeIf { it.isNotBlank() }?.let { uid ->
                                     BsdcButton(
                                         label = if (bn) "প্রোফাইল" else "Profile",
                                         secondary = true,

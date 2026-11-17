@@ -115,6 +115,11 @@ export function jobPath(slug: string): string {
   return `${ROUTES.jobs}/${encodeURIComponent(slug.trim())}`;
 }
 
+/** The applicant queue for one job: /jobs/<slug>/applications. */
+export function jobApplicationsPath(slug: string): string {
+  return `${jobPath(slug)}/applications`;
+}
+
 /** A freelance gig's own page: /freelance/<slug>. */
 export function gigPath(slug: string): string {
   return `${ROUTES.freelance}/${encodeURIComponent(slug.trim())}`;

@@ -823,10 +823,20 @@ export type GigRow = {
   updated_at: string;
 };
 
+/**
+ * An application, as `job_application_queue()` returns it (0113): the row plus
+ * the applicant's public card. The table has no name or avatar columns — the
+ * queue RPC joins them and derives `verified` from `role`, because `profiles`
+ * has no `verified` column to select.
+ */
 export type JobApplicationRow = {
   id: string;
   job_id: string;
   applicant_uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  verified: boolean;
   cover_letter: string;
   resume_url: string;
   status: DbApplicationStatus;

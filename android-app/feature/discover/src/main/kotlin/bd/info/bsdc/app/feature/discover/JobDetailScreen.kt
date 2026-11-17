@@ -576,18 +576,21 @@ fun JobDetailScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp),
                                         ) {
+                                            // `applicantCard` resolves the flat queue columns and
+                                            // the older embedded shape, so an employer still sees
+                                            // who applied now that the join happens server-side.
                                             BsdcAvatar(
-                                                avatarUrl = application.applicant?.avatarUrl,
-                                                displayName = application.applicant?.displayName
-                                                    ?: application.applicant?.username
+                                                avatarUrl = application.applicantCard.avatarUrl,
+                                                displayName = application.applicantCard.displayName
+                                                    ?: application.applicantCard.username
                                                     ?: (if (bn) "আবেদনকারী" else "Applicant"),
                                                 imageLoader = imageLoader,
                                                 size = 42.dp,
                                             )
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
-                                                    text = application.applicant?.displayName
-                                                        ?: application.applicant?.username
+                                                    text = application.applicantCard.displayName
+                                                        ?: application.applicantCard.username
                                                         ?: (if (bn) "আবেদনকারী" else "Applicant"),
                                                     style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.SemiBold,

@@ -5,6 +5,7 @@ import { toDataError } from '@/lib/supabase/errors';
 import type {
   GigProposalRow,
   GigRow,
+  JobApplicationRow,
   JobBoardRow,
   JobDetailRow,
   PlaygroundSketchRow,
@@ -14,6 +15,7 @@ import type {
   ApplicationStatus,
   Gig,
   GigProposal,
+  JobApplication,
   ProposalStatus,
   JobDetail,
   JobListing,
@@ -72,6 +74,40 @@ export async function applyToJob(
   if (error) throw toDataError(error);
   wakePushDelivery();
   return typeof data === 'string' ? data : '';
+}
+
+/**
+ * Every application on a job the reader posted.
+ *
+ * `job_application_queue()` (migration 0113) joins the applicant's public card
+ * and derives `verified` from `role` server-side, and re-checks that the caller
+ * is the job's poster or staff. Without this call the web could only show a
+ * count: the employer had no way to read, shortlist or hire anyone from a
+ * browser, which is the "job applying system" that was not good enough.
+ */
+export async function fetchJobApplications(jobId: string, limit = 100): Promise<JobApplication[]> {
+  const { data, error } = await getSupabase()
+    .rpc('job_application_queue', { p_job_id: jobId, p_limit: limit })
+    .returns<JobApplicationRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toJobApplication);
+}
+
+function toJobApplication(row: JobApplicationRow): JobApplication {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    applicantUid: row.applicant_uid,
+    displayName: row.display_name,
+    username: row.username,
+    avatarUrl: row.avatar_url.length > 0 ? row.avatar_url : null,
+    verified: row.verified,
+    coverLetter: row.cover_letter,
+    resumeUrl: row.resume_url,
+    status: row.status,
+    decidedAt: row.decided_at,
+    createdAt: row.created_at,
+  };
 }
 
 export async function decideApplication(

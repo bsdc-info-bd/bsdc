@@ -21,7 +21,12 @@ import type {
   ProjectScreenshotDraft,
   ProjectUpdate,
 } from '@/lib/opportunities/opportunity-repository';
-import type { GigProposal, ProposalStatus } from '@/lib/opportunities/opportunity-types';
+import type {
+  ApplicationStatus,
+  GigProposal,
+  JobApplication,
+  ProposalStatus,
+} from '@/lib/opportunities/opportunity-types';
 
 const repository = () => import('@/lib/opportunities/opportunity-repository');
 
@@ -546,5 +551,55 @@ export function useGigDetail(slug: string): GigDetailResult {
       await mutation.mutateAsync({ gigId, pitch, bid, days });
     },
     isProposing: mutation.isPending,
+  };
+}
+
+export interface JobApplicationsResult {
+  applications: JobApplication[];
+  isLoading: boolean;
+  isError: boolean;
+  /** Move one application to a decided status; resolves when the server has written it. */
+  decide: (applicationId: string, status: ApplicationStatus) => Promise<void>;
+  isDeciding: boolean;
+  decidingId: string | null;
+}
+
+/**
+ * The applicant queue for one job the reader posted.
+ *
+ * Never fetched for a job the reader does not own: `job_application_queue()`
+ * refuses it on the server, and asking would turn an ordinary page view into a
+ * 403. `decide_application()` re-checks the same rule, so a forged decision is
+ * refused rather than trusted.
+ */
+export function useJobApplications(jobId: string | null, enabled: boolean): JobApplicationsResult {
+  const queryClient = useQueryClient();
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+
+  const query = useQuery({
+    queryKey: ['job-applications', jobId],
+    queryFn: async () => (await repository()).fetchJobApplications(jobId ?? ''),
+    enabled: enabled && jobId !== null,
+    staleTime: 30_000,
+  });
+
+  async function decide(applicationId: string, status: ApplicationStatus): Promise<void> {
+    setDecidingId(applicationId);
+    try {
+      await (await repository()).decideApplication(applicationId, status);
+      await queryClient.invalidateQueries({ queryKey: ['job-applications', jobId] });
+      await queryClient.invalidateQueries({ queryKey: ['job-detail'] });
+    } finally {
+      setDecidingId(null);
+    }
+  }
+
+  return {
+    applications: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    decide,
+    isDeciding: decidingId !== null,
+    decidingId,
   };
 }

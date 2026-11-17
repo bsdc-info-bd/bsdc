@@ -56,6 +56,7 @@ export const APP_ROUTES: readonly string[] = [
   '/events/:slug',
   '/jobs',
   '/jobs/:slug',
+  '/jobs/:slug/applications',
   '/freelance',
   '/freelance/:slug',
   '/freelance/:slug/proposals',
