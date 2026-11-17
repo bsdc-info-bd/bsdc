@@ -431,7 +431,7 @@ private fun followTileRedirect(start: HttpURLConnection): HttpURLConnection? {
         val location = runCatching { current.getHeaderField("Location") }.getOrNull() ?: return null
         runCatching { current.disconnect() }
         val next = runCatching {
-            (URL(URL(start.url), location).openConnection() as HttpURLConnection).apply {
+            (URL(current.url, location).openConnection() as HttpURLConnection).apply {
                 connectTimeout = 8_000
                 readTimeout = 8_000
                 instanceFollowRedirects = false
