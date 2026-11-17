@@ -100,6 +100,8 @@ fun MkMarketScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit,
+    /** Google Maps links go through the system so the Maps app can open them. */
+    onOpenGoogleMaps: (String) -> Unit = onOpenExternal,
     onOpenAds: () -> Unit,
     initialSection: MarketSection = MarketSection.SHOP,
     modifier: Modifier = Modifier,
@@ -254,6 +256,7 @@ fun MkMarketScreen(
                     imageLoader = imageLoader,
                     bn = bn,
                     onOpenExternal = onOpenExternal,
+                    onOpenGoogleMaps = onOpenGoogleMaps,
                 )
             }
         }

@@ -1,5 +1,7 @@
 package bd.info.bsdc.app.feature.market
 
+import java.util.Locale
+
 /**
  * Pure marketplace rules shared by the customer and vendor screens.
  * Mirrors main-site/src/lib/mk/mk-logic.ts so Android and web agree on money, status and phone rules.
@@ -437,5 +439,22 @@ object MkLogic {
         if (!scheme.equals("https", ignoreCase = true)) return false
         val clean = host?.trim()?.lowercase() ?: return false
         return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
+    }
+
+    /**
+     * A Google Maps directions link for a delivery pin.
+     *
+     * This is the one form that needs no API key and no billing, works on the web and opens
+     * the Maps app when it is installed: `maps/dir/?api=1&destination=lat,lng`. The Android
+     * side opens it with a plain `ACTION_VIEW`, so the system may hand it to the Maps app;
+     * a Custom Tab would force a browser and lose turn-by-turn.
+     *
+     * Six decimals is about 11 cm — far finer than any delivery address needs, and enough
+     * that two nearby pins cannot round onto the same point.
+     */
+    internal fun googleMapsDirectionsUrl(lat: Double, lng: Double): String {
+        if (!lat.isFinite() || !lng.isFinite()) return ""
+        val point = String.format(Locale.ROOT, "%.6f,%.6f", lat, lng)
+        return "https://www.google.com/maps/dir/?api=1&destination=$point"
     }
 }

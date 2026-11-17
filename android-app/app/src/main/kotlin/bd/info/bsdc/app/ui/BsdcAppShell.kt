@@ -623,6 +623,9 @@ fun BsdcAppShell(
                     },
                     onSignInRequired = { showAuthModal = true },
                     onOpenExternal = { url -> openInCustomTab(context, url) },
+                    // Directions go to the system: the Maps app if it is installed, a browser
+                    // otherwise. A Custom Tab would always choose the browser.
+                    onOpenGoogleMaps = { url -> openInMaps(context, url) },
                     onOpenAds = { showMarketAds = true },
                     initialSection = marketSection,
                 )
@@ -997,6 +1000,29 @@ fun BsdcAppShell(
             language = language,
             onDismiss = { showPermissionSheet = false },
         )
+    }
+}
+
+/**
+ * Hands a Google Maps link to the system, preferring the Maps app.
+ *
+ * [openInCustomTab] is right for a web page, but wrong for directions: a Custom Tab always
+ * opens a browser, which hides the one thing a delivery driver wants — turn-by-turn in the
+ * navigation app. `ACTION_VIEW` lets Android route the link to Maps when it is installed and
+ * fall back to a browser when it is not. Nothing here is required to exist on the device, so
+ * both outcomes are normal rather than errors.
+ */
+private fun openInMaps(context: Context, url: String) {
+    val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return
+    if (parsed.scheme != "https") return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, parsed).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.onFailure {
+        // No Maps app and no browser that claims the link: fall back to the in-app tab so the
+        // tap is never silently swallowed.
+        openInCustomTab(context, url)
     }
 }
 

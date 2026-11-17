@@ -1,7 +1,9 @@
 package bd.info.bsdc.app.feature.market
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +86,8 @@ fun MkVendorConsoleScreen(
     imageLoader: ImageLoader,
     bn: Boolean,
     onOpenExternal: (String) -> Unit,
+    /** Opens a Google Maps link through the system, so the Maps app can take the tap. */
+    onOpenGoogleMaps: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
@@ -315,9 +320,8 @@ fun MkVendorConsoleScreen(
                         }
                     }
                 },
-                onOpenMap = { lat, lng ->
-                    onOpenExternal("https://www.openstreetmap.org/?mlat=$lat&mlon=$lng#map=17/$lat/$lng")
-                },
+                // Google Maps, not a Custom Tab: directions belong in the navigation app.
+                onOpenMap = { url -> onOpenGoogleMaps(url) },
             )
         }
         }
@@ -370,8 +374,10 @@ private fun VendorOrderCard(
     imageLoader: ImageLoader,
     busy: Boolean,
     onAction: (String) -> Unit,
-    onOpenMap: (Double, Double) -> Unit,
+    onOpenMap: (String) -> Unit,
 ) {
+    var mapTarget by remember(order.id) { mutableStateOf<Pair<Double, Double>?>(null) }
+
     BsdcCard(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -428,9 +434,35 @@ private fun VendorOrderCard(
         val lat = order.lat
         val lng = order.lng
         if (lat != null && lng != null) {
-            Spacer(Modifier.height(6.dp))
-            OutlinedButton(onClick = { onOpenMap(lat, lng) }) {
-                Text(mkText(bn, "Open pin on map", "ম্যাপে পিন দেখুন"))
+            Spacer(Modifier.height(8.dp))
+            // The delivery pin, in the card. It used to be a button that left the app for
+            // openstreetmap.org, which meant a vendor lost the order to look at the address.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(160.dp)
+                    .clip(RoundedCornerShape(12.dp)),
+            ) {
+                MkOsmViewMap(
+                    lat = lat,
+                    lng = lng,
+                    bn = bn,
+                    interactive = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                BsdcButton(
+                    label = mkText(bn, "Full screen", "পুরো স্ক্রিন"),
+                    secondary = true,
+                    onClick = { mapTarget = lat to lng },
+                )
+                BsdcButton(
+                    label = mkText(bn, "Google Maps", "গুগল ম্যাপ"),
+                    secondary = true,
+                    onClick = { onOpenMap(MkLogic.googleMapsDirectionsUrl(lat, lng)) },
+                )
             }
         }
         if (order.note.isNotBlank()) {
@@ -479,6 +511,23 @@ private fun VendorOrderCard(
                 }
             }
         }
+    }
+
+    // Outside the card on purpose: a Dialog declared inside the card's content still works,
+    // but keeping it here makes clear that it covers the screen, not the card.
+    val target = mapTarget
+    if (target != null) {
+        MkOsmViewMapDialog(
+            open = true,
+            lat = target.first,
+            lng = target.second,
+            title = mkText(bn, "Delivery address", "ডেলিভারি ঠিকানা"),
+            bn = bn,
+            onDismiss = { mapTarget = null },
+            onOpenGoogleMaps = {
+                onOpenMap(MkLogic.googleMapsDirectionsUrl(target.first, target.second))
+            },
+        )
     }
 }
 

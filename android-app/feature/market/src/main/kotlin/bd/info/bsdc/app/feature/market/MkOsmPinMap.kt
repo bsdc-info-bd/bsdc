@@ -8,17 +8,37 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Map
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import bd.info.bsdc.app.core.designsystem.BsdcButton
+import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.model.BsdcHosts
 import java.net.HttpURLConnection
 import java.net.URL
@@ -161,6 +181,154 @@ fun MkOsmPinMap(
     )
 }
 
+/**
+ * A read-only map for a delivery address.
+ *
+ * The counterpart to [MkOsmPinMap]: same tiles, same cached fetch, same User-Agent workaround,
+ * but the pin cannot be moved. A customer's address is not something a vendor should be able to
+ * drag somewhere else, so this installs no [PinBridge] at all — the page is given the
+ * coordinates once and has nothing to report back.
+ */
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+fun MkOsmViewMap(
+    lat: Double,
+    lng: Double,
+    bn: Boolean = false,
+    zoom: Int = 16,
+    modifier: Modifier = Modifier,
+    interactive: Boolean = true,
+) {
+    val context = LocalContext.current
+    val mapErrorText = if (bn) {
+        "মানচিত্রের টাইল লোড হয়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
+    } else {
+        "Map tiles could not load. Check your internet connection and try again."
+    }
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            val leafletJs = context.assets.open("leaflet/leaflet.js").bufferedReader().use { it.readText() }
+            val leafletCss = context.assets.open("leaflet/leaflet.css").bufferedReader().use { it.readText() }
+            WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = false
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                // Nothing in this page navigates: it draws one pin and stops.
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): Boolean = true
+
+                    override fun shouldInterceptRequest(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                    ): WebResourceResponse? {
+                        val uri = request?.url ?: return null
+                        if (!MkLogic.isOsmTileRequest(uri.scheme, uri.host)) return null
+                        return fetchTile(uri.toString())
+                    }
+                }
+                loadDataWithBaseURL(
+                    BsdcHosts.SITE_ORIGIN + "/",
+                    viewMapPage(
+                        lat = lat,
+                        lng = lng,
+                        zoom = zoom,
+                        interactive = interactive,
+                        leafletJs = leafletJs,
+                        leafletCss = leafletCss,
+                        mapErrorText = mapErrorText,
+                    ),
+                    "text/html",
+                    "utf-8",
+                    null,
+                )
+            }
+        },
+        onRelease = { view ->
+            view.stopLoading()
+            view.destroy()
+        },
+    )
+}
+
+/**
+ * The delivery pin, full screen.
+ *
+ * A 160dp card tile tells a vendor roughly where a delivery is; it is not enough to decide
+ * whether a courier reaches the address before dark. Expanding to the whole screen is the
+ * difference between a decoration and a decision, and it costs one WebView because the content
+ * only exists while the dialog is open.
+ */
+@Composable
+fun MkOsmViewMapDialog(
+    open: Boolean,
+    lat: Double,
+    lng: Double,
+    title: String,
+    bn: Boolean,
+    onDismiss: () -> Unit,
+    onOpenGoogleMaps: () -> Unit,
+) {
+    if (!open) return
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = BsdcThemeTokens.colors.surface) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = if (bn) "বন্ধ করুন" else "Close",
+                        )
+                    }
+                }
+                MkOsmViewMap(
+                    lat = lat,
+                    lng = lng,
+                    bn = bn,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                ) {
+                    // A key-free link the system routes to the Maps app when it is installed,
+                    // so the driver gets turn-by-turn instead of a browser tab.
+                    BsdcButton(
+                        label = if (bn) "গুগল ম্যাপে যান" else "Open in Google Maps",
+                        onClick = onOpenGoogleMaps,
+                        modifier = Modifier.fillMaxWidth(),
+                        leadingIcon = Icons.Rounded.Map,
+                    )
+                }
+            }
+        }
+    }
+}
+
 /** Remembers the last pin and optional radius circle known to both sides. */
 private class PinMapState(initial: Pair<Double, Double>?) {
     var loaded: Boolean = false
@@ -228,6 +396,61 @@ private const val MAX_TILE_BYTES = 512 * 1024
 
 private const val DHAKA_LAT = 23.8103
 private const val DHAKA_LNG = 90.4125
+
+/**
+ * A map page that draws one pin and accepts no input.
+ *
+ * Deliberately not a variant of [mapPage]: that one installs `BsdcPin` so taps can move the
+ * pin, and a read-only delivery address must not expose that surface at all.
+ */
+private fun viewMapPage(
+    lat: Double,
+    lng: Double,
+    zoom: Int,
+    interactive: Boolean,
+    leafletJs: String,
+    leafletCss: String,
+    mapErrorText: String,
+): String = """
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>
+$leafletCss
+
+  html,body,#map{height:100%;margin:0;padding:0;background:#e5e3df;font-family:sans-serif}
+  .leaflet-control-attribution{font-size:9px}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="bsdc-map-error" style="display:none;position:absolute;inset:0;z-index:1000;background:#e5e3df;color:#374151;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:13px;line-height:1.45">
+  $mapErrorText
+</div>
+<script>
+$leafletJs
+</script>
+<script>
+  var map = L.map('map', {
+    zoomControl: true,
+    dragging: ${if (interactive) "true" else "false"},
+    scrollWheelZoom: ${if (interactive) "true" else "false"},
+    tap: true
+  }).setView([$lat, $lng], $zoom);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map).on('tileerror', function () {
+    var el = document.getElementById('bsdc-map-error');
+    if (el) { el.style.display = 'flex'; }
+  });
+  L.marker([$lat, $lng]).addTo(map);
+</script>
+</body>
+</html>
+""".trimIndent()
 
 /**
  * The page is generated here with numbers only, so nothing from the user reaches the HTML.
