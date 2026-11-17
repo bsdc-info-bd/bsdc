@@ -99,16 +99,31 @@ export default function MarketProductPage() {
         <section aria-label={data.name} className="space-y-3">
           <div className="relative aspect-square overflow-hidden rounded-3xl border border-border bg-surface-2">
             <AnimatePresence mode="wait" initial={false}>
-              <motion.img
+              {/*
+                The hero goes through MediaImage, not a bare <img>. A bare image
+                here had no retry ladder, no srcset and no edge proxy, so the one
+                picture a buyer came to see was the one picture that could fail
+                permanently on a flaky connection while every thumbnail around it
+                recovered. The fade is kept by animating the wrapper, which is
+                enough because the frame is a fixed aspect square.
+              */}
+              <motion.div
                 key={images[active] ?? 'none'}
-                src={images[active]}
-                alt={data.name}
                 initial={reduce ? false : { opacity: 0, scale: 1.03 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={reduce ? {} : { opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+                className="absolute inset-0"
+              >
+                <MediaImage
+                  src={images[active] ?? ''}
+                  alt={data.name}
+                  slotWidth={640}
+                  priority={active === 0}
+                  sizesAttribute="(min-width: 1024px) 50vw, 100vw"
+                  className="h-full w-full object-cover"
+                />
+              </motion.div>
             </AnimatePresence>
             {images.length === 0 ? (
               <span className="grid h-full place-items-center text-muted">

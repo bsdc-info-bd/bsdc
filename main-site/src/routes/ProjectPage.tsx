@@ -171,7 +171,7 @@ export default function ProjectPage() {
                   src={project.coverUrl}
                   alt={project.name}
                   slotWidth={960}
-                  loading="eager"
+                  priority
                   decoding="async"
                   className="h-full w-full object-cover"
                 />

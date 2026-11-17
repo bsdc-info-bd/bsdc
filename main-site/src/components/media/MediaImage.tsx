@@ -36,6 +36,12 @@ export interface MediaImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement
   slotWidth?: number;
   /** Overrides the `sizes` descriptor when the layout is multi-column. */
   sizesAttribute?: string;
+  /**
+   * Marks this image as the likely Largest Contentful Paint element: loads it
+   * eagerly and raises its fetch priority. See the note on `priority` below for
+   * why this is a separate flag rather than a pair of raw attributes.
+   */
+  priority?: boolean;
 }
 
 /** Longest single retry delay in the recovery ladder. */
@@ -80,6 +86,14 @@ interface Painting {
  * Resilient, responsive image element backed directly by ImgBB + Cloudflare edge
  * delivery (`/media/i` fallback) with zero service-worker interception or
  * first-mount remount churn.
+ *
+ * `priority` is one flag rather than raw `loading` plus `fetchpriority` because
+ * every hero image in the app was already `loading="eager"` and still slow: eager
+ * loading starts the request sooner but does not raise it above the browser's own
+ * queue. Without `fetchpriority="high"` a large hero competes on equal terms with
+ * a dozen below-fold thumbnails, so on a slow connection the largest element
+ * paints last. Deriving both from one prop means a caller cannot set half of the
+ * pair, which had already happened five times.
  */
 export function MediaImage({
   src,
@@ -95,6 +109,7 @@ export function MediaImage({
   onFailure,
   slotWidth,
   sizesAttribute,
+  priority = false,
   ...imageProps
 }: MediaImageProps) {
   const { t } = useTranslation();
@@ -302,7 +317,12 @@ export function MediaImage({
       src={painting.url}
       alt={alt}
       className={cn(!loaded && 'bg-surface-2', className)}
-      loading={imageProps.loading ?? 'lazy'}
+      loading={priority ? 'eager' : (imageProps.loading ?? 'lazy')}
+      {...(priority
+        ? { fetchPriority: 'high' as const }
+        : imageProps.fetchPriority === undefined
+          ? {}
+          : { fetchPriority: imageProps.fetchPriority })}
       onError={handleError}
       onLoad={handleLoad}
       data-attempt={painting.attempt}

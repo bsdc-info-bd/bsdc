@@ -172,7 +172,7 @@ export default function CoursePage() {
                   src={record.cover_url.trim()}
                   alt={record.title}
                   slotWidth={840}
-                  loading="eager"
+                  priority
                   decoding="async"
                   className="h-full w-full object-cover"
                 />
