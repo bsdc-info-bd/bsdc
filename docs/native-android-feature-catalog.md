@@ -77,6 +77,17 @@
 
 ## Domain 3 — Persistent Play-Store-Compliant Permission Readiness Engine (`AND-0059` – `AND-0080`)
 
+> **Microphone is out of scope, and was never in scope.** Entries below that
+> mention `MICROPHONE` or `RECORD_AUDIO` (`AND-0061`, `AND-0063`, `AND-0068`,
+> `AND-0075`, `AND-0364`) describe a capability this app does not have and must
+> not ask for: voice search issues `Intent.ACTION_RECOGNIZE_SPEECH`, so the
+> device's own speech service holds the microphone permission and records the
+> audio. The permission was removed from the manifest, the coordinator, the
+> rationale copy and this state machine; `AndroidManifest.xml` records why, the
+> Android workflow fails the build if it comes back, and checkpoint K-07 in
+> `scripts/audit.mjs` holds the same line. A future in-app recorder needs a new
+> decision, a new disclosure and a new entry here — not a resurrected permission.
+
 - `AND-0059`: `PermissionStateMachine.java` tracking exact runtime status (`GRANTED`, `NEEDS_REQUEST`, `SHOW_RATIONALE`, `PERMANENTLY_DENIED_OPEN_SETTINGS`) per capability (`NOTIFICATIONS`, `LOCATION`, `CAMERA`, `MICROPHONE`).
 - `AND-0060`: Capability-aware API level resolution (`POST_NOTIFICATIONS` required API 33+, `READ_MEDIA_IMAGES` replaced cleanly by zero-permission Android Photo Picker `PickVisualMedia`).
 - `AND-0061`: Animated first-launch "BSDC Device Readiness" step walking through Notifications, Location (Fine/Coarse), Camera, and Microphone with visual illustrations and plain Bangla/English purpose cards.
