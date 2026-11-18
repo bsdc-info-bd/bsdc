@@ -57,6 +57,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
@@ -579,7 +580,9 @@ private fun MkShopCard(
                     MkStars(rating = shop.rating)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "(${shop.review_count})",
+                        // A Bangla member reading (7) beside a Bangla shop name is the kind of
+                        // mismatch that makes an app feel translated rather than built for them.
+                        text = "(${BanglaDigitFormatter.formatCount(shop.review_count.toLong(), if (bn) AppLanguage.BN else AppLanguage.EN)})",
                         style = MaterialTheme.typography.labelSmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
@@ -696,7 +699,7 @@ fun MkVendorPageScreen(
                     MkStars(rating = data.rating)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "(${data.review_count})",
+                        text = "(${BanglaDigitFormatter.formatCount(data.review_count.toLong(), if (bn) AppLanguage.BN else AppLanguage.EN)})",
                         style = MaterialTheme.typography.labelSmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
