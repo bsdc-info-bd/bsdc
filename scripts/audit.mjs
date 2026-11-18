@@ -727,14 +727,24 @@ note('H-01', 'Tests', 'Unit tests by package', () => {
     // parentheses is the same count. Grepping only the first form missed a package
     // whose run ended in a different shape and reported it as zero tests, which is
     // indistinguishable from a package with no tests.
+    // A package whose dependencies are not installed reports zero tests, which is
+    // indistinguishable in the output from a package that has no tests. That is how a
+    // real gap hides: run this in a clean checkout and every package reads 0.
+    if (!existsSync(join(name, 'node_modules'))) {
+      return { name, n: 0, skipped: true };
+    }
     const output = sh(
       `cd ${name} && npx vitest run 2>&1 | grep -E "^ *Tests +[0-9]+ (passed|failed)" | tail -1 || true`,
     );
     const n = Number(output.match(/(\d+) (?:passed|failed)/)?.[1] ?? 0);
-    return { name, n };
+    return { name, n, skipped: false };
   });
   const total = counts.reduce((sum, entry) => sum + entry.n, 0);
-  return `${total} tests: ${counts.map((entry) => `${entry.name} ${entry.n}`).join(', ')}`;
+  const skipped = counts.filter((entry) => entry.skipped).map((entry) => entry.name);
+  const run = counts.filter((entry) => !entry.skipped);
+  return `${total} tests across ${run.length} installed package(s)${
+    skipped.length > 0 ? `; ${skipped.length} package(s) not counted because dependencies are not installed: ${skipped.join(', ')}` : ''
+  }: ${run.map((entry) => `${entry.name} ${entry.n}`).join(', ') || 'none'}`;
 });
 
 check('H-02', 'Tests', 'Every package has at least one test file', () => {
