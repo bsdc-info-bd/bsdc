@@ -112,4 +112,78 @@ public class AppLinkUriRouterTest {
         assertFalse(AppLinkUriRouter.isImgBbUrl("https://res.cloudinary.com/demo/image/upload/sample.jpg"));
         assertFalse(AppLinkUriRouter.isImgBbUrl("http://i.ibb.co/insecure.png"));
     }
+
+    /**
+     * Push payloads are the one place a path is built by concatenation rather than
+     * parsed, so the id is the only thing standing between a notification and the
+     * route table. Anyone who can deliver a payload controls it.
+     *
+     * The id guard is a deny-list of separators rather than an allow-list of
+     * characters, because real ids contain hyphens and Bangla letters. These cases are
+     * the ones a hostile payload would try: traversal, an absolute URL parked in the
+     * id, and casing tricks against the admin check.
+     */
+    @Test
+    public void aHostilePushIdIsRefusedRatherThanConcatenated() {
+        for (String hostile : new String[] {
+            "../admin/announcements",
+            "../../ADMIN",
+            "https://evil.test/phish",
+            "conv/../settings",
+            "conv\\..\\admin",
+            "conv id with a space",
+            "bsdc://admin",
+            "newline\n/ admin",
+        }) {
+            assertTrue(
+                "hostile id must be refused: " + hostile,
+                AppLinkUriRouter.pushDestination(Map.of("kind", "message", "id", hostile))
+                    instanceof LinkDestination.Ignored
+            );
+        }
+    }
+
+    @Test
+    public void ordinaryIdsStillReachTheirScreen() {
+        // The guard must not break real traffic. A uuid, a slug and a certificate code
+        // are all ids this platform actually sends.
+        assertEquals(
+            new LinkDestination.NativeRoute("/messages/8f14e45f-ceea-467f-a8e0-9d3a1b2c3d4e"),
+            AppLinkUriRouter.pushDestination(
+                Map.of("kind", "message", "id", "8f14e45f-ceea-467f-a8e0-9d3a1b2c3d4e")
+            )
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/p/kotlin-compose"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "post", "id", "kotlin-compose"))
+        );
+        // A certificate code is hyphenated and must survive the guard unchanged.
+        assertEquals(
+            new LinkDestination.NativeRoute("/verify/BSDC-CT-4A7C21B9-6"),
+            AppLinkUriRouter.pushDestination(Map.of("kind", "certificate", "id", "BSDC-CT-4A7C21B9-6"))
+        );
+    }
+
+    @Test
+    public void aPushUrlIsHeldToTheSameRulesAsATappedLink() {
+        // `url` is the field an attacker would reach for first, because it looks like it
+        // bypasses the id switch entirely. It does not: it is handed to resolveLink, so
+        // the scheme, host and credential rules all apply unchanged.
+        assertTrue(
+            AppLinkUriRouter.pushDestination(Map.of("url", "http://www.bsdc.info.bd/p/x"))
+                instanceof LinkDestination.Ignored
+        );
+        assertTrue(
+            AppLinkUriRouter.pushDestination(Map.of("url", "https://www.bsdc.info.bd@evil.test/p"))
+                instanceof LinkDestination.Ignored
+        );
+        assertTrue(
+            AppLinkUriRouter.pushDestination(Map.of("url", "javascript:alert(1)"))
+                instanceof LinkDestination.Ignored
+        );
+        assertEquals(
+            new LinkDestination.NativeRoute("/p/realfind"),
+            AppLinkUriRouter.pushDestination(Map.of("url", "https://www.bsdc.info.bd/p/realfind"))
+        );
+    }
 }

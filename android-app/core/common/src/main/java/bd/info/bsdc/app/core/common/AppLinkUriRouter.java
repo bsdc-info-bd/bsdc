@@ -108,6 +108,17 @@ public final class AppLinkUriRouter {
         String kind = data.getOrDefault("kind", "").trim();
         String id = data.getOrDefault("id", "").trim();
 
+        // Every path below is built by concatenation, so the id is the whole of the
+        // validation. Today the result is safe because the screen router matches known
+        // prefixes and never hands a path to a WebView — but that safety lives in a
+        // `when` far from here, and it is not why the id was trusted. An id is a
+        // conversation id, a uuid, a slug: none of them legitimately contains a slash,
+        // a backslash, a dot-dot or a colon. Refusing those here means the invariant is
+        // enforced where the value enters, not three files away.
+        if (!isSafePushId(id)) {
+            return new LinkDestination.Ignored("The notification named an id the app will not open.");
+        }
+
         // Kinds whose whole meaning is an id. Without one there is no page to open, and
         // guessing (the directory, the inbox) would put the member somewhere they did not ask
         // to be, so these fall through to Ignored rather than a substituted route.
@@ -184,6 +195,27 @@ public final class AppLinkUriRouter {
         } catch (IllegalArgumentException ex) {
             return false;
         }
+    }
+
+    /**
+     * Whether a push id can be concatenated into a route path unchanged.
+     *
+     * Deliberately a deny-list of separators rather than an allow-list of characters: a
+     * slug may contain Bangla letters, and a certificate code contains hyphens, so an
+     * allow-list of `[a-z0-9-]` would reject real ids. Nothing that is allowed to reach
+     * a path can contain a character that changes what the path means.
+     */
+    private static boolean isSafePushId(String id) {
+        if (id.isEmpty()) return true; // absence is handled per kind, not here
+        if (id.length() > 128) return false;
+        if (id.indexOf('/') >= 0 || id.indexOf('\\') >= 0 || id.indexOf(':') >= 0) return false;
+        if (id.contains("..")) return false;
+        // Control characters and whitespace would let an id terminate or split a path.
+        for (int i = 0; i < id.length(); i++) {
+            char c = id.charAt(i);
+            if (c < 0x20 || c == 0x7f || Character.isWhitespace(c)) return false;
+        }
+        return true;
     }
 
     private static LinkDestination routeNativePath(String normalizedPath) {
