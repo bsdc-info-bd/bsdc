@@ -7,8 +7,12 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom';
 import { AppShell } from '../../../src/components/layout/AppShell';
 import MessagesPage from '../../../src/routes/MessagesPage';
 import { DEFAULT_CLAIMS, useAuthStore } from '../../../src/store/auth-store';
-import '../../../src/i18n';
+import { initI18n } from '../../../src/i18n';
 import '../../../src/styles/index.css';
+
+// The real entry point awaits this too: the language bundle is a chunk of its
+// own now, so the strings a component renders exist only after it has loaded.
+await initI18n();
 
 useAuthStore.getState().setSession(
   {
