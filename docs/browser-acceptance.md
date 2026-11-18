@@ -70,9 +70,15 @@ browser evidence artifacts. No GitHub Actions run is claimed for this local work
   focus behavior. This does not prove every signed-in layout.
 - Default/repeated Run, infinite-loop termination, storage denial, network denial
   and inert HTML in both contexts, plus mobile language switching.
-- Main-site strict typecheck, lint, **854 unit tests in 67 files**, source/Functions
-  formatting and production build passed after these changes. No SQL changed in
-  this batch; the previous 27/27 database proof result remains earlier evidence.
+- Console errors, not only uncaught exceptions. Chrome logs a failed request as a
+  console error, so a page can look clean to a `pageerror` listener while the
+  console is saying otherwise — that is exactly how Lighthouse's
+  `errors-in-console` found one. The gate now fails on any console error that is
+  not explained by a stubbed `/api` response, which is the only error the local
+  server is allowed to cause.
+- Main-site strict typecheck, lint, **1197 unit tests in 114 files**, source/Functions
+  formatting and production build passed after these changes. 130 of 130 database
+  proofs pass.
 
 **Production release is still blocked.** Required next checks include configured
 signup/OAuth/verification, account switching, permissions/demotion, post/poll

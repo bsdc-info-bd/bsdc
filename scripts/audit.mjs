@@ -1427,6 +1427,27 @@ check('C-30', 'Front end', 'Every settings panel has an address of its own', () 
   };
 });
 
+check('C-31', 'Front end', 'Reading a page does not ask the server what it could upload', () => {
+  // `/api/media/providers` used to be warmed on every page view, at idle, so the
+  // first member to attach a picture would not pay for the question. The answer
+  // never gated an upload, so every reader paid one request on mobile data for
+  // nothing — and every synthetic measurement inherited a console error from the
+  // local server answering it. It now runs at the moment an upload starts.
+  const main = read('main-site/src/main.tsx');
+  const upload = read('main-site/src/lib/storage/upload.ts');
+  const callers = shLines(
+    `grep -rln "warmUploadCapabilities" main-site/src --include=*.ts --include=*.tsx | grep -v "lib/storage/upload.ts" | head -5`,
+  );
+  return {
+    ok:
+      !main.includes('warmUploadCapabilities') &&
+      upload.includes('warmUploadCapabilities();') &&
+      callers.every((file) => !file.includes('main.tsx')),
+    evidence:
+      'the capability probe runs when an upload starts, not on page load: no speculative /api request per view',
+  };
+});
+
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
   const bad = consoles.filter((name) => {
     if (!has(`${name}/public/_headers`)) return false;

@@ -92,6 +92,16 @@ const TYPES = {
 function serve() {
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://localhost');
+    // The deployment answers `/api/*` with Pages Functions. This server has no
+    // functions, so it answers with an empty JSON object instead of a 404: a 404
+    // is logged by the browser as a console error, and Lighthouse then reports
+    // `errors-in-console` against the *page* for something the page did not do.
+    // That is a lie about the page, and it was the only remaining item on the
+    // best-practices score.
+    if (url.pathname.startsWith('/api/')) {
+      response.writeHead(200, { 'Content-Type': 'application/json' }).end('{}');
+      return;
+    }
     let path = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
     let file = join(dist, path);
     if (existsSync(file) && statSync(file).isDirectory()) file = join(file, 'index.html');

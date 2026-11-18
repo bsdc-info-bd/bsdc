@@ -192,6 +192,11 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
           <MediaImage
             src={current.url}
             fallbackSrc={current.thumbUrl}
+            // The member opened this dialog to see this picture. It is the one
+            // image on screen, it is above the fold by definition, and it was
+            // requested by a deliberate tap — leaving it lazy would put it behind
+            // a dozen thumbnails that are no longer visible behind the scrim.
+            priority
             // The picture is the content here, so it is never left unnamed: an
             // empty alt would hide the only thing the dialog is showing.
             alt={

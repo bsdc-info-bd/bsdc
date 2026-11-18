@@ -138,23 +138,17 @@ function registerPushWhenIdle(): void {
 
 registerPushWhenIdle();
 
-// Ask the deployment what it can upload through, once, while the browser is
-// idle — so the first member to attach a picture does not pay for the question.
+// The upload capability probe used to be warmed here, on every page view, "so
+// the first member to attach a picture does not pay for the question". It was
+// all cost and no benefit: the answer never gated an upload (the endpoint is
+// the only thing that can see the key, and `uploadMedia` sends the file and
+// reads the refusal), so every reader — including the many who will never
+// attach anything — paid for one request to /api/media/providers on mobile data
+// that they did not need.
 //
-// It is only a question. The answer is recorded for the diagnostics screen and
-// is never used to decide whether an upload may be attempted; that decision
-// belongs to the endpoint, which is the only thing that can see the key. See
-// `uploadMedia` in lib/storage/upload.ts.
-const warmUpload = () => {
-  void import('./lib/storage/upload')
-    .then(({ warmUploadCapabilities }) => warmUploadCapabilities())
-    .catch(() => undefined);
-};
-if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(warmUpload, { timeout: 5_000 });
-} else {
-  setTimeout(warmUpload, 1_500);
-}
+// It now runs where it is useful: at the moment an upload starts, and on the
+// diagnostics screen, which asks on its own. A page that uploads nothing asks
+// nothing.
 
 // Field measurement. It reports on pages, never on people, and it is sent
 // once per page view on the browser's own "going away" signal.

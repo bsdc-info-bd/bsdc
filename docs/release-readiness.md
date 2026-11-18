@@ -261,15 +261,31 @@ node ../scripts/lighthouse.mjs --routes /,/privacy --runs 5 --floor 95
 The last full run of the script (16 routes × 3 runs) printed *every category
 clears the floor on every route*; accessibility and SEO were 100 on all sixteen.
 
-Two readings that are *not* evidence of a defect, so nobody chases them:
+One reading that is *not* evidence of a defect, so nobody chases it: **the score
+of a single run.** On a shared machine the same commit measures 94–98. The budget
+is the median of three, which is what the script asserts.
 
-- **Best practices 96 on data pages in a local run.** The local server has no
-  `/api/*` and no Supabase or Firebase host, so the browser logs network
-  failures for requests the deployment answers. Pages that make no such request
-  (`/about`, `/privacy`, `/terms`) score 100 in the same run — that is the
-  control.
-- **The score of a single run.** On a shared machine the same commit measures
-  94–98. The budget is the median of three, which is what the script asserts.
+### Best practices was 96 on data pages, and it was two separate things
+
+The first was the measurement. This server has no Pages Functions, so it answered
+`/api/*` with a 404, and Chrome logs a 404 as a console error; Lighthouse then
+reported `errors-in-console` against the page for something the page had not done.
+`scripts/lighthouse.mjs` now answers `/api/*` with an empty JSON object, as the
+deployment does.
+
+The second was real, and the measurement found it. Chrome's console said the
+request was `/api/media/providers`, and it was made **on every page view, at idle,
+whether or not anybody was going to upload anything**: the upload-capability probe
+was warmed at startup "so the first member to attach a picture does not pay for the
+question". The answer never gated an upload — the endpoint is the only thing that
+can see the key, and `uploadMedia` sends the file and reads the refusal — so the
+warm was one request per reader on mobile data for no answer anybody used.
+
+Measured before and after on `/`, `/jobs` and `/marketplace` in Chromium: before,
+each route logged one console error and one `/api/media/providers` request; after,
+**no console error and no `/api` request at all**. `C-31` holds it, and the browser
+smoke now fails on any console error that is not explained by a stubbed `/api`
+response — so the next one cannot hide.
 
 ## A comment can carry a picture (0120)
 

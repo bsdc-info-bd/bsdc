@@ -343,6 +343,7 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | C-28 | Every console states a minimum width of nothing | Pass | no console demands a wide screen |
 | C-29 | A comment can carry a picture, and the picture survives the upload sweeper | Pass | comments carry one https picture on web and Android, and media_pending_purge treats it as a reference |
 | C-30 | Every settings panel has an address of its own | Pass | eight panels, each with its own path, and the tab strip navigates instead of holding state |
+| C-31 | Reading a page does not ask the server what it could upload | Pass | the capability probe runs when an upload starts, not on page load: no speculative /api request per view |
 
 ### Safety
 

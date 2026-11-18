@@ -64,10 +64,24 @@ try {
     activePage = page;
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    // Console errors, not just uncaught exceptions. Lighthouse's
+    // `errors-in-console` audit reads these, so a run that ignores them can call
+    // a page clean while a browser says otherwise. The only permitted ones are
+    // those the stub server itself causes: it answers `/api/*` with 503, which
+    // Chrome logs as "Failed to load resource", and the deployment answers those
+    // paths with Pages Functions. They are counted so an unexplained console
+    // error — a React warning, a failed import, a rejected promise nobody
+    // caught — cannot hide behind them.
+    const consoleErrors = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    let stubbedApiFailures = 0;
     const failures = [];
     page.on('response', (response) => {
       if (response.status() >= 400 && !response.url().includes('/api/'))
         failures.push(`${response.status()} ${response.url()}`);
+      if (response.status() >= 400 && response.url().includes('/api/')) stubbedApiFailures += 1;
     });
     for (const route of [
       '/',
@@ -83,10 +97,16 @@ try {
       '/missing-browser-route',
     ]) {
       await check(`${device}: ${route} renders without crash/overflow`, async () => {
+        consoleErrors.length = 0;
+        stubbedApiFailures = 0;
         await page.goto(server.origin + route, { waitUntil: 'networkidle' });
         assert(await page.locator('main').innerText(), 'Main content must render');
         assert.deepEqual(errors, [], 'No uncaught browser exceptions');
         assert.deepEqual(failures, [], 'No missing non-API resources');
+        assert(
+          consoleErrors.length <= stubbedApiFailures,
+          `No unexplained console errors: ${consoleErrors.join(' | ')}`,
+        );
         assert(
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           'No horizontal overflow',
