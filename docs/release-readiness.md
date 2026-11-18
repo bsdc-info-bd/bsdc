@@ -175,3 +175,45 @@ Do not waive these because local builds pass:
 No production migration, provider mutation, deployment or real-browser acceptance
 was executed in this batch. Logs are local execution evidence, not a penetration
 test or guarantee that the deployed platform has no defects.
+
+## Play Store submission — what the repository now settles
+
+Added 2026-11-18. Everything below is a property of this repository, held by a
+test or a checkpoint, and recorded against the schema in
+[play-store-compliance.md](play-store-compliance.md).
+
+**Done here**
+
+- Privacy policy at `/privacy`, bilingual, public, no sign-in.
+- Terms of service at `/terms`, bilingual, public, no sign-in.
+- Deletion URL at `/account-deletion`, bilingual, public — the one Play's Data
+  safety section asks for, which works for a reviewer with no account and for a
+  member without the app.
+- Self-service account deletion in both clients:
+  `public.delete_my_account()` (0119), Settings → Delete account on the web and
+  Android, with a typed `DELETE` confirmation and copy that says what is kept as
+  well as what is removed.
+- Copyrighted-material and moderation behaviour described in the terms; report
+  and appeal paths already existed and are now named there.
+- Sensitive permissions reviewed: `RECORD_AUDIO` removed (voice search hands
+  the microphone to the system recogniser), camera and location declared
+  optional, background location never declared, and the manifest guard in CI
+  fails if the microphone permission returns.
+- Cleartext traffic refused, backups disabled for the database and preferences,
+  R8 shrinking and resource shrinking on, `targetSdk 35`.
+- Data safety answers written down against the schema, including the third
+  parties that receive data (Firebase, Supabase, Cloudflare, ImgBB).
+
+**Still owner-side, and cannot be done from this repository**
+
+1. Fill the Data safety form in the Play Console from
+   [play-store-compliance.md](play-store-compliance.md) — the table there is the
+   answer sheet.
+2. Declare the deletion URL as `https://www.bsdc.info.bd/account-deletion` and
+   the policy as `https://www.bsdc.info.bd/privacy`.
+3. Request the `USE_FULL_SCREEN_INTENT` grant for the order alarm, or accept the
+   fallback (a heads-up notification) — the app works either way.
+4. Upload the signed AAB from the release workflow and complete the content
+   rating, ads declaration ("no ads") and target audience questionnaire.
+5. Run the pre-launch report and read it: it is the only automated check that
+   exercises real devices, and it is free.
