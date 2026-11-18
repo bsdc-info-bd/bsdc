@@ -19,8 +19,14 @@
     <!-- QR Scanner & Composer Camera Capture -->
     <uses-permission android:name="android.permission.CAMERA" />
 
-    <!-- Voice Search System ONLY (no audio file recording/storage) -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!--
+      RECORD_AUDIO is deliberately NOT declared. Voice search uses
+      Intent.ACTION_RECOGNIZE_SPEECH, which hands the recording to the device's
+      own speech service — that app holds the microphone permission, not this one.
+      Nothing in this app opens an AudioRecord or a MediaRecorder, so declaring
+      the permission would be asking for a sensitive capability the app does not
+      use, which Play's permissions policy treats as a defect.
+    -->
 
     <!-- Foreground Location for Local Meetups & Rounded Reverse Geocode -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />

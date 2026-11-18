@@ -10,7 +10,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.LocationOn
-import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
@@ -63,15 +62,8 @@ private fun copyFor(kind: DevicePermissionKind): PermissionCopy = when (kind) {
         icon = Icons.Rounded.CameraAlt,
         titleEn = "Camera (QR Verification & Photos)",
         titleBn = "ক্যামেরা (QR যাচাই ও ছবি)",
-        reasonEn = "Powers real-time Certificate/Notice QR scanning and capturing photos for ImgBB uploads.",
-        reasonBn = "সার্টিফিকেট ও নোটিশের রিয়েল-টাইম QR স্ক্যান এবং ImgBB ছবি তোলার জন্য প্রয়োজন।",
-    )
-    DevicePermissionKind.MICROPHONE -> PermissionCopy(
-        icon = Icons.Rounded.Mic,
-        titleEn = "Microphone (Voice Search Only)",
-        titleBn = "মাইক্রোফোন (শুধুমাত্র ভয়েস সার্চ)",
-        reasonEn = "Dedicated exclusively to live Bengali & English Voice Search. BSDC never records or stores voice audio.",
-        reasonBn = "শুধুমাত্র বাংলা ও ইংরেজি ভয়েস সার্চের জন্য ব্যবহৃত হয়। কোনো অডিও ফাইল সংরক্ষণ করা হয় না।",
+        reasonEn = "Powers real-time Certificate/Notice QR scanning and taking photos for a post or listing. A photo is taken only when you press the button.",
+        reasonBn = "সার্টিফিকেট ও নোটিশের রিয়েল-টাইম QR স্ক্যান এবং পোস্ট বা তালিকার জন্য ছবি তোলার কাজে লাগে। আপনি বোতাম চাপলেই কেবল ছবি তোলা হয়।",
     )
 }
 
@@ -97,7 +89,7 @@ fun PersistentPermissionReadinessBanner(
         body = if (bn) {
             "QR স্ক্যানার, ভয়েস সার্চ, লোকেশন ও লক-স্ক্রিন নোটিফিকেশনের জন্য সব অনুমতি চালু করুন।"
         } else {
-            "Enable Camera, Mic Voice Search, Location, and Push Alerts so every BSDC tool responds smoothly."
+            "Enable Camera, Location and Push Alerts so every BSDC tool responds smoothly."
         },
         tone = BsdcTone.WARN,
         actionLabel = if (bn) "অনুমতি দিন" else "Enable",

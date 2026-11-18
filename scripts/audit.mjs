@@ -53,6 +53,9 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const unique = (values) => [...new Set(values)];
 const has = (path) => existsSync(join(root, path));
 
+/** Evidence line for a list that was checked, used by a few checkpoints. */
+const producersNote = (names) => `named in both locales: ${names.join(', ')}`;
+
 /** Every directory with a package.json at depth one: the deployable units. */
 const packages = readdirSync(root)
   .filter((name) => statSync(join(root, name)).isDirectory())
@@ -1593,6 +1596,42 @@ check('K-06', 'Play Store', 'Cleartext traffic is refused and backups are off', 
     ok:
       /usesCleartextTraffic="false"/.test(manifest) && /allowBackup="false"/.test(manifest),
     evidence: 'the manifest refuses cleartext and disables backup',
+  };
+});
+
+check('K-07', 'Play Store', 'The manifest asks for no sensitive permission the app does not use', () => {
+  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+  // A declared permission the code never exercises is a permissions-policy
+  // defect. The microphone was exactly that: voice search hands the recording to
+  // the device's own speech service, which holds RECORD_AUDIO itself.
+  const declared = [...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map(
+    (match) => match[1],
+  );
+  const recording = declared.filter((name) => /RECORD_AUDIO/.test(name));
+  return {
+    ok: recording.length === 0,
+    evidence:
+      recording.length === 0
+        ? `${declared.length} permissions declared, none of them RECORD_AUDIO`
+        : `declared but unused: ${recording.join(', ')}`,
+  };
+});
+
+check('K-08', 'Play Store', 'Every third party that receives member data is named in the policy', () => {
+  // Play's data safety form asks which third parties receive data; a policy that
+  // omits one is inaccurate in the direction that gets an app suspended. The
+  // image host is the easy one to forget, because the app talks to our own
+  // upload endpoint and ImgBB is behind it.
+  const en = read('main-site/src/i18n/locales/en.ts');
+  const bn = read('main-site/src/i18n/locales/bn.ts');
+  const processors = ['Supabase', 'Firebase', 'Cloudflare', 'ImgBB'];
+  const missing = processors.filter((name) => !en.includes(name) || !bn.includes(name));
+  return {
+    ok: missing.length === 0,
+    evidence:
+      missing.length === 0
+        ? producersNote(processors)
+        : `not named in both locales: ${missing.join(', ')}`,
   };
 });
 

@@ -250,7 +250,8 @@ enum class DevicePermissionKind {
     NOTIFICATIONS,
     LOCATION,
     CAMERA,
-    MICROPHONE,
+    // Microphone is intentionally absent: voice search goes through the system
+    // recogniser, which owns the microphone permission (see AndroidManifest).
 }
 
 enum class PermissionGrantState {

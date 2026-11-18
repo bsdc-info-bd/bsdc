@@ -514,7 +514,6 @@ fun OnboardingWizardScreen(
                                     DevicePermissionKind.NOTIFICATIONS -> if (bn) "পুশ নোটিফিকেশন" else "Push Notifications"
                                     DevicePermissionKind.LOCATION -> if (bn) "লোকেশন (~১ কিমি)" else "City Location (~1 km)"
                                     DevicePermissionKind.CAMERA -> if (bn) "ক্যামেরা (QR ও ছবি)" else "Camera (QR & Photos)"
-                                    DevicePermissionKind.MICROPHONE -> if (bn) "মাইক্রোফোন (ভয়েস সার্চ)" else "Microphone (Voice Search)"
                                 },
                                 style = MaterialTheme.typography.titleMedium,
                             )

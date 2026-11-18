@@ -258,7 +258,7 @@ export const en = {
           'An employer sees the application you submit to their job, including your cover letter and any resume link you attach.',
           'A client sees the proposals submitted to their own gig, including your bid and pitch.',
           'Moderators and staff see reported content and the accounts involved, through a console that records who took which action. They do not browse private messages as a matter of course.',
-          'Our infrastructure providers process data on our behalf: Supabase for the database and storage, Firebase for sign-in and push delivery. They are bound to use it only to run those services.',
+          'Our infrastructure providers process data on our behalf: Supabase for the database, Firebase for sign-in and push delivery, Cloudflare for serving the site, and ImgBB as the image host that stores the pictures you upload. Each is bound to use the data only to run that service, and none of them may use it for advertising.',
         ],
       },
       payments: {
@@ -275,11 +275,11 @@ export const en = {
       },
       photos: {
         title: 'Photos',
-        body: 'Photos you upload are resized and stripped of their embedded metadata before they are stored, so a picture of your desk does not carry the coordinates of your desk. Uploaded photos are served from our storage, and a photo you delete is removed from it rather than merely hidden.',
+        body: 'Photos you upload are resized and stripped of their embedded metadata before they are stored, so a picture of your desk does not carry the coordinates of your desk. The picture itself is held by our image host, ImgBB, which receives the file from our upload endpoint and returns the address the app displays; our own database stores only that address. A photo you delete is removed from the host rather than merely hidden.',
       },
       camera: {
         title: 'Camera and microphone',
-        body: 'Two permissions in the Android app are easy to misread from the store listing, so here is exactly what they do. The camera is used to scan a QR code and, when you choose to, to take a photo for a post or a listing; no photo is taken until you press the button, and pictures are stored the same way as every other upload. The microphone is used only while you hold the voice search button, to turn your speech into a search query. No audio is recorded to a file, kept after the search, or sent anywhere except the speech service that performs the transcription.',
+        body: 'The Android app asks for one of these, and the other is worth stating plainly. The camera scans a QR code and, when you choose to, takes a photo for a post or a listing; no photo is taken until you press the button, and pictures are stored the same way as every other upload. The app does not ask for microphone access at all. Voice search hands the listening to Android’s own speech service, which has its own microphone permission — so no audio passes through, or is stored by, BSDC.',
       },
       cookies: {
         title: 'Cookies and local storage',

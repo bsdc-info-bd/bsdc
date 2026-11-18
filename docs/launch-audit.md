@@ -133,6 +133,20 @@ workflow:
    `docs/play-store-compliance.md`, and checkpoints K-01 to K-06 hold the four
    requirements rather than a document claiming them.
 
+11. **A permission nobody used, and a processor nobody named.** Two Play Store
+   findings that no test had been able to see. `RECORD_AUDIO` was declared and
+   requested with a rationale, and nothing in the app ever opens a recorder:
+   voice search hands the microphone to Android's own speech service, which holds
+   the permission itself — so the app was asking for a sensitive capability it
+   did not use, which is a permissions-policy defect. The declaration, the
+   coordinator branch, the rationale copy and the enum value are gone, and K-07
+   keeps them out. Separately, uploaded pictures are stored on ImgBB — the app
+   talks to our own upload endpoint, so the third party was invisible from the
+   client — and neither the privacy policy nor the data safety answers named it.
+   Both languages now list it beside Supabase, Firebase and Cloudflare, K-08
+   fails if any of the four goes missing, and the camera rationale in the app
+   stopped saying "ImgBB uploads" to a member who has never heard of ImgBB.
+
 ### Findings from the last full pass
 
 Each of these was a live defect found by running the checks rather than by reading
@@ -220,7 +234,7 @@ the code, and each is now fixed with a test or a check that would catch it again
 
 ## Checkpoints
 
-Current result: **114 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Current result: **116 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
@@ -273,7 +287,7 @@ Current result: **114 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
 | C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
 | C-07 | Both languages carry the same keys | Pass | 56 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 55998 Bangla code points in the Bangla locale |
+| C-08 | Bangla is a real translation, not a copy of English | Pass | 56150 Bangla code points in the Bangla locale |
 | C-09 | Every application ships a security header set | Pass | all fourteen |
 | C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
 | C-11 | TypeScript source files under version control | Recorded | 624 .ts/.tsx files |
@@ -399,8 +413,11 @@ Current result: **114 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | K-04 | The Android app links the policy and the terms, and can delete an account | Pass | legal links open in a custom tab and deletion runs through the repository |
 | K-05 | The data safety answers are written down and match the deletion path | Pass | the document names the policy, the terms, the data safety answers and the deletion RPC |
 | K-06 | Cleartext traffic is refused and backups are off | Pass | the manifest refuses cleartext and disables backup |
+| K-07 | The manifest asks for no sensitive permission the app does not use | Pass | 10 permissions declared, none of them RECORD_AUDIO |
+| K-08 | Every third party that receives member data is named in the policy | Pass | named in both locales: Supabase, Firebase, Cloudflare, ImgBB |
 
 ## What no checkpoint can settle
+
 
 Everything in this section is recorded here rather than dressed up as an automated result.
 

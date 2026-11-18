@@ -88,9 +88,11 @@ advertising tag appears in the web app, and the Android build has no analytics
 dependency (`android-app/gradle/libs.versions.toml`).
 
 **Shared with third parties.** Data is processed by Firebase (authentication,
-push delivery), Supabase (database, storage) and Cloudflare (hosting) as
-processors. Nothing is sold, and no data goes to an advertising network. The
-privacy policy says the same thing in both languages.
+push delivery), Supabase (database), Cloudflare (hosting) and **ImgBB** — the
+image host that stores uploaded pictures, which receives the file from our own
+upload endpoint and returns the address the app displays. Nothing is sold, and no
+data goes to an advertising network. The privacy policy names all four in both
+languages, and checkpoint K-08 fails if the image host stops being disclosed.
 
 **Deletion.** Self-service, in-app, immediate, as described above. Users can also
 request deletion by writing to the support address, and both paths lead to the
@@ -100,17 +102,39 @@ same RPC.
 
 | Permission | Why it is declared | Disclosure |
 | --- | --- | --- |
-| `CAMERA` | taking a photo in the composer, avatar upload | declared optional in the manifest, requested at the moment of use, explained in the privacy policy `camera` section |
-| `RECORD_AUDIO` | recording a voice clip in the composer | requested at the moment of use, explained in the privacy policy `camera` / audio section |
+| `CAMERA` | QR scanning, taking a photo in the composer, avatar upload | declared optional in the manifest, requested at the moment of use, explained in the privacy policy `camera` section |
 | `ACCESS_FINE_LOCATION` | delivery address picker, "near me" discovery | requested when the member opens the picker, never at launch, never in the background |
 | `ACCESS_COARSE_LOCATION` | same, with lower precision | same |
 | `POST_NOTIFICATIONS` | order and message notifications | explained in the notifications panel; the app is usable if refused |
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | the order alarm player | declared with its type, as API 34+ requires |
 
+**Microphone is not declared at all.** Voice search issues
+`Intent.ACTION_RECOGNIZE_SPEECH`, which hands the recording to the device's own
+speech service — that app holds `RECORD_AUDIO`, not this one. Nothing in the
+Android sources opens an `AudioRecord` or a `MediaRecorder`. Declaring the
+permission would have asked for a sensitive capability the app does not use,
+which Play's permissions policy treats as a defect; it was removed, together with
+the rationale copy that described it, and the privacy policy now says so in both
+languages. Checkpoint K-07 keeps it out.
+
 Location is never requested in the background, and no `ACCESS_BACKGROUND_LOCATION`
 permission is declared. Coordinates sent to the database are rounded to two
 decimal places (`GeoCoordinatePrivacy.roundTwoDecimals`) before they leave the
 handset.
+
+## Decisions recorded rather than hidden
+
+**No microphone permission.** See above: the system recogniser owns it.
+
+**"Full screen intent" for the order alarm.** `USE_FULL_SCREEN_INTENT` is a
+restricted permission Play grants for alarms, calls and similar interruptions.
+It is used for one thing — a new marketplace order ringing on a locked handset —
+and the request states that. If Play refuses the grant the alarm still posts as a
+heads-up notification; nothing else depends on it.
+
+**Media-playback foreground service for an alarm sound.** Android has no
+"alarm" foreground-service type; `mediaPlayback` is the type that matches keeping
+an audio loop alive with the screen off, and the service is declared with it.
 
 ## What a reviewer should click
 
