@@ -310,10 +310,66 @@ async function syncMentions(postId: string, body: string): Promise<void> {
   if (error) throw toDataError(error);
 }
 
-async function syncPoll(postId: string, options: readonly string[]): Promise<void> {
-  const supabase = getSupabase();
-  const labels = options.map((option) => option.trim()).filter(Boolean);
+/**
+ * The poll options a post already carries, and the ballots on each one.
+ *
+ * Reading them before a save is what separates "the body changed" from "the
+ * poll changed". Without it every edit rewrote the poll, and the rewrite
+ * deleted the votes.
+ */
+export interface StoredPollOption {
+  position: number;
+  label: string;
+  votes: number;
+}
 
+/**
+ * Raised when an edit would change the options of a poll somebody has voted on.
+ *
+ * A poll that has votes is a record of what people answered. Its options are
+ * frozen: the database refuses to delete a voted option (0121), and this stops
+ * the save before the post row is touched, so the member reads a sentence
+ * instead of half a save.
+ */
+export const POLL_LOCKED_MESSAGE = 'poll/options-locked';
+
+export type PollWrite =
+  | { write: false; labels: readonly string[] }
+  | { write: true; labels: readonly string[] };
+
+/**
+ * Whether this save has to touch the poll at all.
+ *
+ * Three answers, and the first two are the ones that matter:
+ *
+ *  - **Unchanged.** Saving a post to fix a typo in its body used to delete and
+ *    re-insert every option, which (a) destroyed the votes and (b) left a window
+ *    where a reader saw a poll with no options. An unchanged poll is not written.
+ *  - **Changed, nobody voted.** Replace it. A poll with no answers is a draft of
+ *    a poll, and its author may still reword it.
+ *  - **Changed, somebody voted.** Refuse. The sentence the member reads explains
+ *    that the poll keeps its options; the alternative is silent data loss.
+ */
+export function decidePollWrite(
+  stored: readonly StoredPollOption[],
+  options: readonly string[],
+): PollWrite {
+  const labels = options.map((option) => option.trim()).filter(Boolean);
+  const existing = [...stored].sort((a, b) => a.position - b.position);
+  const unchanged =
+    existing.length === labels.length && existing.every((option, i) => option.label === labels[i]);
+  if (unchanged) return { write: false, labels };
+
+  if (existing.some((option) => option.votes > 0)) {
+    throw toDataError(new Error(POLL_LOCKED_MESSAGE));
+  }
+
+  return { write: true, labels };
+}
+
+/** Replaces a poll's options. Only reached when no option has a vote. */
+async function writePoll(postId: string, labels: readonly string[]): Promise<void> {
+  const supabase = getSupabase();
   const { error: clearError } = await supabase.from('poll_options').delete().eq('post_id', postId);
   if (clearError) throw toDataError(clearError);
   if (labels.length === 0) return;
@@ -322,6 +378,21 @@ async function syncPoll(postId: string, options: readonly string[]): Promise<voi
     .from('poll_options')
     .insert(labels.map((label, index) => ({ post_id: postId, position: index, label })));
   if (error) throw toDataError(error);
+}
+
+/** The stored options of the post being edited, or none for a new post. */
+async function readStoredPoll(postId: string | null): Promise<StoredPollOption[]> {
+  if (!postId) return [];
+  const { data, error } = await getSupabase()
+    .from('poll_options')
+    .select('position, label, votes')
+    .eq('post_id', postId);
+  if (error) throw toDataError(error);
+  return (data ?? []).map((row) => ({
+    position: row.position,
+    label: row.label,
+    votes: row.votes,
+  }));
 }
 
 export interface SaveResult {
@@ -348,6 +419,12 @@ export async function savePost(
   // image until both its hosted URL and its media_assets foreign key exist.
   assertPostMediaLinked(draft.media);
   const supabase = getSupabase();
+  // Decided before the post is written, so a poll whose votes are frozen stops
+  // the save instead of leaving the post updated and the poll half-rewritten.
+  const pollPlan =
+    draft.kind === 'poll'
+      ? decidePollWrite(await readStoredPoll(draft.id), draft.pollOptions)
+      : null;
   const body = draft.body.trim();
   const title = draft.title.trim();
   const fallbackSlug = draft.kind === 'snippet' ? 'snippet' : draft.kind;
@@ -419,7 +496,7 @@ export async function savePost(
   await syncTags(postId, draft.tags);
   await syncMedia(postId, draft);
   await syncMentions(postId, body);
-  if (draft.kind === 'poll') await syncPoll(postId, draft.pollOptions);
+  if (pollPlan?.write) await writePoll(postId, pollPlan.labels);
   if (status === 'published') wakePushDelivery();
 
   return { id: postId, slug: postSlug };

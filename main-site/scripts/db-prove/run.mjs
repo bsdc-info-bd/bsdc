@@ -163,10 +163,8 @@ const HARNESSES = [
     't78.mjs',
     '0119: a member deletes their own account — everything personal goes, the tombstone keeps no name, the owner and anon are refused',
   ],
-  [
-    't79.mjs',
-    '0120: a comment carries its own picture — and the sweeper is told not to delete it',
-  ],
+  ['t79.mjs', '0120: a comment carries its own picture — and the sweeper is told not to delete it'],
+  ['t80.mjs', '0121: a poll that has votes keeps its options — and still dies with its post'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

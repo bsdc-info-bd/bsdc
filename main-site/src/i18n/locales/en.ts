@@ -1289,6 +1289,7 @@ export const en = {
       codeRequired: 'A code snippet needs code.',
       pollOptions: 'A poll needs at least two options.',
       pollDuplicate: 'Poll options must be different from each other.',
+      pollLocked: 'This poll already has votes, so its options stay as they are.',
       mediaRequired: 'A media post needs at least one image.',
       tooManyTags: 'Too many tags.',
     },

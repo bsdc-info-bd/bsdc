@@ -22,6 +22,10 @@ const MESSAGE_MAP: Record<string, string> = {
   // second request instead of the constraint doing it: a member who submits
   // twice is told they already have, not that a value is "already in use".
   'job/already-applied': 'data.errors.alreadyApplied',
+  // Raised by 0121 and by the composer's own check: a poll somebody voted on
+  // keeps its options, so an edit that rewrites them is refused with a sentence
+  // that says why rather than a constraint name.
+  'poll/options-locked': 'compose.errors.pollLocked',
   'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 

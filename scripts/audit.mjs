@@ -62,9 +62,7 @@ const packages = readdirSync(root)
   .filter((name) => existsSync(join(root, name, 'package.json')))
   .sort();
 
-const webApps = packages.filter(
-  (name) => name !== 'corporate-kit' && name !== 'push-worker',
-);
+const webApps = packages.filter((name) => name !== 'corporate-kit' && name !== 'push-worker');
 const consoles = webApps.filter((name) => name !== 'main-site');
 /**
  * The one Cloudflare Worker. It is a deployable unit with its own gates, but it
@@ -98,15 +96,24 @@ check('A-14', 'Delivery', 'The push worker is a deployable unit of its own', () 
     'it is deployed by deploy.yml and gated by the push-worker job in ci.yml',
 }));
 
-check('A-03', 'Delivery', 'The Android app is a pure native Kotlin + Java + Compose project', () => ({
-  ok:
-    !has('android-app/capacitor.config.ts') &&
-    has('android-app/settings.gradle.kts') &&
-    has('android-app/app/build.gradle.kts') &&
-    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java') &&
-    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/DocCodeChecksum.java'),
-  evidence: 'native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor',
-}));
+check(
+  'A-03',
+  'Delivery',
+  'The Android app is a pure native Kotlin + Java + Compose project',
+  () => ({
+    ok:
+      !has('android-app/capacitor.config.ts') &&
+      has('android-app/settings.gradle.kts') &&
+      has('android-app/app/build.gradle.kts') &&
+      has(
+        'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
+      ) &&
+      has(
+        'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/DocCodeChecksum.java',
+      ),
+    evidence: 'native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor',
+  }),
+);
 
 check('A-04', 'Delivery', 'Every application declares the five gate scripts', () => {
   const missing = packages.filter((name) => {
@@ -199,36 +206,57 @@ check('B-03b', 'Database', 'No pinned search path leaves out the extensions sche
   );
   return {
     ok: bad.length === 0,
-    evidence: bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
+    evidence:
+      bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
   };
 });
 
-check('B-03c', 'Database', '`pg_temp` is last, so a caller cannot get in front of a real schema', () => {
-  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
-    match[1].trim(),
-  );
-  const bad = [...new Set(paths)].filter((path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path));
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
-});
+check(
+  'B-03c',
+  'Database',
+  '`pg_temp` is last, so a caller cannot get in front of a real schema',
+  () => {
+    const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+      match[1].trim(),
+    );
+    const bad = [...new Set(paths)].filter(
+      (path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path),
+    );
+    return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
+  },
+);
 
 // The same class of mistake in a different coat. A function body is resolved
 // against *its own* pinned search path at the moment it is created, so a file
 // that calls an extension-owned symbol must say where to look. Qualifying the
 // call instead would tie the file to one deployment's layout; naming the
 // schema in the path works wherever the extension landed.
-check('B-03d', 'Database', 'A file that calls an extension-owned symbol says where to find it', () => {
-  const owned = ['gen_random_bytes', 'digest', 'hmac', 'gen_salt', 'crypt', 'similarity', 'show_trgm'];
-  const bad = [];
-  for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
-    const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
-    const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
-    if (uses.length === 0) continue;
-    const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
-    const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
-    if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
-  }
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
-});
+check(
+  'B-03d',
+  'Database',
+  'A file that calls an extension-owned symbol says where to find it',
+  () => {
+    const owned = [
+      'gen_random_bytes',
+      'digest',
+      'hmac',
+      'gen_salt',
+      'crypt',
+      'similarity',
+      'show_trgm',
+    ];
+    const bad = [];
+    for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
+      const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
+      const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
+      if (uses.length === 0) continue;
+      const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
+      const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
+      if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
+    }
+    return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
+  },
+);
 
 check('B-04', 'Database', 'No migration grants a blanket write to anon', () => {
   const bad = shLines(
@@ -558,23 +586,28 @@ check('D-05', 'Safety', 'The secret scanner runs before anything else in CI', ()
   return { ok: /gitleaks/.test(ci), evidence: 'gitleaks runs in the secrets-scan job' };
 });
 
-check('D-06', 'Safety', 'The native Android router renders only BSDC and News origins in-app', () => {
-  const router = read(
-    'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
-  );
-  const models = read(
-    'android-app/core/model/src/main/kotlin/bd/info/bsdc/app/core/model/BsdcModels.kt',
-  );
-  return {
-    ok:
-      /NATIVE_HOSTS/.test(models) &&
-      /NEWS_HOSTS/.test(models) &&
-      /ExternalBrowser/.test(router) &&
-      /AdminWebOnly/.test(router),
-    evidence:
-      'AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin*, and sends untrusted hosts to browser',
-  };
-});
+check(
+  'D-06',
+  'Safety',
+  'The native Android router renders only BSDC and News origins in-app',
+  () => {
+    const router = read(
+      'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
+    );
+    const models = read(
+      'android-app/core/model/src/main/kotlin/bd/info/bsdc/app/core/model/BsdcModels.kt',
+    );
+    return {
+      ok:
+        /NATIVE_HOSTS/.test(models) &&
+        /NEWS_HOSTS/.test(models) &&
+        /ExternalBrowser/.test(router) &&
+        /AdminWebOnly/.test(router),
+      evidence:
+        'AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin*, and sends untrusted hosts to browser',
+    };
+  },
+);
 
 check('D-07', 'Safety', 'Field measurement carries no identity', () => {
   const sql = read('supabase/migrations/0034_performance.sql');
@@ -709,16 +742,21 @@ check('G-02', 'Web delivery', 'Push worker cleans up any leftover offline or ima
   };
 });
 
-check('G-03', 'Web delivery', 'No offline shell, offline banner, or picture cache module ships', () => ({
-  ok:
-    !has('main-site/src/components/layout/OfflineBanner.tsx') &&
-    !has('main-site/src/routes/OfflinePage.tsx') &&
-    !has('main-site/src/pwa.ts') &&
-    !has('main-site/src/lib/media/image-strategy.ts') &&
-    !has('main-site/src/lib/media/cache-policy.ts') &&
-    !has('main-site/src/components/media/PictureHealthCard.tsx'),
-  evidence: 'offline page, offline banner, pwa.ts, and client picture cache modules are absent',
-}));
+check(
+  'G-03',
+  'Web delivery',
+  'No offline shell, offline banner, or picture cache module ships',
+  () => ({
+    ok:
+      !has('main-site/src/components/layout/OfflineBanner.tsx') &&
+      !has('main-site/src/routes/OfflinePage.tsx') &&
+      !has('main-site/src/pwa.ts') &&
+      !has('main-site/src/lib/media/image-strategy.ts') &&
+      !has('main-site/src/lib/media/cache-policy.ts') &&
+      !has('main-site/src/components/media/PictureHealthCard.tsx'),
+    evidence: 'offline page, offline banner, pwa.ts, and client picture cache modules are absent',
+  }),
+);
 
 /* ------------------------------------------------------------------ *
  * 8. Tests
@@ -746,7 +784,9 @@ note('H-01', 'Tests', 'Unit tests by package', () => {
   const skipped = counts.filter((entry) => entry.skipped).map((entry) => entry.name);
   const run = counts.filter((entry) => !entry.skipped);
   return `${total} tests across ${run.length} installed package(s)${
-    skipped.length > 0 ? `; ${skipped.length} package(s) not counted because dependencies are not installed: ${skipped.join(', ')}` : ''
+    skipped.length > 0
+      ? `; ${skipped.length} package(s) not counted because dependencies are not installed: ${skipped.join(', ')}`
+      : ''
   }: ${run.map((entry) => `${entry.name} ${entry.n}`).join(', ') || 'none'}`;
 });
 
@@ -939,8 +979,7 @@ check('C-14', 'Front end', 'Every image carries alternative text', () => {
     // writing `alt=` next to the element: `MediaImage` destructures it and
     // spreads the rest, so the attribute is there at runtime and is typed as
     // non-optional at the call site.
-    const altIsARequiredProp =
-      /alt:\s*string;/.test(source) && !/alt\?:/.test(source);
+    const altIsARequiredProp = /alt:\s*string;/.test(source) && !/alt\?:/.test(source);
     for (const match of source.matchAll(/<img\b([\s\S]*?)\/>/g)) {
       if (!/\balt=|\{\.\.\./.test(match[1]) && !altIsARequiredProp) bad.push(file);
     }
@@ -1040,17 +1079,22 @@ check('C-22', 'Front end', 'The shared kit is imported, never copied', () => {
   };
 });
 
-check('D-08', 'Safety', 'The native Android app disables cleartext traffic, backups, and Capacitor shells', () => {
-  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
-  return {
-    ok:
-      !has('android-app/capacitor.config.ts') &&
-      /android:usesCleartextTraffic="false"/.test(manifest) &&
-      !/android:usesCleartextTraffic="true"/.test(manifest) &&
-      /android:allowBackup="false"/.test(manifest),
-    evidence: 'native manifest disables cleartext and backups; zero Capacitor shell exists',
-  };
-});
+check(
+  'D-08',
+  'Safety',
+  'The native Android app disables cleartext traffic, backups, and Capacitor shells',
+  () => {
+    const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+    return {
+      ok:
+        !has('android-app/capacitor.config.ts') &&
+        /android:usesCleartextTraffic="false"/.test(manifest) &&
+        !/android:usesCleartextTraffic="true"/.test(manifest) &&
+        /android:allowBackup="false"/.test(manifest),
+      evidence: 'native manifest disables cleartext and backups; zero Capacitor shell exists',
+    };
+  },
+);
 
 check('D-09', 'Safety', 'No Firebase service configuration is committed for Android', () => {
   // Credential *files*, not source that mentions them. The original pattern also
@@ -1199,26 +1243,31 @@ check('G-04', 'Web delivery', 'Website HTML does not advertise an offline PWA ma
   };
 });
 
-check('G-05', 'Web delivery', 'Service worker never intercepts fetches, navigations, or images', () => {
-  const worker = read('main-site/src/sw.ts');
-  const checks = {
-    noWorkbox: !/from\s+['"]workbox-/.test(worker),
-    noPrecache: !/precacheAndRoute/.test(worker),
-    noNavigation: !/NavigationRoute|createHandlerBoundToURL/.test(worker),
-    noFetchListener: !/addEventListener\(['"]fetch['"]/.test(worker),
-    noCachePut: !/caches\.open\(|cache\.put\(/.test(worker),
-  };
-  const failed = Object.entries(checks)
-    .filter(([, present]) => !present)
-    .map(([name]) => name);
-  return {
-    ok: failed.length === 0,
-    evidence:
-      failed.length === 0
-        ? 'push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes'
-        : `failed: ${failed.join(', ')}`,
-  };
-});
+check(
+  'G-05',
+  'Web delivery',
+  'Service worker never intercepts fetches, navigations, or images',
+  () => {
+    const worker = read('main-site/src/sw.ts');
+    const checks = {
+      noWorkbox: !/from\s+['"]workbox-/.test(worker),
+      noPrecache: !/precacheAndRoute/.test(worker),
+      noNavigation: !/NavigationRoute|createHandlerBoundToURL/.test(worker),
+      noFetchListener: !/addEventListener\(['"]fetch['"]/.test(worker),
+      noCachePut: !/caches\.open\(|cache\.put\(/.test(worker),
+    };
+    const failed = Object.entries(checks)
+      .filter(([, present]) => !present)
+      .map(([name]) => name);
+    return {
+      ok: failed.length === 0,
+      evidence:
+        failed.length === 0
+          ? 'push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes'
+          : `failed: ${failed.join(', ')}`,
+    };
+  },
+);
 
 check('I-01', 'CI', 'Continuous integration runs all five gates on every application', () => {
   const ci = read('.github/workflows/ci.yml');
@@ -1412,7 +1461,16 @@ check('C-30', 'Front end', 'Every settings panel has an address of its own', () 
   const site = read('main-site/src/lib/site.ts');
   const page = read('main-site/src/routes/SettingsPage.tsx');
   const app = read('main-site/src/App.tsx');
-  const panels = ['Account', 'Appearance', 'Language', 'Notifications', 'Feed', 'Privacy', 'Security', 'Danger'];
+  const panels = [
+    'Account',
+    'Appearance',
+    'Language',
+    'Notifications',
+    'Feed',
+    'Privacy',
+    'Security',
+    'Danger',
+  ];
   const missing = panels.filter((name) => !site.includes(`settings${name}: '/settings/`));
   return {
     ok:
@@ -1445,6 +1503,35 @@ check('C-31', 'Front end', 'Reading a page does not ask the server what it could
       callers.every((file) => !file.includes('main.tsx')),
     evidence:
       'the capability probe runs when an upload starts, not on page load: no speculative /api request per view',
+  };
+});
+
+check('C-32', 'Content', 'Editing a post does not rewrite a poll that has votes', () => {
+  // Saving a post rewrote its poll by deleting every option and inserting the new
+  // list. `poll_votes.option_id` cascades from `poll_options`, so correcting a
+  // typo in a poll's body deleted every ballot — and the options came back with
+  // new ids, so nothing was recoverable. Three things now hold it:
+  //   * `decidePollWrite` returns "unchanged" for an unchanged poll, so the common
+  //     save writes nothing at all;
+  //   * it refuses a change to a poll somebody voted on, before the post is
+  //     touched, and the composer shows the options read-only with the reason;
+  //   * 0121 refuses the delete in the database, for every other client.
+  const repo = read('main-site/src/lib/content/post-repository.ts');
+  const composer = read('main-site/src/routes/ComposePage.tsx');
+  const migration = read('supabase/migrations/0121_a_poll_that_has_votes_keeps_its_options.sql');
+  const proof = read('main-site/scripts/db-prove/t80.mjs');
+  return {
+    ok:
+      repo.includes('export function decidePollWrite') &&
+      repo.includes('if (pollPlan?.write) await writePoll(') &&
+      repo.includes("export const POLL_LOCKED_MESSAGE = 'poll/options-locked'") &&
+      composer.includes('pollLocked') &&
+      migration.includes('create trigger poll_options_keep_votes') &&
+      migration.includes('pg_trigger_depth() > 1') &&
+      proof.includes('the rewrite that emptied the poll is refused as a whole') &&
+      proof.includes('deleting the post still takes its votes'),
+    evidence:
+      'a save writes a poll only when nobody has voted; the database refuses the delete, and the post still takes its options with it',
   };
 });
 
@@ -1572,7 +1659,9 @@ check('F-13', 'Performance', 'The first paint is the page, not a placeholder', (
   // happens with the HTML rather than after the JavaScript — and a reader
   // without scripts gets the page's opening, not a summary of it.
   const routes = staticRoutesFile().routes;
-  const withOpening = routes.filter((route) => Array.isArray(route.opening) && route.opening.length > 0);
+  const withOpening = routes.filter(
+    (route) => Array.isArray(route.opening) && route.opening.length > 0,
+  );
   const expected = ['/about', '/guidelines', '/privacy', '/terms', '/account-deletion'];
   const missing = expected.filter((path) => !withOpening.some((route) => route.path === path));
   return {
@@ -1600,30 +1689,40 @@ check('F-14', 'Performance', "Only the visitor's language is downloaded", () => 
   };
 });
 
-check('F-15', 'Performance', 'The router does not pull a validation library onto the first paint', () => {
-  const guard = read('main-site/src/components/auth/RequireGuest.tsx');
-  const onboarding = has('main-site/src/lib/profile/onboarding.ts')
-    ? read('main-site/src/lib/profile/onboarding.ts')
-    : '';
-  const env = read('main-site/src/lib/env.ts');
-  return {
-    ok:
-      guard.includes("from '@/lib/profile/onboarding'") &&
-      onboarding.includes('export function isProfileOnboarded') &&
-      !/from 'zod'/.test(onboarding) &&
-      !/from 'zod'/.test(env),
-    evidence:
-      'the router guard and the environment check import no schema library; zod ships only with the forms that use it',
-  };
-});
+check(
+  'F-15',
+  'Performance',
+  'The router does not pull a validation library onto the first paint',
+  () => {
+    const guard = read('main-site/src/components/auth/RequireGuest.tsx');
+    const onboarding = has('main-site/src/lib/profile/onboarding.ts')
+      ? read('main-site/src/lib/profile/onboarding.ts')
+      : '';
+    const env = read('main-site/src/lib/env.ts');
+    return {
+      ok:
+        guard.includes("from '@/lib/profile/onboarding'") &&
+        onboarding.includes('export function isProfileOnboarded') &&
+        !/from 'zod'/.test(onboarding) &&
+        !/from 'zod'/.test(env),
+      evidence:
+        'the router guard and the environment check import no schema library; zod ships only with the forms that use it',
+    };
+  },
+);
 
-check('F-16', 'Performance', 'The footer starts below the fold, so its arrival cannot shift the page', () => {
-  const shell = read('main-site/src/components/layout/AppShell.tsx');
-  return {
-    ok: shell.includes('min-h-[100dvh]'),
-    evidence: 'main reserves a viewport height whenever the page has a footer',
-  };
-});
+check(
+  'F-16',
+  'Performance',
+  'The footer starts below the fold, so its arrival cannot shift the page',
+  () => {
+    const shell = read('main-site/src/components/layout/AppShell.tsx');
+    return {
+      ok: shell.includes('min-h-[100dvh]'),
+      evidence: 'main reserves a viewport height whenever the page has a footer',
+    };
+  },
+);
 
 check('F-17', 'Performance', 'Blue that renders words clears the contrast floor', () => {
   // #1877f2 on our surface is 3.9:1. The fill token stays for artwork; text
@@ -1645,18 +1744,24 @@ check('F-17', 'Performance', 'Blue that renders words clears the contrast floor'
   };
 });
 
-check('F-18', 'Performance', 'The font is preloaded and cached, not revalidated every visit', () => {
-  const html = read('main-site/index.html');
-  const headers = read('main-site/public/_headers');
-  return {
-    ok:
-      /rel="preload"/.test(html) &&
-      /noto-sans-bengali\.woff2/.test(html) &&
-      /\/fonts\/\*/.test(headers) &&
-      /immutable/.test(headers),
-    evidence: 'index.html preloads the Bangla face and _headers marks /fonts/* immutable for a year',
-  };
-});
+check(
+  'F-18',
+  'Performance',
+  'The font is preloaded and cached, not revalidated every visit',
+  () => {
+    const html = read('main-site/index.html');
+    const headers = read('main-site/public/_headers');
+    return {
+      ok:
+        /rel="preload"/.test(html) &&
+        /noto-sans-bengali\.woff2/.test(html) &&
+        /\/fonts\/\*/.test(headers) &&
+        /immutable/.test(headers),
+      evidence:
+        'index.html preloads the Bangla face and _headers marks /fonts/* immutable for a year',
+    };
+  },
+);
 
 check('F-19', 'Performance', 'An empty state starts a section, not a skipped heading level', () => {
   const empty = read('main-site/src/design-system/EmptyState.tsx');
@@ -1670,7 +1775,8 @@ check('F-20', 'Performance', 'The home page puts the feed before the sidebar on 
   const home = read('main-site/src/routes/HomePage.tsx');
   return {
     ok: home.includes('order-1') && home.includes('order-2 lg:order-none'),
-    evidence: 'the rail follows the feed below the lg breakpoint and is skipped for layout until then',
+    evidence:
+      'the rail follows the feed below the lg breakpoint and is skipped for layout until then',
   };
 });
 
@@ -1686,20 +1792,26 @@ check('F-21', 'Performance', 'A decorative animation does not keep the main thre
       !/animate=\{\{ scale: \[1, 1\.08, 1\] \}\}/.test(page) &&
       css.includes('.mk-glow') &&
       css.includes('@keyframes mk-glow'),
-    evidence: 'the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion',
+    evidence:
+      'the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion',
   };
 });
 
-check('G-06', 'Web delivery', 'Feed and API queries do not stall on browser online heuristics', () => {
-  const entry = read('main-site/src/main.tsx');
-  return {
-    ok:
-      /networkMode:\s*'always'/.test(entry) &&
-      /registerPushServiceWorker\(\)/.test(entry) &&
-      !/registerServiceWorker/.test(entry),
-    evidence: 'QueryClient configures networkMode: always and registers only the push worker',
-  };
-});
+check(
+  'G-06',
+  'Web delivery',
+  'Feed and API queries do not stall on browser online heuristics',
+  () => {
+    const entry = read('main-site/src/main.tsx');
+    return {
+      ok:
+        /networkMode:\s*'always'/.test(entry) &&
+        /registerPushServiceWorker\(\)/.test(entry) &&
+        !/registerServiceWorker/.test(entry),
+      evidence: 'QueryClient configures networkMode: always and registers only the push worker',
+    };
+  },
+);
 
 check(
   'I-05',
@@ -1748,7 +1860,7 @@ check('J-05', 'Data', 'Every migration names only tables, columns and functions 
     ok: problems.length === 0,
     evidence:
       problems.length === 0
-        ? detail.split('\n').pop() ?? 'every migration resolves against the schema'
+        ? (detail.split('\n').pop() ?? 'every migration resolves against the schema')
         : problems.join('; '),
   };
 });
@@ -1785,9 +1897,7 @@ check('K-02', 'Play Store', 'The terms of service are a public route', () => {
 });
 
 check('K-03', 'Play Store', 'A member can delete their own account in the app', () => {
-  const migration = read(
-    'supabase/migrations/0119_a_member_can_delete_their_own_account.sql',
-  );
+  const migration = read('supabase/migrations/0119_a_member_can_delete_their_own_account.sql');
   const settings = read('main-site/src/routes/SettingsPage.tsx');
   const service = read('main-site/src/lib/auth/auth-service.ts');
   return {
@@ -1800,69 +1910,87 @@ check('K-03', 'Play Store', 'A member can delete their own account in the app', 
   };
 });
 
-check('K-04', 'Play Store', 'The Android app links the policy and the terms, and can delete an account', () => {
-  const settingsScreen = read(
-    'android-app/feature/news/src/main/kotlin/bd/info/bsdc/app/feature/news/SystemDiagnosticsScreen.kt',
-  );
-  const api = read(
-    'android-app/core/network/src/main/kotlin/bd/info/bsdc/app/core/network/BsdcPlatformApi.kt',
-  );
-  const repo = read(
-    'android-app/core/auth/src/main/kotlin/bd/info/bsdc/app/core/auth/AuthRepository.kt',
-  );
-  return {
-    ok:
-      /SITE_ORIGIN}\/privacy/.test(settingsScreen) &&
-      /SITE_ORIGIN}\/terms/.test(settingsScreen) &&
-      settingsScreen.includes('onDeleteAccount') &&
-      api.includes('delete_my_account') &&
-      repo.includes('suspend fun deleteMyAccount'),
-    evidence: 'legal links open in a custom tab and deletion runs through the repository',
-  };
-});
+check(
+  'K-04',
+  'Play Store',
+  'The Android app links the policy and the terms, and can delete an account',
+  () => {
+    const settingsScreen = read(
+      'android-app/feature/news/src/main/kotlin/bd/info/bsdc/app/feature/news/SystemDiagnosticsScreen.kt',
+    );
+    const api = read(
+      'android-app/core/network/src/main/kotlin/bd/info/bsdc/app/core/network/BsdcPlatformApi.kt',
+    );
+    const repo = read(
+      'android-app/core/auth/src/main/kotlin/bd/info/bsdc/app/core/auth/AuthRepository.kt',
+    );
+    return {
+      ok:
+        /SITE_ORIGIN}\/privacy/.test(settingsScreen) &&
+        /SITE_ORIGIN}\/terms/.test(settingsScreen) &&
+        settingsScreen.includes('onDeleteAccount') &&
+        api.includes('delete_my_account') &&
+        repo.includes('suspend fun deleteMyAccount'),
+      evidence: 'legal links open in a custom tab and deletion runs through the repository',
+    };
+  },
+);
 
-check('K-05', 'Play Store', 'The data safety answers are written down and match the deletion path', () => {
-  const doc = read('docs/play-store-compliance.md');
-  const migration = read(
-    'supabase/migrations/0119_a_member_can_delete_their_own_account.sql',
-  );
-  const documented = ['privacy', 'terms', 'Data safety', 'Encrypted in transit', 'Account deletion'];
-  const missing = documented.filter((heading) => !doc.includes(heading));
-  return {
-    ok: missing.length === 0 && doc.includes('delete_my_account'),
-    evidence:
-      missing.length === 0
-        ? 'the document names the policy, the terms, the data safety answers and the deletion RPC'
-        : `missing: ${missing.join(', ')}`,
-  };
-});
+check(
+  'K-05',
+  'Play Store',
+  'The data safety answers are written down and match the deletion path',
+  () => {
+    const doc = read('docs/play-store-compliance.md');
+    const migration = read('supabase/migrations/0119_a_member_can_delete_their_own_account.sql');
+    const documented = [
+      'privacy',
+      'terms',
+      'Data safety',
+      'Encrypted in transit',
+      'Account deletion',
+    ];
+    const missing = documented.filter((heading) => !doc.includes(heading));
+    return {
+      ok: missing.length === 0 && doc.includes('delete_my_account'),
+      evidence:
+        missing.length === 0
+          ? 'the document names the policy, the terms, the data safety answers and the deletion RPC'
+          : `missing: ${missing.join(', ')}`,
+    };
+  },
+);
 
 check('K-06', 'Play Store', 'Cleartext traffic is refused and backups are off', () => {
   const manifest = read('android-app/app/src/main/AndroidManifest.xml');
   return {
-    ok:
-      /usesCleartextTraffic="false"/.test(manifest) && /allowBackup="false"/.test(manifest),
+    ok: /usesCleartextTraffic="false"/.test(manifest) && /allowBackup="false"/.test(manifest),
     evidence: 'the manifest refuses cleartext and disables backup',
   };
 });
 
-check('K-07', 'Play Store', 'The manifest asks for no sensitive permission the app does not use', () => {
-  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
-  // A declared permission the code never exercises is a permissions-policy
-  // defect. The microphone was exactly that: voice search hands the recording to
-  // the device's own speech service, which holds RECORD_AUDIO itself.
-  const declared = [...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map(
-    (match) => match[1],
-  );
-  const recording = declared.filter((name) => /RECORD_AUDIO/.test(name));
-  return {
-    ok: recording.length === 0,
-    evidence:
-      recording.length === 0
-        ? `${declared.length} permissions declared, none of them RECORD_AUDIO`
-        : `declared but unused: ${recording.join(', ')}`,
-  };
-});
+check(
+  'K-07',
+  'Play Store',
+  'The manifest asks for no sensitive permission the app does not use',
+  () => {
+    const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+    // A declared permission the code never exercises is a permissions-policy
+    // defect. The microphone was exactly that: voice search hands the recording to
+    // the device's own speech service, which holds RECORD_AUDIO itself.
+    const declared = [...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+    const recording = declared.filter((name) => /RECORD_AUDIO/.test(name));
+    return {
+      ok: recording.length === 0,
+      evidence:
+        recording.length === 0
+          ? `${declared.length} permissions declared, none of them RECORD_AUDIO`
+          : `declared but unused: ${recording.join(', ')}`,
+    };
+  },
+);
 
 check('K-09', 'Play Store', 'The deletion URL works without the app installed', () => {
   // Play's Data safety section asks for a URL where deletion can be requested.
@@ -1880,27 +2008,33 @@ check('K-09', 'Play Store', 'The deletion URL works without the app installed', 
       footer.includes('ROUTES.accountDeletion') &&
       page.includes('byEmail') &&
       doc.includes('account-deletion'),
-    evidence: '/account-deletion is routed, linked in the footer and named in the compliance record',
+    evidence:
+      '/account-deletion is routed, linked in the footer and named in the compliance record',
   };
 });
 
-check('K-08', 'Play Store', 'Every third party that receives member data is named in the policy', () => {
-  // Play's data safety form asks which third parties receive data; a policy that
-  // omits one is inaccurate in the direction that gets an app suspended. The
-  // image host is the easy one to forget, because the app talks to our own
-  // upload endpoint and ImgBB is behind it.
-  const en = read('main-site/src/i18n/locales/en.ts');
-  const bn = read('main-site/src/i18n/locales/bn.ts');
-  const processors = ['Supabase', 'Firebase', 'Cloudflare', 'ImgBB'];
-  const missing = processors.filter((name) => !en.includes(name) || !bn.includes(name));
-  return {
-    ok: missing.length === 0,
-    evidence:
-      missing.length === 0
-        ? producersNote(processors)
-        : `not named in both locales: ${missing.join(', ')}`,
-  };
-});
+check(
+  'K-08',
+  'Play Store',
+  'Every third party that receives member data is named in the policy',
+  () => {
+    // Play's data safety form asks which third parties receive data; a policy that
+    // omits one is inaccurate in the direction that gets an app suspended. The
+    // image host is the easy one to forget, because the app talks to our own
+    // upload endpoint and ImgBB is behind it.
+    const en = read('main-site/src/i18n/locales/en.ts');
+    const bn = read('main-site/src/i18n/locales/bn.ts');
+    const processors = ['Supabase', 'Firebase', 'Cloudflare', 'ImgBB'];
+    const missing = processors.filter((name) => !en.includes(name) || !bn.includes(name));
+    return {
+      ok: missing.length === 0,
+      evidence:
+        missing.length === 0
+          ? producersNote(processors)
+          : `not named in both locales: ${missing.join(', ')}`,
+    };
+  },
+);
 
 /* ------------------------------------------------------------------ *
  * Report

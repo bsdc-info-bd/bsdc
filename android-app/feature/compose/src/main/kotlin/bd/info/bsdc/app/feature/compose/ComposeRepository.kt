@@ -33,6 +33,13 @@ private data class TagSlugDto(val slug: String = "")
 private data class ProfileUidDto(val uid: String = "")
 
 @Serializable
+private data class StoredPollOptionDto(
+    val position: Int = 0,
+    val label: String = "",
+    val votes: Int = 0,
+)
+
+@Serializable
 private data class PostSavedDto(
     val id: String = "",
     val slug: String = "",
@@ -325,23 +332,57 @@ class ComposeRepository(
         supabase.postJson("post_mentions", payload, prefer = "return=minimal", requireAuth = true)
     }
 
+    /**
+     * A poll somebody voted on keeps its options (0121).
+     *
+     * Deleting and re-inserting the options is how this used to run on every
+     * save, and `poll_votes.option_id` cascades from `poll_options`: an edit that
+     * only fixed the wording of the body deleted every ballot. The decision is
+     * made before anything is written, so the app never issues a delete the
+     * database would refuse.
+     */
     private suspend fun syncPollOptions(postId: String, options: List<String>) {
-        supabase.deleteRows("poll_options", listOf("post_id" to "eq.$postId"))
-        val labels = options.map { it.trim() }.filter { it.isNotEmpty() }
-        if (labels.isEmpty()) return
+        when (val decision = PollOptionsLogic.decide(readPollOptions(postId), options)) {
+            PollWrite.Unchanged -> return
+            PollWrite.Locked -> throw PollOptionsLockedException()
+            is PollWrite.Replace -> {
+                supabase.deleteRows("poll_options", listOf("post_id" to "eq.$postId"))
+                if (decision.labels.isEmpty()) return
 
-        val body = buildJsonArray {
-            labels.forEachIndexed { idx, label ->
-                add(
-                    buildJsonObject {
-                        put("post_id", postId)
-                        put("position", idx)
-                        put("label", label)
-                    },
-                )
+                val body = buildJsonArray {
+                    decision.labels.forEachIndexed { idx, label ->
+                        add(
+                            buildJsonObject {
+                                put("post_id", postId)
+                                put("position", idx)
+                                put("label", label)
+                            },
+                        )
+                    }
+                }
+                supabase.postJson("poll_options", body, prefer = "return=minimal", requireAuth = true)
             }
         }
-        supabase.postJson("poll_options", body, prefer = "return=minimal", requireAuth = true)
+    }
+
+    /** The poll options the post already carries, with their ballots. */
+    private suspend fun readPollOptions(postId: String): List<StoredPollOption> {
+        val raw = runCatching {
+            supabase.getJsonText(
+                table = "poll_options",
+                queryPairs = listOf(
+                    "select" to "position,label,votes",
+                    "post_id" to "eq.$postId",
+                ),
+                requireAuth = true,
+            )
+        }.getOrElse { return emptyList() }
+
+        return runCatching {
+            json.decodeFromString<List<StoredPollOptionDto>>(raw).map {
+                StoredPollOption(position = it.position, label = it.label, votes = it.votes)
+            }
+        }.getOrDefault(emptyList())
     }
 
     suspend fun createEvent(hostUid: String, draft: EventDraftInput): String = withContext(Dispatchers.IO) {

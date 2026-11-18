@@ -81,9 +81,9 @@ browser evidence artifacts. No GitHub Actions run is claimed for this local work
   first ("24 passed" and one error was a run that never reached the other
   twenty-three). Non-API responses and uncaught exceptions are scoped per route,
   so a 404 on one page is not charged to every page visited after it.
-- Main-site strict typecheck, lint, **1198 unit tests in 114 files**, source/Functions
-  formatting and production build passed after these changes. 131 of 131 audit
-  checks and 62 of 62 database proofs pass.
+- Main-site strict typecheck, lint, **1206 unit tests in 114 files**, source/Functions
+  formatting and production build passed after these changes. 132 of 132 audit
+  checks and 63 of 63 database proofs pass.
 
 **Production release is still blocked.** Required next checks include configured
 signup/OAuth/verification, account switching, permissions/demotion, post/poll

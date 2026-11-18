@@ -683,7 +683,7 @@ fun PostComposerScreen(
                                 }.onSuccess {
                                     statusMsg = if (bn) "খসড়া সংরক্ষিত হয়েছে।" else "Draft saved to your profile."
                                 }.onFailure { err ->
-                                    errorMsg = err.message ?: "Failed to save draft."
+                                    errorMsg = composeErrorMessage(err, bn, "Failed to save draft.")
                                 }
                                 savingDraft = false
                             }
@@ -718,7 +718,7 @@ fun PostComposerScreen(
                                     draft = PostComposerDraft(language = language)
                                     onPublished(res)
                                 }.onFailure { err ->
-                                    errorMsg = err.message ?: "Could not publish post."
+                                    errorMsg = composeErrorMessage(err, bn, "Could not publish post.")
                                 }
                                 publishing = false
                             }
@@ -785,3 +785,21 @@ fun PostComposerScreen(
         }
     }
 }
+
+/**
+ * The sentence shown when a save fails.
+ *
+ * A poll that has votes keeps its options (0121). The repository says so by
+ * refusing the save, and the member reads why in their own language rather than
+ * the database's key.
+ */
+private fun composeErrorMessage(err: Throwable, bn: Boolean, fallback: String): String =
+    if (err is PollOptionsLockedException) {
+        if (bn) {
+            "এই জরিপে ইতিমধ্যে ভোট পড়েছে, তাই এর অপশনগুলো অপরিবর্তিত থাকবে।"
+        } else {
+            "This poll already has votes, so its options stay as they are."
+        }
+    } else {
+        err.message ?: fallback
+    }

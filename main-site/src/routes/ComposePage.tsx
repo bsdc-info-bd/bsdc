@@ -1,5 +1,5 @@
 import { Eye, ImagePlus, Plus, Send, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -111,6 +111,9 @@ export default function ComposePage() {
     ...EMPTY_DRAFT,
     language: i18n.language === 'en' ? 'en' : 'bn',
   }));
+  /** Id for the sentence that explains why a voted poll's options are fixed. */
+  const pollLockId = useId();
+  const pollLocked = draft.pollVotes > 0;
   const [restored, setRestored] = useState(false);
   const [tab, setTab] = useState('write');
   const [busy, setBusy] = useState(false);
@@ -318,21 +321,31 @@ export default function ComposePage() {
       ) : null}
 
       {draft.kind === 'poll' ? (
-        <fieldset className="grid gap-2">
+        // Once a poll has a ballot its options are fixed: changing them would
+        // either erase the answer somebody gave or move it to a different
+        // question. The editor says so and stays readable, and the repository
+        // refuses the same edit even if this rendering is bypassed.
+        <fieldset className="grid gap-2" aria-describedby={pollLocked ? pollLockId : undefined}>
           <legend className="mb-1 text-sm font-medium">{t('compose.fields.pollOptions')}</legend>
+          {pollLocked ? (
+            <p id={pollLockId} className="text-xs text-muted">
+              {t('compose.errors.pollLocked')}
+            </p>
+          ) : null}
           {draft.pollOptions.map((option, index) => (
             <div key={`poll-option-${String(index)}`} className="flex items-end gap-2">
               <TextField
                 label={t('compose.fields.pollOption', { number: index + 1 })}
                 value={option}
                 maxLength={80}
+                disabled={pollLocked}
                 onChange={(event) => {
                   const next = [...draft.pollOptions];
                   next[index] = event.target.value;
                   update('pollOptions', next);
                 }}
               />
-              {draft.pollOptions.length > 2 ? (
+              {!pollLocked && draft.pollOptions.length > 2 ? (
                 <IconButton
                   label={t('compose.removeOption')}
                   icon={<X size={18} />}
@@ -346,7 +359,7 @@ export default function ComposePage() {
               ) : null}
             </div>
           ))}
-          {draft.pollOptions.length < POLL_OPTIONS_MAX ? (
+          {!pollLocked && draft.pollOptions.length < POLL_OPTIONS_MAX ? (
             <div>
               <Button
                 variant="secondary"
