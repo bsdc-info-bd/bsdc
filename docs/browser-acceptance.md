@@ -76,9 +76,14 @@ browser evidence artifacts. No GitHub Actions run is claimed for this local work
   `errors-in-console` found one. The gate now fails on any console error that is
   not explained by a stubbed `/api` response, which is the only error the local
   server is allowed to cause.
-- Main-site strict typecheck, lint, **1197 unit tests in 114 files**, source/Functions
-  formatting and production build passed after these changes. 130 of 130 database
-  proofs pass.
+- Every check is independent: one failed page records its own result and the run
+  continues, so a report shows everything that broke rather than stopping at the
+  first ("24 passed" and one error was a run that never reached the other
+  twenty-three). Non-API responses and uncaught exceptions are scoped per route,
+  so a 404 on one page is not charged to every page visited after it.
+- Main-site strict typecheck, lint, **1198 unit tests in 114 files**, source/Functions
+  formatting and production build passed after these changes. 131 of 131 audit
+  checks and 62 of 62 database proofs pass.
 
 **Production release is still blocked.** Required next checks include configured
 signup/OAuth/verification, account switching, permissions/demotion, post/poll

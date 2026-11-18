@@ -34,10 +34,26 @@ const server = await serveBuild(join(root, 'dist'));
 const results = [];
 let browser;
 let activePage;
+/**
+ * One check failing must not hide the rest.
+ *
+ * This file used to let a failed assertion unwind the whole run: the first
+ * broken page stopped the other twenty-three, so a report said "24 passed" and
+ * one error, and the reader could not tell a single regression from a broken
+ * gate. Each check now records its own outcome, the run finishes, and the exit
+ * code is non-zero if anything failed.
+ */
 async function check(name, fn) {
-  await fn();
-  results.push({ name, passed: true });
-  console.log(`PASS ${name}`);
+  try {
+    await fn();
+    results.push({ name, passed: true });
+    console.log(`PASS ${name}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    results.push({ name, passed: false, error: message });
+    console.log(`FAIL ${name} — ${message.split('\n')[0]}`);
+    process.exitCode = 1;
+  }
 }
 async function launch() {
   return chromium.launch({
@@ -97,6 +113,10 @@ try {
       '/missing-browser-route',
     ]) {
       await check(`${device}: ${route} renders without crash/overflow`, async () => {
+        // Judged on its own requests: a 404 on one page must not be charged to
+        // every page visited after it.
+        errors.length = 0;
+        failures.length = 0;
         consoleErrors.length = 0;
         stubbedApiFailures = 0;
         await page.goto(server.origin + route, { waitUntil: 'networkidle' });
@@ -231,5 +251,9 @@ try {
       2,
     ),
   );
-  console.log(`${results.filter((r) => r.passed).length} passed; report: ${output}`);
+  const failed = results.filter((result) => !result.passed);
+  console.log(
+    `${results.length - failed.length} passed${failed.length > 0 ? `, ${failed.length} failed` : ''}; report: ${output}`,
+  );
+  for (const failure of failed) console.log(`  ${failure.name}: ${failure.error.split('\n')[0]}`);
 }
