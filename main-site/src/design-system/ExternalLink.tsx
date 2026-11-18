@@ -24,7 +24,7 @@ export function ExternalLink({
       target="_blank"
       rel={userGenerated ? 'noopener noreferrer nofollow ugc' : 'noopener noreferrer'}
       className={cn(
-        'inline-flex items-center gap-1 text-blue underline underline-offset-2',
+        'inline-flex items-center gap-1 text-blue-text underline underline-offset-2',
         className,
       )}
     >

@@ -13,7 +13,6 @@ export function LanguageToggle({ className }: { className?: string }) {
     <button
       type="button"
       onClick={() => void changeLanguage(next)}
-      aria-label={t('a11y.toggleLanguage')}
       title={t('a11y.toggleLanguage')}
       className={cn(
         'fab-tap inline-flex h-11 items-center gap-1.5 rounded-full px-3 text-xs font-semibold',
@@ -23,6 +22,11 @@ export function LanguageToggle({ className }: { className?: string }) {
     >
       <Languages size={18} aria-hidden="true" />
       <span>{next === 'bn' ? t('language.bangla') : t('language.english')}</span>
+      {/* The visible word is the language you would switch to; the hidden words
+          say what pressing it does. Both end up in the accessible name, which
+          is what a screen-reader user hears and what a voice-control user has
+          to say — "বাংলা" alone would be ambiguous. */}
+      <span className="sr-only"> — {t('a11y.toggleLanguage')}</span>
     </button>
   );
 }

@@ -49,7 +49,7 @@ export default function ContactPage() {
             </h2>
             <p className="mt-2 text-sm">
               <a
-                className="text-blue underline underline-offset-2"
+                className="text-blue-text underline underline-offset-2"
                 href={`mailto:${SITE.emails.primary}`}
               >
                 {SITE.emails.primary}
@@ -64,7 +64,7 @@ export default function ContactPage() {
             </h2>
             <p className="mt-2 text-sm">
               <a
-                className="text-blue underline underline-offset-2"
+                className="text-blue-text underline underline-offset-2"
                 href={`mailto:${SITE.emails.secondary}`}
               >
                 {SITE.emails.secondary}

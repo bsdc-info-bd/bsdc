@@ -156,6 +156,30 @@ workflow:
    what is deleted and — unlike a marketing page — what is kept and why, and is
    linked from the footer. K-09 fails if it disappears.
 
+13. **The site was 63 on mobile Lighthouse, and the score was three separate
+   defects.** A footer that moved 2,300 px when the feed arrived (CLS 0.43); a
+   largest paint that belonged to React rather than to the HTML, because the
+   prerendered shell was smaller than the page that replaced it (LCP 4.1 s on
+   `/`, 3.2–3.8 s on every text page); and 480 kB of entry JavaScript, of which
+   354 kB was the two language bundles downloaded in full by every visitor.
+   The shell now quotes the page's own opening at the page's own class names,
+   the stylesheet is inlined instead of linked, one language is fetched as its
+   own chunk, and each page preloads the chunk that renders it. Measured with
+   `node scripts/lighthouse.mjs` (median of three runs per route): **every
+   public page clears 95 in all four categories**, and accessibility and SEO are
+   100 everywhere. F-11 to F-19 hold each of those decisions in place.
+14. **Two colours and two labels failed the accessibility audit.** `#1877f2` as
+   text on our surface is 3.9:1 against a 4.5:1 floor, and the logo link and
+   language button had accessible names that did not contain their visible text
+   — so a voice-control user could not say what they saw. There is now a
+   separate `--bsdc-blue-text` token for copy (6.1:1), the logo's name is its
+   visible lockup, and the language button carries its action in a visually
+   hidden span. Accessibility is 100 on every measured route.
+15. **An empty state skipped a heading level.** `EmptyState` rendered an `h3`
+   directly under the page's `h1`, which is a heading-order failure on
+   `/marketplace` — the one page whose first card is an empty state. It now
+   renders an `h2` unless a caller asks for `h3`.
+
 ### Findings from the last full pass
 
 Each of these was a live defect found by running the checks rather than by reading
@@ -243,7 +267,7 @@ the code, and each is now fixed with a test or a check that would catch it again
 
 ## Checkpoints
 
-Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
@@ -296,10 +320,10 @@ Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
 | C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
 | C-07 | Both languages carry the same keys | Pass | 57 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 57780 Bangla code points in the Bangla locale |
+| C-08 | Bangla is a real translation, not a copy of English | Pass | 57796 Bangla code points in the Bangla locale |
 | C-09 | Every application ships a security header set | Pass | all fourteen |
 | C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
-| C-11 | TypeScript source files under version control | Recorded | 626 .ts/.tsx files |
+| C-11 | TypeScript source files under version control | Recorded | 628 .ts/.tsx files |
 | C-12 | No link opens a new tab without severing the opener | Pass | every _blank link carries rel="noopener" |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text | Pass | every <img> declares alt, decorative images with an empty one |
@@ -351,13 +375,13 @@ Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | E-09 | A page marked noindex never reaches the sitemap | Pass | sitemap_urls() skips any path an override marks noindex, in the same query that lists them |
 | E-10 | The verification portal declares its own canonical address | Pass | vf-site/index.html is hand-written and marked so the scaffold leaves it alone |
 | E-11 | The prerendered pages carry their canonical link | Pass | the built home page carries a canonical link, a description and JSON-LD before any script runs |
-| E-12 | The prerendered pages are readable without JavaScript | Pass | 618 characters of readable text inside #root before hydration |
+| E-12 | The prerendered pages are readable without JavaScript | Pass | 670 characters of readable text inside #root before hydration |
 
 ### Performance
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere | Pass | main-site 240 KB |
+| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere | Pass | main-site 157 KB |
 | F-02 | Routes are code split, so a visitor pays only for the page | Pass | React.lazy per route in main-site/src/App.tsx |
 | F-03 | Field measurement is collected and stored | Pass | a hand-written collector, a beacon endpoint and the web_vitals table |
 | F-04 | Speed is reported at the 75th percentile with its sample count | Pass | percentile_cont(0.75) in vitals_by_route, with samples returned beside it |
@@ -367,6 +391,17 @@ Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | F-08 | Query caching is configured rather than left at the defaults | Pass | React Query is given explicit staleTime, gcTime, retry and focus behaviour |
 | F-09 | No source map is shipped to production | Pass | none in any dist/ |
 | F-10 | Stylesheets stay small enough to inline-parse quickly | Pass | main-site 18 KB |
+| F-11 | The stylesheet is inlined, so nothing blocks the first paint | Pass | prerender inlines every stylesheet the template links into every page |
+| F-12 | Each prerendered page preloads the chunk that renders it | Pass | 16 routes name a real route component and are preloaded |
+| F-13 | The first paint is the page, not a placeholder | Pass | 7 routes carry the copy a reader sees first: /about, /guidelines, /contact, /playground, /privacy, /terms, /account-deletion |
+| F-14 | Only the visitor's language is downloaded | Pass | both locale bundles are dynamic imports, fetched one at a time |
+| F-15 | The router does not pull a validation library onto the first paint | Pass | the router guard and the environment check import no schema library; zod ships only with the forms that use it |
+| F-16 | The footer starts below the fold, so its arrival cannot shift the page | Pass | main reserves a viewport height whenever the page has a footer |
+| F-17 | Blue that renders words clears the contrast floor | Pass | text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders |
+| F-18 | The font is preloaded and cached, not revalidated every visit | Pass | index.html preloads the Bangla face and _headers marks /fonts/* immutable for a year |
+| F-19 | An empty state starts a section, not a skipped heading level | Pass | EmptyState renders an h2 by default; a page that needs h3 asks for it |
+| F-20 | The home page puts the feed before the sidebar on a phone | Pass | the rail follows the feed below the lg breakpoint and is skipped for layout until then |
+| F-21 | A decorative animation does not keep the main thread awake | Pass | the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion |
 
 ### Web delivery
 
@@ -383,7 +418,7 @@ Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| H-01 | Unit tests by package | Recorded | 1183 tests across 3 installed package(s); 13 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site: corporate-kit 0, main-site 1183, push-worker 0 |
+| H-01 | Unit tests by package | Recorded | 1186 tests across 3 installed package(s); 13 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site: corporate-kit 0, main-site 1186, push-worker 0 |
 | H-02 | Every package has at least one test file | Pass | all sixteen |
 
 ### CI

@@ -232,6 +232,49 @@
   text-align: start;
 }
 
+/* The marketplace header's glow. Transform-only, so the browser can run it on
+ * the compositor and the main thread stays free; the reduced-motion query
+ * stops it entirely. */
+.mk-glow {
+  animation: mk-glow 6s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes mk-glow {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-glow {
+    animation: none;
+  }
+}
+
+/* Rendering work is spent on what is on screen.
+ *
+ * The footer is the tallest block on a phone (773 px of links) and it is
+ * always below the fold on first paint. `content-visibility: auto` lets the
+ * browser skip its layout and paint until it comes near the viewport, and the
+ * intrinsic size keeps the scrollbar honest while it does. It is still in the
+ * accessibility tree and still found by find-in-page.
+ */
+.defer-offscreen {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 480px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .defer-offscreen {
+    content-visibility: visible;
+  }
+}
+
 /* highlight.js tokens, mapped onto BSDC tokens so both themes stay readable */
 .bsdc-markdown .hljs-comment,
 .bsdc-markdown .hljs-quote {
@@ -246,7 +289,8 @@
 }
 .bsdc-markdown .hljs-string,
 .bsdc-markdown .hljs-attr {
-  color: var(--bsdc-blue);
+  /* Text, not a fill: the token has to clear 4.5:1 against the code surface. */
+  color: var(--bsdc-blue-text);
 }
 .bsdc-markdown .hljs-number,
 .bsdc-markdown .hljs-built_in,

@@ -13,6 +13,15 @@ import staticRoutes from './static-routes.json';
 
 export interface StaticRoute {
   readonly path: string;
+  /**
+   * The route component in `src/App.tsx`.
+   *
+   * The prerender step uses it to preload the chunk that renders this page, so
+   * the first screen does not wait for a second round trip after the entry
+   * script — see `PRERENDER` notes in scripts/prerender.mjs and the assertion
+   * in app-routes.test.ts that every name here is a real lazy import.
+   */
+  readonly component: string;
   readonly title: string;
   readonly description: string;
   readonly changefreq: string;

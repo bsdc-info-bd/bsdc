@@ -6,7 +6,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import App from './App';
 import { AuthProvider } from './components/auth/AuthProvider';
 import { AppCrashFallback } from './components/layout/AppCrashFallback';
-import './i18n';
+import { initI18n } from './i18n';
 import './styles/index.css';
 import { isConfigured } from './lib/env';
 import { startPerformanceReporting } from './lib/perf/collect';
@@ -88,27 +88,55 @@ const queryClient = new QueryClient({
 });
 registerQueryClient(queryClient);
 
-const container = document.getElementById('root');
-if (!container) {
+const rootElement = document.getElementById('root');
+if (!rootElement) {
   throw new Error('BSDC: #root container is missing from index.html');
 }
+const container: HTMLElement = rootElement;
 
-createRoot(container).render(
-  <StrictMode>
-    <ErrorBoundary FallbackComponent={AppCrashFallback}>
-      <HelmetProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <App />
-          </AuthProvider>
-        </QueryClientProvider>
-      </HelmetProvider>
-    </ErrorBoundary>
-  </StrictMode>,
-);
+/**
+ * The first render waits for the visitor's language bundle.
+ *
+ * The bundle is one chunk, fetched in parallel with this one, so the wait is
+ * short — and the prerendered HTML is already on the screen while it happens,
+ * which is why the wait is invisible. Rendering earlier would put raw
+ * `home.heading` keys in front of the visitor instead.
+ */
+function mount(): void {
+  createRoot(container).render(
+    <StrictMode>
+      <ErrorBoundary FallbackComponent={AppCrashFallback}>
+        <HelmetProvider>
+          <QueryClientProvider client={queryClient}>
+            <AuthProvider>
+              <App />
+            </AuthProvider>
+          </QueryClientProvider>
+        </HelmetProvider>
+      </ErrorBoundary>
+    </StrictMode>,
+  );
+}
 
-// Registers the push-only worker and removes any legacy offline/image caches.
-registerPushServiceWorker();
+void initI18n()
+  .catch(() => undefined)
+  .then(mount);
+
+// Registers the push-only worker and removes any legacy offline/image caches —
+// once the page has loaded and the browser is idle. Nothing on the page waits
+// for it, and a registration is main-thread work at exactly the moment the
+// first paint is trying to happen.
+function registerPushWhenIdle(): void {
+  const run = () => registerPushServiceWorker();
+  const schedule = () => {
+    if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 4_000 });
+    else setTimeout(run, 1_500);
+  };
+  if (document.readyState === 'complete') schedule();
+  else window.addEventListener('load', schedule, { once: true });
+}
+
+registerPushWhenIdle();
 
 // Ask the deployment what it can upload through, once, while the browser is
 // idle — so the first member to attach a picture does not pay for the question.

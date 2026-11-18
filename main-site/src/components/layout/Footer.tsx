@@ -18,7 +18,7 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-10 border-t border-border bg-surface">
+    <footer className="defer-offscreen mt-10 border-t border-border bg-surface">
       <div className="fab-container grid gap-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
         <div className="min-w-0">
           <Logo variant="full" className="h-9" title={t('common.brandFull')} />

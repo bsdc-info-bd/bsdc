@@ -233,7 +233,12 @@ describe('the build-time prerender and the application agree', () => {
 
   it('puts words inside the root element for a crawler that runs no scripts', () => {
     const shell = renderShell(home, STATIC_ROUTES);
-    expect(shell).toContain(`<h1>${home.heading}</h1>`);
+    // Styled with the page's own classes rather than a bare tag: the shell is
+    // the no-JavaScript page and the first paint, so it has to render at the
+    // size the real heading will render at. See renderShell.
+    expect(shell).toContain(`<h1 class="text-4xl">${home.heading}</h1>`);
+    expect(shell).toContain('class="fab-container');
+    expect(shell).toContain('text-base text-muted');
     expect(shell).toContain('href="/jobs"');
     expect(shell).not.toContain(`href="${home.path}"`);
   });
@@ -255,7 +260,7 @@ describe('the build-time prerender and the application agree', () => {
     expect(html.match(/property="og:title"/g)).toHaveLength(1);
     expect(html.match(/name="robots"/g)).toHaveLength(1);
     expect(html).toContain('application/ld+json');
-    expect(html).toContain('<h1>Bangladesh Software Development Community</h1>');
+    expect(html).toContain('<h1 class="text-4xl">Bangladesh Software Development Community</h1>');
   });
 
   it('leaves the real template with exactly one of each head tag', () => {

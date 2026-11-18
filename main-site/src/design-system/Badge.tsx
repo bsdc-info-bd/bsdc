@@ -11,7 +11,7 @@ export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 const TONES: Record<BadgeTone, string> = {
   neutral: 'bg-surface-2 text-muted border-border',
   green: 'bg-surface-2 text-green-700 border-green-300/40',
-  blue: 'bg-blue-soft text-blue border-blue/20',
+  blue: 'bg-blue-soft text-blue-text border-blue/20',
   danger: 'bg-danger/10 text-danger border-danger/20',
   warn: 'bg-warn/10 text-warn border-warn/30',
 };

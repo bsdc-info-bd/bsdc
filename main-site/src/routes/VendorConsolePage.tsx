@@ -69,7 +69,7 @@ export default function VendorConsolePage() {
         />
         {pending?.status === 'submitted' ? (
           <Card padded className="text-center">
-            <Clock3 className="mx-auto mb-3 text-blue" size={32} aria-hidden />
+            <Clock3 className="mx-auto mb-3 text-blue-text" size={32} aria-hidden />
             <h1 className="text-xl font-semibold">{copy.underReview}</h1>
             <p className="mt-2 text-sm text-muted">{copy.submittedBody}</p>
           </Card>

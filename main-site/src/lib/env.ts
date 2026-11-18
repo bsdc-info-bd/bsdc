@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 /**
  * Public runtime configuration.
  *
@@ -8,32 +6,53 @@ import { z } from 'zod';
  * keys, ImgBB API key) are never imported into the client; Pages Functions read
  * them from `context.env`. See ../../SECURITY.md.
  */
-const envSchema = z.object({
-  siteUrl: z.string().url(),
-  siteName: z.string().min(1),
-  firebase: z.object({
-    apiKey: z.string(),
-    authDomain: z.string(),
-    projectId: z.string(),
-    storageBucket: z.string(),
-    messagingSenderId: z.string(),
-    appId: z.string(),
-    databaseURL: z.string(),
-  }),
-  supabase: z.object({
-    url: z.string(),
-    publishableKey: z.string(),
-  }),
-  push: z.object({
+export interface PublicEnv {
+  siteUrl: string;
+  siteName: string;
+  firebase: {
+    apiKey: string;
+    authDomain: string;
+    projectId: string;
+    storageBucket: string;
+    messagingSenderId: string;
+    appId: string;
+    databaseURL: string;
+  };
+  supabase: { url: string; publishableKey: string };
+  push: {
     /** Firebase Cloud Messaging's key. Kept because a deployment may already hold it. */
-    vapidPublicKey: z.string(),
+    vapidPublicKey: string;
     /** This site's own VAPID key, the one web push is signed with. */
-    webPushPublicKey: z.string(),
-  }),
-  oneSignalAppId: z.string(),
-});
+    webPushPublicKey: string;
+  };
+  oneSignalAppId: string;
+}
 
-export type PublicEnv = z.infer<typeof envSchema>;
+/**
+ * Checks the two values a wrong deployment can actually break, and nothing
+ * else — everything else is optional by design, and `isConfigured` below is
+ * what decides whether a client is built.
+ *
+ * This used to run through a schema library. Two checks are not worth 40 kB of
+ * validation code on the entry chunk, which every visitor downloads before the
+ * first page can paint; the rest of that schema was `z.string()` and always
+ * would be.
+ */
+function validate(value: PublicEnv): PublicEnv {
+  let parsed: URL;
+  try {
+    parsed = new URL(value.siteUrl);
+  } catch {
+    throw new Error(`BSDC: VITE_SITE_URL is not an absolute URL (received "${value.siteUrl}")`);
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`BSDC: VITE_SITE_URL must be http or https (received "${value.siteUrl}")`);
+  }
+  if (value.siteName.trim().length === 0) {
+    throw new Error('BSDC: VITE_SITE_NAME must not be empty');
+  }
+  return value;
+}
 
 const raw: PublicEnv = {
   siteUrl: import.meta.env.VITE_SITE_URL ?? 'https://www.bsdc.info.bd',
@@ -58,7 +77,7 @@ const raw: PublicEnv = {
   oneSignalAppId: import.meta.env.VITE_ONESIGNAL_APP_ID ?? '',
 };
 
-export const env: PublicEnv = envSchema.parse(raw);
+export const env: PublicEnv = validate(raw);
 
 export function effectivePushVapidConfig(
   push: PublicEnv['push'],

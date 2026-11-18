@@ -127,6 +127,10 @@ export const en = {
     feedBody:
       'The public feed, newest and best first. Read everything without an account — sign in to react, comment, follow and publish.',
     feedJoin: 'Join the community',
+    // The hero's primary button. "Learn more" is what the accessibility audit
+    // calls a non-descriptive link: out of context, in a list of links, it says
+    // nothing about where it goes.
+    ctaAbout: 'About the community',
     heading: 'The developer community of Bangladesh',
     subheading:
       'One free home for Bangladeshi and worldwide software developers: write, ask, share code, find work, sell, and build your reputation — in Bangla and in English.',

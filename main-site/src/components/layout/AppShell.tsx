@@ -1,7 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Outlet, ScrollRestoration, useLocation } from 'react-router-dom';
 import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
-import { Toaster } from '@/design-system';
 import { cn } from '@/lib/cn';
 import { chromeFor } from '@/lib/layout/chrome';
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey';
@@ -29,6 +28,17 @@ const CommandPalette = lazy(() =>
   import('./CommandPalette').then((module) => ({ default: module.CommandPalette })),
 );
 
+/**
+ * The toast host is not part of the first screen.
+ *
+ * It pulls in the toast library — ~28 kB that nothing on the page uses until
+ * something has gone right or wrong — so it is a chunk of its own, rendered
+ * as soon as the browser has finished with the page it is showing.
+ */
+const Toaster = lazy(() =>
+  import('@/design-system/Toaster').then((module) => ({ default: module.Toaster })),
+);
+
 export function AppShell() {
   useCommandPaletteHotkey();
   useNotificationRealtime();
@@ -47,9 +57,13 @@ export function AppShell() {
         tabIndex={-1}
         className={cn(
           'flex-1',
-          chrome.tabBarPadding
-            ? 'pb-[calc(var(--bsdc-bottom-nav-h)+1rem)] md:pb-6'
-            : 'min-h-0 pb-0',
+          // The footer starts below the fold on every page that has one. Without
+          // this it began wherever the first paint of the content ended — right
+          // under the hero while the feed was still loading — and then moved by
+          // the height of everything that arrived, which is the single largest
+          // layout shift the site had (0.43, measured at the footer).
+          chrome.footer ? 'min-h-[100dvh]' : 'min-h-0',
+          chrome.tabBarPadding ? 'pb-[calc(var(--bsdc-bottom-nav-h)+1rem)] md:pb-6' : 'pb-0',
         )}
       >
         <Outlet />
@@ -59,7 +73,9 @@ export function AppShell() {
       <Suspense fallback={null}>
         <CommandPalette />
       </Suspense>
-      <Toaster />
+      <Suspense fallback={null}>
+        <Toaster />
+      </Suspense>
       <ScrollRestoration />
     </div>
   );

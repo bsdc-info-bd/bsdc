@@ -72,11 +72,12 @@ export default function MarketplacePage() {
       <MarketNav copy={copy} />
 
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg sm:p-8">
-        <motion.div
+        {/* A compositor animation rather than a motion one: this runs for as
+            long as the page is open, and a library-driven loop kept the main
+            thread awake for a decorative circle. */}
+        <div
           aria-hidden
-          className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10"
-          animate={reduce ? {} : { scale: [1, 1.08, 1] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className="mk-glow pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10"
         />
         <h1 className="relative text-2xl font-bold sm:text-3xl">{copy.buyer.marketTitle}</h1>
         <p className="relative mt-2 max-w-xl text-sm text-white/90">{copy.buyer.marketLead}</p>
@@ -166,11 +167,14 @@ export default function MarketplacePage() {
         />
       ) : null}
 
-      <motion.ul layout className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {/* No `layout` here: it makes the browser measure every card on every
+          render to animate positions that never change, and that measurement
+          is main-thread work on the first screen. */}
+      <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {(shops.data ?? []).map((shop, i) => (
           <ShopCard key={shop.slug} shop={shop} index={i} copy={copy} language={language} />
         ))}
-      </motion.ul>
+      </ul>
     </div>
   );
 }
@@ -236,10 +240,9 @@ function ShopCard({
 
   return (
     <motion.li
-      layout
       initial={reduce ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index, 9) * 0.04, duration: 0.3 }}
+      transition={{ delay: Math.min(index, 6) * 0.03, duration: 0.25 }}
     >
       <Link
         to={`/marketplace/shop/${shop.slug}`}

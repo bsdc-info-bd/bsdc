@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { en } from '@/i18n/locales/en';
 import { ROUTES } from '@/lib/site';
 import { APP_ROUTES, HANDLE_ROUTE, isEdgeNoindexPath, matchAppRoute } from './app-routes';
 import staticRoutes from './static-routes.json';
@@ -42,6 +43,53 @@ describe('the route manifest matches the router', () => {
     for (const route of staticRoutes.routes) {
       expect(APP_ROUTES, route.path).toContain(route.path);
     }
+  });
+
+  /**
+   * The prerender step turns `component` into a `<link rel="modulepreload">`
+   * tag by looking the name up in the build manifest. A name that does not
+   * match a lazy import is not an error anywhere — the tag is silently left
+   * out and the page quietly goes back to a second round trip before its first
+   * paint. So the name is checked here, against the source of the router.
+   */
+  it('names the route component each prerendered page actually renders', () => {
+    const app = readFileSync('src/App.tsx', 'utf8');
+    const lazyImports = new Set(
+      [...app.matchAll(/const (\w+) = lazy\(\(\) => import\('([^']+)'\)\)/g)].map((m) => m[1]),
+    );
+    for (const route of staticRoutes.routes) {
+      expect(lazyImports, route.path).toContain(route.component);
+      expect(existsSync(`src/routes/${route.component}.tsx`), route.path).toBe(true);
+    }
+  });
+
+  /**
+   * The prerendered shell quotes the page's opening paragraphs so the first
+   * paint is the page itself. Quoting is only honest while the words are the
+   * same words: this holds every `opening` paragraph against the English
+   * bundle, so editing the copy in the locale and not in the manifest fails
+   * here instead of leaving a stale paragraph on screen for the first second
+   * of every visit.
+   */
+  it('quotes the page it stands in for, word for word', () => {
+    const strings = new Set<string>();
+    const walk = (value: unknown): void => {
+      if (typeof value === 'string') strings.add(value);
+      else if (value && typeof value === 'object') {
+        for (const child of Object.values(value)) walk(child);
+      }
+    };
+    walk(en);
+    for (const route of staticRoutes.routes) {
+      for (const paragraph of (route as { opening?: string[] }).opening ?? []) {
+        expect(strings.has(paragraph), `${route.path}: ${paragraph.slice(0, 60)}…`).toBe(true);
+      }
+    }
+  });
+
+  it('never prerenders the same path twice', () => {
+    const paths = staticRoutes.routes.map((route) => route.path);
+    expect(new Set(paths).size).toBe(paths.length);
   });
 });
 

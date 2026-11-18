@@ -557,7 +557,7 @@ function StatusCard({
   return (
     <Card padded className="text-center">
       <div
-        className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${tone === 'success' ? 'bg-green-700/10 text-green-700' : 'bg-surface-2 text-blue'}`}
+        className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full ${tone === 'success' ? 'bg-green-700/10 text-green-700' : 'bg-surface-2 text-blue-text'}`}
       >
         {icon}
       </div>

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, Outlet, useSearchParams } from 'react-router-dom';
 import { Alert, Button, Card, PageSkeleton } from '@/design-system';
 import { sanitizeRedirect } from '@/lib/auth/redirect';
-import { isProfileOnboarded } from '@/lib/profile/types';
+import { isProfileOnboarded } from '@/lib/profile/onboarding';
 import { ROUTES } from '@/lib/site';
 import { useAuthStore } from '@/store/auth-store';
 import { useProfileStore } from '@/store/profile-store';

@@ -217,3 +217,56 @@ test or a checkpoint, and recorded against the schema in
    rating, ads declaration ("no ads") and target audience questionnaire.
 5. Run the pre-launch report and read it: it is the only automated check that
    exercises real devices, and it is free.
+
+## Performance budget — Lighthouse 95+ on every public page
+
+The measurement that started this work was a mobile Lighthouse run on `/`:
+**performance 63**, accessibility 96, best practices 96, SEO 92. The causes were
+not vague. Each one is named below with the change that removed it, and every
+change has a checkpoint in `scripts/audit.mjs` (checks `F-11` … `F-21`) so the
+next commit cannot quietly undo it.
+
+| Symptom (mobile, `/`) | Cause | Fix |
+| --- | --- | --- |
+| CLS **0.43** | The footer is 773 px tall on a phone and sat directly under the hero while the feed was still loading; when the feed arrived the footer moved by the height of the page. | `AppShell` reserves `min-h-[100dvh]` for `<main>` on every page with a footer, so the footer starts below the fold and its arrival cannot move anything on screen. CLS is now 0. |
+| LCP **4.1 s**, and 3.2–3.8 s on every text page | The largest thing on screen was painted by React, not by the HTML: the prerendered shell was a bare `<h1>` and one sentence — smaller than the page that replaced it — so the browser recorded the application's later paint as the largest content. | The shell is now styled with the page's own classes *and* quotes the page's opening paragraphs (`opening` in `static-routes.json`, held word-for-word against the English bundle by `app-routes.test.ts`). The first paint is the page. LCP 1.8 s everywhere. |
+| Render-blocking **150 ms** | One `<link rel="stylesheet">` in front of the first pixel. | `scripts/prerender.mjs` inlines the single design-system stylesheet into every page (`inlineStyles`); the request is gone rather than deferred. |
+| Unused JavaScript **91 KiB**, 480 kB entry chunk | Both language bundles (354 kB of copy) and the schema library were in the entry chunk, so every visitor parsed Bangla and English before anything could render. | `src/i18n/index.ts` loads one language as its own chunk; the environment check validates two values by hand instead of shipping a schema library (`src/lib/env.ts`); the router's guard imports a tiny module instead of the profile schema; the app bar's unread badge no longer drags the messaging layer in. Entry chunk: 480 kB → 195 kB raw (161 kB → 61 kB gzip). |
+| Second round trip before the first screen | Routes are `lazy()`; the browser learned the route's chunk only after the entry script ran. | The build manifest names each route's chunk and the prerender writes `<link rel="modulepreload">` for it (`modulePreloadHrefs`). |
+| Long main-thread tasks after paint (TBT 200–300 ms) | The toast library, the service worker registration and a `framer-motion` animation loop all ran during the first screen. | Toaster is a lazy chunk; the worker registers on `load` + idle; the marketplace's decorative glow is a compositor CSS animation; the footer is skipped for layout/paint until it is near the viewport (`content-visibility`). |
+| Accessibility **96** | `#1877f2` as *text* on our surface is 3.9:1 (needs 4.5:1). A logo link and a language button had accessible names that did not contain their visible text. | New `--bsdc-blue-text` token (6.1:1) for copy, with `--bsdc-blue` kept for fills; the logo's name is its visible lockup; the language button's action is in a visually hidden span. Accessibility is 100 on every route. |
+| SEO **92** | One link with the text "Learn more", and legal pages were missing from the prerender manifest. | The hero button is "About the community"; `/privacy`, `/terms` and `/account-deletion` are prerendered, in the sitemap, and crawlable without JavaScript. SEO is 100 on every route. |
+
+**Measured result** (mobile, simulated Slow 4G, 4× CPU — the Lighthouse default;
+`node scripts/lighthouse.mjs`, three runs per route, median):
+
+| Route | Performance | Accessibility | Best practices | SEO |
+| --- | --- | --- | --- | --- |
+| `/` | 96–98 | 100 | 96–100 | 100 |
+| `/about` `/guidelines` `/privacy` `/terms` `/account-deletion` `/contact` | 97–100 | 100 | 100 | 100 |
+| `/jobs` `/freelance` `/projects` `/learn` `/groups` `/events` `/verify` | 97–100 | 100 | 96–100 | 100 |
+| `/marketplace` `/playground` | 95–99 | 100 | 96–100 | 100 |
+
+Desktop is 100 in every category on `/` and never below 96 elsewhere.
+
+**How to re-measure**
+
+```bash
+cd main-site && npm run build          # dist/ with prerendered HTML
+npm install --no-save lighthouse chrome-launcher
+CHROME_PATH=/path/to/chrome npm run lighthouse            # every public route, median of 3
+node ../scripts/lighthouse.mjs --routes /,/privacy --runs 5 --floor 95
+```
+
+The last full run of the script (16 routes × 3 runs) printed *every category
+clears the floor on every route*; accessibility and SEO were 100 on all sixteen.
+
+Two readings that are *not* evidence of a defect, so nobody chases them:
+
+- **Best practices 96 on data pages in a local run.** The local server has no
+  `/api/*` and no Supabase or Firebase host, so the browser logs network
+  failures for requests the deployment answers. Pages that make no such request
+  (`/about`, `/privacy`, `/terms`) score 100 in the same run — that is the
+  control.
+- **The score of a single run.** On a shared machine the same commit measures
+  94–98. The budget is the median of three, which is what the script asserts.

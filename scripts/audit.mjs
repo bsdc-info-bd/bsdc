@@ -1443,6 +1443,180 @@ check('F-10', 'Performance', 'Stylesheets stay small enough to inline-parse quic
   };
 });
 
+/* ------------------------------------------------------------------ *
+ * Field performance — the fixes that made Lighthouse 95+ hold
+ * ------------------------------------------------------------------ *
+ *
+ * These are the structural decisions behind the measured scores, written as
+ * assertions so the next change cannot quietly undo one of them. The scores
+ * themselves are measured by scripts/lighthouse.mjs against a served build;
+ * these checks run without a browser and fail in CI.
+ */
+
+const prerenderSource = () => read('main-site/scripts/prerender.mjs');
+const staticRoutesFile = () => JSON.parse(read('main-site/src/lib/seo/static-routes.json'));
+
+check('F-11', 'Performance', 'The stylesheet is inlined, so nothing blocks the first paint', () => {
+  // A <link rel=stylesheet> is a round trip in front of the first pixel. The
+  // whole design system is one file needed by every route, so the prerender
+  // step writes it into each page instead.
+  const script = prerenderSource();
+  return {
+    ok:
+      /export function inlineStyles/.test(script) &&
+      /inlineStyles\(/.test(script) &&
+      /readStylesheets\(/.test(script),
+    evidence: 'prerender inlines every stylesheet the template links into every page',
+  };
+});
+
+check('F-12', 'Performance', 'Each prerendered page preloads the chunk that renders it', () => {
+  // The routes are lazy. Without a modulepreload the browser learns the
+  // route's chunk only after the entry script runs: a second round trip in
+  // front of the first screen.
+  const script = prerenderSource();
+  const routes = staticRoutesFile().routes;
+  const missing = routes.filter((route) => typeof route.component !== 'string');
+  const app = read('main-site/src/App.tsx');
+  const unknown = routes.filter(
+    (route) => !new RegExp(`const ${route.component} = lazy\\(`).test(app),
+  );
+  return {
+    ok:
+      /export function modulePreloadHrefs/.test(script) &&
+      /modulePreloadTags\(/.test(script) &&
+      missing.length === 0 &&
+      unknown.length === 0,
+    evidence:
+      missing.length + unknown.length === 0
+        ? `${routes.length} routes name a real route component and are preloaded`
+        : `routes without a usable component: ${[...missing, ...unknown].map((r) => r.path).join(', ')}`,
+  };
+});
+
+check('F-13', 'Performance', 'The first paint is the page, not a placeholder', () => {
+  // The shell quotes the page's own opening paragraphs, so the largest paint
+  // happens with the HTML rather than after the JavaScript — and a reader
+  // without scripts gets the page's opening, not a summary of it.
+  const routes = staticRoutesFile().routes;
+  const withOpening = routes.filter((route) => Array.isArray(route.opening) && route.opening.length > 0);
+  const expected = ['/about', '/guidelines', '/privacy', '/terms', '/account-deletion'];
+  const missing = expected.filter((path) => !withOpening.some((route) => route.path === path));
+  return {
+    ok: /opening/.test(prerenderSource()) && missing.length === 0,
+    evidence:
+      missing.length === 0
+        ? `${withOpening.length} routes carry the copy a reader sees first: ${withOpening.map((r) => r.path).join(', ')}`
+        : `no opening copy for: ${missing.join(', ')}`,
+  };
+});
+
+check('F-14', 'Performance', "Only the visitor's language is downloaded", () => {
+  // Both bundles used to be in the entry chunk: every visitor downloaded a
+  // language they were never shown, before anything could paint.
+  const i18n = read('main-site/src/i18n/index.ts');
+  const staticImport = /import\s*\{[^}]*\b(en|bn)\b[^}]*\}\s*from\s*'\.\/locales/.test(i18n);
+  return {
+    ok:
+      !staticImport &&
+      /import\('\.\/locales\/bn'\)/.test(i18n) &&
+      /import\('\.\/locales\/en'\)/.test(i18n),
+    evidence: staticImport
+      ? 'a locale bundle is imported statically and lands in the entry chunk'
+      : 'both locale bundles are dynamic imports, fetched one at a time',
+  };
+});
+
+check('F-15', 'Performance', 'The router does not pull a validation library onto the first paint', () => {
+  const guard = read('main-site/src/components/auth/RequireGuest.tsx');
+  const onboarding = has('main-site/src/lib/profile/onboarding.ts')
+    ? read('main-site/src/lib/profile/onboarding.ts')
+    : '';
+  const env = read('main-site/src/lib/env.ts');
+  return {
+    ok:
+      guard.includes("from '@/lib/profile/onboarding'") &&
+      onboarding.includes('export function isProfileOnboarded') &&
+      !/from 'zod'/.test(onboarding) &&
+      !/from 'zod'/.test(env),
+    evidence:
+      'the router guard and the environment check import no schema library; zod ships only with the forms that use it',
+  };
+});
+
+check('F-16', 'Performance', 'The footer starts below the fold, so its arrival cannot shift the page', () => {
+  const shell = read('main-site/src/components/layout/AppShell.tsx');
+  return {
+    ok: shell.includes('min-h-[100dvh]'),
+    evidence: 'main reserves a viewport height whenever the page has a footer',
+  };
+});
+
+check('F-17', 'Performance', 'Blue that renders words clears the contrast floor', () => {
+  // #1877f2 on our surface is 3.9:1. The fill token stays for artwork; text
+  // uses --bsdc-blue-text, which measures 6.1:1 on the same background.
+  const base = read('main-site/src/styles/base.css');
+  const tailwind = read('main-site/tailwind.config.ts');
+  const offenders = shLines(
+    `grep -rn "text-blue[^-a-zA-Z]" main-site/src --include=*.tsx | grep -v "text-blue-text" | head -10`,
+  );
+  return {
+    ok:
+      base.includes('--bsdc-blue-text') &&
+      tailwind.includes("text: 'var(--bsdc-blue-text)'") &&
+      offenders.length === 0,
+    evidence:
+      offenders.length === 0
+        ? 'text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders'
+        : offenders.join(' | '),
+  };
+});
+
+check('F-18', 'Performance', 'The font is preloaded and cached, not revalidated every visit', () => {
+  const html = read('main-site/index.html');
+  const headers = read('main-site/public/_headers');
+  return {
+    ok:
+      /rel="preload"/.test(html) &&
+      /noto-sans-bengali\.woff2/.test(html) &&
+      /\/fonts\/\*/.test(headers) &&
+      /immutable/.test(headers),
+    evidence: 'index.html preloads the Bangla face and _headers marks /fonts/* immutable for a year',
+  };
+});
+
+check('F-19', 'Performance', 'An empty state starts a section, not a skipped heading level', () => {
+  const empty = read('main-site/src/design-system/EmptyState.tsx');
+  return {
+    ok: /headingLevel = 2/.test(empty) && /headingLevel === 3 \? 'h3' : 'h2'/.test(empty),
+    evidence: 'EmptyState renders an h2 by default; a page that needs h3 asks for it',
+  };
+});
+
+check('F-20', 'Performance', 'The home page puts the feed before the sidebar on a phone', () => {
+  const home = read('main-site/src/routes/HomePage.tsx');
+  return {
+    ok: home.includes('order-1') && home.includes('order-2 lg:order-none'),
+    evidence: 'the rail follows the feed below the lg breakpoint and is skipped for layout until then',
+  };
+});
+
+check('F-21', 'Performance', 'A decorative animation does not keep the main thread awake', () => {
+  // The marketplace header's glow ran on a library animation loop for as long
+  // as the page was open. It is a transform-only CSS animation now, which the
+  // compositor runs, or nothing under prefers-reduced-motion.
+  const page = read('main-site/src/routes/MarketplacePage.tsx');
+  const css = read('main-site/src/styles/components.css');
+  return {
+    ok:
+      page.includes('mk-glow') &&
+      !/animate=\{\{ scale: \[1, 1\.08, 1\] \}\}/.test(page) &&
+      css.includes('.mk-glow') &&
+      css.includes('@keyframes mk-glow'),
+    evidence: 'the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion',
+  };
+});
+
 check('G-06', 'Web delivery', 'Feed and API queries do not stall on browser online heuristics', () => {
   const entry = read('main-site/src/main.tsx');
   return {
