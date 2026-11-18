@@ -147,6 +147,32 @@ the code, and each is now fixed with a test or a check that would catch it again
   assertion was the one check in its step with no retry, so it sometimes ran while
   the static assets were live and the Functions were not yet at the edge, failing a
   commit whose functions were fine.
+- **The database proofs printed `FAIL` for the outcome they wanted.** t75 asked the
+  database to refuse a stranger deciding a proposal, ran that through `as()` — which
+  records a failure whenever the statement throws — and then asserted the result was
+  null. Seven checks in that file were written this way, so a correct refusal printed
+  `FAIL` while the `ok` came from the assertion beside it. The harness still passed,
+  because it tracked a private counter and never consulted what the shared library
+  had recorded. The loud symptom trains a reader to skim `FAIL`; the quiet one is a
+  real failure recorded in the library that no exit status examined. t39 and t40 had
+  the same blind exit. Refusals now go through `expectFail` with the error code they
+  must raise, `failureCount()` is folded into every harness's exit status, and a
+  deliberately wrong expected code has been shown to turn the harness red.
+- **The test count was a silent zero in a clean checkout.** H-01 ran `vitest` in all
+  sixteen packages and reported `main-site 0` while 1169 tests were passing, because
+  a package with no `node_modules` exits without a summary line and the parser read
+  that as "no tests". The number now names a package as uncounted rather than
+  counting it as empty.
+- **Two review counts were the last ASCII digits in the marketplace.** A member
+  reading Bangla saw a Bangla shop name with an English `(7)` beside its stars.
+  Every other number goes through `BanglaDigitFormatter`; these two now do as well.
+- **A proof harness that is present is not a proof harness that runs.** `run.mjs`
+  said a dropped-in `tNN.mjs` runs on its own. It does not — the file must be listed
+  in `HARNESSES`, and an unlisted one is skipped in silence. The comment now says so,
+  and `t76` proves 0116 and 0117 behaviourally: a variant of a picture the product
+  does not show is refused, a plaintext variant is refused, a save that omits the
+  field keeps the stored map, replacing the images prunes the removed picture's
+  variant, and `updated_at` advances rather than the trigger merely existing.
 - **Four checks were measuring the wrong thing.** C-05 scanned a vendored Leaflet file
   for a fixed width that cannot reach a page layout; D-09 matched the *script* that
   keeps the keystore out of the repository; C-01 and E-11/E-12 were reported failing
