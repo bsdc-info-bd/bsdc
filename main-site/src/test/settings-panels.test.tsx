@@ -118,6 +118,22 @@ describe('settings panels are addresses', () => {
     expect(screen.getByTestId('path')).toHaveTextContent('/settings/security');
   });
 
+  it('keeps the keyboard on the tab a member moved to', async () => {
+    // The strip's buttons are not remounted by a panel change, so the arrow key
+    // that moves the selection also leaves focus there. This is a guard, not a
+    // fix: a `key` on the strip, or a panel rendered outside it, would silently
+    // drop a keyboard member back to the top of the document.
+    const user = userEvent.setup();
+    renderAt('/settings/account');
+    screen.getByRole('tab', { name: 'Account' }).focus();
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByTestId('path')).toHaveTextContent('/settings/appearance');
+    // A tab that changes the address re-renders the page; without this focus
+    // falls to the body and the next arrow key scrolls the document instead of
+    // moving along the strip.
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Appearance' }));
+  });
+
   it('sends an address that is not a panel to the first panel', () => {
     renderAt('/settings/nonsense');
     expect(screen.getByTestId('path')).toHaveTextContent('/settings/account');
