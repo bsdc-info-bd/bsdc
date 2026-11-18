@@ -237,33 +237,44 @@ next commit cannot quietly undo it.
 | Accessibility **96** | `#1877f2` as *text* on our surface is 3.9:1 (needs 4.5:1). A logo link and a language button had accessible names that did not contain their visible text. | New `--bsdc-blue-text` token (6.1:1) for copy, with `--bsdc-blue` kept for fills; the logo's name is its visible lockup; the language button's action is in a visually hidden span. Accessibility is 100 on every route. |
 | SEO **92** | One link with the text "Learn more", and legal pages were missing from the prerender manifest. | The hero button is "About the community"; `/privacy`, `/terms` and `/account-deletion` are prerendered, in the sitemap, and crawlable without JavaScript. SEO is 100 on every route. |
 
-**Measured result** (mobile, simulated Slow 4G, 4× CPU — the Lighthouse default;
-`node scripts/lighthouse.mjs`, three runs per route, median):
+**Measured result** — one full run of `node scripts/lighthouse.mjs` on
+2026-11-18, mobile, simulated Slow 4G, 4× CPU (the Lighthouse default), five
+samples per route in a fresh browser, median:
 
 | Route | Performance | Accessibility | Best practices | SEO |
 | --- | --- | --- | --- | --- |
-| `/` | 96–98 | 100 | 96–100 | 100 |
-| `/about` `/guidelines` `/privacy` `/terms` `/account-deletion` `/contact` | 97–100 | 100 | 100 | 100 |
-| `/jobs` `/freelance` `/projects` `/learn` `/groups` `/events` `/verify` | 97–100 | 100 | 96–100 | 100 |
-| `/marketplace` `/playground` | 95–99 | 100 | 96–100 | 100 |
+| `/` | **95** | 100 | 100 | 100 |
+| `/marketplace` | **95** | 100 | 100 | 100 |
+| `/groups` `/events` `/playground` | 96 | 100 | 100 | 100 |
+| `/jobs` `/projects` `/verify` | 97 | 100 | 100 | 100 |
+| `/guidelines` `/privacy` `/terms` `/account-deletion` | 98 | 100 | 100 | 100 |
+| `/about` `/contact` `/freelance` `/learn` | 99 | 100 | 100 | 100 |
 
-Desktop is 100 in every category on `/` and never below 96 elsewhere.
+**Every route clears every floor.** The two lowest medians are `/` and
+`/marketplace` at 95: both render the feed, which is the largest React commit in
+the product, and on a shared machine `/` ranges 94–98 sample to sample. Desktop
+is 100 in every category on `/` and never below 96 elsewhere.
 
 **How to re-measure**
 
 ```bash
 cd main-site && npm run build          # dist/ with prerendered HTML
 npm install --no-save lighthouse chrome-launcher
-CHROME_PATH=/path/to/chrome npm run lighthouse            # every public route, median of 3
-node ../scripts/lighthouse.mjs --routes /,/privacy --runs 5 --floor 95
+CHROME_PATH=/path/to/chrome npm run lighthouse            # every public route, median of 5, fresh browser per route
+node ../scripts/lighthouse.mjs --routes /,/privacy --verbose   # samples, not just the median
 ```
 
-The last full run of the script (16 routes × 3 runs) printed *every category
-clears the floor on every route*; accessibility and SEO were 100 on all sixteen.
+The script runs a fresh browser for every route, because one Chrome reused across
+sixteen routes and eighty audits measures a browser that is no longer the state a
+visitor's is: on a quiet machine the cost was invisible, on a shared one it moved
+`/` from 96 to 93 depending on where in the sweep it fell. It asserts the median of
+**five** samples — with three, one slow run moves the median; with five it takes
+two — and `--verbose` prints every sample, so a low median can be read as the
+regression or the shared machine it actually is rather than guessed at.
 
 One reading that is *not* evidence of a defect, so nobody chases it: **the score
 of a single run.** On a shared machine the same commit measures 94–98. The budget
-is the median of three, which is what the script asserts.
+is the median of five samples in a fresh browser, which is what the script asserts.
 
 ### Best practices was 96 on data pages, and it was two separate things
 

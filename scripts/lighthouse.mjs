@@ -22,8 +22,13 @@
  *
  * The score of one run is not a measurement, it is a sample: shared CI
  * machines vary by several points. Each route is run `--runs` times (3 by
- * default) and the **median** is what must clear the floor. A route whose
- * median misses is a failure; a single slow sample is reported and not.
+ * five) and the **median** is what must clear the floor. A route whose median
+ * misses is a failure; a single slow sample is reported and not. Five, not three,
+ * because a shared machine occasionally takes 400 ms to mount a page: with three
+ * samples one bad run moves the median, with five it takes two.
+ *
+ * `--verbose` prints every performance sample, so a low median can be read as the
+ * regression or the shared machine it actually is.
  */
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -39,7 +44,15 @@ const flag = (name, fallback) => {
   return index === -1 ? fallback : args[index + 1];
 };
 const FLOOR = Number(flag('floor', '95'));
-const RUNS = Number(flag('runs', '3'));
+/**
+ * Print every sample instead of only the median.
+ *
+ * A median of 93 on one route is two different facts depending on the spread: 93,
+ * 93, 93 is a regression, and 87, 93, 99 is a shared machine. Without the samples
+ * the two look identical, and the only way to tell them apart was to guess.
+ */
+const VERBOSE = args.includes('--verbose');
+const RUNS = Number(flag('runs', '5'));
 const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo'];
 const DEFAULT_ROUTES = [
   '/',
@@ -167,10 +180,28 @@ async function main() {
     process.exit(1);
   }
 
-  const chrome = await launch({
-    chromePath: process.env.CHROME_PATH || undefined,
-    chromeFlags: ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-  });
+  const startChrome = () =>
+    launch({
+      chromePath: process.env.CHROME_PATH || undefined,
+      chromeFlags: ['--headless=new', '--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    });
+
+  /**
+   * A browser per route.
+   *
+   * One instance reused across sixteen routes and eighty audits accumulates
+   * everything a long-lived renderer accumulates — compiled scripts for every
+   * page, its caches, its heap — and the later routes measure a browser that is
+   * no longer in the state a visitor's is. On a quiet machine that cost was
+   * invisible; on a shared one it moved `/` from 96 to 93 depending on where in
+   * the sweep it fell. A page measured in a fresh browser is the page a visitor
+   * opens.
+   */
+  let chrome = await startChrome();
+  const freshBrowser = async () => {
+    await chrome.kill();
+    chrome = await startChrome();
+  };
 
   const { server, port } = await serve();
   const origin = `http://127.0.0.1:${port}`;
@@ -178,7 +209,10 @@ async function main() {
   const rows = [];
 
   try {
+    let first = true;
     for (const route of ROUTES) {
+      if (!first) await freshBrowser();
+      first = false;
       const samples = { performance: [], accessibility: [], 'best-practices': [], seo: [] };
       for (let run = 0; run < RUNS; run += 1) {
         const runner = await lighthouse(`${origin}${route}`, {
@@ -201,6 +235,9 @@ async function main() {
           below.length > 0 ? `   ← below ${FLOOR}: ${below.join(', ')}` : ''
         }\n`,
       );
+      if (VERBOSE) {
+        process.stdout.write(`  performance samples: ${samples.performance.join(', ')}\n`);
+      }
     }
   } finally {
     server.close();
@@ -216,8 +253,11 @@ async function main() {
   }
   process.stdout.write(`${failures.length} route(s) below the floor:\n`);
   for (const failure of failures) {
+    const row = rows.find((entry) => entry.route === failure.route);
     process.stdout.write(
-      `  ${failure.route}: ${failure.below.map((c) => `${c} ${failure.medians[c]}`).join(', ')}\n`,
+      `  ${failure.route}: ${failure.below
+        .map((c) => `${c} ${failure.medians[c]} (samples ${row ? row.samples[c].join(', ') : '?'})`)
+        .join(', ')}\n`,
     );
   }
   process.exitCode = 1;
