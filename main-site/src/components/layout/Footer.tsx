@@ -9,6 +9,7 @@ const PLATFORM_LINKS = [
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
   { to: ROUTES.privacy, labelKey: 'nav.privacy' },
   { to: ROUTES.terms, labelKey: 'nav.terms' },
+  { to: ROUTES.accountDeletion, labelKey: 'nav.accountDeletion' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
 ] as const;
 

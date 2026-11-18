@@ -14,6 +14,7 @@ should fail a test rather than wait for a reviewer to notice.
 | Terms of service, public URL | `/terms` (`main-site/src/routes/TermsPage.tsx`, bilingual) | `src/test/terms-page.test.tsx` |
 | In-app account deletion | Settings → Delete account (web) and Settings → Delete your account (Android) | `scripts/db-prove/t78.mjs`, `src/test/delete-account.test.ts` |
 | Deletion reachable without support | deletion is an RPC + client call, no staff step | `supabase/migrations/0119_*.sql` |
+| Deletion URL that works without the app | `/account-deletion` (`main-site/src/routes/AccountDeletionPage.tsx`, bilingual) | `src/test/account-deletion-page.test.tsx` |
 | Data safety answers | this document, "Data safety" below | `scripts/db-prove/t78.mjs` (the deletion list is the data list) |
 | Prominent disclosure for sensitive permissions | privacy policy sections `location`, `camera`, `microphone`; in-app rationale before the first request | `src/test/privacy-page.test.tsx` |
 | Target API level 35 | `android-app/app/build.gradle.kts` (`targetSdk = 35`) | CI build |
@@ -138,7 +139,8 @@ an audio loop alive with the screen off, and the service is declared with it.
 
 ## What a reviewer should click
 
-1. Open `/privacy` and `/terms` — both render in English and Bangla, no sign-in.
+1. Open `/privacy`, `/terms` and `/account-deletion` — all three render in English
+   and Bangla, with no sign-in.
 2. In the app: Settings (gear) → **Legal** → privacy policy and terms open in a
    custom tab.
 3. In the web app: Settings → **Delete account** → the panel states what is

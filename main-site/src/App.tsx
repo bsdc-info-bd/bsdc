@@ -14,6 +14,7 @@ const AboutPage = lazy(() => import('@/routes/AboutPage'));
 const GuidelinesPage = lazy(() => import('@/routes/GuidelinesPage'));
 const PrivacyPage = lazy(() => import('@/routes/PrivacyPage'));
 const TermsPage = lazy(() => import('@/routes/TermsPage'));
+const AccountDeletionPage = lazy(() => import('@/routes/AccountDeletionPage'));
 const ContactPage = lazy(() => import('@/routes/ContactPage'));
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage'));
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
@@ -87,6 +88,7 @@ const router = createBrowserRouter([
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
       { path: ROUTES.privacy, element: withSuspense(<PrivacyPage />) },
       { path: ROUTES.terms, element: withSuspense(<TermsPage />) },
+      { path: ROUTES.accountDeletion, element: withSuspense(<AccountDeletionPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
       { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 

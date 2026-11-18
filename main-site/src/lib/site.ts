@@ -36,6 +36,10 @@ export const ROUTES = {
   privacy: '/privacy',
   // The terms of service, beside the privacy policy. Public, no sign-in.
   terms: '/terms',
+  // Google Play asks for a deletion URL that works without the app installed —
+  // a page a reviewer, or a member who no longer has the handset, can open and
+  // follow. Public, no sign-in.
+  accountDeletion: '/account-deletion',
   contact: '/contact',
   // The page that proves the platform is working, with evidence a member can
   // copy into a support message. Public on purpose: a visitor whose pictures do

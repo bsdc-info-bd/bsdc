@@ -1617,6 +1617,26 @@ check('K-07', 'Play Store', 'The manifest asks for no sensitive permission the a
   };
 });
 
+check('K-09', 'Play Store', 'The deletion URL works without the app installed', () => {
+  // Play's Data safety section asks for a URL where deletion can be requested.
+  // The in-app button does not satisfy it on its own: a reviewer has no account,
+  // and a member may no longer have the app.
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  const footer = read('main-site/src/components/layout/Footer.tsx');
+  const doc = read('docs/play-store-compliance.md');
+  const page = read('main-site/src/routes/AccountDeletionPage.tsx');
+  return {
+    ok:
+      site.includes("accountDeletion: '/account-deletion'") &&
+      routes.includes('ROUTES.accountDeletion') &&
+      footer.includes('ROUTES.accountDeletion') &&
+      page.includes('byEmail') &&
+      doc.includes('account-deletion'),
+    evidence: '/account-deletion is routed, linked in the footer and named in the compliance record',
+  };
+});
+
 check('K-08', 'Play Store', 'Every third party that receives member data is named in the policy', () => {
   // Play's data safety form asks which third parties receive data; a policy that
   // omits one is inaccurate in the direction that gets an app suspended. The

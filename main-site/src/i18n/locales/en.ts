@@ -77,6 +77,7 @@ export const en = {
     guidelines: 'Guidelines',
     privacy: 'Privacy',
     terms: 'Terms',
+    accountDeletion: 'Delete account',
     contact: 'Contact',
     create: 'Create',
   },
@@ -313,6 +314,47 @@ export const en = {
         body: 'Questions about this policy, or a request about your data, go to the support address on our contact page. We answer data requests within 30 days, and we will tell you if a request needs more time and why.',
       },
     },
+  },
+  accountDeletion: {
+    metaTitle: 'Delete your BSDC account',
+    metaDescription:
+      'How to delete a BSDC account and what happens to your data — from inside the app, from the web, or by writing to us.',
+    heading: 'Delete your account',
+    intro:
+      'You can delete your BSDC account yourself, at any time, without asking us and without explaining why. This page explains the three ways to do it and exactly what happens to your data when you do.',
+    updated: 'Last updated 18 November 2026.',
+    sections: {
+      inTheApp: {
+        title: 'From the Android app',
+        body: 'Open Settings (the gear in the top bar), choose “Delete account” under Legal and account controls, read what is deleted and what is kept, then type DELETE to confirm. The app signs you out when it finishes.',
+      },
+      onTheWeb: {
+        title: 'From the website',
+        body: 'Sign in, open Settings, and choose the “Delete account” tab. The panel states what goes and what stays, and the confirm button stays disabled until you type DELETE. This works on a phone, a tablet or a desktop.',
+      },
+      byEmail: {
+        title: 'By writing to us',
+        body: 'If you cannot sign in — you have lost the handset, or the address no longer receives mail — write to the support address below from any address and ask us to delete the account. Tell us the username or the sign-in email so we can find it. We answer within 30 days, and we will confirm when the deletion is done.',
+      },
+      whatHappens: {
+        title: 'What is deleted',
+        body: 'Deletion is immediate and cannot be undone. This is what goes:',
+        items: [
+          'Your profile: name, username, photo, bio, location and links.',
+          'Every post, comment, reaction and photo you published.',
+          'Your private messages and the conversations you were part of.',
+          'Your saved addresses, bookmarks, saved items and notification settings.',
+          'Your job applications, freelance proposals and course progress.',
+          'Every device token, so no notification can reach a phone for this account again.',
+        ],
+      },
+      whatStays: {
+        title: 'What is kept, and why',
+        body: 'Orders and payments that the other party to a transaction still needs are kept, because a vendor’s records and the buyer’s history have to keep adding up. They are kept without your name, address or phone number, and the record that pointed at your account points at a tombstone that no longer describes a person. Moderation and audit records are kept for safety and legal reasons in the same de-identified form. Nothing else is retained.',
+      },
+    },
+    readPolicy: 'Read the privacy policy',
+    readTerms: 'Read the terms of service',
   },
   terms: {
     metaTitle: 'Terms of Service — BSDC',

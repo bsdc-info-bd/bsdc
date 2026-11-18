@@ -147,6 +147,15 @@ workflow:
    fails if any of the four goes missing, and the camera rationale in the app
    stopped saying "ImgBB uploads" to a member who has never heard of ImgBB.
 
+12. **The deletion URL Play asks for did not exist.** Play's Data safety section
+   wants a public URL where deletion can be requested — a reviewer has no
+   account, and a member whose phone is gone cannot open the app. The in-app
+   button satisfied the spirit of the requirement and not the letter of it.
+   `/account-deletion` is now a bilingual public page that names all three ways
+   to delete an account (in the app, on the web, by writing to support), states
+   what is deleted and — unlike a marketing page — what is kept and why, and is
+   linked from the footer. K-09 fails if it disappears.
+
 ### Findings from the last full pass
 
 Each of these was a live defect found by running the checks rather than by reading
@@ -234,7 +243,7 @@ the code, and each is now fixed with a test or a check that would catch it again
 
 ## Checkpoints
 
-Current result: **116 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Current result: **117 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
@@ -286,11 +295,11 @@ Current result: **116 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | C-04 | Nothing logs to the console in shipped code | Pass | none |
 | C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
 | C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
-| C-07 | Both languages carry the same keys | Pass | 56 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 56150 Bangla code points in the Bangla locale |
+| C-07 | Both languages carry the same keys | Pass | 57 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
+| C-08 | Bangla is a real translation, not a copy of English | Pass | 57780 Bangla code points in the Bangla locale |
 | C-09 | Every application ships a security header set | Pass | all fourteen |
 | C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
-| C-11 | TypeScript source files under version control | Recorded | 624 .ts/.tsx files |
+| C-11 | TypeScript source files under version control | Recorded | 626 .ts/.tsx files |
 | C-12 | No link opens a new tab without severing the opener | Pass | every _blank link carries rel="noopener" |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text | Pass | every <img> declares alt, decorative images with an empty one |
@@ -374,7 +383,7 @@ Current result: **116 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| H-01 | Unit tests by package | Recorded | 1178 tests across 3 installed package(s); 13 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site: corporate-kit 0, main-site 1178, push-worker 0 |
+| H-01 | Unit tests by package | Recorded | 1183 tests across 3 installed package(s); 13 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site: corporate-kit 0, main-site 1183, push-worker 0 |
 | H-02 | Every package has at least one test file | Pass | all sixteen |
 
 ### CI
@@ -414,9 +423,11 @@ Current result: **116 passed, 0 failed, 4 recorded**. Regenerate with `node scri
 | K-05 | The data safety answers are written down and match the deletion path | Pass | the document names the policy, the terms, the data safety answers and the deletion RPC |
 | K-06 | Cleartext traffic is refused and backups are off | Pass | the manifest refuses cleartext and disables backup |
 | K-07 | The manifest asks for no sensitive permission the app does not use | Pass | 10 permissions declared, none of them RECORD_AUDIO |
+| K-09 | The deletion URL works without the app installed | Pass | /account-deletion is routed, linked in the footer and named in the compliance record |
 | K-08 | Every third party that receives member data is named in the policy | Pass | named in both locales: Supabase, Firebase, Cloudflare, ImgBB |
 
 ## What no checkpoint can settle
+
 
 
 Everything in this section is recorded here rather than dressed up as an automated result.
