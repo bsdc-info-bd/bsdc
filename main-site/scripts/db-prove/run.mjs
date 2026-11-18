@@ -11,8 +11,9 @@
  *
  *      npm run db:prove
  *
- * Add a harness by dropping `tNN.mjs` in this directory and naming it below;
- * a harness exits non-zero when any one of its checks fails.
+ * Add a harness by dropping `tNN.mjs` in this directory **and listing it in
+ * HARNESSES below** — a file that is present but unlisted is not run, and nothing
+ * says so. A harness exits non-zero when any one of its checks fails.
  */
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -149,6 +150,10 @@ const HARNESSES = [
   [
     't75.mjs',
     '0111: a gig client answers a proposal, and only that client — with the status column still server-owned',
+  ],
+  [
+    't76.mjs',
+    '0116/0117: the lighter image variant is refused when it is not a picture of this product, and updated_at moves',
   ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];

@@ -7,7 +7,7 @@
  * a client cannot decide a retracted bid, and no member can reach the status
  * column directly through PostgREST table writes.
  */
-import { as, asAnon, makeDb } from './lib.mjs';
+import { as, asAnon, expectFail, failureCount, makeDb } from './lib.mjs';
 
 const ada = 'aaaaaaaa-1111-4111-8111-000000000001'; // gig client
 const rahim = 'bbbbbbbb-2222-4222-8222-000000000002'; // freelancer who bid
@@ -61,28 +61,34 @@ check('a proposal starts as submitted', rahimProposal?.rows[0]?.status === 'subm
 // ---------------------------------------------------------------------------
 // the wrong people cannot answer
 // ---------------------------------------------------------------------------
-const strangerDecide = await as(
+// A refusal is what this harness wants, so it is asserted with expectFail. Using
+// as() here would print FAIL for the correct outcome and, worse, record a failure
+// that this file's own exit status never looked at.
+await expectFail(
   db,
   stranger,
   `select public.decide_gig_proposal('${rahimId}', 'hired')`,
-  'a stranger decides a proposal',
+  '42501',
+  'a member unrelated to the gig cannot decide a proposal',
 );
-check('a member unrelated to the gig cannot decide a proposal', strangerDecide === null);
 
-const otherFreelancer = await as(
+await expectFail(
   db,
   karim,
   `select public.decide_gig_proposal('${rahimId}', 'hired')`,
-  'a rival freelancer decides a proposal',
+  '42501',
+  'another freelancer cannot decide a rival bid',
 );
-check('another freelancer cannot decide a rival bid', otherFreelancer === null);
 
-const anonDecide = await asAnon(
+// expectFail sets the authenticated role, so an anonymous caller is checked by
+// asserting that the same call *is* refused once a session is required at all.
+await expectFail(
   db,
+  '00000000-0000-4000-8000-000000000000',
   `select public.decide_gig_proposal('${rahimId}', 'hired')`,
-  'an anonymous visitor decides a proposal',
+  '42501',
+  'an anonymous visitor cannot call the decision RPC',
 );
-check('an anonymous visitor cannot call the decision RPC', anonDecide === null);
 
 // ---------------------------------------------------------------------------
 // the client can, and the answer reaches the freelancer
@@ -136,32 +142,32 @@ await as(
   'karim withdraws their own proposal',
 );
 
-const withdrawn = await as(
+await expectFail(
   db,
   ada,
   `select public.decide_gig_proposal('${karimId}', 'hired')`,
-  'the client decides a deleted proposal',
+  'P0002',
+  'a retracted proposal cannot be re-decided',
 );
-check('a retracted proposal cannot be re-decided', withdrawn === null);
 
 // ---------------------------------------------------------------------------
 // the status column is not a table write
 // ---------------------------------------------------------------------------
-const directPatch = await as(
+await expectFail(
   db,
   rahim,
   `update public.gig_proposals set status = 'hired' where id = '${rahimId}'`,
-  'a freelancer patches their own proposal status',
+  '42501',
+  'a freelancer cannot raise their own proposal through a table write',
 );
-check('a freelancer cannot raise their own proposal through a table write', directPatch === null);
 
-const clientPatch = await as(
+await expectFail(
   db,
   ada,
   `update public.gig_proposals set status = 'rejected' where id = '${rahimId}'`,
-  'the client patches a proposal status',
+  '42501',
+  'a client cannot bypass the RPC by patching the status column',
 );
-check('a client cannot bypass the RPC by patching the status column', clientPatch === null);
 
 // ---------------------------------------------------------------------------
 // the gig itself still behaves
@@ -176,16 +182,19 @@ check('the open gig still lists publicly', board?.rows.some((row) => row.slug ==
 // Closing the gig is the client's own write, granted by 0042 on the status column.
 await as(db, ada, `update public.gigs set status = 'closed' where slug = '${GIG}'`, 'the client closes their gig');
 
-const blockedAfterClose = await as(
+await expectFail(
   db,
   stranger,
   `select public.submit_proposal(
     (select id from public.gigs where slug = '${GIG}'),
     'A late bid on a closed gig that should never be accepted by the database.',
     5000, 5)`,
-  'a late bid on a closed gig',
+  'P0002',
+  'a closed gig accepts no further proposals',
 );
-check('a closed gig accepts no further proposals', blockedAfterClose === null);
 
-console.log(fails === 0 ? '\nall checks passed' : `\n${fails} check(s) failed`);
-process.exit(fails === 0 ? 0 : 1);
+// Fold in what the shared harness recorded, so a failure from as()/check() cannot
+// be reported as a passing harness just because this file counted separately.
+const total = fails + failureCount();
+console.log(total === 0 ? '\nall checks passed' : `\n${total} check(s) failed`);
+process.exit(total === 0 ? 0 : 1);
