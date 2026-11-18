@@ -1504,6 +1504,99 @@ check('J-05', 'Data', 'Every migration names only tables, columns and functions 
 });
 
 /* ------------------------------------------------------------------ *
+ * Play Store compliance
+ *
+ * These are the four things a Play reviewer settles first, and each is a
+ * property of the repository rather than a claim in a document: a public
+ * policy, public terms, an in-app deletion path, and a data safety record
+ * that matches the deletion path.
+ * ------------------------------------------------------------------ */
+
+check('K-01', 'Play Store', 'The privacy policy is a public route, not only a document', () => {
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  return {
+    ok: site.includes("privacy: '/privacy'") && routes.includes('ROUTES.privacy'),
+    evidence: 'ROUTES.privacy is declared and mounted in the router',
+  };
+});
+
+check('K-02', 'Play Store', 'The terms of service are a public route', () => {
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  const footer = read('main-site/src/components/layout/Footer.tsx');
+  return {
+    ok:
+      site.includes("terms: '/terms'") &&
+      routes.includes('ROUTES.terms') &&
+      footer.includes('ROUTES.terms'),
+    evidence: 'ROUTES.terms is declared, mounted and linked from the footer',
+  };
+});
+
+check('K-03', 'Play Store', 'A member can delete their own account in the app', () => {
+  const migration = read(
+    'supabase/migrations/0119_a_member_can_delete_their_own_account.sql',
+  );
+  const settings = read('main-site/src/routes/SettingsPage.tsx');
+  const service = read('main-site/src/lib/auth/auth-service.ts');
+  return {
+    ok:
+      /create or replace function public\.delete_my_account\(\)/.test(migration) &&
+      /to authenticated/.test(migration) &&
+      settings.includes('deleteMyAccount') &&
+      service.includes("rpc('delete_my_account')"),
+    evidence: 'delete_my_account() is granted to authenticated and called from Settings',
+  };
+});
+
+check('K-04', 'Play Store', 'The Android app links the policy and the terms, and can delete an account', () => {
+  const settingsScreen = read(
+    'android-app/feature/news/src/main/kotlin/bd/info/bsdc/app/feature/news/SystemDiagnosticsScreen.kt',
+  );
+  const api = read(
+    'android-app/core/network/src/main/kotlin/bd/info/bsdc/app/core/network/BsdcPlatformApi.kt',
+  );
+  const repo = read(
+    'android-app/core/auth/src/main/kotlin/bd/info/bsdc/app/core/auth/AuthRepository.kt',
+  );
+  return {
+    ok:
+      /SITE_ORIGIN}\/privacy/.test(settingsScreen) &&
+      /SITE_ORIGIN}\/terms/.test(settingsScreen) &&
+      settingsScreen.includes('onDeleteAccount') &&
+      api.includes('delete_my_account') &&
+      repo.includes('suspend fun deleteMyAccount'),
+    evidence: 'legal links open in a custom tab and deletion runs through the repository',
+  };
+});
+
+check('K-05', 'Play Store', 'The data safety answers are written down and match the deletion path', () => {
+  const doc = read('docs/play-store-compliance.md');
+  const migration = read(
+    'supabase/migrations/0119_a_member_can_delete_their_own_account.sql',
+  );
+  const documented = ['privacy', 'terms', 'Data safety', 'Encrypted in transit', 'Account deletion'];
+  const missing = documented.filter((heading) => !doc.includes(heading));
+  return {
+    ok: missing.length === 0 && doc.includes('delete_my_account'),
+    evidence:
+      missing.length === 0
+        ? 'the document names the policy, the terms, the data safety answers and the deletion RPC'
+        : `missing: ${missing.join(', ')}`,
+  };
+});
+
+check('K-06', 'Play Store', 'Cleartext traffic is refused and backups are off', () => {
+  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+  return {
+    ok:
+      /usesCleartextTraffic="false"/.test(manifest) && /allowBackup="false"/.test(manifest),
+    evidence: 'the manifest refuses cleartext and disables backup',
+  };
+});
+
+/* ------------------------------------------------------------------ *
  * Report
  * ------------------------------------------------------------------ */
 

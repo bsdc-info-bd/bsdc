@@ -2453,6 +2453,9 @@ export type Database = {
       };
       push_public_config: { Args: never; Returns: Json };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
+      // Self-service account deletion (0119). Returns void; the client deletes
+      // the Firebase user afterwards, so there is no payload to read.
+      delete_my_account: { Args: never; Returns: undefined };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.
       register_push_subscription: {

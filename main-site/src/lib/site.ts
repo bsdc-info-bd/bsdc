@@ -34,6 +34,8 @@ export const ROUTES = {
   // Required by Google Play: a reachable policy URL for an app that stores
   // profiles, addresses and orders. Public, no sign-in.
   privacy: '/privacy',
+  // The terms of service, beside the privacy policy. Public, no sign-in.
+  terms: '/terms',
   contact: '/contact',
   // The page that proves the platform is working, with evidence a member can
   // copy into a support message. Public on purpose: a visitor whose pictures do

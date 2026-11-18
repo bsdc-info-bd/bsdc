@@ -76,6 +76,7 @@ export const en = {
     projects: 'Projects',
     guidelines: 'Guidelines',
     privacy: 'Privacy',
+    terms: 'Terms',
     contact: 'Contact',
     create: 'Create',
   },
@@ -290,11 +291,11 @@ export const en = {
       },
       yourRights: {
         title: 'Your rights',
-        body: 'You can exercise these from the app or by writing to us, and we do not charge for it.',
+        body: 'You can exercise these from the app or by writing to us, and we do not charge for it. Account deletion is self-service: Settings → Delete account.',
         items: [
           'See what we hold: your profile, your content and your order history are visible to you in the app.',
           'Correct it: your name, username, photo, phone number and addresses can be edited at any time.',
-          'Delete it: you can delete individual posts, messages, addresses and photos, or ask us to delete your account.',
+          'Delete it: you can delete individual posts, messages, addresses and photos, and you can delete your whole account yourself from Settings — the button is under “Delete account”, and it does not need our permission.',
           'Export it: ask for a machine-readable copy of your account data and we will provide it.',
           'Object or ask a question: write to the contact address below and a person will answer.',
         ],
@@ -310,6 +311,74 @@ export const en = {
       contact: {
         title: 'Contact',
         body: 'Questions about this policy, or a request about your data, go to the support address on our contact page. We answer data requests within 30 days, and we will tell you if a request needs more time and why.',
+      },
+    },
+  },
+  terms: {
+    metaTitle: 'Terms of Service — BSDC',
+    metaDescription:
+      'The terms you agree to when you create a BSDC account: what the service is, what you may post, how payments work, and how to leave.',
+    heading: 'Terms of service',
+    intro:
+      'These terms cover the BSDC website and the BSDC Android app. By creating an account you agree to them. They are written from what the platform actually does, so the words below describe the service you are joining rather than a generic one.',
+    updated: 'Last updated 18 November 2026.',
+    sections: {
+      theService: {
+        title: 'The service',
+        body: 'BSDC is a community platform for software developers in Bangladesh. It provides public posts, groups, events, jobs, freelance gigs, learning courses, a marketplace, and direct messaging. The service is provided free of charge. Some features, such as advertising credit and marketplace credit, are paid for through bKash as described below.',
+      },
+      yourAccount: {
+        title: 'Your account',
+        body: 'You need an account to post, message, order, or apply. You are responsible for keeping your sign-in credentials to yourself and for everything done under your account. One person may hold more than one account, but an account may not be shared. You must be at least 13 years old to use the service. When you sign up you choose a username; it must be available, and it may be reclaimed if the account is inactive for a long period.',
+      },
+      yourContent: {
+        title: 'Your content',
+        body: 'What you post is yours. By posting you give BSDC a licence to display, store and distribute it as part of running the service — showing it to the people you chose, in the feed, in search results, and in notifications. That licence ends when you delete the content. Deleted posts and messages enter a 30-day recovery window during which you can restore them; after that they are gone. You are responsible for what you post: you must have the right to share it, and it must not break these terms or the law.',
+      },
+      marketplace: {
+        title: 'The marketplace',
+        body: 'The marketplace is cash-on-delivery. A vendor lists products and sets their own prices, stock and delivery areas. When you place an order you agree to pay the vendor on delivery. A vendor who accepts your order is bound by the price and description at the time of the order. Vendors must describe products accurately, ship what was ordered, and honour the delivery terms they published. A vendor account is a separate application from a member account and can be refused or revoked for inaccurate listings, counterfeit goods, or repeated failure to fulfil orders.',
+      },
+      payments: {
+        title: 'Payments and bKash',
+        body: 'Advertising credit and marketplace credit are paid by bKash. You send the money through bKash yourself and submit the transaction reference to us; a staff member checks that reference against the bKash statement and approves or rejects the request. A rejection always carries a reason, and we message it to you. We store the reference and the decision, never your bKash PIN or any bank credential. We will never ask for those, in the app or by message, and a message asking for them is not from us. Credit that has been spent is not refundable; unused credit can be refunded on request, less any fee the payment provider charges.',
+      },
+      acceptableUse: {
+        title: 'What you may not do',
+        body: 'The following are not permitted on the service:',
+        items: [
+          'Post content that is unlawful, harassing, hateful, or that targets a person or group with abuse.',
+          'Post spam, scams, counterfeit goods, or links to malware.',
+          'Impersonate another person, or misrepresent your identity or affiliation.',
+          'Harvest other members’ personal data, or scrape the service at a volume that degrades it for others.',
+          'Attempt to access another member’s account, or to bypass the platform’s access controls.',
+          'Use the service to advertise a competing platform, or to solicit members off the platform for a transaction the platform governs.',
+          'Upload content you do not have the right to share, including other people’s photographs and code.',
+        ],
+      },
+      moderation: {
+        title: 'Moderation',
+        body: 'Members can report content, and staff and moderators review reports through a console that records who took which action. Moderators can hide content, remove it, suspend an account, or ban it. A moderator’s decision can be appealed through the contact page, and an appeal is reviewed by someone other than the moderator who made the original decision. Staff do not read private messages as a matter of course; a message is read only when it is reported, or when required to investigate fraud or a legal order, and every such access is recorded in an audit log.',
+      },
+      suspension: {
+        title: 'Suspension and termination',
+        body: 'We may suspend or terminate an account that breaks these terms, and we will tell the account holder what happened and why, unless telling them would compromise an investigation. Termination removes the account’s content and device tokens as described in the privacy policy. Order and payment records that belong to the other party to a transaction are retained in a form that no longer identifies the terminated account, because the other party still needs them.',
+      },
+      deletingYourAccount: {
+        title: 'Deleting your account',
+        body: 'You can delete your account at any time from Settings, without asking us. Deletion removes your profile, posts, messages and device tokens, and anonymises the profile row so that order records stop identifying you. It cannot be undone. The owner account cannot be deleted from Settings; ownership must be transferred to another member first, through the people console.',
+      },
+      liability: {
+        title: 'Liability',
+        body: 'The service is provided as it is, without warranties of any kind. To the maximum extent the law allows, BSDC is not liable for loss arising from the use of the service, from content posted by other members, or from transactions between members. Nothing in these terms limits liability for fraud, for wilful misconduct, or for any liability that cannot be limited by law. The marketplace is a venue: a vendor is responsible for the goods they sell, and BSDC is not a party to the contract between a buyer and a vendor.',
+      },
+      changes: {
+        title: 'Changes to these terms',
+        body: 'A change that affects what you may do on the service is announced in the app before it takes effect. The date at the top of this page always reflects the version in force. Continuing to use the service after a change takes effect means you accept it.',
+      },
+      contact: {
+        title: 'Contact',
+        body: 'Questions about these terms, an appeal against a moderation decision, or a report of a problem with the service go to the support address on our contact page. We answer within 30 days, and sooner when the matter is urgent.',
       },
     },
   },
@@ -605,6 +674,7 @@ export const en = {
       feed: 'Feed',
       privacy: 'Privacy',
       security: 'Security',
+      danger: 'Delete account',
     },
     save: 'Save changes',
     saved: 'Changes saved.',
@@ -652,6 +722,32 @@ export const en = {
       signOutEverywhere: 'Sign out of this device',
       lastSignIn: 'Last sign-in: {{date}}',
       createdAt: 'Account created: {{date}}',
+    },
+    danger: {
+      title: 'Delete your account',
+      description:
+        'This removes your profile, posts, comments, messages, addresses and device tokens. It cannot be undone.',
+      whatIsDeleted: 'What is deleted',
+      whatIsDeletedBody:
+        'Your profile details, every post and comment you wrote, your messages, your address book, your saved items and your notification settings all go. Every device token is removed, so no notification can reach a phone for this account again.',
+      whatIsKept: 'What is kept',
+      whatIsKeptBody:
+        'Orders and payments that the other party to a transaction still needs stay on file, without your name, address or phone number. Your handle is released and becomes available to someone else.',
+      beforeYouGo: 'Before you delete',
+      beforeTakeout: 'Export anything you want to keep — deleted content cannot be recovered.',
+      answer: 'Type DELETE to confirm',
+      answerHint: 'Type the word DELETE in capitals.',
+      confirm: 'Delete my account for ever',
+      cancel: 'Keep my account',
+      busy: 'Deleting your account',
+      ownerRefused:
+        'The owner account cannot be deleted here. Transfer ownership to another member first, then delete this one.',
+      pending:
+        'Your account data has been deleted. Your sign-in could not be removed in this session — sign in once more and repeat this step to finish.',
+      failed: 'The account could not be deleted. Nothing was changed. Please try again.',
+      deletedTitle: 'Your account has been deleted',
+      deletedBody: 'You are signed out. Thank you for being part of BSDC.',
+      readPolicy: 'Read the privacy policy',
     },
   },
   data: {

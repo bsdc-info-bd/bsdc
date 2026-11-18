@@ -159,6 +159,10 @@ const HARNESSES = [
     't77.mjs',
     '0118: the internal writers (audit, deployment notes) refuse anon and members, and the owner still writes through them',
   ],
+  [
+    't78.mjs',
+    '0119: a member deletes their own account — everything personal goes, the tombstone keeps no name, the owner and anon are refused',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

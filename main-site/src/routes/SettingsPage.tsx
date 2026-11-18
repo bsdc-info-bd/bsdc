@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { PushCard } from '@/components/notifications/PushCard';
@@ -26,7 +26,12 @@ import {
 } from '@/design-system';
 import { useFeedPreferences } from '@/hooks/use-feed';
 import { changeLanguage, type Language } from '@/i18n';
-import { changePassword, logout, updateDisplayName } from '@/lib/auth/auth-service';
+import {
+  changePassword,
+  deleteMyAccount,
+  logout,
+  updateDisplayName,
+} from '@/lib/auth/auth-service';
 import { authErrorKey } from '@/lib/auth/errors';
 import type { FeedPreferences } from '@/lib/feed/ranking';
 import { profileErrorKey } from '@/lib/profile/profile-errors';
@@ -497,6 +502,127 @@ function FeedPanel() {
   );
 }
 
+/**
+ * Delete-account panel.
+ *
+ * Google Play requires an in-app path to account deletion for any app that lets
+ * people create an account, and the privacy policy has promised one since it was
+ * written. This is that path, and it is deliberately not a single button: a
+ * mis-tap here destroys someone's writing and messages, so the panel states what
+ * goes and what stays, and requires the member to type DELETE before the button
+ * becomes available.
+ *
+ * The copy is not decoration. Play's reviewers read it to check the deletion is
+ * explained before it happens, and a member deserves to know that their orders
+ * survive in de-identified form before they press it rather than after.
+ */
+function DangerPanel() {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [confirming, setConfirming] = useState(false);
+  const [answer, setAnswer] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [errorKey, setErrorKey] = useState<string | null>(null);
+
+  const armed = answer.trim() === 'DELETE';
+
+  async function onDelete() {
+    setBusy(true);
+    setErrorKey(null);
+    try {
+      await deleteMyAccount();
+      toast.success(t('settings.danger.deletedTitle'));
+      navigate(ROUTES.home, { replace: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      // Only three outcomes are possible, and each has its own instruction. A
+      // generic "something went wrong" here would leave a member unable to tell
+      // whether their data is gone, so the messages are specific.
+      setErrorKey(
+        message === 'auth/delete-owner-refused'
+          ? 'settings.danger.ownerRefused'
+          : message === 'auth/delete-pending'
+            ? 'settings.danger.pending'
+            : 'settings.danger.failed',
+      );
+      setAnswer('');
+      if (message === 'auth/delete-pending') toast.error(t('settings.danger.pending'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="grid gap-4">
+      <Card>
+        <h3 className="text-lg font-semibold">{t('settings.danger.title')}</h3>
+        <p className="mt-2 text-sm text-muted">{t('settings.danger.description')}</p>
+
+        <div className="mt-4 grid gap-3">
+          <div>
+            <p className="text-sm font-semibold">{t('settings.danger.whatIsDeleted')}</p>
+            <p className="mt-1 text-sm text-muted">{t('settings.danger.whatIsDeletedBody')}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">{t('settings.danger.whatIsKept')}</p>
+            <p className="mt-1 text-sm text-muted">{t('settings.danger.whatIsKeptBody')}</p>
+          </div>
+          <div>
+            <p className="text-sm font-semibold">{t('settings.danger.beforeYouGo')}</p>
+            <p className="mt-1 text-sm text-muted">{t('settings.danger.beforeTakeout')}</p>
+          </div>
+        </div>
+
+        {errorKey ? <Alert tone="danger" title={t(errorKey)} className="mt-4" /> : null}
+
+        {!confirming ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <Button variant="danger" onClick={() => setConfirming(true)}>
+              {t('settings.danger.title')}
+            </Button>
+            <Link to={ROUTES.privacy} className="text-sm text-muted underline">
+              {t('settings.danger.readPolicy')}
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-5 grid gap-4">
+            <Alert tone="warning" title={t('settings.danger.description')} />
+            <TextField
+              label={t('settings.danger.answer')}
+              hint={t('settings.danger.answerHint')}
+              value={answer}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(event) => setAnswer(event.target.value)}
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="danger"
+                loading={busy}
+                disabled={!armed}
+                onClick={() => void onDelete()}
+              >
+                {busy ? t('settings.danger.busy') : t('settings.danger.confirm')}
+              </Button>
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setConfirming(false);
+                  setAnswer('');
+                  setErrorKey(null);
+                }}
+              >
+                {t('settings.danger.cancel')}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { t } = useTranslation();
   const profileLoaded = useAuthStore((state) => state.profileLoaded);
@@ -522,6 +648,7 @@ export default function SettingsPage() {
     { id: 'feed', label: t('settings.tabs.feed'), content: <FeedPanel /> },
     { id: 'privacy', label: t('settings.tabs.privacy'), content: <PrivacyPanel /> },
     { id: 'security', label: t('settings.tabs.security'), content: <SecurityPanel /> },
+    { id: 'danger', label: t('settings.tabs.danger'), content: <DangerPanel /> },
   ];
 
   return (

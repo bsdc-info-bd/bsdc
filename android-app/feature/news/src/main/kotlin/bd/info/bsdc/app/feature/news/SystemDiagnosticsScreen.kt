@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.Newspaper
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material.icons.rounded.ShoppingBag
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -31,11 +32,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +56,7 @@ import bd.info.bsdc.app.core.model.PrivacyPrefs
 import bd.info.bsdc.app.core.model.SyncNetworkPolicy
 import bd.info.bsdc.app.core.model.ThemeMode
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -78,10 +82,16 @@ fun SystemDiagnosticsAndSettingsScreen(
     modifier: Modifier = Modifier,
     privacyPrefs: PrivacyPrefs? = null,
     onUpdatePrivacy: ((PrivacyPrefs) -> Unit)? = null,
+    onDeleteAccount: (suspend () -> Result<Unit>)? = null,
 ) {
     val bn = language == AppLanguage.BN
     var testUrl by remember { mutableStateOf(BsdcHosts.NEWS_ORIGIN) }
     var localPrivacy by remember(privacyPrefs) { mutableStateOf(privacyPrefs ?: PrivacyPrefs()) }
+    val scope = rememberCoroutineScope()
+    var deleteDialogOpen by remember { mutableStateOf(false) }
+    var deleteAnswer by remember { mutableStateOf("") }
+    var deleteBusy by remember { mutableStateOf(false) }
+    var deleteMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
@@ -267,6 +277,87 @@ fun SystemDiagnosticsAndSettingsScreen(
             }
 
             item {
+                // Google Play expects the policy and the terms to be reachable
+                // from inside the app, not only from the store listing, and a
+                // member should be able to read what they agreed to without
+                // leaving for a browser they have to remember the address of.
+                BsdcCard {
+                    Text(
+                        text = if (bn) "আইনি তথ্য" else "Legal",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = if (bn) {
+                            "গোপনীয়তা নীতি ও সেবার শর্তাবলি পড়ুন।"
+                        } else {
+                            "Read the privacy policy and the terms of service."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        OutlinedButton(onClick = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/privacy") }) {
+                            Text(if (bn) "গোপনীয়তা নীতি" else "Privacy policy")
+                        }
+                        OutlinedButton(onClick = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/terms") }) {
+                            Text(if (bn) "শর্তাবলি" else "Terms of service")
+                        }
+                    }
+                }
+            }
+
+            if (onDeleteAccount != null) {
+                item {
+                    // Required by Google Play for any app with account creation.
+                    // The wording is deliberately explicit: a member deleting
+                    // their account should know what goes and what stays before
+                    // they confirm, not after.
+                    BsdcCard {
+                        Text(
+                            text = if (bn) "আপনার অ্যাকাউন্ট মোছা" else "Delete your account",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = if (bn) {
+                                "আপনার প্রোফাইল, পোস্ট, মন্তব্য, বার্তা, ঠিকানা ও ডিভাইস টোকেন মুছে যাবে। " +
+                                    "লেনদেনের অন্য পক্ষের প্রয়োজন হয় এমন অর্ডার ও পেমেন্ট নথিতে থাকবে, তবে আপনার নাম, " +
+                                    "ঠিকানা বা ফোন নম্বর ছাড়া। এটি পূর্বাবস্থায় ফেরানো যায় না।"
+                            } else {
+                                "This removes your profile, posts, comments, messages, addresses and device tokens. " +
+                                    "Orders and payments the other party still needs stay on file without your name, " +
+                                    "address or phone number. It cannot be undone."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        deleteMessage?.let { message ->
+                            BsdcStatusBanner(
+                                title = if (bn) "অ্যাকাউন্ট মোছা" else "Delete account",
+                                body = message,
+                                tone = BsdcTone.BAD,
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            BsdcButton(
+                                label = if (bn) "অ্যাকাউন্ট মোছা" else "Delete account",
+                                onClick = {
+                                    deleteMessage = null
+                                    deleteAnswer = ""
+                                    deleteDialogOpen = true
+                                },
+                            )
+                            OutlinedButton(onClick = { onOpenExternal("${BsdcHosts.SITE_ORIGIN}/privacy") }) {
+                                Text(if (bn) "গোপনীয়তা নীতি" else "Privacy policy")
+                            }
+                        }
+                    }
+                }
+            }
+
+            item {
                 BsdcCard {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -312,6 +403,90 @@ fun SystemDiagnosticsAndSettingsScreen(
                     )
                 }
             }
+        }
+
+        val delete = onDeleteAccount
+        if (deleteDialogOpen && delete != null) {
+            AlertDialog(
+                onDismissRequest = { if (!deleteBusy) deleteDialogOpen = false },
+                title = { Text(if (bn) "অ্যাকাউন্ট মোছা নিশ্চিত করুন" else "Confirm account deletion") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = if (bn) {
+                                "যা মুছে যাবে তা ফিরিয়ে আনা যাবে না। নিশ্চিত করতে DELETE লিখুন।"
+                            } else {
+                                "What you delete cannot be recovered. Type DELETE to confirm."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        OutlinedTextField(
+                            value = deleteAnswer,
+                            onValueChange = { deleteAnswer = it },
+                            singleLine = true,
+                            label = { Text("DELETE") },
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = deleteAnswer.trim() == "DELETE" && !deleteBusy,
+                        onClick = {
+                            if (deleteBusy) return@TextButton
+                            deleteBusy = true
+                            scope.launch {
+                                val result = delete()
+                                deleteBusy = false
+                                deleteDialogOpen = false
+                                deleteAnswer = ""
+                                deleteMessage = result.exceptionOrNull()?.let { err ->
+                                    val text = err.message.orEmpty()
+                                    when {
+                                        text.contains("delete-pending") -> if (bn) {
+                                            "আপনার অ্যাকাউন্টের তথ্য মুছে গেছে। এই সেশনে সাইন-ইন সরানো যায়নি — " +
+                                                "আবার সাইন ইন করে আবার চেষ্টা করলে বাকিটাও শেষ হবে।"
+                                        } else {
+                                            "Your account data has been deleted. Your sign-in could not be removed " +
+                                                "in this session — sign in again and repeat this to finish."
+                                        }
+                                        text.contains("owner", ignoreCase = true) || text.contains("42501") -> if (bn) {
+                                            "ওনার অ্যাকাউন্ট এখান থেকে মোছা যায় না। প্রথমে মালিকানা হস্তান্তর করুন।"
+                                        } else {
+                                            "The owner account cannot be deleted here. Transfer ownership first."
+                                        }
+                                        else -> if (bn) {
+                                            "অ্যাকাউন্ট মোছা যায়নি। কিছুই বদলায়নি। আবার চেষ্টা করুন।"
+                                        } else {
+                                            "The account could not be deleted. Nothing was changed. Please try again."
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    ) {
+                        Text(
+                            if (deleteBusy) {
+                                if (bn) "মোছা হচ্ছে" else "Deleting"
+                            } else if (bn) {
+                                "মুছুন"
+                            } else {
+                                "Delete"
+                            },
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        enabled = !deleteBusy,
+                        onClick = {
+                            deleteDialogOpen = false
+                            deleteAnswer = ""
+                        },
+                    ) {
+                        Text(if (bn) "বাতিল" else "Cancel")
+                    }
+                },
+            )
         }
     }
 }

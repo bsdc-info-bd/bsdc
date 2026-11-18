@@ -683,6 +683,14 @@ fun BsdcAppShell(
                 } else {
                     null
                 },
+                // Google Play requires in-app account deletion. The repository
+                // runs the database half, then removes the Firebase user, then
+                // clears the session — the order the two systems force.
+                onDeleteAccount = if (authState.session?.uid != null) {
+                    { container.authRepository.deleteMyAccount() }
+                } else {
+                    null
+                },
             )
             return
         }
