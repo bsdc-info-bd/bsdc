@@ -155,6 +155,10 @@ const HARNESSES = [
     't76.mjs',
     '0116/0117: the lighter image variant is refused when it is not a picture of this product, and updated_at moves',
   ],
+  [
+    't77.mjs',
+    '0118: the internal writers (audit, deployment notes) refuse anon and members, and the owner still writes through them',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

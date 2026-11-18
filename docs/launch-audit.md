@@ -179,6 +179,23 @@ the code, and each is now fixed with a test or a check that would catch it again
   without a `dist` to read. The first two are now scoped to what they meant to test,
   and the last three pass once a build exists. C-01's two real findings were fixed
   rather than exempted.
+- **Three internal writers were answering the door.** B-05 derives "what anon can
+  execute" from explicit `grant … to anon` lines, which cannot see Postgres's
+  default EXECUTE to PUBLIC. Asked the catalogue directly with
+  `has_function_privilege`, three security-definer writers in the `bsdc` schema
+  were callable by an anonymous visitor: the three-argument `bsdc.audit` overload
+  (0024, never revoked — 0068 revoked only the four-argument one), and
+  `bsdc.note_deployment` / `bsdc.resolve_deployment_note` (0056, which postdates
+  0049's hand-written list). An anonymous visitor could forge audit rows, overwrite
+  a recorded deployment fault and reopen it, or mark a live fault resolved. All
+  three are now revoked from PUBLIC, anon and authenticated; the catalogue was
+  checked first to confirm no policy, default, constraint, index, or SECURITY
+  INVOKER function needs them, and `t77` proves the refusal, the owner's continued
+  access, and that the read-only policy helpers still answer. A first attempt at a
+  catalogue-wide sweep broke real writes (`join_text`, `normalise_skills`,
+  `can_post_in_channel`, `mk_owns_vendor` are called as the caller from
+  constraints and invoker functions), which is why 0118 revokes exactly the three
+  confirmed holes and no more.
 
 ## Checkpoints
 
