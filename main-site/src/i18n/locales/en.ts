@@ -1468,6 +1468,15 @@ export const en = {
     unacceptAnswer: 'Remove accepted answer',
     acceptedAnswer: 'Accepted answer',
     edited: 'edited',
+    addPicture: 'Add a picture',
+    removePicture: 'Remove the picture',
+    pictureUploading: 'Uploading the picture',
+    pictureDescription: 'What is in the picture?',
+    pictureDescriptionHint:
+      'Read aloud to somebody who cannot see it. Optional, but a picture with no description is a picture half the readers cannot use.',
+    pictureWithoutDescription: 'A picture attached to this comment',
+    commentPicture: 'Picture attached to the comment',
+    enlargePicture: 'Open the picture: {{description}}',
     unknownMember: 'Former member',
   },
   notifications: {

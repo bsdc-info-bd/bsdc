@@ -446,6 +446,7 @@ fun BsdcAppShell(
                 repository = container.feedRepository,
                 imageLoader = container.imageLoader,
                 viewerUid = authState.session?.uid,
+                mediaRepository = container.mediaRepository,
                 language = language,
                 onBack = {
                     activeDetailSlug = null

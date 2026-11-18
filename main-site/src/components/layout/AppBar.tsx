@@ -52,7 +52,7 @@ export function AppBar() {
           { to: ROUTES.messages, labelKey: 'messages.open' },
           { to: ROUTES.notifications, labelKey: 'notifications.open' },
           { to: ROUTES.marketCart, labelKey: 'cart.title' },
-          { to: ROUTES.settings, labelKey: 'settings.title' },
+          { to: ROUTES.settingsAccount, labelKey: 'settings.title' },
         ]
       : []),
   ];

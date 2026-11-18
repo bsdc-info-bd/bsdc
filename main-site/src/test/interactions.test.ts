@@ -14,6 +14,7 @@ function comment(overrides: Partial<Comment> & Pick<Comment, 'id'>): Comment {
     rootId: null,
     depth: 0,
     body: 'body',
+    image: null,
     likes: 0,
     replies: 0,
     isAnswer: false,

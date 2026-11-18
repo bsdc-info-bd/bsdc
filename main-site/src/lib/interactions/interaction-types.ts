@@ -28,6 +28,23 @@ export interface CommentAuthor {
   avatarUrl: string;
 }
 
+/**
+ * A picture attached to a comment.
+ *
+ * `width`/`height` are the intrinsic size of the original, kept so the thread can
+ * reserve the right box before the bytes arrive — an image that appears without
+ * one moves every comment below it, which is exactly the shift the performance
+ * budget refuses. They are null only for rows written before the upload endpoint
+ * reported a size.
+ */
+export interface CommentImage {
+  url: string;
+  thumbUrl: string;
+  alt: string;
+  width: number | null;
+  height: number | null;
+}
+
 export interface Comment {
   id: string;
   postId: string;
@@ -35,6 +52,8 @@ export interface Comment {
   rootId: string | null;
   depth: number;
   body: string;
+  /** Present when the member attached a picture, null otherwise. */
+  image: CommentImage | null;
   likes: number;
   replies: number;
   isAnswer: boolean;

@@ -285,13 +285,13 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | A-09 | The root governance documents are present | Pass | LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md |
 | A-10 | Every delivery row is recorded as done | Pass | all twenty rows read Done |
 | A-11 | Every console registers under its own application id | Pass | bsdc-admin, bsdc-cert, bsdc-config, bsdc-connect, bsdc-custom, bsdc-ip, bsdc-mod, bsdc-notice, bsdc-perf, bsdc-status, bsdc-uadmin, bsdc-umod, bsdc-vf |
-| A-12 | Every migration opens with a comment saying what it does | Pass | 119 migrations |
+| A-12 | Every migration opens with a comment saying what it does | Pass | 120 migrations |
 
 ### Database
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| B-01 | Migrations are numbered without a gap | Pass | 0001..0119 |
+| B-01 | Migrations are numbered without a gap | Pass | 0001..0120 |
 | B-02 | Every table has row level security enabled | Pass | 128 tables |
 | B-03 | Every security-definer function pins its search path | Pass | all of them |
 | B-03b | No pinned search path leaves out the extensions schema | Pass | 185 search paths, all naming extensions |
@@ -299,9 +299,9 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | B-03d | A file that calls an extension-owned symbol says where to find it | Pass | every file |
 | B-04 | No migration grants a blanket write to anon | Pass | none found |
 | B-05 | Every anonymous write path is a counted exception | Pass | 61 functions are executable by anon; 24 of them write (fcm_flag_invalid_device, fcm_kill_device, fcm_mark_device_deliveries, fcm_mark_devices, fcm_sweep_dead_devices, follow_redirect, increment_job_view, increment_post_view, log_search, media_claim_purge, media_mark_purged, media_release_purge, media_sweep_forgotten, push_content, push_flag_invalid_device, push_kill, push_kill_device, push_mark, push_mark_device_deliveries, push_mark_devices, push_sweep_dead_devices, record_ad_event, record_share, verify_code) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine |
-| B-06 | Tables, functions and policies shipped | Recorded | 128 tables, 323 RPCs, 117 helpers, 222 policies, 119 migrations |
-| B-07 | Permission checks guard the privileged RPCs | Pass | 373 of 429 RPCs check identity or permission |
-| B-08 | Every migration can be re-run without error | Pass | 119 migrations are idempotent |
+| B-06 | Tables, functions and policies shipped | Recorded | 128 tables, 323 RPCs, 117 helpers, 222 policies, 120 migrations |
+| B-07 | Permission checks guard the privileged RPCs | Pass | 374 of 430 RPCs check identity or permission |
+| B-08 | Every migration can be re-run without error | Pass | 120 migrations are idempotent |
 | B-09 | Every policy is dropped before it is created | Pass | 206 policies |
 | B-10 | Money is never stored as a floating point number | Pass | money columns are integer or numeric, never real |
 | B-11 | State lives in enumerated types, not in free text | Pass | 61 enumerated types, including bsdc_role, bsdc_account_status, bsdc_media_kind, bsdc_media_provider |
@@ -320,10 +320,10 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
 | C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
 | C-07 | Both languages carry the same keys | Pass | 57 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 57796 Bangla code points in the Bangla locale |
+| C-08 | Bangla is a real translation, not a copy of English | Pass | 57981 Bangla code points in the Bangla locale |
 | C-09 | Every application ships a security header set | Pass | all fourteen |
 | C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
-| C-11 | TypeScript source files under version control | Recorded | 628 .ts/.tsx files |
+| C-11 | TypeScript source files under version control | Recorded | 630 .ts/.tsx files |
 | C-12 | No link opens a new tab without severing the opener | Pass | every _blank link carries rel="noopener" |
 | C-13 | Raw HTML is injected only from markup this repository generated | Pass | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
 | C-14 | Every image carries alternative text | Pass | every <img> declares alt, decorative images with an empty one |
@@ -341,6 +341,8 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | C-26 | Both colour schemes are supported, not just the light one | Pass | light and dark token sets, selected by preference and overridable by the member |
 | C-27 | No text on screen is set smaller than 12 pixels | Pass | the smallest declared size is at least 12px |
 | C-28 | Every console states a minimum width of nothing | Pass | no console demands a wide screen |
+| C-29 | A comment can carry a picture, and the picture survives the upload sweeper | Pass | comments carry one https picture on web and Android, and media_pending_purge treats it as a reference |
+| C-30 | Every settings panel has an address of its own | Pass | eight panels, each with its own path, and the tab strip navigates instead of holding state |
 
 ### Safety
 
@@ -386,7 +388,7 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 | F-03 | Field measurement is collected and stored | Pass | a hand-written collector, a beacon endpoint and the web_vitals table |
 | F-04 | Speed is reported at the 75th percentile with its sample count | Pass | percentile_cont(0.75) in vitals_by_route, with samples returned beside it |
 | F-05 | Build weight is recorded on every push, next to the field data | Pass | CI posts the gzipped size of each main-site push into bundle_sizes |
-| F-06 | Images below the fold are loaded lazily | Pass | 10 image sites opt into lazy loading |
+| F-06 | Images below the fold are loaded lazily | Pass | 12 image sites opt into lazy loading |
 | F-07 | No render-blocking font or stylesheet is fetched from a third party | Pass | system font stack; nothing is fetched from a font CDN |
 | F-08 | Query caching is configured rather than left at the defaults | Pass | React Query is given explicit staleTime, gcTime, retry and focus behaviour |
 | F-09 | No source map is shipped to production | Pass | none in any dist/ |
@@ -418,7 +420,7 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| H-01 | Unit tests by package | Recorded | 1186 tests across 3 installed package(s); 13 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site: corporate-kit 0, main-site 1186, push-worker 0 |
+| H-01 | Unit tests by package | Recorded | 1197 tests across 1 installed package(s); 15 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, moderator-site, notice-site, performance-site, push-worker, status-site, users-admin-site, users-moderator-site, vf-site: main-site 1197 |
 | H-02 | Every package has at least one test file | Pass | all sixteen |
 
 ### CI
@@ -445,7 +447,7 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 
 | # | Checkpoint | Result | Evidence |
 | --- | --- | --- | --- |
-| J-05 | Every migration names only tables, columns and functions that exist | Pass | 0 problem(s) across 119 file(s) |
+| J-05 | Every migration names only tables, columns and functions that exist | Pass | 0 problem(s) across 120 file(s) |
 
 ### Play Store
 

@@ -270,3 +270,41 @@ Two readings that are *not* evidence of a defect, so nobody chases them:
   control.
 - **The score of a single run.** On a shared machine the same commit measures
   94–98. The budget is the median of three, which is what the script asserts.
+
+## A comment can carry a picture (0120)
+
+The feed has accepted photographs since the composer was written, and the upload
+edge has understood a `comment-image` purpose for longer than that. The database
+did not, so a member answering "what does the damage look like?" had to describe
+it in prose.
+
+| Decision | Why it is that way | Held by |
+| --- | --- | --- |
+| One picture per comment, stored as four columns on `comments` | A thread is the hottest read in the product — 500 rows, one request, shaped into a tree. A join table there is a cost every reader of every thread pays to serve the minority of comments that have a picture. | `0120`, `t79` |
+| The URL must be one this member uploaded | A comment is a place a stranger can write. Without this check `image_url` lets them make every reader of the thread fetch an address of their choosing, with their IP, in their browser, on a page the platform vouched for. The trigger compares against `media_assets`, which already records the owner. | `t79` |
+| The sweeper was taught that a comment is a reference | `media_pending_purge` looked at `post_media`, `messages` and the profile columns. A picture attached only to a comment looked orphaned, and an orphan older than a day is deleted at ImgBB — leaving a broken picture nobody can repair. | `t79` |
+| A comment with a picture may have no words | The old body rule demanded a character. It now demands one *unless* there is a picture, and `t79` asserts both halves. | `t79` |
+| Intrinsic width and height travel with the picture | So the thread reserves the box before the bytes arrive. Without it every comment below the picture jumps down once it loads — the same shift the performance budget refuses. | `comment-picture.test.tsx` |
+| A picture with no description still has a name | A thread is read aloud and with a screen reader. The description is optional to write and never optional to render. | `comment-picture.test.tsx` |
+
+Both clients send it the same way: the web form uploads with
+`purpose: 'comment-image'` and posts the columns, and Android builds the identical
+row through `CommentPayload` (unit-tested in `CommentPayloadTest`). Android renders
+it through `BsdcImgbbImage` with the ratio reserved and the same lightbox the post
+photographs use; the web renders it through `MediaImage` with the same
+`srcset`-then-lightbox path as the messenger.
+
+## Settings is eight addresses, not one
+
+`/settings` was one URL and a `useState`. The back button did nothing, a support
+reply could not say "open your privacy settings", a member who reloaded lost the
+panel they were on, and every link into settings landed on Account.
+
+Each panel now has a path — `/settings/account`, `/settings/appearance`,
+`/settings/language`, `/settings/notifications`, `/settings/feed`,
+`/settings/privacy`, `/settings/security`, `/settings/danger` — the tab strip is a
+navigation rather than local state, `/settings` redirects to the first panel so
+every older link keeps working, and an address that is not a panel redirects
+instead of rendering nothing. `C-30` holds the eight paths and the redirect in
+place; `settings-panels.test.tsx` holds the behaviour: a panel is reachable by
+URL, choosing one changes the URL, and `/settings/nonsense` lands on Account.

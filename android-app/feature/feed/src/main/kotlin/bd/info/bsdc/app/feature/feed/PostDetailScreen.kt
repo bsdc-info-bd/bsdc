@@ -1,6 +1,9 @@
 package bd.info.bsdc.app.feature.feed
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,7 +15,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -29,6 +34,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.Reply
 import androidx.compose.material.icons.rounded.Send
@@ -55,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
@@ -67,9 +74,11 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAdSlot
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
 import bd.info.bsdc.app.core.model.AdPlacement
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.MediaPurpose
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.core.model.PostMediaModel
@@ -84,6 +93,7 @@ fun PostDetailScreen(
     repository: FeedRepository,
     imageLoader: ImageLoader,
     viewerUid: String?,
+    mediaRepository: BsdcMediaRepository? = null,
     language: AppLanguage,
     onBack: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
@@ -102,10 +112,44 @@ fun PostDetailScreen(
     var loadingComments by remember { mutableStateOf(true) }
     var replyTarget by remember { mutableStateOf<FeedComment?>(null) }
     var commentDraft by remember { mutableStateOf("") }
+    var commentImage by remember { mutableStateOf<CommentImage?>(null) }
+    var uploadingImage by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0) }
     var submittingComment by remember { mutableStateOf(false) }
     var bannerMessage by remember { mutableStateOf<String?>(null) }
     var lightboxData by remember { mutableStateOf<Pair<String, String>?>(null) }
     var showReportDialog by remember { mutableStateOf(false) }
+
+    // The picture picker. One picture per comment (0120), uploaded through the
+    // same edge the composer uses, with the comment purpose so the lifetime and
+    // the compression are the ones the server decided for comments.
+    val commentImagePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null || mediaRepository == null) return@rememberLauncherForActivityResult
+        uploadingImage = true
+        uploadProgress = 0
+        scope.launch {
+            runCatching {
+                mediaRepository.uploadImageUri(
+                    uri = uri,
+                    purpose = MediaPurpose.COMMENT_IMAGE,
+                    onProgress = { pct -> uploadProgress = pct },
+                )
+            }.onSuccess { uploaded ->
+                commentImage = CommentImage(
+                    url = uploaded.url,
+                    thumbUrl = uploaded.thumbUrl.ifBlank { uploaded.url },
+                    alt = "",
+                    width = uploaded.width,
+                    height = uploaded.height,
+                )
+            }.onFailure { err ->
+                bannerMessage = err.message ?: "That picture could not be uploaded."
+            }
+            uploadingImage = false
+        }
+    }
 
     LaunchedEffect(postSlugOrId, viewerUid) {
         if (post == null) loadingPost = true
@@ -217,6 +261,64 @@ fun PostDetailScreen(
                             }
                         }
                     }
+                    commentImage?.let { attached ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            BsdcImgbbImage(
+                                fullUrl = attached.url,
+                                thumbUrl = attached.thumbUrl,
+                                contentDescription = null,
+                                imageLoader = imageLoader,
+                                modifier = Modifier
+                                    .size(64.dp)
+                                    .clip(RoundedCornerShape(10.dp)),
+                                targetWidthPx = 200,
+                                contentScale = ContentScale.Crop,
+                            )
+                            Text(
+                                text = if (language == AppLanguage.BN) {
+                                    "ছবি সংযুক্ত হয়েছে"
+                                } else {
+                                    "Picture attached"
+                                },
+                                style = MaterialTheme.typography.labelMedium,
+                                color = tokens.mutedText,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(onClick = { commentImage = null }) {
+                                Text(if (language == AppLanguage.BN) "সরান" else "Remove")
+                            }
+                        }
+                    }
+                    if (uploadingImage) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            CircularProgressIndicator(
+                                progress = { uploadProgress / 100f },
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            Text(
+                                text = if (language == AppLanguage.BN) {
+                                    "ছবি আপলোড হচ্ছে… $uploadProgress%"
+                                } else {
+                                    "Uploading the picture… $uploadProgress%"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = tokens.mutedText,
+                            )
+                        }
+                    }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -239,8 +341,32 @@ fun PostDetailScreen(
                             modifier = Modifier.weight(1f),
                             maxLines = 4,
                         )
+                        if (mediaRepository != null) {
+                            IconButton(
+                                enabled = viewerUid != null && !uploadingImage &&
+                                    !submittingComment && commentImage == null,
+                                onClick = {
+                                    commentImagePicker.launch(
+                                        PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly,
+                                        ),
+                                    )
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Image,
+                                    contentDescription = if (language == AppLanguage.BN) {
+                                        "ছবি যোগ করুন"
+                                    } else {
+                                        "Add a picture"
+                                    },
+                                    tint = tokens.mutedText,
+                                )
+                            }
+                        }
                         IconButton(
-                            enabled = viewerUid != null && commentDraft.trim().isNotEmpty() && !submittingComment,
+                            enabled = viewerUid != null && !uploadingImage && !submittingComment &&
+                                (commentDraft.trim().isNotEmpty() || commentImage != null),
                             onClick = {
                                 val uid = viewerUid ?: return@IconButton
                                 submittingComment = true
@@ -251,10 +377,12 @@ fun PostDetailScreen(
                                             authorUid = uid,
                                             body = commentDraft,
                                             parentId = replyTarget?.id,
+                                            image = commentImage,
                                         )
                                     }.onSuccess { created ->
                                         comments = comments + created
                                         commentDraft = ""
+                                        commentImage = null
                                         replyTarget = null
                                         post = activePost.copy(comments = activePost.comments + 1)
                                     }.onFailure {
@@ -604,6 +732,7 @@ fun PostDetailScreen(
                                         }
                                 }
                             },
+                            onOpenImage = { url, caption -> lightboxData = url to caption },
                         )
                     }
                 }
@@ -661,6 +790,7 @@ private fun CommentRow(
     onReply: () -> Unit,
     onToggleAnswer: () -> Unit,
     onDelete: () -> Unit,
+    onOpenImage: (String, String) -> Unit,
 ) {
     val tokens = BsdcThemeTokens.colors
     val indentDp = (comment.depth.coerceIn(0, 3) * 18).dp
@@ -725,10 +855,43 @@ private fun CommentRow(
                 }
             }
 
-            Text(
-                text = comment.body,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (comment.body.isNotBlank()) {
+                Text(
+                    text = comment.body,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            comment.image?.let { picture ->
+                val description = picture.alt.ifBlank {
+                    if (language == AppLanguage.BN) {
+                        "মন্তব্যের সঙ্গে সংযুক্ত ছবি"
+                    } else {
+                        "Picture attached to the comment"
+                    }
+                }
+                // The ratio is reserved before the bytes arrive, which is what
+                // stops every comment below from jumping down once it loads.
+                val ratio = picture.ratio
+                BsdcImgbbImage(
+                    fullUrl = picture.url,
+                    thumbUrl = picture.thumbUrl,
+                    contentDescription = description,
+                    imageLoader = imageLoader,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (ratio != null) {
+                                Modifier.aspectRatio(ratio)
+                            } else {
+                                Modifier.heightIn(max = 260.dp)
+                            },
+                        ),
+                    targetWidthPx = 640,
+                    contentScale = ContentScale.Crop,
+                    onTapOpenLightbox = { onOpenImage(picture.url, description) },
+                )
+            }
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,

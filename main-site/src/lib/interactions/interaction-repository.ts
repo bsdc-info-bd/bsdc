@@ -13,6 +13,7 @@ import {
   type AppNotification,
   type Comment,
   type CommentAuthor,
+  type CommentImage,
   type InteractionState,
   type NotificationKind,
   type Reaction,
@@ -96,6 +97,7 @@ export async function recordShare(postId: string, channel: ShareChannel): Promis
 const COMMENT_SELECT = `
   id, post_id, author_uid, parent_id, root_id, depth, body, status,
   likes_count, replies_count, is_answer, edited_at, created_at, updated_at,
+  image_url, image_thumb_url, image_alt, image_width, image_height,
   profiles:author_uid (uid, username, display_name, avatar_url)
 `;
 
@@ -115,6 +117,16 @@ function toComment(row: JoinedCommentRow, liked: boolean): Comment {
     createdAt: row.created_at,
     editedAt: row.edited_at,
     author: toAuthor(row.profiles),
+    image:
+      row.image_url === ''
+        ? null
+        : {
+            url: row.image_url,
+            thumbUrl: row.image_thumb_url === '' ? row.image_url : row.image_thumb_url,
+            alt: row.image_alt,
+            width: row.image_width,
+            height: row.image_height,
+          },
     liked,
   };
 }
@@ -152,15 +164,37 @@ export async function fetchComments(postId: string, viewerUid: string | null): P
   return rows.map((row) => toComment(row, liked.has(row.id)));
 }
 
+/**
+ * A comment, with or without a picture.
+ *
+ * `image` is what the upload endpoint returned, not a URL a caller assembled: the
+ * database refuses any address this member did not upload (0120), so passing one
+ * through here would fail at the trigger with the same reason.
+ */
 export async function createComment(
   postId: string,
   authorUid: string,
   body: string,
   parentId: string | null,
+  image: CommentImage | null = null,
 ): Promise<Comment> {
   const { data, error } = await getSupabase()
     .from('comments')
-    .insert({ post_id: postId, author_uid: authorUid, body: body.trim(), parent_id: parentId })
+    .insert({
+      post_id: postId,
+      author_uid: authorUid,
+      body: body.trim(),
+      parent_id: parentId,
+      ...(image === null
+        ? {}
+        : {
+            image_url: image.url,
+            image_thumb_url: image.thumbUrl,
+            image_alt: image.alt.trim(),
+            image_width: image.width,
+            image_height: image.height,
+          }),
+    })
     .select(COMMENT_SELECT)
     .single<JoinedCommentRow>();
   if (error) throw toDataError(error);

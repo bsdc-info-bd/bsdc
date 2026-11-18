@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
 import { PushCard } from '@/components/notifications/PushCard';
@@ -623,11 +623,34 @@ function DangerPanel() {
   );
 }
 
+/**
+ * The panels, in the order the tabs show them.
+ *
+ * Each one has its own address now (`/settings/privacy`, `/settings/feed`, …).
+ * The tab strip is a navigation, not a state: a member can link to a panel, the
+ * back button moves between panels, and a reload lands where they were.
+ */
+const PANELS = [
+  { id: 'account', path: ROUTES.settingsAccount, render: () => <AccountPanel /> },
+  { id: 'appearance', path: ROUTES.settingsAppearance, render: () => <AppearancePanel /> },
+  { id: 'language', path: ROUTES.settingsLanguage, render: () => <LanguagePanel /> },
+  {
+    id: 'notifications',
+    path: ROUTES.settingsNotifications,
+    render: () => <NotificationsPanel />,
+  },
+  { id: 'feed', path: ROUTES.settingsFeed, render: () => <FeedPanel /> },
+  { id: 'privacy', path: ROUTES.settingsPrivacy, render: () => <PrivacyPanel /> },
+  { id: 'security', path: ROUTES.settingsSecurity, render: () => <SecurityPanel /> },
+  { id: 'danger', path: ROUTES.settingsDanger, render: () => <DangerPanel /> },
+] as const;
+
 export default function SettingsPage() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { panel } = useParams<{ panel?: string }>();
   const profileLoaded = useAuthStore((state) => state.profileLoaded);
   const profile = useProfileStore((state) => state.profile);
-  const [tab, setTab] = useState('account');
 
   // The account panels write partial profile fields. Let the sign-in bootstrap
   // settle first and send a new member to the one place that can create their
@@ -636,33 +659,39 @@ export default function SettingsPage() {
   if (!profileLoaded) return <PageSkeleton label={t('common.loading')} />;
   if (!profile) return <Navigate to={ROUTES.onboarding} replace />;
 
-  const items: TabItem[] = [
-    { id: 'account', label: t('settings.tabs.account'), content: <AccountPanel /> },
-    { id: 'appearance', label: t('settings.tabs.appearance'), content: <AppearancePanel /> },
-    { id: 'language', label: t('settings.tabs.language'), content: <LanguagePanel /> },
-    {
-      id: 'notifications',
-      label: t('settings.tabs.notifications'),
-      content: <NotificationsPanel />,
-    },
-    { id: 'feed', label: t('settings.tabs.feed'), content: <FeedPanel /> },
-    { id: 'privacy', label: t('settings.tabs.privacy'), content: <PrivacyPanel /> },
-    { id: 'security', label: t('settings.tabs.security'), content: <SecurityPanel /> },
-    { id: 'danger', label: t('settings.tabs.danger'), content: <DangerPanel /> },
-  ];
+  const known = PANELS.find((entry) => entry.id === panel);
+  // `/settings` is where every older link points, and `/settings/something`
+  // is a typo in a shared link rather than a panel. Both go to the first panel
+  // instead of rendering nothing.
+  if (panel !== undefined && !known) return <Navigate to={ROUTES.settingsAccount} replace />;
+
+  const active = known ?? PANELS[0];
+  const items: TabItem[] = PANELS.map((entry) => ({
+    id: entry.id,
+    label: t(`settings.tabs.${entry.id}`),
+    content: entry.render(),
+  }));
 
   return (
     <>
       <Seo
         title={t('settings.metaTitle')}
         description={t('settings.metaDescription')}
-        path={ROUTES.settings}
+        path={active.path}
         noindex
       />
       <div className="fab-container py-6 sm:py-10">
         <h1 className="text-2xl sm:text-3xl">{t('settings.title')}</h1>
         <div className="mt-5">
-          <Tabs items={items} activeId={tab} onChange={setTab} label={t('settings.title')} />
+          <Tabs
+            items={items}
+            activeId={active.id}
+            onChange={(id) => {
+              const next = PANELS.find((entry) => entry.id === id);
+              if (next) navigate(next.path);
+            }}
+            label={t('settings.title')}
+          />
         </div>
       </div>
     </>

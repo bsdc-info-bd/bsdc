@@ -1375,6 +1375,58 @@ check('C-28', 'Front end', 'Every console states a minimum width of nothing', ()
   };
 });
 
+check(
+  'C-29',
+  'Front end',
+  'A comment can carry a picture, and the picture survives the upload sweeper',
+  () => {
+    // Migration 0120. The two halves that matter are the ones a reviewer cannot
+    // see in the UI: the column exists with a check that it is an https address,
+    // and the purge function was taught that a comment referencing a picture is a
+    // reference — without that line the sweeper deletes every comment picture a
+    // day after it is uploaded.
+    const purge = read('supabase/migrations/0120_a_comment_can_carry_a_picture.sql');
+    const web = read('main-site/src/components/interactions/CommentThread.tsx');
+    const android = read(
+      'android-app/feature/feed/src/main/kotlin/bd/info/bsdc/app/feature/feed/FeedRepository.kt',
+    );
+    const ok =
+      purge.includes('image_url') &&
+      purge.includes("image_url ~ '^https://") &&
+      purge.includes('from public.comments c') &&
+      web.includes('<CommentPicture') &&
+      android.includes('image_url,image_thumb_url,image_alt');
+    return {
+      ok,
+      evidence: ok
+        ? 'comments carry one https picture on web and Android, and media_pending_purge treats it as a reference'
+        : 'the picture column, its https check, the sweeper reference, or one of the two clients is missing',
+    };
+  },
+);
+
+check('C-30', 'Front end', 'Every settings panel has an address of its own', () => {
+  // One URL and a `useState` meant the back button did nothing and a link could
+  // not point at a panel. The panels are addresses now, and `/settings` still
+  // answers by redirecting to the first one.
+  const site = read('main-site/src/lib/site.ts');
+  const page = read('main-site/src/routes/SettingsPage.tsx');
+  const app = read('main-site/src/App.tsx');
+  const panels = ['Account', 'Appearance', 'Language', 'Notifications', 'Feed', 'Privacy', 'Security', 'Danger'];
+  const missing = panels.filter((name) => !site.includes(`settings${name}: '/settings/`));
+  return {
+    ok:
+      missing.length === 0 &&
+      /settings\/\:panel/.test(`${app}${read('main-site/src/lib/seo/app-routes.ts')}`) &&
+      page.includes('useParams') &&
+      page.includes('navigate(next.path)'),
+    evidence:
+      missing.length === 0
+        ? 'eight panels, each with its own path, and the tab strip navigates instead of holding state'
+        : `panels without a path: ${missing.join(', ')}`,
+  };
+});
+
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
   const bad = consoles.filter((name) => {
     if (!has(`${name}/public/_headers`)) return false;

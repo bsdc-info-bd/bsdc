@@ -1457,6 +1457,15 @@ export const bn: Translation = {
     unacceptAnswer: 'গৃহীত উত্তর সরান',
     acceptedAnswer: 'গৃহীত উত্তর',
     edited: 'সম্পাদিত',
+    addPicture: 'ছবি যোগ করুন',
+    removePicture: 'ছবিটি সরান',
+    pictureUploading: 'ছবি আপলোড হচ্ছে',
+    pictureDescription: 'ছবিতে কী আছে?',
+    pictureDescriptionHint:
+      'যিনি দেখতে পান না, তাঁর কাছে এটিই ছবিটির কথা। ঐচ্ছিক, তবে বর্ণনাহীন ছবি অর্ধেক পাঠকের কাছে অকেজো।',
+    pictureWithoutDescription: 'এই মন্তব্যের সঙ্গে সংযুক্ত ছবি',
+    commentPicture: 'মন্তব্যের সঙ্গে সংযুক্ত ছবি',
+    enlargePicture: 'ছবিটি বড় করে দেখুন: {{description}}',
     unknownMember: 'সাবেক সদস্য',
   },
   notifications: {

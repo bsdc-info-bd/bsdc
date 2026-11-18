@@ -108,7 +108,13 @@ const router = createBrowserRouter([
         children: [
           { path: ROUTES.verify, element: withSuspense(<VerifyEmailPage />) },
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
-          { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
+          // Settings is eight panels, each with its own address. This one
+          // redirect keeps every link written before that change working.
+          { path: ROUTES.settings, element: <Navigate to={ROUTES.settingsAccount} replace /> },
+          {
+            path: `${ROUTES.settings}/:panel`,
+            element: withSuspense(<SettingsPage />),
+          },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
           // The one door for adding to a directory: an event, a job, a gig, a
           // project, a group. Each table already had a policy for its author;

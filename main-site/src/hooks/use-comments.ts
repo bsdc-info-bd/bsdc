@@ -4,6 +4,7 @@ const repository = () => import('@/lib/interactions/interaction-repository');
 import {
   buildCommentTree,
   type Comment,
+  type CommentImage,
   type CommentNode,
 } from '@/lib/interactions/interaction-types';
 import { useAuthStore } from '@/store/auth-store';
@@ -13,7 +14,7 @@ export interface UseCommentsResult {
   total: number;
   isLoading: boolean;
   isError: boolean;
-  add: (body: string, parentId: string | null) => Promise<void>;
+  add: (body: string, parentId: string | null, image?: CommentImage | null) => Promise<void>;
   edit: (commentId: string, body: string) => Promise<void>;
   remove: (commentId: string) => Promise<void>;
   like: (commentId: string) => void;
@@ -42,8 +43,15 @@ export function useComments(postId: string): UseCommentsResult {
   };
 
   const addMutation = useMutation({
-    mutationFn: async ({ body, parentId }: { body: string; parentId: string | null }) =>
-      (await repository()).createComment(postId, uid ?? '', body, parentId),
+    mutationFn: async ({
+      body,
+      parentId,
+      image,
+    }: {
+      body: string;
+      parentId: string | null;
+      image: CommentImage | null;
+    }) => (await repository()).createComment(postId, uid ?? '', body, parentId, image),
     onSuccess: invalidate,
   });
 
@@ -99,8 +107,8 @@ export function useComments(postId: string): UseCommentsResult {
     total: comments.length,
     isLoading: query.isLoading,
     isError: query.isError,
-    add: async (body, parentId) => {
-      await addMutation.mutateAsync({ body, parentId });
+    add: async (body, parentId, image = null) => {
+      await addMutation.mutateAsync({ body, parentId, image });
     },
     edit: async (commentId, body) => {
       await editMutation.mutateAsync({ commentId, body });

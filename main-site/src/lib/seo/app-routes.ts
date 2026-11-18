@@ -23,6 +23,7 @@ export const APP_ROUTES: readonly string[] = [
   '/auth/verify',
   '/onboarding',
   '/settings',
+  '/settings/:panel',
   '/compose',
   '/create',
   '/projects/:slug/edit',

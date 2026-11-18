@@ -355,6 +355,13 @@ export type CommentRow = {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /** The picture the member attached, or empty. Always an https address. */
+  image_url: string;
+  /** ImgBB's ~640px variant of the same picture. */
+  image_thumb_url: string;
+  image_alt: string;
+  image_width: number | null;
+  image_height: number | null;
 };
 
 export type CommentReactionRow = { comment_id: string; uid: string; created_at: string };
@@ -2324,6 +2331,11 @@ export type Database = {
         Row: CommentRow;
         Insert: Pick<CommentRow, 'post_id' | 'author_uid' | 'body'> & {
           parent_id?: string | null;
+          image_url?: string;
+          image_thumb_url?: string;
+          image_alt?: string;
+          image_width?: number | null;
+          image_height?: number | null;
         };
         Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at' | 'deleted_at'>>;
         Relationships: [];

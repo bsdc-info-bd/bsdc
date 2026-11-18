@@ -22,12 +22,36 @@ data class PostInteractionState(
     val bookmarked: Boolean = false,
 )
 
+/**
+ * The picture a comment carries (migration 0120).
+ *
+ * The intrinsic size travels with it because Compose needs the aspect ratio
+ * before the bytes arrive: a `ContentScale`d image with no ratio reserves no
+ * height, so every comment below it jumps once it loads.
+ */
+data class CommentImage(
+    val url: String,
+    val thumbUrl: String = "",
+    val alt: String = "",
+    val width: Int? = null,
+    val height: Int? = null,
+) {
+    val ratio: Float?
+        get() = if (width != null && height != null && width > 0 && height > 0) {
+            width.toFloat() / height.toFloat()
+        } else {
+            null
+        }
+}
+
 data class FeedComment(
     val id: String,
     val postId: String,
     val parentId: String? = null,
     val depth: Int = 0,
     val body: String = "",
+    /** Present when the member attached a picture; a comment may be only a picture. */
+    val image: CommentImage? = null,
     val likes: Int = 0,
     val replies: Int = 0,
     val isAnswer: Boolean = false,

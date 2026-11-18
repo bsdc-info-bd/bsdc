@@ -50,7 +50,23 @@ export const ROUTES = {
   reset: '/auth/reset',
   verify: '/auth/verify',
   onboarding: '/onboarding',
+  /**
+   * Settings is a set of panels, each with its own address.
+   *
+   * It used to be one address and a `useState`, which meant the back button did
+   * nothing, a link could not point at "your privacy settings", and a member who
+   * chose a panel could not bookmark it or send it to themselves. `/settings`
+   * still exists and redirects to the first panel, so every older link works.
+   */
   settings: '/settings',
+  settingsAccount: '/settings/account',
+  settingsAppearance: '/settings/appearance',
+  settingsLanguage: '/settings/language',
+  settingsNotifications: '/settings/notifications',
+  settingsFeed: '/settings/feed',
+  settingsPrivacy: '/settings/privacy',
+  settingsSecurity: '/settings/security',
+  settingsDanger: '/settings/danger',
   compose: '/compose',
   create: '/create',
   notifications: '/notifications',
