@@ -23,6 +23,7 @@ import {
 import { uint8ArrayToUrlBase64, urlBase64ToUint8Array } from '@/lib/push/webpush';
 import type { PushDevice } from '@/lib/push/push-repository';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import { pushRegistrationErrorKey } from '@/lib/push/push-registration-error';
 import { useAuthStore } from '@/store/auth-store';
 
 // The repository pulls in the Supabase client, so it is imported lazily: this
@@ -236,6 +237,32 @@ export function usePush(): PushControl {
     staleTime: 60_000,
   });
 
+  // A service worker can wake for pushsubscriptionchange while this page is
+  // already open. It cannot authenticate to Supabase itself, so it asks the
+  // signed-in page to persist the replacement; the usual mount-time refresh
+  // handles the same change the next time a closed browser is opened.
+  useEffect(() => {
+    if (uid === null || pushConfig === null || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent<unknown>): void => {
+      if (
+        typeof event.data !== 'object' ||
+        event.data === null ||
+        !('type' in event.data) ||
+        event.data.type !== 'BSDC_PUSH_SUBSCRIPTION_CHANGED'
+      )
+        return;
+      void registerCurrentBrowser(uid, i18n.language, pushConfig)
+        .then((registered) =>
+          registered
+            ? queryClient.invalidateQueries({ queryKey: ['push-devices', uid] })
+            : undefined,
+        )
+        .catch(() => undefined);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [uid, i18n.language, pushConfig, queryClient]);
+
   useEffect(() => {
     const described = describePushEnvironment(readPushEnvironment(activeKey));
     setBlock(described.block);
@@ -296,7 +323,7 @@ export function usePush(): PushControl {
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
       return true;
     } catch (error) {
-      setErrorKey(dataErrorKey(error));
+      setErrorKey(pushRegistrationErrorKey(error));
       return false;
     } finally {
       setBusy(false);
