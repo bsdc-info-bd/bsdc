@@ -1535,6 +1535,33 @@ check('C-32', 'Content', 'Editing a post does not rewrite a poll that has votes'
   };
 });
 
+check('C-33', 'Media', 'Every upload is recorded before anything can point at it', () => {
+  // `uploadMedia` returns a URL; `recordMediaAsset` writes the row that says who
+  // the URL belongs to. The comment box did the first and not the second, so a
+  // comment carrying a picture was refused by 0120 with `42501` and the member
+  // read "your role does not allow this action" — a sentence about permissions
+  // for a missing row. An unrecorded upload is also never a candidate for the
+  // sweeper, so it stays at the host for ever.
+  //
+  // The rule this holds: a file that calls `uploadMedia` must also record, either
+  // through `uploadAndRecord` (both halves in one call) or `recordMediaAsset`.
+  const callers = shLines(
+    `grep -rlE "uploadMedia\\(|uploadAndRecord\\(" main-site/src --include=*.ts --include=*.tsx ` +
+      `| grep -v "\\.test\\." | grep -v "lib/storage/upload.ts" | grep -v "lib/storage/upload-and-record.ts"`,
+  );
+  const unrecorded = callers.filter((file) => {
+    const source = read(file);
+    return !source.includes('uploadAndRecord(') && !source.includes('recordMediaAsset(');
+  });
+  return {
+    ok: callers.length >= 7 && unrecorded.length === 0,
+    evidence:
+      unrecorded.length === 0
+        ? `${callers.length} upload surfaces upload and record in the same operation`
+        : `unrecorded upload: ${unrecorded.join(', ')}`,
+  };
+});
+
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
   const bad = consoles.filter((name) => {
     if (!has(`${name}/public/_headers`)) return false;

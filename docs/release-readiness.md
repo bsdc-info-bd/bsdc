@@ -321,6 +321,23 @@ it through `BsdcImgbbImage` with the ratio reserved and the same lightbox the po
 photographs use; the web renders it through `MediaImage` with the same
 `srcset`-then-lightbox path as the messenger.
 
+## "Your role does not allow this action" was not about the role
+
+A member attached a picture to a comment and was told their role did not allow it.
+Their role was fine. The comment box uploaded the bytes to ImgBB and never wrote
+the row that says who uploaded them, and `prepare_comment` (0120) accepts a picture
+only when `media_assets` already records it against the author. The refusal was
+real; the sentence was about the wrong thing.
+
+| Decision                                                       | Why it is that way                                                                                                                                                                                                                                                       | Held by                                       |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
+| Uploading is one operation: `uploadAndRecord`                  | `uploadMedia` returns a URL and says nothing about whether a row exists for it. Two calls, one forgotten silently, is how this shipped. The helper does both or fails, and it is what the comment box, the vendor catalogue and the shop settings now call.              | `upload-and-record.test.ts`                   |
+| The sign-in check comes before the upload                      | A signed-out caller would otherwise spend an upload on a row that cannot be written — the member's data allowance for nothing, and an orphan at the host.                                                                                                                | `upload-and-record.test.ts`                   |
+| The record's absence is a failure, not a warning               | A chat message may be sent with an unrecorded picture (the bytes are already there and losing the message is worse), so `MessageComposer` records best-effort. A comment cannot be: the database refuses it. The two surfaces differ on purpose, and each test says why. | `comment-picture.test.tsx`, `MessageComposer` |
+| The two `42501` refusals from `prepare_comment` have sentences | `42501` mapped to "your role does not allow this action", which is true of the code and false of the situation. "That picture did not finish attaching to your account" and "Comments are closed on this post" both say what happened, in both locales.                  | `errors.ts`                                   |
+| `C-33` holds every upload surface                              | Seven files upload; seven record. A grep-based checkpoint cannot prove the call succeeded, but it does catch the next surface that forgets — which is exactly how this one was written.                                                                                  | `C-33`                                        |
+| Android never had the bug, and that is the reason to check     | Its `BsdcMediaRepository.upload` records inside the same function as the upload, so there was no second step to forget. The web had the two steps separated and paid for it.                                                                                             | `BsdcMediaUploadContractTest`                 |
+
 ## A poll that has votes keeps its options (0121)
 
 Saving a post rewrote its poll: delete every option, insert the new list. It ran

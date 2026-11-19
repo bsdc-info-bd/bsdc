@@ -17,6 +17,7 @@ import { formatTaka, isHttpsUrl, variantFor, type Language } from '@/lib/mk/mk-l
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import type { ProductPayload } from '@/lib/mk/mk-repository';
 import type { MkCatalogProduct } from '@/lib/mk/mk-types';
+import { useAuthStore } from '@/store/auth-store';
 
 interface Props {
   copy: MkCopy;
@@ -91,11 +92,15 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
     if (!files || files.length === 0 || editing === null) return;
     setUploading(true);
     try {
-      const { uploadMedia } = await import('@/lib/storage/upload');
+      // Uploading is only half of it: the row that says who uploaded the picture
+      // is what makes it attributable and sweepable, and it is the half a client
+      // forgets silently. See `upload-and-record`.
+      const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+      const ownerUid = useAuthStore.getState().user?.uid ?? '';
       const added: string[] = [];
       const variants: Record<string, string> = { ...(editing.draft.image_variants ?? {}) };
       for (const file of Array.from(files)) {
-        const result = await uploadMedia(file, { purpose: 'product-image' });
+        const result = await uploadAndRecord(file, { purpose: 'product-image' }, ownerUid);
         added.push(result.url);
         // The upload already produced a ~640px copy; discarding it here is what
         // made every catalogue thumbnail download the full-size original.

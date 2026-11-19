@@ -95,6 +95,15 @@ interface Painting {
  * paints last. Deriving both from one prop means a caller cannot set half of the
  * pair, which had already happened five times.
  */
+/**
+ * The attribute as the browser reads it.
+ *
+ * React 18 does not know the camelCase prop and warns on every render that passes
+ * one, so the priority flag is passed as the lower-case attribute — the same
+ * thing `MediaGallery` does for its first picture.
+ */
+const HIGH_PRIORITY: Record<string, string> = { fetchpriority: 'high' };
+
 export function MediaImage({
   src,
   fallbackSrc = '',
@@ -319,10 +328,10 @@ export function MediaImage({
       className={cn(!loaded && 'bg-surface-2', className)}
       loading={priority ? 'eager' : (imageProps.loading ?? 'lazy')}
       {...(priority
-        ? { fetchPriority: 'high' as const }
+        ? HIGH_PRIORITY
         : imageProps.fetchPriority === undefined
           ? {}
-          : { fetchPriority: imageProps.fetchPriority })}
+          : { fetchpriority: imageProps.fetchPriority })}
       onError={handleError}
       onLoad={handleLoad}
       data-attempt={painting.attempt}

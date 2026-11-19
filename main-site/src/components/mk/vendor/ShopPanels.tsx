@@ -14,6 +14,7 @@ import {
 } from '@/lib/mk/mk-logic';
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import type { MkVendorShop, MkPurchase } from '@/lib/mk/mk-types';
+import { useAuthStore } from '@/store/auth-store';
 
 interface ShopProps {
   copy: MkCopy;
@@ -32,8 +33,14 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
     if (!file) return;
     setUploading(which);
     try {
-      const { uploadMedia } = await import('@/lib/storage/upload');
-      const result = await uploadMedia(file, { purpose: which === 'logo' ? 'avatar' : 'cover' });
+      // The record is written with the bytes, so the picture is attributable and
+      // the sweeper can eventually reclaim it.
+      const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+      const result = await uploadAndRecord(
+        file,
+        { purpose: which === 'logo' ? 'avatar' : 'cover' },
+        useAuthStore.getState().user?.uid ?? '',
+      );
       if (which === 'logo') setLogo(result.url);
       else setCover(result.url);
     } catch {

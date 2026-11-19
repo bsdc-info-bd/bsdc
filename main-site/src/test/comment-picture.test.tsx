@@ -30,6 +30,26 @@ vi.mock('sonner', () => ({
 const uploadMedia = vi.fn<(file: File, options: unknown) => Promise<unknown>>();
 vi.mock('@/lib/storage/upload', () => ({
   uploadMedia: (file: File, options: unknown) => uploadMedia(file, options),
+  MediaError: class MediaError extends Error {
+    readonly messageKey: string;
+    constructor(messageKey: string) {
+      super(messageKey);
+      this.messageKey = messageKey;
+    }
+  },
+}));
+
+/**
+ * The half that used to be missing.
+ *
+ * `prepare_comment` (0120) accepts a picture only when `media_assets` records it
+ * against the author. The comment box uploaded without recording, so every
+ * comment with a picture was refused with `42501` and the member read "your role
+ * does not allow this action". These tests fail if the record call is dropped.
+ */
+const recordMediaAsset = vi.fn<(uid: string, result: unknown) => Promise<unknown>>();
+vi.mock('@/lib/data/media-repository', () => ({
+  recordMediaAsset: (uid: string, result: unknown) => recordMediaAsset(uid, result),
 }));
 
 const threadState = vi.hoisted(() => ({ current: null as unknown }));
@@ -71,6 +91,8 @@ const result = (overrides: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   uploadMedia.mockReset();
+  recordMediaAsset.mockReset();
+  recordMediaAsset.mockResolvedValue({ id: 'asset-1', url: IMAGE.url });
   toastError.mockReset();
 });
 
@@ -100,6 +122,10 @@ describe('attaching a picture to a comment', () => {
     });
     expect(uploadMedia.mock.calls[0]?.[1]).toMatchObject({ purpose: 'comment-image' });
 
+    // The row that makes the picture the member's own is written before the
+    // form offers to attach it.
+    expect(recordMediaAsset).toHaveBeenCalledWith('viewer', result());
+
     // The description box only exists once there is a picture to describe.
     const description = await screen.findByLabelText('What is in the picture?');
     await user.type(description, 'The crack runs down the left side of the screen');
@@ -117,6 +143,38 @@ describe('attaching a picture to a comment', () => {
       width: 1200,
       height: 900,
     });
+  });
+
+  it('refuses the picture when its record cannot be written', async () => {
+    // A picture at ImgBB that no row points at is one the database will not let
+    // a comment reference, so the member is told now rather than after writing.
+    recordMediaAsset.mockResolvedValue(null);
+    uploadMedia.mockResolvedValue(result());
+
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(
+      <CommentForm
+        allowImage
+        placeholder="Add to the discussion"
+        submitLabel="Post comment"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['x'], 'crack.png', { type: 'image/png' })] },
+    });
+
+    // The toast is translated by the time it is shown, so the assertion is that
+    // one failure was reported — the behaviour under test is that no picture was
+    // attached, which the next three lines hold.
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledTimes(1);
+    });
+    // No picture was attached, so the form has nothing to submit.
+    expect(screen.queryByLabelText('What is in the picture?')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Post comment' })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it('will not submit with neither words nor a picture', () => {

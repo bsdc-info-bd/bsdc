@@ -26,6 +26,13 @@ const MESSAGE_MAP: Record<string, string> = {
   // keeps its options, so an edit that rewrites them is refused with a sentence
   // that says why rather than a constraint name.
   'poll/options-locked': 'compose.errors.pollLocked',
+  // Raised by `prepare_comment` (0120). Without these the refusal arrived as
+  // `42501` and the member read "your role does not allow this action" — which is
+  // true of the code and false of the situation: their role was fine, the picture
+  // simply was not in `media_assets` yet, and the comment box has no way to say
+  // so. Both sentences now name what actually happened.
+  'that picture was not uploaded by this member': 'media.errors.notRecorded',
+  'comments are closed on this post': 'post.commentsClosed',
   'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 

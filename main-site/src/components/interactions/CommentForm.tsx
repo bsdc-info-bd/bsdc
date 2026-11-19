@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button, ProgressBar, TextField, TextareaField } from '@/design-system';
 import type { CommentImage } from '@/lib/interactions/interaction-types';
 import { cn } from '@/lib/cn';
+import { useAuthStore } from '@/store/auth-store';
 import { dataErrorKey } from '@/lib/supabase/errors';
 
 export interface CommentFormProps {
@@ -73,13 +74,24 @@ export function CommentForm({
     try {
       // Loaded on demand: a reader who never attaches a picture never downloads
       // the compressor or the upload contract.
-      const { uploadMedia } = await import('@/lib/storage/upload');
-      const result = await uploadMedia(file, {
-        purpose: 'comment-image',
-        onProgress: (percent) => {
-          setProgress(percent);
+      //
+      // Uploading is only half of it. `prepare_comment` (0120) accepts a picture
+      // only when `media_assets` already records it against the author, and this
+      // box used to upload without recording — so every comment carrying a
+      // picture was refused as "your role does not allow this action", a sentence
+      // about permissions for a missing row. `uploadAndRecord` writes both halves
+      // or fails, and it is the same call the rest of the product makes.
+      const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+      const result = await uploadAndRecord(
+        file,
+        {
+          purpose: 'comment-image',
+          onProgress: (percent) => {
+            setProgress(percent);
+          },
         },
-      });
+        useAuthStore.getState().user?.uid ?? '',
+      );
       setImage({
         url: result.url,
         thumbUrl: result.thumbUrl === '' ? result.url : result.thumbUrl,
