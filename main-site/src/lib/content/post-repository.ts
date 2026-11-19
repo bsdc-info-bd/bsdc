@@ -244,72 +244,6 @@ export async function fetchTags(limit = 40): Promise<TagRow[]> {
   return data ?? [];
 }
 
-async function syncTags(postId: string, tags: readonly string[]): Promise<void> {
-  const supabase = getSupabase();
-  const slugs = [...new Set(tags.map(normalizeTag).filter((tag) => tag.length >= 2))];
-
-  const { error: clearError } = await supabase.from('post_tags').delete().eq('post_id', postId);
-  if (clearError) throw toDataError(clearError);
-  if (slugs.length === 0) return;
-
-  // Only tags that exist in the curated vocabulary are attached; unknown
-  // words are dropped rather than silently creating new taxonomy.
-  const { data: known, error: knownError } = await supabase
-    .from('tags')
-    .select('slug')
-    .in('slug', slugs);
-  if (knownError) throw toDataError(knownError);
-
-  const rows = (known ?? []).map((tag) => ({ post_id: postId, tag_slug: tag.slug }));
-  if (rows.length === 0) return;
-
-  const { error } = await supabase.from('post_tags').insert(rows);
-  if (error) throw toDataError(error);
-}
-
-async function syncMedia(postId: string, draft: PostDraft): Promise<void> {
-  const supabase = getSupabase();
-  const { error: clearError } = await supabase.from('post_media').delete().eq('post_id', postId);
-  if (clearError) throw toDataError(clearError);
-
-  const rows = draft.media
-    .filter((item) => item.mediaId.length > 0)
-    .map((item, index) => ({
-      post_id: postId,
-      media_id: item.mediaId,
-      position: index,
-      alt_text: item.altText,
-    }));
-  if (rows.length === 0) return;
-
-  const { error } = await supabase.from('post_media').insert(rows);
-  if (error) throw toDataError(error);
-}
-
-async function syncMentions(postId: string, body: string): Promise<void> {
-  const supabase = getSupabase();
-  const handles = extractMentions(body);
-
-  const { error: clearError } = await supabase.from('post_mentions').delete().eq('post_id', postId);
-  if (clearError) throw toDataError(clearError);
-  if (handles.length === 0) return;
-
-  const { data: people, error: peopleError } = await supabase
-    .from('profiles')
-    .select('uid')
-    .in('username', handles);
-  if (peopleError) throw toDataError(peopleError);
-
-  const rows = (people ?? []).map((person) => ({
-    post_id: postId,
-    mentioned_uid: person.uid,
-  }));
-  if (rows.length === 0) return;
-
-  const { error } = await supabase.from('post_mentions').insert(rows);
-  if (error) throw toDataError(error);
-}
-
 /**
  * The poll options a post already carries, and the ballots on each one.
  *
@@ -367,19 +301,6 @@ export function decidePollWrite(
   return { write: true, labels };
 }
 
-/** Replaces a poll's options. Only reached when no option has a vote. */
-async function writePoll(postId: string, labels: readonly string[]): Promise<void> {
-  const supabase = getSupabase();
-  const { error: clearError } = await supabase.from('poll_options').delete().eq('post_id', postId);
-  if (clearError) throw toDataError(clearError);
-  if (labels.length === 0) return;
-
-  const { error } = await supabase
-    .from('poll_options')
-    .insert(labels.map((label, index) => ({ post_id: postId, position: index, label })));
-  if (error) throw toDataError(error);
-}
-
 /** The stored options of the post being edited, or none for a new post. */
 async function readStoredPoll(postId: string | null): Promise<StoredPollOption[]> {
   if (!postId) return [];
@@ -410,8 +331,24 @@ export const PROFILE_MISSING_MESSAGE = 'profile/missing';
  * Creates or updates a post and all of its side tables. Publishing sets
  * `published_at`, which the database requires for any published row.
  */
+/**
+ * Saves a post — the row, its tags, its pictures, its mentions and its poll — in
+ * one call, in one transaction.
+ *
+ * This used to be up to nine requests: the post row, then each of the four
+ * attachments. If the fourth failed the post was already published without the
+ * picture, without the tags and without the mention notification, and the member
+ * was shown an error for a post that existed. `public.save_post` (0123) is the
+ * same write in one statement, so a save either happened or did not.
+ *
+ * The author is the signed-in member (`bsdc.current_uid()` inside the function),
+ * never a parameter a client could choose.
+ *
+ * The poll decision is still made here, before anything is written, so a poll
+ * whose ballot exists is refused with a sentence rather than by a constraint —
+ * and the database refuses it too, as the backstop for every other client.
+ */
 export async function savePost(
-  authorUid: string,
   draft: PostDraft,
   status: Extract<PostStatus, 'draft' | 'published'>,
 ): Promise<SaveResult> {
@@ -430,76 +367,51 @@ export async function savePost(
   const fallbackSlug = draft.kind === 'snippet' ? 'snippet' : draft.kind;
   const slug = uniqueSlug(title.length > 0 ? title : toExcerpt(body, 48), fallbackSlug);
 
-  const payload = {
-    kind: draft.kind,
-    status,
-    visibility: draft.visibility,
-    title,
-    body,
-    excerpt: toExcerpt(body.length > 0 ? body : title),
-    cover_url: draft.coverUrl,
-    language: draft.language,
-    code: draft.code,
-    code_language: draft.kind === 'snippet' ? draft.codeLanguage : '',
-    reading_time: readingTimeMinutes(`${title} ${body} ${draft.code}`),
-    is_sensitive: draft.isSensitive,
-    allow_comments: draft.allowComments,
-    published_at: status === 'published' ? new Date().toISOString() : null,
-  };
+  const { data, error } = await supabase.rpc('save_post', {
+    p_id: draft.id ?? null,
+    p_slug: slug,
+    p_post: {
+      kind: draft.kind,
+      status,
+      visibility: draft.visibility,
+      title,
+      body,
+      excerpt: toExcerpt(body.length > 0 ? body : title),
+      cover_url: draft.coverUrl,
+      language: draft.language,
+      code: draft.code,
+      code_language: draft.kind === 'snippet' ? draft.codeLanguage : '',
+      reading_time: readingTimeMinutes(`${title} ${body} ${draft.code}`),
+      is_sensitive: draft.isSensitive,
+      allow_comments: draft.allowComments,
+    },
+    // The arrays are the whole post's worth, not a patch: the save replaces what
+    // the post carried, exactly as the four syncs did.
+    p_tags: [...new Set(draft.tags.map(normalizeTag).filter((tag) => tag.length >= 2))],
+    p_media: draft.media
+      .filter((item) => item.mediaId.length > 0)
+      .map((item, index) => ({
+        media_id: item.mediaId,
+        position: index,
+        alt_text: item.altText,
+      })),
+    p_mentions: extractMentions(body),
+    p_poll: pollPlan?.write ? [...pollPlan.labels] : null,
+  });
 
-  let postId = draft.id;
-  let postSlug = slug;
-
-  if (postId) {
-    // Preserve the original publication timestamp when editing an already-published
-    // post instead of resetting it to now on every edit.
-    const { data: existing, error: existingError } = await supabase
-      .from('posts')
-      .select('published_at')
-      .eq('id', postId)
-      .maybeSingle();
-    if (existingError) throw toDataError(existingError);
-
-    const updatePayload = {
-      ...payload,
-      published_at:
-        status === 'published' ? (existing?.published_at ?? new Date().toISOString()) : null,
-    };
-    const { data, error } = await supabase
-      .from('posts')
-      .update(updatePayload)
-      .eq('id', postId)
-      .select('id, slug')
-      .maybeSingle();
-    if (error) throw toDataError(error);
-    if (!data) throw toDataError(new Error('profile/not-found'));
-    postSlug = data.slug;
-  } else {
-    // The database checks the author's profile exists through the
-    // posts_author_uid_fkey constraint, which is the only foreign key on this
-    // table. Reading its answer keeps this free — no extra round trip — and
-    // cannot race with a profile deleted mid-save the way a pre-check could.
-    const { data, error } = await supabase
-      .from('posts')
-      .insert({ ...payload, author_uid: authorUid, slug })
-      .select('id, slug')
-      .maybeSingle();
-    if (error) {
-      if (error.code === '23503') throw toDataError(new Error(PROFILE_MISSING_MESSAGE));
-      throw toDataError(error);
-    }
-    if (!data) throw toDataError(new Error('data/insert-failed'));
-    postId = data.id;
-    postSlug = data.slug;
+  if (error) {
+    // The author's profile is the only foreign key a save can trip on this table,
+    // and the member reads a sentence that sends them to onboarding.
+    if (error.code === '23503') throw toDataError(new Error(PROFILE_MISSING_MESSAGE));
+    throw toDataError(error);
   }
 
-  await syncTags(postId, draft.tags);
-  await syncMedia(postId, draft);
-  await syncMentions(postId, body);
-  if (pollPlan?.write) await writePoll(postId, pollPlan.labels);
+  const saved = data as { id: string; slug: string } | null;
+  if (!saved?.id) throw toDataError(new Error('data/insert-failed'));
+
   if (status === 'published') wakePushDelivery();
 
-  return { id: postId, slug: postSlug };
+  return { id: saved.id, slug: saved.slug };
 }
 
 /**

@@ -243,7 +243,7 @@ export default function ComposePage() {
     setBusy(true);
     try {
       const { savePost } = await import('@/lib/content/post-repository');
-      const saved = await savePost(user.uid, draftToSave, status);
+      const saved = await savePost(draftToSave, status);
       if (isEditing) {
         toast.success(t('compose.updated'));
         navigate(`/p/${saved.slug}`);

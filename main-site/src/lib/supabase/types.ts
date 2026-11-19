@@ -2541,6 +2541,18 @@ export type Database = {
       };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
+      save_post: {
+        Args: {
+          p_id?: string | null;
+          p_post?: Json;
+          p_slug?: string | null;
+          p_tags?: string[];
+          p_media?: Json;
+          p_mentions?: string[];
+          p_poll?: Json | null;
+        };
+        Returns: Json;
+      };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };
       prune_feed_seen: { Args: { p_days: number }; Returns: number };

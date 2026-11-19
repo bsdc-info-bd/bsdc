@@ -1485,6 +1485,37 @@ check('C-30', 'Front end', 'Every settings panel has an address of its own', () 
   };
 });
 
+check('B-17', 'Database', 'A post is saved once, or not at all', () => {
+  // A save used to be up to nine requests — the post row, then tags, media,
+  // mentions and the poll — and a failure in any of them left the post published
+  // without its parts. `public.save_post` (0123) is the same write in one
+  // transaction, `security invoker` so every policy still decides, and the client
+  // sends one request instead of nine.
+  const migration = read('supabase/migrations/0123_a_post_is_saved_once.sql');
+  const repository = read('main-site/src/lib/content/post-repository.ts');
+  const proof = read('main-site/scripts/db-prove/t82.mjs');
+  const unit = read('main-site/src/lib/content/save-post.test.ts');
+  const save = repository.slice(repository.indexOf('export async function savePost('));
+  return {
+    ok:
+      migration.includes('create or replace function public.save_post(') &&
+      migration.includes('security invoker') &&
+      migration.includes('grant execute on function public.save_post') &&
+      // The client writes through the function and nothing else.
+      save.includes("rpc('save_post'") &&
+      !save.includes(".from('post_tags')") &&
+      !save.includes(".from('post_media')") &&
+      !save.includes(".from('post_mentions')") &&
+      // And the transaction claim is asserted from the database side, including a
+      // failure that must leave no post behind.
+      proof.includes('the failed save published nothing') &&
+      proof.includes('the refused save did not change the post title') &&
+      unit.includes('expect(rpcMock).toHaveBeenCalledTimes(1)'),
+    evidence:
+      'one call writes the post, its tags, pictures, mentions and poll; a failure in any of them leaves nothing behind',
+  };
+});
+
 check('B-16', 'Database', 'The marketplace page is the nearest page, not an arbitrary one', () => {
   // `mk_list_vendors` applied `limit` inside its subquery and sorted what came
   // back by distance afterwards, so "nearest shops first" ordered an arbitrary
@@ -1537,28 +1568,33 @@ check('C-32', 'Content', 'Editing a post does not rewrite a poll that has votes'
   // Saving a post rewrote its poll by deleting every option and inserting the new
   // list. `poll_votes.option_id` cascades from `poll_options`, so correcting a
   // typo in a poll's body deleted every ballot — and the options came back with
-  // new ids, so nothing was recoverable. Three things now hold it:
+  // new ids, so nothing was recoverable. Three things hold it:
   //   * `decidePollWrite` returns "unchanged" for an unchanged poll, so the common
-  //     save writes nothing at all;
-  //   * it refuses a change to a poll somebody voted on, before the post is
-  //     touched, and the composer shows the options read-only with the reason;
-  //   * 0121 refuses the delete in the database, for every other client.
+  //     save sends no poll at all;
+  //   * it refuses a change to a poll somebody voted on, before the save is sent,
+  //     and the composer shows the options read-only with the reason;
+  //   * the save itself (0123) compares the labels before deleting anything, and
+  //     0121 refuses the delete in the database, for every other client.
   const repo = read('main-site/src/lib/content/post-repository.ts');
   const composer = read('main-site/src/routes/ComposePage.tsx');
+  const saver = read('supabase/migrations/0123_a_post_is_saved_once.sql');
   const migration = read('supabase/migrations/0121_a_poll_that_has_votes_keeps_its_options.sql');
   const proof = read('main-site/scripts/db-prove/t80.mjs');
+  const saveProof = read('main-site/scripts/db-prove/t82.mjs');
   return {
     ok:
       repo.includes('export function decidePollWrite') &&
-      repo.includes('if (pollPlan?.write) await writePoll(') &&
+      repo.includes('p_poll: pollPlan?.write') &&
       repo.includes("export const POLL_LOCKED_MESSAGE = 'poll/options-locked'") &&
       composer.includes('pollLocked') &&
+      saver.includes('if v_stored is distinct from v_incoming then') &&
       migration.includes('create trigger poll_options_keep_votes') &&
       migration.includes('pg_trigger_depth() > 1') &&
       proof.includes('the rewrite that emptied the poll is refused as a whole') &&
-      proof.includes('deleting the post still takes its votes'),
+      proof.includes('deleting the post still takes its votes') &&
+      saveProof.includes('the unchanged poll is not rewritten, so its options keep their ids'),
     evidence:
-      'a save writes a poll only when nobody has voted; the database refuses the delete, and the post still takes its options with it',
+      'a save sends a poll only when nobody has voted; the database compares before deleting, refuses a voted delete, and a refused save leaves the post as it was',
   };
 });
 
