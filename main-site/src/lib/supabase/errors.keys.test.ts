@@ -57,6 +57,8 @@ describe('every error key resolves in both languages', () => {
       ['poll/options-locked', 23514, 'compose.errors.pollLocked'],
       ['job/already-applied', 23505, 'data.errors.alreadyApplied'],
       ['gig/already-proposed', 23505, 'data.errors.alreadyProposed'],
+      ['this account has reached its picture limit', 54000, 'media.errors.quotaReached'],
+      ['authentication required', 42501, 'data.errors.signInRequired'],
     ];
     for (const [message, code, key] of mapping) {
       expect(dataErrorKey({ message, code })).toBe(key);

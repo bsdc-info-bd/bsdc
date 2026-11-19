@@ -832,6 +832,8 @@ export const en = {
         'Picture uploads are unavailable right now. Please try again in a moment — if it keeps happening, contact support.',
       signInRequired: 'Sign in to upload. Your session has expired; reload the page and try again.',
       notRecorded: 'That picture did not finish attaching to your account. Please attach it again.',
+      quotaReached:
+        'You have reached the limit of pictures one account can keep. Delete some from your library and try again.',
       tooMany: 'That is as many pictures as one post can hold.',
       cancelled: 'The upload was cancelled.',
     },

@@ -33,6 +33,15 @@ const MESSAGE_MAP: Record<string, string> = {
   // so. Both sentences now name what actually happened.
   'that picture was not uploaded by this member': 'media.errors.notRecorded',
   'comments are closed on this post': 'interactions.commentsClosed',
+  // `record_media_asset` has a per-member quota (0073) and refuses over it with
+  // 54000, which had no entry in CODE_MAP at all: the member was told the data
+  // service could not complete the request. The limit is now reachable faster
+  // because a comment can carry a picture.
+  'this account has reached its picture limit': 'media.errors.quotaReached',
+  // `record_media_asset` refuses an expired session with 42501 and the words
+  // "authentication required", which mapped to "You do not have permission to do
+  // that" — the same wrong-sentence problem as the comment picture.
+  'authentication required': 'data.errors.signInRequired',
   'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 
