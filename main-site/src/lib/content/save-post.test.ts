@@ -1,7 +1,57 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { DataError } from '@/lib/supabase/errors';
 
-const rpcMock = vi.fn();
+interface SaveArgs {
+  p_id: string | null;
+  p_slug: string;
+  p_post: {
+    kind: string;
+    status: string;
+    title: string;
+    body: string;
+    excerpt: string;
+    cover_url: string;
+    language: string;
+    code: string;
+    code_language: string;
+    reading_time: number;
+    is_sensitive: boolean;
+    allow_comments: boolean;
+  };
+  p_tags: string[];
+  p_media: { media_id: string; position: number; alt_text: string }[];
+  p_mentions: string[];
+  p_poll: string[] | null;
+}
+
+interface SaveReply {
+  data: { id: string; slug: string } | null;
+  error: { code: string; message: string } | null;
+}
+
+/**
+ * The RPC is recorded rather than asserted through the mock's untyped `calls`:
+ * the point of these tests is the *arguments*, and an `any` would hide a typo in
+ * one of them.
+ */
+interface SaveCall {
+  name: string;
+  args: SaveArgs;
+}
+
+let reply: SaveReply = { data: { id: 'post-1', slug: 'my-first-week' }, error: null };
+const calls: SaveCall[] = [];
+
+/** The one call the save made. A save makes exactly one, which is the point. */
+function firstCall(): SaveCall {
+  const [call] = calls;
+  if (!call) throw new Error('the save made no call');
+  return call;
+}
+const rpcMock = vi.fn((name: string, args: SaveArgs): Promise<SaveReply> => {
+  calls.push({ name, args });
+  return Promise.resolve(reply);
+});
 const fromMock = vi.fn();
 
 vi.mock('@/lib/supabase/client', () => ({
@@ -37,7 +87,8 @@ function media(mediaId: string, url: string, altText: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  rpcMock.mockResolvedValue({ data: { id: 'post-1', slug: 'my-first-week' }, error: null });
+  calls.length = 0;
+  reply = { data: { id: 'post-1', slug: 'my-first-week' }, error: null };
 });
 
 describe('a post is saved in one call', () => {
@@ -57,7 +108,7 @@ describe('a post is saved in one call', () => {
     expect(fromMock).not.toHaveBeenCalled();
     expect(rpcMock).toHaveBeenCalledTimes(1);
 
-    const [name, args] = rpcMock.mock.calls[0] as [string, Record<string, any>];
+    const { name, args } = firstCall();
     expect(name).toBe('save_post');
     expect(args.p_id).toBeNull();
     // The slug carries a random suffix so two saves of the same title never collide.
@@ -83,25 +134,25 @@ describe('a post is saved in one call', () => {
   it('sends the poll labels only when the poll has to be written', async () => {
     await savePost(draft({ kind: 'poll', pollOptions: ['Neovim', 'VS Code'] }), 'published');
 
-    const [, args] = rpcMock.mock.calls[0] as [string, Record<string, any>];
-    expect(args.p_poll).toEqual(['Neovim', 'VS Code']);
+    expect(firstCall().args.p_poll).toEqual(['Neovim', 'VS Code']);
   });
 
   it('keeps the language of a snippet and does not carry its code language elsewhere', async () => {
     await savePost(draft({ kind: 'snippet', code: 'const a = 1;' }), 'published');
 
-    const [, args] = rpcMock.mock.calls[0] as [string, Record<string, any>];
-    expect(args.p_post.code_language).toBe('typescript');
+    expect(firstCall().args.p_post.code_language).toBe('typescript');
   });
 
   it('refuses a poll that has votes before anything is written', async () => {
-    const eqMock = vi.fn(async () => ({
-      data: [
-        { position: 0, label: 'Neovim', votes: 3 },
-        { position: 1, label: 'VS Code', votes: 1 },
-      ],
-      error: null,
-    }));
+    const eqMock = vi.fn(() =>
+      Promise.resolve({
+        data: [
+          { position: 0, label: 'Neovim', votes: 3 },
+          { position: 1, label: 'VS Code', votes: 1 },
+        ],
+        error: null,
+      }),
+    );
     fromMock.mockReturnValue({ select: () => ({ eq: eqMock }) });
 
     await expect(
@@ -116,16 +167,16 @@ describe('a post is saved in one call', () => {
   });
 
   it('reads a missing profile as an onboarding problem, not a broken save', async () => {
-    rpcMock.mockResolvedValue({ data: null, error: { code: '23503', message: 'fk' } });
+    reply = { data: null, error: { code: '23503', message: 'fk' } };
     await expect(savePost(draft(), 'draft')).rejects.toThrow(DataError);
   });
 
   it('translates a locked poll raised by the database, for clients that skip the check', async () => {
-    rpcMock.mockResolvedValue({
-      data: null,
-      error: { code: '23514', message: POLL_LOCKED_MESSAGE },
-    });
-    const failure = await savePost(draft({ kind: 'post' }), 'published').catch((error) => error);
+    reply = { data: null, error: { code: '23514', message: POLL_LOCKED_MESSAGE } };
+    const failure = await savePost(draft({ kind: 'post' }), 'published').then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(failure).toBeInstanceOf(DataError);
   });
 });
