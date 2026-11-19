@@ -32,7 +32,7 @@ const MESSAGE_MAP: Record<string, string> = {
   // simply was not in `media_assets` yet, and the comment box has no way to say
   // so. Both sentences now name what actually happened.
   'that picture was not uploaded by this member': 'media.errors.notRecorded',
-  'comments are closed on this post': 'post.commentsClosed',
+  'comments are closed on this post': 'interactions.commentsClosed',
   'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 
@@ -52,6 +52,21 @@ const CODE_MAP: Record<string, string> = {
   PGRST301: 'data.errors.signInRequired',
   PGRST116: 'data.errors.notFound',
 };
+
+/**
+ * Every translation key this module can return.
+ *
+ * `dataErrorKey` is on the path of almost every failed write, and it can only
+ * return a key that is in these two maps. A key that is not in the locale bundle
+ * is not a crash: i18next renders the key itself, so a member of the public reads
+ * `data.errors.notFound` where a sentence was meant to be. The test beside this
+ * file walks both maps through `en` and `bn` and fails on a key that does not
+ * resolve, which is the only way a typo in this file can be caught before a
+ * member sees it.
+ */
+export const TRANSLATED_ERROR_KEYS: readonly string[] = [
+  ...new Set([...Object.values(MESSAGE_MAP), ...Object.values(CODE_MAP)]),
+];
 
 function isPostgrestError(value: unknown): value is PostgrestError {
   return (
