@@ -5,11 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The map's tile routing.
- *
- * A blank white map on Android came from a strict `host == "tile.openstreetmap.org"` check:
- * the page asks for that host, OSM answers by redirecting to its `a.`/`b.`/`c.` shards, and
- * every sharded tile was dropped. These cases pin both halves of the rule down.
+ * The map's exact HTTPS tile-host allowlist, including OpenStreetMap's `a.`/`b.`/`c.` shards.
  *
  * The rule lives in [MkLogic] rather than beside the WebView that uses it, because a JVM unit
  * test cannot reach into a file that imports `android.webkit.WebView`.

@@ -1,38 +1,52 @@
 package bd.info.bsdc.app.feature.market
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Color as AndroidColor
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -42,15 +56,19 @@ import androidx.compose.ui.window.DialogProperties
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.model.BsdcHosts
+import kotlinx.coroutines.delay
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.net.HttpURLConnection
+import java.net.URI
 import java.net.URL
 
 /**
  * OpenStreetMap pin for the delivery address: Leaflet with OSM tiles inside a WebView.
  *
  * The map reports a new pin on tap or drag, and Compose pushes pins set by search or GPS back in.
- * The page can only talk to the app through [PinBridge], which accepts two numbers and nothing else.
- * Every point is checked against Bangladesh's bounds by the caller.
+ * The page can only talk to the app through [PinBridge], which accepts two finite numbers. Every
+ * point is checked against Bangladesh's bounds by the caller.
  */
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
@@ -64,143 +82,142 @@ fun MkOsmPinMap(
     bn: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val mapErrorText = if (bn) {
-        "মানচিত্রের টাইল লোড হয়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
-    } else {
-        "Map tiles could not load. Check your internet connection and try again."
-    }
     val latestOnPin by rememberUpdatedState(onPin)
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
-    val state = remember { PinMapState(initial = if (lat != null && lng != null) lat to lng else null) }
+    val state = remember { PinMapState(initial = validPoint(lat, lng)) }
+    var mapStatus by remember { mutableStateOf(OsmMapStatus.LOADING) }
+    var retryVersion by remember { mutableStateOf(0) }
 
-    AndroidView(
+    LaunchedEffect(mapStatus, retryVersion) {
+        if (mapStatus == OsmMapStatus.LOADING) {
+            delay(MAP_LOAD_TIMEOUT_MS)
+            if (mapStatus == OsmMapStatus.LOADING) mapStatus = OsmMapStatus.ERROR
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(230.dp)
             .clip(RoundedCornerShape(14.dp)),
-        factory = { context ->
-            val leafletJs = context.assets.open("leaflet/leaflet.js").bufferedReader().use { it.readText() }
-            val leafletCss = context.assets.open("leaflet/leaflet.css").bufferedReader().use { it.readText() }
-            WebView(context).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = false
-                // Leaflet sizes its canvas from the layout viewport. Without these the page
-                // is laid out at a fixed width and the map can come up as an empty canvas.
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                // The map is one bundled page loaded from the site origin. Nothing in it navigates,
-                // so the WebView must not hand any URL off to a browser.
-                webViewClient = object : WebViewClient() {
-                    // Only the map's own document may load. The attribution link would otherwise
-                    // navigate the WebView off the map and leave the member on a web page.
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        val uri = request?.url ?: return true
-                        val base = BsdcHosts.SITE_ORIGIN.trimEnd('/')
-                        return !uri.toString().startsWith(base)
+    ) {
+        key(retryVersion) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    val generation = retryVersion
+                    state.loaded = false
+                    state.pagePin = validPoint(lat, lng)
+                    state.pageCircle = null
+                    WebView(context).apply {
+                        configureOsmWebView()
+                        webChromeClient = mapChromeClient(
+                            generation = generation,
+                            currentGeneration = { retryVersion },
+                            mainHandler = mainHandler,
+                            onStatus = { mapStatus = it },
+                        )
+                        webViewClient = mapWebViewClient(
+                            context = context,
+                            generation = generation,
+                            currentGeneration = { retryVersion },
+                            mainHandler = mainHandler,
+                            onStatus = { mapStatus = it },
+                            onPageLoaded = { view ->
+                                state.loaded = true
+                                state.desiredPin?.let { point ->
+                                    if (point != state.pagePin) {
+                                        view.evaluateJavascript("setPin(${point.first},${point.second})", null)
+                                        state.pagePin = point
+                                    }
+                                }
+                                if (state.desiredPin == null && state.pagePin != null) {
+                                    view.evaluateJavascript("clearPin()", null)
+                                    state.pagePin = null
+                                }
+                                applyRadiusCircle(view, state)
+                            },
+                        )
+                        addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                            if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                                (view as? WebView)?.refreshOsmMapSize()
+                            }
+                        }
+                        addJavascriptInterface(
+                            PinBridge { newLat, newLng ->
+                                // Bridge calls arrive on a background thread; keep shared state and
+                                // the Compose callback on Android's main thread.
+                                mainHandler.post {
+                                    if (generation != retryVersion) return@post
+                                    val point = newLat to newLng
+                                    state.desiredPin = point
+                                    state.pagePin = point
+                                    latestOnPin(newLat, newLng)
+                                }
+                            },
+                            "BsdcPin",
+                        )
+                        loadDataWithBaseURL(
+                            BsdcHosts.SITE_ORIGIN + "/",
+                            mapPage(
+                                lat = validCoordinate(lat, DHAKA_LAT),
+                                lng = validCoordinate(lng, DHAKA_LNG),
+                                hasPin = validPoint(lat, lng) != null,
+                            ),
+                            "text/html",
+                            "utf-8",
+                            null,
+                        )
+                    }
+                },
+                update = { view ->
+                    val target = validPoint(lat, lng)
+                    state.desiredPin = target
+                    if (state.loaded && target != state.pagePin) {
+                        if (target == null) {
+                            view.evaluateJavascript("clearPin()", null)
+                        } else {
+                            view.evaluateJavascript("setPin(${target.first},${target.second})", null)
+                        }
+                        state.pagePin = target
                     }
 
-                    // OpenStreetMap refuses tile requests without an identifying User-Agent and Referer, which a
-                    // WebView does not reliably send. Tiles are fetched here instead, and only from tile hosts.
-                    //
-                    // The page asks for a plain `tile.openstreetmap.org` URL, but OSM answers by redirecting to
-                    // one of its `a.`/`b.`/`c.` shards, so every shard host has to be accepted too. A strict
-                    // `host ==` test dropped those requests and left the canvas blank white.
-                    override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
-                        val uri = request?.url ?: return null
-                        if (!MkLogic.isOsmTileRequest(uri.scheme, uri.host)) return null
-                        return fetchTile(uri.toString())
+                    val anchorLat = circleCenterLat ?: lat
+                    val anchorLng = circleCenterLng ?: lng
+                    val nextCircle = if (
+                        radiusKm != null && radiusKm in 1..MAX_DELIVERY_RADIUS_KM &&
+                        anchorLat != null && anchorLng != null &&
+                        anchorLat.isFinite() && anchorLng.isFinite()
+                    ) {
+                        Triple(anchorLat, anchorLng, radiusKm * 1000)
+                    } else {
+                        null
                     }
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        view?.refreshOsmMapSize()
-                        state.loaded = true
-                        val pin = state.applied
-                        if (view != null && pin != null) {
-                            view.evaluateJavascript("setPin(${pin.first},${pin.second})", null)
-                        }
-                        val circle = state.appliedCircle
-                        if (view != null && circle != null) {
-                            view.evaluateJavascript(
-                                "setRadiusCircle(${circle.first},${circle.second},${circle.third})",
-                                null,
-                            )
-                        }
+                    state.desiredCircle = nextCircle
+                    if (state.loaded && nextCircle != state.pageCircle) {
+                        applyRadiusCircle(view, state)
                     }
-                }
-                addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-                    if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
-                        (view as? WebView)?.refreshOsmMapSize()
-                    }
-                }
-                addJavascriptInterface(
-                    PinBridge { newLat, newLng ->
-                        // Bridge calls arrive on a background thread; the state change belongs on the main one.
-                        mainHandler.post {
-                            state.applied = newLat to newLng
-                            latestOnPin(newLat, newLng)
-                        }
-                    },
-                    "BsdcPin",
-                )
-                loadDataWithBaseURL(
-                    BsdcHosts.SITE_ORIGIN + "/",
-                    mapPage(
-                        lat = lat ?: DHAKA_LAT,
-                        lng = lng ?: DHAKA_LNG,
-                        hasPin = lat != null && lng != null,
-                        leafletJs = leafletJs,
-                        leafletCss = leafletCss,
-                        mapErrorText = mapErrorText,
-                    ),
-                    "text/html",
-                    "utf-8",
-                    null,
-                )
-            }
-        },
-        update = { view ->
-            // Compose moved the pin (search, GPS or a previous tap): move the marker to match.
-            val target = if (lat != null && lng != null) lat to lng else null
-            if (state.loaded && target != null && target != state.applied) {
-                state.applied = target
-                view.evaluateJavascript("setPin(${target.first},${target.second})", null)
-            }
-            val anchorLat = circleCenterLat ?: lat
-            val anchorLng = circleCenterLng ?: lng
-            val nextCircle = if (radiusKm != null && radiusKm > 0 && anchorLat != null && anchorLng != null) {
-                Triple(anchorLat, anchorLng, radiusKm * 1000)
-            } else {
-                null
-            }
-            if (state.loaded && nextCircle != state.appliedCircle) {
-                state.appliedCircle = nextCircle
-                if (nextCircle == null) {
-                    view.evaluateJavascript("clearRadiusCircle()", null)
-                } else {
-                    view.evaluateJavascript(
-                        "setRadiusCircle(${nextCircle.first},${nextCircle.second},${nextCircle.third})",
-                        null,
-                    )
-                }
-            }
-        },
-        onRelease = { view ->
-            view.stopLoading()
-            view.destroy()
-        },
-    )
+                },
+                onRelease = { view ->
+                    view.stopLoading()
+                    view.destroy()
+                },
+            )
+        }
+        OsmMapNotice(
+            status = mapStatus,
+            bn = bn,
+            onRetry = {
+                mapStatus = OsmMapStatus.LOADING
+                retryVersion += 1
+            },
+        )
+    }
 }
 
 /**
- * A read-only map for a delivery address.
- *
- * The counterpart to [MkOsmPinMap]: same tiles, same cached fetch, same User-Agent workaround,
- * but the pin cannot be moved. A customer's address is not something a vendor should be able to
- * drag somewhere else, so this installs no [PinBridge] at all — the page is given the
- * coordinates once and has nothing to report back.
+ * A read-only map for a delivery address. It deliberately installs no JavaScript bridge: the
+ * map can move and zoom, but it cannot report or change the customer's saved address.
  */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
@@ -212,74 +229,93 @@ fun MkOsmViewMap(
     modifier: Modifier = Modifier,
     interactive: Boolean = true,
 ) {
-    val context = LocalContext.current
-    val mapErrorText = if (bn) {
-        "মানচিত্রের টাইল লোড হয়নি। ইন্টারনেট সংযোগ দেখে আবার চেষ্টা করুন।"
-    } else {
-        "Map tiles could not load. Check your internet connection and try again."
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
+    val state = remember { ReadOnlyMapState(initial = MapViewTarget(lat, lng, zoom)) }
+    var mapStatus by remember { mutableStateOf(OsmMapStatus.LOADING) }
+    var retryVersion by remember { mutableStateOf(0) }
+
+    LaunchedEffect(mapStatus, retryVersion) {
+        if (mapStatus == OsmMapStatus.LOADING) {
+            delay(MAP_LOAD_TIMEOUT_MS)
+            if (mapStatus == OsmMapStatus.LOADING) mapStatus = OsmMapStatus.ERROR
+        }
     }
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            val leafletJs = context.assets.open("leaflet/leaflet.js").bufferedReader().use { it.readText() }
-            val leafletCss = context.assets.open("leaflet/leaflet.css").bufferedReader().use { it.readText() }
-            WebView(ctx).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = false
-                // Leaflet sizes its canvas from the layout viewport. Without these the page
-                // is laid out at a fixed width and the map can come up as an empty canvas.
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
-                settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                // Nothing in this page navigates: it draws one pin and stops.
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                    ): Boolean = true
 
-                    override fun shouldInterceptRequest(
-                        view: WebView?,
-                        request: WebResourceRequest?,
-                    ): WebResourceResponse? {
-                        val uri = request?.url ?: return null
-                        if (!MkLogic.isOsmTileRequest(uri.scheme, uri.host)) return null
-                        return fetchTile(uri.toString())
+    Box(modifier = modifier.clip(RoundedCornerShape(14.dp))) {
+        key(retryVersion) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    val generation = retryVersion
+                    val target = MapViewTarget(
+                        validCoordinate(lat, DHAKA_LAT),
+                        validCoordinate(lng, DHAKA_LNG),
+                        zoom.coerceIn(MIN_MAP_ZOOM, MAX_MAP_ZOOM),
+                    )
+                    state.loaded = false
+                    state.desired = target
+                    state.pageTarget = target
+                    WebView(context).apply {
+                        configureOsmWebView()
+                        webChromeClient = mapChromeClient(
+                            generation = generation,
+                            currentGeneration = { retryVersion },
+                            mainHandler = mainHandler,
+                            onStatus = { mapStatus = it },
+                        )
+                        webViewClient = mapWebViewClient(
+                            context = context,
+                            generation = generation,
+                            currentGeneration = { retryVersion },
+                            mainHandler = mainHandler,
+                            onStatus = { mapStatus = it },
+                            onPageLoaded = { view ->
+                                state.loaded = true
+                                applyReadOnlyTarget(view, state)
+                            },
+                        )
+                        addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                            if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                                (view as? WebView)?.refreshOsmMapSize()
+                            }
+                        }
+                        loadDataWithBaseURL(
+                            BsdcHosts.SITE_ORIGIN + "/",
+                            viewMapPage(
+                                lat = target.lat,
+                                lng = target.lng,
+                                zoom = target.zoom,
+                                interactive = interactive,
+                            ),
+                            "text/html",
+                            "utf-8",
+                            null,
+                        )
                     }
-
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        view?.refreshOsmMapSize()
-                    }
-                }
-                addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
-                    if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
-                        (view as? WebView)?.refreshOsmMapSize()
-                    }
-                }
-                loadDataWithBaseURL(
-                    BsdcHosts.SITE_ORIGIN + "/",
-                    viewMapPage(
-                        lat = lat,
-                        lng = lng,
-                        zoom = zoom,
-                        interactive = interactive,
-                        leafletJs = leafletJs,
-                        leafletCss = leafletCss,
-                        mapErrorText = mapErrorText,
-                    ),
-                    "text/html",
-                    "utf-8",
-                    null,
-                )
-            }
-        },
-        onRelease = { view ->
-            view.stopLoading()
-            view.destroy()
-        },
-    )
+                },
+                update = { view ->
+                    state.desired = MapViewTarget(
+                        validCoordinate(lat, DHAKA_LAT),
+                        validCoordinate(lng, DHAKA_LNG),
+                        zoom.coerceIn(MIN_MAP_ZOOM, MAX_MAP_ZOOM),
+                    )
+                    if (state.loaded) applyReadOnlyTarget(view, state)
+                },
+                onRelease = { view ->
+                    view.stopLoading()
+                    view.destroy()
+                },
+            )
+        }
+        OsmMapNotice(
+            status = mapStatus,
+            bn = bn,
+            onRetry = {
+                mapStatus = OsmMapStatus.LOADING
+                retryVersion += 1
+            },
+        )
+    }
 }
 
 /**
@@ -356,29 +392,456 @@ fun MkOsmViewMapDialog(
     }
 }
 
-/**
- * Re-measure Leaflet after AndroidView layout and page load. The initial timeout in the
- * document is only a best-effort first pass: on a slow WebView or while a dialog is
- * entering, it can fire before Compose gives the view its final viewport and leave every
- * tile positioned outside the visible canvas.
- */
-private fun WebView.refreshOsmMapSize() {
-    post {
-        evaluateJavascript(
-            "if (window.map) { window.map.invalidateSize({ pan: false }); }",
-            null,
-        )
+@Composable
+private fun BoxScope.OsmMapNotice(
+    status: OsmMapStatus,
+    bn: Boolean,
+    onRetry: () -> Unit,
+) {
+    if (status == OsmMapStatus.READY) return
+
+    Surface(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .padding(8.dp)
+            .widthIn(max = 320.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.97f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(12.dp),
+        shadowElevation = 4.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, top = 8.dp, end = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            if (status == OsmMapStatus.LOADING) {
+                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else {
+                Icon(
+                    imageVector = Icons.Rounded.LocationOn,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = if (bn) "BSDC · ওপেনস্ট্রিটম্যাপ" else "BSDC · OpenStreetMap",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = when (status) {
+                        OsmMapStatus.LOADING -> if (bn) "মানচিত্র লোড হচ্ছে…" else "Loading map tiles…"
+                        OsmMapStatus.ERROR -> if (bn) {
+                            "টাইল লোড হয়নি। ইন্টারনেট দেখে আবার চেষ্টা করুন।"
+                        } else {
+                            "Map tiles failed. Check your connection and retry."
+                        }
+                        OsmMapStatus.READY -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (status == OsmMapStatus.ERROR) {
+                TextButton(onClick = onRetry) {
+                    Text(if (bn) "আবার" else "Retry")
+                }
+            }
+        }
     }
 }
 
-/** Remembers the last pin and optional radius circle known to both sides. */
-private class PinMapState(initial: Pair<Double, Double>?) {
-    var loaded: Boolean = false
-    var applied: Pair<Double, Double>? = initial
-    var appliedCircle: Triple<Double, Double, Int>? = null
+/** Keep debug WebView tools on for local builds; the identifying UA also covers WebView fallback. */
+@SuppressLint("SetJavaScriptEnabled")
+private fun WebView.configureOsmWebView() {
+    if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
+    settings.javaScriptEnabled = true
+    settings.domStorageEnabled = false
+    settings.databaseEnabled = false
+    settings.useWideViewPort = true
+    settings.loadWithOverviewMode = true
+    settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+    settings.allowFileAccess = false
+    settings.allowContentAccess = false
+    settings.allowFileAccessFromFileURLs = false
+    settings.allowUniversalAccessFromFileURLs = false
+    settings.javaScriptCanOpenWindowsAutomatically = false
+    settings.setSupportMultipleWindows(false)
+    settings.setSupportZoom(false)
+    settings.builtInZoomControls = false
+    settings.displayZoomControls = false
+    settings.defaultTextEncodingName = "utf-8"
+    val existingAgent = settings.userAgentString.orEmpty()
+    if (!existingAgent.contains(TILE_USER_AGENT)) {
+        settings.userAgentString = "$existingAgent $TILE_USER_AGENT".trim()
+    }
+    isVerticalScrollBarEnabled = false
+    isHorizontalScrollBarEnabled = false
+    setBackgroundColor(AndroidColor.rgb(229, 227, 223))
 }
 
-/** The only object the map page can reach. It accepts coordinates and does nothing else. */
+private fun mapChromeClient(
+    generation: Int,
+    currentGeneration: () -> Int,
+    mainHandler: Handler,
+    onStatus: (OsmMapStatus) -> Unit,
+): WebChromeClient = object : WebChromeClient() {
+    override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+        val message = consoleMessage.message()
+        if (BuildConfig.DEBUG) {
+            Log.d(
+                MAP_LOG_TAG,
+                "console ${consoleMessage.messageLevel()} ${consoleMessage.sourceId()}:${consoleMessage.lineNumber()} $message",
+            )
+        }
+        val tileState = MkLogic.osmMapStatusFromConsoleMessage(message)
+        if (tileState != null) {
+            postMapStatus(generation, currentGeneration, mainHandler, onStatus, tileState)
+        } else if (consoleMessage.messageLevel() == ConsoleMessage.MessageLevel.ERROR) {
+            postMapStatus(generation, currentGeneration, mainHandler, onStatus, OsmMapStatus.ERROR)
+        }
+        return true
+    }
+}
+
+private fun mapWebViewClient(
+    context: Context,
+    generation: Int,
+    currentGeneration: () -> Int,
+    mainHandler: Handler,
+    onStatus: (OsmMapStatus) -> Unit,
+    onPageLoaded: (WebView) -> Unit,
+): WebViewClient = object : WebViewClient() {
+    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+        // The map page has no navigations. This also keeps the visible OSM attribution link from
+        // replacing the map in this small, stateful WebView.
+        return true
+    }
+
+    override fun shouldInterceptRequest(
+        view: WebView?,
+        request: WebResourceRequest?,
+    ): WebResourceResponse? {
+        val webRequest = request ?: return null
+        val uri = webRequest.url
+        if (webRequest.isForMainFrame) return null
+        val siteHost = URI.create(BsdcHosts.SITE_ORIGIN).host.orEmpty()
+        return when (
+            MkLogic.classifyOsmMapResource(
+                scheme = uri.scheme,
+                host = uri.host,
+                path = uri.path,
+                siteHost = siteHost,
+                port = uri.port,
+            )
+        ) {
+            OsmMapResource.LEAFLET_JS -> bundledMapAsset(context, "leaflet/leaflet.js", "text/javascript")
+            OsmMapResource.LEAFLET_CSS -> bundledMapAsset(context, "leaflet/leaflet.css", "text/css")
+            OsmMapResource.OSM_TILE -> {
+                if (BuildConfig.DEBUG) {
+                    Log.d(MAP_LOG_TAG, "tile request intercepted: ${uri.host}${uri.path}")
+                }
+                val response = fetchTile(uri.toString())
+                if (response == null && BuildConfig.DEBUG) {
+                    Log.w(MAP_LOG_TAG, "tile interceptor fell back to WebView fetch: ${uri.host}${uri.path}")
+                }
+                // A null response deliberately lets WebView retry the same HTTPS OSM URL with
+                // settings.userAgentString, rather than silently dropping a failed intercepted tile.
+                response
+            }
+            OsmMapResource.BLOCKED -> {
+                if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "blocked map subresource: $uri")
+                blockedResourceResponse()
+            }
+        }
+    }
+
+    override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+        if (BuildConfig.DEBUG) Log.d(MAP_LOG_TAG, "page started: $url")
+        postMapStatus(generation, currentGeneration, mainHandler, onStatus, OsmMapStatus.LOADING)
+    }
+
+    override fun onPageFinished(view: WebView?, url: String?) {
+        if (BuildConfig.DEBUG) Log.d(MAP_LOG_TAG, "page finished: $url")
+        if (generation != currentGeneration() || view == null) return
+        view.refreshOsmMapSize()
+        onPageLoaded(view)
+    }
+
+    override fun onReceivedError(
+        view: WebView?,
+        request: WebResourceRequest?,
+        error: android.webkit.WebResourceError?,
+    ) {
+        val url = request?.url?.toString().orEmpty()
+        if (BuildConfig.DEBUG) {
+            Log.w(
+                MAP_LOG_TAG,
+                "resource error main=${request?.isForMainFrame} code=${error?.errorCode} description=${error?.description} url=$url",
+            )
+        }
+        if (request?.isForMainFrame == true) {
+            postMapStatus(generation, currentGeneration, mainHandler, onStatus, OsmMapStatus.ERROR)
+        }
+    }
+
+    override fun onReceivedHttpError(
+        view: WebView?,
+        request: WebResourceRequest?,
+        errorResponse: WebResourceResponse?,
+    ) {
+        if (BuildConfig.DEBUG) {
+            Log.w(
+                MAP_LOG_TAG,
+                "HTTP ${errorResponse?.statusCode} main=${request?.isForMainFrame} url=${request?.url}",
+            )
+        }
+        if (request?.isForMainFrame == true && (errorResponse?.statusCode ?: 0) >= 400) {
+            postMapStatus(generation, currentGeneration, mainHandler, onStatus, OsmMapStatus.ERROR)
+        }
+    }
+}
+
+private fun postMapStatus(
+    generation: Int,
+    currentGeneration: () -> Int,
+    mainHandler: Handler,
+    onStatus: (OsmMapStatus) -> Unit,
+    status: OsmMapStatus,
+) {
+    mainHandler.post {
+        if (generation == currentGeneration()) onStatus(status)
+    }
+}
+
+private fun bundledMapAsset(context: Context, assetPath: String, mimeType: String): WebResourceResponse =
+    try {
+        WebResourceResponse(mimeType, "utf-8", context.assets.open(assetPath))
+    } catch (failure: Exception) {
+        if (BuildConfig.DEBUG) Log.e(MAP_LOG_TAG, "could not open bundled map asset $assetPath", failure)
+        errorResourceResponse(404, "Bundled map asset missing")
+    }
+
+private fun blockedResourceResponse(): WebResourceResponse =
+    errorResourceResponse(403, "Blocked by BSDC map policy")
+
+private fun errorResourceResponse(statusCode: Int, reason: String): WebResourceResponse = WebResourceResponse(
+    "text/plain",
+    "utf-8",
+    statusCode,
+    reason,
+    emptyMap(),
+    ByteArrayInputStream(ByteArray(0)),
+)
+
+/** The map's own document, local Leaflet assets, and OSM tiles are the only allowed subresources. */
+private const val MAP_LOG_TAG = "MkOsmMap"
+private const val TILE_USER_AGENT = "BSDC-Android/1.0 (+https://www.bsdc.info.bd)"
+private const val MAP_LOAD_TIMEOUT_MS = 20_000L
+private const val MAP_REDIRECT_LIMIT = 4
+private const val MAX_TILE_BYTES = 512 * 1024
+private const val MAX_TILE_CACHE_BYTES = 16 * 1024 * 1024
+private const val MAX_TILE_CACHE_ENTRIES = 256
+private const val MIN_MAP_ZOOM = 2
+private const val MAX_MAP_ZOOM = 19
+private const val MAX_DELIVERY_RADIUS_KM = 500
+private const val DHAKA_LAT = 23.8103
+private const val DHAKA_LNG = 90.4125
+
+/** Fetches one OSM tile with an identifying UA. Runs on WebView's background resource thread. */
+private fun fetchTile(url: String): WebResourceResponse? {
+    val source = runCatching { URL(url) }.getOrElse {
+        if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "invalid tile URL", it)
+        return null
+    }
+    if (!MkLogic.isOsmTileRequest(source.protocol, source.host, source.port)) return null
+
+    TileCache[url]?.let { bytes ->
+        if (BuildConfig.DEBUG) Log.d(MAP_LOG_TAG, "tile cache hit: ${source.host}")
+        return WebResourceResponse("image/png", null, bytes.inputStream())
+    }
+
+    var connection: HttpURLConnection? = null
+    return try {
+        val initial = (source.openConnection() as HttpURLConnection).apply {
+            connectTimeout = TILE_CONNECT_TIMEOUT_MS
+            readTimeout = TILE_READ_TIMEOUT_MS
+            instanceFollowRedirects = false
+            setTileHeaders()
+        }
+        connection = followTileRedirect(initial)
+        if (connection == null) {
+            if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "tile redirect refused or failed: ${source.host}")
+            null
+        } else {
+            val responseCode = connection.responseCode
+            if (BuildConfig.DEBUG) Log.d(MAP_LOG_TAG, "tile HTTP $responseCode from ${connection.url.host}")
+            if (responseCode != HttpURLConnection.HTTP_OK) {
+                null
+            } else {
+                val bytes = readTileBody(connection)
+                if (bytes == null || bytes.isEmpty()) {
+                    if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "tile body empty or exceeded $MAX_TILE_BYTES bytes")
+                    null
+                } else {
+                    TileCache.put(url, bytes)
+                    WebResourceResponse("image/png", null, bytes.inputStream())
+                }
+            }
+        }
+    } catch (failure: Exception) {
+        if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "tile fetch failed: ${source.host}", failure)
+        null
+    } finally {
+        runCatching { connection?.disconnect() }
+    }
+}
+
+private fun HttpURLConnection.setTileHeaders() {
+    setRequestProperty("User-Agent", TILE_USER_AGENT)
+    setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
+    setRequestProperty("Accept", "image/png,image/*;q=0.8")
+}
+
+/** Read at most MAX_TILE_BYTES + 1, so a hostile or broken body cannot balloon the app heap. */
+private fun readTileBody(connection: HttpURLConnection): ByteArray? {
+    val output = ByteArrayOutputStream(minOf(MAX_TILE_BYTES, 16 * 1024))
+    val chunk = ByteArray(8 * 1024)
+    connection.inputStream.use { input ->
+        while (true) {
+            val count = input.read(chunk)
+            if (count < 0) break
+            if (count == 0) continue
+            if (output.size() + count > MAX_TILE_BYTES) return null
+            output.write(chunk, 0, count)
+        }
+    }
+    return output.toByteArray()
+}
+
+/** Keep the identifying headers on every redirect and refuse any non-HTTPS or non-OSM hop. */
+private fun followTileRedirect(start: HttpURLConnection): HttpURLConnection? {
+    var current = start
+    var hops = 0
+    while (hops < MAP_REDIRECT_LIMIT) {
+        val responseCode = runCatching { current.responseCode }.getOrElse {
+            if (BuildConfig.DEBUG) Log.w(MAP_LOG_TAG, "could not read tile response", it)
+            current.disconnect()
+            return null
+        }
+        if (!isTileRedirect(responseCode)) return current
+
+        val baseUrl = current.url
+        val location = runCatching { current.getHeaderField("Location") }.getOrNull()
+        if (location.isNullOrBlank()) {
+            current.disconnect()
+            return null
+        }
+        val nextUrl = runCatching { URL(baseUrl, location) }.getOrElse {
+            current.disconnect()
+            return null
+        }
+        val next = runCatching {
+            (nextUrl.openConnection() as HttpURLConnection).apply {
+                connectTimeout = TILE_CONNECT_TIMEOUT_MS
+                readTimeout = TILE_READ_TIMEOUT_MS
+                instanceFollowRedirects = false
+                setTileHeaders()
+            }
+        }.getOrElse {
+            current.disconnect()
+            return null
+        }
+        current.disconnect()
+        if (!MkLogic.isOsmTileRequest(next.url.protocol, next.url.host, next.url.port)) {
+            next.disconnect()
+            return null
+        }
+        current = next
+        hops++
+    }
+    current.disconnect()
+    return null
+}
+
+private fun isTileRedirect(statusCode: Int): Boolean =
+    statusCode == HttpURLConnection.HTTP_MOVED_PERM ||
+        statusCode == HttpURLConnection.HTTP_MOVED_TEMP ||
+        statusCode == HttpURLConnection.HTTP_SEE_OTHER ||
+        statusCode == 307 || statusCode == 308
+
+private const val TILE_CONNECT_TIMEOUT_MS = 8_000
+private const val TILE_READ_TIMEOUT_MS = 8_000
+
+/** Small access-ordered cache bounded by both entry count and total tile bytes. */
+private object TileCache {
+    private var totalBytes = 0
+    private val entries = object : LinkedHashMap<String, ByteArray>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean = false
+    }
+
+    operator fun get(key: String): ByteArray? = synchronized(entries) { entries[key] }
+
+    fun put(key: String, value: ByteArray) {
+        if (value.size > MAX_TILE_CACHE_BYTES) return
+        synchronized(entries) {
+            entries.remove(key)?.let { totalBytes -= it.size }
+            entries[key] = value
+            totalBytes += value.size
+            while (entries.size > MAX_TILE_CACHE_ENTRIES || totalBytes > MAX_TILE_CACHE_BYTES) {
+                val eldest = entries.entries.iterator()
+                if (!eldest.hasNext()) break
+                val removed = eldest.next()
+                totalBytes -= removed.value.size
+                eldest.remove()
+            }
+        }
+    }
+}
+
+private class PinMapState(initial: Pair<Double, Double>?) {
+    var loaded: Boolean = false
+    var desiredPin: Pair<Double, Double>? = initial
+    var pagePin: Pair<Double, Double>? = initial
+    var desiredCircle: Triple<Double, Double, Int>? = null
+    var pageCircle: Triple<Double, Double, Int>? = null
+}
+
+private fun applyRadiusCircle(view: WebView, state: PinMapState) {
+    val circle = state.desiredCircle
+    if (circle == null) {
+        view.evaluateJavascript("clearRadiusCircle()", null)
+    } else {
+        view.evaluateJavascript(
+            "setRadiusCircle(${circle.first},${circle.second},${circle.third})",
+            null,
+        )
+    }
+    state.pageCircle = circle
+}
+
+private data class MapViewTarget(val lat: Double, val lng: Double, val zoom: Int)
+
+private class ReadOnlyMapState(initial: MapViewTarget) {
+    var loaded: Boolean = false
+    var desired: MapViewTarget = initial
+    var pageTarget: MapViewTarget = initial
+}
+
+private fun applyReadOnlyTarget(view: WebView, state: ReadOnlyMapState) {
+    if (state.desired == state.pageTarget) return
+    val target = state.desired
+    view.evaluateJavascript("setMapView(${target.lat},${target.lng},${target.zoom})", null)
+    state.pageTarget = target
+}
+
+/** The only object exposed to pin-map JavaScript. It accepts two finite numbers, and nothing else. */
 private class PinBridge(private val onChanged: (Double, Double) -> Unit) {
     @JavascriptInterface
     fun pinChanged(lat: Double, lng: Double) {
@@ -386,221 +849,137 @@ private class PinBridge(private val onChanged: (Double, Double) -> Unit) {
     }
 }
 
-private const val TILE_USER_AGENT = "BSDC-Android/1.0 (+https://www.bsdc.info.bd)"
+private fun validPoint(lat: Double?, lng: Double?): Pair<Double, Double>? =
+    if (lat != null && lng != null && lat.isFinite() && lng.isFinite()) lat to lng else null
 
-/** Fetches one OSM tile with the app's identity. Runs on the WebView's background thread. Null means the tile is skipped. */
-private fun fetchTile(url: String): WebResourceResponse? = runCatching {
-    // A tile is ~10 KB. Without a cache the map re-downloads every visible tile on every scroll,
-    // which is what made the blank canvas slow to fill and expensive on mobile data.
-    val cached = tileCache[url]
-    if (cached != null) {
-        return@runCatching WebResourceResponse("image/png", null, cached.inputStream())
-    }
-    val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-        connectTimeout = 8_000
-        readTimeout = 8_000
-        // OSM answers with a redirect to a shard host, and following it inline drops the
-        // identifying headers, so the hop is taken by hand in followTileRedirect.
-        instanceFollowRedirects = false
-        setRequestProperty("User-Agent", TILE_USER_AGENT)
-        setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
-        setRequestProperty("Accept", "image/png,image/*;q=0.8")
-    }
-    val resolved = followTileRedirect(connection)
-    if (resolved == null) {
-        connection.disconnect()
-        null
-    } else if (resolved.responseCode != HttpURLConnection.HTTP_OK) {
-        resolved.disconnect()
-        null
-    } else {
-        val bytes = runCatching { resolved.inputStream.use { it.readBytes() } }.getOrNull()
-        resolved.disconnect()
-        // A zero-byte or oversized body is a broken tile, not a picture: let Leaflet retry it.
-        if (bytes == null || bytes.isEmpty() || bytes.size > MAX_TILE_BYTES) {
-            null
-        } else {
-            tileCache.put(url, bytes)
-            WebResourceResponse("image/png", null, bytes.inputStream())
-        }
-    }
-}.getOrNull()
+private fun validCoordinate(value: Double?, fallback: Double): Double =
+    value?.takeIf { it.isFinite() } ?: fallback
 
-/** Small lock-free LRU of decoded tile bytes, capped so a long pan cannot grow the heap. */
-private object tileCache {
-    private const val MAX_ENTRIES = 256
-    private val entries = object : LinkedHashMap<String, ByteArray>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, ByteArray>?): Boolean =
-            size > MAX_ENTRIES
-    }
-
-    operator fun get(key: String): ByteArray? = synchronized(entries) { entries[key] }
-
-    fun put(key: String, value: ByteArray) {
-        synchronized(entries) { entries[key] = value }
+/** Re-measure only after a real viewport exists; Compose bounds changes and ResizeObserver cover later resizes. */
+private fun WebView.refreshOsmMapSize() {
+    post {
+        if (width <= 0 || height <= 0) return@post
+        evaluateJavascript(
+            "if (window.map) { window.map.invalidateSize({ pan: false }); }",
+            null,
+        )
     }
 }
 
-/**
- * Follows the shard redirect by hand so the identifying headers survive it.
- *
- * `tile.openstreetmap.org` answers with a 302 to `a.`/`b.`/`c.tile.openstreetmap.org`. Letting
- * HttpURLConnection follow it inline sends the next request without the User-Agent and Referer
- * that OSM requires, and the shard answers 403 — which reads on screen as a blank map. Returns
- * the connection holding the final response, or null if the chain leaves the tile hosts or loops.
- */
-private fun followTileRedirect(start: HttpURLConnection): HttpURLConnection? {
-    var current = start
-    var hops = 0
-    while (hops < 4) {
-        val code = runCatching { current.responseCode }.getOrNull()
-        val isRedirect = code == HttpURLConnection.HTTP_MOVED_TEMP ||
-            code == HttpURLConnection.HTTP_MOVED_PERM ||
-            code == 307 || code == 308
-        if (!isRedirect) return current
-        val location = runCatching { current.getHeaderField("Location") }.getOrNull() ?: return null
-        runCatching { current.disconnect() }
-        val next = runCatching {
-            (URL(current.url, location).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 8_000
-                readTimeout = 8_000
-                instanceFollowRedirects = false
-                setRequestProperty("User-Agent", TILE_USER_AGENT)
-                setRequestProperty("Referer", BsdcHosts.SITE_ORIGIN + "/")
-                setRequestProperty("Accept", "image/png,image/*;q=0.8")
-            }
-        }.getOrNull() ?: return null
-        // A redirect that leaves the tile hosts is not a tile; refusing it keeps this from
-        // becoming a general-purpose fetcher on the app's behalf.
-        if (!MkLogic.isOsmTileRequest(next.url.protocol, next.url.host)) {
-            runCatching { next.disconnect() }
-            return null
-        }
-        current = next
-        hops++
-    }
-    return null
-}
+private fun mapAssetUrl(path: String): String = BsdcHosts.SITE_ORIGIN.trimEnd('/') + path
 
-private const val MAX_TILE_BYTES = 512 * 1024
-
-private const val DHAKA_LAT = 23.8103
-private const val DHAKA_LNG = 90.4125
-
-/**
- * A map page that draws one pin and accepts no input.
- *
- * Deliberately not a variant of [mapPage]: that one installs `BsdcPin` so taps can move the
- * pin, and a read-only delivery address must not expose that surface at all.
- */
+/** Read-only page: no bridge object is referenced or installed. */
 private fun viewMapPage(
     lat: Double,
     lng: Double,
     zoom: Int,
     interactive: Boolean,
-    leafletJs: String,
-    leafletCss: String,
-    mapErrorText: String,
 ): String = """
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="${mapAssetUrl(MkLogic.OSM_MAP_CSS_PATH)}">
 <style>
-$leafletCss
-
-  html,body{height:100%;margin:0;padding:0;background:#e5e3df}
+  html,body{height:100%;width:100%;margin:0;padding:0;overflow:hidden;background:#e5e3df}
   #map{position:absolute;inset:0;background:#e5e3df;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="bsdc-map-error" style="display:none;position:absolute;inset:0;z-index:1000;background:#e5e3df;color:#374151;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:13px;line-height:1.45">
-  $mapErrorText
-</div>
-<script>
-$leafletJs
-</script>
+<script src="${mapAssetUrl(MkLogic.OSM_MAP_JS_PATH)}"></script>
 <script>
   var map = L.map('map', {
-    zoomControl: true,
+    zoomControl: ${if (interactive) "true" else "false"},
     dragging: ${if (interactive) "true" else "false"},
+    touchZoom: ${if (interactive) "true" else "false"},
     scrollWheelZoom: ${if (interactive) "true" else "false"},
+    doubleClickZoom: ${if (interactive) "true" else "false"},
+    keyboard: ${if (interactive) "true" else "false"},
     tap: true
   }).setView([$lat, $lng], $zoom);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap'
-  }).addTo(map).on('tileerror', function () {
-    var el = document.getElementById('bsdc-map-error');
-    if (el) { el.style.display = 'flex'; }
+  var readonlyIcon = L.divIcon({
+    className: 'bsdc-readonly-pin',
+    html: '<svg width="30" height="40" viewBox="0 0 30 40"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>',
+    iconSize: [30, 40],
+    iconAnchor: [15, 40]
   });
-  L.marker([$lat, $lng]).addTo(map);
-  // Leaflet measures its container once, at init. A WebView can report a zero-size
-  // viewport on the first pass, and a map that measured zero stays blank forever.
-  setTimeout(function () { map.invalidateSize(); }, 120);
+  var marker = L.marker([$lat, $lng], { icon: readonlyIcon }).addTo(map);
+  var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  });
+  var tileErrors = 0, tileOk = 0;
+  function reportTileEvent(kind) {
+    if (window.console && console.log) {
+      console.log('${MkLogic.OSM_MAP_CONSOLE_PREFIX} tile' + kind + ' ok=' + tileOk + ' errors=' + tileErrors);
+    }
+  }
+  tiles.on('tileerror', function () { tileErrors++; reportTileEvent('error'); });
+  tiles.on('tileload', function () { tileOk++; reportTileEvent('load'); });
+  tiles.addTo(map);
+  function setMapView(la, ln, nextZoom) {
+    marker.setLatLng([la, ln]);
+    map.setView([la, ln], nextZoom);
+  }
+  window.setMapView = setMapView;
+  function resizeMap() {
+    window.requestAnimationFrame(function () { map.invalidateSize({ pan: false }); });
+  }
+  if (window.ResizeObserver) new ResizeObserver(resizeMap).observe(document.getElementById('map'));
+  window.addEventListener('resize', resizeMap);
+  setTimeout(resizeMap, 0);
+  if (window.console && console.log) console.log('${MkLogic.OSM_MAP_CONSOLE_PREFIX} initialized readonly=true interactive=' + ${if (interactive) "true" else "false"});
 </script>
 </body>
 </html>
 """.trimIndent()
 
 /**
- * The page is generated here with numbers only, so nothing from the user reaches the HTML.
- * Leaflet is bundled in assets (BSD-2-Clause). Only OSM map tiles come from the network, over HTTPS.
- * OSM attribution is shown on the map.
+ * Interactive picker page. Only finite numeric coordinates are embedded; names, labels,
+ * addresses, and any other user text never enter this generated document.
  */
 private fun mapPage(
     lat: Double,
     lng: Double,
     hasPin: Boolean,
-    leafletJs: String,
-    leafletCss: String,
-    mapErrorText: String,
 ): String = """
 <!doctype html>
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<link rel="stylesheet" href="${mapAssetUrl(MkLogic.OSM_MAP_CSS_PATH)}">
 <style>
-$leafletCss
-
-  html,body{height:100%;margin:0;padding:0;background:#e5e3df}
+  html,body{height:100%;width:100%;margin:0;padding:0;overflow:hidden;background:#e5e3df}
   #map{position:absolute;inset:0;background:#e5e3df;font-family:sans-serif}
   .leaflet-control-attribution{font-size:9px}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="bsdc-map-error" style="display:none;position:absolute;inset:0;z-index:1000;background:#e5e3df;color:#374151;align-items:center;justify-content:center;text-align:center;padding:16px;font-size:13px;line-height:1.45">
-  $mapErrorText
-</div>
+<script src="${mapAssetUrl(MkLogic.OSM_MAP_JS_PATH)}"></script>
 <script>
-$leafletJs
-</script>
-<script>
-  var map = L.map('map', { zoomControl: true }).setView([$lat, $lng], ${if (hasPin) 16 else 13});
-  var tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(map);
-  // A blank white canvas tells nobody anything. If tiles never arrive, say so on the map itself.
+  var map = L.map('map', { zoomControl: true, tap: true }).setView([$lat, $lng], ${if (hasPin) 16 else 13});
   var tileErrors = 0, tileOk = 0;
-  tiles.on('tileerror', function () {
-    tileErrors++;
-    if (tileOk === 0 && tileErrors >= 4) {
-      var box = document.getElementById('bsdc-map-error');
-      if (box) { box.style.display = 'flex'; }
+  var tiles = null;
+  function reportTileEvent(kind) {
+    if (window.console && console.log) {
+      console.log('${MkLogic.OSM_MAP_CONSOLE_PREFIX} tile' + kind + ' ok=' + tileOk + ' errors=' + tileErrors);
     }
-  });
-  tiles.on('tileload', function () {
-    tileOk++;
-    var box = document.getElementById('bsdc-map-error');
-    if (box) { box.style.display = 'none'; }
-  });
-  var marker = null;
+  }
+  function attachTiles() {
+    tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    });
+    tiles.on('tileerror', function () { tileErrors++; reportTileEvent('error'); });
+    tiles.on('tileload', function () { tileOk++; reportTileEvent('load'); });
+    tiles.addTo(map);
+  }
+  attachTiles();
   var radiusCircle = null;
   function setRadiusCircle(la, ln, metres) {
     if (!radiusCircle) {
@@ -627,6 +1006,7 @@ $leafletJs
     iconSize: [30, 40],
     iconAnchor: [15, 40]
   });
+  var marker = null;
   function place(la, ln) {
     if (!marker) {
       marker = L.marker([la, ln], { draggable: true, icon: PIN_ICON }).addTo(map);
@@ -642,13 +1022,28 @@ $leafletJs
     place(la, ln);
     map.setView([la, ln], Math.max(map.getZoom(), 15));
   }
+  function clearPin() {
+    if (marker) {
+      marker.remove();
+      marker = null;
+    }
+  }
+  window.setPin = setPin;
+  window.clearPin = clearPin;
+  window.setRadiusCircle = setRadiusCircle;
+  window.clearRadiusCircle = clearRadiusCircle;
   map.on('click', function (e) {
     place(e.latlng.lat, e.latlng.lng);
     BsdcPin.pinChanged(e.latlng.lat, e.latlng.lng);
   });
-  if (${if (hasPin) "true" else "false"}) { place($lat, $lng); }
-  // Same reason as the read-only page: re-measure once the WebView has a real viewport.
-  setTimeout(function () { map.invalidateSize(); }, 120);
+  if (${if (hasPin) "true" else "false"}) place($lat, $lng);
+  function resizeMap() {
+    window.requestAnimationFrame(function () { map.invalidateSize({ pan: false }); });
+  }
+  if (window.ResizeObserver) new ResizeObserver(resizeMap).observe(document.getElementById('map'));
+  window.addEventListener('resize', resizeMap);
+  setTimeout(resizeMap, 0);
+  if (window.console && console.log) console.log('${MkLogic.OSM_MAP_CONSOLE_PREFIX} initialized pin-picker');
 </script>
 </body>
 </html>

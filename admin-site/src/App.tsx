@@ -45,6 +45,7 @@ import {
 import { Approvals } from './Approvals';
 import { Campaigns } from './Campaigns';
 import { Overview } from './Overview';
+import { Marketplace } from './Marketplace';
 import {
   EMPTY_OVERRIDE,
   EMPTY_REDIRECT,
@@ -119,6 +120,7 @@ export function App(): ReactElement {
           ),
         },
         { id: 'approvals', label: 'Approvals', render: () => <Approvals /> },
+        { id: 'marketplace', label: 'Marketplace', render: () => <Marketplace /> },
         { id: 'campaigns', label: 'Campaigns', render: () => <Campaigns /> },
         { id: 'pages', label: 'Pages', render: () => <Pages /> },
         { id: 'redirects', label: 'Redirects', render: () => <Redirects /> },
