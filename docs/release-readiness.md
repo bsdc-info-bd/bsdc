@@ -35,6 +35,20 @@ ranges: these checks do not establish reproducible production dependency version
 
 ## Executed evidence
 
+Most recent run of this branch (`4f652d3`, 2026-11-16), all four gates rerun
+after the last change:
+
+| Gate                        | Result                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| main-site unit tests        | **1,222 passed in 117 files**                                                              |
+| `npm run db:prove`          | **65 of 65 harnesses passed**, replaying every migration in local PGlite                   |
+| `scripts/audit.mjs`         | **135 passed, 0 failed, 4 recorded**                                                       |
+| Production build            | **16 routes prerendered**; `scripts/browser/smoke.mjs` **47 checks passed**                 |
+| CI on the pushed commit     | CI, Database, Android, browser smoke, Deploy and Marketplace settings all green            |
+
+The numbers below are the earlier whole-platform run and are kept as history,
+not as the current count.
+
 Full installation and quality run: **98/98 gates passed across 16 packages**.
 After the final main-site endpoint tests/auth-proxy changes, its seven quality
 and database gates were rerun and all passed. Other packages were unchanged.
