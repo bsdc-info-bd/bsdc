@@ -1485,6 +1485,81 @@ check('C-30', 'Front end', 'Every settings panel has an address of its own', () 
   };
 });
 
+check('B-18', 'Database', 'A tag a member types is a tag, not a suggestion', () => {
+  // The composer accepted any tag and the save attached only the words that
+  // already existed in `public.tags`, so anything else disappeared between the
+  // chip and the published post with nothing said about it. 0124 creates the tag
+  // the post uses, inside the same transaction.
+  const migration = read('supabase/migrations/0124_a_tag_a_member_types_is_a_tag.sql');
+  const proof = read('main-site/scripts/db-prove/t83.mjs');
+  const composer = read('main-site/src/routes/ComposePage.tsx');
+  const tagInput = read('main-site/src/design-system/TagInput.tsx');
+  return {
+    ok:
+      migration.includes('insert into public.tags (slug, label_en, label_bn)') &&
+      migration.includes('grant insert on public.tags to authenticated') &&
+      migration.includes('create policy tags_insert_member') &&
+      // The chip on screen is the tag that is saved: the composer normalises
+      // before the chip exists, so a word that cannot be a tag never appears.
+      composer.includes('normalize={normalizeTag}') &&
+      tagInput.includes('normalize(raw.trim())') &&
+      proof.includes('every tag on the chip list is on the post') &&
+      proof.includes('a curated tag keeps the labels it already had') &&
+      proof.includes('a one-character word is not a tag'),
+    evidence:
+      'a new word becomes a tag with a readable label, a curated word keeps its labels, and a word that cannot be a tag never becomes one',
+  };
+});
+
+check('C-34', 'Content', 'Editing a comment opens with the comment in the box', () => {
+  // The edit box opened empty. The member pressed the pencil, their words
+  // vanished, and saving wrote whatever they typed over the top — silently.
+  const form = read('main-site/src/components/interactions/CommentForm.tsx');
+  const thread = read('main-site/src/components/interactions/CommentThread.tsx');
+  const test = read('main-site/src/test/comment-edit.test.tsx');
+  return {
+    ok:
+      form.includes('initialBody?: string') &&
+      form.includes('useState(initialBody)') &&
+      thread.includes('initialBody={node.body}') &&
+      test.includes('opens with the comment already in the box') &&
+      test.includes('keeps the picture the comment already carries'),
+    evidence:
+      'the edit box starts from the stored body, and cancelling leaves the comment and its picture as they were',
+  };
+});
+
+check('C-35', 'Front end', 'The composer is an editor, not a textarea', () => {
+  // A member writes markdown. Without a toolbar the only way to write a heading,
+  // a list or a link is to remember the syntax, and without a cover field every
+  // post was published with an empty `cover_url` the post page has always had a
+  // slot for.
+  const editor = read('main-site/src/components/content/MarkdownEditor.tsx');
+  const cover = read('main-site/src/components/content/CoverImagePicker.tsx');
+  const compose = read('main-site/src/routes/ComposePage.tsx');
+  const logic = read('main-site/src/lib/content/markdown-edit.ts');
+  const logicTest = read('main-site/src/lib/content/markdown-edit.test.ts');
+  return {
+    ok:
+      // The toolbar acts on a selection through tested pure functions.
+      editor.includes('role="toolbar"') &&
+      editor.includes("key === 'b'") &&
+      editor.includes('onPaste') &&
+      editor.includes('onDrop') &&
+      logic.includes('export function wrapSelection') &&
+      logic.includes('export function continueLine') &&
+      logicTest.includes('unwraps text that is already wrapped') &&
+      logicTest.includes('continues an unordered list') &&
+      // The page uses them, and the cover reaches the column the post page reads.
+      compose.includes('<MarkdownEditor') &&
+      compose.includes('<CoverImagePicker') &&
+      compose.includes("onChange={(url) => update('coverUrl', url)}") &&
+      cover.includes("purpose: 'cover'"),
+    evidence:
+      'the body is written in an editor with a tested toolbar, pictures are pasted or dropped, and a post can carry a cover',
+  };
+});
+
 check('B-17', 'Database', 'A post is saved once, or not at all', () => {
   // A save used to be up to nine requests — the post row, then tags, media,
   // mentions and the poll — and a failure in any of them left the post published

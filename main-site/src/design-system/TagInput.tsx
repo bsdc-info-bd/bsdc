@@ -12,6 +12,13 @@ export interface TagInputProps {
   maxLength?: number;
   suggestions?: readonly string[];
   className?: string;
+  /**
+   * Turns whatever was typed into the value that will be stored — the composer
+   * passes the same normaliser the save path uses, so the chip on screen is the
+   * tag that gets saved (and a word that normalises to nothing is refused here
+   * rather than dropped silently later).
+   */
+  normalize?: (value: string) => string;
 }
 
 /** Chip based multi-value input used for skills and interests. */
@@ -24,14 +31,15 @@ export function TagInput({
   maxLength = 32,
   suggestions = [],
   className,
+  normalize = (value: string) => value,
 }: TagInputProps) {
   const { t } = useTranslation();
   const inputId = useId();
   const [draft, setDraft] = useState('');
 
   function add(raw: string) {
-    const tag = raw.trim().slice(0, maxLength);
-    if (tag.length === 0 || value.length >= max) return;
+    const tag = normalize(raw.trim()).slice(0, maxLength);
+    if (tag.length < 2 || value.length >= max) return;
     if (value.some((item) => item.toLowerCase() === tag.toLowerCase())) return;
     onChange([...value, tag]);
     setDraft('');

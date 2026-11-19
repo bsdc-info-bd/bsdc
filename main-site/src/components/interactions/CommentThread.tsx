@@ -226,6 +226,8 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
               <CommentForm
                 placeholder={t('interactions.editComment')}
                 submitLabel={t('common.save')}
+                // The box opens with the words that are already there.
+                initialBody={node.body}
                 onCancel={() => {
                   setEditing(false);
                 }}

@@ -47,6 +47,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -100,6 +102,15 @@ fun PostComposerScreen(
     val bn = language == AppLanguage.BN
 
     var draft by remember { mutableStateOf(initialDraft) }
+    // The body field keeps its own selection so the formatting buttons can act on
+    // what is selected; the draft keeps the text, which is what gets saved.
+    var bodyField by remember { mutableStateOf(TextFieldValue(initialDraft.body)) }
+
+    fun applyMarkdown(edit: MarkdownEdit?) {
+        if (edit == null) return
+        bodyField = TextFieldValue(edit.text, TextRange(edit.start, edit.end))
+        draft = draft.copy(body = edit.text)
+    }
     var previewMode by remember { mutableStateOf(false) }
     var curatedTags by remember { mutableStateOf<List<CuratedTagItem>>(emptyList()) }
     var tagInput by remember { mutableStateOf("") }
@@ -336,9 +347,92 @@ fun PostComposerScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        // The same formatting the web editor offers, in the order a
+                        // writer reaches for it. Each button is one entry in
+                        // MarkdownInsert, which is unit-tested on the JVM.
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.wrap(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                    "**",
+                                    "**",
+                                    if (bn) "বোল্ড লেখা" else "bold text",
+                                ),
+                            )
+                        }) { Text("B", fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.wrap(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                    "*",
+                                    "*",
+                                    if (bn) "ইটালিক লেখা" else "italic text",
+                                ),
+                            )
+                        }) { Text("I", fontStyle = androidx.compose.ui.text.font.FontStyle.Italic) }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.linePrefix(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                    "## ",
+                                ),
+                            )
+                        }) { Text("H2") }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.linePrefix(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                    "- ",
+                                ),
+                            )
+                        }) { Text("•") }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.linePrefix(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                    "1. ",
+                                ),
+                            )
+                        }) { Text("1.") }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.codeBlock(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                ),
+                            )
+                        }) { Text("</>") }
+                        TextButton(onClick = {
+                            applyMarkdown(
+                                MarkdownInsert.link(
+                                    bodyField.text,
+                                    bodyField.selection.start,
+                                    bodyField.selection.end,
+                                ),
+                            )
+                        }) { Text("🔗") }
+                    }
                     OutlinedTextField(
-                        value = draft.body,
-                        onValueChange = { draft = draft.copy(body = it) },
+                        value = bodyField,
+                        onValueChange = { value ->
+                            bodyField = value
+                            draft = draft.copy(body = value.text)
+                        },
                         label = {
                             Text(
                                 if (bn) "Markdown-এ বিস্তারিত লিখুন (@উল্লেখ, #ট্যাগ)"

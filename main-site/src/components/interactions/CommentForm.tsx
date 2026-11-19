@@ -25,6 +25,14 @@ export interface CommentFormProps {
    * the words should not silently drop it.
    */
   allowImage?: boolean;
+  /**
+   * The words already there when the box opens.
+   *
+   * Editing used to open an empty box: the member pressed edit, their comment
+   * vanished from the field, and saving wrote whatever they typed over it. This
+   * is why an edit box is never empty.
+   */
+  initialBody?: string;
 }
 
 const MAX_LENGTH = 4000;
@@ -54,9 +62,10 @@ export function CommentForm({
   submitLabel,
   busy = false,
   allowImage = false,
+  initialBody = '',
 }: CommentFormProps) {
   const { t } = useTranslation();
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(initialBody);
   const [saving, setSaving] = useState(false);
   const [image, setImage] = useState<Attached | null>(null);
   const [alt, setAlt] = useState('');

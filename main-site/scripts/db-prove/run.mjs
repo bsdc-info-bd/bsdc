@@ -167,6 +167,7 @@ const HARNESSES = [
   ['t80.mjs', '0121: a poll that has votes keeps its options — and still dies with its post'],
   ['t81.mjs', '0122: the marketplace home reads a page of shops, not every shop and its ledger'],
   ['t82.mjs', '0123: a post is saved once, or not at all'],
+  ['t83.mjs', '0124: a tag a member types is a tag, not a suggestion'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

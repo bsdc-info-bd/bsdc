@@ -113,8 +113,10 @@ const row = parts.rows[0];
 check(row.posts === 1, 'the post row exists');
 check(row.published === true, 'a published post has its publication time');
 check(
-  JSON.stringify(row.tags) === JSON.stringify(['tips', 'writing']),
-  'only words in the vocabulary are attached',
+  JSON.stringify(row.tags) === JSON.stringify(['not-a-real-tag', 'tips', 'writing']),
+  // 0124: a word the vocabulary did not know is created rather than dropped, so
+  // every tag on the chip list reaches the post.
+  'every tag the member chose is attached, including a new word',
   JSON.stringify(row.tags),
 );
 check(row.media === 1, 'the picture is attached', String(row.media));

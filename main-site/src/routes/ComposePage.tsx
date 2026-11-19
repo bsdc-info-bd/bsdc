@@ -3,6 +3,8 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { CoverImagePicker } from '@/components/content/CoverImagePicker';
+import { MarkdownEditor } from '@/components/content/MarkdownEditor';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -277,6 +279,25 @@ export default function ComposePage() {
     setSaveErrorKey(null);
   }
 
+  /**
+   * A picture inserted into the text is uploaded the same way an attachment is:
+   * bytes plus the `media_assets` row that says whose they are. The editor only
+   * needs the URL back, because markdown is where the picture lives.
+   */
+  async function uploadBodyImage(file: File): Promise<string> {
+    const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+    const result = await uploadAndRecord(file, { purpose: 'post-image' }, user?.uid ?? '');
+    return result.url;
+  }
+
+  const coverCandidates = attachments.attachments
+    .map((item) => ({
+      url: item.url.length > 0 ? item.url : item.previewUrl,
+      thumbUrl: item.thumbUrl.length > 0 ? item.thumbUrl : item.previewUrl,
+      altText: item.altText,
+    }))
+    .filter((item) => item.url.length > 0);
+
   const suggestedTags = extractHashtags(draft.body).filter(
     (tag) => !draft.tags.includes(tag) && draft.tags.length < TAGS_MAX,
   );
@@ -293,12 +314,13 @@ export default function ComposePage() {
         />
       ) : null}
 
-      <TextareaField
+      <MarkdownEditor
         label={t('compose.fields.body')}
         hint={t('compose.hints.body')}
         value={draft.body}
-        rows={draft.kind === 'article' ? 14 : 7}
-        onChange={(event) => update('body', event.target.value)}
+        rows={draft.kind === 'article' ? 16 : 9}
+        onChange={(value) => update('body', value)}
+        uploadImage={uploadBodyImage}
       />
 
       {draft.kind === 'snippet' ? (
@@ -374,6 +396,13 @@ export default function ComposePage() {
         </fieldset>
       ) : null}
 
+      <CoverImagePicker
+        value={draft.coverUrl}
+        onChange={(url) => update('coverUrl', url)}
+        candidates={coverCandidates}
+        disabled={busy}
+      />
+
       <div className="grid gap-3">
         <input
           ref={fileRef}
@@ -415,6 +444,7 @@ export default function ComposePage() {
         value={draft.tags}
         max={TAGS_MAX}
         suggestions={TAG_SUGGESTIONS}
+        normalize={normalizeTag}
         onChange={(tags) => update('tags', tags.map(normalizeTag).filter(Boolean))}
       />
 
