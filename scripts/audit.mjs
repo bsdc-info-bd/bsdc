@@ -1485,6 +1485,33 @@ check('C-30', 'Front end', 'Every settings panel has an address of its own', () 
   };
 });
 
+check('B-16', 'Database', 'The marketplace page is the nearest page, not an arbitrary one', () => {
+  // `mk_list_vendors` applied `limit` inside its subquery and sorted what came
+  // back by distance afterwards, so "nearest shops first" ordered an arbitrary
+  // forty of the shops. With more shops than a page holds, the shop across the
+  // road was often not on it — `t81` measures it on sixty shops. The page is now
+  // chosen by distance and then capped, and the funding question (`a sum over the
+  // shop's ledger`) is asked once for all candidates instead of once per shop.
+  const migration = read('supabase/migrations/0122_the_marketplace_page_reads_a_page.sql');
+  const proof = read('main-site/scripts/db-prove/t81.mjs');
+  const source = migration.slice(
+    migration.indexOf('create or replace function public.mk_list_vendors'),
+  );
+  return {
+    ok:
+      // The ordering that chooses the page has to be inside the capped subquery.
+      /order by distance_km nulls last, v\.name\s+limit v_limit/.test(source) &&
+      !source.includes('mk_vendor_credits') &&
+      source.includes('having sum(l.orders_delta) > 0') &&
+      migration.includes('mk_credit_ledger_sum_idx') &&
+      migration.includes('media_assets_owner_url_idx') &&
+      proof.includes('no shop left out is nearer than one listed') &&
+      proof.includes('the list no longer sums a ledger per shop'),
+    evidence:
+      'the page is ordered by distance before the cap, and the funding test reads the ledger once',
+  };
+});
+
 check('C-31', 'Front end', 'Reading a page does not ask the server what it could upload', () => {
   // `/api/media/providers` used to be warmed on every page view, at idle, so the
   // first member to attach a picture would not pay for the question. The answer

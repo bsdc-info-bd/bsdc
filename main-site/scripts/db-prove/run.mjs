@@ -165,6 +165,7 @@ const HARNESSES = [
   ],
   ['t79.mjs', '0120: a comment carries its own picture — and the sweeper is told not to delete it'],
   ['t80.mjs', '0121: a poll that has votes keeps its options — and still dies with its post'],
+  ['t81.mjs', '0122: the marketplace home reads a page of shops, not every shop and its ledger'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
