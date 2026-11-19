@@ -62,4 +62,28 @@ class GroupDetailLogicTest {
         )
         assertEquals(listOf("owner", "admin", "early member", "late member"), sorted.map { it.name })
     }
+
+    @Test
+    fun memberSearchMatchesNameAndHandleIgnoringCase() {
+        val roster = listOf("Rahim Uddin" to "rahim", "Karim" to "karim99", "Fatima" to "fatima")
+        fun find(query: String) = GroupDetailLogic.searchMembers(
+            roster,
+            query,
+            nameOf = { it.first },
+            handleOf = { it.second },
+        ).map { it.first }
+
+        assertEquals(listOf("Rahim Uddin", "Karim", "Fatima"), find("  "))
+        assertEquals(listOf("Rahim Uddin"), find("rahim u"))
+        assertEquals(listOf("Karim"), find("KARIM99"))
+        assertEquals(listOf("Fatima"), find("tim"))
+        assertEquals(emptyList<String>(), find("nobody"))
+    }
+
+    @Test
+    fun channelTitleHasExactlyOneHash() {
+        assertEquals("# general", GroupDetailLogic.channelTitle("general"))
+        assertEquals("# general", GroupDetailLogic.channelTitle("  # general  "))
+        assertEquals("# help-desk", GroupDetailLogic.channelTitle("help-desk"))
+    }
 }

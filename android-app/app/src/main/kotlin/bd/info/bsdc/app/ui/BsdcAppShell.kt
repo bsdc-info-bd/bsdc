@@ -84,7 +84,9 @@ import bd.info.bsdc.app.core.permissions.PermissionPreferencesStore
 import bd.info.bsdc.app.core.permissions.PermissionReadinessModalSheet
 import bd.info.bsdc.app.core.permissions.PersistentPermissionReadinessBanner
 import bd.info.bsdc.app.core.permissions.rememberPermissionCoordinator
+import bd.info.bsdc.app.core.push.OrderAlarmService
 import bd.info.bsdc.app.core.push.PushEventBus
+import bd.info.bsdc.app.core.push.PushNotificationRouter
 import bd.info.bsdc.app.core.push.PushRegistrationSyncWorker
 import bd.info.bsdc.app.core.sync.OfflineSyncSettings
 import bd.info.bsdc.app.core.sync.SyncScheduler
@@ -92,6 +94,7 @@ import bd.info.bsdc.app.di.BsdcAppContainer
 import bd.info.bsdc.app.feature.compose.CreateHubMode
 import bd.info.bsdc.app.feature.compose.CreateHubScreen
 import bd.info.bsdc.app.feature.discover.DiscoverHubScreen
+import bd.info.bsdc.app.feature.discover.GigDetailScreen
 import bd.info.bsdc.app.feature.discover.DiscoverSection
 import bd.info.bsdc.app.feature.discover.EventDetailScreen
 import bd.info.bsdc.app.feature.discover.GroupDetailScreen
@@ -103,6 +106,7 @@ import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.AdsDashboardScreen
 import bd.info.bsdc.app.feature.market.MarketSection
 import bd.info.bsdc.app.feature.market.MkMarketScreen
+import bd.info.bsdc.app.feature.market.MkSavedStore
 import bd.info.bsdc.app.feature.messenger.LiveChannelStatus
 import bd.info.bsdc.app.feature.messenger.MessengerRootScreen
 import bd.info.bsdc.app.feature.messenger.SupabaseRealtimeTransport
@@ -162,6 +166,7 @@ fun BsdcAppShell(
     var activeNewsUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProfileTarget by rememberSaveable { mutableStateOf<String?>(null) }
     var activeProjectSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    var activeGigSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeJobSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeEventSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeGroupSlug by rememberSaveable { mutableStateOf<String?>(null) }
@@ -242,8 +247,9 @@ fun BsdcAppShell(
                         activeDetailSlug = null
                         selectedTab = MainTab.MESSAGES
                     }
-                    p.startsWith("/shop") || p.startsWith("/cart") || p.startsWith("/orders") ||
-                        p.startsWith("/vendor") || p.startsWith("/ads") || p.startsWith("/checkout") -> {
+                    p.startsWith("/marketplace") || p.startsWith("/shop") || p.startsWith("/cart") ||
+                        p.startsWith("/orders") || p.startsWith("/vendor") || p.startsWith("/ads") ||
+                        p.startsWith("/checkout") -> {
                         guestBrowsing = true
                         showNotificationsScreen = false
                         showSettingsScreen = false
@@ -251,9 +257,10 @@ fun BsdcAppShell(
                         activeProfileTarget = null
                         activeDetailSlug = null
                         marketSection = when {
-                            p.startsWith("/cart") -> MarketSection.CART
-                            p.startsWith("/orders") -> MarketSection.ORDERS
-                            p.startsWith("/vendor") -> MarketSection.VENDOR
+                            p.startsWith("/cart") || p.startsWith("/marketplace/cart") ||
+                                p.startsWith("/marketplace/checkout") || p.startsWith("/checkout") -> MarketSection.CART
+                            p.startsWith("/orders") || p.startsWith("/marketplace/orders") -> MarketSection.ORDERS
+                            p.startsWith("/vendor") || p.startsWith("/marketplace/apply") -> MarketSection.VENDOR
                             p.startsWith("/ads") -> MarketSection.ADS
                             else -> MarketSection.SHOP
                         }
@@ -266,12 +273,25 @@ fun BsdcAppShell(
                         activeNewsUrl = null
                         activeProfileTarget = null
                         activeDetailSlug = null
+                        // A collection address opens the collection; an address with a slug
+                        // underneath it opens that one listing, so a shared gig, job, project,
+                        // event or group link lands on the page the sender was reading.
+                        val groupsSlug = slashSlug(p, "/g/", "/groups/")
+                        val eventsSlug = slashSlug(p, "/events/")
+                        val jobsSlug = slashSlug(p, "/jobs/")
+                        val gigSlug = slashSlug(p, "/gigs/", "/freelance/", "/gig/")
+                        val projectsSlug = slashSlug(p, "/projects/")?.takeUnless { it == "new" }
+                        activeGroupSlug = groupsSlug
+                        activeEventSlug = eventsSlug
+                        activeJobSlug = jobsSlug
+                        activeGigSlug = gigSlug
+                        activeProjectSlug = projectsSlug
                         discoverSection = when {
-                            p.startsWith("/groups") || p.startsWith("/g/") -> DiscoverSection.GROUPS
-                            p.startsWith("/events") -> DiscoverSection.EVENTS
-                            p.startsWith("/jobs") -> DiscoverSection.JOBS
-                            p.startsWith("/gigs") || p.startsWith("/freelance") -> DiscoverSection.GIGS
-                            p.startsWith("/projects") -> DiscoverSection.PROJECTS
+                            groupsSlug != null || p.startsWith("/groups") || p.startsWith("/g/") -> DiscoverSection.GROUPS
+                            eventsSlug != null || p.startsWith("/events") -> DiscoverSection.EVENTS
+                            jobsSlug != null || p.startsWith("/jobs") -> DiscoverSection.JOBS
+                            gigSlug != null || p.startsWith("/gigs") || p.startsWith("/freelance") -> DiscoverSection.GIGS
+                            projectsSlug != null || p.startsWith("/projects") -> DiscoverSection.PROJECTS
                             p.startsWith("/courses") || p.startsWith("/learn") -> DiscoverSection.COURSES
                             p.startsWith("/people") -> DiscoverSection.PEOPLE
                             else -> DiscoverSection.SEARCH
@@ -331,6 +351,18 @@ fun BsdcAppShell(
                         notificationsLiveNonce++
                         scope.launch {
                             unreadNotifications = container.notificationsRepository.fetchUnreadCount()
+                        }
+                    }
+
+                    override fun onNotificationInserted(
+                        record: SupabaseRealtimeTransport.LiveNotificationRecord,
+                    ) {
+                        if (!record.read && PushNotificationRouter.isOrderAlarm(null, record.url)) {
+                            OrderAlarmService.start(
+                                context = context.applicationContext,
+                                notificationId = record.id.takeIf { it.isNotBlank() },
+                                body = record.body.takeIf { it.isNotBlank() },
+                            )
                         }
                     }
 
@@ -414,6 +446,7 @@ fun BsdcAppShell(
                 repository = container.feedRepository,
                 imageLoader = container.imageLoader,
                 viewerUid = authState.session?.uid,
+                mediaRepository = container.mediaRepository,
                 language = language,
                 onBack = {
                     activeDetailSlug = null
@@ -481,11 +514,30 @@ fun BsdcAppShell(
             JobDetailScreen(
                 slug = activeJobSlug!!,
                 viewerUid = authState.session?.uid,
+                viewerSkills = authState.profile?.skills ?: emptyList(),
                 repository = container.discoverRepository,
+                imageLoader = container.imageLoader,
                 language = language,
                 onBack = { activeJobSlug = null },
                 onSignInRequired = { showAuthModal = true },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
+            )
+            return
+        }
+        activeGigSlug != null -> {
+            GigDetailScreen(
+                slug = activeGigSlug!!,
+                viewerUid = authState.session?.uid,
+                viewerSkills = authState.profile?.skills ?: emptyList(),
+                repository = container.discoverRepository,
+                imageLoader = container.imageLoader,
+                language = language,
+                onBack = { activeGigSlug = null },
+                onSignInRequired = { showAuthModal = true },
+                onOpenProfile = { target ->
+                    activeGigSlug = null
+                    activeProfileTarget = target
+                },
             )
             return
         }
@@ -572,6 +624,9 @@ fun BsdcAppShell(
                     },
                     onSignInRequired = { showAuthModal = true },
                     onOpenExternal = { url -> openInCustomTab(context, url) },
+                    // Directions go to the system: the Maps app if it is installed, a browser
+                    // otherwise. A Custom Tab would always choose the browser.
+                    onOpenGoogleMaps = { url -> openInMaps(context, url) },
                     onOpenAds = { showMarketAds = true },
                     initialSection = marketSection,
                 )
@@ -626,6 +681,14 @@ fun BsdcAppShell(
                                 .onSuccess { container.authRepository.refreshSessionAndProfile() }
                         }
                     }
+                } else {
+                    null
+                },
+                // Google Play requires in-app account deletion. The repository
+                // runs the database half, then removes the Firebase user, then
+                // clears the session — the order the two systems force.
+                onDeleteAccount = if (authState.session?.uid != null) {
+                    { container.authRepository.deleteMyAccount() }
                 } else {
                     null
                 },
@@ -724,6 +787,10 @@ fun BsdcAppShell(
                                     container.pushRegistrationManager.unregisterOnSignOut(authState.session?.uid)
                                     container.authRepository.atomicSignOut {
                                         container.database.wipeUserScopedTables()
+                                        // Wish list and "recently viewed" are per-device
+                                        // preferences, so they must not outlive the account
+                                        // that created them on a shared phone.
+                                        MkSavedStore.get(context).clear()
                                     }
                                 }
                             },
@@ -887,6 +954,7 @@ fun BsdcAppShell(
                         imageLoader = container.imageLoader,
                         viewerUid = authState.session?.uid,
                         language = language,
+                        viewerSkills = authState.profile?.skills ?: emptyList(),
                         initialSection = discoverSection,
                         onSignInRequired = { showAuthModal = true },
                         onOpenPost = { slugOrId ->
@@ -901,6 +969,9 @@ fun BsdcAppShell(
                         },
                         onOpenJob = { slug ->
                             activeJobSlug = slug
+                        },
+                        onOpenGig = { slug ->
+                            activeGigSlug = slug
                         },
                         onOpenEvent = { slug ->
                             activeEventSlug = slug
@@ -918,6 +989,13 @@ fun BsdcAppShell(
                             showMarketScreen = true
                         },
                         onOpenNewsReader = { activeNewsUrl = BsdcHosts.NEWS_ORIGIN },
+                        onOpenCreateHub = {
+                            showNotificationsScreen = false
+                            showSettingsScreen = false
+                            showMarketScreen = false
+                            activeNewsUrl = null
+                            selectedTab = MainTab.CREATE
+                        },
                     )
                 }
                 }
@@ -931,6 +1009,29 @@ fun BsdcAppShell(
             language = language,
             onDismiss = { showPermissionSheet = false },
         )
+    }
+}
+
+/**
+ * Hands a Google Maps link to the system, preferring the Maps app.
+ *
+ * [openInCustomTab] is right for a web page, but wrong for directions: a Custom Tab always
+ * opens a browser, which hides the one thing a delivery driver wants — turn-by-turn in the
+ * navigation app. `ACTION_VIEW` lets Android route the link to Maps when it is installed and
+ * fall back to a browser when it is not. Nothing here is required to exist on the device, so
+ * both outcomes are normal rather than errors.
+ */
+private fun openInMaps(context: Context, url: String) {
+    val parsed = runCatching { Uri.parse(url) }.getOrNull() ?: return
+    if (parsed.scheme != "https") return
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, parsed).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.onFailure {
+        // No Maps app and no browser that claims the link: fall back to the in-app tab so the
+        // tap is never silently swallowed.
+        openInCustomTab(context, url)
     }
 }
 
@@ -951,4 +1052,19 @@ private fun openInCustomTab(context: Context, url: String) {
             context.startActivity(Intent(Intent.ACTION_VIEW, parsed))
         }
     }
+}
+
+/**
+ * The slug that follows one of [prefixes] in a route, or null when the route is the bare
+ * collection, points somewhere else, or carries no slug at all. Trailing slashes and deeper
+ * segments (`/projects/<slug>/edit`) are tolerated: the first segment after the prefix wins.
+ */
+private fun slashSlug(path: String, vararg prefixes: String): String? {
+    val clean = path.trim()
+    for (prefix in prefixes) {
+        if (!clean.startsWith(prefix)) continue
+        val rest = clean.removePrefix(prefix).substringBefore('/').substringBefore('?').substringBefore('#').trim()
+        return rest.ifBlank { null }
+    }
+    return null
 }

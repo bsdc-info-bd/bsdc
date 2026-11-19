@@ -48,8 +48,6 @@ public final class PermissionStateMachine {
                 );
             case CAMERA:
                 return List.of("android.permission.CAMERA");
-            case MICROPHONE:
-                return List.of("android.permission.RECORD_AUDIO");
             default:
                 return Collections.emptyList();
         }

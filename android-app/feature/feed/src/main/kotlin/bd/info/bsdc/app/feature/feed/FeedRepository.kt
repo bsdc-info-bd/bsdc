@@ -128,8 +128,24 @@ private data class CommentJoinedDto(
     @SerialName("is_answer") val isAnswer: Boolean = false,
     @SerialName("created_at") val createdAt: String = "",
     @SerialName("edited_at") val editedAt: String? = null,
+    @SerialName("image_url") val imageUrl: String = "",
+    @SerialName("image_thumb_url") val imageThumbUrl: String = "",
+    @SerialName("image_alt") val imageAlt: String = "",
+    @SerialName("image_width") val imageWidth: Int? = null,
+    @SerialName("image_height") val imageHeight: Int? = null,
     val profiles: AuthorJoinDto? = null,
-)
+) {
+    /** The picture, or null when the comment is words only. */
+    fun image(): CommentImage? = imageUrl.takeIf { it.isNotBlank() }?.let { url ->
+        CommentImage(
+            url = url,
+            thumbUrl = imageThumbUrl.ifBlank { url },
+            alt = imageAlt,
+            width = imageWidth,
+            height = imageHeight,
+        )
+    }
+}
 
 @Serializable
 private data class CommentLikeRowDto(@SerialName("comment_id") val commentId: String = "")
@@ -164,7 +180,9 @@ class FeedRepository(
         private const val POST_SELECT =
             "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))"
         private const val COMMENT_SELECT =
-            "id,post_id,author_uid,parent_id,root_id,depth,body,status,likes_count,replies_count,is_answer,edited_at,created_at,updated_at,profiles:author_uid(uid,username,display_name,avatar_url)"
+            "id,post_id,author_uid,parent_id,root_id,depth,body,status,likes_count,replies_count,is_answer,edited_at,created_at,updated_at," +
+                "image_url,image_thumb_url,image_alt,image_width,image_height," +
+                "profiles:author_uid(uid,username,display_name,avatar_url)"
     }
 
     suspend fun loadFeed(
@@ -497,6 +515,7 @@ class FeedRepository(
                     parentId = row.parentId,
                     depth = row.depth,
                     body = row.body,
+                    image = row.image(),
                     likes = row.likesCount,
                     replies = row.repliesCount,
                     isAnswer = row.isAnswer,
@@ -515,18 +534,27 @@ class FeedRepository(
             }
         }
 
+    /**
+     * Posts a comment, with or without a picture.
+     *
+     * [image] must be what the upload endpoint returned: the database refuses any
+     * address this member did not upload, so a hand-built URL fails at the trigger
+     * with the same reason it would fail on the web client.
+     */
     suspend fun createComment(
         postId: String,
         authorUid: String,
         body: String,
         parentId: String? = null,
+        image: CommentImage? = null,
     ): FeedComment = withContext(Dispatchers.IO) {
-        val payload = buildJsonObject {
-            put("post_id", postId)
-            put("author_uid", authorUid)
-            put("body", body.trim())
-            if (parentId != null) put("parent_id", parentId) else put("parent_id", JsonNull)
-        }
+        val payload = CommentPayload.build(
+            postId = postId,
+            authorUid = authorUid,
+            body = body,
+            parentId = parentId,
+            image = image,
+        )
         val raw = supabase.postJson(
             table = "comments",
             body = payload,
@@ -542,6 +570,7 @@ class FeedRepository(
             parentId = row.parentId,
             depth = row.depth,
             body = row.body,
+            image = row.image(),
             likes = row.likesCount,
             replies = row.repliesCount,
             isAnswer = row.isAnswer,

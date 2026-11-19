@@ -76,7 +76,7 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
         title={t('feed.empty.filtered.title')}
         description={t('feed.empty.filtered.description')}
         action={
-          <LinkButton to={ROUTES.settings} variant="secondary" size="sm">
+          <LinkButton to={ROUTES.settingsFeed} variant="secondary" size="sm">
             {t('feed.empty.filtered.action')}
           </LinkButton>
         }
@@ -105,7 +105,7 @@ export function FeedList({ feed, emptyTitle, emptyDescription }: FeedListProps) 
         <Alert tone="info" title={t('feed.filteredOthersTitle')}>
           <p className="mt-1 text-sm">{t('feed.filteredOthersBody')}</p>
           <div className="mt-2">
-            <LinkButton to={ROUTES.settings} variant="secondary" size="sm">
+            <LinkButton to={ROUTES.settingsFeed} variant="secondary" size="sm">
               {t('feed.empty.filtered.action')}
             </LinkButton>
           </div>

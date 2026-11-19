@@ -154,6 +154,22 @@ export function useSetVendorDelivery() {
     mutationFn: repo.setVendorDelivery,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: KEYS.dashboard });
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'vendor-page'] });
+      void queryClient.invalidateQueries({ queryKey: KEYS.shops });
+    },
+  });
+}
+
+export function useSetVendorSchedule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: repo.setVendorSchedule,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: KEYS.dashboard });
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'vendor-page'] });
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'product'] });
+      void queryClient.invalidateQueries({ queryKey: ['mk', 'cart'] });
+      void queryClient.invalidateQueries({ queryKey: KEYS.shops });
     },
   });
 }

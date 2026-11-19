@@ -1,5 +1,7 @@
 package bd.info.bsdc.app.feature.market
 
+import java.util.Locale
+
 /**
  * Pure marketplace rules shared by the customer and vendor screens.
  * Mirrors main-site/src/lib/mk/mk-logic.ts so Android and web agree on money, status and phone rules.
@@ -51,6 +53,143 @@ object MkLogic {
 
     fun isInsideBangladesh(lat: Double, lng: Double): Boolean =
         lat in BD_LAT_MIN..BD_LAT_MAX && lng in BD_LNG_MIN..BD_LNG_MAX
+
+    data class DeliveryEvaluation(
+        val feePoisha: Long,
+        val roundedKm: Int?,
+        val withinArea: Boolean,
+        val needsPinForFee: Boolean,
+    )
+
+    /** Great-circle distance in km, unrounded (matches bsdc.mk_distance_km in SQL). */
+    fun rawDistanceKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+        val rad = Math.PI / 180.0
+        val dLat = (lat2 - lat1) * rad
+        val dLng = (lng2 - lng1) * rad
+        val sLat = kotlin.math.sin(dLat / 2.0)
+        val sLng = kotlin.math.sin(dLng / 2.0)
+        val a = sLat * sLat +
+            kotlin.math.cos(lat1 * rad) * kotlin.math.cos(lat2 * rad) * sLng * sLng
+        return 2.0 * 6371.0 * kotlin.math.asin(kotlin.math.min(1.0, kotlin.math.sqrt(a)))
+    }
+
+    /** Whole kilometres rounded up (matches ceil(bsdc.mk_distance_km(...)) in SQL). */
+    fun roundedDistanceKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Int =
+        kotlin.math.ceil(rawDistanceKm(lat1, lng1, lat2, lng2)).toInt().coerceAtLeast(0)
+
+    /**
+     * Evaluates a shop's 3-mode delivery charge (`default`, `fixed`, `per_km`) and radius
+     * eligibility for an optional customer pin, matching `mk_place_order` in SQL.
+     */
+    fun evaluateShopDelivery(
+        delivery: MkShopDeliveryDto?,
+        pinLat: Double?,
+        pinLng: Double?,
+    ): DeliveryEvaluation {
+        if (delivery == null) {
+            return DeliveryEvaluation(
+                feePoisha = DEFAULT_DELIVERY_FEE_POISHA,
+                roundedKm = null,
+                withinArea = true,
+                needsPinForFee = false,
+            )
+        }
+        val cLat = delivery.center_lat
+        val cLng = delivery.center_lng
+        val roundedKm = if (pinLat != null && pinLng != null && cLat != null && cLng != null) {
+            roundedDistanceKm(cLat, cLng, pinLat, pinLng)
+        } else {
+            null
+        }
+        val withinArea = delivery.scope == "all_bd" || roundedKm == null || roundedKm <= delivery.radius_km
+        return when (delivery.fee_mode) {
+            "per_km" -> {
+                if (roundedKm == null) {
+                    DeliveryEvaluation(
+                        feePoisha = 0L,
+                        roundedKm = null,
+                        withinArea = withinArea,
+                        needsPinForFee = true,
+                    )
+                } else {
+                    DeliveryEvaluation(
+                        feePoisha = roundedKm.toLong() * delivery.per_km_rate_poisha.coerceAtLeast(0L),
+                        roundedKm = roundedKm,
+                        withinArea = withinArea,
+                        needsPinForFee = false,
+                    )
+                }
+            }
+            "fixed" -> DeliveryEvaluation(
+                feePoisha = delivery.fixed_fee_poisha.takeIf { it >= 0L } ?: delivery.fee_poisha,
+                roundedKm = roundedKm,
+                withinArea = withinArea,
+                needsPinForFee = false,
+            )
+            else -> DeliveryEvaluation(
+                feePoisha = delivery.default_fee_poisha.takeIf { it > 0L } ?: DEFAULT_DELIVERY_FEE_POISHA,
+                roundedKm = roundedKm,
+                withinArea = withinArea,
+                needsPinForFee = false,
+            )
+        }
+    }
+
+    val DAY_KEYS: List<String> = listOf("0", "1", "2", "3", "4", "5", "6")
+
+    fun defaultScheduleDays(): Map<String, MkDayHoursDto> =
+        DAY_KEYS.associateWith { MkDayHoursDto(open = true, start = "09:00", end = "22:00") }
+
+    private val HH_MM = Regex("^([01][0-9]|2[0-3]):[0-5][0-9]$")
+
+    fun isValidHhMm(value: String, allow24: Boolean = false): Boolean =
+        (allow24 && value == "24:00") || HH_MM.matches(value.trim())
+
+    fun dayLabel(dayKey: String, bn: Boolean): String = when (dayKey) {
+        "0" -> if (bn) "রবিবার" else "Sunday"
+        "1" -> if (bn) "সোমবার" else "Monday"
+        "2" -> if (bn) "মঙ্গলবার" else "Tuesday"
+        "3" -> if (bn) "বুধবার" else "Wednesday"
+        "4" -> if (bn) "বৃহস্পতিবার" else "Thursday"
+        "5" -> if (bn) "শুক্রবার" else "Friday"
+        "6" -> if (bn) "শনিবার" else "Saturday"
+        else -> dayKey
+    }
+
+    fun formatHhMm(hhmm: String, bn: Boolean): String {
+        val parts = hhmm.trim().split(":")
+        val h = parts.getOrNull(0)?.toIntOrNull() ?: return hhmm
+        val m = parts.getOrNull(1)?.toIntOrNull() ?: return hhmm
+        val norm = h % 24
+        val isPm = norm >= 12 && h != 24
+        val hour12 = if (norm % 12 == 0) 12 else norm % 12
+        val mStr = m.toString().padStart(2, '0')
+        return if (bn) {
+            "${toBanglaDigits("$hour12:$mStr")} ${if (isPm) "অপরাহ্ণ" else "পূর্বাহ্ণ"}"
+        } else {
+            "$hour12:$mStr ${if (isPm) "PM" else "AM"}"
+        }
+    }
+
+    fun scheduleBadgeLabel(schedule: MkShopScheduleDto?, bn: Boolean): String? {
+        if (schedule == null || !schedule.enabled) return null
+        if (schedule.is_open) {
+            val closes = schedule.closes_at?.takeIf { it.isNotBlank() }
+            return if (closes != null) {
+                if (bn) "খোলা · বন্ধ ${formatHhMm(closes, true)}" else "Open · closes ${formatHhMm(closes, false)}"
+            } else {
+                if (bn) "এখন খোলা" else "Open now"
+            }
+        }
+        val next = schedule.next_open
+        return if (next != null) {
+            val dName = dayLabel(next.day.toString(), bn)
+            val tFmt = formatHhMm(next.start, bn)
+            if (bn) "বন্ধ · খুলবে $dName $tFmt" else "Closed · opens $dName $tFmt"
+        } else {
+            if (bn) "এখন বন্ধ" else "Closed now"
+        }
+    }
 
     /** What a vendor can do next to an order, given its current status. */
     fun vendorActionsFor(status: String): List<String> = when (status) {
@@ -121,6 +260,123 @@ object MkLogic {
     private val NID_PATTERN = Regex("""[0-9]{10}|[0-9]{13}|[0-9]{17}""")
     private val TAKA_PATTERN = Regex("""(\d{1,7})(?:\.(\d{1,2}))?""")
 
+    // ---------------------------------------------------------------------
+    // Browsing rules: sorting, filtering, comparing and the shelf's arithmetic
+    // ---------------------------------------------------------------------
+
+    /** The order a customer can put a storefront in. Mirrors the chips on the product grid. */
+    enum class ProductSort { FEATURED, PRICE_LOW, PRICE_HIGH, NAME }
+
+    fun productSortLabel(sort: ProductSort, bn: Boolean): String = when (sort) {
+        ProductSort.FEATURED -> if (bn) "প্রস্তাবিত" else "Featured"
+        ProductSort.PRICE_LOW -> if (bn) "কম দাম আগে" else "Price: low first"
+        ProductSort.PRICE_HIGH -> if (bn) "বেশি দাম আগে" else "Price: high first"
+        ProductSort.NAME -> if (bn) "নাম অনুসারে" else "Name A–Z"
+    }
+
+    /**
+     * Sorts a storefront for display. `FEATURED` keeps the shop's own order but lifts in-stock
+     * items above sold-out ones, so a customer never scrolls past three un-buyable rows to find
+     * something they can buy.
+     */
+    fun sortStorefront(
+        products: List<MkStorefrontProductDto>,
+        sort: ProductSort,
+    ): List<MkStorefrontProductDto> = when (sort) {
+        ProductSort.FEATURED -> products.sortedBy { if (it.in_stock) 0 else 1 }
+        ProductSort.PRICE_LOW -> products.sortedWith(
+            compareBy<MkStorefrontProductDto> { it.price_poisha }.thenBy { it.name.lowercase() },
+        )
+        ProductSort.PRICE_HIGH -> products.sortedWith(
+            compareByDescending<MkStorefrontProductDto> { it.price_poisha }.thenBy { it.name.lowercase() },
+        )
+        ProductSort.NAME -> products.sortedBy { it.name.lowercase() }
+    }
+
+    /** The one filter panel a storefront offers: a price band and an in-stock-only switch. */
+    data class ProductFilter(
+        val inStockOnly: Boolean = false,
+        val minTaka: Long? = null,
+        val maxTaka: Long? = null,
+        val query: String = "",
+    ) {
+        val isActive: Boolean
+            get() = inStockOnly || minTaka != null || maxTaka != null || query.isNotBlank()
+    }
+
+    /**
+     * Applies [filter] to a storefront. Prices are compared in **taka**, because that is what a
+     * customer types; the products carry poisha, so the bounds are converted once here rather
+     * than in every call site.
+     */
+    fun filterStorefront(
+        products: List<MkStorefrontProductDto>,
+        filter: ProductFilter,
+    ): List<MkStorefrontProductDto> {
+        val needle = filter.query.trim().lowercase()
+        val minPoisha = filter.minTaka?.let { it * 100 }
+        val maxPoisha = filter.maxTaka?.let { it * 100 }
+        return products.filter { product ->
+            if (filter.inStockOnly && !product.in_stock) return@filter false
+            if (minPoisha != null && product.price_poisha < minPoisha) return@filter false
+            if (maxPoisha != null && product.price_poisha > maxPoisha) return@filter false
+            if (needle.isEmpty()) return@filter true
+            product.name.lowercase().contains(needle)
+        }
+    }
+
+    /**
+     * A comparison row: the same attribute across up to three products, so the customer sees
+     * one difference per line rather than one card per product.
+     */
+    data class CompareRow(val label: String, val values: List<String>, val differs: Boolean)
+
+    /**
+     * Builds the comparison table for [products] (at most three). Blank rows — every value the
+     * same — are dropped unless [keepSame] is true, so a table of identical product names does
+     * not bury the one line that actually differs.
+     */
+    fun compareRows(
+        products: List<MkStorefrontProductDto>,
+        bn: Boolean,
+        keepSame: Boolean = false,
+    ): List<CompareRow> {
+        val chosen = products.take(3)
+        if (chosen.size < 2) return emptyList()
+        val rows = mutableListOf<CompareRow>()
+
+        val prices = chosen.map { formatTaka(it.price_poisha, bn) }
+        rows.add(CompareRow(if (bn) "দাম" else "Price", prices, prices.distinct().size > 1))
+
+        val stock = chosen.map {
+            if (it.in_stock) (if (bn) "স্টকে আছে" else "In stock")
+            else (if (bn) "স্টক নেই" else "Sold out")
+        }
+        rows.add(CompareRow(if (bn) "স্টক" else "Stock", stock, stock.distinct().size > 1))
+
+        val shop = chosen.map { it.image_url.isNotBlank().toString() }
+        rows.add(
+            CompareRow(
+                if (bn) "ছবি আছে" else "Has photo",
+                chosen.map { if (it.image_url.isNotBlank()) (if (bn) "হ্যাঁ" else "Yes") else (if (bn) "না" else "No") },
+                shop.distinct().size > 1,
+            ),
+        )
+        return if (keepSame) rows else rows.filter { it.differs }
+    }
+
+    /** The cheapest of the compared products, or null when the list is empty. */
+    fun cheapestOf(products: List<MkStorefrontProductDto>): MkStorefrontProductDto? =
+        products.minByOrNull { it.price_poisha }
+
+    /** What a customer saves against the most expensive alternative, in poisha. Zero when alone. */
+    fun savingsAgainstPriciest(products: List<MkStorefrontProductDto>): Long {
+        if (products.size < 2) return 0
+        val cheapest = products.minOf { it.price_poisha }
+        val priciest = products.maxOf { it.price_poisha }
+        return (priciest - cheapest).coerceAtLeast(0)
+    }
+
     /** Shop categories, same keys as the database and the web (mk-logic.ts SHOP_TYPES). */
     val SHOP_TYPES: List<String> = listOf(
         "grocery", "restaurant", "bakery", "pharmacy", "electronics", "fashion", "beauty",
@@ -162,5 +418,43 @@ object MkLogic {
         for (c in text) {
             if (c in '0'..'9') append('০' + (c - '0')) else append(c)
         }
+    }
+
+    /** OpenStreetMap's canonical tile host. The map page requests this one. */
+    const val OSM_TILE_HOST: String = "tile.openstreetmap.org"
+
+    /**
+     * Whether a request is for an OpenStreetMap raster tile.
+     *
+     * The page asks for [OSM_TILE_HOST], but OSM answers by redirecting to its `a.`/`b.`/`c.`
+     * shards, so the bare host and any `*.tile.openstreetmap.org` subdomain both have to be
+     * recognised. A strict `host ==` test dropped every sharded tile and left the Android map
+     * a blank white canvas while the web map loaded fine.
+     *
+     * Lives here, beside the other pure rules, so it can be unit tested: `MkOsmPinMap.kt`
+     * imports `android.webkit.WebView`, and a JVM unit test that touched a declaration in that
+     * file would drag the Android stubs in with it.
+     */
+    internal fun isOsmTileRequest(scheme: String?, host: String?): Boolean {
+        if (!scheme.equals("https", ignoreCase = true)) return false
+        val clean = host?.trim()?.lowercase() ?: return false
+        return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
+    }
+
+    /**
+     * A Google Maps directions link for a delivery pin.
+     *
+     * This is the one form that needs no API key and no billing, works on the web and opens
+     * the Maps app when it is installed: `maps/dir/?api=1&destination=lat,lng`. The Android
+     * side opens it with a plain `ACTION_VIEW`, so the system may hand it to the Maps app;
+     * a Custom Tab would force a browser and lose turn-by-turn.
+     *
+     * Six decimals is about 11 cm — far finer than any delivery address needs, and enough
+     * that two nearby pins cannot round onto the same point.
+     */
+    internal fun googleMapsDirectionsUrl(lat: Double, lng: Double): String {
+        if (!lat.isFinite() || !lng.isFinite()) return ""
+        val point = String.format(Locale.ROOT, "%.6f,%.6f", lat, lng)
+        return "https://www.google.com/maps/dir/?api=1&destination=$point"
     }
 }

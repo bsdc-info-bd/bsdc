@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -95,5 +96,63 @@ class MkVendorFlowTest {
         val payload = buildProductPayload(MkProductDraft(name = "Mat", priceText = "100", stockText = "1"))
         assertEquals("null", payload!!["category_id"].toString())
         assertEquals("[]", payload["images"]!!.jsonArray.toString())
+    }
+
+    @Test
+    fun evaluatesThreeModeDeliveryFeesAndRadiusRulesIdenticallyToSql() {
+        val defaultEval = MkLogic.evaluateShopDelivery(
+            MkShopDeliveryDto(scope = "all_bd", fee_mode = "default", default_fee_poisha = 15000),
+            pinLat = null,
+            pinLng = null,
+        )
+        assertEquals(15000L, defaultEval.feePoisha)
+        assertFalse(defaultEval.needsPinForFee)
+
+        val fixedEval = MkLogic.evaluateShopDelivery(
+            MkShopDeliveryDto(scope = "all_bd", fee_mode = "fixed", fixed_fee_poisha = 45000),
+            pinLat = null,
+            pinLng = null,
+        )
+        assertEquals(45000L, fixedEval.feePoisha)
+
+        val perKmCfg = MkShopDeliveryDto(
+            scope = "radius",
+            radius_km = 5,
+            fee_mode = "per_km",
+            per_km_rate_poisha = 2500,
+            center_lat = 24.8949,
+            center_lng = 91.8687,
+        )
+        val unpinned = MkLogic.evaluateShopDelivery(perKmCfg, null, null)
+        assertTrue(unpinned.needsPinForFee)
+        assertEquals(0L, unpinned.feePoisha)
+
+        // ~2.8 km away -> ceil = 3 km -> 3 * 2500 = 7500 poisha
+        val pinnedInArea = MkLogic.evaluateShopDelivery(perKmCfg, 24.915, 91.885)
+        assertEquals(3, pinnedInArea.roundedKm)
+        assertEquals(7500L, pinnedInArea.feePoisha)
+        assertTrue(pinnedInArea.withinArea)
+
+        // ~15 km away -> outside 5 km radius
+        val pinnedOut = MkLogic.evaluateShopDelivery(perKmCfg, 25.03, 91.87)
+        assertFalse(pinnedOut.withinArea)
+    }
+
+    @Test
+    fun formatsOpeningScheduleBadgesInEnglishAndBangla() {
+        assertTrue(MkLogic.isValidHhMm("09:00"))
+        assertTrue(MkLogic.isValidHhMm("24:00", allow24 = true))
+        assertFalse(MkLogic.isValidHhMm("24:00", allow24 = false))
+
+        val openSched = MkShopScheduleDto(enabled = true, is_open = true, closes_at = "21:30")
+        assertEquals("Open · closes 9:30 PM", MkLogic.scheduleBadgeLabel(openSched, bn = false))
+
+        val closedSched = MkShopScheduleDto(
+            enabled = true,
+            is_open = false,
+            next_open = MkNextOpenDto(day = 0, start = "09:00"),
+        )
+        assertEquals("Closed · opens Sunday 9:00 AM", MkLogic.scheduleBadgeLabel(closedSched, bn = false))
+        assertTrue(MkLogic.scheduleBadgeLabel(closedSched, bn = true)!!.contains("রবিবার"))
     }
 }

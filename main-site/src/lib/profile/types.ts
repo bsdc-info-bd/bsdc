@@ -114,22 +114,11 @@ export type Profile = z.infer<typeof profileSchema>;
  * Whether a member has chosen their handle yet. A profile without one is
  * real — it belongs to a member who has not finished onboarding — so the
  * answer is a check, never a filter.
+ *
+ * Defined in ./onboarding.ts, which imports nothing: the router needs these
+ * answers before the schema's dependencies are worth downloading.
  */
-export function hasClaimedHandle(profile: Pick<Profile, 'username'>): boolean {
-  return profile.username.trim().length > 0;
-}
-
-/**
- * True when a member has already completed setup (either explicitly via
- * `onboardingComplete` — including staff/imported accounts — or by holding a
- * claimed username handle). Prevents existing OAuth accounts from being sent
- * back into onboarding due to partial legacy rows.
- */
-export function isProfileOnboarded(
-  profile: Pick<Profile, 'onboardingComplete' | 'username'> | null | undefined,
-): boolean {
-  return Boolean(profile && (profile.onboardingComplete || hasClaimedHandle(profile)));
-}
+export { hasClaimedHandle, isProfileOnboarded } from './onboarding';
 
 export type ProfileDraft = Pick<
   Profile,

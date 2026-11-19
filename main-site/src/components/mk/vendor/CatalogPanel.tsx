@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ImagePlus, Pencil, Plus, Tag, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -12,10 +13,11 @@ import {
   TextareaField,
 } from '@/design-system';
 import { useCatalogMutations, useVendorCatalog } from '@/hooks/use-mk';
-import { formatTaka, isHttpsUrl, type Language } from '@/lib/mk/mk-logic';
+import { formatTaka, isHttpsUrl, variantFor, type Language } from '@/lib/mk/mk-logic';
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import type { ProductPayload } from '@/lib/mk/mk-repository';
 import type { MkCatalogProduct } from '@/lib/mk/mk-types';
+import { useAuthStore } from '@/store/auth-store';
 
 interface Props {
   copy: MkCopy;
@@ -65,6 +67,10 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
         status: product.status,
         category_id: product.category_id,
         images: product.images,
+        // Carried through the edit. Without this, saving any change to an existing
+        // product would send an empty map and erase the lighter copies 0116 exists
+        // to keep — the shop would get slower every time a name was corrected.
+        image_variants: { ...(product.image_variants ?? {}) },
       },
       priceText: String(product.price_poisha / 100),
     });
@@ -86,18 +92,31 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
     if (!files || files.length === 0 || editing === null) return;
     setUploading(true);
     try {
-      const { uploadMedia } = await import('@/lib/storage/upload');
+      // Uploading is only half of it: the row that says who uploaded the picture
+      // is what makes it attributable and sweepable, and it is the half a client
+      // forgets silently. See `upload-and-record`.
+      const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+      const ownerUid = useAuthStore.getState().user?.uid ?? '';
       const added: string[] = [];
+      const variants: Record<string, string> = { ...(editing.draft.image_variants ?? {}) };
       for (const file of Array.from(files)) {
-        const result = await uploadMedia(file, { purpose: 'product-image' });
+        const result = await uploadAndRecord(file, { purpose: 'product-image' }, ownerUid);
         added.push(result.url);
+        // The upload already produced a ~640px copy; discarding it here is what
+        // made every catalogue thumbnail download the full-size original.
+        if (result.thumbUrl.length > 0 && result.thumbUrl !== result.url) {
+          variants[result.url] = result.thumbUrl;
+        }
+      }
+      const images = [...new Set([...editing.draft.images, ...added])].slice(0, 8);
+      // Drop variants for pictures that the slice just removed, so the stored map
+      // cannot grow past the images it describes.
+      for (const url of Object.keys(variants)) {
+        if (!images.includes(url)) delete variants[url];
       }
       setEditing({
         ...editing,
-        draft: {
-          ...editing.draft,
-          images: [...new Set([...editing.draft.images, ...added])].slice(0, 8),
-        },
+        draft: { ...editing.draft, images, image_variants: variants },
       });
     } catch {
       toast.error(copy.errorGeneric);
@@ -195,10 +214,11 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
           >
             <div className="relative aspect-[4/3] bg-surface-2">
               {product.images[0] ? (
-                <img
+                <MediaImage
                   src={product.images[0]}
+                  variantSrc={variantFor(product.images, product.image_variants, product.images[0])}
                   alt=""
-                  loading="lazy"
+                  slotWidth={400}
                   className="h-full w-full object-cover transition group-hover:scale-105"
                 />
               ) : (
@@ -350,7 +370,12 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
                     key={url}
                     className="relative h-16 w-16 overflow-hidden rounded-lg border border-border"
                   >
-                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <MediaImage
+                      src={url}
+                      alt=""
+                      slotWidth={64}
+                      className="h-full w-full object-cover"
+                    />
                     <button
                       type="button"
                       aria-label={copy.cancel}
@@ -361,6 +386,11 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
                           draft: {
                             ...editing.draft,
                             images: editing.draft.images.filter((u) => u !== url),
+                            image_variants: Object.fromEntries(
+                              Object.entries(editing.draft.image_variants ?? {}).filter(
+                                ([key]) => key !== url,
+                              ),
+                            ),
                           },
                         })
                       }

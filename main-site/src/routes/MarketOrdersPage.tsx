@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ClipboardList, MessageSquarePlus, Star, Store, XCircle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -141,7 +142,12 @@ function OrderCard({
         <div className="flex min-w-0 items-center gap-3">
           <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-surface-2">
             {order.vendor.logo_url ? (
-              <img src={order.vendor.logo_url} alt="" className="h-full w-full object-cover" />
+              <MediaImage
+                src={order.vendor.logo_url}
+                alt=""
+                slotWidth={48}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <Store className="m-2.5 text-muted" size={24} aria-hidden />
             )}

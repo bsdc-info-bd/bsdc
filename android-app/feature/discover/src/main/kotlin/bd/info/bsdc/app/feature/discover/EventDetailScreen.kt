@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -20,10 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +47,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
@@ -78,6 +82,15 @@ fun EventDetailScreen(
     var reloadNonce by remember(slug) { mutableStateOf(0) }
     var rsvpBusy by remember(slug) { mutableStateOf(false) }
     var actionError by remember(slug) { mutableStateOf<String?>(null) }
+    // The countdown has to move on its own while the page is open, so it ticks once a minute.
+    var clockMillis by remember(slug) { mutableStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(slug) {
+        while (true) {
+            clockMillis = System.currentTimeMillis()
+            kotlinx.coroutines.delay(60_000L)
+        }
+    }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -207,6 +220,16 @@ fun EventDetailScreen(
                         .joinToString(", ")
                     val canCalendar = EventDetailLogic.calendarWindow(current.startsAt, current.endsAt) != null
                     val goingLabel = BanglaDigitFormatter.formatCount(current.goingCount.toLong(), language)
+                    val countdown = EventDetailLogic.startCountdown(
+                        startsAt = current.startsAt,
+                        endsAt = current.endsAt,
+                        nowMillis = clockMillis,
+                        bn = bn,
+                    )
+                    val seats = EventDetailLogic.seatsLeft(current.capacity, current.goingCount)
+                    val seatsLabel = seats?.let {
+                        BanglaDigitFormatter.formatCount(it.toLong(), language)
+                    }
                     val cover = current.coverUrl.orEmpty()
                     val description = current.description.orEmpty()
 
@@ -217,29 +240,59 @@ fun EventDetailScreen(
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             item {
-                                if (cover.isNotBlank()) {
-                                    BsdcImgbbImage(
-                                        fullUrl = cover,
-                                        thumbUrl = cover,
-                                        contentDescription = current.title,
-                                        imageLoader = imageLoader,
-                                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                                        targetWidthPx = 960,
-                                        cornerRadiusDp = 16,
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(140.dp)
-                                            .background(BsdcThemeTokens.colors.brandSoft),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Event,
-                                            contentDescription = null,
-                                            tint = BsdcThemeTokens.colors.brandStrong,
-                                            modifier = Modifier.size(44.dp),
+                                // The cover carries the one fact a reader needs before they RSVP:
+                                // how long they have left. It floats over the image so the page
+                                // does not spend a whole row on a status line.
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    if (cover.isNotBlank()) {
+                                        BsdcImgbbImage(
+                                            fullUrl = cover,
+                                            thumbUrl = cover,
+                                            contentDescription = current.title,
+                                            imageLoader = imageLoader,
+                                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                                            targetWidthPx = 960,
+                                            cornerRadiusDp = 16,
+                                        )
+                                    } else {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(140.dp)
+                                                .background(BsdcThemeTokens.colors.brandSoft),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Event,
+                                                contentDescription = null,
+                                                tint = BsdcThemeTokens.colors.brandStrong,
+                                                modifier = Modifier.size(44.dp),
+                                            )
+                                        }
+                                    }
+                                    val heroPill = when {
+                                        live -> if (bn) "এখন চলছে" else "Happening now"
+                                        countdown.isNotBlank() -> countdown
+                                        whenLine.isNotBlank() -> whenLine
+                                        else -> ""
+                                    }
+                                    if (heroPill.isNotBlank()) {
+                                        BsdcInfoPill(
+                                            text = heroPill,
+                                            icon = if (live) Icons.Rounded.Event else Icons.Rounded.Schedule,
+                                            tone = if (live) BsdcTone.OK else BsdcTone.INFO,
+                                            modifier = Modifier
+                                                .align(Alignment.BottomStart)
+                                                .padding(12.dp),
+                                        )
+                                    }
+                                    if (seats != null && seats in 1..10) {
+                                        BsdcInfoPill(
+                                            text = if (bn) "মাত্র $seatsLabel আসন বাকি" else "Only $seatsLabel seats left",
+                                            tone = BsdcTone.WARN,
+                                            modifier = Modifier
+                                                .align(Alignment.BottomEnd)
+                                                .padding(12.dp),
                                         )
                                     }
                                 }
@@ -256,9 +309,6 @@ fun EventDetailScreen(
                                             label = if (bn) "$goingLabel যাচ্ছেন" else "$goingLabel going",
                                             tone = BsdcTone.OK,
                                         )
-                                        if (live) {
-                                            BsdcBadge(label = if (bn) "এখন চলছে" else "Happening now", tone = BsdcTone.OK)
-                                        }
                                         if (full && !cancelled && !ended) {
                                             BsdcBadge(label = if (bn) "পূর্ণ" else "Full", tone = BsdcTone.WARN)
                                         }
@@ -307,6 +357,31 @@ fun EventDetailScreen(
                                         body = if (bn) "নতুন অংশগ্রহণকারী নেওয়া হচ্ছে না।" else "No more people can join.",
                                         tone = BsdcTone.WARN,
                                     )
+                                }
+                            }
+
+                            if (seats != null && !cancelled) {
+                                item {
+                                    BsdcCard {
+                                        BsdcSectionHeader(
+                                            title = if (bn) "আসন" else "Seats",
+                                            subtitle = if (seats == 0) {
+                                                if (bn) "সব আসন পূর্ণ" else "Every seat is taken"
+                                            } else if (bn) {
+                                                "$seatsLabel আসন বাকি"
+                                            } else {
+                                                "$seatsLabel seats left"
+                                            },
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                        val capacity = current.capacity ?: 0
+                                        val filled = (current.goingCount.toFloat() / capacity.toFloat())
+                                            .coerceIn(0f, 1f)
+                                        LinearProgressIndicator(
+                                            progress = { filled },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                    }
                                 }
                             }
 

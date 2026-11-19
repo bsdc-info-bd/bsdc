@@ -303,3 +303,131 @@ export async function sendForReview(campaignId: string): Promise<void> {
   });
   if (error) throw toDataError(error);
 }
+
+// ---------------------------- advertising credits ----------------------------
+//
+// 1 credit = 1 taka, minimum 500, paid by bKash, reviewed by staff.
+// See migration 0115. The price is computed on the server from the credit
+// count, so nothing here sends a price — only a count and the payment proof.
+
+/** The bKash transaction an advertiser paid with, and what they are owed. */
+export interface AdCreditRequest {
+  id: string;
+  credits: number;
+  pricePoisha: number;
+  method: 'bkash';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  reviewNote: string;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export interface MyAdCredits {
+  balancePoisha: number;
+  requests: AdCreditRequest[];
+}
+
+/** One row of the staff review queue, with the advertiser's name attached. */
+export interface AdCreditQueueRow {
+  id: string;
+  uid: string;
+  displayName: string;
+  username: string;
+  credits: number;
+  pricePoisha: number;
+  method: 'bkash';
+  senderNumber: string;
+  txnId: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  reviewNote: string;
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+function toCreditRequest(r: Record<string, unknown>): AdCreditRequest {
+  return {
+    id: String(r.id ?? ''),
+    credits: Number(r.credits ?? 0),
+    pricePoisha: Number(r.price_poisha ?? 0),
+    method: 'bkash',
+    status: (typeof r.status === 'string' ? r.status : 'pending') as AdCreditRequest['status'],
+    reviewNote: String(r.review_note ?? ''),
+    createdAt: String(r.created_at ?? ''),
+    decidedAt: typeof r.decided_at === 'string' ? r.decided_at : null,
+  };
+}
+
+/** The advertiser's wallet balance and their credit request history. */
+export async function fetchMyAdCredits(limit = 50): Promise<MyAdCredits> {
+  const { data, error } = await getSupabase().rpc('my_ad_credit_requests', { p_limit: limit });
+  if (error) throw toDataError(error);
+  const r = asObject(data);
+  return {
+    balancePoisha: Number(r.balance_poisha ?? 0),
+    requests: Array.isArray(r.requests)
+      ? r.requests.map((row) => toCreditRequest(asObject(row)))
+      : [],
+  };
+}
+
+/** Asks for credits after a bKash payment. Returns the request the server recorded. */
+export async function requestAdCredits(input: {
+  credits: number;
+  senderNumber: string;
+  txnId: string;
+}): Promise<AdCreditRequest> {
+  const { data, error } = await getSupabase().rpc('request_ad_credits', {
+    p_credits: input.credits,
+    p_sender_number: input.senderNumber.trim(),
+    p_txn_id: input.txnId.trim(),
+  });
+  if (error) throw toDataError(error);
+  return toCreditRequest(asObject(data));
+}
+
+/** The staff review queue, oldest request first so the backlog drains in order. */
+export async function fetchAdCreditQueue(
+  status: 'pending' | 'approved' | 'rejected' = 'pending',
+  limit = 100,
+): Promise<AdCreditQueueRow[]> {
+  const { data, error } = await getSupabase().rpc('ad_credit_queue', {
+    p_status: status,
+    p_limit: limit,
+  });
+  if (error) throw toDataError(error);
+  return Array.isArray(data)
+    ? data.map((row) => {
+        const r = asObject(row);
+        return {
+          id: String(r.id ?? ''),
+          uid: String(r.uid ?? ''),
+          displayName: String(r.display_name ?? 'Member'),
+          username: String(r.username ?? ''),
+          credits: Number(r.credits ?? 0),
+          pricePoisha: Number(r.price_poisha ?? 0),
+          method: 'bkash' as const,
+          senderNumber: String(r.sender_number ?? ''),
+          txnId: String(r.txn_id ?? ''),
+          status: (typeof r.status === 'string'
+            ? r.status
+            : 'pending') as AdCreditQueueRow['status'],
+          reviewNote: String(r.review_note ?? ''),
+          createdAt: String(r.created_at ?? ''),
+          decidedAt: typeof r.decided_at === 'string' ? r.decided_at : null,
+        };
+      })
+    : [];
+}
+
+export async function decideAdCreditRequest(
+  id: string,
+  decision: 'approve' | 'reject',
+  note = '',
+): Promise<void> {
+  const { error } = await getSupabase().rpc('decide_ad_credit_request', {
+    p_purchase_id: id,
+    p_decision: decision,
+    p_note: note.trim(),
+  });
+  if (error) throw toDataError(error);
+}

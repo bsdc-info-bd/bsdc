@@ -159,12 +159,6 @@ class PermissionCoordinator internal constructor(
                     android.Manifest.permission.CAMERA,
                 ) == PackageManager.PERMISSION_GRANTED
             }
-            DevicePermissionKind.MICROPHONE -> {
-                ContextCompat.checkSelfPermission(
-                    context,
-                    android.Manifest.permission.RECORD_AUDIO,
-                ) == PackageManager.PERMISSION_GRANTED
-            }
         }
     }
 }

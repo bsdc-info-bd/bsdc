@@ -14,7 +14,7 @@
  *
  * Outputs (into dist/): one index.html per route, sitemap.xml, robots.txt.
  */
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -84,6 +84,82 @@ export function renderHead(route, origin = SITE_URL) {
   ].join('\n    ');
 }
 
+/**
+ * The stylesheet the template links, inlined into each page.
+ *
+ * A `<link rel="stylesheet">` is render-blocking: nothing paints until it
+ * arrives, and on a mobile connection that is one more round trip in front of
+ * the first pixel. The file is the whole design system for every route — it is
+ * needed everywhere, it weighs ~11 kB compressed, and the HTML that carries it
+ * is already being fetched, so inlining removes a request instead of adding
+ * one. Critical-CSS extraction would split the same file in two and still leave
+ * a request for the rest.
+ */
+export function inlineStyles(html, cssByHref) {
+  return html.replace(/[ \t]*<link[^>]*rel="stylesheet"[^>]*>[ \t]*\n?/g, (tag) => {
+    const href = /href="([^"]+)"/.exec(tag)?.[1];
+    const css = href ? cssByHref.get(href) : undefined;
+    if (css === undefined) return tag;
+    return `<style>${css}</style>\n`;
+  });
+}
+
+/** Every stylesheet the template links, keyed by its href. */
+export async function readStylesheets(template, distDir) {
+  const hrefs = [...template.matchAll(/<link[^>]*rel="stylesheet"[^>]*>/g)]
+    .map((match) => /href="([^"]+)"/.exec(match[0])?.[1])
+    .filter((href) => typeof href === 'string' && href.startsWith('/'));
+  const styles = new Map();
+  for (const href of hrefs) {
+    try {
+      styles.set(href, await readFile(join(distDir, href.replace(/^\//, '')), 'utf8'));
+    } catch {
+      // A stylesheet that is not on disk stays a link; the page still works.
+    }
+  }
+  return styles;
+}
+
+/**
+ * The chunks a page needs to render, from Vite's build manifest.
+ *
+ * The route components are lazy: the entry script runs, discovers `import()`,
+ * and only then asks for the page. That is a second round trip in front of the
+ * first screen, and the prerender step knows the answer already — it is writing
+ * that page. The route's own chunk and the chunks it imports statically are
+ * named in the head, so the browser fetches them alongside the entry instead of
+ * after it.
+ */
+export function modulePreloadHrefs(route, manifest, seen = new Set()) {
+  const key = `src/routes/${route.component}.tsx`;
+  const entry = manifest[key];
+  if (!entry) return [];
+  const hrefs = [];
+  const url = (file) => (file.startsWith('assets/') ? `/${file}` : `/assets/${file}`);
+  // Depth 1 and at most ten: the page's own chunk, plus the chunks it imports
+  // directly. Every icon in the design system is its own chunk, so following
+  // the graph further turns one round trip into forty requests, and a
+  // modulepreload costs the same as the request it is trying to save.
+  const visit = (chunk, depth) => {
+    if (!chunk || depth > 1 || hrefs.length >= 10) return;
+    for (const file of [chunk.file, ...(chunk.css ?? [])]) {
+      if (!file || seen.has(file) || hrefs.length >= 10) continue;
+      seen.add(file);
+      hrefs.push(url(file));
+    }
+    for (const imported of chunk.imports ?? []) visit(manifest[imported], depth + 1);
+  };
+  visit(entry, 0);
+  return hrefs;
+}
+
+/** The `<link rel="modulepreload">` tags for one page. */
+export function modulePreloadTags(hrefs) {
+  return hrefs
+    .map((href) => `<link rel="modulepreload" crossorigin href="${escapeHtml(href)}" />`)
+    .join('\n    ');
+}
+
 /** The JSON-LD graph every page carries, with the page itself added to it. */
 export function renderJsonLd(route, origin = SITE_URL) {
   const base = origin.replace(/\/+$/, '');
@@ -133,17 +209,53 @@ export function renderJsonLd(route, origin = SITE_URL) {
 export function renderShell(route, routes) {
   const links = routes
     .filter((other) => other.path !== route.path)
-    .map((other) => `<li><a href="${other.path}">${escapeHtml(other.heading)}</a></li>`)
+    .map(
+      (other) =>
+        `<li><a class="fab-tap inline-flex rounded-full border border-border bg-surface px-3 py-1.5 text-sm text-muted" href="${other.path}">${escapeHtml(other.heading)}</a></li>`,
+    )
     .join('');
   // The home page keeps the marker the edge function fills with the live
   // feed; every other route is complete as it stands.
   const feedMarker = route.path === '/' ? '<div data-prerender-feed="home"></div>' : '';
+  /**
+   * Styled with the page's own classes, not bare tags.
+   *
+   * Two reasons, and the second is the one that matters. First, this markup is
+   * the no-JavaScript page: it should look like BSDC rather than like a plain
+   * document. Second, it is the largest thing on the screen before React runs,
+   * and an unstyled heading is a *different size* from the styled one — so the
+   * moment React painted the real hero, the browser recorded a second, later
+   * largest paint and the page's LCP became "when did the JavaScript finish"
+   * instead of "when did the content appear". Rendered at the same width, in
+   * the same classes, the replacement does not repaint anything larger.
+   *
+   * The stylesheet is inlined into every page (see `inlineStyles`), so these
+   * classes are already on the critical path and cost nothing extra.
+   */
+  /**
+   * The page's own opening, in full.
+   *
+   * `summary` is one sentence about the page; `opening` is the page — the
+   * paragraphs a reader sees first, taken from the same locale bundle the
+   * application renders. Without them the shell was shorter than the page it
+   * was standing in for, and the browser recorded the application's later,
+   * taller paint as the largest content on the screen: LCP became "when did
+   * the JavaScript finish" on every text page. With them the first paint is
+   * the page, and it is the page for a reader whose scripts never run.
+   */
+  const opening = (route.opening ?? [])
+    .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
+    .join('');
+  const heading = route.path === '/' ? 'text-4xl' : 'text-3xl';
   return [
     '<div data-prerender="true">',
     feedMarker,
-    `<h1>${escapeHtml(route.heading)}</h1>`,
-    `<p>${escapeHtml(route.summary)}</p>`,
-    `<nav aria-label="Sections"><ul>${links}</ul></nav>`,
+    '<section class="fab-container py-6 sm:py-10">',
+    `<h1 class="${heading}">${escapeHtml(route.heading)}</h1>`,
+    `<p class="mt-3 max-w-[60ch] text-base text-muted">${escapeHtml(route.summary)}</p>`,
+    opening === '' ? '' : `<div class="mt-6 max-w-[72ch] text-base">${opening}</div>`,
+    `<nav class="mt-5" aria-label="Sections"><ul class="flex flex-wrap gap-2">${links}</ul></nav>`,
+    '</section>',
     '</div>',
   ].join('');
 }
@@ -214,9 +326,25 @@ export function renderRobots(disallow, origin = SITE_URL) {
 async function main() {
   const { routes, disallow } = JSON.parse(await readFile(routesFile, 'utf8'));
   const template = await readFile(join(distDir, 'index.html'), 'utf8');
+  let manifest = {};
+  try {
+    manifest = JSON.parse(await readFile(join(distDir, '.vite', 'manifest.json'), 'utf8'));
+  } catch {
+    // A build without the manifest still prerenders; the pages just keep the
+    // entry script as the only script on the critical path.
+  }
+  const styles = await readStylesheets(template, distDir);
 
   for (const route of routes) {
-    const html = renderPage(template, route, routes);
+    // Anything the template already preloads (the entry chunk, the vendor
+    // split) is not named twice.
+    const preload = modulePreloadTags(
+      modulePreloadHrefs(route, manifest).filter((href) => !template.includes(href)),
+    );
+    const html = inlineStyles(
+      renderPage(template, route, routes).replace('</head>', `  ${preload}\n  </head>`),
+      styles,
+    );
     const target =
       route.path === '/'
         ? join(distDir, 'index.html')
@@ -224,6 +352,9 @@ async function main() {
     await mkdir(dirname(target), { recursive: true });
     await writeFile(target, html, 'utf8');
   }
+
+  // The manifest is a build artefact, not a public file.
+  await rm(join(distDir, '.vite'), { recursive: true, force: true });
 
   await writeFile(join(distDir, 'sitemap-static.xml'), renderSitemap(routes), 'utf8');
   await writeFile(join(distDir, 'robots.txt'), renderRobots(disallow), 'utf8');

@@ -1,5 +1,8 @@
 package bd.info.bsdc.app.feature.discover
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,12 +15,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -42,13 +54,18 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
+import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
+import coil3.ImageLoader
 import kotlinx.coroutines.launch
 
 /** One job in full: role, pay, skills, the description, and the one action the reader can take. */
@@ -57,7 +74,9 @@ import kotlinx.coroutines.launch
 fun JobDetailScreen(
     slug: String,
     viewerUid: String?,
+    viewerSkills: List<String> = emptyList(),
     repository: DiscoverRepository,
+    imageLoader: ImageLoader,
     language: AppLanguage,
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
@@ -78,6 +97,12 @@ fun JobDetailScreen(
     var applying by remember(slug) { mutableStateOf(false) }
     var applyError by remember(slug) { mutableStateOf<String?>(null) }
     var applied by remember(slug) { mutableStateOf(false) }
+    var saved by remember(slug) { mutableStateOf(false) }
+    var applicants by remember(slug) { mutableStateOf<List<JobApplicationDto>>(emptyList()) }
+    var applicantsBusy by remember(slug) { mutableStateOf(false) }
+    var banner by remember(slug) { mutableStateOf<String?>(null) }
+    var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
+    var actionBusy by remember(slug) { mutableStateOf(false) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -86,6 +111,21 @@ fun JobDetailScreen(
             .onSuccess { job = it }
             .onFailure { failed = true }
         loading = false
+
+        val loaded = job
+        val uid = viewerUid
+        if (loaded != null) {
+            repository.recordJobView(loaded.id)
+            if (!uid.isNullOrBlank()) {
+                repository.isOpportunitySaved("job", loaded.id).onSuccess { saved = it }
+                if (loaded.posterUid == uid) {
+                    applicantsBusy = true
+                    repository.fetchJobApplications(loaded.id)
+                        .onSuccess { applicants = JobDetailLogic.sortApplicationsForEmployer(it) }
+                    applicantsBusy = false
+                }
+            }
+        }
     }
 
     fun submitApplication(current: JobDetailDto) {
@@ -120,6 +160,50 @@ fun JobDetailScreen(
         context.startActivity(Intent.createChooser(intent, if (bn) "চাকরি শেয়ার করুন" else "Share job"))
     }
 
+    fun copyLink(current: JobDetailDto) {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return
+        clipboard.setPrimaryClip(ClipData.newPlainText("BSDC job", JobDetailLogic.webUrl(current.slug)))
+        banner = if (bn) "লিংক কপি হয়েছে।" else "Link copied."
+        bannerTone = BsdcTone.OK
+    }
+
+    fun withdraw(current: JobDetailDto) {
+        if (actionBusy) return
+        actionBusy = true
+        scope.launch {
+            repository.withdrawMyJobApplication(current.id, viewerUid.orEmpty())
+                .onSuccess {
+                    banner = if (bn) "আবেদন প্রত্যাহার করা হয়েছে।" else "Application withdrawn."
+                    bannerTone = BsdcTone.OK
+                    reloadNonce += 1
+                }
+                .onFailure {
+                    banner = if (bn) "প্রত্যাহার ব্যর্থ হয়েছে।" else "Withdrawal failed."
+                    bannerTone = BsdcTone.BAD
+                }
+            actionBusy = false
+        }
+    }
+
+    fun decide(current: JobDetailDto, application: JobApplicationDto, next: String) {
+        if (actionBusy) return
+        actionBusy = true
+        scope.launch {
+            repository.decideApplication(application.id, next)
+                .onSuccess {
+                    repository.fetchJobApplications(current.id)
+                        .onSuccess { applicants = JobDetailLogic.sortApplicationsForEmployer(it) }
+                    banner = if (bn) "আবেদনের অবস্থা হালনাগাদ হয়েছে।" else "Application updated."
+                    bannerTone = BsdcTone.OK
+                }
+                .onFailure {
+                    banner = if (bn) "হালনাগাদ ব্যর্থ হয়েছে।" else "Update failed."
+                    bannerTone = BsdcTone.BAD
+                }
+            actionBusy = false
+        }
+    }
+
     val current = job
     val resumeValid = resumeLink.isBlank() || DiscoverSearchEngine.safeHttpUrlOrEmpty(resumeLink).isNotBlank()
 
@@ -142,6 +226,42 @@ fun JobDetailScreen(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
+            current?.let { loaded ->
+                IconButton(onClick = { copyLink(loaded) }) {
+                    Icon(Icons.Rounded.ContentCopy, contentDescription = if (bn) "লিংক কপি" else "Copy link")
+                }
+                IconButton(
+                    onClick = {
+                        if (viewerUid.isNullOrBlank()) {
+                            onSignInRequired()
+                        } else {
+                            scope.launch {
+                                repository.toggleSavedOpportunity(
+                                    kind = "job",
+                                    remoteId = loaded.id,
+                                    slug = loaded.slug,
+                                    title = loaded.title,
+                                    subtitle = loaded.company,
+                                    nowMillis = System.currentTimeMillis(),
+                                ).onSuccess { nowSaved ->
+                                    saved = nowSaved
+                                    banner = if (nowSaved) {
+                                        if (bn) "চাকরি সংরক্ষিত হয়েছে।" else "Job saved."
+                                    } else {
+                                        if (bn) "সংরক্ষণ থেকে সরানো হয়েছে।" else "Removed from saved."
+                                    }
+                                    bannerTone = BsdcTone.OK
+                                }
+                            }
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = if (saved) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                        contentDescription = if (bn) "সংরক্ষণ" else "Save",
+                    )
+                }
+            }
         }
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -184,7 +304,6 @@ fun JobDetailScreen(
                         externalUrl = externalUrl,
                     )
                     val skills = JobDetailLogic.skillChips(current.skills)
-                    val applicationCount = BanglaDigitFormatter.formatCount(current.applicationsCount.toLong(), language)
 
                     BsdcResponsiveContainer(modifier = Modifier.fillMaxSize()) {
                         LazyColumn(
@@ -193,7 +312,44 @@ fun JobDetailScreen(
                             modifier = Modifier.fillMaxSize(),
                         ) {
                             item {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                BsdcHeroBanner(
+                                    title = current.title,
+                                    subtitle = listOf(current.company, current.city.ifBlank { current.country })
+                                        .filter { it.isNotBlank() }
+                                        .joinToString(" · "),
+                                    eyebrow = if (bn) "চাকরির সুযোগ" else "Job opportunity",
+                                    icon = Icons.Rounded.Work,
+                                    stats = buildList {
+                                        add(
+                                            (if (bn) "আবেদন" else "Applicants") to
+                                                BanglaDigitFormatter.formatCount(current.applicationsCount.toLong(), language),
+                                        )
+                                        add((if (bn) "ধরন" else "Type") to current.jobType.replace("_", " "))
+                                        if (current.workMode.isNotBlank()) {
+                                            add((if (bn) "কাজ" else "Mode") to current.workMode)
+                                        }
+                                    },
+                                    primaryActionLabel = when (state) {
+                                        JobDetailLogic.ApplyState.IN_APP -> if (bn) "আবেদন করুন" else "Apply now"
+                                        JobDetailLogic.ApplyState.EXTERNAL -> if (bn) "কোম্পানির সাইটে আবেদন" else "Apply on site"
+                                        JobDetailLogic.ApplyState.SIGN_IN -> if (bn) "সাইন ইন করে আবেদন" else "Sign in to apply"
+                                        else -> null
+                                    },
+                                    onPrimaryAction = {
+                                        when (state) {
+                                            JobDetailLogic.ApplyState.IN_APP -> showApply = true
+                                            JobDetailLogic.ApplyState.EXTERNAL -> onOpenExternal(externalUrl)
+                                            JobDetailLogic.ApplyState.SIGN_IN -> onSignInRequired()
+                                            else -> Unit
+                                        }
+                                    },
+                                    secondaryActionLabel = if (bn) "শেয়ার" else "Share",
+                                    onSecondaryAction = { shareJob(current) },
+                                )
+                            }
+
+                            item {
+                                BsdcCard {
                                     FlowRow(
                                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -207,16 +363,14 @@ fun JobDetailScreen(
                                         if (current.city.isNotBlank()) {
                                             BsdcBadge(label = current.city, tone = BsdcTone.NEUTRAL)
                                         }
+                                        if (!live) {
+                                            BsdcBadge(
+                                                label = if (bn) "বন্ধ" else "CLOSED",
+                                                tone = BsdcTone.WARN,
+                                            )
+                                        }
                                     }
-                                    Text(
-                                        text = current.title,
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        fontWeight = FontWeight.Bold,
-                                    )
-                                    if (current.company.isNotBlank()) {
-                                        Text(text = current.company, style = MaterialTheme.typography.bodyLarge)
-                                    }
-                                    Text(
+                                    BsdcInfoPill(
                                         text = DiscoverSearchEngine.formatCompensation(
                                             current.salaryMin,
                                             current.salaryMax,
@@ -224,13 +378,53 @@ fun JobDetailScreen(
                                             current.salaryPeriod,
                                             bn,
                                         ),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = BsdcThemeTokens.colors.brandStrong,
+                                        icon = Icons.Rounded.Star,
+                                        tone = BsdcTone.OK,
                                     )
-                                    Text(
-                                        text = if (bn) "আবেদন: $applicationCount" else "Applications: ${current.applicationsCount}",
-                                        style = MaterialTheme.typography.bodySmall,
+                                    val yearly = JobDetailLogic.yearlyEquivalent(
+                                        current.salaryMin,
+                                        current.salaryMax,
+                                        current.salaryCurrency,
+                                        current.salaryPeriod,
                                     )
+                                    if (yearly.isNotBlank()) {
+                                        Text(
+                                            text = if (bn) {
+                                                "বার্ষিক হিসাবে প্রায় $yearly"
+                                            } else {
+                                                "About $yearly a year"
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = BsdcThemeTokens.colors.mutedText,
+                                        )
+                                    }
+                                    if (viewerSkills.isNotEmpty() && current.skills.isNotEmpty()) {
+                                        val match = DiscoverSearchEngine.skillMatchPercent(
+                                            current.skills,
+                                            viewerSkills,
+                                        )
+                                        if (match > 0) {
+                                            LinearProgressIndicator(
+                                                progress = { match / 100f },
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                            Text(
+                                                text = if (bn) {
+                                                    "$match% দক্ষতা মিলেছে আপনার প্রোফাইলের সাথে"
+                                                } else {
+                                                    "$match% of the skills are already on your profile"
+                                                },
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = BsdcThemeTokens.colors.mutedText,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!banner.isNullOrBlank()) {
+                                item {
+                                    BsdcStatusBanner(title = banner.orEmpty(), body = "", tone = bannerTone)
                                 }
                             }
 
@@ -254,11 +448,30 @@ fun JobDetailScreen(
                                 }
                             } else if (!current.myStatus.isNullOrBlank()) {
                                 item {
-                                    BsdcStatusBanner(
-                                        title = if (bn) "আপনার আবেদন" else "Your application",
-                                        body = current.myStatus.orEmpty(),
-                                        tone = BsdcTone.INFO,
-                                    )
+                                    BsdcCard {
+                                        BsdcSectionHeader(
+                                            title = if (bn) "আপনার আবেদন" else "Your application",
+                                            subtitle = JobDetailLogic.applicationStatusLabel(
+                                                current.myStatus.orEmpty(),
+                                                bn,
+                                            ),
+                                        )
+                                        LinearProgressIndicator(
+                                            progress = {
+                                                JobDetailLogic.applicationProgress(current.myStatus.orEmpty()) / 100f
+                                            },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        )
+                                        if (JobDetailLogic.canWithdraw(current.myStatus)) {
+                                            BsdcButton(
+                                                label = if (bn) "আবেদন প্রত্যাহার" else "Withdraw application",
+                                                secondary = true,
+                                                enabled = !actionBusy,
+                                                onClick = { withdraw(current) },
+                                                modifier = Modifier.fillMaxWidth(),
+                                            )
+                                        }
+                                    }
                                 }
                             }
 
@@ -335,6 +548,101 @@ fun JobDetailScreen(
                                             style = MaterialTheme.typography.bodyMedium,
                                             modifier = Modifier.padding(top = 8.dp),
                                         )
+                                    }
+                                }
+                            }
+
+                            if (isOwner) {
+                                item {
+                                    BsdcSectionHeader(
+                                        title = if (bn) "আবেদনকারীরা" else "Applicants",
+                                        subtitle = if (applicants.isEmpty()) {
+                                            if (bn) "এখনো কেউ আবেদন করেনি।" else "Nobody has applied yet."
+                                        } else {
+                                            if (bn) {
+                                                "${applicants.size}টি আবেদন · ${applicants.count { !JobDetailLogic.isDecided(it.status) }}টি সিদ্ধান্ত বাকি"
+                                            } else {
+                                                "${applicants.size} total · ${applicants.count { !JobDetailLogic.isDecided(it.status) }} awaiting a decision"
+                                            }
+                                        },
+                                    )
+                                }
+                                if (applicantsBusy) {
+                                    items(2) { BsdcDirectorySkeletonCard() }
+                                }
+                                items(applicants, key = { it.id }) { application ->
+                                    BsdcCard {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            // `applicantCard` resolves the flat queue columns and
+                                            // the older embedded shape, so an employer still sees
+                                            // who applied now that the join happens server-side.
+                                            BsdcAvatar(
+                                                avatarUrl = application.applicantCard.avatarUrl,
+                                                displayName = application.applicantCard.displayName
+                                                    ?: application.applicantCard.username
+                                                    ?: (if (bn) "আবেদনকারী" else "Applicant"),
+                                                imageLoader = imageLoader,
+                                                size = 42.dp,
+                                            )
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = application.applicantCard.displayName
+                                                        ?: application.applicantCard.username
+                                                        ?: (if (bn) "আবেদনকারী" else "Applicant"),
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text(
+                                                    text = JobDetailLogic.applicationStatusLabel(application.status, bn),
+                                                    style = MaterialTheme.typography.labelMedium,
+                                                    color = BsdcThemeTokens.colors.mutedText,
+                                                )
+                                            }
+                                            if (JobDetailLogic.isDecided(application.status)) {
+                                                BsdcBadge(
+                                                    label = JobDetailLogic.applicationStatusLabel(application.status, bn),
+                                                    tone = BsdcTone.NEUTRAL,
+                                                )
+                                            }
+                                        }
+                                        if (application.coverLetter.isNotBlank()) {
+                                            Text(
+                                                text = application.coverLetter,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 5,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        val resume = DiscoverSearchEngine.safeHttpUrlOrEmpty(application.resumeUrl)
+                                        if (resume.isNotBlank()) {
+                                            BsdcButton(
+                                                label = if (bn) "রিজিউমি খুলুন" else "Open résumé",
+                                                secondary = true,
+                                                onClick = { onOpenExternal(resume) },
+                                            )
+                                        }
+                                        val actions = JobDetailLogic.employerActionsFor(application.status)
+                                        if (actions.isNotEmpty()) {
+                                            HorizontalDivider()
+                                            FlowRow(
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                            ) {
+                                                actions.forEach { next ->
+                                                    BsdcButton(
+                                                        label = JobDetailLogic.applicationStatusLabel(next, bn),
+                                                        secondary = next != "hired",
+                                                        enabled = !actionBusy,
+                                                        onClick = { decide(current, application, next) },
+                                                    )
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }

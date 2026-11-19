@@ -53,15 +53,16 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const unique = (values) => [...new Set(values)];
 const has = (path) => existsSync(join(root, path));
 
+/** Evidence line for a list that was checked, used by a few checkpoints. */
+const producersNote = (names) => `named in both locales: ${names.join(', ')}`;
+
 /** Every directory with a package.json at depth one: the deployable units. */
 const packages = readdirSync(root)
   .filter((name) => statSync(join(root, name)).isDirectory())
   .filter((name) => existsSync(join(root, name, 'package.json')))
   .sort();
 
-const webApps = packages.filter(
-  (name) => name !== 'corporate-kit' && name !== 'push-worker',
-);
+const webApps = packages.filter((name) => name !== 'corporate-kit' && name !== 'push-worker');
 const consoles = webApps.filter((name) => name !== 'main-site');
 /**
  * The one Cloudflare Worker. It is a deployable unit with its own gates, but it
@@ -95,15 +96,24 @@ check('A-14', 'Delivery', 'The push worker is a deployable unit of its own', () 
     'it is deployed by deploy.yml and gated by the push-worker job in ci.yml',
 }));
 
-check('A-03', 'Delivery', 'The Android app is a pure native Kotlin + Java + Compose project', () => ({
-  ok:
-    !has('android-app/capacitor.config.ts') &&
-    has('android-app/settings.gradle.kts') &&
-    has('android-app/app/build.gradle.kts') &&
-    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java') &&
-    has('android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/DocCodeChecksum.java'),
-  evidence: 'native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor',
-}));
+check(
+  'A-03',
+  'Delivery',
+  'The Android app is a pure native Kotlin + Java + Compose project',
+  () => ({
+    ok:
+      !has('android-app/capacitor.config.ts') &&
+      has('android-app/settings.gradle.kts') &&
+      has('android-app/app/build.gradle.kts') &&
+      has(
+        'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
+      ) &&
+      has(
+        'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/DocCodeChecksum.java',
+      ),
+    evidence: 'native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor',
+  }),
+);
 
 check('A-04', 'Delivery', 'Every application declares the five gate scripts', () => {
   const missing = packages.filter((name) => {
@@ -196,36 +206,57 @@ check('B-03b', 'Database', 'No pinned search path leaves out the extensions sche
   );
   return {
     ok: bad.length === 0,
-    evidence: bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
+    evidence:
+      bad.length === 0 ? `${paths.length} search paths, all naming extensions` : bad.join(' | '),
   };
 });
 
-check('B-03c', 'Database', '`pg_temp` is last, so a caller cannot get in front of a real schema', () => {
-  const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
-    match[1].trim(),
-  );
-  const bad = [...new Set(paths)].filter((path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path));
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
-});
+check(
+  'B-03c',
+  'Database',
+  '`pg_temp` is last, so a caller cannot get in front of a real schema',
+  () => {
+    const paths = [...sqlCode.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((match) =>
+      match[1].trim(),
+    );
+    const bad = [...new Set(paths)].filter(
+      (path) => /pg_temp/.test(path) && !/,\s*pg_temp\s*;?$/.test(path),
+    );
+    return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every path' : bad.join(' | ') };
+  },
+);
 
 // The same class of mistake in a different coat. A function body is resolved
 // against *its own* pinned search path at the moment it is created, so a file
 // that calls an extension-owned symbol must say where to look. Qualifying the
 // call instead would tie the file to one deployment's layout; naming the
 // schema in the path works wherever the extension landed.
-check('B-03d', 'Database', 'A file that calls an extension-owned symbol says where to find it', () => {
-  const owned = ['gen_random_bytes', 'digest', 'hmac', 'gen_salt', 'crypt', 'similarity', 'show_trgm'];
-  const bad = [];
-  for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
-    const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
-    const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
-    if (uses.length === 0) continue;
-    const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
-    const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
-    if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
-  }
-  return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
-});
+check(
+  'B-03d',
+  'Database',
+  'A file that calls an extension-owned symbol says where to find it',
+  () => {
+    const owned = [
+      'gen_random_bytes',
+      'digest',
+      'hmac',
+      'gen_salt',
+      'crypt',
+      'similarity',
+      'show_trgm',
+    ];
+    const bad = [];
+    for (const [file, sql] of migrations.map((path) => [path, read(path.replace(/^\.\//, ''))])) {
+      const code = sql.replace(/--[^\n]*/g, '').replace(/'(?:[^']|'')*'/g, "''");
+      const uses = owned.filter((name) => new RegExp(`(?<![.\\w])${name}\\s*\\(`).test(code));
+      if (uses.length === 0) continue;
+      const paths = [...code.matchAll(/set\s+search_path\s*=\s*([^\n;]+)/gi)].map((m) => m[1]);
+      const covered = paths.filter((path) => /(^|,)\s*extensions\s*(,|$)/.test(path));
+      if (covered.length === 0) bad.push(`${file} (${uses.join(', ')})`);
+    }
+    return { ok: bad.length === 0, evidence: bad.length === 0 ? 'every file' : bad.join(' | ') };
+  },
+);
 
 check('B-04', 'Database', 'No migration grants a blanket write to anon', () => {
   const bad = shLines(
@@ -319,8 +350,15 @@ check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
   // proves itself to a routine that has no member to ask. `bsdc.role_rank` is a
   // pure comparison and is not one, so the pattern names the secret check
   // explicitly rather than matching anything under the `bsdc.` namespace.
+  //
+  // `bsdc.mk_require_uid()` (0094) and `bsdc.mk_require_staff_permission()`
+  // (0094) are the marketplace's own guards: the first raises `42501` when
+  // `current_uid()` is null, the second performs `bsdc.require_permission`.
+  // Naming them costs nothing and keeps the evidence honest — a `mk_*` RPC that
+  // begins with `perform bsdc.mk_require_uid()` refuses anonymous callers just
+  // as firmly as one that spells the check out inline.
   const guarded = blocks.filter((block) =>
-    /require_permission|has_permission|current_uid\(\)|push_secret_matches/.test(
+    /require_permission|has_permission|current_uid\(\)|push_secret_matches|mk_require_uid|mk_require_staff_permission/.test(
       block.slice(0, 2500),
     ),
   );
@@ -417,8 +455,13 @@ check('C-04', 'Front end', 'Nothing logs to the console in shipped code', () => 
 });
 
 check('C-05', 'Front end', 'Nothing can force a horizontal scrollbar', () => {
+  // Scoped to the sites the browser ships. The Android tree carries a vendored
+  // leaflet.css whose `width: 1600px` is Leaflet's own Safari tile-container
+  // hack, which runs inside a WebView on a map canvas, not in a page layout — a
+  // horizontal scrollbar cannot reach it, and editing a third-party file to
+  // satisfy a layout rule would be the wrong repair.
   const wide = shLines(
-    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v "@media"`,
+    `grep -rnE --exclude-dir=node_modules --exclude-dir=dist --exclude-dir=.git --exclude-dir=android-app "(^|[^-])width:\\s*[0-9]{4,}px" --include="*.css" --include="*.tsx" . | grep -v "@media"`,
   );
   const css = ['base.css', 'components.css', 'fabric.css', 'index.css']
     .filter((name) => has(`main-site/src/styles/${name}`))
@@ -543,23 +586,28 @@ check('D-05', 'Safety', 'The secret scanner runs before anything else in CI', ()
   return { ok: /gitleaks/.test(ci), evidence: 'gitleaks runs in the secrets-scan job' };
 });
 
-check('D-06', 'Safety', 'The native Android router renders only BSDC and News origins in-app', () => {
-  const router = read(
-    'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
-  );
-  const models = read(
-    'android-app/core/model/src/main/kotlin/bd/info/bsdc/app/core/model/BsdcModels.kt',
-  );
-  return {
-    ok:
-      /NATIVE_HOSTS/.test(models) &&
-      /NEWS_HOSTS/.test(models) &&
-      /ExternalBrowser/.test(router) &&
-      /AdminWebOnly/.test(router),
-    evidence:
-      'AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin*, and sends untrusted hosts to browser',
-  };
-});
+check(
+  'D-06',
+  'Safety',
+  'The native Android router renders only BSDC and News origins in-app',
+  () => {
+    const router = read(
+      'android-app/core/common/src/main/java/bd/info/bsdc/app/core/common/AppLinkUriRouter.java',
+    );
+    const models = read(
+      'android-app/core/model/src/main/kotlin/bd/info/bsdc/app/core/model/BsdcModels.kt',
+    );
+    return {
+      ok:
+        /NATIVE_HOSTS/.test(models) &&
+        /NEWS_HOSTS/.test(models) &&
+        /ExternalBrowser/.test(router) &&
+        /AdminWebOnly/.test(router),
+      evidence:
+        'AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin*, and sends untrusted hosts to browser',
+    };
+  },
+);
 
 check('D-07', 'Safety', 'Field measurement carries no identity', () => {
   const sql = read('supabase/migrations/0034_performance.sql');
@@ -694,16 +742,21 @@ check('G-02', 'Web delivery', 'Push worker cleans up any leftover offline or ima
   };
 });
 
-check('G-03', 'Web delivery', 'No offline shell, offline banner, or picture cache module ships', () => ({
-  ok:
-    !has('main-site/src/components/layout/OfflineBanner.tsx') &&
-    !has('main-site/src/routes/OfflinePage.tsx') &&
-    !has('main-site/src/pwa.ts') &&
-    !has('main-site/src/lib/media/image-strategy.ts') &&
-    !has('main-site/src/lib/media/cache-policy.ts') &&
-    !has('main-site/src/components/media/PictureHealthCard.tsx'),
-  evidence: 'offline page, offline banner, pwa.ts, and client picture cache modules are absent',
-}));
+check(
+  'G-03',
+  'Web delivery',
+  'No offline shell, offline banner, or picture cache module ships',
+  () => ({
+    ok:
+      !has('main-site/src/components/layout/OfflineBanner.tsx') &&
+      !has('main-site/src/routes/OfflinePage.tsx') &&
+      !has('main-site/src/pwa.ts') &&
+      !has('main-site/src/lib/media/image-strategy.ts') &&
+      !has('main-site/src/lib/media/cache-policy.ts') &&
+      !has('main-site/src/components/media/PictureHealthCard.tsx'),
+    evidence: 'offline page, offline banner, pwa.ts, and client picture cache modules are absent',
+  }),
+);
 
 /* ------------------------------------------------------------------ *
  * 8. Tests
@@ -715,14 +768,26 @@ note('H-01', 'Tests', 'Unit tests by package', () => {
     // parentheses is the same count. Grepping only the first form missed a package
     // whose run ended in a different shape and reported it as zero tests, which is
     // indistinguishable from a package with no tests.
+    // A package whose dependencies are not installed reports zero tests, which is
+    // indistinguishable in the output from a package that has no tests. That is how a
+    // real gap hides: run this in a clean checkout and every package reads 0.
+    if (!existsSync(join(name, 'node_modules'))) {
+      return { name, n: 0, skipped: true };
+    }
     const output = sh(
       `cd ${name} && npx vitest run 2>&1 | grep -E "^ *Tests +[0-9]+ (passed|failed)" | tail -1 || true`,
     );
     const n = Number(output.match(/(\d+) (?:passed|failed)/)?.[1] ?? 0);
-    return { name, n };
+    return { name, n, skipped: false };
   });
   const total = counts.reduce((sum, entry) => sum + entry.n, 0);
-  return `${total} tests: ${counts.map((entry) => `${entry.name} ${entry.n}`).join(', ')}`;
+  const skipped = counts.filter((entry) => entry.skipped).map((entry) => entry.name);
+  const run = counts.filter((entry) => !entry.skipped);
+  return `${total} tests across ${run.length} installed package(s)${
+    skipped.length > 0
+      ? `; ${skipped.length} package(s) not counted because dependencies are not installed: ${skipped.join(', ')}`
+      : ''
+  }: ${run.map((entry) => `${entry.name} ${entry.n}`).join(', ') || 'none'}`;
 });
 
 check('H-02', 'Tests', 'Every package has at least one test file', () => {
@@ -914,8 +979,7 @@ check('C-14', 'Front end', 'Every image carries alternative text', () => {
     // writing `alt=` next to the element: `MediaImage` destructures it and
     // spreads the rest, so the attribute is there at runtime and is typed as
     // non-optional at the call site.
-    const altIsARequiredProp =
-      /alt:\s*string;/.test(source) && !/alt\?:/.test(source);
+    const altIsARequiredProp = /alt:\s*string;/.test(source) && !/alt\?:/.test(source);
     for (const match of source.matchAll(/<img\b([\s\S]*?)\/>/g)) {
       if (!/\balt=|\{\.\.\./.test(match[1]) && !altIsARequiredProp) bad.push(file);
     }
@@ -1015,20 +1079,33 @@ check('C-22', 'Front end', 'The shared kit is imported, never copied', () => {
   };
 });
 
-check('D-08', 'Safety', 'The native Android app disables cleartext traffic, backups, and Capacitor shells', () => {
-  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
-  return {
-    ok:
-      !has('android-app/capacitor.config.ts') &&
-      /android:usesCleartextTraffic="false"/.test(manifest) &&
-      !/android:usesCleartextTraffic="true"/.test(manifest) &&
-      /android:allowBackup="false"/.test(manifest),
-    evidence: 'native manifest disables cleartext and backups; zero Capacitor shell exists',
-  };
-});
+check(
+  'D-08',
+  'Safety',
+  'The native Android app disables cleartext traffic, backups, and Capacitor shells',
+  () => {
+    const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+    return {
+      ok:
+        !has('android-app/capacitor.config.ts') &&
+        /android:usesCleartextTraffic="false"/.test(manifest) &&
+        !/android:usesCleartextTraffic="true"/.test(manifest) &&
+        /android:allowBackup="false"/.test(manifest),
+      evidence: 'native manifest disables cleartext and backups; zero Capacitor shell exists',
+    };
+  },
+);
 
 check('D-09', 'Safety', 'No Firebase service configuration is committed for Android', () => {
-  const tracked = shLines(`git ls-files | grep -i "google-services.json\\|keystore"`);
+  // Credential *files*, not source that mentions them. The original pattern also
+  // matched android-app/scripts/prepare-release-keystore.mjs, which is the code
+  // that decodes the keystore from CI secrets — a file whose whole purpose is to
+  // avoid committing one. It reads every password from the environment and holds
+  // no key of its own, so matching it was a false positive that would have been
+  // "fixed" by renaming an honest script.
+  const tracked = shLines(
+    `git ls-files | grep -iE "google-services\\.json$|\\.(jks|keystore|p12|p8|pem|mobileprovision)$" | grep -v "\\.example$"`,
+  );
   return {
     ok: tracked.length === 0,
     evidence: tracked.length === 0 ? 'none; both arrive from CI secrets' : tracked.join(', '),
@@ -1166,26 +1243,31 @@ check('G-04', 'Web delivery', 'Website HTML does not advertise an offline PWA ma
   };
 });
 
-check('G-05', 'Web delivery', 'Service worker never intercepts fetches, navigations, or images', () => {
-  const worker = read('main-site/src/sw.ts');
-  const checks = {
-    noWorkbox: !/from\s+['"]workbox-/.test(worker),
-    noPrecache: !/precacheAndRoute/.test(worker),
-    noNavigation: !/NavigationRoute|createHandlerBoundToURL/.test(worker),
-    noFetchListener: !/addEventListener\(['"]fetch['"]/.test(worker),
-    noCachePut: !/caches\.open\(|cache\.put\(/.test(worker),
-  };
-  const failed = Object.entries(checks)
-    .filter(([, present]) => !present)
-    .map(([name]) => name);
-  return {
-    ok: failed.length === 0,
-    evidence:
-      failed.length === 0
-        ? 'push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes'
-        : `failed: ${failed.join(', ')}`,
-  };
-});
+check(
+  'G-05',
+  'Web delivery',
+  'Service worker never intercepts fetches, navigations, or images',
+  () => {
+    const worker = read('main-site/src/sw.ts');
+    const checks = {
+      noWorkbox: !/from\s+['"]workbox-/.test(worker),
+      noPrecache: !/precacheAndRoute/.test(worker),
+      noNavigation: !/NavigationRoute|createHandlerBoundToURL/.test(worker),
+      noFetchListener: !/addEventListener\(['"]fetch['"]/.test(worker),
+      noCachePut: !/caches\.open\(|cache\.put\(/.test(worker),
+    };
+    const failed = Object.entries(checks)
+      .filter(([, present]) => !present)
+      .map(([name]) => name);
+    return {
+      ok: failed.length === 0,
+      evidence:
+        failed.length === 0
+          ? 'push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes'
+          : `failed: ${failed.join(', ')}`,
+    };
+  },
+);
 
 check('I-01', 'CI', 'Continuous integration runs all five gates on every application', () => {
   const ci = read('.github/workflows/ci.yml');
@@ -1342,6 +1424,289 @@ check('C-28', 'Front end', 'Every console states a minimum width of nothing', ()
   };
 });
 
+check(
+  'C-29',
+  'Front end',
+  'A comment can carry a picture, and the picture survives the upload sweeper',
+  () => {
+    // Migration 0120. The two halves that matter are the ones a reviewer cannot
+    // see in the UI: the column exists with a check that it is an https address,
+    // and the purge function was taught that a comment referencing a picture is a
+    // reference — without that line the sweeper deletes every comment picture a
+    // day after it is uploaded.
+    const purge = read('supabase/migrations/0120_a_comment_can_carry_a_picture.sql');
+    const web = read('main-site/src/components/interactions/CommentThread.tsx');
+    const android = read(
+      'android-app/feature/feed/src/main/kotlin/bd/info/bsdc/app/feature/feed/FeedRepository.kt',
+    );
+    const ok =
+      purge.includes('image_url') &&
+      purge.includes("image_url ~ '^https://") &&
+      purge.includes('from public.comments c') &&
+      web.includes('<CommentPicture') &&
+      android.includes('image_url,image_thumb_url,image_alt');
+    return {
+      ok,
+      evidence: ok
+        ? 'comments carry one https picture on web and Android, and media_pending_purge treats it as a reference'
+        : 'the picture column, its https check, the sweeper reference, or one of the two clients is missing',
+    };
+  },
+);
+
+check('C-30', 'Front end', 'Every settings panel has an address of its own', () => {
+  // One URL and a `useState` meant the back button did nothing and a link could
+  // not point at a panel. The panels are addresses now, and `/settings` still
+  // answers by redirecting to the first one.
+  const site = read('main-site/src/lib/site.ts');
+  const page = read('main-site/src/routes/SettingsPage.tsx');
+  const app = read('main-site/src/App.tsx');
+  const panels = [
+    'Account',
+    'Appearance',
+    'Language',
+    'Notifications',
+    'Feed',
+    'Privacy',
+    'Security',
+    'Danger',
+  ];
+  const missing = panels.filter((name) => !site.includes(`settings${name}: '/settings/`));
+  return {
+    ok:
+      missing.length === 0 &&
+      /settings\/\:panel/.test(`${app}${read('main-site/src/lib/seo/app-routes.ts')}`) &&
+      page.includes('useParams') &&
+      page.includes('navigate(next.path)'),
+    evidence:
+      missing.length === 0
+        ? 'eight panels, each with its own path, and the tab strip navigates instead of holding state'
+        : `panels without a path: ${missing.join(', ')}`,
+  };
+});
+
+check('B-18', 'Database', 'A tag a member types is a tag, not a suggestion', () => {
+  // The composer accepted any tag and the save attached only the words that
+  // already existed in `public.tags`, so anything else disappeared between the
+  // chip and the published post with nothing said about it. 0124 creates the tag
+  // the post uses, inside the same transaction.
+  const migration = read('supabase/migrations/0124_a_tag_a_member_types_is_a_tag.sql');
+  const proof = read('main-site/scripts/db-prove/t83.mjs');
+  const composer = read('main-site/src/routes/ComposePage.tsx');
+  const tagInput = read('main-site/src/design-system/TagInput.tsx');
+  return {
+    ok:
+      migration.includes('insert into public.tags (slug, label_en, label_bn)') &&
+      migration.includes('grant insert on public.tags to authenticated') &&
+      migration.includes('create policy tags_insert_member') &&
+      // The chip on screen is the tag that is saved: the composer normalises
+      // before the chip exists, so a word that cannot be a tag never appears.
+      composer.includes('normalize={normalizeTag}') &&
+      tagInput.includes('normalize(raw.trim())') &&
+      proof.includes('every tag on the chip list is on the post') &&
+      proof.includes('a curated tag keeps the labels it already had') &&
+      proof.includes('a one-character word is not a tag'),
+    evidence:
+      'a new word becomes a tag with a readable label, a curated word keeps its labels, and a word that cannot be a tag never becomes one',
+  };
+});
+
+check('C-34', 'Content', 'Editing a comment opens with the comment in the box', () => {
+  // The edit box opened empty. The member pressed the pencil, their words
+  // vanished, and saving wrote whatever they typed over the top — silently.
+  const form = read('main-site/src/components/interactions/CommentForm.tsx');
+  const thread = read('main-site/src/components/interactions/CommentThread.tsx');
+  const test = read('main-site/src/test/comment-edit.test.tsx');
+  return {
+    ok:
+      form.includes('initialBody?: string') &&
+      form.includes('useState(initialBody)') &&
+      thread.includes('initialBody={node.body}') &&
+      test.includes('opens with the comment already in the box') &&
+      test.includes('keeps the picture the comment already carries'),
+    evidence:
+      'the edit box starts from the stored body, and cancelling leaves the comment and its picture as they were',
+  };
+});
+
+check('C-35', 'Front end', 'The composer is an editor, not a textarea', () => {
+  // A member writes markdown. Without a toolbar the only way to write a heading,
+  // a list or a link is to remember the syntax, and without a cover field every
+  // post was published with an empty `cover_url` the post page has always had a
+  // slot for.
+  const editor = read('main-site/src/components/content/MarkdownEditor.tsx');
+  const cover = read('main-site/src/components/content/CoverImagePicker.tsx');
+  const compose = read('main-site/src/routes/ComposePage.tsx');
+  const logic = read('main-site/src/lib/content/markdown-edit.ts');
+  const logicTest = read('main-site/src/lib/content/markdown-edit.test.ts');
+  return {
+    ok:
+      // The toolbar acts on a selection through tested pure functions.
+      editor.includes('role="toolbar"') &&
+      editor.includes("key === 'b'") &&
+      editor.includes('onPaste') &&
+      editor.includes('onDrop') &&
+      logic.includes('export function wrapSelection') &&
+      logic.includes('export function continueLine') &&
+      logicTest.includes('unwraps text that is already wrapped') &&
+      logicTest.includes('continues an unordered list') &&
+      // The page uses them, and the cover reaches the column the post page reads.
+      compose.includes('<MarkdownEditor') &&
+      compose.includes('<CoverImagePicker') &&
+      compose.includes("onChange={(url) => update('coverUrl', url)}") &&
+      cover.includes("purpose: 'cover'"),
+    evidence:
+      'the body is written in an editor with a tested toolbar, pictures are pasted or dropped, and a post can carry a cover',
+  };
+});
+
+check('B-17', 'Database', 'A post is saved once, or not at all', () => {
+  // A save used to be up to nine requests — the post row, then tags, media,
+  // mentions and the poll — and a failure in any of them left the post published
+  // without its parts. `public.save_post` (0123) is the same write in one
+  // transaction, `security invoker` so every policy still decides, and the client
+  // sends one request instead of nine.
+  const migration = read('supabase/migrations/0123_a_post_is_saved_once.sql');
+  const repository = read('main-site/src/lib/content/post-repository.ts');
+  const proof = read('main-site/scripts/db-prove/t82.mjs');
+  const unit = read('main-site/src/lib/content/save-post.test.ts');
+  const android = read(
+    'android-app/feature/compose/src/main/kotlin/bd/info/bsdc/app/feature/compose/ComposeRepository.kt',
+  );
+  const save = repository.slice(repository.indexOf('export async function savePost('));
+  return {
+    ok:
+      migration.includes('create or replace function public.save_post(') &&
+      migration.includes('security invoker') &&
+      migration.includes('grant execute on function public.save_post') &&
+      // The client writes through the function and nothing else.
+      save.includes("rpc('save_post'") &&
+      !save.includes(".from('post_tags')") &&
+      !save.includes(".from('post_media')") &&
+      !save.includes(".from('post_mentions')") &&
+      // Both clients go through it: a phone with the same nine-request save has
+      // the same defect, and fixing only the browser would leave it there.
+      android.includes('supabase.rpcText("save_post"') &&
+      !android.includes('postJson("post_tags"') &&
+      // And the transaction claim is asserted from the database side, including a
+      // failure that must leave no post behind.
+      proof.includes('the failed save published nothing') &&
+      proof.includes('the refused save did not change the post title') &&
+      unit.includes('expect(rpcMock).toHaveBeenCalledTimes(1)'),
+    evidence:
+      'one call writes the post, its tags, pictures, mentions and poll; a failure in any of them leaves nothing behind',
+  };
+});
+
+check('B-16', 'Database', 'The marketplace page is the nearest page, not an arbitrary one', () => {
+  // `mk_list_vendors` applied `limit` inside its subquery and sorted what came
+  // back by distance afterwards, so "nearest shops first" ordered an arbitrary
+  // forty of the shops. With more shops than a page holds, the shop across the
+  // road was often not on it — `t81` measures it on sixty shops. The page is now
+  // chosen by distance and then capped, and the funding question (`a sum over the
+  // shop's ledger`) is asked once for all candidates instead of once per shop.
+  const migration = read('supabase/migrations/0122_the_marketplace_page_reads_a_page.sql');
+  const proof = read('main-site/scripts/db-prove/t81.mjs');
+  const source = migration.slice(
+    migration.indexOf('create or replace function public.mk_list_vendors'),
+  );
+  return {
+    ok:
+      // The ordering that chooses the page has to be inside the capped subquery.
+      /order by distance_km nulls last, v\.name\s+limit v_limit/.test(source) &&
+      !source.includes('mk_vendor_credits') &&
+      source.includes('having sum(l.orders_delta) > 0') &&
+      migration.includes('mk_credit_ledger_sum_idx') &&
+      migration.includes('media_assets_owner_url_idx') &&
+      proof.includes('no shop left out is nearer than one listed') &&
+      proof.includes('the list no longer sums a ledger per shop'),
+    evidence:
+      'the page is ordered by distance before the cap, and the funding test reads the ledger once',
+  };
+});
+
+check('C-31', 'Front end', 'Reading a page does not ask the server what it could upload', () => {
+  // `/api/media/providers` used to be warmed on every page view, at idle, so the
+  // first member to attach a picture would not pay for the question. The answer
+  // never gated an upload, so every reader paid one request on mobile data for
+  // nothing — and every synthetic measurement inherited a console error from the
+  // local server answering it. It now runs at the moment an upload starts.
+  const main = read('main-site/src/main.tsx');
+  const upload = read('main-site/src/lib/storage/upload.ts');
+  const callers = shLines(
+    `grep -rln "warmUploadCapabilities" main-site/src --include=*.ts --include=*.tsx | grep -v "lib/storage/upload.ts" | head -5`,
+  );
+  return {
+    ok:
+      !main.includes('warmUploadCapabilities') &&
+      upload.includes('warmUploadCapabilities();') &&
+      callers.every((file) => !file.includes('main.tsx')),
+    evidence:
+      'the capability probe runs when an upload starts, not on page load: no speculative /api request per view',
+  };
+});
+
+check('C-32', 'Content', 'Editing a post does not rewrite a poll that has votes', () => {
+  // Saving a post rewrote its poll by deleting every option and inserting the new
+  // list. `poll_votes.option_id` cascades from `poll_options`, so correcting a
+  // typo in a poll's body deleted every ballot — and the options came back with
+  // new ids, so nothing was recoverable. Three things hold it:
+  //   * `decidePollWrite` returns "unchanged" for an unchanged poll, so the common
+  //     save sends no poll at all;
+  //   * it refuses a change to a poll somebody voted on, before the save is sent,
+  //     and the composer shows the options read-only with the reason;
+  //   * the save itself (0123) compares the labels before deleting anything, and
+  //     0121 refuses the delete in the database, for every other client.
+  const repo = read('main-site/src/lib/content/post-repository.ts');
+  const composer = read('main-site/src/routes/ComposePage.tsx');
+  const saver = read('supabase/migrations/0123_a_post_is_saved_once.sql');
+  const migration = read('supabase/migrations/0121_a_poll_that_has_votes_keeps_its_options.sql');
+  const proof = read('main-site/scripts/db-prove/t80.mjs');
+  const saveProof = read('main-site/scripts/db-prove/t82.mjs');
+  return {
+    ok:
+      repo.includes('export function decidePollWrite') &&
+      repo.includes('p_poll: pollPlan?.write') &&
+      repo.includes("export const POLL_LOCKED_MESSAGE = 'poll/options-locked'") &&
+      composer.includes('pollLocked') &&
+      saver.includes('if v_stored is distinct from v_incoming then') &&
+      migration.includes('create trigger poll_options_keep_votes') &&
+      migration.includes('pg_trigger_depth() > 1') &&
+      proof.includes('the rewrite that emptied the poll is refused as a whole') &&
+      proof.includes('deleting the post still takes its votes') &&
+      saveProof.includes('the unchanged poll is not rewritten, so its options keep their ids'),
+    evidence:
+      'a save sends a poll only when nobody has voted; the database compares before deleting, refuses a voted delete, and a refused save leaves the post as it was',
+  };
+});
+
+check('C-33', 'Media', 'Every upload is recorded before anything can point at it', () => {
+  // `uploadMedia` returns a URL; `recordMediaAsset` writes the row that says who
+  // the URL belongs to. The comment box did the first and not the second, so a
+  // comment carrying a picture was refused by 0120 with `42501` and the member
+  // read "your role does not allow this action" — a sentence about permissions
+  // for a missing row. An unrecorded upload is also never a candidate for the
+  // sweeper, so it stays at the host for ever.
+  //
+  // The rule this holds: a file that calls `uploadMedia` must also record, either
+  // through `uploadAndRecord` (both halves in one call) or `recordMediaAsset`.
+  const callers = shLines(
+    `grep -rlE "uploadMedia\\(|uploadAndRecord\\(" main-site/src --include=*.ts --include=*.tsx ` +
+      `| grep -v "\\.test\\." | grep -v "lib/storage/upload.ts" | grep -v "lib/storage/upload-and-record.ts"`,
+  );
+  const unrecorded = callers.filter((file) => {
+    const source = read(file);
+    return !source.includes('uploadAndRecord(') && !source.includes('recordMediaAsset(');
+  });
+  return {
+    ok: callers.length >= 7 && unrecorded.length === 0,
+    evidence:
+      unrecorded.length === 0
+        ? `${callers.length} upload surfaces upload and record in the same operation`
+        : `unrecorded upload: ${unrecorded.join(', ')}`,
+  };
+});
+
 check('D-13', 'Safety', 'No console policy allows inline script', () => {
   const bad = consoles.filter((name) => {
     if (!has(`${name}/public/_headers`)) return false;
@@ -1410,16 +1775,215 @@ check('F-10', 'Performance', 'Stylesheets stay small enough to inline-parse quic
   };
 });
 
-check('G-06', 'Web delivery', 'Feed and API queries do not stall on browser online heuristics', () => {
-  const entry = read('main-site/src/main.tsx');
+/* ------------------------------------------------------------------ *
+ * Field performance — the fixes that made Lighthouse 95+ hold
+ * ------------------------------------------------------------------ *
+ *
+ * These are the structural decisions behind the measured scores, written as
+ * assertions so the next change cannot quietly undo one of them. The scores
+ * themselves are measured by scripts/lighthouse.mjs against a served build;
+ * these checks run without a browser and fail in CI.
+ */
+
+const prerenderSource = () => read('main-site/scripts/prerender.mjs');
+const staticRoutesFile = () => JSON.parse(read('main-site/src/lib/seo/static-routes.json'));
+
+check('F-11', 'Performance', 'The stylesheet is inlined, so nothing blocks the first paint', () => {
+  // A <link rel=stylesheet> is a round trip in front of the first pixel. The
+  // whole design system is one file needed by every route, so the prerender
+  // step writes it into each page instead.
+  const script = prerenderSource();
   return {
     ok:
-      /networkMode:\s*'always'/.test(entry) &&
-      /registerPushServiceWorker\(\)/.test(entry) &&
-      !/registerServiceWorker/.test(entry),
-    evidence: 'QueryClient configures networkMode: always and registers only the push worker',
+      /export function inlineStyles/.test(script) &&
+      /inlineStyles\(/.test(script) &&
+      /readStylesheets\(/.test(script),
+    evidence: 'prerender inlines every stylesheet the template links into every page',
   };
 });
+
+check('F-12', 'Performance', 'Each prerendered page preloads the chunk that renders it', () => {
+  // The routes are lazy. Without a modulepreload the browser learns the
+  // route's chunk only after the entry script runs: a second round trip in
+  // front of the first screen.
+  const script = prerenderSource();
+  const routes = staticRoutesFile().routes;
+  const missing = routes.filter((route) => typeof route.component !== 'string');
+  const app = read('main-site/src/App.tsx');
+  const unknown = routes.filter(
+    (route) => !new RegExp(`const ${route.component} = lazy\\(`).test(app),
+  );
+  return {
+    ok:
+      /export function modulePreloadHrefs/.test(script) &&
+      /modulePreloadTags\(/.test(script) &&
+      missing.length === 0 &&
+      unknown.length === 0,
+    evidence:
+      missing.length + unknown.length === 0
+        ? `${routes.length} routes name a real route component and are preloaded`
+        : `routes without a usable component: ${[...missing, ...unknown].map((r) => r.path).join(', ')}`,
+  };
+});
+
+check('F-13', 'Performance', 'The first paint is the page, not a placeholder', () => {
+  // The shell quotes the page's own opening paragraphs, so the largest paint
+  // happens with the HTML rather than after the JavaScript — and a reader
+  // without scripts gets the page's opening, not a summary of it.
+  const routes = staticRoutesFile().routes;
+  const withOpening = routes.filter(
+    (route) => Array.isArray(route.opening) && route.opening.length > 0,
+  );
+  const expected = ['/about', '/guidelines', '/privacy', '/terms', '/account-deletion'];
+  const missing = expected.filter((path) => !withOpening.some((route) => route.path === path));
+  return {
+    ok: /opening/.test(prerenderSource()) && missing.length === 0,
+    evidence:
+      missing.length === 0
+        ? `${withOpening.length} routes carry the copy a reader sees first: ${withOpening.map((r) => r.path).join(', ')}`
+        : `no opening copy for: ${missing.join(', ')}`,
+  };
+});
+
+check('F-14', 'Performance', "Only the visitor's language is downloaded", () => {
+  // Both bundles used to be in the entry chunk: every visitor downloaded a
+  // language they were never shown, before anything could paint.
+  const i18n = read('main-site/src/i18n/index.ts');
+  const staticImport = /import\s*\{[^}]*\b(en|bn)\b[^}]*\}\s*from\s*'\.\/locales/.test(i18n);
+  return {
+    ok:
+      !staticImport &&
+      /import\('\.\/locales\/bn'\)/.test(i18n) &&
+      /import\('\.\/locales\/en'\)/.test(i18n),
+    evidence: staticImport
+      ? 'a locale bundle is imported statically and lands in the entry chunk'
+      : 'both locale bundles are dynamic imports, fetched one at a time',
+  };
+});
+
+check(
+  'F-15',
+  'Performance',
+  'The router does not pull a validation library onto the first paint',
+  () => {
+    const guard = read('main-site/src/components/auth/RequireGuest.tsx');
+    const onboarding = has('main-site/src/lib/profile/onboarding.ts')
+      ? read('main-site/src/lib/profile/onboarding.ts')
+      : '';
+    const env = read('main-site/src/lib/env.ts');
+    return {
+      ok:
+        guard.includes("from '@/lib/profile/onboarding'") &&
+        onboarding.includes('export function isProfileOnboarded') &&
+        !/from 'zod'/.test(onboarding) &&
+        !/from 'zod'/.test(env),
+      evidence:
+        'the router guard and the environment check import no schema library; zod ships only with the forms that use it',
+    };
+  },
+);
+
+check(
+  'F-16',
+  'Performance',
+  'The footer starts below the fold, so its arrival cannot shift the page',
+  () => {
+    const shell = read('main-site/src/components/layout/AppShell.tsx');
+    return {
+      ok: shell.includes('min-h-[100dvh]'),
+      evidence: 'main reserves a viewport height whenever the page has a footer',
+    };
+  },
+);
+
+check('F-17', 'Performance', 'Blue that renders words clears the contrast floor', () => {
+  // #1877f2 on our surface is 3.9:1. The fill token stays for artwork; text
+  // uses --bsdc-blue-text, which measures 6.1:1 on the same background.
+  const base = read('main-site/src/styles/base.css');
+  const tailwind = read('main-site/tailwind.config.ts');
+  const offenders = shLines(
+    `grep -rn "text-blue[^-a-zA-Z]" main-site/src --include=*.tsx | grep -v "text-blue-text" | head -10`,
+  );
+  return {
+    ok:
+      base.includes('--bsdc-blue-text') &&
+      tailwind.includes("text: 'var(--bsdc-blue-text)'") &&
+      offenders.length === 0,
+    evidence:
+      offenders.length === 0
+        ? 'text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders'
+        : offenders.join(' | '),
+  };
+});
+
+check(
+  'F-18',
+  'Performance',
+  'The font is preloaded and cached, not revalidated every visit',
+  () => {
+    const html = read('main-site/index.html');
+    const headers = read('main-site/public/_headers');
+    return {
+      ok:
+        /rel="preload"/.test(html) &&
+        /noto-sans-bengali\.woff2/.test(html) &&
+        /\/fonts\/\*/.test(headers) &&
+        /immutable/.test(headers),
+      evidence:
+        'index.html preloads the Bangla face and _headers marks /fonts/* immutable for a year',
+    };
+  },
+);
+
+check('F-19', 'Performance', 'An empty state starts a section, not a skipped heading level', () => {
+  const empty = read('main-site/src/design-system/EmptyState.tsx');
+  return {
+    ok: /headingLevel = 2/.test(empty) && /headingLevel === 3 \? 'h3' : 'h2'/.test(empty),
+    evidence: 'EmptyState renders an h2 by default; a page that needs h3 asks for it',
+  };
+});
+
+check('F-20', 'Performance', 'The home page puts the feed before the sidebar on a phone', () => {
+  const home = read('main-site/src/routes/HomePage.tsx');
+  return {
+    ok: home.includes('order-1') && home.includes('order-2 lg:order-none'),
+    evidence:
+      'the rail follows the feed below the lg breakpoint and is skipped for layout until then',
+  };
+});
+
+check('F-21', 'Performance', 'A decorative animation does not keep the main thread awake', () => {
+  // The marketplace header's glow ran on a library animation loop for as long
+  // as the page was open. It is a transform-only CSS animation now, which the
+  // compositor runs, or nothing under prefers-reduced-motion.
+  const page = read('main-site/src/routes/MarketplacePage.tsx');
+  const css = read('main-site/src/styles/components.css');
+  return {
+    ok:
+      page.includes('mk-glow') &&
+      !/animate=\{\{ scale: \[1, 1\.08, 1\] \}\}/.test(page) &&
+      css.includes('.mk-glow') &&
+      css.includes('@keyframes mk-glow'),
+    evidence:
+      'the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion',
+  };
+});
+
+check(
+  'G-06',
+  'Web delivery',
+  'Feed and API queries do not stall on browser online heuristics',
+  () => {
+    const entry = read('main-site/src/main.tsx');
+    return {
+      ok:
+        /networkMode:\s*'always'/.test(entry) &&
+        /registerPushServiceWorker\(\)/.test(entry) &&
+        !/registerServiceWorker/.test(entry),
+      evidence: 'QueryClient configures networkMode: always and registers only the push worker',
+    };
+  },
+);
 
 check(
   'I-05',
@@ -1448,6 +2012,201 @@ check('J-04', 'Docs', 'The audit and the registry are reproducible commands, not
   evidence:
     'node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record',
 }));
+
+check('J-05', 'Data', 'Every migration names only tables, columns and functions that exist', () => {
+  // A migration that references `profiles.verified` (which is derived, not a
+  // column) or calls a helper that was never created fails at runtime inside a
+  // SECURITY DEFINER function — so a member sees an empty list, not an error,
+  // and review cannot see it. scripts/sql-schema-check.py settles it instead.
+  let detail = '';
+  try {
+    detail = sh('python3 scripts/sql-schema-check.py');
+  } catch (error) {
+    detail = String(error.stdout ?? error.message);
+  }
+  const problems = detail
+    .split('\n')
+    .filter((line) => line.startsWith('PROBLEM'))
+    .slice(0, 5);
+  return {
+    ok: problems.length === 0,
+    evidence:
+      problems.length === 0
+        ? (detail.split('\n').pop() ?? 'every migration resolves against the schema')
+        : problems.join('; '),
+  };
+});
+
+/* ------------------------------------------------------------------ *
+ * Play Store compliance
+ *
+ * These are the four things a Play reviewer settles first, and each is a
+ * property of the repository rather than a claim in a document: a public
+ * policy, public terms, an in-app deletion path, and a data safety record
+ * that matches the deletion path.
+ * ------------------------------------------------------------------ */
+
+check('K-01', 'Play Store', 'The privacy policy is a public route, not only a document', () => {
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  return {
+    ok: site.includes("privacy: '/privacy'") && routes.includes('ROUTES.privacy'),
+    evidence: 'ROUTES.privacy is declared and mounted in the router',
+  };
+});
+
+check('K-02', 'Play Store', 'The terms of service are a public route', () => {
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  const footer = read('main-site/src/components/layout/Footer.tsx');
+  return {
+    ok:
+      site.includes("terms: '/terms'") &&
+      routes.includes('ROUTES.terms') &&
+      footer.includes('ROUTES.terms'),
+    evidence: 'ROUTES.terms is declared, mounted and linked from the footer',
+  };
+});
+
+check('K-03', 'Play Store', 'A member can delete their own account in the app', () => {
+  const migration = read('supabase/migrations/0119_a_member_can_delete_their_own_account.sql');
+  const settings = read('main-site/src/routes/SettingsPage.tsx');
+  const service = read('main-site/src/lib/auth/auth-service.ts');
+  return {
+    ok:
+      /create or replace function public\.delete_my_account\(\)/.test(migration) &&
+      /to authenticated/.test(migration) &&
+      settings.includes('deleteMyAccount') &&
+      service.includes("rpc('delete_my_account')"),
+    evidence: 'delete_my_account() is granted to authenticated and called from Settings',
+  };
+});
+
+check(
+  'K-04',
+  'Play Store',
+  'The Android app links the policy and the terms, and can delete an account',
+  () => {
+    const settingsScreen = read(
+      'android-app/feature/news/src/main/kotlin/bd/info/bsdc/app/feature/news/SystemDiagnosticsScreen.kt',
+    );
+    const api = read(
+      'android-app/core/network/src/main/kotlin/bd/info/bsdc/app/core/network/BsdcPlatformApi.kt',
+    );
+    const repo = read(
+      'android-app/core/auth/src/main/kotlin/bd/info/bsdc/app/core/auth/AuthRepository.kt',
+    );
+    return {
+      ok:
+        /SITE_ORIGIN}\/privacy/.test(settingsScreen) &&
+        /SITE_ORIGIN}\/terms/.test(settingsScreen) &&
+        settingsScreen.includes('onDeleteAccount') &&
+        api.includes('delete_my_account') &&
+        repo.includes('suspend fun deleteMyAccount'),
+      evidence: 'legal links open in a custom tab and deletion runs through the repository',
+    };
+  },
+);
+
+check(
+  'K-05',
+  'Play Store',
+  'The data safety answers are written down and match the deletion path',
+  () => {
+    const doc = read('docs/play-store-compliance.md');
+    const migration = read('supabase/migrations/0119_a_member_can_delete_their_own_account.sql');
+    const documented = [
+      'privacy',
+      'terms',
+      'Data safety',
+      'Encrypted in transit',
+      'Account deletion',
+    ];
+    const missing = documented.filter((heading) => !doc.includes(heading));
+    return {
+      ok: missing.length === 0 && doc.includes('delete_my_account'),
+      evidence:
+        missing.length === 0
+          ? 'the document names the policy, the terms, the data safety answers and the deletion RPC'
+          : `missing: ${missing.join(', ')}`,
+    };
+  },
+);
+
+check('K-06', 'Play Store', 'Cleartext traffic is refused and backups are off', () => {
+  const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+  return {
+    ok: /usesCleartextTraffic="false"/.test(manifest) && /allowBackup="false"/.test(manifest),
+    evidence: 'the manifest refuses cleartext and disables backup',
+  };
+});
+
+check(
+  'K-07',
+  'Play Store',
+  'The manifest asks for no sensitive permission the app does not use',
+  () => {
+    const manifest = read('android-app/app/src/main/AndroidManifest.xml');
+    // A declared permission the code never exercises is a permissions-policy
+    // defect. The microphone was exactly that: voice search hands the recording to
+    // the device's own speech service, which holds RECORD_AUDIO itself.
+    const declared = [...manifest.matchAll(/<uses-permission android:name="([^"]+)"/g)].map(
+      (match) => match[1],
+    );
+    const recording = declared.filter((name) => /RECORD_AUDIO/.test(name));
+    return {
+      ok: recording.length === 0,
+      evidence:
+        recording.length === 0
+          ? `${declared.length} permissions declared, none of them RECORD_AUDIO`
+          : `declared but unused: ${recording.join(', ')}`,
+    };
+  },
+);
+
+check('K-09', 'Play Store', 'The deletion URL works without the app installed', () => {
+  // Play's Data safety section asks for a URL where deletion can be requested.
+  // The in-app button does not satisfy it on its own: a reviewer has no account,
+  // and a member may no longer have the app.
+  const site = read('main-site/src/lib/site.ts');
+  const routes = read('main-site/src/App.tsx');
+  const footer = read('main-site/src/components/layout/Footer.tsx');
+  const doc = read('docs/play-store-compliance.md');
+  const page = read('main-site/src/routes/AccountDeletionPage.tsx');
+  return {
+    ok:
+      site.includes("accountDeletion: '/account-deletion'") &&
+      routes.includes('ROUTES.accountDeletion') &&
+      footer.includes('ROUTES.accountDeletion') &&
+      page.includes('byEmail') &&
+      doc.includes('account-deletion'),
+    evidence:
+      '/account-deletion is routed, linked in the footer and named in the compliance record',
+  };
+});
+
+check(
+  'K-08',
+  'Play Store',
+  'Every third party that receives member data is named in the policy',
+  () => {
+    // Play's data safety form asks which third parties receive data; a policy that
+    // omits one is inaccurate in the direction that gets an app suspended. The
+    // image host is the easy one to forget, because the app talks to our own
+    // upload endpoint and ImgBB is behind it.
+    const en = read('main-site/src/i18n/locales/en.ts');
+    const bn = read('main-site/src/i18n/locales/bn.ts');
+    const processors = ['Supabase', 'Firebase', 'Cloudflare', 'ImgBB'];
+    const missing = processors.filter((name) => !en.includes(name) || !bn.includes(name));
+    return {
+      ok: missing.length === 0,
+      evidence:
+        missing.length === 0
+          ? producersNote(processors)
+          : `not named in both locales: ${missing.join(', ')}`,
+    };
+  },
+);
 
 /* ------------------------------------------------------------------ *
  * Report

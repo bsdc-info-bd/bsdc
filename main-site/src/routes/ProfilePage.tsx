@@ -466,7 +466,7 @@ export default function ProfilePage() {
               <p className="mt-2 text-xs text-muted">{t('profile.joined', { date: joined })}</p>
             </div>
             {isSelf ? (
-              <Link to={ROUTES.settings} className="shrink-0">
+              <Link to={ROUTES.settingsAccount} className="shrink-0">
                 <Button variant="secondary">{t('profile.editProfile')}</Button>
               </Link>
             ) : currentUser ? (

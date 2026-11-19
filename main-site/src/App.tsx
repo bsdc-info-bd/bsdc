@@ -12,6 +12,9 @@ import RouteErrorBoundary from '@/routes/RouteErrorBoundary';
 const HomePage = lazy(() => import('@/routes/HomePage'));
 const AboutPage = lazy(() => import('@/routes/AboutPage'));
 const GuidelinesPage = lazy(() => import('@/routes/GuidelinesPage'));
+const PrivacyPage = lazy(() => import('@/routes/PrivacyPage'));
+const TermsPage = lazy(() => import('@/routes/TermsPage'));
+const AccountDeletionPage = lazy(() => import('@/routes/AccountDeletionPage'));
 const ContactPage = lazy(() => import('@/routes/ContactPage'));
 const NotFoundPage = lazy(() => import('@/routes/NotFoundPage'));
 const LoginPage = lazy(() => import('@/routes/auth/LoginPage'));
@@ -37,6 +40,9 @@ const JobsPage = lazy(() => import('@/routes/JobsPage'));
 const JobPage = lazy(() => import('@/routes/JobPage'));
 const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const GigPage = lazy(() => import('@/routes/GigPage'));
+const GigProposalsPage = lazy(() => import('@/routes/GigProposalsPage'));
+const JobApplicationsPage = lazy(() => import('@/routes/JobApplicationsPage'));
+const AdminAdsPage = lazy(() => import('@/routes/AdminAdsPage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
 const ProjectEditPage = lazy(() => import('@/routes/ProjectEditPage'));
@@ -80,6 +86,9 @@ const router = createBrowserRouter([
       { path: ROUTES.home, element: withSuspense(<HomePage />) },
       { path: ROUTES.about, element: withSuspense(<AboutPage />) },
       { path: ROUTES.guidelines, element: withSuspense(<GuidelinesPage />) },
+      { path: ROUTES.privacy, element: withSuspense(<PrivacyPage />) },
+      { path: ROUTES.terms, element: withSuspense(<TermsPage />) },
+      { path: ROUTES.accountDeletion, element: withSuspense(<AccountDeletionPage />) },
       { path: ROUTES.contact, element: withSuspense(<ContactPage />) },
       { path: ROUTES.systemCheck, element: withSuspense(<SystemCheckPage />) },
 
@@ -99,7 +108,13 @@ const router = createBrowserRouter([
         children: [
           { path: ROUTES.verify, element: withSuspense(<VerifyEmailPage />) },
           { path: ROUTES.onboarding, element: withSuspense(<OnboardingPage />) },
-          { path: ROUTES.settings, element: withSuspense(<SettingsPage />) },
+          // Settings is eight panels, each with its own address. This one
+          // redirect keeps every link written before that change working.
+          { path: ROUTES.settings, element: <Navigate to={ROUTES.settingsAccount} replace /> },
+          {
+            path: `${ROUTES.settings}/:panel`,
+            element: withSuspense(<SettingsPage />),
+          },
           { path: ROUTES.compose, element: withSuspense(<ComposePage />) },
           // The one door for adding to a directory: an event, a job, a gig, a
           // project, a group. Each table already had a policy for its author;
@@ -139,6 +154,7 @@ const router = createBrowserRouter([
           { path: ROUTES.vendorApply, element: withSuspense(<ShopApplyPage />) },
           { path: ROUTES.vendorConsole, element: withSuspense(<VendorConsolePage />) },
           { path: ROUTES.adminMarketplace, element: withSuspense(<AdminMarketplacePage />) },
+          { path: ROUTES.adminAds, element: withSuspense(<AdminAdsPage />) },
           { path: ROUTES.marketCart, element: withSuspense(<MarketCartPage />) },
           { path: '/marketplace/checkout/:slug', element: withSuspense(<MarketCheckoutPage />) },
           { path: ROUTES.marketOrders, element: withSuspense(<MarketOrdersPage />) },
@@ -163,8 +179,16 @@ const router = createBrowserRouter([
       // Opportunity surfaces: public to read, gated to act on.
       { path: ROUTES.jobs, element: withSuspense(<JobsPage />) },
       { path: `${ROUTES.jobs}/:slug`, element: withSuspense(<JobPage />) },
+      {
+        path: `${ROUTES.jobs}/:slug/applications`,
+        element: withSuspense(<JobApplicationsPage />),
+      },
       { path: ROUTES.freelance, element: withSuspense(<FreelancePage />) },
       { path: `${ROUTES.freelance}/:slug`, element: withSuspense(<GigPage />) },
+      {
+        path: `${ROUTES.freelance}/:slug/proposals`,
+        element: withSuspense(<GigProposalsPage />),
+      },
       { path: ROUTES.projects, element: withSuspense(<ProjectsPage />) },
       { path: `${ROUTES.projects}/:slug`, element: withSuspense(<ProjectPage />) },
       { path: ROUTES.playground, element: withSuspense(<PlaygroundPage />) },

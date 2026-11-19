@@ -18,6 +18,7 @@ let cachedJwks: CachedJwks | null = null;
 const cachedOAuthTokens = new Map<string, { token: string; expiresAt: number }>();
 
 export interface FcmEnv extends RpcEnv {
+  FIREBASE_SERVICE_ACCOUNT_BSDC_BD?: string;
   FB_PROJECT_ID?: string;
   FB_CLIENT_EMAIL?: string;
   FB_PRIVATE_KEY?: string;
@@ -143,6 +144,20 @@ export async function verifyFirebaseIdToken(
 export function resolveFcmCredentials(
   env: FcmEnv,
 ): { projectId: string; clientEmail: string; privateKey: string } | null {
+  const rawJson = (env.FIREBASE_SERVICE_ACCOUNT_BSDC_BD ?? '').trim();
+  if (rawJson.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(rawJson) as Record<string, unknown>;
+      const projectId = String(parsed['project_id'] ?? '').trim();
+      const clientEmail = String(parsed['client_email'] ?? '').trim();
+      const privateKey = String(parsed['private_key'] ?? '').trim();
+      if (projectId && clientEmail && privateKey) {
+        return { projectId, clientEmail, privateKey };
+      }
+    } catch {
+      // Fall back to split FB_* variables below.
+    }
+  }
   const projectId = (env.FB_PROJECT_ID ?? env.VITE_FB_PROJECT_ID ?? '').trim();
   const clientEmail = (env.FB_CLIENT_EMAIL ?? '').trim();
   const privateKey = (env.FB_PRIVATE_KEY ?? '').trim();
@@ -282,7 +297,11 @@ function channelIdFor(kind: string, url: string): string {
   return 'bsdc_general';
 }
 
-function buildWordsForGroup(rows: readonly FcmPendingRow[]) {
+function isNewOrderAlarmRow(kind: string, url: string): boolean {
+  return kind === 'order' && /[?&]alarm=new(?:&|$)/.test(url);
+}
+
+export function buildWordsForGroup(rows: readonly FcmPendingRow[]) {
   const newest = rows[rows.length - 1]!;
   const en = newest.language === 'en';
   const kind = newest.kind || 'general';
@@ -315,6 +334,7 @@ function buildWordsForGroup(rows: readonly FcmPendingRow[]) {
     postId: newest.post_id ?? '',
     notificationId: newest.notification_id,
     actorName: actor,
+    isOrderAlarm: isNewOrderAlarmRow(kind, url),
   };
 }
 
@@ -405,8 +425,20 @@ export async function fcmFallbackDispatch(
 
   for (const [token, deviceRows] of byToken.entries()) {
     const first = deviceRows[0]!;
-    const byTopic = new Map<string, FcmPendingRow[]>();
+    const alarmGroups: { rows: FcmPendingRow[]; words: ReturnType<typeof buildWordsForGroup> }[] =
+      [];
+    const regularRows: FcmPendingRow[] = [];
+
     for (const row of deviceRows) {
+      if (isNewOrderAlarmRow(row.kind, row.url)) {
+        alarmGroups.push({ rows: [row], words: buildWordsForGroup([row]) });
+      } else {
+        regularRows.push(row);
+      }
+    }
+
+    const byTopic = new Map<string, FcmPendingRow[]>();
+    for (const row of regularRows) {
       const topic = row.conversation_id
         ? `c-${row.conversation_id}`
         : row.post_id
@@ -417,35 +449,40 @@ export async function fcmFallbackDispatch(
       else byTopic.set(topic, [row]);
     }
 
-    const groups =
-      byTopic.size <= 4
-        ? [...byTopic.values()].map((bucket) => ({
-            rows: bucket,
-            words: buildWordsForGroup(bucket),
-          }))
-        : [
-            {
-              rows: deviceRows,
-              words: {
-                title:
-                  first.language === 'en'
-                    ? `${deviceRows.length} new notifications · BSDC`
-                    : `${deviceRows.length}টি নতুন বিজ্ঞপ্তি · BSDC`,
-                body:
-                  first.actor_name.trim() ||
-                  (first.language === 'en' ? 'Open BSDC' : 'বিএসডিসি খুলুন'),
-                url: '/notifications',
-                tag: 'bsdc-summary',
-                topic: 'bsdc-summary',
-                kind: 'general',
-                channelId: 'bsdc_general',
-                conversationId: '',
-                postId: '',
-                notificationId: deviceRows[deviceRows.length - 1]!.notification_id,
-                actorName: '',
+    const regularGroups =
+      regularRows.length === 0
+        ? []
+        : byTopic.size <= 4
+          ? [...byTopic.values()].map((bucket) => ({
+              rows: bucket,
+              words: buildWordsForGroup(bucket),
+            }))
+          : [
+              {
+                rows: regularRows,
+                words: {
+                  title:
+                    first.language === 'en'
+                      ? `${regularRows.length} new notifications · BSDC`
+                      : `${regularRows.length}টি নতুন বিজ্ঞপ্তি · BSDC`,
+                  body:
+                    first.actor_name.trim() ||
+                    (first.language === 'en' ? 'Open BSDC' : 'বিএসডিসি খুলুন'),
+                  url: '/notifications',
+                  tag: 'bsdc-summary',
+                  topic: 'bsdc-summary',
+                  kind: 'general',
+                  channelId: 'bsdc_general',
+                  conversationId: '',
+                  postId: '',
+                  notificationId: regularRows[regularRows.length - 1]!.notification_id,
+                  actorName: '',
+                  isOrderAlarm: false,
+                },
               },
-            },
-          ];
+            ];
+
+    const groups = [...alarmGroups, ...regularGroups];
 
     for (const group of groups) {
       const w = group.words;
@@ -465,6 +502,9 @@ export async function fcmFallbackDispatch(
       if (w.actorName) data.actor_name = w.actorName;
       if (w.conversationId) data.conversation_id = w.conversationId;
       if (w.postId) data.post_id = w.postId;
+      if (first.platform === 'android' && w.isOrderAlarm) {
+        data.alarm = 'order_loop';
+      }
 
       // Pure data-only HIGH priority payload for native Android devices.
       const message =

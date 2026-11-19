@@ -88,9 +88,9 @@ await expectFail(
 await expectFail(
   db,
   'shop-owner',
-  `select public.mk_vendor_set_delivery('all_bd', 5, 151)`,
+  `select public.mk_vendor_set_delivery('all_bd', 5, 100001)`,
   '22023',
-  'a charge above 150 taka is refused',
+  'a charge above 100,000 taka is refused',
   SHOP_OWNER,
 );
 await expectFail(

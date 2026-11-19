@@ -98,15 +98,16 @@ fun MkCheckoutScreen(
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var placedCode by remember { mutableStateOf<String?>(null) }
-    var shopFee by remember { mutableStateOf(MkLogic.DEFAULT_DELIVERY_FEE_POISHA) }
+    var shopDelivery by remember { mutableStateOf<MkShopDeliveryDto?>(null) }
+    var shopSchedule by remember { mutableStateOf<MkShopScheduleDto?>(null) }
 
-    // Resolve the vendor id and the price of what is being bought.
+    // Resolve the vendor id, delivery rules, schedule, and subtotal of what is being bought.
     LaunchedEffect(vendorSlug) {
         vendorChecked = false
         vendorId = repository.fetchVendorRef(vendorSlug).getOrNull()
-        // The shop sets its own delivery charge; the server charges the same amount.
-        shopFee = repository.fetchVendorPage(vendorSlug).getOrNull()?.vendor?.delivery?.fee_poisha
-            ?: MkLogic.DEFAULT_DELIVERY_FEE_POISHA
+        val page = repository.fetchVendorPage(vendorSlug).getOrNull()
+        shopDelivery = page?.vendor?.delivery
+        shopSchedule = page?.vendor?.schedule
         if (directItems == null) {
             val lines = repository.fetchMyCart().getOrNull().orEmpty()
                 .filter { it.vendor_slug == vendorSlug && it.orderable }
@@ -177,11 +178,14 @@ fun MkCheckoutScreen(
 
     val lat = pinLat
     val lng = pinLng
+    val deliveryEval = MkLogic.evaluateShopDelivery(shopDelivery, lat, lng)
+    val shopOpen = shopSchedule?.is_open != false
     val nameOk = customerName.trim().length >= 2
     val phoneOk = MkLogic.isBdMobile(phone)
     val addressOk = addressLine.trim().length >= 5
     val pinOk = lat != null && lng != null && MkLogic.isInsideBangladesh(lat, lng)
-    val canPlace = vendorId != null && nameOk && phoneOk && addressOk && pinOk && !busy && placedCode == null &&
+    val canPlace = vendorId != null && shopOpen && deliveryEval.withinArea &&
+        nameOk && phoneOk && addressOk && pinOk && !busy && placedCode == null &&
         (subtotal ?: 0L) > 0L
 
     // Once the order is in, show the confirmation briefly, then go to the orders screen.
@@ -192,7 +196,7 @@ fun MkCheckoutScreen(
         }
     }
 
-    val fee = shopFee
+    val fee = deliveryEval.feePoisha
     val sub = subtotal ?: 0L
 
     Box(modifier.fillMaxSize()) {
@@ -207,6 +211,20 @@ fun MkCheckoutScreen(
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
+            }
+            if (!shopOpen) {
+                item {
+                    BsdcStatusBanner(
+                        title = mkText(bn, "Shop is currently closed", "এই দোকান এখন বন্ধ আছে"),
+                        body = MkLogic.scheduleBadgeLabel(shopSchedule, bn)
+                            ?: mkText(
+                                bn,
+                                "Please place your order during opening hours.",
+                                "অনুগ্রহ করে খোলার সময়ে অর্ডার করুন।",
+                            ),
+                        tone = BsdcTone.WARN,
+                    )
+                }
             }
             if (vendorChecked && vendorId == null) {
                 item {
@@ -342,6 +360,10 @@ fun MkCheckoutScreen(
                     MkOsmPinMap(
                         lat = lat,
                         lng = lng,
+                        radiusKm = shopDelivery?.takeIf { it.scope == "radius" }?.radius_km,
+                        circleCenterLat = shopDelivery?.center_lat,
+                        circleCenterLng = shopDelivery?.center_lng,
+                        bn = bn,
                         onPin = { plat, plng ->
                             if (MkLogic.isInsideBangladesh(plat, plng)) {
                                 pinLat = plat
@@ -353,6 +375,27 @@ fun MkCheckoutScreen(
                             }
                         },
                     )
+                    deliveryEval.roundedKm?.let { rKm ->
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = mkText(bn, "$rKm km (rounded up)", "$rKm কিমি (পূর্ণ কিমি)"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = BsdcThemeTokens.colors.mutedText,
+                        )
+                    }
+                    if (!deliveryEval.withinArea) {
+                        val maxR = shopDelivery?.radius_km ?: 1
+                        Spacer(Modifier.height(6.dp))
+                        BsdcStatusBanner(
+                            title = mkText(bn, "Outside delivery area", "ডেলিভারি এলাকার বাইরে"),
+                            body = mkText(
+                                bn,
+                                "This shop delivers within $maxR km (distance is rounded up).",
+                                "এই দোকান $maxR কিমির মধ্যে ডেলিভারি দেয় (দূরত্ব পূর্ণ কিমিতে হিসাব হয়)।",
+                            ),
+                            tone = BsdcTone.BAD,
+                        )
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text(
                         text = mkText(
@@ -394,7 +437,25 @@ fun MkCheckoutScreen(
                     )
                     Spacer(Modifier.height(8.dp))
                     SummaryRow(label = mkText(bn, "Subtotal", "সাবটোটাল"), poisha = sub, bn = bn)
-                    SummaryRow(label = mkText(bn, "Delivery", "ডেলিভারি"), poisha = fee, bn = bn)
+                    if (deliveryEval.needsPinForFee) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = mkText(bn, "Delivery", "ডেলিভারি"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = mkText(bn, "Pin location to calculate", "চার্জ দেখতে পিন করুন"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BsdcThemeTokens.colors.mutedText,
+                            )
+                        }
+                    } else {
+                        SummaryRow(label = mkText(bn, "Delivery", "ডেলিভারি"), poisha = fee, bn = bn)
+                    }
                     HorizontalDivider(Modifier.padding(vertical = 8.dp))
                     SummaryRow(
                         label = mkText(bn, "Total (cash on delivery)", "মোট (ক্যাশ অন ডেলিভারি)"),

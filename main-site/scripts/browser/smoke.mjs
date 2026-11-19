@@ -34,10 +34,26 @@ const server = await serveBuild(join(root, 'dist'));
 const results = [];
 let browser;
 let activePage;
+/**
+ * One check failing must not hide the rest.
+ *
+ * This file used to let a failed assertion unwind the whole run: the first
+ * broken page stopped the other twenty-three, so a report said "24 passed" and
+ * one error, and the reader could not tell a single regression from a broken
+ * gate. Each check now records its own outcome, the run finishes, and the exit
+ * code is non-zero if anything failed.
+ */
 async function check(name, fn) {
-  await fn();
-  results.push({ name, passed: true });
-  console.log(`PASS ${name}`);
+  try {
+    await fn();
+    results.push({ name, passed: true });
+    console.log(`PASS ${name}`);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    results.push({ name, passed: false, error: message });
+    console.log(`FAIL ${name} — ${message.split('\n')[0]}`);
+    process.exitCode = 1;
+  }
 }
 async function launch() {
   return chromium.launch({
@@ -64,10 +80,24 @@ try {
     activePage = page;
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
+    // Console errors, not just uncaught exceptions. Lighthouse's
+    // `errors-in-console` audit reads these, so a run that ignores them can call
+    // a page clean while a browser says otherwise. The only permitted ones are
+    // those the stub server itself causes: it answers `/api/*` with 503, which
+    // Chrome logs as "Failed to load resource", and the deployment answers those
+    // paths with Pages Functions. They are counted so an unexplained console
+    // error — a React warning, a failed import, a rejected promise nobody
+    // caught — cannot hide behind them.
+    const consoleErrors = [];
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text());
+    });
+    let stubbedApiFailures = 0;
     const failures = [];
     page.on('response', (response) => {
       if (response.status() >= 400 && !response.url().includes('/api/'))
         failures.push(`${response.status()} ${response.url()}`);
+      if (response.status() >= 400 && response.url().includes('/api/')) stubbedApiFailures += 1;
     });
     for (const route of [
       '/',
@@ -83,10 +113,20 @@ try {
       '/missing-browser-route',
     ]) {
       await check(`${device}: ${route} renders without crash/overflow`, async () => {
+        // Judged on its own requests: a 404 on one page must not be charged to
+        // every page visited after it.
+        errors.length = 0;
+        failures.length = 0;
+        consoleErrors.length = 0;
+        stubbedApiFailures = 0;
         await page.goto(server.origin + route, { waitUntil: 'networkidle' });
         assert(await page.locator('main').innerText(), 'Main content must render');
         assert.deepEqual(errors, [], 'No uncaught browser exceptions');
         assert.deepEqual(failures, [], 'No missing non-API resources');
+        assert(
+          consoleErrors.length <= stubbedApiFailures,
+          `No unexplained console errors: ${consoleErrors.join(' | ')}`,
+        );
         assert(
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
           'No horizontal overflow',
@@ -211,5 +251,9 @@ try {
       2,
     ),
   );
-  console.log(`${results.filter((r) => r.passed).length} passed; report: ${output}`);
+  const failed = results.filter((result) => !result.passed);
+  console.log(
+    `${results.length - failed.length} passed${failed.length > 0 ? `, ${failed.length} failed` : ''}; report: ${output}`,
+  );
+  for (const failure of failed) console.log(`  ${failure.name}: ${failure.error.split('\n')[0]}`);
 }

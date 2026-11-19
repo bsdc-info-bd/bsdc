@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { assertPostMediaLinked, toPost, type JoinedPostRow } from './post-repository';
+import { DataError } from '@/lib/supabase/errors';
+import {
+  assertPostMediaLinked,
+  decidePollWrite,
+  toPost,
+  type JoinedPostRow,
+} from './post-repository';
 
 function joinedPost(overrides: Partial<JoinedPostRow> = {}): JoinedPostRow {
   return {
@@ -153,5 +159,70 @@ describe('post media reaches the permalink', () => {
         },
       ]),
     ).not.toThrow();
+  });
+});
+
+describe('a poll that has votes keeps its options', () => {
+  // The rewrite that used to run on every save: delete every option, insert the
+  // new list. `poll_votes.option_id` cascades from `poll_options`, so it deleted
+  // every ballot with them — a typo fix in a poll's body emptied the poll.
+  const stored = [
+    { position: 0, label: 'Neovim', votes: 3 },
+    { position: 1, label: 'VS Code', votes: 1 },
+  ];
+
+  it('does not rewrite a poll whose options are unchanged', () => {
+    // The common case: the author fixes a typo in the body and saves. Nothing
+    // about the poll is written, so nothing about it can be lost — and no reader
+    // sees a poll with no options for the length of the rewrite.
+    expect(decidePollWrite(stored, ['Neovim', 'VS Code'])).toEqual({
+      write: false,
+      labels: ['Neovim', 'VS Code'],
+    });
+    expect(decidePollWrite(stored, ['  Neovim ', 'VS Code', ''])).toEqual({
+      write: false,
+      labels: ['Neovim', 'VS Code'],
+    });
+  });
+
+  it('rewrites a poll nobody has voted on', () => {
+    // A poll with no answers is a draft of a poll: its author may still reword it.
+    expect(decidePollWrite([], ['Yes', 'No'])).toEqual({ write: true, labels: ['Yes', 'No'] });
+    expect(
+      decidePollWrite(
+        [
+          { position: 0, label: 'Ys', votes: 0 },
+          { position: 1, label: 'No', votes: 0 },
+        ],
+        ['Yes', 'No'],
+      ),
+    ).toEqual({ write: true, labels: ['Yes', 'No'] });
+  });
+
+  it('refuses to change the options of a poll somebody voted on', () => {
+    let thrown: unknown;
+    try {
+      decidePollWrite(stored, ['Neovim', 'Emacs']);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(DataError);
+    // The member reads a sentence, not `23514` or a constraint name.
+    expect((thrown as DataError).messageKey).toBe('compose.errors.pollLocked');
+  });
+
+  it('refuses to empty a poll that has votes', () => {
+    expect(() => decidePollWrite(stored, [])).toThrow(DataError);
+  });
+
+  it('compares options in their stored order, not the order they arrive in', () => {
+    const shuffled = [
+      { position: 1, label: 'VS Code', votes: 0 },
+      { position: 0, label: 'Neovim', votes: 0 },
+    ];
+    expect(decidePollWrite(shuffled, ['Neovim', 'VS Code'])).toEqual({
+      write: false,
+      labels: ['Neovim', 'VS Code'],
+    });
   });
 });

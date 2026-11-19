@@ -228,7 +228,7 @@ export default function GroupPage() {
                 src={group.coverUrl}
                 alt={group.name}
                 slotWidth={960}
-                loading="eager"
+                priority
                 decoding="async"
                 className="h-full w-full object-cover"
               />

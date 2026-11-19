@@ -21,14 +21,16 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +38,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +51,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
 import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
@@ -89,6 +93,7 @@ fun GroupDetailScreen(
     var busy by remember(slug) { mutableStateOf(false) }
     var notice by remember(slug) { mutableStateOf<Pair<String, BsdcTone>?>(null) }
     var tab by remember(slug) { mutableStateOf(GroupTab.CHANNELS) }
+    var memberQuery by rememberSaveable(slug) { mutableStateOf("") }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -222,6 +227,14 @@ fun GroupDetailScreen(
                     }
                 }
                 val cover = current.coverUrl.orEmpty()
+                val visibleMembers = GroupDetailLogic.searchMembers(
+                    members,
+                    memberQuery,
+                    nameOf = { it.profile().displayName },
+                    handleOf = { it.profile().username },
+                )
+                val visibleMembersLabel = BanglaDigitFormatter.formatCount(visibleMembers.size.toLong(), language)
+                val totalMemberLabel = BanglaDigitFormatter.formatCount(current.membersCount.toLong(), language)
 
                 BsdcResponsiveContainer(modifier = Modifier.fillMaxSize()) {
                     LazyColumn(
@@ -373,17 +386,19 @@ fun GroupDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 modifier = Modifier.padding(horizontal = 16.dp),
                             ) {
-                                FilterChip(
+                                BsdcFilterPill(
+                                    label = if (bn) "চ্যানেল" else "Channels",
                                     selected = tab == GroupTab.CHANNELS,
                                     onClick = { tab = GroupTab.CHANNELS },
-                                    label = { Text("${if (bn) "চ্যানেল" else "Channels"} (${channels.size})") },
-                                    leadingIcon = { Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    leadingIcon = Icons.Rounded.ChatBubbleOutline,
+                                    countLabel = channels.size.toString(),
                                 )
-                                FilterChip(
+                                BsdcFilterPill(
+                                    label = if (bn) "সদস্য" else "Members",
                                     selected = tab == GroupTab.MEMBERS,
                                     onClick = { tab = GroupTab.MEMBERS },
-                                    label = { Text("${if (bn) "সদস্য" else "Members"} (${current.membersCount})") },
-                                    leadingIcon = { Icon(Icons.Rounded.Groups, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                    leadingIcon = Icons.Rounded.Groups,
+                                    countLabel = current.membersCount.toString(),
                                 )
                             }
                         }
@@ -404,7 +419,7 @@ fun GroupDetailScreen(
                                     BsdcCard(modifier = Modifier.padding(horizontal = 16.dp)) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text(
-                                                text = "# ${channel.name}",
+                                                text = GroupDetailLogic.channelTitle(channel.name),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.SemiBold,
                                                 modifier = Modifier.weight(1f),
@@ -431,7 +446,51 @@ fun GroupDetailScreen(
                                         )
                                     }
                                 }
-                                items(members, key = { it.uid }) { member ->
+                                item {
+                                    OutlinedTextField(
+                                        value = memberQuery,
+                                        onValueChange = { memberQuery = it },
+                                        label = { Text(if (bn) "সদস্য খুঁজুন" else "Search members") },
+                                        singleLine = true,
+                                        leadingIcon = {
+                                            Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        },
+                                        trailingIcon = {
+                                            if (memberQuery.isNotEmpty()) {
+                                                IconButton(onClick = { memberQuery = "" }) {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Close,
+                                                        contentDescription = if (bn) "মুছে ফেলুন" else "Clear",
+                                                        modifier = Modifier.size(18.dp),
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                                    )
+                                }
+                                if (members.isNotEmpty() && visibleMembers.isEmpty()) {
+                                    item {
+                                        BsdcEmptyState(
+                                            icon = Icons.Rounded.Groups,
+                                            title = if (bn) "কোনো সদস্য মেলেনি" else "No member matches",
+                                            subtitle = if (bn) "অন্য নামে খুঁজুন।" else "Try another name or @handle.",
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                            actionLabel = if (bn) "খোঁজ মুছুন" else "Clear search",
+                                            onAction = { memberQuery = "" },
+                                        )
+                                    }
+                                } else if (members.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            text = if (bn) "$totalMemberLabel সদস্যের মধ্যে $visibleMembersLabel জন" else "$visibleMembersLabel of $totalMemberLabel",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.padding(horizontal = 16.dp),
+                                        )
+                                    }
+                                }
+                                items(visibleMembers, key = { it.uid }) { member ->
                                     val profile = member.profile()
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,

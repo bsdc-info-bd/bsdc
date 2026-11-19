@@ -4,9 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CommentForm } from '@/components/interactions/CommentForm';
+import { Lightbox } from '@/components/media/Lightbox';
+import { MediaImage } from '@/components/media/MediaImage';
 import { Alert, Avatar, Badge, Button, EmptyState, Skeleton } from '@/design-system';
 import { useComments } from '@/hooks/use-comments';
-import type { CommentNode } from '@/lib/interactions/interaction-types';
+import type { CommentImage, CommentNode } from '@/lib/interactions/interaction-types';
 import { cn } from '@/lib/cn';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { profilePath } from '@/lib/site';
@@ -46,8 +48,9 @@ export function CommentThread({
           placeholder={t('interactions.commentPlaceholder')}
           submitLabel={t('interactions.publishComment')}
           busy={thread.isPosting}
-          onSubmit={async (body) => {
-            await thread.add(body, null);
+          allowImage
+          onSubmit={async (body, image) => {
+            await thread.add(body, null, image);
           }}
         />
       ) : (
@@ -84,6 +87,69 @@ export function CommentThread({
         ))}
       </ul>
     </section>
+  );
+}
+
+/**
+ * The picture a comment carries, at the width of the comment and no larger.
+ *
+ * Two details matter more than they look. The intrinsic width and height are
+ * passed to the `<img>` so the browser reserves the box before the bytes arrive —
+ * a thread where each picture pushes the replies below it down as it loads is a
+ * thread nobody can read on a phone. And the whole thing is a button that opens
+ * the same Lightbox the messenger uses, because a crack in a phone screen is not
+ * visible at 320 px.
+ */
+function CommentPicture({ image }: { image: CommentImage }) {
+  const { t } = useTranslation();
+  const [enlarged, setEnlarged] = useState(false);
+  const description =
+    image.alt.trim().length > 0 ? image.alt : t('interactions.pictureWithoutDescription');
+
+  return (
+    <div className="mt-2">
+      <button
+        type="button"
+        onClick={() => {
+          setEnlarged(true);
+        }}
+        className="fab-tap block w-full overflow-hidden rounded-xl border border-line"
+        aria-label={t('interactions.enlargePicture', { description })}
+      >
+        <MediaImage
+          src={image.url}
+          variantSrc={image.thumbUrl}
+          alt={description}
+          width={image.width ?? undefined}
+          height={image.height ?? undefined}
+          fullWidth={image.width}
+          slotWidth={384}
+          loading="lazy"
+          decoding="async"
+          className="max-h-72 w-full object-cover"
+        />
+      </button>
+      {enlarged ? (
+        <Lightbox
+          items={[
+            {
+              id: image.url,
+              url: image.url,
+              thumbUrl: image.thumbUrl,
+              altText: description,
+              width: image.width,
+              height: image.height,
+            },
+          ]}
+          index={0}
+          label={t('interactions.commentPicture')}
+          onChange={() => undefined}
+          onClose={() => {
+            setEnlarged(false);
+          }}
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -160,6 +226,8 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
               <CommentForm
                 placeholder={t('interactions.editComment')}
                 submitLabel={t('common.save')}
+                // The box opens with the words that are already there.
+                initialBody={node.body}
                 onCancel={() => {
                   setEditing(false);
                 }}
@@ -170,7 +238,12 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
               />
             </div>
           ) : (
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm">{node.body}</p>
+            <>
+              {node.body.trim().length > 0 ? (
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm">{node.body}</p>
+              ) : null}
+              {node.image === null ? null : <CommentPicture image={node.image} />}
+            </>
           )}
 
           <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -245,11 +318,12 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
               <CommentForm
                 placeholder={t('interactions.replyPlaceholder')}
                 submitLabel={t('interactions.publishReply')}
+                allowImage
                 onCancel={() => {
                   setReplying(false);
                 }}
-                onSubmit={async (body) => {
-                  await thread.add(body, node.id);
+                onSubmit={async (body, image) => {
+                  await thread.add(body, node.id, image);
                 }}
               />
             </div>

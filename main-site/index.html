@@ -49,6 +49,18 @@
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
+    <!-- The Bangla face is 188 kB of the font the first screen renders with.
+         Preloading it starts the download with the HTML rather than after the
+         stylesheet has been parsed and matched, and it is cached immutably
+         (see _headers), so a second visit never asks for it again. -->
+    <link
+      rel="preload"
+      href="/fonts/noto-sans-bengali.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+
     <link rel="preconnect" href="https://i.ibb.co" crossorigin />
     <link rel="dns-prefetch" href="https://i.ibb.co" />
     <link rel="dns-prefetch" href="https://i.ibb.co.com" />

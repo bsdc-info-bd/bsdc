@@ -5,6 +5,7 @@ import bd.info.bsdc.app.core.database.PendingDraftEntity
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.core.network.BsdcHttpClientFactory
+import bd.info.bsdc.app.core.network.SupabaseApiException
 import bd.info.bsdc.app.core.network.SupabaseRestClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -13,6 +14,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -27,20 +29,16 @@ private data class TagRowDto(
 )
 
 @Serializable
-private data class TagSlugDto(val slug: String = "")
-
-@Serializable
-private data class ProfileUidDto(val uid: String = "")
+private data class StoredPollOptionDto(
+    val position: Int = 0,
+    val label: String = "",
+    val votes: Int = 0,
+)
 
 @Serializable
 private data class PostSavedDto(
     val id: String = "",
     val slug: String = "",
-    @SerialName("published_at") val publishedAt: String? = null,
-)
-
-@Serializable
-private data class ExistingPublishedAtDto(
     @SerialName("published_at") val publishedAt: String? = null,
 )
 
@@ -142,8 +140,20 @@ class ComposeRepository(
         }.getOrDefault(emptyList())
     }
 
+    /**
+     * Saves a post — the row, its tags, its pictures, its mentions and its poll —
+     * in one call, in one transaction (0123).
+     *
+     * This used to be up to nine requests: the post, then each of the four
+     * attachments. A save that failed at the fourth one left the post published
+     * without the picture, without the tags and without the mention notification,
+     * while the member was shown an error for a post that existed. The function
+     * is that same write in one statement, so a save either happened or did not.
+     *
+     * The author is the signed-in member (`bsdc.current_uid()` inside the
+     * function), never a parameter this app chooses.
+     */
     suspend fun savePost(
-        authorUid: String,
         draft: PostComposerDraft,
         publish: Boolean,
     ): PublishedResult = withContext(Dispatchers.IO) {
@@ -159,189 +169,107 @@ class ComposeRepository(
         val generatedSlug = ComposerValidationEngine.uniqueSlug(slugBase, fallbackSlug)
         val excerpt = ComposerValidationEngine.toExcerpt(if (cleanBody.isNotEmpty()) cleanBody else cleanTitle, 180)
         val readingTime = ComposerValidationEngine.readingTimeMinutes("$cleanTitle $cleanBody ${draft.code}")
-        val statusWire = if (publish) "published" else "draft"
 
-        var postId = draft.remotePostId
-        var postSlug = generatedSlug
-
-        if (!postId.isNullOrBlank()) {
-            val existingRaw = runCatching {
-                supabase.getJsonText(
-                    table = "posts",
-                    queryPairs = listOf("select" to "published_at", "id" to "eq.$postId", "limit" to "1"),
-                    requireAuth = true,
-                )
-            }.getOrDefault("[]")
-            val existingPub = runCatching {
-                json.decodeFromString<List<ExistingPublishedAtDto>>(existingRaw).firstOrNull()?.publishedAt
-            }.getOrNull()
-
-            val updatePayload = buildJsonObject {
-                put("kind", kindWire)
-                put("status", statusWire)
-                put("visibility", draft.visibility)
-                put("title", cleanTitle)
-                put("body", cleanBody)
-                put("excerpt", excerpt)
-                put("cover_url", draft.coverUrl)
-                put("language", draft.language.tag)
-                put("code", draft.code)
-                put("code_language", if (draft.kind == PostKind.SNIPPET) draft.codeLanguage else "")
-                put("reading_time", readingTime)
-                put("is_sensitive", draft.isSensitive)
-                put("allow_comments", draft.allowComments)
-                if (publish) {
-                    put("published_at", existingPub ?: Instant.now().toString())
-                } else {
-                    put("published_at", JsonNull)
-                }
-            }
-
-            val updatedRaw = supabase.patchJson(
-                table = "posts",
-                body = updatePayload,
-                queryPairs = listOf("id" to "eq.$postId", "select" to "id,slug"),
-                prefer = "return=representation",
-            )
-            val saved = json.decodeFromString<List<PostSavedDto>>(updatedRaw).first()
-            postSlug = saved.slug
+        // Decided before anything is written, so a poll somebody voted on is
+        // refused with a sentence rather than by a constraint. The database
+        // refuses the delete as well, for every other client.
+        val pollPlan = if (draft.kind == PostKind.POLL) {
+            PollOptionsLogic.decide(readPollOptions(draft.remotePostId), draft.pollOptions)
         } else {
-            val insertPayload = buildJsonObject {
-                put("author_uid", authorUid)
-                put("slug", generatedSlug)
-                put("kind", kindWire)
-                put("status", statusWire)
-                put("visibility", draft.visibility)
-                put("title", cleanTitle)
-                put("body", cleanBody)
-                put("excerpt", excerpt)
-                put("cover_url", draft.coverUrl)
-                put("language", draft.language.tag)
-                put("code", draft.code)
-                put("code_language", if (draft.kind == PostKind.SNIPPET) draft.codeLanguage else "")
-                put("reading_time", readingTime)
-                put("is_sensitive", draft.isSensitive)
-                put("allow_comments", draft.allowComments)
-                if (publish) put("published_at", Instant.now().toString()) else put("published_at", JsonNull)
-            }
+            null
+        }
 
-            val insertedRaw = supabase.postJson(
-                table = "posts",
-                body = insertPayload,
-                queryPairs = listOf("select" to "id,slug"),
-                prefer = "return=representation",
-                requireAuth = true,
+        val tagSlugs = draft.tags
+            .map { ComposerValidationEngine.normalizeTag(it) }
+            .filter { it.length >= 2 }
+            .distinct()
+        val readyMedia = draft.media.filter { it.isReady }
+
+        val payload = buildJsonObject {
+            put("p_id", draft.remotePostId)
+            put("p_slug", generatedSlug)
+            put(
+                "p_post",
+                buildJsonObject {
+                    put("kind", kindWire)
+                    put("status", if (publish) "published" else "draft")
+                    put("visibility", draft.visibility)
+                    put("title", cleanTitle)
+                    put("body", cleanBody)
+                    put("excerpt", excerpt)
+                    put("cover_url", draft.coverUrl)
+                    put("language", draft.language.tag)
+                    put("code", draft.code)
+                    put("code_language", if (draft.kind == PostKind.SNIPPET) draft.codeLanguage else "")
+                    put("reading_time", readingTime)
+                    put("is_sensitive", draft.isSensitive)
+                    put("allow_comments", draft.allowComments)
+                },
             )
-            val saved = json.decodeFromString<List<PostSavedDto>>(insertedRaw).first()
-            postId = saved.id
-            postSlug = saved.slug
+            put("p_tags", buildJsonArray { tagSlugs.forEach { add(it) } })
+            put(
+                "p_media",
+                buildJsonArray {
+                    readyMedia.forEachIndexed { idx, item ->
+                        add(
+                            buildJsonObject {
+                                put("media_id", item.mediaId)
+                                put("position", idx)
+                                put("alt_text", item.altText.trim())
+                            },
+                        )
+                    }
+                },
+            )
+            put(
+                "p_mentions",
+                buildJsonArray {
+                    ComposerValidationEngine.extractMentions(cleanBody).forEach { add(it) }
+                },
+            )
+            when (pollPlan) {
+                // No poll, or the poll is exactly what is stored: leave it alone.
+                null, PollWrite.Unchanged -> put("p_poll", JsonNull)
+                PollWrite.Locked -> throw PollOptionsLockedException()
+                is PollWrite.Replace -> put(
+                    "p_poll",
+                    buildJsonArray { pollPlan.labels.forEach { add(it) } },
+                )
+            }
         }
 
-        val resolvedPostId = requireNotNull(postId)
-        syncTags(resolvedPostId, draft.tags)
-        syncMedia(resolvedPostId, draft.media)
-        syncMentions(resolvedPostId, cleanBody)
-        if (draft.kind == PostKind.POLL) {
-            syncPollOptions(resolvedPostId, draft.pollOptions)
-        }
+        val saved = json.decodeFromString<PostSavedDto>(
+            supabase.rpcText("save_post", payload, requireAuth = true),
+        )
+        if (saved.id.isBlank()) throw SupabaseApiException(500, null, "data/insert-failed")
+
         database.pendingDraftDao().remove(draft.localDraftId)
         if (publish) {
             supabase.wakePushDelivery("post-published")
         }
-        PublishedResult(id = resolvedPostId, slug = postSlug)
+        PublishedResult(id = saved.id, slug = saved.slug)
     }
 
-    private suspend fun syncTags(postId: String, tags: List<String>) {
-        supabase.deleteRows("post_tags", listOf("post_id" to "eq.$postId"))
-        val slugs = tags.map { ComposerValidationEngine.normalizeTag(it) }.filter { it.length >= 2 }.distinct()
-        if (slugs.isEmpty()) return
+    /** The poll options the post already carries, with their ballots. */
+    private suspend fun readPollOptions(postId: String?): List<StoredPollOption> {
+        if (postId.isNullOrBlank()) return emptyList()
 
-        val inClause = slugs.joinToString(",", prefix = "(", postfix = ")")
-        val knownRaw = supabase.getJsonText(
-            table = "tags",
-            queryPairs = listOf("select" to "slug", "slug" to "in.$inClause"),
-            requireAuth = false,
-        )
-        val knownSlugs = json.decodeFromString<List<TagSlugDto>>(knownRaw).map { it.slug }
-        if (knownSlugs.isEmpty()) return
+        val raw = runCatching {
+            supabase.getJsonText(
+                table = "poll_options",
+                queryPairs = listOf(
+                    "select" to "position,label,votes",
+                    "post_id" to "eq.$postId",
+                ),
+                requireAuth = true,
+            )
+        }.getOrElse { return emptyList() }
 
-        val body = buildJsonArray {
-            knownSlugs.forEach { slug ->
-                add(
-                    buildJsonObject {
-                        put("post_id", postId)
-                        put("tag_slug", slug)
-                    },
-                )
+        return runCatching {
+            json.decodeFromString<List<StoredPollOptionDto>>(raw).map {
+                StoredPollOption(position = it.position, label = it.label, votes = it.votes)
             }
-        }
-        supabase.postJson("post_tags", body, prefer = "return=minimal", requireAuth = true)
-    }
-
-    private suspend fun syncMedia(postId: String, media: List<ComposerMediaAttachment>) {
-        supabase.deleteRows("post_media", listOf("post_id" to "eq.$postId"))
-        val ready = media.filter { it.isReady }
-        if (ready.isEmpty()) return
-
-        val body = buildJsonArray {
-            ready.forEachIndexed { idx, item ->
-                add(
-                    buildJsonObject {
-                        put("post_id", postId)
-                        put("media_id", item.mediaId)
-                        put("position", idx)
-                        put("alt_text", item.altText.trim())
-                    },
-                )
-            }
-        }
-        supabase.postJson("post_media", body, prefer = "return=minimal", requireAuth = true)
-    }
-
-    private suspend fun syncMentions(postId: String, bodyText: String) {
-        supabase.deleteRows("post_mentions", listOf("post_id" to "eq.$postId"))
-        val handles = ComposerValidationEngine.extractMentions(bodyText)
-        if (handles.isEmpty()) return
-
-        val inClause = handles.joinToString(",", prefix = "(", postfix = ")")
-        val raw = supabase.getJsonText(
-            table = "profiles",
-            queryPairs = listOf("select" to "uid", "username" to "in.$inClause"),
-            requireAuth = false,
-        )
-        val uids = json.decodeFromString<List<ProfileUidDto>>(raw).map { it.uid }.filter { it.isNotBlank() }
-        if (uids.isEmpty()) return
-
-        val payload = buildJsonArray {
-            uids.forEach { uid ->
-                add(
-                    buildJsonObject {
-                        put("post_id", postId)
-                        put("mentioned_uid", uid)
-                    },
-                )
-            }
-        }
-        supabase.postJson("post_mentions", payload, prefer = "return=minimal", requireAuth = true)
-    }
-
-    private suspend fun syncPollOptions(postId: String, options: List<String>) {
-        supabase.deleteRows("poll_options", listOf("post_id" to "eq.$postId"))
-        val labels = options.map { it.trim() }.filter { it.isNotEmpty() }
-        if (labels.isEmpty()) return
-
-        val body = buildJsonArray {
-            labels.forEachIndexed { idx, label ->
-                add(
-                    buildJsonObject {
-                        put("post_id", postId)
-                        put("position", idx)
-                        put("label", label)
-                    },
-                )
-            }
-        }
-        supabase.postJson("poll_options", body, prefer = "return=minimal", requireAuth = true)
+        }.getOrDefault(emptyList())
     }
 
     suspend fun createEvent(hostUid: String, draft: EventDraftInput): String = withContext(Dispatchers.IO) {

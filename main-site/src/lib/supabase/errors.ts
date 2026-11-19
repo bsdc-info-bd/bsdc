@@ -13,10 +13,35 @@ const MESSAGE_MAP: Record<string, string> = {
   'profile/not-found': 'data.errors.notFound',
   'profile/missing': 'data.errors.profileMissing',
   'auth/required': 'data.errors.signInRequired',
+  'push/auth-required': 'data.errors.signInRequired',
+  'push/account-inactive': 'data.errors.forbidden',
+  'push/invalid-endpoint': 'push.errors.failed',
+  'push/invalid-key': 'push.errors.failed',
+  'push/invalid-token': 'push.errors.failed',
   // Raised by apply_to_job / submit_proposal when the unique key resolves the
   // second request instead of the constraint doing it: a member who submits
   // twice is told they already have, not that a value is "already in use".
   'job/already-applied': 'data.errors.alreadyApplied',
+  // Raised by 0121 and by the composer's own check: a poll somebody voted on
+  // keeps its options, so an edit that rewrites them is refused with a sentence
+  // that says why rather than a constraint name.
+  'poll/options-locked': 'compose.errors.pollLocked',
+  // Raised by `prepare_comment` (0120). Without these the refusal arrived as
+  // `42501` and the member read "your role does not allow this action" — which is
+  // true of the code and false of the situation: their role was fine, the picture
+  // simply was not in `media_assets` yet, and the comment box has no way to say
+  // so. Both sentences now name what actually happened.
+  'that picture was not uploaded by this member': 'media.errors.notRecorded',
+  'comments are closed on this post': 'interactions.commentsClosed',
+  // `record_media_asset` has a per-member quota (0073) and refuses over it with
+  // 54000, which had no entry in CODE_MAP at all: the member was told the data
+  // service could not complete the request. The limit is now reachable faster
+  // because a comment can carry a picture.
+  'this account has reached its picture limit': 'media.errors.quotaReached',
+  // `record_media_asset` refuses an expired session with 42501 and the words
+  // "authentication required", which mapped to "You do not have permission to do
+  // that" — the same wrong-sentence problem as the comment picture.
+  'authentication required': 'data.errors.signInRequired',
   'gig/already-proposed': 'data.errors.alreadyProposed',
 };
 
@@ -36,6 +61,21 @@ const CODE_MAP: Record<string, string> = {
   PGRST301: 'data.errors.signInRequired',
   PGRST116: 'data.errors.notFound',
 };
+
+/**
+ * Every translation key this module can return.
+ *
+ * `dataErrorKey` is on the path of almost every failed write, and it can only
+ * return a key that is in these two maps. A key that is not in the locale bundle
+ * is not a crash: i18next renders the key itself, so a member of the public reads
+ * `data.errors.notFound` where a sentence was meant to be. The test beside this
+ * file walks both maps through `en` and `bn` and fails on a key that does not
+ * resolve, which is the only way a typo in this file can be caught before a
+ * member sees it.
+ */
+export const TRANSLATED_ERROR_KEYS: readonly string[] = [
+  ...new Set([...Object.values(MESSAGE_MAP), ...Object.values(CODE_MAP)]),
+];
 
 function isPostgrestError(value: unknown): value is PostgrestError {
   return (
@@ -112,6 +152,15 @@ export function dataErrorKey(error: unknown): string {
     if (mapped) return mapped;
     if (error.name === 'DataAccessBootstrapError') return 'data.errors.accessUnavailable';
     if (error.name === 'SupabaseNotConfiguredError') return 'data.errors.notConfigured';
+    if (
+      error.name === 'InvalidStateError' ||
+      error.name === 'InvalidAccessError' ||
+      error.name === 'AbortError' ||
+      error.name === 'NotSupportedError'
+    ) {
+      return 'push.errors.failed';
+    }
+    if (error.name === 'NotAllowedError') return 'push.errors.permissionDenied';
     if (error.name === 'TypeError') return 'data.errors.offline';
   }
   return 'data.errors.generic';

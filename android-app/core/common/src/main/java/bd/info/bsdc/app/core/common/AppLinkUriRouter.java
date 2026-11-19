@@ -107,50 +107,81 @@ public final class AppLinkUriRouter {
         }
         String kind = data.getOrDefault("kind", "").trim();
         String id = data.getOrDefault("id", "").trim();
-        if (!id.isEmpty()) {
-            switch (kind) {
-                case "message":
-                    return routeNativePath("/messages/" + id);
-                case "post":
-                case "comment":
-                case "reply":
-                case "reaction":
-                case "mention":
-                case "bookmark":
-                case "share":
-                case "post_published":
-                case "poll_vote":
-                case "comment_reaction":
-                case "answer_accepted":
-                    return routeNativePath("/p/" + id);
-                case "follow":
-                    return routeNativePath("/@" + id);
-                case "order":
-                case "review":
-                case "payout":
-                    return routeNativePath("/orders");
-                case "certificate":
-                    return routeNativePath("/verify/" + id);
-                case "course":
-                    return routeNativePath("/courses");
-                case "job":
-                    return routeNativePath("/jobs");
-                case "event":
-                    return routeNativePath("/events");
-                case "gig_proposal":
-                    return routeNativePath("/freelance");
-                case "project_star":
-                    return routeNativePath("/projects");
-                case "group_invite":
-                case "mention_group":
-                    return routeNativePath("/groups");
-                case "moderation":
-                    return routeNativePath("/notifications");
-                default:
-                    break;
-            }
+
+        // Every path below is built by concatenation, so the id is the whole of the
+        // validation. Today the result is safe because the screen router matches known
+        // prefixes and never hands a path to a WebView — but that safety lives in a
+        // `when` far from here, and it is not why the id was trusted. An id is a
+        // conversation id, a uuid, a slug: none of them legitimately contains a slash,
+        // a backslash, a dot-dot or a colon. Refusing those here means the invariant is
+        // enforced where the value enters, not three files away.
+        if (!isSafePushId(id)) {
+            return new LinkDestination.Ignored("The notification named an id the app will not open.");
         }
-        return new LinkDestination.Ignored("The notification carried no destination.");
+
+        // Kinds whose whole meaning is an id. Without one there is no page to open, and
+        // guessing (the directory, the inbox) would put the member somewhere they did not ask
+        // to be, so these fall through to Ignored rather than a substituted route.
+        switch (kind) {
+            case "message":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no conversation.")
+                    : routeNativePath("/messages/" + id);
+            case "post":
+            case "comment":
+            case "reply":
+            case "reaction":
+            case "mention":
+            case "bookmark":
+            case "share":
+            case "post_published":
+            case "poll_vote":
+            case "comment_reaction":
+            case "answer_accepted":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no post.")
+                    : routeNativePath("/p/" + id);
+            case "follow":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no member.")
+                    : routeNativePath("/@" + id);
+            case "certificate":
+                return id.isEmpty()
+                    ? new LinkDestination.Ignored("The notification named no certificate.")
+                    : routeNativePath("/verify/" + id);
+            default:
+                break;
+        }
+
+        // Directory kinds: the payload names a section, not a row, so an id is optional. A
+        // proposal or application decision still opens the board it was decided on; the board
+        // then shows the member's own row, which is the same place the website sends them.
+        switch (kind) {
+            case "order":
+            case "review":
+            case "payout":
+                return routeNativePath("/orders");
+            case "course":
+                return routeNativePath("/courses");
+            case "job":
+            case "application_decision":
+                return routeNativePath("/jobs");
+            case "event":
+                return routeNativePath("/events");
+            case "gig":
+            case "gig_proposal":
+            case "gig_proposal_decision":
+                return routeNativePath("/freelance");
+            case "project_star":
+                return routeNativePath("/projects");
+            case "group_invite":
+            case "mention_group":
+                return routeNativePath("/groups");
+            case "moderation":
+                return routeNativePath("/notifications");
+            default:
+                return new LinkDestination.Ignored("The notification carried no destination.");
+        }
     }
 
     public static boolean isImgBbUrl(String rawUrl) {
@@ -164,6 +195,27 @@ public final class AppLinkUriRouter {
         } catch (IllegalArgumentException ex) {
             return false;
         }
+    }
+
+    /**
+     * Whether a push id can be concatenated into a route path unchanged.
+     *
+     * Deliberately a deny-list of separators rather than an allow-list of characters: a
+     * slug may contain Bangla letters, and a certificate code contains hyphens, so an
+     * allow-list of `[a-z0-9-]` would reject real ids. Nothing that is allowed to reach
+     * a path can contain a character that changes what the path means.
+     */
+    private static boolean isSafePushId(String id) {
+        if (id.isEmpty()) return true; // absence is handled per kind, not here
+        if (id.length() > 128) return false;
+        if (id.indexOf('/') >= 0 || id.indexOf('\\') >= 0 || id.indexOf(':') >= 0) return false;
+        if (id.contains("..")) return false;
+        // Control characters and whitespace would let an id terminate or split a path.
+        for (int i = 0; i < id.length(); i++) {
+            char c = id.charAt(i);
+            if (c < 0x20 || c == 0x7f || Character.isWhitespace(c)) return false;
+        }
+        return true;
     }
 
     private static LinkDestination routeNativePath(String normalizedPath) {

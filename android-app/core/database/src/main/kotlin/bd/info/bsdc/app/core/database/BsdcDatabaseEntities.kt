@@ -157,6 +157,20 @@ data class VerificationHistoryEntity(
 )
 
 @Entity(
+    tableName = "saved_opportunities",
+    indices = [Index(value = ["savedAtEpochMs"])],
+)
+data class SavedOpportunityEntity(
+    @PrimaryKey val key: String,
+    val kind: String,
+    val remoteId: String,
+    val slug: String,
+    val title: String,
+    val subtitle: String,
+    val savedAtEpochMs: Long,
+)
+
+@Entity(
     tableName = "saved_searches",
     indices = [Index(value = ["searchedAtEpochMs"])],
 )

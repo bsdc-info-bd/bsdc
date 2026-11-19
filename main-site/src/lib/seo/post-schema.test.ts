@@ -50,6 +50,7 @@ function sampleComment(overrides: Partial<Comment> = {}): Comment {
     rootId: null,
     depth: 0,
     body: 'Enable strictNullChecks from day one so nullability bugs fail at compile time.',
+    image: null,
     likes: 5,
     replies: 0,
     isAnswer: false,

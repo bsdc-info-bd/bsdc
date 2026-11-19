@@ -21,7 +21,7 @@ import { useJobDetail } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { jobIsLive, jobPostingJsonLd, safeExternalUrl } from '@/lib/listings/listing-schema';
 import { formatSalaryRange, isApplied } from '@/lib/opportunities/opportunity-types';
-import { ROUTES, SITE, jobPath } from '@/lib/site';
+import { ROUTES, SITE, jobApplicationsPath, jobPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -186,7 +186,19 @@ export default function JobPage() {
                     <Badge tone="green">{t(`jobs.statuses.${job.myStatus ?? 'submitted'}`)}</Badge>
                   </p>
                 ) : isPoster ? (
-                  <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p>
+                  // The count above is a promise that the applications can be
+                  // read somewhere. This is that somewhere.
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p>
+                    <LinkButton
+                      to={jobApplicationsPath(slug)}
+                      size="sm"
+                      variant="secondary"
+                      iconStart={<Users size={14} />}
+                    >
+                      {t('jobs.detail.reviewApplicants')}
+                    </LinkButton>
+                  </div>
                 ) : !isSignedIn ? (
                   <p className="text-sm text-muted">{t('jobs.signInToApply')}</p>
                 ) : live ? (

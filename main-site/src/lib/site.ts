@@ -31,6 +31,15 @@ export const ROUTES = {
   home: '/',
   about: '/about',
   guidelines: '/guidelines',
+  // Required by Google Play: a reachable policy URL for an app that stores
+  // profiles, addresses and orders. Public, no sign-in.
+  privacy: '/privacy',
+  // The terms of service, beside the privacy policy. Public, no sign-in.
+  terms: '/terms',
+  // Google Play asks for a deletion URL that works without the app installed —
+  // a page a reviewer, or a member who no longer has the handset, can open and
+  // follow. Public, no sign-in.
+  accountDeletion: '/account-deletion',
   contact: '/contact',
   // The page that proves the platform is working, with evidence a member can
   // copy into a support message. Public on purpose: a visitor whose pictures do
@@ -41,7 +50,23 @@ export const ROUTES = {
   reset: '/auth/reset',
   verify: '/auth/verify',
   onboarding: '/onboarding',
+  /**
+   * Settings is a set of panels, each with its own address.
+   *
+   * It used to be one address and a `useState`, which meant the back button did
+   * nothing, a link could not point at "your privacy settings", and a member who
+   * chose a panel could not bookmark it or send it to themselves. `/settings`
+   * still exists and redirects to the first panel, so every older link works.
+   */
   settings: '/settings',
+  settingsAccount: '/settings/account',
+  settingsAppearance: '/settings/appearance',
+  settingsLanguage: '/settings/language',
+  settingsNotifications: '/settings/notifications',
+  settingsFeed: '/settings/feed',
+  settingsPrivacy: '/settings/privacy',
+  settingsSecurity: '/settings/security',
+  settingsDanger: '/settings/danger',
   compose: '/compose',
   create: '/create',
   notifications: '/notifications',
@@ -69,6 +94,7 @@ export const ROUTES = {
   vendorApply: '/vendor/apply',
   vendorConsole: '/vendor/console',
   adminMarketplace: '/admin/marketplace',
+  adminAds: '/admin/ads',
   market: '/marketplace',
   marketCart: '/marketplace/cart',
   marketOrders: '/marketplace/orders',
@@ -114,9 +140,19 @@ export function jobPath(slug: string): string {
   return `${ROUTES.jobs}/${encodeURIComponent(slug.trim())}`;
 }
 
+/** The applicant queue for one job: /jobs/<slug>/applications. */
+export function jobApplicationsPath(slug: string): string {
+  return `${jobPath(slug)}/applications`;
+}
+
 /** A freelance gig's own page: /freelance/<slug>. */
 export function gigPath(slug: string): string {
   return `${ROUTES.freelance}/${encodeURIComponent(slug.trim())}`;
+}
+
+/** The proposal queue for one gig: /freelance/<slug>/proposals. */
+export function gigProposalsPath(slug: string): string {
+  return `${gigPath(slug)}/proposals`;
 }
 
 /** Event permalink: /events/slug. */

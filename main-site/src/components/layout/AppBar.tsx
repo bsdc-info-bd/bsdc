@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { IconButton, LanguageToggle, Logo, Modal, ThemeToggle } from '@/design-system';
 import { useUnreadNotificationCount } from '@/hooks/use-interactions';
-import { useUnreadMessageCount } from '@/hooks/use-messaging';
+import { useUnreadMessageCount } from '@/hooks/use-unread-message-count';
 import { useAuthStore } from '@/store/auth-store';
 import { cn } from '@/lib/cn';
 import { ROUTES } from '@/lib/site';
@@ -52,7 +52,7 @@ export function AppBar() {
           { to: ROUTES.messages, labelKey: 'messages.open' },
           { to: ROUTES.notifications, labelKey: 'notifications.open' },
           { to: ROUTES.marketCart, labelKey: 'cart.title' },
-          { to: ROUTES.settings, labelKey: 'settings.title' },
+          { to: ROUTES.settingsAccount, labelKey: 'settings.title' },
         ]
       : []),
   ];
@@ -60,11 +60,7 @@ export function AppBar() {
   return (
     <header className="bsdc-app-bar fab-glass fab-safe-top">
       <div className="fab-container flex h-app-bar items-center gap-1 sm:gap-2">
-        <Link
-          to={ROUTES.home}
-          className="fab-tap flex shrink-0 items-center rounded-lg px-1"
-          aria-label={t('common.brandFull')}
-        >
+        <Link to={ROUTES.home} className="fab-tap flex shrink-0 items-center rounded-lg px-1">
           <Logo variant="mark" className="h-8 w-8 sm:hidden" title={t('common.brand')} />
           <Logo variant="full" className="hidden h-9 sm:block" title={t('common.brandFull')} />
         </Link>

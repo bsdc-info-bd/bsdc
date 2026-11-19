@@ -15,8 +15,10 @@ interface LocationPickerProps {
   onChange: (next: PinnedLocation) => void;
   language: Language;
   labels: { title: string; hint: string; search: string; useCurrent: string; outside: string };
-  /** Optional delivery radius in km, drawn as a circle around the pin. */
+  /** Optional delivery radius in km, drawn as a circle around `circleCenter` (or `value` when omitted). */
   radiusKm?: number | null;
+  /** Optional fixed centre for the delivery radius circle (used on customer checkout). */
+  circleCenter?: { lat: number; lng: number } | null;
 }
 
 interface NominatimHit {
@@ -46,6 +48,7 @@ export function LocationPicker({
   language,
   labels,
   radiusKm = null,
+  circleCenter = null,
 }: LocationPickerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -118,7 +121,7 @@ export function LocationPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Draw or remove the delivery radius circle around the pin.
+  // Draw or remove the delivery radius circle around `circleCenter` (or the pin).
   useEffect(() => {
     const map = mapRef.current;
     if (map === null || !ready) return;
@@ -126,15 +129,16 @@ export function LocationPicker({
       const L = await import('leaflet');
       circleRef.current?.remove();
       circleRef.current = null;
-      if (radiusKm === null || value === null) return;
-      circleRef.current = L.circle([value.lat, value.lng], {
+      const anchor = circleCenter ?? value;
+      if (radiusKm === null || radiusKm <= 0 || anchor === null) return;
+      circleRef.current = L.circle([anchor.lat, anchor.lng], {
         radius: radiusKm * 1000,
         color: '#2563eb',
         weight: 2,
         fillOpacity: 0.12,
       }).addTo(map);
     })();
-  }, [radiusKm, value, ready]);
+  }, [radiusKm, circleCenter, value, ready]);
 
   // Keep the marker in step with the value the parent holds.
   useEffect(() => {

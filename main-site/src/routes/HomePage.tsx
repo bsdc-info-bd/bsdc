@@ -90,7 +90,7 @@ export default function HomePage() {
         <h1 className="mt-2 text-4xl">{t('home.heading')}</h1>
         <p className="mt-3 max-w-[60ch] text-base text-muted">{t('home.subheading')}</p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <LinkButton to={ROUTES.about}>{t('common.learnMore')}</LinkButton>
+          <LinkButton to={ROUTES.about}>{t('home.ctaAbout')}</LinkButton>
           <LinkButton to={ROUTES.guidelines} variant="outline">
             {t('nav.guidelines')}
           </LinkButton>
@@ -190,10 +190,19 @@ function FeedLayout({ rail, id, children }: { rail: ReactNode; id?: string; chil
   return (
     <section id={id} className="fab-container pb-10 pt-4 sm:pt-6">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[14rem_minmax(0,44rem)] xl:justify-center 2xl:gap-10">
-        <aside aria-label="Sections and tags" className="lg:sticky lg:top-20 lg:self-start">
+        {/* On a phone the feed comes first and the rail — sections, trending
+            tags, the sidebar's ad — follows it. A reader who opens the home
+            page is there for the feed; putting a column of links above it on a
+            412 px screen pushed the first post most of a screen down. It also
+            lets the browser skip the rail's layout until it arrives
+            (`defer-offscreen`), because it is now below the fold. */}
+        <aside
+          aria-label="Sections and tags"
+          className="defer-offscreen order-2 lg:order-none lg:sticky lg:top-20 lg:self-start"
+        >
           {rail}
         </aside>
-        <div className="min-w-0">{children}</div>
+        <div className="order-1 min-w-0 lg:order-none">{children}</div>
       </div>
     </section>
   );

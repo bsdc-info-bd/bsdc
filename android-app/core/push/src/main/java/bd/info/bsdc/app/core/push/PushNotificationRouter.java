@@ -28,6 +28,21 @@ public final class PushNotificationRouter {
     private static final Pattern CONVERSATION_PATH_PATTERN = Pattern.compile(
         "^/messages/([0-9a-fA-F-]{8,64})(?:[/?#].*)?$"
     );
+    private static final Pattern ORDER_ALARM_QUERY_PATTERN = Pattern.compile(
+        "(?:^|[?&])alarm=new(?:&|#|$)"
+    );
+
+    /**
+     * Returns {@code true} when a push payload or notification URL marks a
+     * vendor new-order looping alarm (`alarm=order_loop` or `?alarm=new`).
+     */
+    public static boolean isOrderAlarm(String alarmField, String url) {
+        if (alarmField != null && "order_loop".equalsIgnoreCase(alarmField.trim())) {
+            return true;
+        }
+        if (url == null || url.isBlank()) return false;
+        return ORDER_ALARM_QUERY_PATTERN.matcher(url.trim()).find();
+    }
 
     public static String resolveChannelId(String kind, String url, String explicitChannelId) {
         if (explicitChannelId != null) {
@@ -51,11 +66,15 @@ public final class PushNotificationRouter {
             return CHANNEL_ORDERS;
         }
         if ("moderation".equals(k) || "certificate".equals(k) || "course".equals(k)
-            || "job".equals(k) || "event".equals(k) || "gig_proposal".equals(k)
+            || "job".equals(k) || "event".equals(k) || "gig".equals(k)
+            || "gig_proposal".equals(k) || "gig_proposal_decision".equals(k)
+            || "application_decision".equals(k)
             || k.startsWith("bsdc-moderation-") || k.startsWith("bsdc-certificate-")
             || k.startsWith("bsdc-course-") || k.startsWith("bsdc-job-")
-            || k.startsWith("bsdc-event-") || k.startsWith("bsdc-gig_proposal-")
-            || u.startsWith("/verify")) {
+            || k.startsWith("bsdc-event-") || k.startsWith("bsdc-gig-")
+            || k.startsWith("bsdc-gig_proposal-")
+            || u.startsWith("/verify") || u.startsWith("/jobs") || u.startsWith("/freelance")
+            || u.startsWith("/gigs") || u.startsWith("/events")) {
             return CHANNEL_VERIFY_ALERTS;
         }
         if ("follow".equals(k) || "reaction".equals(k) || "comment".equals(k) || "reply".equals(k)

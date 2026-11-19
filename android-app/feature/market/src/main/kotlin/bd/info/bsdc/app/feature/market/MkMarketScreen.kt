@@ -18,14 +18,20 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Receipt
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.ShoppingCart
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,10 +57,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
+import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
+import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
+import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
@@ -88,6 +101,8 @@ fun MkMarketScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit,
+    /** Google Maps links go through the system so the Maps app can open them. */
+    onOpenGoogleMaps: (String) -> Unit = onOpenExternal,
     onOpenAds: () -> Unit,
     initialSection: MarketSection = MarketSection.SHOP,
     modifier: Modifier = Modifier,
@@ -242,6 +257,7 @@ fun MkMarketScreen(
                     imageLoader = imageLoader,
                     bn = bn,
                     onOpenExternal = onOpenExternal,
+                    onOpenGoogleMaps = onOpenGoogleMaps,
                 )
             }
         }
@@ -271,7 +287,11 @@ private fun MkSignInPrompt(bn: Boolean, onSignIn: () -> Unit) {
     )
 }
 
-/** Shop directory with search, category chips, and distance when location permission is already granted. */
+/**
+ * The shop directory: search, categories, an "open now" switch, and the saved shelf. Distance is
+ * shown only when the location permission has already been granted, so opening the marketplace
+ * never asks for anything.
+ */
 @Composable
 fun MkShopListScreen(
     repository: MkRepository,
@@ -282,8 +302,13 @@ fun MkShopListScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val savedStore = remember(context) { MkSavedStore.get(context) }
+    val wishlist by savedStore.wishlist.collectAsState()
+    val recentlyViewed by savedStore.recentlyViewed.collectAsState()
+
     var query by rememberSaveable { mutableStateOf("") }
     var type by rememberSaveable { mutableStateOf("") }
+    var openNowOnly by rememberSaveable { mutableStateOf(false) }
     var shops by remember { mutableStateOf<List<MkListedShopDto>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -302,11 +327,35 @@ fun MkShopListScreen(
         loading = false
     }
 
+    // "Open now" is applied on the client so toggling it is instant and never re-queries.
+    val visibleShops = remember(shops, openNowOnly) {
+        if (!openNowOnly) shops else shops.filter { shop -> shop.schedule?.is_open != false }
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item {
+            BsdcHeroBanner(
+                title = mkText(bn, "Marketplace", "মার্কেটপ্লেস"),
+                subtitle = mkText(
+                    bn,
+                    "Sylhet's neighbourhood shops, delivered cash on delivery.",
+                    "সিলেটের পাড়ার দোকান — ক্যাশ অন ডেলিভারিতে।",
+                ),
+                eyebrow = mkText(bn, "ক্যাশ অন ডেলিভারি", "Cash on delivery"),
+                icon = Icons.Rounded.Storefront,
+                stats = buildList {
+                    add(mkText(bn, "Shops", "দোকান") to shops.size.toString())
+                    if (wishlist.isNotEmpty()) {
+                        add(mkText(bn, "Saved", "সংরক্ষিত") to wishlist.size.toString())
+                    }
+                },
+            )
+        }
+
         item {
             OutlinedTextField(
                 value = query,
@@ -314,27 +363,134 @@ fun MkShopListScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                placeholder = { Text(mkText(bn, "Search shops", "দোকান খুঁজুন")) },
+                placeholder = { Text(mkText(bn, "Search shops and products", "দোকান ও পণ্য খুঁজুন")) },
             )
         }
+
+        if (recentlyViewed.isNotEmpty()) {
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = mkText(bn, "Recently viewed", "সম্প্রতি দেখা"),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        IconButton(onClick = { savedStore.clearRecentlyViewed() }) {
+                            Icon(
+                                Icons.Rounded.DeleteSweep,
+                                contentDescription = mkText(bn, "Clear", "মুছুন"),
+                            )
+                        }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(recentlyViewed, key = { it.id }) { recent ->
+                            BsdcCard(modifier = Modifier.width(150.dp)) {
+                                Text(
+                                    text = recent.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = MkLogic.formatTaka(recent.pricePoisha, bn),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BsdcThemeTokens.colors.brandStrong,
+                                )
+                                if (recent.shopSlug.isNotBlank()) {
+                                    Text(
+                                        text = recent.shopName.ifBlank { recent.shopSlug },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BsdcThemeTokens.colors.mutedText,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (wishlist.isNotEmpty()) {
+            item {
+                BsdcCard {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        BsdcInfoPill(
+                            text = mkText(
+                                bn,
+                                "${wishlist.size} saved item(s)",
+                                "${wishlist.size}টি সংরক্ষিত পণ্য",
+                            ),
+                            icon = Icons.Rounded.Bookmark,
+                            tone = BsdcTone.OK,
+                        )
+                        IconButton(onClick = { savedStore.clearWishlist() }) {
+                            Icon(
+                                Icons.Rounded.DeleteSweep,
+                                contentDescription = mkText(bn, "Clear saved", "সংরক্ষণ মুছুন"),
+                            )
+                        }
+                    }
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(wishlist, key = { it.id }) { item ->
+                            BsdcCard(modifier = Modifier.width(150.dp)) {
+                                Text(
+                                    text = item.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = MkLogic.formatTaka(item.pricePoisha, bn),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = BsdcThemeTokens.colors.brandStrong,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         item {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
-                    FilterChip(
-                        selected = type.isBlank(),
-                        onClick = { type = "" },
-                        label = { Text(mkText(bn, "All", "সব")) },
+                    BsdcFilterPill(
+                        label = mkText(bn, "All", "সব"),
+                        selected = type.isBlank() && !openNowOnly,
+                        onClick = {
+                            type = ""
+                            openNowOnly = false
+                        },
+                    )
+                }
+                item {
+                    BsdcFilterPill(
+                        label = mkText(bn, "Open now", "এখন খোলা"),
+                        selected = openNowOnly,
+                        onClick = { openNowOnly = !openNowOnly },
+                        leadingIcon = Icons.Rounded.History,
                     )
                 }
                 items(MkLogic.SHOP_TYPES) { key ->
-                    FilterChip(
+                    BsdcFilterPill(
+                        label = MkLogic.shopTypeLabel(key, bn),
                         selected = type == key,
                         onClick = { type = if (type == key) "" else key },
-                        label = { Text(MkLogic.shopTypeLabel(key, bn)) },
                     )
                 }
             }
         }
+
         error?.let { message ->
             item {
                 BsdcStatusBanner(
@@ -354,20 +510,32 @@ fun MkShopListScreen(
                 )
             }
         }
-        if (!loading && shops.isEmpty() && error == null) {
+
+        if (loading) {
+            items(3) { BsdcDirectorySkeletonCard() }
+        }
+
+        if (!loading && visibleShops.isEmpty() && error == null) {
             item {
                 BsdcEmptyState(
                     icon = Icons.Rounded.Storefront,
-                    title = mkText(bn, "No shops yet", "এখনো কোনো দোকান নেই"),
+                    title = if (openNowOnly) {
+                        mkText(bn, "Nothing is open right now", "এখন কোনো দোকান খোলা নেই")
+                    } else {
+                        mkText(bn, "No shops yet", "এখনো কোনো দোকান নেই")
+                    },
                     subtitle = mkText(
                         bn,
                         "Shops appear here once they are approved and have order credits.",
                         "অনুমোদিত ও অর্ডার ক্রেডিট থাকা দোকান এখানে দেখাবে।",
                     ),
+                    actionLabel = if (openNowOnly) mkText(bn, "Show all shops", "সব দোকান দেখান") else null,
+                    onAction = { openNowOnly = false },
                 )
             }
         }
-        items(shops, key = { it.slug }) { shop ->
+
+        items(visibleShops, key = { it.slug }) { shop ->
             MkShopCard(shop = shop, imageLoader = imageLoader, bn = bn, onClick = { onOpenShop(shop.slug) })
         }
     }
@@ -398,15 +566,23 @@ private fun MkShopCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     BsdcBadge(label = MkLogic.shopTypeLabel(shop.vendor_type, bn), tone = BsdcTone.INFO)
+                    MkLogic.scheduleBadgeLabel(shop.schedule, bn)?.let { schedLabel ->
+                        BsdcBadge(
+                            label = schedLabel,
+                            tone = if (shop.schedule?.is_open != false) BsdcTone.OK else BsdcTone.WARN,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MkStars(rating = shop.rating)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "(${shop.review_count})",
+                        // A Bangla member reading (7) beside a Bangla shop name is the kind of
+                        // mismatch that makes an app feel translated rather than built for them.
+                        text = "(${BanglaDigitFormatter.formatCount(shop.review_count.toLong(), if (bn) AppLanguage.BN else AppLanguage.EN)})",
                         style = MaterialTheme.typography.labelSmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
@@ -444,6 +620,13 @@ fun MkVendorPageScreen(
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
     var categoryId by rememberSaveable { mutableStateOf<String?>(null) }
+    var sort by rememberSaveable { mutableStateOf(MkLogic.ProductSort.FEATURED) }
+    var inStockOnly by rememberSaveable { mutableStateOf(false) }
+    var compareMode by rememberSaveable { mutableStateOf(false) }
+    val compareIds = remember { mutableStateListOf<String>() }
+    val context = LocalContext.current
+    val savedStore = remember(context) { MkSavedStore.get(context) }
+    val wishlist by savedStore.wishlist.collectAsState()
 
     LaunchedEffect(slug) {
         loading = true
@@ -473,8 +656,16 @@ fun MkVendorPageScreen(
         return
     }
 
-    val visibleProducts = data.products.filter { categoryId == null || it.category_id == categoryId }
+    val filtered = MkLogic.filterStorefront(
+        data.products.filter { categoryId == null || it.category_id == categoryId },
+        MkLogic.ProductFilter(inStockOnly = inStockOnly),
+    )
+    val visibleProducts = MkLogic.sortStorefront(filtered, sort)
     val rows = visibleProducts.chunked(2)
+    val comparing = visibleProducts.filter { it.id in compareIds }.take(3)
+    val compareRows = MkLogic.compareRows(comparing, bn)
+    val cheapest = MkLogic.cheapestOf(comparing)
+    val savings = MkLogic.savingsAgainstPriciest(comparing)
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -508,8 +699,33 @@ fun MkVendorPageScreen(
                     MkStars(rating = data.rating)
                     Spacer(Modifier.width(6.dp))
                     Text(
-                        text = "(${data.review_count})",
+                        text = "(${BanglaDigitFormatter.formatCount(data.review_count.toLong(), if (bn) AppLanguage.BN else AppLanguage.EN)})",
                         style = MaterialTheme.typography.labelSmall,
+                        color = BsdcThemeTokens.colors.mutedText,
+                    )
+                }
+                MkLogic.scheduleBadgeLabel(data.vendor.schedule, bn)?.let { schedLabel ->
+                    Spacer(Modifier.height(6.dp))
+                    BsdcBadge(
+                        label = schedLabel,
+                        tone = if (data.vendor.schedule?.is_open != false) BsdcTone.OK else BsdcTone.WARN,
+                    )
+                }
+                data.vendor.delivery?.let { del ->
+                    Spacer(Modifier.height(6.dp))
+                    val delText = if (del.fee_mode == "per_km") {
+                        val rate = MkLogic.formatTaka(del.per_km_rate_poisha, bn)
+                        mkText(bn, "Delivery: $rate / km", "ডেলিভারি: $rate / কিমি")
+                    } else {
+                        val chg = MkLogic.formatTaka(
+                            if (del.fee_mode == "fixed") del.fixed_fee_poisha else del.default_fee_poisha,
+                            bn,
+                        )
+                        mkText(bn, "Delivery: $chg", "ডেলিভারি: $chg")
+                    }
+                    Text(
+                        text = delText,
+                        style = MaterialTheme.typography.bodySmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
                 }
@@ -529,18 +745,123 @@ fun MkVendorPageScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item {
-                    FilterChip(
+                    BsdcFilterPill(
+                        label = mkText(bn, "All", "সব"),
                         selected = categoryId == null,
                         onClick = { categoryId = null },
-                        label = { Text(mkText(bn, "All", "সব")) },
                     )
                 }
                 items(data.categories, key = { it.id }) { category ->
-                    FilterChip(
+                    BsdcFilterPill(
+                        label = category.name,
                         selected = categoryId == category.id,
                         onClick = { categoryId = if (categoryId == category.id) null else category.id },
-                        label = { Text(category.name) },
                     )
+                }
+            }
+        }
+
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BsdcFilterPill(
+                    label = mkText(bn, "In stock", "স্টকে আছে"),
+                    selected = inStockOnly,
+                    onClick = { inStockOnly = !inStockOnly },
+                )
+                BsdcFilterPill(
+                    label = mkText(bn, "Compare", "তুলনা"),
+                    selected = compareMode,
+                    onClick = {
+                        compareMode = !compareMode
+                        if (!compareMode) compareIds.clear()
+                    },
+                    leadingIcon = Icons.Rounded.Tune,
+                    countLabel = if (compareIds.isNotEmpty()) compareIds.size.toString() else null,
+                )
+                Spacer(Modifier.weight(1f))
+                Text(
+                    text = MkLogic.productSortLabel(sort, bn),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = BsdcThemeTokens.colors.mutedText,
+                )
+            }
+        }
+
+        item {
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(MkLogic.ProductSort.entries.toList(), key = { it.name }) { option ->
+                    BsdcFilterPill(
+                        label = MkLogic.productSortLabel(option, bn),
+                        selected = sort == option,
+                        onClick = { sort = option },
+                    )
+                }
+            }
+        }
+
+        if (compareMode) {
+            item {
+                BsdcCard(modifier = Modifier.padding(horizontal = 16.dp)) {
+                    Text(
+                        text = if (compareIds.isEmpty()) {
+                            mkText(bn, "Tap up to three products to compare them.", "তুলনা করতে সর্বোচ্চ তিনটি পণ্যে ট্যাপ করুন।")
+                        } else {
+                            mkText(bn, "${compareIds.size} of 3 selected", "৩টির মধ্যে ${compareIds.size}টি বাছা হয়েছে")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BsdcThemeTokens.colors.mutedText,
+                    )
+                    if (compareRows.isNotEmpty()) {
+                        HorizontalDivider()
+                        compareRows.forEach { row ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Text(
+                                    text = row.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.width(84.dp),
+                                    color = BsdcThemeTokens.colors.mutedText,
+                                )
+                                row.values.forEach { value ->
+                                    Text(
+                                        text = value,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.weight(1f),
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                            }
+                        }
+                        if (cheapest != null && savings > 0) {
+                            HorizontalDivider()
+                            Text(
+                                text = mkText(
+                                    bn,
+                                    "Cheapest is ${cheapest.name} — you save ${MkLogic.formatTaka(savings, bn)}.",
+                                    "সবচেয়ে কম দাম ${cheapest.name} — বাঁচবে ${MkLogic.formatTaka(savings, true)}।",
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = BsdcThemeTokens.colors.brandStrong,
+                            )
+                        }
+                    }
+                    if (compareIds.isNotEmpty()) {
+                        BsdcButton(
+                            label = mkText(bn, "Clear comparison", "তুলনা সরান"),
+                            secondary = true,
+                            onClick = { compareIds.clear() },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
             }
         }
@@ -559,6 +880,7 @@ fun MkVendorPageScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 pair.forEach { product ->
+                    val wished = wishlist.any { it.id == product.id }
                     MkProductTile(
                         name = product.name,
                         pricePoisha = product.price_poisha,
@@ -566,7 +888,41 @@ fun MkVendorPageScreen(
                         inStock = product.in_stock,
                         imageLoader = imageLoader,
                         bn = bn,
-                        onClick = { onOpenProduct(product.id) },
+                        onClick = {
+                            savedStore.recordView(
+                                MkSavedProduct(
+                                    id = product.id,
+                                    name = product.name,
+                                    shopSlug = slug,
+                                    shopName = data.vendor.name,
+                                    pricePoisha = product.price_poisha,
+                                    imageUrl = product.image_url,
+                                ),
+                            )
+                            if (compareMode) {
+                                if (product.id in compareIds) {
+                                    compareIds.remove(product.id)
+                                } else if (compareIds.size < 3) {
+                                    compareIds.add(product.id)
+                                }
+                            } else {
+                                onOpenProduct(product.id)
+                            }
+                        },
+                        wished = wished,
+                        onToggleWish = {
+                            savedStore.toggleWishlist(
+                                MkSavedProduct(
+                                    id = product.id,
+                                    name = product.name,
+                                    shopSlug = slug,
+                                    shopName = data.vendor.name,
+                                    pricePoisha = product.price_poisha,
+                                    imageUrl = product.image_url,
+                                ),
+                            )
+                        },
+                        selectedForCompare = compareMode && product.id in compareIds,
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -586,14 +942,42 @@ private fun MkProductTile(
     bn: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    wished: Boolean = false,
+    onToggleWish: (() -> Unit)? = null,
+    selectedForCompare: Boolean = false,
 ) {
-    BsdcCard(modifier = modifier, onClick = onClick) {
-        MkImage(
-            url = imageUrl,
-            contentDescription = name,
-            imageLoader = imageLoader,
-            modifier = Modifier.fillMaxWidth().height(120.dp),
-        )
+    BsdcCard(
+        modifier = modifier,
+        onClick = onClick,
+        elevated = selectedForCompare,
+    ) {
+        Box(Modifier.fillMaxWidth()) {
+            MkImage(
+                url = imageUrl,
+                contentDescription = name,
+                imageLoader = imageLoader,
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+            )
+            if (onToggleWish != null) {
+                IconButton(
+                    onClick = onToggleWish,
+                    modifier = Modifier.align(Alignment.TopEnd),
+                ) {
+                    Icon(
+                        imageVector = if (wished) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                        contentDescription = if (bn) "সংরক্ষণ" else "Save",
+                        tint = if (wished) BsdcThemeTokens.colors.brandStrong else BsdcThemeTokens.colors.mutedText,
+                    )
+                }
+            }
+            if (selectedForCompare) {
+                BsdcBadge(
+                    label = if (bn) "তুলনায়" else "Comparing",
+                    tone = BsdcTone.OK,
+                    modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
+                )
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Text(
             text = name,

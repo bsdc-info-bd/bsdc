@@ -235,43 +235,12 @@ export function useInbox(): InboxResult {
   };
 }
 
-export function useUnreadMessageCount(): number {
-  const uid = useAuthStore((state) => state.user?.uid ?? null);
-  const [status, setStatus] = useState<LiveStatus>('connecting');
-  const queryClient = useQueryClient();
-  const { data = 0 } = useQuery({
-    queryKey: ['messages-unread', uid],
-    queryFn: async () => (await repository()).fetchUnreadMessageCount(),
-    enabled: uid !== null,
-    staleTime: 10_000,
-    refetchInterval: status === 'live' ? LIVE_RECONCILE_MS : FALLBACK_INBOX_MS,
-  });
-
-  useEffect(() => {
-    if (uid === null) return;
-    let stop: (() => void) | null = null;
-    let cancelled = false;
-    void channelModule()
-      .then((module) => {
-        if (cancelled) return;
-        stop = module.joinInbox(uid, {
-          onStatus: setStatus,
-          onActivity: () => {
-            void queryClient.invalidateQueries({ queryKey: ['messages-unread', uid] });
-          },
-        });
-      })
-      .catch(() => {
-        if (!cancelled) setStatus('offline');
-      });
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [uid, queryClient]);
-
-  return data;
-}
+/**
+ * The unread badge moved to its own module so the app bar does not download
+ * the messaging layer to show a number; this re-export keeps the name
+ * available to anything that imported it from here.
+ */
+export { useUnreadMessageCount } from './use-unread-message-count';
 
 export interface SendOptions {
   replyTo?: string | null;

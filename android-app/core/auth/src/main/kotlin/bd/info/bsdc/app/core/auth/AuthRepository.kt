@@ -351,6 +351,53 @@ class AuthRepository(
         }
     }
 
+    /**
+     * Deletes the account, in the order the two systems allow.
+     *
+     * Google Play requires an in-app path to account deletion. The data lives in
+     * Postgres and the login lives in Firebase, and the ID token that authorises
+     * the database call belongs to the Firebase user — so the data has to go
+     * first, while the session is still valid:
+     *
+     *   1. `delete_my_account()` (0119) deletes content, tokens and addresses and
+     *      tombstones the profile;
+     *   2. the Firebase user is deleted;
+     *   3. the session is cleared locally.
+     *
+     * If step 2 fails the data is already gone, so the session is still cleared and
+     * an error is returned: signing in again and repeating the request finishes
+     * it, because the RPC is idempotent.
+     *
+     * The owner account is refused by the database (42501) — ownership has to be
+     * transferred first — and that refusal surfaces to the caller, because
+     * deleting the Firebase user of an account whose data still exists would be
+     * the worst of both outcomes.
+     */
+    suspend fun deleteMyAccount(): Result<Unit> {
+        val user = firebaseAuth.currentUser
+            ?: return Result.failure(IllegalStateException("auth/required"))
+        _state.update { it.copy(isBusy = true, errorMessage = null, infoMessage = null) }
+        return runCatching {
+            bootstrapManager.ensureDataAccess(user)
+            platformApi.deleteMyAccount()
+        }.fold(
+            onSuccess = {
+                val firebaseDelete = runCatching { user.delete().await() }
+                // Whichever way the Firebase delete went, this device no longer
+                // holds a session: the data it pointed at is gone.
+                atomicSignOut()
+                firebaseDelete.fold(
+                    onSuccess = { Result.success(Unit) },
+                    onFailure = { err -> Result.failure(IllegalStateException("auth/delete-pending", err)) },
+                )
+            },
+            onFailure = { err ->
+                _state.update { it.copy(isBusy = false) }
+                Result.failure(err)
+            },
+        )
+    }
+
     suspend fun atomicSignOut(onAfterSignOutCleanup: suspend () -> Unit = {}) {
         runCatching { onAfterSignOutCleanup() }
         runCatching {

@@ -314,7 +314,7 @@ export default function PostPage() {
               src={post.coverUrl}
               alt={post.title}
               slotWidth={960}
-              loading="eager"
+              priority
               decoding="async"
               className="mt-5 w-full rounded-card object-cover"
             />

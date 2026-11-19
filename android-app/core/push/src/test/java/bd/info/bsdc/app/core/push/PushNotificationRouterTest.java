@@ -5,6 +5,7 @@ import org.junit.Test;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -53,6 +54,22 @@ public final class PushNotificationRouterTest {
             PushNotificationRouter.resolveChannelId("gig_proposal", "/freelance", null)
         );
         assertEquals(
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
+            PushNotificationRouter.resolveChannelId("gig_proposal_decision", "/freelance/api-redesign", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
+            PushNotificationRouter.resolveChannelId("bsdc-gig_proposal-abc", "", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
+            PushNotificationRouter.resolveChannelId("application_decision", "/jobs/senior-dev", null)
+        );
+        assertEquals(
+            PushNotificationRouter.CHANNEL_VERIFY_ALERTS,
+            PushNotificationRouter.resolveChannelId("unknown", "/gigs", null)
+        );
+        assertEquals(
             PushNotificationRouter.CHANNEL_GENERAL,
             PushNotificationRouter.resolveChannelId("bsdc-summary", "/notifications", null)
         );
@@ -82,5 +99,14 @@ public final class PushNotificationRouterTest {
         );
         assertNull(PushNotificationRouter.extractConversationId("/p/not-a-chat", null));
         assertTrue(PushNotificationRouter.stableNotificationId("tag", "ch", null) >= 1000);
+    }
+
+    @Test
+    public void detectsVendorOrderLoopAlarmFromPayloadOrQueryString() {
+        assertTrue(PushNotificationRouter.isOrderAlarm("order_loop", "/vendor/console"));
+        assertTrue(PushNotificationRouter.isOrderAlarm(null, "/vendor/console?tab=orders&alarm=new"));
+        assertTrue(PushNotificationRouter.isOrderAlarm("", "/vendor/console?alarm=new#top"));
+        assertFalse(PushNotificationRouter.isOrderAlarm(null, "/marketplace/orders"));
+        assertFalse(PushNotificationRouter.isOrderAlarm("order_stop", "/vendor/console"));
     }
 }

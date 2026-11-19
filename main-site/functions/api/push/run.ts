@@ -5,18 +5,26 @@
  *
  *   1. If `PUSH_WORKER_URL` is set, forward to the Worker's `POST /run` so
  *      devices receive RFC 8291 encrypted Web Push and high-priority FCM.
- *   2. Otherwise, or if the Worker does not answer, run both Web Push and
- *      FCM HTTP v1 fallback delivery locally in this Pages Function.
+ *   2. Otherwise, or if the Worker does not answer, run both RFC 8291 encrypted
+ *      Web Push (falling back to empty wake-up pokes if subscription keys are
+ *      absent) and FCM HTTP v1 fallback delivery locally in this Pages Function.
  */
 import {
   PUSH_TTL_SECONDS,
+  encryptWebPushPayload,
   endpointOrigin,
   isDeadEndpointStatus,
   signVapidJwt,
   vapidAuthorizationHeader,
   vapidSubject,
 } from '../../../src/lib/push/webpush';
-import { fcmFallbackDispatch, resolveFcmCredentials, type FcmEnv } from '../../_fcm';
+import {
+  buildWordsForGroup,
+  fcmFallbackDispatch,
+  resolveFcmCredentials,
+  type FcmEnv,
+  type FcmPendingRow,
+} from '../../_fcm';
 import { rpc } from '../../_rpc';
 
 export interface PushEnv extends FcmEnv {
@@ -76,6 +84,23 @@ interface PendingRow {
   created_at: string;
 }
 
+interface PendingDeviceRow {
+  notification_id: string;
+  uid: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  language: string;
+  kind: string;
+  body: string;
+  actor_name: string;
+  actor_avatar: string;
+  url: string;
+  post_id: string | null;
+  conversation_id: string | null;
+  created_at: string;
+}
+
 export interface RunOutcome {
   path: 'worker' | 'local' | 'none';
   status: number;
@@ -88,9 +113,15 @@ const MAX_BATCH = 500;
 const CONCURRENCY = 8;
 const WORKER_TIMEOUT_MS = 25_000;
 
-async function sendOne(
+async function sendWebPush(
   endpoint: string,
   keys: { privateKey: string; publicKey: string; subject: string },
+  options: {
+    p256dh?: string;
+    auth?: string;
+    payload?: Record<string, unknown>;
+    topic?: string;
+  } = {},
 ): Promise<'sent' | 'dead' | 'failed'> {
   const audience = endpointOrigin(endpoint);
   if (audience === null) return 'failed';
@@ -104,16 +135,33 @@ async function sendOne(
   });
   if (token === null) return 'failed';
 
+  const safeTopic = (options.topic ?? 'bsdc').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || 'bsdc';
+  const headers: Record<string, string> = {
+    authorization: vapidAuthorizationHeader(token, keys.publicKey),
+    ttl: String(PUSH_TTL_SECONDS),
+    urgency: 'high',
+    topic: safeTopic,
+  };
+
+  let body: BodyInit = '';
+  if (options.payload && options.p256dh && options.auth) {
+    const encrypted = await encryptWebPushPayload({
+      p256dh: options.p256dh,
+      auth: options.auth,
+      plaintext: JSON.stringify(options.payload).slice(0, 3_600),
+    });
+    if (encrypted !== null) {
+      headers['content-encoding'] = encrypted.contentEncoding;
+      headers['content-type'] = 'application/octet-stream';
+      body = encrypted.body;
+    }
+  }
+
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
-      body: '',
-      headers: {
-        authorization: vapidAuthorizationHeader(token, keys.publicKey),
-        ttl: String(PUSH_TTL_SECONDS),
-        urgency: 'high',
-        topic: 'bsdc',
-      },
+      body,
+      headers,
     });
     if (isDeadEndpointStatus(response.status)) return 'dead';
     return response.ok ? 'sent' : 'failed';
@@ -132,7 +180,25 @@ async function inBatches<T>(
   }
 }
 
-/** The in-function flush: empty Web Push wake-ups + FCM HTTP v1 fallback. */
+function toFcmShape(row: PendingDeviceRow): FcmPendingRow {
+  return {
+    notification_id: row.notification_id,
+    uid: row.uid,
+    token: row.endpoint,
+    platform: 'web',
+    language: row.language,
+    kind: row.kind,
+    body: row.body,
+    actor_name: row.actor_name,
+    actor_avatar: row.actor_avatar,
+    url: row.url,
+    post_id: row.post_id,
+    conversation_id: row.conversation_id,
+    created_at: row.created_at,
+  };
+}
+
+/** The in-function flush: RFC 8291 encrypted Web Push + FCM HTTP v1 fallback. */
 async function runLocally(env: PushEnv, secret: string, limit: number): Promise<RunOutcome> {
   const started = Date.now();
   const privateKey = (env.PUSH_VAPID_PRIVATE_KEY ?? '').trim();
@@ -159,56 +225,156 @@ async function runLocally(env: PushEnv, secret: string, limit: number): Promise<
 
   if (hasVapid) {
     const keys = { privateKey, publicKey, subject: vapidSubject(env.PUSH_VAPID_SUBJECT ?? '') };
-    const pending = await rpc<PendingRow[]>(env, 'push_pending', {
+    const richRows = await rpc<PendingDeviceRow[]>(env, 'push_pending_devices', {
       p_secret: secret,
       p_limit: limit,
+      p_lookback_hours: 72,
     });
-    if (pending === null) {
-      webPushError = true;
-    } else if (pending.length > 0) {
-      webWaiting = pending.length;
-      const endpoints = [...new Set(pending.map((row) => row.endpoint))];
-      webEndpoints = endpoints.length;
-      const outcomes = new Map<string, 'sent' | 'dead' | 'failed'>();
-      await inBatches(endpoints, CONCURRENCY, async (endpoint) => {
-        outcomes.set(endpoint, await sendOne(endpoint, keys));
-      });
 
-      const dead = [...outcomes.entries()].filter(([, outcome]) => outcome === 'dead');
-      await Promise.all(
-        dead.map(([endpoint]) => rpc(env, 'push_kill', { p_secret: secret, p_endpoint: endpoint })),
+    if (Array.isArray(richRows) && richRows.length > 0) {
+      webWaiting = richRows.length;
+      const byEndpoint = new Map<string, PendingDeviceRow[]>();
+      for (const row of richRows) {
+        const list = byEndpoint.get(row.endpoint);
+        if (list) list.push(row);
+        else byEndpoint.set(row.endpoint, [row]);
+      }
+      webEndpoints = byEndpoint.size;
+
+      const deadEndpoints = new Set<string>();
+      const reachedPairs: { id: string; endpoint: string }[] = [];
+      let sentCount = 0;
+      let failedCount = 0;
+
+      await inBatches(
+        [...byEndpoint.entries()],
+        CONCURRENCY,
+        async ([endpoint, rowsForEndpoint]) => {
+          const latest = rowsForEndpoint[rowsForEndpoint.length - 1]!;
+          const words = buildWordsForGroup(rowsForEndpoint.map(toFcmShape));
+          const outcome = await sendWebPush(endpoint, keys, {
+            p256dh: latest.p256dh,
+            auth: latest.auth,
+            topic: words.topic,
+            payload: {
+              title: words.title,
+              body: words.body,
+              url: words.url,
+              tag: words.tag,
+              icon: '/icons/icon-192.png',
+              badge: '/icons/maskable-512.png',
+            },
+          });
+          if (outcome === 'sent') {
+            sentCount += 1;
+            for (const row of rowsForEndpoint) {
+              reachedPairs.push({ id: row.notification_id, endpoint });
+            }
+          } else if (outcome === 'dead') {
+            deadEndpoints.add(endpoint);
+          } else {
+            failedCount += 1;
+          }
+        },
       );
 
-      const reachedSent = pending.filter((row) => outcomes.get(row.endpoint) === 'sent');
-      const reachedAll = pending.filter((row) => outcomes.get(row.endpoint) !== 'failed');
-      const webFailedCount = [...outcomes.values()].filter((o) => o === 'failed').length;
+      await Promise.all(
+        [...deadEndpoints].map((endpoint) =>
+          rpc(env, 'push_kill', { p_secret: secret, p_endpoint: endpoint }),
+        ),
+      );
+
       let marked: number | null = 0;
-      if (webFailedCount > 0 || pending.length >= limit) {
-        if (reachedSent.length > 0) {
+      if (failedCount > 0 || richRows.length >= limit) {
+        if (reachedPairs.length > 0) {
           const perDevice = await rpc<number>(env, 'push_mark_device_deliveries', {
             p_secret: secret,
-            p_pairs: reachedSent.map((row) => ({
-              id: row.notification_id,
-              endpoint: row.endpoint,
-            })),
+            p_pairs: reachedPairs,
           });
           marked =
             typeof perDevice === 'number'
               ? perDevice
               : await rpc<number>(env, 'push_mark', {
                   p_secret: secret,
-                  p_ids: [...new Set(reachedSent.map((row) => row.notification_id))],
+                  p_ids: [...new Set(reachedPairs.map((p) => p.id))],
                 });
         }
-      } else if (reachedAll.length > 0) {
-        const ids = [...new Set(reachedAll.map((row) => row.notification_id))];
-        marked = await rpc<number>(env, 'push_mark', { p_secret: secret, p_ids: ids });
+      } else if (reachedPairs.length > 0 || deadEndpoints.size > 0) {
+        const ids = [
+          ...new Set(
+            richRows
+              .filter(
+                (r) =>
+                  deadEndpoints.has(r.endpoint) ||
+                  reachedPairs.some((p) => p.id === r.notification_id && p.endpoint === r.endpoint),
+              )
+              .map((r) => r.notification_id),
+          ),
+        ];
+        if (ids.length > 0) {
+          marked = await rpc<number>(env, 'push_mark', { p_secret: secret, p_ids: ids });
+        }
       }
 
-      webSent = [...outcomes.values()].filter((o) => o === 'sent').length;
-      webDead = dead.length;
-      webFailed = webFailedCount;
+      webSent = sentCount;
+      webDead = deadEndpoints.size;
+      webFailed = failedCount;
       webMarked = typeof marked === 'number' ? marked : 0;
+    } else if (richRows === null) {
+      // Backwards-compatible fallback to `push_pending` if `push_pending_devices` is unavailable.
+      const pending = await rpc<PendingRow[]>(env, 'push_pending', {
+        p_secret: secret,
+        p_limit: limit,
+      });
+      if (pending === null) {
+        webPushError = true;
+      } else if (pending.length > 0) {
+        webWaiting = pending.length;
+        const endpoints = [...new Set(pending.map((row) => row.endpoint))];
+        webEndpoints = endpoints.length;
+        const outcomes = new Map<string, 'sent' | 'dead' | 'failed'>();
+        await inBatches(endpoints, CONCURRENCY, async (endpoint) => {
+          outcomes.set(endpoint, await sendWebPush(endpoint, keys));
+        });
+
+        const dead = [...outcomes.entries()].filter(([, outcome]) => outcome === 'dead');
+        await Promise.all(
+          dead.map(([endpoint]) =>
+            rpc(env, 'push_kill', { p_secret: secret, p_endpoint: endpoint }),
+          ),
+        );
+
+        const reachedSent = pending.filter((row) => outcomes.get(row.endpoint) === 'sent');
+        const reachedAll = pending.filter((row) => outcomes.get(row.endpoint) !== 'failed');
+        const webFailedCount = [...outcomes.values()].filter((o) => o === 'failed').length;
+        let marked: number | null = 0;
+        if (webFailedCount > 0 || pending.length >= limit) {
+          if (reachedSent.length > 0) {
+            const perDevice = await rpc<number>(env, 'push_mark_device_deliveries', {
+              p_secret: secret,
+              p_pairs: reachedSent.map((row) => ({
+                id: row.notification_id,
+                endpoint: row.endpoint,
+              })),
+            });
+            marked =
+              typeof perDevice === 'number'
+                ? perDevice
+                : await rpc<number>(env, 'push_mark', {
+                    p_secret: secret,
+                    p_ids: [...new Set(reachedSent.map((row) => row.notification_id))],
+                  });
+          }
+        } else if (reachedAll.length > 0) {
+          const ids = [...new Set(reachedAll.map((row) => row.notification_id))];
+          marked = await rpc<number>(env, 'push_mark', { p_secret: secret, p_ids: ids });
+        }
+
+        webSent = [...outcomes.values()].filter((o) => o === 'sent').length;
+        webDead = dead.length;
+        webFailed = webFailedCount;
+        webMarked = typeof marked === 'number' ? marked : 0;
+      }
     }
   }
 

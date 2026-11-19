@@ -18,6 +18,7 @@ on:
     branches: ['**']
     paths:
       - 'supabase/**'
+      - 'scripts/sql-schema-check.py'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
       - 'scripts/prove-corporate-permissions.sql'
@@ -31,6 +32,7 @@ on:
   pull_request:
     paths:
       - 'supabase/**'
+      - 'scripts/sql-schema-check.py'
       - 'scripts/db-push.mjs'
       - 'scripts/rls-proof.sql'
       - 'scripts/prove-corporate-permissions.sql'
@@ -82,6 +84,13 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # Ten seconds, and it runs before anything expensive. Catches a migration
+      # that names a table, column, function, type or notification kind that
+      # nothing defines -- the class of bug that otherwise surfaces only when a
+      # SECURITY DEFINER function returns empty for every real user.
+      - name: Every migration names only things that exist
+        run: python3 scripts/sql-schema-check.py
 
       - uses: actions/setup-node@v4
         with:

@@ -102,6 +102,10 @@ jobs:
           grep -q 'android:usesCleartextTraffic="false"' "$manifest" || { echo "::error::usesCleartextTraffic=false missing"; exit 1; }
           if grep -q 'usesCleartextTraffic="true"' "$manifest"; then echo "::error::cleartext traffic enabled"; exit 1; fi
           if grep -q 'ACCESS_BACKGROUND_LOCATION' "$manifest"; then echo "::error::background location declared"; exit 1; fi
+          # Voice search hands the listening to the system recogniser, which holds
+          # the microphone permission. Declaring it here would ask Play reviewers to
+          # justify a sensitive capability this app never exercises.
+          if grep -q 'android.permission.RECORD_AUDIO' "$manifest"; then echo "::error::RECORD_AUDIO declared but unused (voice search uses the system recogniser)"; exit 1; fi
           echo "Native manifest invariants verified."
 
       - name: Prepare debug Firebase configuration

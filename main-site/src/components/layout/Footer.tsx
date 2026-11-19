@@ -7,6 +7,9 @@ import { ECOSYSTEM_LINKS, ROUTES, SITE } from '@/lib/site';
 const PLATFORM_LINKS = [
   { to: ROUTES.about, labelKey: 'nav.about' },
   { to: ROUTES.guidelines, labelKey: 'nav.guidelines' },
+  { to: ROUTES.privacy, labelKey: 'nav.privacy' },
+  { to: ROUTES.terms, labelKey: 'nav.terms' },
+  { to: ROUTES.accountDeletion, labelKey: 'nav.accountDeletion' },
   { to: ROUTES.contact, labelKey: 'nav.contact' },
 ] as const;
 
@@ -15,7 +18,7 @@ export function Footer() {
   const year = new Date().getFullYear();
 
   return (
-    <footer className="mt-10 border-t border-border bg-surface">
+    <footer className="defer-offscreen mt-10 border-t border-border bg-surface">
       <div className="fab-container grid gap-6 py-8 sm:grid-cols-2 lg:grid-cols-4">
         <div className="min-w-0">
           <Logo variant="full" className="h-9" title={t('common.brandFull')} />

@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ArrowLeft, Check, ImageOff, ShoppingBag, Star, Zap } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +11,7 @@ import { QuantityStepper } from '@/components/mk/customer/QuantityStepper';
 import { Button, EmptyState, PageSkeleton } from '@/design-system';
 import { useMyCart, useProductDetail, useSetCartQty } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { formatTaka, type Language } from '@/lib/mk/mk-logic';
+import { formatTaka, variantFor, type Language } from '@/lib/mk/mk-logic';
 
 export default function MarketProductPage() {
   const { id = '' } = useParams();
@@ -54,8 +55,13 @@ export default function MarketProductPage() {
 
   const images = data.images.filter(Boolean);
   const shopSlug = data.vendor.slug;
+  const shopOpen = data.vendor.schedule ? data.vendor.schedule.is_open : true;
 
   async function addToCart(): Promise<void> {
+    if (!shopOpen) {
+      toast.error(copy.schedule.closedBanner);
+      return;
+    }
     try {
       await setQty.mutateAsync({ productId: id, qty: inCart + picked });
       setAdded(true);
@@ -66,6 +72,10 @@ export default function MarketProductPage() {
   }
 
   function buyNow(): void {
+    if (!shopOpen) {
+      toast.error(copy.schedule.closedBanner);
+      return;
+    }
     const params = new URLSearchParams({ product: id, qty: String(picked) });
     navigate(`/marketplace/checkout/${shopSlug}?${params.toString()}`);
   }
@@ -89,16 +99,32 @@ export default function MarketProductPage() {
         <section aria-label={data.name} className="space-y-3">
           <div className="relative aspect-square overflow-hidden rounded-3xl border border-border bg-surface-2">
             <AnimatePresence mode="wait" initial={false}>
-              <motion.img
+              {/*
+                The hero goes through MediaImage, not a bare <img>. A bare image
+                here had no retry ladder, no srcset and no edge proxy, so the one
+                picture a buyer came to see was the one picture that could fail
+                permanently on a flaky connection while every thumbnail around it
+                recovered. The fade is kept by animating the wrapper, which is
+                enough because the frame is a fixed aspect square.
+              */}
+              <motion.div
                 key={images[active] ?? 'none'}
-                src={images[active]}
-                alt={data.name}
                 initial={reduce ? false : { opacity: 0, scale: 1.03 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={reduce ? {} : { opacity: 0 }}
                 transition={{ duration: 0.3 }}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
+                className="absolute inset-0"
+              >
+                <MediaImage
+                  src={images[active] ?? ''}
+                  variantSrc={variantFor(images, data.image_variants, images[active] ?? '')}
+                  alt={data.name}
+                  slotWidth={640}
+                  priority={active === 0}
+                  sizesAttribute="(min-width: 1024px) 50vw, 100vw"
+                  className="h-full w-full object-cover"
+                />
+              </motion.div>
             </AnimatePresence>
             {images.length === 0 ? (
               <span className="grid h-full place-items-center text-muted">
@@ -117,7 +143,13 @@ export default function MarketProductPage() {
                   onClick={() => setActive(i)}
                   className={`h-16 w-16 shrink-0 overflow-hidden rounded-xl border-2 ${active === i ? 'border-green-700' : 'border-transparent'}`}
                 >
-                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <MediaImage
+                    src={url}
+                    variantSrc={variantFor(images, data.image_variants, url)}
+                    alt=""
+                    slotWidth={96}
+                    className="h-full w-full object-cover"
+                  />
                 </button>
               ))}
             </div>
@@ -142,6 +174,12 @@ export default function MarketProductPage() {
             {data.in_stock ? `${data.stock} ${copy.buyer.stockLeft}` : copy.buyer.outOfStock}
           </p>
 
+          {!shopOpen ? (
+            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-800 dark:text-rose-200">
+              {copy.schedule.closedBanner}
+            </p>
+          ) : null}
+
           {data.in_stock ? (
             <div className="space-y-3 rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between gap-3">
@@ -159,6 +197,7 @@ export default function MarketProductPage() {
                   type="button"
                   variant="secondary"
                   className="flex-1"
+                  disabled={!shopOpen}
                   loading={setQty.isPending}
                   iconStart={added ? <Check size={16} /> : <ShoppingBag size={16} />}
                   onClick={() => void addToCart()}
@@ -168,6 +207,7 @@ export default function MarketProductPage() {
                 <Button
                   type="button"
                   className="flex-1"
+                  disabled={!shopOpen}
                   iconStart={<Zap size={16} />}
                   onClick={buyNow}
                 >

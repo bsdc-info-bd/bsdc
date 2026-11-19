@@ -278,6 +278,24 @@ class BsdcPlatformApi(
             ?: throw SupabaseApiException(500, null, "profile/save-failed")
     }
 
+    /**
+     * Deletes this member's account data (migration 0119).
+     *
+     * Only the database half: `public.delete_my_account()` removes the member's
+     * content, tokens and addresses and turns the profile row into a tombstone.
+     * The Firebase user is removed by [AuthRepository.deleteMyAccount] afterwards,
+     * because this client is the only thing holding both sessions — and the ID
+     * token that authorises this call belongs to the Firebase user, so the order
+     * cannot be reversed.
+     */
+    suspend fun deleteMyAccount() {
+        supabase.rpcText(
+            functionName = "delete_my_account",
+            params = buildJsonObject { },
+            requireAuth = true,
+        )
+    }
+
     suspend fun updatePrivacyPrefs(uid: String, privacy: PrivacyPrefs) {
         val body = buildJsonObject {
             put(

@@ -355,6 +355,13 @@ export type CommentRow = {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  /** The picture the member attached, or empty. Always an https address. */
+  image_url: string;
+  /** ImgBB's ~640px variant of the same picture. */
+  image_thumb_url: string;
+  image_alt: string;
+  image_width: number | null;
+  image_height: number | null;
 };
 
 export type CommentReactionRow = { comment_id: string; uid: string; created_at: string };
@@ -823,10 +830,20 @@ export type GigRow = {
   updated_at: string;
 };
 
+/**
+ * An application, as `job_application_queue()` returns it (0113): the row plus
+ * the applicant's public card. The table has no name or avatar columns — the
+ * queue RPC joins them and derives `verified` from `role`, because `profiles`
+ * has no `verified` column to select.
+ */
 export type JobApplicationRow = {
   id: string;
   job_id: string;
   applicant_uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  verified: boolean;
   cover_letter: string;
   resume_url: string;
   status: DbApplicationStatus;
@@ -834,10 +851,19 @@ export type JobApplicationRow = {
   created_at: string;
 };
 
+/**
+ * A proposal, as `gig_proposal_queue()` returns it (0112): the bid row plus the
+ * freelancer's public card. The table itself has no name or avatar columns —
+ * the queue RPC joins them and derives `verified` from `role`.
+ */
 export type GigProposalRow = {
   id: string;
   gig_id: string;
   freelancer_uid: string;
+  username: string;
+  display_name: string;
+  avatar_url: string;
+  verified: boolean;
   pitch: string;
   bid_amount: number;
   delivery_days: number;
@@ -2305,6 +2331,11 @@ export type Database = {
         Row: CommentRow;
         Insert: Pick<CommentRow, 'post_id' | 'author_uid' | 'body'> & {
           parent_id?: string | null;
+          image_url?: string;
+          image_thumb_url?: string;
+          image_alt?: string;
+          image_width?: number | null;
+          image_height?: number | null;
         };
         Update: Partial<Pick<CommentRow, 'body' | 'status' | 'edited_at' | 'deleted_at'>>;
         Relationships: [];
@@ -2420,10 +2451,23 @@ export type Database = {
           p_fee_taka: number;
           p_center_lat?: number | null;
           p_center_lng?: number | null;
+          p_fee_mode?: string | null;
+          p_per_km_taka?: number | null;
         };
         Returns: Json;
       };
+      mk_vendor_set_schedule: {
+        Args: {
+          p_enabled: boolean;
+          p_days: Json;
+        };
+        Returns: Json;
+      };
+      push_public_config: { Args: never; Returns: Json };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
+      // Self-service account deletion (0119). Returns void; the client deletes
+      // the Firebase user afterwards, so there is no payload to read.
+      delete_my_account: { Args: never; Returns: undefined };
       // Web push (0060). The flush and the content endpoint are called from the
       // edge, where the client is a plain fetch, so they are not listed here.
       register_push_subscription: {
@@ -2497,6 +2541,18 @@ export type Database = {
       };
       next_username_change: { Args: Record<string, never>; Returns: string | null };
       cast_poll_vote: { Args: { p_post_id: string; p_option_id: string }; Returns: undefined };
+      save_post: {
+        Args: {
+          p_id?: string | null;
+          p_post?: Json;
+          p_slug?: string | null;
+          p_tags?: string[];
+          p_media?: Json;
+          p_mentions?: string[];
+          p_poll?: Json | null;
+        };
+        Returns: Json;
+      };
       increment_post_view: { Args: { p_post_id: string }; Returns: undefined };
       record_feed_impression: { Args: { p_post_id: string }; Returns: undefined };
       prune_feed_seen: { Args: { p_days: number }; Returns: number };
@@ -2917,6 +2973,41 @@ export type Database = {
       post_interaction_state: {
         Args: { p_post_ids: string[] };
         Returns: InteractionStateRow[];
+      };
+      /** Every proposal on a gig, with the freelancer's public card (0112). */
+      gig_proposal_queue: {
+        Args: { p_gig_id: string; p_limit?: number };
+        Returns: GigProposalRow[];
+      };
+      gig_proposal_count: {
+        Args: { p_gig_id: string };
+        Returns: number;
+      };
+      decide_gig_proposal: {
+        Args: { p_proposal_id: string; p_status: DbApplicationStatus };
+        Returns: undefined;
+      };
+      /** Every application on a job, with the applicant's public card (0113). */
+      job_application_queue: {
+        Args: { p_job_id: string; p_limit?: number };
+        Returns: JobApplicationRow[];
+      };
+      // Advertising credits: 1 credit = 1 taka, minimum 500, paid by bKash (0115).
+      request_ad_credits: {
+        Args: { p_credits: number; p_sender_number: string; p_txn_id: string };
+        Returns: Json;
+      };
+      my_ad_credit_requests: {
+        Args: { p_limit?: number };
+        Returns: Json;
+      };
+      ad_credit_queue: {
+        Args: { p_status?: string; p_limit?: number };
+        Returns: Json;
+      };
+      decide_ad_credit_request: {
+        Args: { p_purchase_id: string; p_decision: string; p_note?: string };
+        Returns: Json;
       };
     };
     Enums: {

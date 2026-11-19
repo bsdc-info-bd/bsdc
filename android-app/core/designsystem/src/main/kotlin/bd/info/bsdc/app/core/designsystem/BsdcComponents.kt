@@ -524,3 +524,400 @@ fun BsdcEmptyState(
         }
     }
 }
+
+/**
+ * Gradient hero banner with optional icon, eyebrow badge, title, subtitle, live KPI pills,
+ * and primary/secondary actions — giving every directory & hub screen an editorial, modern anchor.
+ */
+@Composable
+fun BsdcHeroBanner(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    eyebrow: String? = null,
+    icon: ImageVector? = null,
+    stats: List<Pair<String, String>> = emptyList(),
+    primaryActionLabel: String? = null,
+    onPrimaryAction: (() -> Unit)? = null,
+    secondaryActionLabel: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
+) {
+    val ext = BsdcThemeTokens.colors
+    val gradient = Brush.linearGradient(
+        colors = listOf(
+            ext.brandSoft,
+            MaterialTheme.colorScheme.surfaceVariant,
+            ext.accentBlueSoft.copy(alpha = 0.55f),
+        ),
+    )
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.Transparent,
+        border = BorderStroke(1.dp, ext.border),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(gradient)
+                .padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (icon != null) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp)
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f))
+                            .border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f),
+                                RoundedCornerShape(14.dp),
+                            ),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = ext.brandStrong,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    if (!eyebrow.isNullOrBlank()) {
+                        BsdcBadge(label = eyebrow, tone = BsdcTone.OK)
+                    }
+                    Text(
+                        text = title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    if (subtitle.isNotBlank()) {
+                        Text(
+                            text = subtitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ext.mutedText,
+                        )
+                    }
+                }
+            }
+
+            if (stats.isNotEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    stats.take(4).forEach { (k, v) ->
+                        Surface(
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
+                            border = BorderStroke(1.dp, ext.border),
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp),
+                            ) {
+                                Text(
+                                    text = v,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = ext.brandStrong,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = k,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = ext.mutedText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if ((primaryActionLabel != null && onPrimaryAction != null) ||
+                (secondaryActionLabel != null && onSecondaryAction != null)
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (primaryActionLabel != null && onPrimaryAction != null) {
+                        BsdcButton(
+                            label = primaryActionLabel,
+                            onClick = onPrimaryAction,
+                        )
+                    }
+                    if (secondaryActionLabel != null && onSecondaryAction != null) {
+                        BsdcButton(
+                            label = secondaryActionLabel,
+                            onClick = onSecondaryAction,
+                            secondary = true,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Interactive pill chip with optional icon and count badge.
+ */
+@Composable
+fun BsdcFilterPill(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    leadingIcon: ImageVector? = null,
+    countLabel: String? = null,
+) {
+    val ext = BsdcThemeTokens.colors
+    val interactionSource = remember { MutableInteractionSource() }
+    val bg = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface
+    val fg = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+    val border = if (selected) MaterialTheme.colorScheme.primary else ext.border
+
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier.pressBounceScale(interactionSource),
+        shape = RoundedCornerShape(999.dp),
+        color = bg,
+        border = BorderStroke(1.dp, border),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (leadingIcon != null) {
+                Icon(
+                    imageVector = leadingIcon,
+                    contentDescription = null,
+                    tint = fg,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = fg,
+                maxLines = 1,
+            )
+            if (!countLabel.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (selected) fg.copy(alpha = 0.2f) else ext.surfaceElevated,
+                ) {
+                    Text(
+                        text = countLabel,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (selected) fg else ext.mutedText,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Compact icon-and-label metadata pill for cards (budget, location, timeline, license, etc.).
+ */
+@Composable
+fun BsdcInfoPill(
+    text: String,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    tone: BsdcTone = BsdcTone.NEUTRAL,
+) {
+    val ext = BsdcThemeTokens.colors
+    val (bg, fg) = when (tone) {
+        BsdcTone.OK -> ext.brandSoft to ext.brandStrong
+        BsdcTone.INFO -> ext.accentBlueSoft to ext.accentBlue
+        BsdcTone.WARN -> ext.warnSoft to ext.warn
+        BsdcTone.BAD -> ext.dangerSoft to ext.danger
+        BsdcTone.NEUTRAL -> ext.surfaceElevated.copy(alpha = 0.85f) to MaterialTheme.colorScheme.onSurface
+    }
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(10.dp),
+        color = bg,
+        border = BorderStroke(1.dp, ext.border.copy(alpha = 0.6f)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            if (icon != null) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = fg,
+                    modifier = Modifier.size(14.dp),
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                color = fg,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/**
+ * Tappable launcher tile used in the More Hub, Quick Actions, and Ecosystem grids.
+ */
+@Composable
+fun BsdcActionTile(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tone: BsdcTone = BsdcTone.OK,
+    badge: String? = null,
+) {
+    val ext = BsdcThemeTokens.colors
+    val interactionSource = remember { MutableInteractionSource() }
+    val (iconBg, iconFg) = when (tone) {
+        BsdcTone.OK -> ext.brandSoft to ext.brandStrong
+        BsdcTone.INFO -> ext.accentBlueSoft to ext.accentBlue
+        BsdcTone.WARN -> ext.warnSoft to ext.warn
+        BsdcTone.BAD -> ext.dangerSoft to ext.danger
+        BsdcTone.NEUTRAL -> ext.surfaceElevated to MaterialTheme.colorScheme.primary
+    }
+    Surface(
+        onClick = onClick,
+        interactionSource = interactionSource,
+        modifier = modifier
+            .fillMaxWidth()
+            .pressBounceScale(interactionSource),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, ext.border),
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(iconBg),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = iconFg,
+                        modifier = Modifier.size(21.dp),
+                    )
+                }
+                if (!badge.isNullOrBlank()) {
+                    BsdcBadge(label = badge, tone = tone)
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle.isNotBlank()) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = ext.mutedText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Compact directory loading skeleton card for Jobs, Gigs, Projects, Groups, and Shops.
+ */
+@Composable
+fun BsdcDirectorySkeletonCard(modifier: Modifier = Modifier) {
+    BsdcCard(modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .bsdcShimmerPlaceholder(),
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(160.dp)
+                            .height(15.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .bsdcShimmerPlaceholder(),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(105.dp)
+                            .height(11.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .bsdcShimmerPlaceholder(),
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .width(64.dp)
+                    .height(24.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .bsdcShimmerPlaceholder(),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(13.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .bsdcShimmerPlaceholder(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.7f)
+                .height(13.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .bsdcShimmerPlaceholder(),
+        )
+    }
+}

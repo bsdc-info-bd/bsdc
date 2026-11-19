@@ -299,7 +299,7 @@ describe('FCM HTTP v1 delivery', () => {
     expect((msg['data'] as { kind?: string }).kind).toBe('message');
   });
 
-  it('keeps distinct topics separate up to 4 threads and summarises at 5+', () => {
+  it('keeps distinct topics separate up to 4 threads and summarises at 5+ while keeping new-order alarms isolated', () => {
     const mkRow = (id: string, kind: string, extra: Record<string, string | null> = {}) => ({
       notification_id: id,
       kind,
@@ -333,6 +333,22 @@ describe('FCM HTTP v1 delivery', () => {
     );
     expect(summarised).toHaveLength(1);
     expect(summarised[0]?.words.tag).toBe('bsdc-summary');
+
+    const withAlarm = planDeviceDeliveries(
+      [
+        mkRow('n1', 'message', { conversation_id: 'c1', url: '/messages/c1' }),
+        mkRow('n2', 'comment', { post_id: 'p1', url: '/p/p1' }),
+        mkRow('n3', 'reaction', { post_id: 'p2', url: '/p/p2' }),
+        mkRow('n4', 'follow', { url: '/u/karim' }),
+        mkRow('n5', 'bookmark', { post_id: 'p3', url: '/p/p3' }),
+        mkRow('n6', 'order', { url: '/vendor/console?alarm=new' }),
+      ],
+      'en',
+    );
+    expect(withAlarm).toHaveLength(2);
+    expect(withAlarm[0]?.words.url).toBe('/vendor/console?alarm=new');
+    expect(withAlarm[0]?.words.kind).toBe('order');
+    expect(withAlarm[1]?.words.tag).toBe('bsdc-summary');
   });
 
   it('delivers pending FCM devices end-to-end inside run /health even without VAPID', async () => {

@@ -17,6 +17,7 @@ object BsdcHttpClientFactory {
         isLenient = true
         encodeDefaults = true
         explicitNulls = false
+        coerceInputValues = true
     }
 
     fun createOkHttpClient(enableDebugLogs: Boolean = false): OkHttpClient {

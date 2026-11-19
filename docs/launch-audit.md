@@ -113,169 +113,372 @@ workflow:
    file — the escaping is fixed and the config now says why the entries
    exist.
 
+10. **The Play Store submission had no way to delete an account.** The privacy
+    policy had promised, since the day it was written, that a member could ask for
+    their account to be deleted — and the only way to do it was to email support.
+    Google Play requires an in-app path, so this was both a policy violation and a
+    promise the product did not keep. `public.delete_my_account()` (migration
+
+119) now deletes the member's content, social graph, behavioural traces,
+     private records and device tokens, strips and suspends any vendor or shop row,
+     scrubs finished orders, and leaves a tombstone profile so the order records the
+     other party still needs keep resolving without identifying anyone. Both clients
+     call it, `scripts/db-prove/t78.mjs` proves it from the database side (41 checks,
+     including that a one-line omission from the delete list turns it red), and
+     `src/test/delete-account.test.ts` holds the ordering the two systems force.
+     The same pass found the terms of service had never existed as a page — the
+     footer linked a policy and no terms — and that the Android app linked neither;
+     `/terms` is now bilingual and tested, both are linked from the footer, and the
+     app opens both in a custom tab beside its own delete-account flow. The data
+     safety answers a Play reviewer asks for are written down against the schema in
+     `docs/play-store-compliance.md`, and checkpoints K-01 to K-06 hold the four
+     requirements rather than a document claiming them.
+
+11. **A permission nobody used, and a processor nobody named.** Two Play Store
+    findings that no test had been able to see. `RECORD_AUDIO` was declared and
+    requested with a rationale, and nothing in the app ever opens a recorder:
+    voice search hands the microphone to Android's own speech service, which holds
+    the permission itself — so the app was asking for a sensitive capability it
+    did not use, which is a permissions-policy defect. The declaration, the
+    coordinator branch, the rationale copy and the enum value are gone, and K-07
+    keeps them out. Separately, uploaded pictures are stored on ImgBB — the app
+    talks to our own upload endpoint, so the third party was invisible from the
+    client — and neither the privacy policy nor the data safety answers named it.
+    Both languages now list it beside Supabase, Firebase and Cloudflare, K-08
+    fails if any of the four goes missing, and the camera rationale in the app
+    stopped saying "ImgBB uploads" to a member who has never heard of ImgBB.
+
+12. **The deletion URL Play asks for did not exist.** Play's Data safety section
+    wants a public URL where deletion can be requested — a reviewer has no
+    account, and a member whose phone is gone cannot open the app. The in-app
+    button satisfied the spirit of the requirement and not the letter of it.
+    `/account-deletion` is now a bilingual public page that names all three ways
+    to delete an account (in the app, on the web, by writing to support), states
+    what is deleted and — unlike a marketing page — what is kept and why, and is
+    linked from the footer. K-09 fails if it disappears.
+
+13. **The site was 63 on mobile Lighthouse, and the score was three separate
+    defects.** A footer that moved 2,300 px when the feed arrived (CLS 0.43); a
+    largest paint that belonged to React rather than to the HTML, because the
+    prerendered shell was smaller than the page that replaced it (LCP 4.1 s on
+    `/`, 3.2–3.8 s on every text page); and 480 kB of entry JavaScript, of which
+    354 kB was the two language bundles downloaded in full by every visitor.
+    The shell now quotes the page's own opening at the page's own class names,
+    the stylesheet is inlined instead of linked, one language is fetched as its
+    own chunk, and each page preloads the chunk that renders it. Measured with
+    `node scripts/lighthouse.mjs` (median of three runs per route): **every
+    public page clears 95 in all four categories**, and accessibility and SEO are
+    100 everywhere. F-11 to F-19 hold each of those decisions in place.
+14. **Two colours and two labels failed the accessibility audit.** `#1877f2` as
+    text on our surface is 3.9:1 against a 4.5:1 floor, and the logo link and
+    language button had accessible names that did not contain their visible text
+    — so a voice-control user could not say what they saw. There is now a
+    separate `--bsdc-blue-text` token for copy (6.1:1), the logo's name is its
+    visible lockup, and the language button carries its action in a visually
+    hidden span. Accessibility is 100 on every measured route.
+15. **An empty state skipped a heading level.** `EmptyState` rendered an `h3`
+    directly under the page's `h1`, which is a heading-order failure on
+    `/marketplace` — the one page whose first card is an empty state. It now
+    renders an `h2` unless a caller asks for `h3`.
+
+### Findings from the last full pass
+
+Each of these was a live defect found by running the checks rather than by reading
+the code, and each is now fixed with a test or a check that would catch it again.
+
+- **Image priority was never set.** Every page hero carried `loading="eager"` and
+  still lost the race, because eager loading moves a request earlier in time and not
+  earlier in the browser's queue. `fetchpriority="high"` appeared nowhere in the
+  source. `MediaImage` now takes one `priority` prop that sets both, so a caller
+  cannot set half of the pair.
+- **The product hero bypassed image recovery entirely.** `MarketProductPage` rendered
+  a bare `<motion.img>`, so the one picture a buyer came to see had no retry ladder,
+  no `srcset` and no edge-proxy fallback while the thumbnails around it recovered.
+  Same for `ProductCard` and the vendor catalogue — the two most repeated images in
+  the marketplace.
+- **Every product thumbnail downloaded the full-size original.** The upload endpoint
+  has always returned a ~640px variant, and `mk_products` kept only the original.
+  Migration 0116 stores the variant map and emits it from the three read models;
+  the existing arrays are untouched.
+- **Editing a product would have erased its variants.** The edit form opened without
+  the map and saved it empty, so correcting a name would have quietly undone 0116.
+  Removing a picture also left its variant behind.
+- **Five tables' `updated_at` never advanced.** `mk_cart_items`, `mk_settings`,
+  `mk_credit_packages`, `admin_saved_macros` and `topic_affinity` had the column and
+  no touch trigger, so an edited package price was indistinguishable from a seeded
+  one. Migration 0117 installs the missing triggers.
+- **Shop types and the checkout stepper used emoji as chrome.** Device-dependent
+  pictures, font-dependent baselines, and announced as words to a screen reader; the
+  pencil was a text-presentation glyph that renders as an outline on some builds.
+  Replaced with vector icons that inherit `currentColor`.
+- **The deploy workflow raced the deployment it was checking.** The upload-endpoint
+  assertion was the one check in its step with no retry, so it sometimes ran while
+  the static assets were live and the Functions were not yet at the edge, failing a
+  commit whose functions were fine.
+- **The database proofs printed `FAIL` for the outcome they wanted.** t75 asked the
+  database to refuse a stranger deciding a proposal, ran that through `as()` — which
+  records a failure whenever the statement throws — and then asserted the result was
+  null. Seven checks in that file were written this way, so a correct refusal printed
+  `FAIL` while the `ok` came from the assertion beside it. The harness still passed,
+  because it tracked a private counter and never consulted what the shared library
+  had recorded. The loud symptom trains a reader to skim `FAIL`; the quiet one is a
+  real failure recorded in the library that no exit status examined. t39 and t40 had
+  the same blind exit. Refusals now go through `expectFail` with the error code they
+  must raise, `failureCount()` is folded into every harness's exit status, and a
+  deliberately wrong expected code has been shown to turn the harness red.
+- **The test count was a silent zero in a clean checkout.** H-01 ran `vitest` in all
+  sixteen packages and reported `main-site 0` while 1169 tests were passing, because
+  a package with no `node_modules` exits without a summary line and the parser read
+  that as "no tests". The number now names a package as uncounted rather than
+  counting it as empty.
+- **Two review counts were the last ASCII digits in the marketplace.** A member
+  reading Bangla saw a Bangla shop name with an English `(7)` beside its stars.
+  Every other number goes through `BanglaDigitFormatter`; these two now do as well.
+- **A proof harness that is present is not a proof harness that runs.** `run.mjs`
+  said a dropped-in `tNN.mjs` runs on its own. It does not — the file must be listed
+  in `HARNESSES`, and an unlisted one is skipped in silence. The comment now says so,
+  and `t76` proves 0116 and 0117 behaviourally: a variant of a picture the product
+  does not show is refused, a plaintext variant is refused, a save that omits the
+  field keeps the stored map, replacing the images prunes the removed picture's
+  variant, and `updated_at` advances rather than the trigger merely existing.
+- **Four checks were measuring the wrong thing.** C-05 scanned a vendored Leaflet file
+  for a fixed width that cannot reach a page layout; D-09 matched the _script_ that
+  keeps the keystore out of the repository; C-01 and E-11/E-12 were reported failing
+  without a `dist` to read. The first two are now scoped to what they meant to test,
+  and the last three pass once a build exists. C-01's two real findings were fixed
+  rather than exempted.
+- **Three internal writers were answering the door.** B-05 derives "what anon can
+  execute" from explicit `grant … to anon` lines, which cannot see Postgres's
+  default EXECUTE to PUBLIC. Asked the catalogue directly with
+  `has_function_privilege`, three security-definer writers in the `bsdc` schema
+  were callable by an anonymous visitor: the three-argument `bsdc.audit` overload
+  (0024, never revoked — 0068 revoked only the four-argument one), and
+  `bsdc.note_deployment` / `bsdc.resolve_deployment_note` (0056, which postdates
+  0049's hand-written list). An anonymous visitor could forge audit rows, overwrite
+  a recorded deployment fault and reopen it, or mark a live fault resolved. All
+  three are now revoked from PUBLIC, anon and authenticated; the catalogue was
+  checked first to confirm no policy, default, constraint, index, or SECURITY
+  INVOKER function needs them, and `t77` proves the refusal, the owner's continued
+  access, and that the read-only policy helpers still answer. A first attempt at a
+  catalogue-wide sweep broke real writes (`join_text`, `normalise_skills`,
+  `can_post_in_channel`, `mk_owns_vendor` are called as the caller from
+  constraints and invoker functions), which is why 0118 revokes exactly the three
+  confirmed holes and no more.
+
 ## Checkpoints
 
-Current result: **104 passed, 0 failed, 4 recorded**. Regenerate with `node scripts/audit.mjs --markdown`.
+Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Delivery
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| A-01 | Seventeen packages carry build gates | Pass | 17: admin-site, android-app, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, push-worker, status-site, users-admin-site, users-moderator-site, vf-site |
-| A-02 | Fourteen web applications are deployable to Pages | Pass | admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site |
-| A-14 | The push worker is a deployable unit of its own | Pass | push-worker/ has wrangler.toml with a cron trigger and its own entry point; it is deployed by deploy.yml and gated by the push-worker job in ci.yml |
-| A-03 | The Android shell is a real package, not a note | Pass | capacitor.config.ts and src/links.ts are present |
-| A-04 | Every application declares the five gate scripts | Pass | all 17 |
-| A-05 | Every console has a distinct dev port | Pass | 5181, 5182, 5183, 5184, 5185, 5186, 5187, 5188, 5189, 5190, 5191, 5192, 5193 |
-| A-06 | The delivery plan records all twenty responses | Pass | 20 rows, last is 20 |
-| A-07 | Every package is marked private and cannot be published | Pass | all sixteen are private |
-| A-08 | Every package carries a README that says what it is | Pass | all 17 |
-| A-09 | The root governance documents are present | Pass | LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md |
-| A-10 | Every delivery row is recorded as done | Pass | all twenty rows read Done |
-| A-11 | Every console registers under its own application id | Pass | bsdc-admin, bsdc-cert, bsdc-config, bsdc-connect, bsdc-custom, bsdc-ip, bsdc-mod, bsdc-notice, bsdc-perf, bsdc-status, bsdc-uadmin, bsdc-umod, bsdc-vf |
-| A-12 | Every migration opens with a comment saying what it does | Pass | 74 migrations |
+| #    | Checkpoint                                                       | Result | Evidence                                                                                                                                                                                                                                                                            |
+| ---- | ---------------------------------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A-01 | Sixteen JS packages and the native Android build carry gates     | Pass   | 16 npm packages (admin-site, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, push-worker, status-site, users-admin-site, users-moderator-site, vf-site) + native Gradle android-app/ |
+| A-02 | Fourteen web applications are deployable to Pages                | Pass   | admin-site, certificate-site, config-site, connect-site, customize-site, ip-site, main-site, moderator-site, notice-site, performance-site, status-site, users-admin-site, users-moderator-site, vf-site                                                                            |
+| A-14 | The push worker is a deployable unit of its own                  | Pass   | push-worker/ has wrangler.toml with a cron trigger and its own entry point; it is deployed by deploy.yml and gated by the push-worker job in ci.yml                                                                                                                                 |
+| A-03 | The Android app is a pure native Kotlin + Java + Compose project | Pass   | native multi-module Gradle + Kotlin + Java 21 + Compose structure without Capacitor                                                                                                                                                                                                 |
+| A-04 | Every application declares the five gate scripts                 | Pass   | all 16                                                                                                                                                                                                                                                                              |
+| A-05 | Every console has a distinct dev port                            | Pass   | 5181, 5182, 5183, 5184, 5185, 5186, 5187, 5188, 5189, 5190, 5191, 5192, 5193                                                                                                                                                                                                        |
+| A-06 | The delivery plan records all twenty responses                   | Pass   | 20 rows, last is 20                                                                                                                                                                                                                                                                 |
+| A-07 | Every package is marked private and cannot be published          | Pass   | all sixteen are private                                                                                                                                                                                                                                                             |
+| A-08 | Every package carries a README that says what it is              | Pass   | all 16                                                                                                                                                                                                                                                                              |
+| A-09 | The root governance documents are present                        | Pass   | LICENSE, NOTICE, THIRD-PARTY-NOTICES.md, SECURITY.md, CONTRIBUTING.md, README.md, docs/delivery-plan.md                                                                                                                                                                             |
+| A-10 | Every delivery row is recorded as done                           | Pass   | all twenty rows read Done                                                                                                                                                                                                                                                           |
+| A-11 | Every console registers under its own application id             | Pass   | bsdc-admin, bsdc-cert, bsdc-config, bsdc-connect, bsdc-custom, bsdc-ip, bsdc-mod, bsdc-notice, bsdc-perf, bsdc-status, bsdc-uadmin, bsdc-umod, bsdc-vf                                                                                                                              |
+| A-12 | Every migration opens with a comment saying what it does         | Pass   | 121 migrations                                                                                                                                                                                                                                                                      |
 
 ### Database
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| B-01 | Migrations are numbered without a gap | Pass | 0001..0074 |
-| B-02 | Every table has row level security enabled | Pass | 107 tables |
-| B-03 | Every security-definer function pins its search path | Pass | all of them |
-| B-04 | No migration grants a blanket write to anon | Pass | none found |
-| B-05 | Every anonymous write path is a counted exception | Pass | 44 functions are executable by anon; 18 of them write (follow_redirect, increment_job_view, increment_post_view, log_search, media_claim_purge, media_mark_purged, media_release_purge, media_sweep_forgotten, push_content, push_flag_invalid_device, push_kill, push_kill_device, push_mark, push_mark_devices, push_sweep_dead_devices, record_ad_event, record_share, verify_code) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine |
-| B-06 | Tables, functions and policies shipped | Recorded | 107 tables, 204 RPCs, 73 helpers, 210 policies, 74 migrations |
-| B-07 | Permission checks guard the privileged RPCs | Pass | 189 of 219 RPCs check identity or permission |
-| B-08 | Every migration can be re-run without error | Pass | 74 migrations are idempotent |
-| B-09 | Every policy is dropped before it is created | Pass | 197 policies |
-| B-10 | Money is never stored as a floating point number | Pass | money columns are integer or numeric, never real |
-| B-11 | State lives in enumerated types, not in free text | Pass | 55 enumerated types, including bsdc_role, bsdc_account_status, bsdc_media_kind, bsdc_media_provider |
-| B-12 | Row level security is forced, so even a table owner is subject to it | Pass | 113 tables enable RLS, 0 additionally force it; the application role is never the table owner |
-| B-13 | A record that can change records when it changed | Pass | 34 tables carry updated_at; 37 touch triggers maintain it |
-| B-14 | The audit trail cannot be edited or deleted | Pass | audit_log, verification_log, report_snapshots have no update or delete policy, so history is append-only |
+| #     | Checkpoint                                                           | Result   | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----- | -------------------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B-01  | Migrations are numbered without a gap                                | Pass     | 0001..0121                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| B-02  | Every table has row level security enabled                           | Pass     | 128 tables                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| B-03  | Every security-definer function pins its search path                 | Pass     | all of them                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| B-03b | No pinned search path leaves out the extensions schema               | Pass     | 185 search paths, all naming extensions                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| B-03c | `pg_temp` is last, so a caller cannot get in front of a real schema  | Pass     | every path                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| B-03d | A file that calls an extension-owned symbol says where to find it    | Pass     | every file                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| B-04  | No migration grants a blanket write to anon                          | Pass     | none found                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| B-05  | Every anonymous write path is a counted exception                    | Pass     | 61 functions are executable by anon; 24 of them write (fcm_flag_invalid_device, fcm_kill_device, fcm_mark_device_deliveries, fcm_mark_devices, fcm_sweep_dead_devices, follow_redirect, increment_job_view, increment_post_view, log_search, media_claim_purge, media_mark_purged, media_release_purge, media_sweep_forgotten, push_content, push_flag_invalid_device, push_kill, push_kill_device, push_mark, push_mark_device_deliveries, push_mark_devices, push_sweep_dead_devices, record_ad_event, record_share, verify_code) and every writer is a reviewed counter/log or a secret-/endpoint-capability-gated push routine |
+| B-06  | Tables, functions and policies shipped                               | Recorded | 128 tables, 323 RPCs, 118 helpers, 222 policies, 121 migrations                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| B-07  | Permission checks guard the privileged RPCs                          | Pass     | 374 of 430 RPCs check identity or permission                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| B-08  | Every migration can be re-run without error                          | Pass     | 121 migrations are idempotent                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| B-09  | Every policy is dropped before it is created                         | Pass     | 206 policies                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| B-10  | Money is never stored as a floating point number                     | Pass     | money columns are integer or numeric, never real                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| B-11  | State lives in enumerated types, not in free text                    | Pass     | 61 enumerated types, including bsdc_role, bsdc_account_status, bsdc_media_kind, bsdc_media_provider                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| B-12  | Row level security is forced, so even a table owner is subject to it | Pass     | 134 tables enable RLS, 0 additionally force it; the application role is never the table owner                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| B-13  | A record that can change records when it changed                     | Pass     | 41 tables carry updated_at; 45 touch triggers maintain it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| B-14  | The audit trail cannot be edited or deleted                          | Pass     | audit_log, verification_log, report_snapshots have no update or delete policy, so history is append-only                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 ### Front end
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| C-01 | Interface icons are vector assets; emoji are member input | Pass | no decorative emoji glyphs; explicit member-input palettes remain supported |
-| C-02 | No placeholder or demo content left in source | Pass | none |
-| C-03 | Strict TypeScript everywhere, with no escape hatches | Pass | strict in all 17 packages; 0 suppression comments |
-| C-04 | Nothing logs to the console in shipped code | Pass | none |
-| C-05 | Nothing can force a horizontal scrollbar | Pass | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves |
-| C-06 | The layout is fluid from 250px upward | Pass | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px |
-| C-07 | Both languages carry the same keys | Pass | 55 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts |
-| C-08 | Bangla is a real translation, not a copy of English | Pass | 38840 Bangla code points in the Bangla locale |
-| C-09 | Every application ships a security header set | Pass | all fourteen |
-| C-10 | A content security policy is declared, without unsafe-eval | Pass | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground) |
-| C-11 | TypeScript source files under version control | Recorded | 514 .ts/.tsx files |
-| C-12 | No link opens a new tab without severing the opener | Pass | every _blank link carries rel="noopener" |
-| C-13 | Raw HTML is injected only from markup this repository generated | Pass | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
-| C-14 | Every image carries alternative text | Pass | every <img> declares alt, decorative images with an empty one |
-| C-15 | A keyboard user can skip the navigation | Pass | a skip link is rendered as the first focusable element of the shell |
-| C-16 | Every document declares its language | Pass | 14 documents |
-| C-17 | Nobody is prevented from zooming | Pass | no document blocks pinch zoom |
-| C-18 | Nothing is fetched over plain HTTP | Pass | every external address is https |
-| C-19 | No API key is hard-coded | Pass | every key arrives from the environment |
-| C-20 | No credential is written to local storage | Pass | local storage holds preferences only; sessions live in the Firebase SDK |
-| C-21 | Every staff console states the role it requires | Pass | 13 of 13; the two public sites (status, verification) are deliberately ungated |
-| C-22 | The shared kit is imported, never copied | Pass | one copy of the kit, used by every console through the @kit alias |
-| C-23 | The any type does not appear in shipped source | Pass | none |
-| C-24 | Focus is always visible for a keyboard user | Pass | focus-visible rings are defined in the design system and used by every control |
-| C-25 | Motion is reduced for anybody who asked for less of it | Pass | a prefers-reduced-motion block removes transitions and animation |
-| C-26 | Both colour schemes are supported, not just the light one | Pass | light and dark token sets, selected by preference and overridable by the member |
-| C-27 | No text on screen is set smaller than 12 pixels | Pass | the smallest declared size is at least 12px |
-| C-28 | Every console states a minimum width of nothing | Pass | no console demands a wide screen |
+| #    | Checkpoint                                                                 | Result   | Evidence                                                                                                       |
+| ---- | -------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| C-01 | Interface icons are vector assets; emoji are member input                  | Pass     | no decorative emoji glyphs; explicit member-input palettes remain supported                                    |
+| C-02 | No placeholder or demo content left in source                              | Pass     | none                                                                                                           |
+| C-03 | Strict TypeScript everywhere, with no escape hatches                       | Pass     | strict in all 16 packages; 0 suppression comments                                                              |
+| C-04 | Nothing logs to the console in shipped code                                | Pass     | none                                                                                                           |
+| C-05 | Nothing can force a horizontal scrollbar                                   | Pass     | no four-digit fixed width in any rule; media and wide blocks are capped at 100% and scroll within themselves   |
+| C-06 | The layout is fluid from 250px upward                                      | Pass     | 3 clamp() declarations; no rule asserts a minimum width between 250px and 400px                                |
+| C-07 | Both languages carry the same keys                                         | Pass     | 57 top-level groups in each; parity is also asserted by src/i18n/i18n.test.ts                                  |
+| C-08 | Bangla is a real translation, not a copy of English                        | Pass     | 58091 Bangla code points in the Bangla locale                                                                  |
+| C-09 | Every application ships a security header set                              | Pass     | all fourteen                                                                                                   |
+| C-10 | A content security policy is declared, without unsafe-eval                 | Pass     | CSP present; script-src carries no 'unsafe-eval' (wasm-unsafe-eval only, for the sandboxed playground)         |
+| C-11 | TypeScript source files under version control                              | Recorded | 632 .ts/.tsx files                                                                                             |
+| C-12 | No link opens a new tab without severing the opener                        | Pass     | every \_blank link carries rel="noopener"                                                                      |
+| C-13 | Raw HTML is injected only from markup this repository generated            | Pass     | three call sites, all fed by generators in this repository; the markdown path escapes before it allows any tag |
+| C-14 | Every image carries alternative text                                       | Pass     | every <img> declares alt, decorative images with an empty one                                                  |
+| C-15 | A keyboard user can skip the navigation                                    | Pass     | a skip link is rendered as the first focusable element of the shell                                            |
+| C-16 | Every document declares its language                                       | Pass     | 14 documents                                                                                                   |
+| C-17 | Nobody is prevented from zooming                                           | Pass     | no document blocks pinch zoom                                                                                  |
+| C-18 | Nothing is fetched over plain HTTP                                         | Pass     | every external address is https                                                                                |
+| C-19 | No API key is hard-coded                                                   | Pass     | every key arrives from the environment                                                                         |
+| C-20 | No credential is written to local storage                                  | Pass     | local storage holds preferences only; sessions live in the Firebase SDK                                        |
+| C-21 | Every staff console states the role it requires                            | Pass     | 13 of 13; the two public sites (status, verification) are deliberately ungated                                 |
+| C-22 | The shared kit is imported, never copied                                   | Pass     | one copy of the kit, used by every console through the @kit alias                                              |
+| C-23 | The any type does not appear in shipped source                             | Pass     | none                                                                                                           |
+| C-24 | Focus is always visible for a keyboard user                                | Pass     | focus-visible rings are defined in the design system and used by every control                                 |
+| C-25 | Motion is reduced for anybody who asked for less of it                     | Pass     | a prefers-reduced-motion block removes transitions and animation                                               |
+| C-26 | Both colour schemes are supported, not just the light one                  | Pass     | light and dark token sets, selected by preference and overridable by the member                                |
+| C-27 | No text on screen is set smaller than 12 pixels                            | Pass     | the smallest declared size is at least 12px                                                                    |
+| C-28 | Every console states a minimum width of nothing                            | Pass     | no console demands a wide screen                                                                               |
+| C-29 | A comment can carry a picture, and the picture survives the upload sweeper | Pass     | comments carry one https picture on web and Android, and media_pending_purge treats it as a reference          |
+| C-30 | Every settings panel has an address of its own                             | Pass     | eight panels, each with its own path, and the tab strip navigates instead of holding state                     |
+| C-31 | Reading a page does not ask the server what it could upload                | Pass     | the capability probe runs when an upload starts, not on page load: no speculative /api request per view        |
 
 ### Safety
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| D-01 | No private key or service account is committed | Pass | no key material anywhere in the tree |
-| D-02 | No .env file is tracked by Git | Pass | only .env.example files |
-| D-03 | The service role key is never referenced from browser code | Pass | browser code uses the anonymous key only |
-| D-04 | Pages Functions run with the anonymous key, under RLS | Pass | functions/_rpc.ts holds no service-role path, so the edge is subject to the same policies as a browser |
-| D-05 | The secret scanner runs before anything else in CI | Pass | gitleaks runs in the secrets-scan job |
-| D-06 | The android shell renders only BSDC origins | Pass | an untrusted origin resolves to the system browser; held by test in android-app/src/links.test.ts |
-| D-07 | Field measurement carries no identity | Pass | web_vitals has no user, session or address column |
-| D-08 | The Android shell embeds no remote origin as its own document | Pass | capacitor.config.ts declares no server.url, so no remote origin runs as the app itself |
-| D-09 | No Firebase service configuration is committed for Android | Pass | none; both arrive from CI secrets |
-| D-10 | The ignore rules cover builds, dependencies, environments and the native project | Pass | node_modules, dist, .env, android-app/android |
-| D-11 | Consoles are told not to be indexed, in a header a crawler cannot ignore | Pass | 11 private consoles send X-Robots-Tag: noindex |
-| D-12 | Consoles refuse to be framed | Pass | frame-ancestors none and X-Frame-Options DENY on every private console |
-| D-13 | No console policy allows inline script | Pass | script-src is 'self' on every console |
+| #    | Checkpoint                                                                       | Result | Evidence                                                                                                                              |
+| ---- | -------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| D-01 | No private key or service account is committed                                   | Pass   | no key material anywhere in the tree                                                                                                  |
+| D-02 | No .env file is tracked by Git                                                   | Pass   | only .env.example files                                                                                                               |
+| D-03 | The service role key is never referenced from browser code                       | Pass   | browser code uses the anonymous key only                                                                                              |
+| D-04 | Pages Functions run with the anonymous key, under RLS                            | Pass   | functions/\_rpc.ts holds no service-role path, so the edge is subject to the same policies as a browser                               |
+| D-05 | The secret scanner runs before anything else in CI                               | Pass   | gitleaks runs in the secrets-scan job                                                                                                 |
+| D-06 | The native Android router renders only BSDC and News origins in-app              | Pass   | AppLinkUriRouter routes BSDC/vf natively, news.bsdc.info.bd to isolated reader, blocks /admin\*, and sends untrusted hosts to browser |
+| D-07 | Field measurement carries no identity                                            | Pass   | web_vitals has no user, session or address column                                                                                     |
+| D-08 | The native Android app disables cleartext traffic, backups, and Capacitor shells | Pass   | native manifest disables cleartext and backups; zero Capacitor shell exists                                                           |
+| D-09 | No Firebase service configuration is committed for Android                       | Pass   | none; both arrive from CI secrets                                                                                                     |
+| D-10 | The ignore rules cover builds, dependencies, environments and the native project | Pass   | node_modules, dist, .env, android-app/.gradle                                                                                         |
+| D-11 | Consoles are told not to be indexed, in a header a crawler cannot ignore         | Pass   | 11 private consoles send X-Robots-Tag: noindex                                                                                        |
+| D-12 | Consoles refuse to be framed                                                     | Pass   | frame-ancestors none and X-Frame-Options DENY on every private console                                                                |
+| D-13 | No console policy allows inline script                                           | Pass   | script-src is 'self' on every console                                                                                                 |
 
 ### SEO
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| E-01 | Public routes are prerendered as real HTML at build time | Pass | scripts/prerender.mjs writes one HTML file per public route |
-| E-02 | robots.txt is generated into the build, not served by a function | Pass | robots.txt is written during prerender so it never depends on the database |
-| E-03 | A sitemap and an RSS feed are served at the edge | Pass | functions/sitemap.xml.ts, functions/sitemaps/, functions/rss.xml.ts |
-| E-04 | Link previews work without JavaScript | Pass | _middleware.ts writes title, description, canonical and share image into the shell |
-| E-05 | Redirects are answered with a real 301 before the app loads | Pass | the edge middleware answers a moved URL with 301 |
-| E-06 | The public verification portal is indexable on its own terms | Pass | vf-site ships its own title, description, canonical and JSON-LD |
-| E-07 | The prerendered head and the running application cannot drift | Pass | a test asserts the head written at build time is byte-identical to the one the engine produces |
-| E-08 | Structured data is emitted for every kind of public page | Pass | Article, Product, JobPosting, Event, Course, BreadcrumbList, Organization, WebSite |
-| E-09 | A page marked noindex never reaches the sitemap | Pass | sitemap_urls() skips any path an override marks noindex, in the same query that lists them |
-| E-10 | The verification portal declares its own canonical address | Pass | vf-site/index.html is hand-written and marked so the scaffold leaves it alone |
-| E-11 | The prerendered pages carry their canonical link | Pass | the built home page carries a canonical link, a description and JSON-LD before any script runs |
-| E-12 | The prerendered pages are readable without JavaScript | Pass | 618 characters of readable text inside #root before hydration |
+| #    | Checkpoint                                                       | Result | Evidence                                                                                       |
+| ---- | ---------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------- |
+| E-01 | Public routes are prerendered as real HTML at build time         | Pass   | scripts/prerender.mjs writes one HTML file per public route                                    |
+| E-02 | robots.txt is generated into the build, not served by a function | Pass   | robots.txt is written during prerender so it never depends on the database                     |
+| E-03 | A sitemap and an RSS feed are served at the edge                 | Pass   | functions/sitemap.xml.ts, functions/sitemaps/, functions/rss.xml.ts                            |
+| E-04 | Link previews work without JavaScript                            | Pass   | \_middleware.ts writes title, description, canonical and share image into the shell            |
+| E-05 | Redirects are answered with a real 301 before the app loads      | Pass   | the edge middleware answers a moved URL with 301                                               |
+| E-06 | The public verification portal is indexable on its own terms     | Pass   | vf-site ships its own title, description, canonical and JSON-LD                                |
+| E-07 | The prerendered head and the running application cannot drift    | Pass   | a test asserts the head written at build time is byte-identical to the one the engine produces |
+| E-08 | Structured data is emitted for every kind of public page         | Pass   | Article, Product, JobPosting, Event, Course, BreadcrumbList, Organization, WebSite             |
+| E-09 | A page marked noindex never reaches the sitemap                  | Pass   | sitemap_urls() skips any path an override marks noindex, in the same query that lists them     |
+| E-10 | The verification portal declares its own canonical address       | Pass   | vf-site/index.html is hand-written and marked so the scaffold leaves it alone                  |
+| E-11 | The prerendered pages carry their canonical link                 | Pass   | the built home page carries a canonical link, a description and JSON-LD before any script runs |
+| E-12 | The prerendered pages are readable without JavaScript            | Pass   | 670 characters of readable text inside #root before hydration                                  |
 
 ### Performance
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere | Pass | main-site 234 KB, moderator-site 177 KB, status-site 174 KB, users-admin-site 177 KB |
-| F-02 | Routes are code split, so a visitor pays only for the page | Pass | React.lazy per route in main-site/src/App.tsx |
-| F-03 | Field measurement is collected and stored | Pass | a hand-written collector, a beacon endpoint and the web_vitals table |
-| F-04 | Speed is reported at the 75th percentile with its sample count | Pass | percentile_cont(0.75) in vitals_by_route, with samples returned beside it |
-| F-05 | Build weight is recorded on every push, next to the field data | Pass | CI posts the gzipped size of each main-site push into bundle_sizes |
-| F-06 | Images below the fold are loaded lazily | Pass | 7 image sites opt into lazy loading |
-| F-07 | No render-blocking font or stylesheet is fetched from a third party | Pass | system font stack; nothing is fetched from a font CDN |
-| F-08 | Query caching is configured rather than left at the defaults | Pass | React Query is given explicit staleTime, gcTime, retry and focus behaviour |
-| F-09 | No source map is shipped to production | Pass | none in any dist/ |
-| F-10 | Stylesheets stay small enough to inline-parse quickly | Pass | main-site 9 KB, moderator-site 2 KB, status-site 2 KB, users-admin-site 2 KB |
+| #    | Checkpoint                                                             | Result | Evidence                                                                                                                     |
+| ---- | ---------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere         | Pass   | main-site 157 KB                                                                                                             |
+| F-02 | Routes are code split, so a visitor pays only for the page             | Pass   | React.lazy per route in main-site/src/App.tsx                                                                                |
+| F-03 | Field measurement is collected and stored                              | Pass   | a hand-written collector, a beacon endpoint and the web_vitals table                                                         |
+| F-04 | Speed is reported at the 75th percentile with its sample count         | Pass   | percentile_cont(0.75) in vitals_by_route, with samples returned beside it                                                    |
+| F-05 | Build weight is recorded on every push, next to the field data         | Pass   | CI posts the gzipped size of each main-site push into bundle_sizes                                                           |
+| F-06 | Images below the fold are loaded lazily                                | Pass   | 12 image sites opt into lazy loading                                                                                         |
+| F-07 | No render-blocking font or stylesheet is fetched from a third party    | Pass   | system font stack; nothing is fetched from a font CDN                                                                        |
+| F-08 | Query caching is configured rather than left at the defaults           | Pass   | React Query is given explicit staleTime, gcTime, retry and focus behaviour                                                   |
+| F-09 | No source map is shipped to production                                 | Pass   | none in any dist/                                                                                                            |
+| F-10 | Stylesheets stay small enough to inline-parse quickly                  | Pass   | main-site 18 KB                                                                                                              |
+| F-11 | The stylesheet is inlined, so nothing blocks the first paint           | Pass   | prerender inlines every stylesheet the template links into every page                                                        |
+| F-12 | Each prerendered page preloads the chunk that renders it               | Pass   | 16 routes name a real route component and are preloaded                                                                      |
+| F-13 | The first paint is the page, not a placeholder                         | Pass   | 7 routes carry the copy a reader sees first: /about, /guidelines, /contact, /playground, /privacy, /terms, /account-deletion |
+| F-14 | Only the visitor's language is downloaded                              | Pass   | both locale bundles are dynamic imports, fetched one at a time                                                               |
+| F-15 | The router does not pull a validation library onto the first paint     | Pass   | the router guard and the environment check import no schema library; zod ships only with the forms that use it               |
+| F-16 | The footer starts below the fold, so its arrival cannot shift the page | Pass   | main reserves a viewport height whenever the page has a footer                                                               |
+| F-17 | Blue that renders words clears the contrast floor                      | Pass   | text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders                                                    |
+| F-18 | The font is preloaded and cached, not revalidated every visit          | Pass   | index.html preloads the Bangla face and \_headers marks /fonts/\* immutable for a year                                       |
+| F-19 | An empty state starts a section, not a skipped heading level           | Pass   | EmptyState renders an h2 by default; a page that needs h3 asks for it                                                        |
+| F-20 | The home page puts the feed before the sidebar on a phone              | Pass   | the rail follows the feed below the lg breakpoint and is skipped for layout until then                                       |
+| F-21 | A decorative animation does not keep the main thread awake             | Pass   | the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion                                      |
 
-### PWA
+### Web delivery
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| G-01 | A manifest is shipped with maskable icons | Pass | VitePWA manifest with a maskable icon |
-| G-02 | An update is offered, never forced mid-action | Pass | onNeedRefresh raises a persistent toast with an explicit action |
-| G-03 | The offline state is honest rather than a blank page | Pass | an offline banner and an offline-ready notice |
-| G-04 | The manifest describes an installable application | Pass | standalone, theme_color, background_color, start_url |
-| G-05 | Offline and runtime caching rules cover each request kind | Pass | the shell/assets are precached, navigation falls back to the shell, images use stale-while-revalidate and fonts use cache-first |
-| G-06 | The offline page is part of the precache, not fetched when offline | Pass | an offline route is built into the shell and precached with it |
+| #    | Checkpoint                                                      | Result | Evidence                                                                                 |
+| ---- | --------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------- |
+| G-01 | Website ships no Workbox or VitePWA offline bundle              | Pass   | vite.config.ts and package.json do not use VitePWA or Workbox                            |
+| G-02 | Push worker cleans up any leftover offline or image caches      | Pass   | push-only sw.ts and register-worker.ts delete bsdc-images/bsdc-fonts/workbox caches      |
+| G-03 | No offline shell, offline banner, or picture cache module ships | Pass   | offline page, offline banner, pwa.ts, and client picture cache modules are absent        |
+| G-04 | Website HTML does not advertise an offline PWA manifest         | Pass   | no manifest.webmanifest link in main-site/index.html                                     |
+| G-05 | Service worker never intercepts fetches, navigations, or images | Pass   | push-only sw.ts has zero fetch interception, zero precache, and zero CacheStorage writes |
+| G-06 | Feed and API queries do not stall on browser online heuristics  | Pass   | QueryClient configures networkMode: always and registers only the push worker            |
 
 ### Tests
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| H-01 | Unit tests by package | Recorded | 1166 tests: admin-site 62, android-app 0, certificate-site 0, config-site 0, connect-site 0, corporate-kit 15, customize-site 0, ip-site 0, main-site 1000, moderator-site 33, notice-site 0, performance-site 0, push-worker 0, status-site 22, users-admin-site 34, users-moderator-site 0, vf-site 0 |
-| H-02 | Every package has at least one test file | Pass | all sixteen |
+| #    | Checkpoint                               | Result   | Evidence                                                                                                                                                                                                                                                                                                                                              |
+| ---- | ---------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H-01 | Unit tests by package                    | Recorded | 1211 tests across 1 installed package(s); 15 package(s) not counted because dependencies are not installed: admin-site, certificate-site, config-site, connect-site, corporate-kit, customize-site, ip-site, moderator-site, notice-site, performance-site, push-worker, status-site, users-admin-site, users-moderator-site, vf-site: main-site 1211 |
+| H-02 | Every package has at least one test file | Pass     | all sixteen                                                                                                                                                                                                                                                                                                                                           |
 
 ### CI
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| I-01 | Continuous integration runs all five gates on every application | Pass | Typecheck, Lint, Format check, Unit tests, Build |
-| I-02 | New applications are discovered rather than listed by hand | Pass | the discover job builds the matrix from the tree, so a new app is gated the day it appears |
-| I-03 | The bundle budget is enforced in CI, not merely documented | Pass | the build fails above 250 KB gzip of initial JavaScript |
-| I-04 | Bookkeeping cannot break a release | Pass | the bundle-size record is best effort and never fails the build |
-| I-05 | The Node version is pinned, so a runner upgrade cannot change a build | Pass | actions/setup-node pins the major version |
-| I-06 | Dependency versions cannot drift between a developer and the runner | Pass | the database client is pinned exactly in every package, after a minor release changed its insert typing mid-project |
+| #    | Checkpoint                                                            | Result | Evidence                                                                                                            |
+| ---- | --------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------- |
+| I-01 | Continuous integration runs all five gates on every application       | Pass   | Typecheck, Lint, Format check, Unit tests, Build                                                                    |
+| I-02 | New applications are discovered rather than listed by hand            | Pass   | the discover job builds the matrix from the tree, so a new app is gated the day it appears                          |
+| I-03 | The bundle budget is enforced in CI, not merely documented            | Pass   | the build fails above 250 KB gzip of initial JavaScript                                                             |
+| I-04 | Bookkeeping cannot break a release                                    | Pass   | the bundle-size record is best effort and never fails the build                                                     |
+| I-05 | The Node version is pinned, so a runner upgrade cannot change a build | Pass   | actions/setup-node pins the major version                                                                           |
+| I-06 | Dependency versions cannot drift between a developer and the runner   | Pass   | the database client is pinned exactly in every package, after a minor release changed its insert typing mid-project |
 
 ### Docs
 
-| # | Checkpoint | Result | Evidence |
-| --- | --- | --- | --- |
-| J-01 | Every response has a scope record | Pass | 20 scope sections recorded |
-| J-02 | The registry records what each response added | Pass | 19 registry blocks |
-| J-03 | Distinct registry codes recorded | Recorded | 1016 distinct codes |
-| J-04 | The audit and the registry are reproducible commands, not prose | Pass | node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record |
+| #    | Checkpoint                                                      | Result   | Evidence                                                                                                |
+| ---- | --------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------- |
+| J-01 | Every response has a scope record                               | Pass     | 20 scope sections recorded                                                                              |
+| J-02 | The registry records what each response added                   | Pass     | 19 registry blocks                                                                                      |
+| J-03 | Distinct registry codes recorded                                | Recorded | 1016 distinct codes                                                                                     |
+| J-04 | The audit and the registry are reproducible commands, not prose | Pass     | node scripts/audit.mjs and node scripts/count-registry.mjs regenerate every number in the launch record |
 
-recorded here rather than dressed up as automated results.
+### Content
+
+| #    | Checkpoint                                            | Result | Evidence                                                                                                                       |
+| ---- | ----------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| C-32 | Editing a post does not rewrite a poll that has votes | Pass   | a save writes a poll only when nobody has voted; the database refuses the delete, and the post still takes its options with it |
+
+### Media
+
+| #    | Checkpoint                                               | Result | Evidence                                                  |
+| ---- | -------------------------------------------------------- | ------ | --------------------------------------------------------- |
+| C-33 | Every upload is recorded before anything can point at it | Pass   | 7 upload surfaces upload and record in the same operation |
+
+### Data
+
+| #    | Checkpoint                                                          | Result | Evidence                        |
+| ---- | ------------------------------------------------------------------- | ------ | ------------------------------- |
+| J-05 | Every migration names only tables, columns and functions that exist | Pass   | 0 problem(s) across 121 file(s) |
+
+### Play Store
+
+| #    | Checkpoint                                                                | Result | Evidence                                                                               |
+| ---- | ------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------------------------- |
+| K-01 | The privacy policy is a public route, not only a document                 | Pass   | ROUTES.privacy is declared and mounted in the router                                   |
+| K-02 | The terms of service are a public route                                   | Pass   | ROUTES.terms is declared, mounted and linked from the footer                           |
+| K-03 | A member can delete their own account in the app                          | Pass   | delete_my_account() is granted to authenticated and called from Settings               |
+| K-04 | The Android app links the policy and the terms, and can delete an account | Pass   | legal links open in a custom tab and deletion runs through the repository              |
+| K-05 | The data safety answers are written down and match the deletion path      | Pass   | the document names the policy, the terms, the data safety answers and the deletion RPC |
+| K-06 | Cleartext traffic is refused and backups are off                          | Pass   | the manifest refuses cleartext and disables backup                                     |
+| K-07 | The manifest asks for no sensitive permission the app does not use        | Pass   | 10 permissions declared, none of them RECORD_AUDIO                                     |
+| K-09 | The deletion URL works without the app installed                          | Pass   | /account-deletion is routed, linked in the footer and named in the compliance record   |
+| K-08 | Every third party that receives member data is named in the policy        | Pass   | named in both locales: Supabase, Firebase, Cloudflare, ImgBB                           |
+
+## What no checkpoint can settle
+
+Everything in this section is recorded here rather than dressed up as an automated result.
 
 **Whether the Bangla reads naturally.** A test can prove that both locales
 carry the same keys and that the Bangla file contains 25,133 Bangla code

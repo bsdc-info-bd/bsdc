@@ -1,8 +1,10 @@
 import { Eye, ImagePlus, Plus, Send, X } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { CoverImagePicker } from '@/components/content/CoverImagePicker';
+import { MarkdownEditor } from '@/components/content/MarkdownEditor';
 import { MarkdownView } from '@/components/content/MarkdownView';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -111,6 +113,9 @@ export default function ComposePage() {
     ...EMPTY_DRAFT,
     language: i18n.language === 'en' ? 'en' : 'bn',
   }));
+  /** Id for the sentence that explains why a voted poll's options are fixed. */
+  const pollLockId = useId();
+  const pollLocked = draft.pollVotes > 0;
   const [restored, setRestored] = useState(false);
   const [tab, setTab] = useState('write');
   const [busy, setBusy] = useState(false);
@@ -240,7 +245,7 @@ export default function ComposePage() {
     setBusy(true);
     try {
       const { savePost } = await import('@/lib/content/post-repository');
-      const saved = await savePost(user.uid, draftToSave, status);
+      const saved = await savePost(draftToSave, status);
       if (isEditing) {
         toast.success(t('compose.updated'));
         navigate(`/p/${saved.slug}`);
@@ -274,6 +279,25 @@ export default function ComposePage() {
     setSaveErrorKey(null);
   }
 
+  /**
+   * A picture inserted into the text is uploaded the same way an attachment is:
+   * bytes plus the `media_assets` row that says whose they are. The editor only
+   * needs the URL back, because markdown is where the picture lives.
+   */
+  async function uploadBodyImage(file: File): Promise<string> {
+    const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
+    const result = await uploadAndRecord(file, { purpose: 'post-image' }, user?.uid ?? '');
+    return result.url;
+  }
+
+  const coverCandidates = attachments.attachments
+    .map((item) => ({
+      url: item.url.length > 0 ? item.url : item.previewUrl,
+      thumbUrl: item.thumbUrl.length > 0 ? item.thumbUrl : item.previewUrl,
+      altText: item.altText,
+    }))
+    .filter((item) => item.url.length > 0);
+
   const suggestedTags = extractHashtags(draft.body).filter(
     (tag) => !draft.tags.includes(tag) && draft.tags.length < TAGS_MAX,
   );
@@ -290,12 +314,13 @@ export default function ComposePage() {
         />
       ) : null}
 
-      <TextareaField
+      <MarkdownEditor
         label={t('compose.fields.body')}
         hint={t('compose.hints.body')}
         value={draft.body}
-        rows={draft.kind === 'article' ? 14 : 7}
-        onChange={(event) => update('body', event.target.value)}
+        rows={draft.kind === 'article' ? 16 : 9}
+        onChange={(value) => update('body', value)}
+        uploadImage={uploadBodyImage}
       />
 
       {draft.kind === 'snippet' ? (
@@ -318,21 +343,31 @@ export default function ComposePage() {
       ) : null}
 
       {draft.kind === 'poll' ? (
-        <fieldset className="grid gap-2">
+        // Once a poll has a ballot its options are fixed: changing them would
+        // either erase the answer somebody gave or move it to a different
+        // question. The editor says so and stays readable, and the repository
+        // refuses the same edit even if this rendering is bypassed.
+        <fieldset className="grid gap-2" aria-describedby={pollLocked ? pollLockId : undefined}>
           <legend className="mb-1 text-sm font-medium">{t('compose.fields.pollOptions')}</legend>
+          {pollLocked ? (
+            <p id={pollLockId} className="text-xs text-muted">
+              {t('compose.errors.pollLocked')}
+            </p>
+          ) : null}
           {draft.pollOptions.map((option, index) => (
             <div key={`poll-option-${String(index)}`} className="flex items-end gap-2">
               <TextField
                 label={t('compose.fields.pollOption', { number: index + 1 })}
                 value={option}
                 maxLength={80}
+                disabled={pollLocked}
                 onChange={(event) => {
                   const next = [...draft.pollOptions];
                   next[index] = event.target.value;
                   update('pollOptions', next);
                 }}
               />
-              {draft.pollOptions.length > 2 ? (
+              {!pollLocked && draft.pollOptions.length > 2 ? (
                 <IconButton
                   label={t('compose.removeOption')}
                   icon={<X size={18} />}
@@ -346,7 +381,7 @@ export default function ComposePage() {
               ) : null}
             </div>
           ))}
-          {draft.pollOptions.length < POLL_OPTIONS_MAX ? (
+          {!pollLocked && draft.pollOptions.length < POLL_OPTIONS_MAX ? (
             <div>
               <Button
                 variant="secondary"
@@ -360,6 +395,13 @@ export default function ComposePage() {
           ) : null}
         </fieldset>
       ) : null}
+
+      <CoverImagePicker
+        value={draft.coverUrl}
+        onChange={(url) => update('coverUrl', url)}
+        candidates={coverCandidates}
+        disabled={busy}
+      />
 
       <div className="grid gap-3">
         <input
@@ -402,6 +444,7 @@ export default function ComposePage() {
         value={draft.tags}
         max={TAGS_MAX}
         suggestions={TAG_SUGGESTIONS}
+        normalize={normalizeTag}
         onChange={(tags) => update('tags', tags.map(normalizeTag).filter(Boolean))}
       />
 

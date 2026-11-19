@@ -11,8 +11,9 @@
  *
  *      npm run db:prove
  *
- * Add a harness by dropping `tNN.mjs` in this directory and naming it below;
- * a harness exits non-zero when any one of its checks fails.
+ * Add a harness by dropping `tNN.mjs` in this directory **and listing it in
+ * HARNESSES below** — a file that is present but unlisted is not run, and nothing
+ * says so. A harness exits non-zero when any one of its checks fails.
  */
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
@@ -142,6 +143,31 @@ const HARNESSES = [
   ],
   ['t72.mjs', '0107: no live database function deletes without a WHERE clause (safe-update)'],
   ['t73.mjs', '0108: shop delivery areas and charges, and admin-editable credit package prices'],
+  [
+    't74.mjs',
+    '0110: shop opening hours, 3-mode custom delivery fees, and self-healing push registration',
+  ],
+  [
+    't75.mjs',
+    '0111: a gig client answers a proposal, and only that client — with the status column still server-owned',
+  ],
+  [
+    't76.mjs',
+    '0116/0117: the lighter image variant is refused when it is not a picture of this product, and updated_at moves',
+  ],
+  [
+    't77.mjs',
+    '0118: the internal writers (audit, deployment notes) refuse anon and members, and the owner still writes through them',
+  ],
+  [
+    't78.mjs',
+    '0119: a member deletes their own account — everything personal goes, the tombstone keeps no name, the owner and anon are refused',
+  ],
+  ['t79.mjs', '0120: a comment carries its own picture — and the sweeper is told not to delete it'],
+  ['t80.mjs', '0121: a poll that has votes keeps its options — and still dies with its post'],
+  ['t81.mjs', '0122: the marketplace home reads a page of shops, not every shop and its ledger'],
+  ['t82.mjs', '0123: a post is saved once, or not at all'],
+  ['t83.mjs', '0124: a tag a member types is a tag, not a suggestion'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

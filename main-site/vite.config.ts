@@ -59,6 +59,10 @@ export default defineConfig({
     sourcemap: false,
     cssCodeSplit: true,
     chunkSizeWarningLimit: 600,
+    // Written to dist/.vite/manifest.json and read by scripts/prerender.mjs,
+    // which turns it into per-page <link rel="modulepreload"> tags and then
+    // deletes it. It never ships.
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks: {

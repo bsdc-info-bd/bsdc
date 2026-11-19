@@ -19,12 +19,12 @@ the browser suite to keep test runs isolated; offline/PWA acceptance is pending.
 
 ## Confirmed errors and fixes
 
-| Finding | Reproduction | Fix / retest |
-|---|---|---|
-| Overlapping header links | At 768px, Home occupied x183–251 while About occupied x211–282. Later links overlapped action buttons. Similar overlaps occurred at 1024px and 1280px, despite no document overflow. | Compact nonshrinking primary links, an accessible all-sections navigation dialog, and mobile action consolidation. Tested selection, Escape dismissal, focus restoration and nonoverlap at 320, 375, 768, 1024, 1280 and 1440px. |
-| Mobile sections and language control not directly reachable in header | Most header navigation was hidden below the desktop breakpoint, with only four bottom tabs; language toggle was hidden on phones. | All public sections available from the navigation dialog, with a mobile language toggle. Actual Bangla/English switching tested at the emulated phone width. |
-| Playground Run produces empty output | Click Run on the default JavaScript sketch: the original srcdoc frame stays empty. Generated source had a nonclosing escaped script tag; correcting that alone would still conflict with application CSP. | Retired srcdoc execution from the page. A sandboxed Function document starts an opaque-origin worker, receives a snapshot of code/language and enforces a two-second execution limit. Default and repeated Run now produce `squares [1,4,9,16]`. |
-| No execution containment for infinite loops | Inline execution in an iframe has no worker termination boundary. | Browser test runs `while (true) {}` and receives the timeout message while the page remains responsive. |
+| Finding                                                               | Reproduction                                                                                                                                                                                              | Fix / retest                                                                                                                                                                                                                                     |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Overlapping header links                                              | At 768px, Home occupied x183–251 while About occupied x211–282. Later links overlapped action buttons. Similar overlaps occurred at 1024px and 1280px, despite no document overflow.                      | Compact nonshrinking primary links, an accessible all-sections navigation dialog, and mobile action consolidation. Tested selection, Escape dismissal, focus restoration and nonoverlap at 320, 375, 768, 1024, 1280 and 1440px.                 |
+| Mobile sections and language control not directly reachable in header | Most header navigation was hidden below the desktop breakpoint, with only four bottom tabs; language toggle was hidden on phones.                                                                         | All public sections available from the navigation dialog, with a mobile language toggle. Actual Bangla/English switching tested at the emulated phone width.                                                                                     |
+| Playground Run produces empty output                                  | Click Run on the default JavaScript sketch: the original srcdoc frame stays empty. Generated source had a nonclosing escaped script tag; correcting that alone would still conflict with application CSP. | Retired srcdoc execution from the page. A sandboxed Function document starts an opaque-origin worker, receives a snapshot of code/language and enforces a two-second execution limit. Default and repeated Run now produce `squares [1,4,9,16]`. |
+| No execution containment for infinite loops                           | Inline execution in an iframe has no worker termination boundary.                                                                                                                                         | Browser test runs `while (true) {}` and receives the timeout message while the page remains responsive.                                                                                                                                          |
 
 The runner is a **Pages Function**, not overlapping static `_headers` rules. Its
 response enforces `sandbox allow-scripts` without `allow-same-origin`, denies
@@ -70,9 +70,20 @@ browser evidence artifacts. No GitHub Actions run is claimed for this local work
   focus behavior. This does not prove every signed-in layout.
 - Default/repeated Run, infinite-loop termination, storage denial, network denial
   and inert HTML in both contexts, plus mobile language switching.
-- Main-site strict typecheck, lint, **854 unit tests in 67 files**, source/Functions
-  formatting and production build passed after these changes. No SQL changed in
-  this batch; the previous 27/27 database proof result remains earlier evidence.
+- Console errors, not only uncaught exceptions. Chrome logs a failed request as a
+  console error, so a page can look clean to a `pageerror` listener while the
+  console is saying otherwise — that is exactly how Lighthouse's
+  `errors-in-console` found one. The gate now fails on any console error that is
+  not explained by a stubbed `/api` response, which is the only error the local
+  server is allowed to cause.
+- Every check is independent: one failed page records its own result and the run
+  continues, so a report shows everything that broke rather than stopping at the
+  first ("24 passed" and one error was a run that never reached the other
+  twenty-three). Non-API responses and uncaught exceptions are scoped per route,
+  so a 404 on one page is not charged to every page visited after it.
+- Main-site strict typecheck, lint, **1216 unit tests in 116 files**, source/Functions
+  formatting and production build passed after these changes. 133 of 133 audit
+  checks and 63 of 63 database proofs pass.
 
 **Production release is still blocked.** Required next checks include configured
 signup/OAuth/verification, account switching, permissions/demotion, post/poll

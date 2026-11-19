@@ -78,4 +78,74 @@ object JobDetailLogic {
     /** Skill chips: trimmed, blanks dropped, case-insensitive duplicates removed, order kept. */
     fun skillChips(skills: List<String>): List<String> =
         skills.map { it.trim() }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }
+
+    /**
+     * Matching the website's `canWithdraw` / `isApplied` / `isDecided`: an applicant may still
+     * retract a bid while it is submitted, reviewing or shortlisted — not once it is decided.
+     */
+    fun canWithdraw(status: String?): Boolean =
+        status?.trim()?.lowercase() in setOf("submitted", "reviewing", "shortlisted")
+
+    fun isApplied(status: String?): Boolean {
+        val clean = status?.trim()?.lowercase().orEmpty()
+        return clean.isNotEmpty() && clean != "withdrawn"
+    }
+
+    /** Terminal states no longer belong in an employer's working queue. */
+    fun isDecided(status: String?): Boolean =
+        status?.trim()?.lowercase() in setOf("rejected", "hired", "withdrawn")
+
+    /** The status pill an application shows, in the reader's language. */
+    fun applicationStatusLabel(status: String, bn: Boolean): String = when (status.trim().lowercase()) {
+        "submitted" -> if (bn) "জমা দেওয়া হয়েছে" else "Submitted"
+        "reviewing" -> if (bn) "পর্যালোচনায়" else "Under review"
+        "shortlisted" -> if (bn) "শর্টলিস্টে" else "Shortlisted"
+        "hired" -> if (bn) "নিয়োগ হয়েছে" else "Hired"
+        "rejected" -> if (bn) "গ্রহণ হয়নি" else "Not selected"
+        "withdrawn" -> if (bn) "প্রত্যাহৃত" else "Withdrawn"
+        else -> status.trim().ifBlank { if (bn) "অজানা" else "Unknown" }
+    }
+
+    /** A 0–100 progress figure for the applicant's own tracker. */
+    fun applicationProgress(status: String): Int = when (status.trim().lowercase()) {
+        "submitted" -> 25
+        "reviewing" -> 50
+        "shortlisted" -> 75
+        "hired" -> 100
+        "rejected" -> 100
+        "withdrawn" -> 100
+        else -> 0
+    }
+
+    /** The decisions an employer may still make on one application, given its current status. */
+    fun employerActionsFor(status: String): List<String> = when (status.trim().lowercase()) {
+        "submitted" -> listOf("reviewing", "shortlisted", "hired", "rejected")
+        "reviewing" -> listOf("shortlisted", "hired", "rejected")
+        "shortlisted" -> listOf("hired", "rejected")
+        else -> emptyList()
+    }
+
+    /** Queues an employer's review by what still needs a decision, then newest first. */
+    fun sortApplicationsForEmployer(applications: List<JobApplicationDto>): List<JobApplicationDto> =
+        applications.sortedWith(
+            compareBy<JobApplicationDto> { if (isDecided(it.status)) 1 else 0 }
+                .thenByDescending { parseTimestampMillis(it.createdAt) ?: 0L },
+        )
+
+    /**
+     * The same monthly figure shown over a year, so a reader weighing two offers does not have
+     * to convert it themselves. Empty when the salary or period cannot be read.
+     */
+    fun yearlyEquivalent(
+        minAmount: Int?,
+        maxAmount: Int?,
+        currency: String,
+        period: String,
+    ): String {
+        val basis = maxAmount ?: minAmount ?: return ""
+        val yearly = DiscoverSearchEngine.convertCompensation(basis.toLong(), period, "year", currency)
+        if (yearly.isBlank()) return ""
+        val prefix = if (maxAmount != null && minAmount != null && maxAmount != minAmount) "~" else ""
+        return prefix + yearly
+    }
 }

@@ -17,13 +17,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ShoppingCart
+import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Storefront
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,11 +37,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
@@ -64,18 +70,44 @@ fun MkProductScreen(
     var qty by rememberSaveable { mutableStateOf(1) }
     var busy by remember { mutableStateOf(false) }
     var notice by remember { mutableStateOf<Pair<String, BsdcTone>?>(null) }
+    val context = LocalContext.current
+    val savedStore = remember(context) { MkSavedStore.get(context) }
+    val wishlist by savedStore.wishlist.collectAsState()
+    // Derived from the store rather than copied into local state, so un-saving the same
+    // product from the shop list updates this button without leaving the page.
+    val wished = wishlist.any { it.id == productId }
 
     LaunchedEffect(productId) {
         loading = true
         detail = repository.fetchProductDetail(productId).getOrNull()
         loading = false
+        // Opening the page is what makes it "recently viewed"; the shelf remembers the price
+        // and the shop so the row still reads correctly after the catalogue moves on.
+        detail?.let { record ->
+            savedStore.recordView(
+                MkSavedProduct(
+                    id = record.id,
+                    name = record.name,
+                    shopSlug = record.vendor.slug,
+                    shopName = record.vendor.name,
+                    pricePoisha = record.price_poisha,
+                    imageUrl = record.images.firstOrNull().orEmpty(),
+                ),
+            )
+        }
     }
 
     val product = detail
     if (product == null) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (loading) {
-                Text(mkText(bn, "Loading product…", "পণ্য লোড হচ্ছে…"))
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    BsdcDirectorySkeletonCard()
+                    BsdcDirectorySkeletonCard()
+                }
             } else {
                 BsdcEmptyState(
                     icon = Icons.Rounded.Storefront,
@@ -88,7 +120,8 @@ fun MkProductScreen(
     }
 
     val maxQty = product.stock.coerceAtLeast(1)
-    val canBuy = product.in_stock && product.stock > 0
+    val shopOpen = product.vendor.schedule?.is_open != false
+    val canBuy = product.in_stock && product.stock > 0 && shopOpen
     val selectedQty = qty.coerceIn(1, maxQty)
 
     LazyColumn(
@@ -114,16 +147,50 @@ fun MkProductScreen(
         }
         item {
             Column(Modifier.padding(horizontal = 16.dp)) {
-                Text(
-                    text = product.name,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = product.name,
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(
+                        onClick = {
+                            val nowSaved = savedStore.toggleWishlist(
+                                MkSavedProduct(
+                                    id = product.id,
+                                    name = product.name,
+                                    shopSlug = product.vendor.slug,
+                                    shopName = product.vendor.name,
+                                    pricePoisha = product.price_poisha,
+                                    imageUrl = product.images.firstOrNull().orEmpty(),
+                                ),
+                            )
+                            notice = (if (nowSaved) {
+                                mkText(bn, "Saved to your wish list.", "ইচ্ছাতালিকায় যোগ হয়েছে।")
+                            } else {
+                                mkText(bn, "Removed from your wish list.", "ইচ্ছাতালিকা থেকে সরানো হয়েছে।")
+                            }) to BsdcTone.OK
+                        },
+                    ) {
+                        Icon(
+                            imageVector = if (wished) Icons.Rounded.Bookmark else Icons.Rounded.BookmarkBorder,
+                            contentDescription = mkText(bn, "Wish list", "ইচ্ছাতালিকা"),
+                            tint = if (wished) BsdcThemeTokens.colors.brandStrong else BsdcThemeTokens.colors.mutedText,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     MkPrice(poisha = product.price_poisha, bn = bn)
                     Spacer(Modifier.width(12.dp))
-                    if (canBuy) {
+                    if (!shopOpen) {
+                        BsdcBadge(label = mkText(bn, "Shop closed", "দোকান বন্ধ"), tone = BsdcTone.WARN)
+                    } else if (canBuy) {
                         BsdcBadge(label = mkText(bn, "In stock", "স্টক আছে"), tone = BsdcTone.OK)
                     } else {
                         BsdcBadge(label = mkText(bn, "Out of stock", "স্টক শেষ"), tone = BsdcTone.WARN)
@@ -169,8 +236,20 @@ fun MkProductScreen(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
+                val deliveryNote = product.vendor.delivery?.let { del ->
+                    if (del.fee_mode == "per_km") {
+                        val rate = MkLogic.formatTaka(del.per_km_rate_poisha, bn)
+                        mkText(bn, "Pay cash on delivery · $rate / km.", "হাতে পেয়ে নগদ দিন · ডেলিভারি $rate / কিমি।")
+                    } else {
+                        val chg = MkLogic.formatTaka(
+                            if (del.fee_mode == "fixed") del.fixed_fee_poisha else del.default_fee_poisha,
+                            bn,
+                        )
+                        mkText(bn, "Pay cash on delivery · Delivery $chg.", "হাতে পেয়ে নগদ পরিশোধ করুন · ডেলিভারি $chg।")
+                    }
+                } ?: mkText(bn, "Pay in cash when it arrives.", "পণ্য হাতে পেয়ে নগদ পরিশোধ করুন।")
                 Text(
-                    text = mkText(bn, "Pay in cash when it arrives. Delivery ৳150.", "পণ্য হাতে পেয়ে নগদ পরিশোধ করুন। ডেলিভারি ৳১৫০।"),
+                    text = deliveryNote,
                     style = MaterialTheme.typography.bodySmall,
                     color = BsdcThemeTokens.colors.mutedText,
                 )
@@ -329,7 +408,11 @@ fun MkCartScreen(
                                 MkPrice(poisha = line.line_total, bn = bn)
                             } else {
                                 BsdcBadge(
-                                    label = mkText(bn, "Unavailable", "পাওয়া যাচ্ছে না"),
+                                    label = if (!line.vendor_open) {
+                                        mkText(bn, "Shop closed", "দোকান বন্ধ")
+                                    } else {
+                                        mkText(bn, "Unavailable", "পাওয়া যাচ্ছে না")
+                                    },
                                     tone = BsdcTone.WARN,
                                 )
                             }

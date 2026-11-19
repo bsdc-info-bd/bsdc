@@ -140,3 +140,24 @@ interface SavedSearchDao {
     @Query("DELETE FROM saved_searches")
     suspend fun deleteAll()
 }
+
+@Dao
+interface SavedOpportunityDao {
+    @Query("SELECT * FROM saved_opportunities ORDER BY savedAtEpochMs DESC")
+    fun observeAll(): Flow<List<SavedOpportunityEntity>>
+
+    @Query("SELECT * FROM saved_opportunities WHERE kind = :kind ORDER BY savedAtEpochMs DESC")
+    fun observeKind(kind: String): Flow<List<SavedOpportunityEntity>>
+
+    @Query("SELECT EXISTS(SELECT 1 FROM saved_opportunities WHERE key = :key)")
+    suspend fun contains(key: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsert(item: SavedOpportunityEntity)
+
+    @Query("DELETE FROM saved_opportunities WHERE key = :key")
+    suspend fun delete(key: String)
+
+    @Query("DELETE FROM saved_opportunities")
+    suspend fun deleteAll()
+}

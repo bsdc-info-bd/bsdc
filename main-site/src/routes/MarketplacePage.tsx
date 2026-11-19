@@ -1,4 +1,5 @@
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ArrowRight, LocateFixed, MapPin, Search, Star, Store } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -10,14 +11,17 @@ import { EmptyState, PageSkeleton } from '@/design-system';
 import { useListedShops, useMyOrders } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import {
+  formatHhMm,
+  formatTaka,
   isBdPoint,
-  SHOP_TYPE_EMOJI,
   SHOP_TYPES,
+  type DayKey,
   type Language,
   type ShopType,
 } from '@/lib/mk/mk-logic';
 import type { MkListedShop } from '@/lib/mk/mk-types';
 import { ROUTES } from '@/lib/site';
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 
 function useDebounced<T>(value: T, ms: number): T {
   const [debounced, setDebounced] = useState(value);
@@ -68,11 +72,12 @@ export default function MarketplacePage() {
       <MarketNav copy={copy} />
 
       <header className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg sm:p-8">
-        <motion.div
+        {/* A compositor animation rather than a motion one: this runs for as
+            long as the page is open, and a library-driven loop kept the main
+            thread awake for a decorative circle. */}
+        <div
           aria-hidden
-          className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10"
-          animate={reduce ? {} : { scale: [1, 1.08, 1] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className="mk-glow pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10"
         />
         <h1 className="relative text-2xl font-bold sm:text-3xl">{copy.buyer.marketTitle}</h1>
         <p className="relative mt-2 max-w-xl text-sm text-white/90">{copy.buyer.marketLead}</p>
@@ -144,7 +149,8 @@ export default function MarketplacePage() {
         {SHOP_TYPES.map((t) => (
           <TypeChip
             key={t}
-            label={`${SHOP_TYPE_EMOJI[t]} ${copy.typeLabels[t]}`}
+            label={copy.typeLabels[t]}
+            icon={<ShopTypeIcon type={t} size={14} />}
             selected={type === t}
             onClick={() => setType(t)}
           />
@@ -161,21 +167,26 @@ export default function MarketplacePage() {
         />
       ) : null}
 
-      <motion.ul layout className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {/* No `layout` here: it makes the browser measure every card on every
+          render to animate positions that never change, and that measurement
+          is main-thread work on the first screen. */}
+      <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {(shops.data ?? []).map((shop, i) => (
-          <ShopCard key={shop.slug} shop={shop} index={i} copy={copy} />
+          <ShopCard key={shop.slug} shop={shop} index={i} copy={copy} language={language} />
         ))}
-      </motion.ul>
+      </ul>
     </div>
   );
 }
 
 function TypeChip({
   label,
+  icon,
   selected,
   onClick,
 }: {
   label: string;
+  icon?: React.ReactNode;
   selected: boolean;
   onClick: () => void;
 }) {
@@ -191,7 +202,10 @@ function TypeChip({
           : 'border-border bg-surface text-text hover:bg-surface-2'
       }`}
     >
-      {label}
+      <span className="inline-flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
     </button>
   );
 }
@@ -200,18 +214,35 @@ function ShopCard({
   shop,
   index,
   copy,
+  language,
 }: {
   shop: MkListedShop;
   index: number;
   copy: ReturnType<typeof mkCopy>;
+  language: Language;
 }) {
   const reduce = useReducedMotion() ?? false;
+  const sched = shop.schedule;
+  const isOpen = sched ? sched.is_open : true;
+  const nextOpenLabel =
+    sched && !sched.is_open && sched.next_open
+      ? copy.schedule.opensNextLabel(
+          copy.schedule.days[String(sched.next_open.day) as DayKey] ?? '',
+          formatHhMm(sched.next_open.start, language),
+        )
+      : copy.schedule.closedNow;
+  const deliveryBadge =
+    shop.delivery?.fee_mode === 'per_km'
+      ? copy.delivery.perKmBadge(formatTaka(shop.delivery.per_km_rate_poisha ?? 2000, language))
+      : shop.delivery
+        ? formatTaka(shop.delivery.fee_poisha, language)
+        : null;
+
   return (
     <motion.li
-      layout
       initial={reduce ? false : { opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: Math.min(index, 9) * 0.04, duration: 0.3 }}
+      transition={{ delay: Math.min(index, 6) * 0.03, duration: 0.25 }}
     >
       <Link
         to={`/marketplace/shop/${shop.slug}`}
@@ -226,15 +257,30 @@ function ShopCard({
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : null}
-          <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
-            {SHOP_TYPE_EMOJI[shop.vendor_type]} {copy.typeLabels[shop.vendor_type]}
+          {sched?.enabled ? (
+            <span
+              className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur ${
+                isOpen ? 'bg-emerald-600/85' : 'bg-rose-600/90'
+              }`}
+            >
+              {isOpen ? copy.schedule.openNow : nextOpenLabel}
+            </span>
+          ) : null}
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+            <ShopTypeIcon type={shop.vendor_type} size={12} />
+            {copy.typeLabels[shop.vendor_type]}
           </span>
         </div>
         <div className="-mt-8 px-4 pb-4">
           <div className="flex items-end gap-3">
             <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
               {shop.logo_url ? (
-                <img src={shop.logo_url} alt="" className="h-full w-full object-cover" />
+                <MediaImage
+                  src={shop.logo_url}
+                  alt=""
+                  slotWidth={64}
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <Store className="m-4 text-muted" aria-hidden />
               )}
@@ -255,6 +301,10 @@ function ShopCard({
             {shop.distance_km !== null ? (
               <span className="font-semibold text-green-700">
                 {shop.distance_km.toFixed(1)} {copy.buyer.kmAway}
+              </span>
+            ) : deliveryBadge ? (
+              <span className="font-medium text-muted">
+                {copy.buyer.deliveryFee}: {deliveryBadge}
               </span>
             ) : (
               <span>

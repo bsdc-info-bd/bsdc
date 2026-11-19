@@ -34,8 +34,12 @@
   --bsdc-green-300: #74c69d;
   --bsdc-green-200: #52b788;
 
+  /* The brand blue, for fills, borders and the gradient mark. */
   --bsdc-blue: #1877f2;
   --bsdc-blue-soft: #e7f0fe;
+  /* The same blue for text: darker, because #1877f2 on this surface is 3.9:1
+     and 4.5:1 is the floor for body copy (WCAG 2.2 AA, 1.4.3). */
+  --bsdc-blue-text: #1461c9;
   --bsdc-danger: #d9363e;
   --bsdc-warn: #e5a50a;
   --bsdc-online: #31a24c;
@@ -67,6 +71,7 @@
 
   --bsdc-blue: #4e9bff;
   --bsdc-blue-soft: #15263c;
+  --bsdc-blue-text: #4e9bff;
   --bsdc-danger: #ff6b70;
   --bsdc-warn: #f4c04b;
   --bsdc-online: #42b72a;

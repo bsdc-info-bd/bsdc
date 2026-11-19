@@ -1,5 +1,6 @@
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
   EmailAuthProvider,
   GithubAuthProvider,
   GoogleAuthProvider,
@@ -190,6 +191,60 @@ export async function logout(): Promise<void> {
   void import('@/lib/supabase/client')
     .then(({ resetSupabase }) => resetSupabase())
     .catch(() => undefined);
+}
+
+/**
+ * Deletes the member's account, in the only order that can work.
+ *
+ * Google Play requires an in-app path to account deletion, and the privacy
+ * policy promises one. The work is split across two systems that cannot see each
+ * other: Postgres holds the data (`public.delete_my_account()`, migration 0119)
+ * and Firebase holds the login. The database cannot call Firebase, and Firebase
+ * cannot call the database, so the client drives both — and the token that
+ * authorises the RPC is only valid while the Firebase user still exists. That
+ * fixes the order:
+ *
+ *   1. the RPC, while the session is alive;
+ *   2. the Firebase user;
+ *   3. the local sign-out.
+ *
+ * If step 2 fails, step 1 has already happened and cannot be undone: the data is
+ * gone and the login is not. That is a real state, not an error to hide, so this
+ * throws `auth/delete-pending` with the session cleared — and the RPC is
+ * idempotent, so signing in again and repeating finishes the job. The one cause
+ * worth naming is `auth/requires-recent-login`, which Firebase raises when the
+ * session is old; the member is told to sign in again and retry rather than being
+ * shown "something went wrong".
+ */
+export async function deleteMyAccount(): Promise<void> {
+  const auth = getFirebaseAuth();
+  const user = auth.currentUser;
+  if (!user) throw new Error('auth/no-current-user');
+
+  const { getSupabase } = await import('@/lib/supabase/client');
+  const { error } = await getSupabase().rpc('delete_my_account');
+  if (error) {
+    // 42501 is the RPC refusing this caller: either the session was already
+    // gone, or this is the owner account, which must transfer ownership first.
+    const ownerRefused = error.code === '42501' && /owner/i.test(error.message);
+    throw new Error(ownerRefused ? 'auth/delete-owner-refused' : 'auth/delete-failed');
+  }
+
+  try {
+    await deleteUser(user);
+  } catch {
+    // The data is gone; only the login remains. Signing out and telling the
+    // member is the honest outcome — the RPC is idempotent, so a fresh sign-in
+    // and a second tap finishes what Firebase refused. `auth/requires-recent-
+    // login` lands here too, and has the same remedy.
+    await logout().catch(() => undefined);
+    throw new Error('auth/delete-pending');
+  }
+
+  await logout().catch(() => undefined);
+  clearQueryCache();
+  useProfileStore.getState().setProfile(null);
+  useAuthStore.getState().reset();
 }
 
 export async function updateDisplayName(displayName: string): Promise<void> {

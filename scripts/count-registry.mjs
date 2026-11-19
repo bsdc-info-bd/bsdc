@@ -240,6 +240,16 @@ report.registryCodes = new Set(
   [...read('docs/delivery-plan.md').matchAll(/\b[A-Z]{1,2}-\d{3}\b/g)].map((match) => match[0]),
 ).size;
 
+// The Android catalog carries its own numbered code range (AND-xxxx). Its planned domains
+// and its post-launch addendum are counted apart on purpose: a redesign that replaces a
+// shipped list is not a new capability, so adding it to the domain total would inflate it.
+const catalogCodes = [
+  ...new Set([...read('docs/native-android-feature-catalog.md').matchAll(/\bAND-\d{4}\b/g)].map((m) => m[0])),
+].sort();
+report.androidCatalogCodes = catalogCodes.length;
+report.androidDomainCodes = catalogCodes.filter((code) => Number(code.slice(4)) <= 480).length;
+report.androidAddendumCodes = catalogCodes.filter((code) => Number(code.slice(4)) > 480).length;
+
 if (process.argv.includes('--json')) {
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
 } else if (process.argv.includes('--markdown')) {
@@ -261,6 +271,7 @@ if (process.argv.includes('--json')) {
       `**Total counted features: ${report.total}**`,
       '',
       `Registry codes recorded as delivered across the twenty responses: **${report.registryCodes}**.`,
+      `Android catalog codes: **${report.androidCatalogCodes}** — ${report.androidDomainCodes} inside the planned domains, ${report.androidAddendumCodes} in the redesign addendum (not added to the domain totals).`,
       `Translated interface strings per language: **${report.messageKeys}** (recorded, not counted as features).`,
       '',
     ].join('\n'),
@@ -282,5 +293,8 @@ if (process.argv.includes('--json')) {
   );
   process.stdout.write(
     `  ${String(report.messageKeys).padStart(5)}  translated strings per language (not counted as features)\n`,
+  );
+  process.stdout.write(
+    `  ${String(report.androidCatalogCodes).padStart(5)}  Android catalog codes (${report.androidDomainCodes} planned domains + ${report.androidAddendumCodes} redesign addendum)\n`,
   );
 }

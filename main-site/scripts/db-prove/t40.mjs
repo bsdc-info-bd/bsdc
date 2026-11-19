@@ -7,7 +7,7 @@
  * crawler metadata are checked against that same rule, and so is the answer
  * for a record-shaped address that matches nothing.
  */
-import { as, asAnon, makeDb } from './lib.mjs';
+import { as, asAnon, failureCount, makeDb } from './lib.mjs';
 
 const ada = 'aaaaaaaa-1111-4111-8111-000000000001'; // client
 const rahim = 'bbbbbbbb-2222-4222-8222-000000000002'; // freelancer
@@ -227,5 +227,7 @@ check(
 );
 
 console.log(`\n${fails === 0 ? 'all' : fails} ${fails === 0 ? 'checks' : 'failed'} for 0067`);
-if (fails > 0) process.exitCode = 1;
+// Fold in what the shared library recorded, so a failure from as()/check() is not
+// reported as a passing harness because this file counted on its own.
+if (fails + failureCount() > 0) process.exitCode = 1;
 await db.close();

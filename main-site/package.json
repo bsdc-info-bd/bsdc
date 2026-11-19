@@ -23,7 +23,8 @@
     "push:keys": "node scripts/vapid-keys.mjs",
     "test:browser": "npm run build && node scripts/browser/smoke.mjs",
     "test:corporate-browser": "node scripts/browser/corporate-smoke.mjs",
-    "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs"
+    "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs",
+    "lighthouse": "node ../scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -86,5 +87,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "overrides": {
+    "rollup": "4.68.4"
   }
 }

@@ -42,6 +42,10 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    // The comment composer picks one picture from the device's photo picker
+    // (0120). The picker launcher lives in activity-compose; without it the
+    // screen compiles no way to choose a file at all.
+    implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

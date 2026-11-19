@@ -67,6 +67,14 @@ export interface PostDraft {
   tags: string[];
   media: DraftMedia[];
   pollOptions: string[];
+  /**
+   * Ballots on the poll as it stands in the database, or 0.
+   *
+   * Carried in the draft so the editor can say "this poll keeps its options"
+   * before the member types a new one, and so a save knows whether a rewritten
+   * poll is a draft-being-finished or a record-being-erased.
+   */
+  pollVotes: number;
   visibility: Visibility;
   language: 'bn' | 'en';
   allowComments: boolean;
@@ -123,7 +131,7 @@ export function draftFromPost(post: {
     width?: number | null;
     height?: number | null;
   }[];
-  poll: { label: string }[];
+  poll: { label: string; votes?: number }[];
   visibility: Visibility;
   language: 'bn' | 'en';
   allowComments: boolean;
@@ -148,6 +156,7 @@ export function draftFromPost(post: {
       height: item.height ?? null,
     })),
     pollOptions: post.poll.length > 0 ? post.poll.map((option) => option.label) : ['', ''],
+    pollVotes: post.poll.reduce((total, option) => total + (option.votes ?? 0), 0),
     visibility: post.visibility,
     language: post.language,
     allowComments: post.allowComments,
@@ -167,6 +176,7 @@ export const EMPTY_DRAFT: PostDraft = {
   tags: [],
   media: [],
   pollOptions: ['', ''],
+  pollVotes: 0,
   visibility: 'public',
   language: 'bn',
   allowComments: true,
@@ -197,6 +207,9 @@ export const storedDraftSchema = z.object({
   tags: z.array(z.string()).max(TAGS_MAX),
   media: z.array(mediaSchema).max(10),
   pollOptions: z.array(z.string().max(80)).max(POLL_OPTIONS_MAX),
+  // A draft stored before ballots were counted still opens: a missing count
+  // costs the editor's note, not the member's writing.
+  pollVotes: z.number().int().min(0).optional().default(0),
   visibility: z.enum(VISIBILITIES),
   language: z.enum(['bn', 'en']),
   allowComments: z.boolean(),

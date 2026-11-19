@@ -47,15 +47,12 @@ public class PermissionStateMachineTest {
         assertFalse(
             PermissionStateMachine.manifestPermissionsFor(DevicePermissionKind.CAMERA, 26).isEmpty()
         );
-        assertFalse(
-            PermissionStateMachine.manifestPermissionsFor(DevicePermissionKind.MICROPHONE, 26).isEmpty()
-        );
     }
 
     @Test
     public void countsMissingPermissionsDeterministically() {
         Map<DevicePermissionKind, PermissionGrantState> snapshot = PermissionStateMachine.initialSnapshot();
-        assertEquals(4, PermissionStateMachine.missingCount(snapshot));
+        assertEquals(3, PermissionStateMachine.missingCount(snapshot));
         assertFalse(PermissionStateMachine.allGranted(snapshot));
 
         for (DevicePermissionKind kind : DevicePermissionKind.values()) {

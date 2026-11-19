@@ -3,7 +3,9 @@ import { normaliseSkills } from '@/lib/opportunities/skills';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
 import type {
+  GigProposalRow,
   GigRow,
+  JobApplicationRow,
   JobBoardRow,
   JobDetailRow,
   PlaygroundSketchRow,
@@ -12,6 +14,9 @@ import type {
 import type {
   ApplicationStatus,
   Gig,
+  GigProposal,
+  JobApplication,
+  ProposalStatus,
   JobDetail,
   JobListing,
   Project,
@@ -69,6 +74,40 @@ export async function applyToJob(
   if (error) throw toDataError(error);
   wakePushDelivery();
   return typeof data === 'string' ? data : '';
+}
+
+/**
+ * Every application on a job the reader posted.
+ *
+ * `job_application_queue()` (migration 0113) joins the applicant's public card
+ * and derives `verified` from `role` server-side, and re-checks that the caller
+ * is the job's poster or staff. Without this call the web could only show a
+ * count: the employer had no way to read, shortlist or hire anyone from a
+ * browser, which is the "job applying system" that was not good enough.
+ */
+export async function fetchJobApplications(jobId: string, limit = 100): Promise<JobApplication[]> {
+  const { data, error } = await getSupabase()
+    .rpc('job_application_queue', { p_job_id: jobId, p_limit: limit })
+    .returns<JobApplicationRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toJobApplication);
+}
+
+function toJobApplication(row: JobApplicationRow): JobApplication {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    applicantUid: row.applicant_uid,
+    displayName: row.display_name,
+    username: row.username,
+    avatarUrl: row.avatar_url.length > 0 ? row.avatar_url : null,
+    verified: row.verified,
+    coverLetter: row.cover_letter,
+    resumeUrl: row.resume_url,
+    status: row.status,
+    decidedAt: row.decided_at,
+    createdAt: row.created_at,
+  };
 }
 
 export async function decideApplication(
@@ -175,6 +214,52 @@ export async function fetchMyProposalStatus(gigId: string, uid: string): Promise
     .returns<{ status: string }[]>();
   if (error) throw toDataError(error);
   return data?.[0]?.status ?? null;
+}
+
+/**
+ * Every proposal on a gig the reader posted.
+ *
+ * `gig_proposal_queue()` (migration 0112) joins the freelancer's public card and
+ * derives `verified` from `role` server-side. Doing that join in the browser
+ * asked PostgREST for a `profiles.verified` column that does not exist, which is
+ * a 400 — the reason "N proposals" was a number with no page behind it.
+ */
+export async function fetchGigProposals(gigId: string, limit = 100): Promise<GigProposal[]> {
+  const { data, error } = await getSupabase()
+    .rpc('gig_proposal_queue', { p_gig_id: gigId, p_limit: limit })
+    .returns<GigProposalRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(toGigProposal);
+}
+
+function toGigProposal(row: GigProposalRow): GigProposal {
+  return {
+    id: row.id,
+    freelancerUid: row.freelancer_uid,
+    displayName: row.display_name,
+    username: row.username,
+    avatarUrl: row.avatar_url.length > 0 ? row.avatar_url : null,
+    verified: row.verified,
+    pitch: row.pitch,
+    bidAmount: row.bid_amount,
+    deliveryDays: row.delivery_days,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+/**
+ * Moves one proposal to a decided status. `decide_gig_proposal()` re-checks that
+ * the caller is the gig's client (or staff) on the server, so a forged call is
+ * refused rather than trusted.
+ */
+export async function decideGigProposal(proposalId: string, status: ProposalStatus): Promise<void> {
+  const { error } = await getSupabase().rpc('decide_gig_proposal', {
+    p_proposal_id: proposalId,
+    p_status: status,
+  });
+  if (error) throw toDataError(error);
+  wakePushDelivery();
 }
 
 export async function submitProposal(

@@ -3,6 +3,7 @@
   "routes": [
     {
       "path": "/",
+      "component": "HomePage",
       "title": "BSDC — the open developer community of Bangladesh",
       "description": "Posts, groups, events, jobs, freelance work, open-source projects, courses and a marketplace, built by and for Bangladeshi software developers.",
       "changefreq": "hourly",
@@ -13,36 +14,50 @@
     },
     {
       "path": "/about",
+      "component": "AboutPage",
       "title": "About BSDC — who we are and who runs it",
       "description": "BSDC is run by RRC Development and founded by Rizwan Rahim Chowdhury. Read what the community is for, how it is governed and how it is funded.",
       "changefreq": "monthly",
       "priority": 0.8,
       "heading": "About the community",
       "summary": "What BSDC is for, who is accountable for it, and how decisions about it are made.",
+      "opening": [
+        "To give every developer in Bangladesh — from a student on a small phone in Sylhet to a senior engineer on a large desktop — one free, fast, bilingual place to learn, publish, collaborate, find work and build a public reputation."
+      ],
       "type": "website"
     },
     {
       "path": "/guidelines",
+      "component": "GuidelinesPage",
       "title": "Community guidelines — BSDC",
       "description": "What is expected of members, what is not allowed, how moderation decisions are made and how to appeal one.",
       "changefreq": "monthly",
       "priority": 0.6,
       "heading": "Community guidelines",
       "summary": "The rules, the reasons behind them, and the route to appeal a decision.",
+      "opening": [
+        "These rules apply to every post, comment, message, product listing and profile on BSDC. Moderators enforce them, and every enforcement action can be appealed."
+      ],
       "type": "website"
     },
     {
       "path": "/contact",
+      "component": "ContactPage",
       "title": "Contact BSDC",
       "description": "Reach the BSDC team about membership, partnerships, press, security reports or anything the community platform gets wrong.",
       "changefreq": "yearly",
       "priority": 0.5,
       "heading": "Contact",
       "summary": "How to reach the people who run the community, and what to expect by way of a reply.",
-      "type": "website"
+      "type": "website",
+      "opening": [
+        "Write to us in Bangla or in English. We read every message.",
+        "Report a vulnerability by email with the subject SECURITY. Please include reproduction steps and the affected URL. Do not open a public issue."
+      ]
     },
     {
       "path": "/marketplace",
+      "component": "MarketplacePage",
       "title": "Marketplace — shops and products from Bangladeshi developers",
       "description": "Shop products and services from developers and studios across Bangladesh. Browse shops, read verified reviews and pay cash on delivery.",
       "changefreq": "daily",
@@ -53,6 +68,7 @@
     },
     {
       "path": "/jobs",
+      "component": "JobsPage",
       "title": "Software jobs in Bangladesh — BSDC",
       "description": "Engineering roles across Bangladesh and remote, posted by companies and by members, with salary ranges shown wherever they are known.",
       "changefreq": "daily",
@@ -63,6 +79,7 @@
     },
     {
       "path": "/freelance",
+      "component": "FreelancePage",
       "title": "Freelance work for developers — BSDC",
       "description": "Short contracts and project work posted by members, with proposals, milestones and payouts handled inside the community.",
       "changefreq": "daily",
@@ -73,6 +90,7 @@
     },
     {
       "path": "/projects",
+      "component": "ProjectsPage",
       "title": "Open-source projects from Bangladesh — BSDC",
       "description": "Projects built by community members, the technologies behind them, and the ones currently looking for contributors.",
       "changefreq": "daily",
@@ -83,6 +101,7 @@
     },
     {
       "path": "/learn",
+      "component": "LearnPage",
       "title": "Courses and learning paths — BSDC",
       "description": "Free and paid courses in Bangla and English, with lessons, quizzes and a verifiable certificate at the end.",
       "changefreq": "weekly",
@@ -93,6 +112,7 @@
     },
     {
       "path": "/groups",
+      "component": "GroupsPage",
       "title": "Groups — BSDC",
       "description": "Communities inside the community: language groups, city groups, study groups and working groups, public and private.",
       "changefreq": "daily",
@@ -103,6 +123,7 @@
     },
     {
       "path": "/events",
+      "component": "EventsPage",
       "title": "Developer events in Bangladesh — BSDC",
       "description": "Meetups, workshops, conferences and online sessions hosted by the community and by its members.",
       "changefreq": "daily",
@@ -113,22 +134,76 @@
     },
     {
       "path": "/playground",
+      "component": "PlaygroundPage",
       "title": "Code playground — BSDC",
       "description": "Write, run and share small programs in the browser, and publish a sketch to the community without leaving the page.",
       "changefreq": "weekly",
       "priority": 0.6,
       "heading": "Playground",
       "summary": "A scratchpad that runs in the browser and can be shared as a link.",
-      "type": "website"
+      "type": "website",
+      "opening": [
+        "Write a snippet, run it, keep it. Nothing leaves your browser when you run.",
+        "Code runs inside a sandboxed frame with scripts only: no network credentials, no storage, no access to your session."
+      ]
     },
     {
       "path": "/verify",
+      "component": "VerifyCertificatePage",
       "title": "Verify a BSDC document",
       "description": "Check whether a certificate, notice or staff identity card issued by BSDC is genuine, using the code printed on it.",
       "changefreq": "yearly",
       "priority": 0.7,
       "heading": "Verify a document",
       "summary": "Enter the code printed under the QR square and the registry answers.",
+      "type": "website"
+    },
+    {
+      "path": "/privacy",
+      "component": "PrivacyPage",
+      "title": "Privacy Policy — BSDC",
+      "description": "What BSDC stores, why it stores it, who can see it, and how to have it removed. Written from the data model, not from a template.",
+      "changefreq": "monthly",
+      "priority": 0.5,
+      "heading": "Privacy policy",
+      "summary": "This policy covers the BSDC website and the BSDC Android app. It describes the personal data the platform actually holds, why it holds it, who can see it, and how to have it removed.",
+      "opening": [
+        "This policy covers the BSDC website and the BSDC Android app. It describes the personal data the platform actually holds, which is a short list because the platform is built that way: there is no analytics tag, no advertising pixel and no third-party session recorder on any page."
+      ],
+      "type": "website"
+    },
+    {
+      "path": "/terms",
+      "component": "TermsPage",
+      "title": "Terms of Service — BSDC",
+      "description": "The terms you agree to when you create a BSDC account: what the service is, what you may post, how payments work, and how to leave.",
+      "changefreq": "monthly",
+      "priority": 0.5,
+      "heading": "Terms of service",
+      "summary": "These terms cover the BSDC website and the BSDC Android app. By creating an account you agree to them. They are written to be read before you agree to them, not after.",
+      "opening": [
+        "These terms cover the BSDC website and the BSDC Android app. By creating an account you agree to them. They are written from what the platform actually does, so the words below describe the service you are joining rather than a generic one.",
+        "BSDC is a community platform for software developers in Bangladesh. It provides public posts, groups, events, jobs, freelance gigs, learning courses, a marketplace, and direct messaging. The service is provided free of charge. Some features, such as advertising credit and marketplace credit, are paid for through bKash as described below.",
+        "You need an account to post, message, order, or apply. You are responsible for keeping your sign-in credentials to yourself and for everything done under your account. One person may hold more than one account, but an account may not be shared. You must be at least 13 years old to use the service. When you sign up you choose a username; it must be available, and it may be reclaimed if the account is inactive for a long period.",
+        "What you post is yours. By posting you give BSDC a licence to display, store and distribute it as part of running the service — showing it to the people you chose, in the feed, in search results, and in notifications. That licence ends when you delete the content. Deleted posts and messages enter a 30-day recovery window during which you can restore them; after that they are gone. You are responsible for what you post: you must have the right to share it, and it must not break these terms or the law."
+      ],
+      "type": "website"
+    },
+    {
+      "path": "/account-deletion",
+      "component": "AccountDeletionPage",
+      "title": "Delete your BSDC account",
+      "description": "How to delete a BSDC account and what happens to your data — from inside the app, from the web, or by writing to us.",
+      "changefreq": "monthly",
+      "priority": 0.5,
+      "heading": "Delete your account",
+      "summary": "You can delete your BSDC account yourself, at any time, without asking us and without explaining why. This page explains the three ways to do it and what is kept afterwards.",
+      "opening": [
+        "You can delete your BSDC account yourself, at any time, without asking us and without explaining why. This page explains the three ways to do it and exactly what happens to your data when you do.",
+        "Open Settings (the gear in the top bar), choose “Delete account” under Legal and account controls, read what is deleted and what is kept, then type DELETE to confirm. The app signs you out when it finishes.",
+        "Sign in, open Settings, and choose the “Delete account” tab. The panel states what goes and what stays, and the confirm button stays disabled until you type DELETE. This works on a phone, a tablet or a desktop.",
+        "If you cannot sign in — you have lost the handset, or the address no longer receives mail — write to the support address below from any address and ask us to delete the account. Tell us the username or the sign-in email so we can find it. We answer within 30 days, and we will confirm when the deletion is done."
+      ],
       "type": "website"
     }
   ],

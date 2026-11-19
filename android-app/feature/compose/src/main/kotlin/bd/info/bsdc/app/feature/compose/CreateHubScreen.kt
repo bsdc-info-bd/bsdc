@@ -22,6 +22,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AddCircleOutline
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.PhotoLibrary
+import androidx.compose.material.icons.rounded.Work
 import androidx.compose.material.icons.rounded.Publish
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
@@ -38,9 +43,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.designsystem.BsdcActionTile
+import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
+import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
+import bd.info.bsdc.app.core.designsystem.BsdcSectionHeader
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
@@ -89,14 +98,145 @@ fun CreateHubScreen(
     }
 
     var mode by remember(initialMode) { mutableStateOf(initialMode) }
+    var showPicker by remember(initialMode) { mutableStateOf(initialMode == CreateHubMode.POST) }
 
     Column(modifier = modifier.fillMaxSize()) {
+        // The picker: one tile per directory, so the reader chooses what they are making
+        // rather than decoding a strip of chips. Collapses once a form is open.
+        if (showPicker) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    BsdcHeroBanner(
+                        title = if (bn) "কী তৈরি করবেন?" else "What will you build?",
+                        subtitle = if (bn) {
+                            "পোস্ট, ইভেন্ট, চাকরি, গিগ, প্রজেক্ট বা গ্রুপ — এক ট্যাপে শুরু করুন।"
+                        } else {
+                            "A post, an event, a job, a gig, a project or a group — pick one to start."
+                        },
+                        eyebrow = if (bn) "তৈরি করুন" else "Create",
+                        icon = Icons.Rounded.AddCircleOutline,
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "পোস্ট / নিবন্ধ" else "Post or article",
+                        subtitle = if (bn) {
+                            "লেখা, কোড স্নিপেট, প্রশ্ন, পোল বা ছবি — সব এক কম্পোজারে।"
+                        } else {
+                            "Writing, code snippets, questions, polls and photos — one composer."
+                        },
+                        icon = Icons.Rounded.PhotoLibrary,
+                        onClick = {
+                            mode = CreateHubMode.POST
+                            showPicker = false
+                        },
+                        badge = if (bn) "মার্কডাউন" else "Markdown",
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "ইভেন্ট" else "Event",
+                        subtitle = if (bn) {
+                            "মিটআপ, ওয়ার্কশপ বা হ্যাকাথন — সময়, স্থান ও ক্যাপাসিটি সহ।"
+                        } else {
+                            "A meetup, workshop or hackathon — with time, place and capacity."
+                        },
+                        icon = Icons.Rounded.Event,
+                        tone = BsdcTone.INFO,
+                        onClick = {
+                            mode = CreateHubMode.EVENT
+                            showPicker = false
+                        },
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "চাকরি" else "Job",
+                        subtitle = if (bn) {
+                            "পূর্ণকালীন, খণ্ডকালীন বা রিমোট ভূমিকা — বেতন ও দক্ষতা সহ।"
+                        } else {
+                            "A full-time, part-time or remote role — with pay and skills."
+                        },
+                        icon = Icons.Rounded.Work,
+                        tone = BsdcTone.INFO,
+                        onClick = {
+                            mode = CreateHubMode.JOB
+                            showPicker = false
+                        },
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "ফ্রিল্যান্স গিগ" else "Freelance gig",
+                        subtitle = if (bn) {
+                            "একটি নির্দিষ্ট কাজের বাজেট দিন — ফ্রিল্যান্সাররা প্রস্তাব পাঠাবে।"
+                        } else {
+                            "Scope one piece of work and freelancers send proposals."
+                        },
+                        icon = Icons.Rounded.Work,
+                        tone = BsdcTone.OK,
+                        onClick = {
+                            mode = CreateHubMode.GIG
+                            showPicker = false
+                        },
+                        badge = if (bn) "প্রস্তাব" else "Proposals",
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "প্রজেক্ট" else "Project",
+                        subtitle = if (bn) {
+                            "ওপেন-সোর্স প্রজেক্ট দেখান — রিপো, ডেমো ও স্ক্রিনশট সহ।"
+                        } else {
+                            "Show an open-source project — repository, demo and screenshots."
+                        },
+                        icon = Icons.Rounded.Code,
+                        tone = BsdcTone.NEUTRAL,
+                        onClick = {
+                            mode = CreateHubMode.PROJECT
+                            showPicker = false
+                        },
+                    )
+                }
+                item {
+                    BsdcActionTile(
+                        title = if (bn) "কমিউনিটি গ্রুপ" else "Community group",
+                        subtitle = if (bn) {
+                            "একটি বিষয়ভিত্তিক গ্রুপ খুলুন — পাবলিক বা প্রাইভেট।"
+                        } else {
+                            "Open a group around a topic — public or private."
+                        },
+                        icon = Icons.Rounded.Groups,
+                        tone = BsdcTone.WARN,
+                        onClick = {
+                            mode = CreateHubMode.GROUP
+                            showPicker = false
+                        },
+                    )
+                }
+                item {
+                    BsdcButton(
+                        label = if (bn) "একটি ফর্ম খুলুন" else "Open the composer",
+                        onClick = { showPicker = false },
+                        secondary = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            return
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             CreateHubMode.entries.forEach { entry ->
                 FilterChip(
@@ -105,6 +245,11 @@ fun CreateHubScreen(
                     label = { Text(if (bn) entry.labelBn else entry.labelEn) },
                 )
             }
+            FilterChip(
+                selected = false,
+                onClick = { showPicker = true },
+                label = { Text(if (bn) "ধরন বদলান" else "Change type") },
+            )
         }
 
         when (mode) {
@@ -272,10 +417,19 @@ private fun JobCreateForm(
     language: AppLanguage,
     onCreated: (String) -> Unit,
 ) {
+    val bn = language == AppLanguage.BN
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf(JobDraftInput()) }
     var submitting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+
+    val salaryMin = draft.salaryMinText.trim().toIntOrNull()
+    val salaryMax = draft.salaryMaxText.trim().toIntOrNull()
+    val skills = draft.skillsText.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    val issues = ComposerValidationEngine.validateJobDraft(
+        draft.title, draft.company, draft.description, draft.workMode, draft.city,
+        salaryMin, salaryMax, skills, draft.applyUrl,
+    )
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -284,10 +438,17 @@ private fun JobCreateForm(
         error?.let { item { BsdcStatusBanner("Check Job Details", it, BsdcTone.BAD) } }
         item {
             BsdcCard {
-                Text(if (language == AppLanguage.BN) "চাকরি পোস্ট করুন" else "Post a Job Opening", style = MaterialTheme.typography.titleLarge)
-                OutlinedTextField(value = draft.title, onValueChange = { draft = draft.copy(title = it) }, label = { Text("Role Title") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = draft.company, onValueChange = { draft = draft.copy(company = it) }, label = { Text("Company") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = draft.description, onValueChange = { draft = draft.copy(description = it) }, label = { Text("Role Description (20+ chars)") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+                BsdcSectionHeader(
+                    title = if (bn) "চাকরি পোস্ট করুন" else "Post a job opening",
+                    subtitle = if (bn) {
+                        "ভূমিকা, বেতন আর দক্ষতা স্পষ্ট লিখলে সঠিক প্রার্থী আসে।"
+                    } else {
+                        "A clear role, pay range and skill list find the right applicant."
+                    },
+                )
+                OutlinedTextField(value = draft.title, onValueChange = { draft = draft.copy(title = it) }, label = { Text(if (bn) "পদের নাম" else "Role title") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = draft.company, onValueChange = { draft = draft.copy(company = it) }, label = { Text(if (bn) "প্রতিষ্ঠান" else "Company") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = draft.description, onValueChange = { draft = draft.copy(description = it) }, label = { Text(if (bn) "ভূমিকার বিবরণ (২০+ অক্ষর)" else "Role description (20+ chars)") }, minLines = 4, modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf("onsite", "hybrid", "remote").forEach { mode ->
                         FilterChip(
@@ -297,23 +458,76 @@ private fun JobCreateForm(
                         )
                     }
                 }
-                OutlinedTextField(value = draft.city, onValueChange = { draft = draft.copy(city = it) }, label = { Text("City") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = draft.city, onValueChange = { draft = draft.copy(city = it) }, label = { Text(if (bn) "শহর" else "City") }, modifier = Modifier.fillMaxWidth())
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = draft.salaryMinText, onValueChange = { draft = draft.copy(salaryMinText = it) }, label = { Text("Min BDT") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(value = draft.salaryMaxText, onValueChange = { draft = draft.copy(salaryMaxText = it) }, label = { Text("Max BDT") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = draft.salaryMinText, onValueChange = { draft = draft.copy(salaryMinText = it.filter(Char::isDigit)) }, label = { Text(if (bn) "সর্বনিম্ন BDT" else "Min BDT") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(value = draft.salaryMaxText, onValueChange = { draft = draft.copy(salaryMaxText = it.filter(Char::isDigit)) }, label = { Text(if (bn) "সর্বোচ্চ BDT" else "Max BDT") }, singleLine = true, modifier = Modifier.weight(1f))
                 }
-                OutlinedTextField(value = draft.skillsText, onValueChange = { draft = draft.copy(skillsText = it) }, label = { Text("Skills (comma-separated)") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = draft.applyUrl, onValueChange = { draft = draft.copy(applyUrl = it) }, label = { Text("Apply URL (optional)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = draft.skillsText, onValueChange = { draft = draft.copy(skillsText = it) }, label = { Text(if (bn) "দক্ষতা (কমা দিয়ে)" else "Skills (comma-separated)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(value = draft.applyUrl, onValueChange = { draft = draft.copy(applyUrl = it) }, label = { Text(if (bn) "আবেদনের লিংক (ঐচ্ছিক)" else "Apply URL (optional)") }, modifier = Modifier.fillMaxWidth())
+            }
+        }
+
+        item {
+            BsdcCard {
+                BsdcSectionHeader(
+                    title = if (bn) "লাইভ প্রিভিউ" else "Live preview",
+                    subtitle = if (bn) "প্রার্থীরা এভাবেই দেখবে।" else "This is how applicants will see it.",
+                )
+                Text(
+                    text = draft.title.ifBlank { if (bn) "পদের নাম" else "Role title" },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = listOf(draft.company, draft.city).filter { it.isNotBlank() }
+                        .joinToString(" · ")
+                        .ifBlank { if (bn) "প্রতিষ্ঠান" else "Company" },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    text = when {
+                        salaryMin == null && salaryMax == null -> if (bn) "আলোচনা সাপেক্ষ" else "Negotiable"
+                        salaryMin != null && salaryMax != null -> "BDT $salaryMin – $salaryMax /month"
+                        salaryMin != null -> "BDT $salaryMin /month"
+                        else -> "BDT $salaryMax /month"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    color = bd.info.bsdc.app.core.designsystem.BsdcThemeTokens.colors.brandStrong,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    BsdcBadge(label = draft.workMode.uppercase(), tone = BsdcTone.INFO)
+                    skills.take(6).forEach { BsdcBadge(label = it.lowercase(), tone = BsdcTone.NEUTRAL) }
+                }
+            }
+        }
+
+        item {
+            BsdcCard {
+                BsdcSectionHeader(title = if (bn) "প্রকাশের চেকলিস্ট" else "Ready to publish?")
+                ChecklistRow(if (bn) "পদের নাম লেখা হয়েছে" else "Role title is written", draft.title.trim().length >= 3)
+                ChecklistRow(if (bn) "প্রতিষ্ঠানের নাম" else "Company is named", draft.company.trim().isNotBlank())
+                ChecklistRow(
+                    if (bn) "বিবরণ ২০+ অক্ষর" else "Description is at least 20 characters",
+                    draft.description.trim().length >= 20,
+                )
+                ChecklistRow(
+                    if (bn) "বেতনের ক্রম ঠিক" else "Salary bounds are in order",
+                    salaryMax == null || salaryMin == null || salaryMax >= salaryMin,
+                    blocking = false,
+                )
+                if (issues.isNotEmpty()) {
+                    Text(
+                        text = issues.first(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bd.info.bsdc.app.core.designsystem.BsdcThemeTokens.colors.warn,
+                    )
+                }
                 BsdcButton(
-                    label = "Publish Job",
+                    label = if (bn) "চাকরি প্রকাশ করুন" else "Publish job",
                     busy = submitting,
                     leadingIcon = Icons.Rounded.Publish,
+                    enabled = issues.isEmpty(),
                     onClick = {
-                        val issues = ComposerValidationEngine.validateJobDraft(
-                            draft.title, draft.company, draft.description, draft.workMode, draft.city,
-                            draft.salaryMinText.toIntOrNull(), draft.salaryMaxText.toIntOrNull(),
-                            draft.skillsText.split(",").filter { it.isNotBlank() }, draft.applyUrl,
-                        )
                         if (issues.isNotEmpty()) {
                             error = issues.first()
                             return@BsdcButton
@@ -327,12 +541,14 @@ private fun JobCreateForm(
                             submitting = false
                         }
                     },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun GigCreateForm(
     clientUid: String,
@@ -340,10 +556,24 @@ private fun GigCreateForm(
     language: AppLanguage,
     onCreated: (String) -> Unit,
 ) {
+    val bn = language == AppLanguage.BN
     val scope = rememberCoroutineScope()
     var draft by remember { mutableStateOf(GigDraftInput()) }
     var submitting by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val scopeIdeas = remember {
+        listOf(
+            "Landing page" to "One responsive page, mobile-first, with the copy you supply.",
+            "Logo and identity" to "A wordmark, a mark and the two files a print shop asks for.",
+            "API integration" to "Connect one REST API to one screen, with error states handled.",
+            "Bug fix sprint" to "A time-boxed pass over a list of reproducible defects.",
+        )
+    }
+
+    val budgetMin = draft.budgetMinText.trim().toIntOrNull()
+    val budgetMax = draft.budgetMaxText.trim().toIntOrNull()
+    val days = draft.durationDaysText.trim().toIntOrNull()
+    val skills = draft.skillsText.split(",").map { it.trim() }.filter { it.isNotBlank() }
 
     LazyColumn(
         contentPadding = PaddingValues(16.dp),
@@ -352,34 +582,185 @@ private fun GigCreateForm(
         error?.let { item { BsdcStatusBanner("Check Gig Details", it, BsdcTone.BAD) } }
         item {
             BsdcCard {
-                Text(if (language == AppLanguage.BN) "ফ্রিল্যান্স গিগ প্রকাশ করুন" else "Post a Freelance Gig", style = MaterialTheme.typography.titleLarge)
-                OutlinedTextField(value = draft.title, onValueChange = { draft = draft.copy(title = it) }, label = { Text("Gig Title") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = draft.description, onValueChange = { draft = draft.copy(description = it) }, label = { Text("Scope & Deliverables (20+ chars)") }, minLines = 4, modifier = Modifier.fillMaxWidth())
+                BsdcSectionHeader(
+                    title = if (bn) "ফ্রিল্যান্স গিগ প্রকাশ করুন" else "Post a freelance gig",
+                    subtitle = if (bn) {
+                        "যত স্পষ্ট স্কোপ, তত ভালো প্রস্তাব।"
+                    } else {
+                        "The clearer the scope, the better the proposals."
+                    },
+                )
+                OutlinedTextField(
+                    value = draft.title,
+                    onValueChange = { draft = draft.copy(title = it) },
+                    label = { Text(if (bn) "গিগের শিরোনাম" else "Gig title") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = draft.description,
+                    onValueChange = { draft = draft.copy(description = it) },
+                    label = { Text(if (bn) "কাজের বিবরণ ও ডেলিভারেবল (২০+ অক্ষর)" else "Scope & deliverables (20+ chars)") },
+                    minLines = 4,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    scopeIdeas.forEach { (label, body) ->
+                        FilterChip(
+                            selected = false,
+                            onClick = {
+                                draft = draft.copy(
+                                    title = draft.title.ifBlank { label },
+                                    description = if (draft.description.isBlank()) body else draft.description,
+                                )
+                            },
+                            label = { Text(label) },
+                        )
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(value = draft.budgetMinText, onValueChange = { draft = draft.copy(budgetMinText = it) }, label = { Text("Min Budget (BDT)") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(value = draft.budgetMaxText, onValueChange = { draft = draft.copy(budgetMaxText = it) }, label = { Text("Max Budget (BDT)") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(
+                        value = draft.budgetMinText,
+                        onValueChange = { draft = draft.copy(budgetMinText = it.filter(Char::isDigit)) },
+                        label = { Text(if (bn) "সর্বনিম্ন (BDT)" else "Min budget (BDT)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = draft.budgetMaxText,
+                        onValueChange = { draft = draft.copy(budgetMaxText = it.filter(Char::isDigit)) },
+                        label = { Text(if (bn) "সর্বোচ্চ (BDT)" else "Max budget (BDT)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (budgetMin != null && budgetMax != null && budgetMax < budgetMin) {
+                    Text(
+                        text = if (bn) {
+                            "সর্বোচ্চ বাজেট সর্বনিম্নের চেয়ে কম হতে পারে না।"
+                        } else {
+                            "The maximum budget cannot be lower than the minimum."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = bd.info.bsdc.app.core.designsystem.BsdcThemeTokens.colors.warn,
+                    )
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Hourly billing rate")
+                    Text(if (bn) "ঘণ্টাভিত্তিক হার" else "Hourly billing rate")
                     Switch(checked = draft.isHourly, onCheckedChange = { draft = draft.copy(isHourly = it) })
                 }
-                OutlinedTextField(value = draft.durationDaysText, onValueChange = { draft = draft.copy(durationDaysText = it) }, label = { Text("Estimated Days") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = draft.skillsText, onValueChange = { draft = draft.copy(skillsText = it) }, label = { Text("Skills (comma-separated)") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = draft.durationDaysText,
+                    onValueChange = { draft = draft.copy(durationDaysText = it.filter(Char::isDigit)) },
+                    label = { Text(if (bn) "আনুমানিক দিন" else "Estimated days") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = draft.skillsText,
+                    onValueChange = { draft = draft.copy(skillsText = it) },
+                    label = { Text(if (bn) "দক্ষতা (কমা দিয়ে আলাদা)" else "Skills (comma-separated)") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Kotlin", "Compose", "Android", "React", "Node", "Postgres", "Figma", "SEO")
+                        .forEach { suggestion ->
+                            FilterChip(
+                                selected = skills.any { it.equals(suggestion, ignoreCase = true) },
+                                onClick = {
+                                    val already = skills.any { it.equals(suggestion, ignoreCase = true) }
+                                    val next = if (already) {
+                                        skills.filterNot { it.equals(suggestion, ignoreCase = true) }
+                                    } else {
+                                        skills + suggestion
+                                    }
+                                    draft = draft.copy(skillsText = next.joinToString(", "))
+                                },
+                                label = { Text(suggestion) },
+                            )
+                        }
+                }
+            }
+        }
+
+        // Live preview: what a freelancer will see in the directory.
+        item {
+            BsdcCard {
+                BsdcSectionHeader(
+                    title = if (bn) "লাইভ প্রিভিউ" else "Live preview",
+                    subtitle = if (bn) "ফ্রিল্যান্সাররা এভাবেই দেখবে।" else "This is how freelancers will see it.",
+                )
+                Text(
+                    text = draft.title.ifBlank { if (bn) "গিগের শিরোনাম" else "Gig title" },
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = when {
+                        budgetMin == null && budgetMax == null -> if (bn) "আলোচনা সাপেক্ষ" else "Negotiable"
+                        budgetMin != null && budgetMax != null -> "BDT $budgetMin – $budgetMax"
+                        budgetMin != null -> "BDT $budgetMin"
+                        else -> "BDT $budgetMax"
+                    } + if (draft.isHourly) (if (bn) " /ঘণ্টা" else " /hr") else "",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = bd.info.bsdc.app.core.designsystem.BsdcThemeTokens.colors.brandStrong,
+                )
+                if (draft.description.isNotBlank()) {
+                    Text(
+                        text = draft.description.take(180),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (days != null && days > 0) {
+                        BsdcBadge(
+                            label = if (bn) "$days দিন" else "$days day delivery",
+                            tone = BsdcTone.INFO,
+                        )
+                    }
+                    skills.take(6).forEach { skill ->
+                        BsdcBadge(label = skill.lowercase(), tone = BsdcTone.NEUTRAL)
+                    }
+                }
+            }
+        }
+
+        // Validation checklist, computed from the same engine the publish button uses.
+        item {
+            val issues = ComposerValidationEngine.validateGigDraft(
+                draft.title,
+                draft.description,
+                budgetMin,
+                budgetMax,
+                days,
+                skills,
+            )
+            BsdcCard {
+                BsdcSectionHeader(title = if (bn) "প্রকাশের চেকলিস্ট" else "Ready to publish?")
+                ChecklistRow(if (bn) "শিরোনাম লেখা হয়েছে" else "Title is written", draft.title.trim().length >= 3)
+                ChecklistRow(
+                    if (bn) "বিবরণ ২০+ অক্ষর" else "Scope is at least 20 characters",
+                    draft.description.trim().length >= 20,
+                )
+                val budgetOrdered = budgetMax == null || budgetMin == null || budgetMax >= budgetMin
+                ChecklistRow(
+                    if (bn) "বাজেটের ক্রম ঠিক আছে" else "Budget bounds are in order",
+                    budgetOrdered,
+                    blocking = false,
+                )
+                ChecklistRow(
+                    if (bn) "কমপক্ষে একটি দক্ষতা" else "At least one skill",
+                    skills.isNotEmpty(),
+                    blocking = false,
+                )
                 BsdcButton(
-                    label = "Publish Gig",
+                    label = if (bn) "গিগ প্রকাশ করুন" else "Publish gig",
                     busy = submitting,
                     leadingIcon = Icons.Rounded.Publish,
+                    enabled = issues.isEmpty(),
                     onClick = {
-                        val issues = ComposerValidationEngine.validateGigDraft(
-                            draft.title, draft.description,
-                            draft.budgetMinText.toIntOrNull(), draft.budgetMaxText.toIntOrNull(),
-                            draft.durationDaysText.toIntOrNull(),
-                            draft.skillsText.split(",").filter { it.isNotBlank() },
-                        )
                         if (issues.isNotEmpty()) {
                             error = issues.first()
                             return@BsdcButton
@@ -393,9 +774,35 @@ private fun GigCreateForm(
                             submitting = false
                         }
                     },
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
+    }
+}
+
+/** One checklist line: a filled tick when satisfied, an outline when not. */
+@Composable
+private fun ChecklistRow(label: String, done: Boolean, blocking: Boolean = true) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(
+            text = if (done) "✓" else "○",
+            style = MaterialTheme.typography.titleMedium,
+            color = when {
+                done -> MaterialTheme.colorScheme.primary
+                blocking -> MaterialTheme.colorScheme.onSurfaceVariant
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            },
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

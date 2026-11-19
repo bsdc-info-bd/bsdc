@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, MapPin, ShoppingBag, Star, Store } from 'lucide-react';
+import { MediaImage } from '@/components/media/MediaImage';
+import { Clock, ArrowRight, MapPin, ShoppingBag, Star, Store } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -10,8 +11,9 @@ import { ProductCard } from '@/components/mk/customer/ProductCard';
 import { EmptyState, PageSkeleton } from '@/design-system';
 import { useMyCart, useSetCartQty, useVendorPage } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { formatTaka, SHOP_TYPE_EMOJI, type Language } from '@/lib/mk/mk-logic';
+import { formatHhMm, formatTaka, type DayKey, type Language } from '@/lib/mk/mk-logic';
 import { ROUTES } from '@/lib/site';
+import { ShopTypeIcon } from '@/components/mk/ShopTypeIcon';
 
 export default function MarketShopPage() {
   const { slug = '' } = useParams();
@@ -55,8 +57,33 @@ export default function MarketShopPage() {
   }
 
   const products = data.products.filter((p) => category === null || p.category_id === category);
+  const sched = data.vendor.schedule;
+  const shopOpen = sched ? sched.is_open : true;
+  const scheduleBadgeText = sched?.enabled
+    ? shopOpen
+      ? sched.closes_at
+        ? copy.schedule.closesAtLabel(formatHhMm(sched.closes_at, language))
+        : copy.schedule.openNow
+      : sched.next_open
+        ? copy.schedule.opensNextLabel(
+            copy.schedule.days[String(sched.next_open.day) as DayKey] ?? '',
+            formatHhMm(sched.next_open.start, language),
+          )
+        : copy.schedule.closedNow
+    : null;
+  const deliveryCfg = data.vendor.delivery;
+  const deliveryFeeBadge =
+    deliveryCfg?.fee_mode === 'per_km'
+      ? copy.delivery.perKmBadge(formatTaka(deliveryCfg.per_km_rate_poisha ?? 2000, language))
+      : deliveryCfg
+        ? formatTaka(deliveryCfg.fee_poisha, language)
+        : null;
 
   async function changeQty(productId: string, next: number): Promise<void> {
+    if (!shopOpen && next > (qtyByProduct.get(productId) ?? 0)) {
+      toast.error(copy.schedule.closedBanner);
+      return;
+    }
     setBusyId(productId);
     try {
       await setQty.mutateAsync({ productId, qty: next });
@@ -92,7 +119,12 @@ export default function MarketShopPage() {
         <div className="flex flex-col gap-4 px-5 pb-6 sm:flex-row sm:items-end sm:gap-5">
           <div className="-mt-14 h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-lg">
             {data.vendor.logo_url ? (
-              <img src={data.vendor.logo_url} alt="" className="h-full w-full object-cover" />
+              <MediaImage
+                src={data.vendor.logo_url}
+                alt=""
+                slotWidth={96}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <Store className="m-6 text-muted" aria-hidden />
             )}
@@ -102,8 +134,8 @@ export default function MarketShopPage() {
               {data.vendor.name}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
-              <span>
-                {SHOP_TYPE_EMOJI[data.vendor.vendor_type]}{' '}
+              <span className="inline-flex items-center gap-1">
+                <ShopTypeIcon type={data.vendor.vendor_type} size={14} />
                 {copy.typeLabels[data.vendor.vendor_type]}
               </span>
               <span className="inline-flex items-center gap-1">
@@ -118,10 +150,36 @@ export default function MarketShopPage() {
             {data.vendor.description ? (
               <p className="mt-2 max-w-2xl text-sm text-text">{data.vendor.description}</p>
             ) : null}
-            <p className="mt-2 text-xs font-medium text-green-700">{copy.buyer.deliveryPromise}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-medium">
+              <span className="text-green-700">{copy.buyer.deliveryPromise}</span>
+              {deliveryFeeBadge ? (
+                <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-text">
+                  {copy.buyer.deliveryFee}: {deliveryFeeBadge}
+                </span>
+              ) : null}
+              {scheduleBadgeText ? (
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold ${
+                    shopOpen ? 'bg-emerald-500/15 text-emerald-700' : 'bg-rose-500/15 text-rose-700'
+                  }`}
+                >
+                  <Clock size={12} aria-hidden />
+                  {scheduleBadgeText}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>
+
+      {!shopOpen ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-800 dark:text-rose-200"
+        >
+          {copy.schedule.closedBanner}
+        </div>
+      ) : null}
 
       <nav aria-label={copy.buyer.products} className="flex gap-2 overflow-x-auto pb-1">
         <CategoryChip

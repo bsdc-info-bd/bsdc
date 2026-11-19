@@ -56,13 +56,13 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
   }
 
   async function turnOn() {
-    await push.enable();
-    if (globalThis.Notification?.permission === 'granted') toast.success(t('push.turnedOn'));
+    const ok = await push.enable();
+    if (ok) toast.success(t('push.turnedOn'));
   }
 
   async function turnOff() {
-    await push.disable();
-    toast.success(t('push.turnedOff'));
+    const ok = await push.disable();
+    if (ok) toast.success(t('push.turnedOff'));
   }
 
   if (variant === 'prompt') {

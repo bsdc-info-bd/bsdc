@@ -39,6 +39,26 @@ object GroupDetailLogic {
         }
     }
 
+    /**
+     * Members whose name or @handle contains [query]. An empty query keeps everyone, so the
+     * search field starts showing the whole roster instead of an empty list.
+     */
+    fun <T> searchMembers(
+        members: List<T>,
+        query: String,
+        nameOf: (T) -> String,
+        handleOf: (T) -> String,
+    ): List<T> {
+        val needle = query.trim().lowercase()
+        if (needle.isEmpty()) return members
+        return members.filter { member ->
+            nameOf(member).lowercase().contains(needle) || handleOf(member).lowercase().contains(needle)
+        }
+    }
+
+    /** A channel row's title, e.g. "# general", so the hash and the name never drift apart. */
+    fun channelTitle(name: String): String = "# ${name.trim().removePrefix("#").trim()}"
+
     /** Owners and admins first, then by how long each member has been there. */
     fun <T> sortMembers(
         members: List<T>,

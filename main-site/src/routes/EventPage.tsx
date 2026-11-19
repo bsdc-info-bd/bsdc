@@ -130,7 +130,7 @@ export default function EventPage() {
                   src={event.coverUrl.trim()}
                   alt={event.title}
                   slotWidth={960}
-                  loading="eager"
+                  priority
                   decoding="async"
                   className="h-full w-full object-cover"
                 />

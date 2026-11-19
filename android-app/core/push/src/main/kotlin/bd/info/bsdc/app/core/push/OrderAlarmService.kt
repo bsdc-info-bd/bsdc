@@ -17,6 +17,8 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
+import java.util.Collections
+import java.util.LinkedHashSet
 
 /**
  * Plays the vendor's new-order alarm: the bundled sound on a loop, on the alarm
@@ -39,7 +41,9 @@ class OrderAlarmService : Service() {
             stopAlarm()
             return START_NOT_STICKY
         }
-        startAlarm()
+        val title = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() }
+        val body = intent?.getStringExtra(EXTRA_BODY)?.takeIf { it.isNotBlank() }
+        startAlarm(title, body)
         // Never restart on its own: a restart without a new order would ring for nothing.
         return START_NOT_STICKY
     }
@@ -49,9 +53,9 @@ class OrderAlarmService : Service() {
         super.onDestroy()
     }
 
-    private fun startAlarm() {
+    private fun startAlarm(title: String?, body: String?) {
         ensureChannel(this)
-        val notification = buildNotification()
+        val notification = buildNotification(title, body)
         ServiceCompat.startForeground(
             this,
             NOTIFICATION_ID,
@@ -118,12 +122,13 @@ class OrderAlarmService : Service() {
         runCatching { audio.setStreamVolume(AudioManager.STREAM_ALARM, previous, 0) }
     }
 
-    private fun buildNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
-        .setSmallIcon(R.drawable.ic_stat_bsdc)
-        .setColor(ContextCompat.getColor(this, R.color.bsdc_notification_accent))
-        .setContentTitle("New order · নতুন অর্ডার")
-        .setContentText("Open the shop console to accept · অর্ডার গ্রহণ করতে খুলুন")
-        .setCategory(NotificationCompat.CATEGORY_ALARM)
+    private fun buildNotification(customTitle: String? = null, customBody: String? = null) =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_bsdc)
+            .setColor(ContextCompat.getColor(this, R.color.bsdc_notification_accent))
+            .setContentTitle(customTitle ?: "New order · নতুন অর্ডার")
+            .setContentText(customBody ?: "Open the shop console to accept · অর্ডার গ্রহণ করতে খুলুন")
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
         .setPriority(NotificationCompat.PRIORITY_MAX)
         .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
         .setOngoing(true)
@@ -171,16 +176,47 @@ class OrderAlarmService : Service() {
         const val CHANNEL_ID = "bsdc_order_alarm"
         const val CONSOLE_PATH = "/vendor/console"
 
+        private const val EXTRA_TITLE = "alarm_title"
+        private const val EXTRA_BODY = "alarm_body"
         private const val NOTIFICATION_ID = 0x0B5D
         private const val REQUEST_OPEN = 0x0B5E
         private const val REQUEST_STOP = 0x0B5F
 
-        /** Starts the looping alarm. Safe to call while it is already ringing. */
-        fun start(context: Context) {
-            ContextCompat.startForegroundService(
-                context,
-                Intent(context, OrderAlarmService::class.java),
-            )
+        private val recentNotificationIds: MutableSet<String> = Collections.synchronizedSet(
+            object : LinkedHashSet<String>() {
+                override fun add(element: String): Boolean {
+                    val added = super.add(element)
+                    if (size > 128) {
+                        val it = iterator()
+                        if (it.hasNext()) {
+                            it.next()
+                            it.remove()
+                        }
+                    }
+                    return added
+                }
+            },
+        )
+
+        /**
+         * Starts the looping alarm. Deduplicates by `notificationId` when supplied so
+         * simultaneous Supabase Realtime WebSocket + FCM HTTP v1 arrivals for the same
+         * new order only trigger once.
+         */
+        fun start(
+            context: Context,
+            notificationId: String? = null,
+            title: String? = null,
+            body: String? = null,
+        ) {
+            if (!notificationId.isNullOrBlank() && !recentNotificationIds.add(notificationId.trim())) {
+                return
+            }
+            val intent = Intent(context, OrderAlarmService::class.java).apply {
+                if (!title.isNullOrBlank()) putExtra(EXTRA_TITLE, title)
+                if (!body.isNullOrBlank()) putExtra(EXTRA_BODY, body)
+            }
+            runCatching { ContextCompat.startForegroundService(context, intent) }
         }
 
         /** Stops the alarm, for example once the order has been accepted in the app. */

@@ -40,6 +40,9 @@ const config: Config = {
         blue: {
           DEFAULT: 'var(--bsdc-blue)',
           soft: 'var(--bsdc-blue-soft)',
+          // Readable text blue. `text-blue` is a fill colour and fails
+          // contrast on our surfaces; anything that renders words uses this.
+          text: 'var(--bsdc-blue-text)',
         },
         danger: 'var(--bsdc-danger)',
         warn: 'var(--bsdc-warn)',
@@ -48,7 +51,15 @@ const config: Config = {
         'chat-outgoing-hover': 'var(--bsdc-chat-outgoing-hover)',
       },
       fontFamily: {
-        sans: ['Inter', 'BSDC Bengali', 'Noto Sans Bengali', 'Hind Siliguri', 'Segoe UI', 'Arial', 'sans-serif'],
+        sans: [
+          'Inter',
+          'BSDC Bengali',
+          'Noto Sans Bengali',
+          'Hind Siliguri',
+          'Segoe UI',
+          'Arial',
+          'sans-serif',
+        ],
         bangla: ['BSDC Bengali', 'Noto Sans Bengali', 'Hind Siliguri', 'Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },

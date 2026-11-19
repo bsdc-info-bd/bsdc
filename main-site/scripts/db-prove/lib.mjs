@@ -109,6 +109,16 @@ export function check(ok, label, detail = '') {
     ok ? null : { code: 'CHECK', message: String(detail || 'the condition was false') },
   );
 }
+/**
+ * The count of checks that failed, so a harness can fold it into its own exit
+ * status. A harness that tracks its own `fails` variable and exits on that alone
+ * will exit 0 even when `as()`/`check()` recorded a failure here — which is how a
+ * real regression can print FAIL and still be reported as a passing harness.
+ */
+export function failureCount() {
+  return failures.length;
+}
+
 export function summary() {
   console.log(`SUMMARY: ${passes} passed, ${failures.length} failed`);
   for (const f of failures) console.log('  failed: ' + f);

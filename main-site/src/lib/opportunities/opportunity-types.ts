@@ -51,6 +51,54 @@ export interface Gig {
   status: ListingStatus;
 }
 
+/** One freelancer's bid on a gig, as the gig's client sees it. */
+export interface GigProposal {
+  id: string;
+  freelancerUid: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  verified: boolean;
+  pitch: string;
+  bidAmount: number;
+  deliveryDays: number;
+  status: ProposalStatus;
+  createdAt: string;
+}
+
+/**
+ * One application on a job the reader posted, as the employer sees it.
+ *
+ * The applicant's card arrives flat (`display_name`, `avatar_url`, `verified`)
+ * because `job_application_queue()` (migration 0113) does the join server-side.
+ * `verified` is derived from `role` there, since `profiles` has no such column —
+ * asking PostgREST for one is a 400 and an empty queue that looks like "nobody
+ * applied yet".
+ */
+export interface JobApplication {
+  id: string;
+  jobId: string;
+  applicantUid: string;
+  displayName: string;
+  username: string;
+  avatarUrl: string | null;
+  verified: boolean;
+  coverLetter: string;
+  resumeUrl: string;
+  status: ApplicationStatus;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+/** The lifecycle of a proposal, matching the `bsdc_application_status` enum. */
+export type ProposalStatus =
+  | 'submitted'
+  | 'reviewing'
+  | 'shortlisted'
+  | 'rejected'
+  | 'hired'
+  | 'withdrawn';
+
 export type ProjectSort = 'popular' | 'recent';
 
 export interface Project {

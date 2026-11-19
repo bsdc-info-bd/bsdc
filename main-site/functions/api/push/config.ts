@@ -3,14 +3,20 @@
  *
  * Exposes ONLY public Web Push client configuration (`vapidPublicKey`) so the
  * browser can subscribe via PushManager even if `VITE_PUSH_VAPID_PUBLIC_KEY` was
- * rotated in Cloudflare Pages Secrets without rebuilding the static bundle.
- * Never exposes private keys or `PUSH_FLUSH_SECRET`.
+ * rotated in Cloudflare Pages Secrets or stored in `bsdc.push_settings` without
+ * rebuilding the static bundle. Never exposes private keys or `PUSH_FLUSH_SECRET`.
  */
+import { rpc, type RpcEnv } from '../../_rpc';
 import { corsHeadersFor } from '../auth/claims-core';
 
-export interface PushConfigEnv {
+export interface PushConfigEnv extends RpcEnv {
   PUSH_VAPID_PUBLIC_KEY?: string;
   VITE_PUSH_VAPID_PUBLIC_KEY?: string;
+}
+
+interface PublicPushConfigRow {
+  enabled?: boolean;
+  vapid_public_key?: string | null;
 }
 
 function jsonResponse(body: unknown, status: number, origin: string | null): Response {
@@ -27,11 +33,18 @@ function jsonResponse(body: unknown, status: number, origin: string | null): Res
 
 export const onRequestGet: PagesFunction<PushConfigEnv> = async (context) => {
   const origin = context.request.headers.get('origin');
-  const key = (
+  let key = (
     context.env.PUSH_VAPID_PUBLIC_KEY ??
     context.env.VITE_PUSH_VAPID_PUBLIC_KEY ??
     ''
   ).trim();
+
+  if (key.length === 0) {
+    const dbConfig = await rpc<PublicPushConfigRow>(context.env, 'push_public_config', {});
+    const fromDb = typeof dbConfig?.vapid_public_key === 'string' ? dbConfig.vapid_public_key : '';
+    key = fromDb.trim();
+  }
+
   return jsonResponse({ enabled: key.length > 0, vapidPublicKey: key || null }, 200, origin);
 };
 

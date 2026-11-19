@@ -8,7 +8,7 @@
  * seo_for_path, and what the sitemap lists. Every answer is checked against the
  * visibility rule the row-level security policies already enforce.
  */
-import { as, asAnon, makeDb } from './lib.mjs';
+import { as, asAnon, failureCount, makeDb } from './lib.mjs';
 
 const ada = 'aaaaaaaa-1111-4111-8111-000000000001'; // host, poster, group owner
 const rahim = 'bbbbbbbb-2222-4222-8222-000000000002'; // applicant, RSVP, private member
@@ -383,5 +383,7 @@ check(
 );
 
 console.log(`\n${fails === 0 ? 'all' : fails} ${fails === 0 ? 'checks' : 'failed'} for 0066`);
-if (fails > 0) process.exitCode = 1;
+// Fold in what the shared library recorded, so a failure from as()/check() is not
+// reported as a passing harness because this file counted on its own.
+if (fails + failureCount() > 0) process.exitCode = 1;
 await db.close();

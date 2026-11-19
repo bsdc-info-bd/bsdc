@@ -1,12 +1,18 @@
-import { LocateFixed, Save, Truck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Button, Card, PageSkeleton, TextField } from '@/design-system';
 import { LocationPicker, type PinnedLocation } from '@/components/mk/LocationPicker';
-import { Alert, Button, Card, TextField } from '@/design-system';
-import { useSetVendorDelivery, useVendorDelivery } from '@/hooks/use-mk';
-import type { Language } from '@/lib/mk/mk-logic';
+import { useSetVendorDelivery, useSetVendorSchedule, useVendorDelivery } from '@/hooks/use-mk';
 import type { MkCopy } from '@/lib/mk/mk-copy';
-import type { MkVendorShop } from '@/lib/mk/mk-types';
+import {
+  DAY_KEYS,
+  defaultDayHoursMap,
+  formatHhMm,
+  isValidHhMm,
+  type DayKey,
+  type Language,
+} from '@/lib/mk/mk-logic';
+import type { MkDayHours, MkFeeMode, MkVendorShop } from '@/lib/mk/mk-types';
 
 interface DeliveryPanelProps {
   copy: MkCopy;
@@ -14,181 +20,395 @@ interface DeliveryPanelProps {
   shop: MkVendorShop;
 }
 
-type Scope = 'radius' | 'all_bd';
-
-const MAX_TAKA = 150;
-const MAX_RADIUS_KM = 500;
-
 /**
- * The shop's delivery area and charge. The owner either delivers to every
- * customer in Bangladesh, or within a radius (whole km) of a pinned centre.
- * The database re-checks every value, so this form only gives early feedback.
+ * Lets an active vendor configure:
+ *   1. Delivery area (radius vs all Bangladesh), delivery centre pin, and 3-mode
+ *      delivery fee (`default`, `fixed`, or `per_km`).
+ *   2. Optional daily opening & closing schedule in Bangladesh time (`Asia/Dhaka`).
  */
-export function DeliveryPanel({ copy, language, shop }: DeliveryPanelProps) {
-  const current = useVendorDelivery();
-  const save = useSetVendorDelivery();
-  const [scope, setScope] = useState<Scope>('radius');
-  const [radius, setRadius] = useState('5');
-  const [charge, setCharge] = useState('150');
-  const [centre, setCentre] = useState<PinnedLocation | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
+  const query = useVendorDelivery();
+  const saveDelivery = useSetVendorDelivery();
+  const saveSchedule = useSetVendorSchedule();
 
-  // Load the saved settings once they arrive.
+  const [scope, setScope] = useState<'radius' | 'all_bd'>('radius');
+  const [radius, setRadius] = useState('10');
+  const [feeMode, setFeeMode] = useState<MkFeeMode>('default');
+  const [charge, setCharge] = useState('150');
+  const [perKmRate, setPerKmRate] = useState('20');
+  const [centre, setCentre] = useState<PinnedLocation | null>(null);
+  const [deliveryError, setDeliveryError] = useState('');
+
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [days, setDays] = useState<Record<DayKey, MkDayHours>>(() => defaultDayHoursMap());
+  const [scheduleError, setScheduleError] = useState('');
+
   useEffect(() => {
-    const d = current.data;
+    const d = query.data;
     if (!d) return;
     setScope(d.scope);
     setRadius(String(d.radius_km));
-    setCharge(String(Math.round(d.fee_poisha / 100)));
+    setFeeMode(d.fee_mode ?? 'fixed');
+    setCharge(String(Math.round((d.fixed_fee_poisha ?? d.fee_poisha) / 100)));
+    setPerKmRate(String(Math.round((d.per_km_rate_poisha ?? 2000) / 100)));
     setCentre({ lat: d.center_lat, lng: d.center_lng, label: '' });
-  }, [current.data]);
 
-  const radiusNumber = Number(radius);
-  const chargeNumber = Number(charge);
-  const radiusValid =
-    Number.isInteger(radiusNumber) && radiusNumber >= 1 && radiusNumber <= MAX_RADIUS_KM;
-  const chargeValid =
-    charge.trim() !== '' &&
-    Number.isInteger(chargeNumber) &&
-    chargeNumber >= 0 &&
-    chargeNumber <= MAX_TAKA;
-
-  async function submit(): Promise<void> {
-    setError(null);
-    if (scope === 'radius') {
-      if (!radiusValid) {
-        setError(copy.delivery.radiusError);
-        return;
+    if (d.schedule) {
+      setScheduleEnabled(d.schedule.enabled);
+      const nextDays = defaultDayHoursMap();
+      for (const k of DAY_KEYS) {
+        const row = d.schedule.days?.[k];
+        if (row) {
+          nextDays[k] = {
+            open: Boolean(row.open),
+            start: row.start || '09:00',
+            end: row.end || '22:00',
+          };
+        }
       }
-      if (centre === null) {
-        setError(copy.delivery.centreError);
-        return;
-      }
+      setDays(nextDays);
     }
-    if (!chargeValid) {
-      setError(copy.delivery.chargeError);
+  }, [query.data]);
+
+  if (query.isLoading || !query.data) {
+    return <PageSkeleton label={c.loading} />;
+  }
+
+  const radiusNumber = Number.parseInt(radius, 10);
+  const chargeNumber = Number.parseInt(charge, 10);
+  const perKmNumber = Number.parseInt(perKmRate, 10);
+
+  async function submitDelivery(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    setDeliveryError('');
+    if (!Number.isInteger(radiusNumber) || radiusNumber < 1 || radiusNumber > 500) {
+      setDeliveryError(c.delivery.radiusError);
+      return;
+    }
+    const resolvedFixed =
+      feeMode === 'fixed'
+        ? chargeNumber
+        : Math.max(0, Number.isInteger(chargeNumber) ? chargeNumber : 150);
+    const resolvedPerKm =
+      feeMode === 'per_km'
+        ? perKmNumber
+        : Math.max(0, Number.isInteger(perKmNumber) ? perKmNumber : 20);
+
+    if (
+      feeMode === 'fixed' &&
+      (!Number.isInteger(chargeNumber) || chargeNumber < 0 || chargeNumber > 100_000)
+    ) {
+      setDeliveryError(c.delivery.chargeError);
+      return;
+    }
+    if (
+      feeMode === 'per_km' &&
+      (!Number.isInteger(perKmNumber) || perKmNumber < 0 || perKmNumber > 10_000)
+    ) {
+      setDeliveryError(c.delivery.perKmError);
+      return;
+    }
+    const needsCentre = scope === 'radius' || feeMode === 'per_km';
+    if (needsCentre && centre === null) {
+      setDeliveryError(c.delivery.centreError);
       return;
     }
     try {
-      await save.mutateAsync({
+      await saveDelivery.mutateAsync({
         scope,
-        radiusKm: scope === 'radius' ? radiusNumber : 1,
-        feeTaka: chargeNumber,
-        center: scope === 'radius' && centre ? { lat: centre.lat, lng: centre.lng } : null,
+        radiusKm: radiusNumber,
+        feeMode,
+        feeTaka: Math.min(100_000, resolvedFixed),
+        perKmTaka: Math.min(10_000, resolvedPerKm),
+        center: centre ? { lat: centre.lat, lng: centre.lng } : null,
       });
-      toast.success(copy.delivery.saved);
+      toast.success(c.delivery.saved);
+      void query.refetch();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : copy.errorGeneric);
+      setDeliveryError(err instanceof Error ? err.message : c.delivery.centreError);
     }
   }
 
-  const shopCentre: PinnedLocation | null =
-    current.data === undefined
-      ? null
-      : { lat: current.data.shop_lat, lng: current.data.shop_lng, label: shop.place_label };
-  const activeRadius = scope === 'radius' && radiusValid ? radiusNumber : null;
+  async function submitSchedule(e: React.FormEvent): Promise<void> {
+    e.preventDefault();
+    setScheduleError('');
+    for (const k of DAY_KEYS) {
+      const row = days[k];
+      if (!isValidHhMm(row.start, false) || !isValidHhMm(row.end, true)) {
+        setScheduleError(c.schedule.timeError);
+        return;
+      }
+      if (row.open && row.start === row.end) {
+        setScheduleError(c.schedule.timeError);
+        return;
+      }
+    }
+    try {
+      await saveSchedule.mutateAsync({
+        enabled: scheduleEnabled,
+        days,
+      });
+      toast.success(c.schedule.saved);
+      void query.refetch();
+    } catch (err) {
+      setScheduleError(err instanceof Error ? err.message : c.schedule.timeError);
+    }
+  }
+
+  function updateDay(key: DayKey, patch: Partial<MkDayHours>): void {
+    setDays((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], ...patch },
+    }));
+  }
+
+  const liveSchedule = query.data.schedule;
+  const showCentrePicker = scope === 'radius' || feeMode === 'per_km';
+  const shopLat = query.data.shop_lat;
+  const shopLng = query.data.shop_lng;
 
   return (
-    <Card padded className="space-y-5">
-      <header className="flex items-start gap-3">
-        <span className="grid size-10 place-items-center rounded-xl bg-primary/10 text-primary">
-          <Truck size={20} aria-hidden />
-        </span>
-        <div>
-          <h2 className="text-lg font-bold">{copy.delivery.title}</h2>
-          <p className="text-sm text-muted">{copy.delivery.lead}</p>
-        </div>
-      </header>
+    <div className="space-y-6">
+      <Card padded>
+        <h2 className="text-lg font-semibold text-text">{c.delivery.title}</h2>
+        <p className="mt-1 text-sm text-muted">{c.delivery.lead}</p>
 
-      <fieldset className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <legend className="sr-only">{copy.delivery.title}</legend>
-        {(
-          [
-            ['radius', copy.delivery.scopeRadius],
-            ['all_bd', copy.delivery.scopeAll],
-          ] as const
-        ).map(([value, label]) => (
-          <label
-            key={value}
-            className={`flex cursor-pointer items-center gap-3 rounded-2xl border p-3 text-sm font-semibold transition ${
-              scope === value
-                ? 'border-primary bg-primary/5 text-text'
-                : 'border-border text-muted hover:text-text'
-            }`}
-          >
-            <input
-              type="radio"
-              name="delivery-scope"
-              value={value}
-              checked={scope === value}
-              onChange={() => setScope(value)}
-              className="accent-primary"
+        <form onSubmit={(e) => void submitDelivery(e)} className="mt-5 space-y-5">
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setScope('radius')}
+              className={`rounded-xl border p-3 text-left text-sm transition ${
+                scope === 'radius'
+                  ? 'border-green-700 bg-green-700/10 font-semibold text-text'
+                  : 'border-border hover:bg-surface-2'
+              }`}
+            >
+              {c.delivery.scopeRadius}
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope('all_bd')}
+              className={`rounded-xl border p-3 text-left text-sm transition ${
+                scope === 'all_bd'
+                  ? 'border-green-700 bg-green-700/10 font-semibold text-text'
+                  : 'border-border hover:bg-surface-2'
+              }`}
+            >
+              {c.delivery.scopeAll}
+            </button>
+          </div>
+
+          {scope === 'radius' && (
+            <TextField
+              label={c.delivery.radius}
+              inputMode="numeric"
+              value={radius}
+              onChange={(e) => setRadius(e.target.value)}
+              required
             />
-            {label}
-          </label>
-        ))}
-      </fieldset>
+          )}
 
-      {scope === 'radius' ? (
-        <div className="space-y-4">
-          <TextField
-            label={copy.delivery.radius}
-            inputMode="numeric"
-            value={radius}
-            onChange={(e) => setRadius(e.target.value.replace(/[^0-9]/g, ''))}
-            hint={`1 – ${MAX_RADIUS_KM}`}
-          />
           <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold">{copy.delivery.centre}</p>
+            <p className="text-sm font-medium text-text">{c.delivery.feeModeLabel}</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(
+                [
+                  ['per_km', c.delivery.feeModePerKm],
+                  ['fixed', c.delivery.feeModeFixed],
+                  ['default', c.delivery.feeModeDefault],
+                ] as const
+              ).map(([modeKey, label]) => (
+                <button
+                  key={modeKey}
+                  type="button"
+                  onClick={() => setFeeMode(modeKey)}
+                  className={`rounded-xl border p-3 text-left text-sm transition ${
+                    feeMode === modeKey
+                      ? 'border-green-700 bg-green-700/10 font-semibold text-text'
+                      : 'border-border hover:bg-surface-2'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {feeMode === 'default' && (
+            <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+              {c.delivery.feeModeDefaultHint}
+            </p>
+          )}
+
+          {feeMode === 'fixed' && (
+            <TextField
+              label={c.delivery.charge}
+              inputMode="numeric"
+              value={charge}
+              onChange={(e) => setCharge(e.target.value)}
+              required
+            />
+          )}
+
+          {feeMode === 'per_km' && (
+            <div className="space-y-1.5">
+              <TextField
+                label={c.delivery.perKmRate}
+                inputMode="numeric"
+                value={perKmRate}
+                onChange={(e) => setPerKmRate(e.target.value)}
+                required
+              />
+              <p className="text-xs text-muted">{c.delivery.perKmHint}</p>
+            </div>
+          )}
+
+          {showCentrePicker && (
+            <div className="space-y-2">
+              <LocationPicker
+                value={centre}
+                onChange={setCentre}
+                language={language}
+                radiusKm={
+                  scope === 'radius' && Number.isFinite(radiusNumber) && radiusNumber > 0
+                    ? radiusNumber
+                    : null
+                }
+                labels={{
+                  title: c.delivery.centre,
+                  hint: c.delivery.centreHint,
+                  search: c.searchPlaceholder,
+                  useCurrent: c.useCurrent,
+                  outside: c.fieldErrors.location_outside_bd,
+                }}
+              />
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
-                disabled={shopCentre === null}
-                onClick={() => setCentre(shopCentre)}
+                onClick={() =>
+                  setCentre({
+                    lat: shopLat,
+                    lng: shopLng,
+                    label: shop.place_label ?? '',
+                  })
+                }
               >
-                <LocateFixed size={16} aria-hidden /> {copy.delivery.useShop}
+                {c.delivery.useShop}
               </Button>
             </div>
-            <p className="text-xs text-muted">{copy.delivery.centreHint}</p>
-            <LocationPicker
-              value={centre}
-              onChange={setCentre}
-              language={language}
-              radiusKm={activeRadius}
-              labels={{
-                title: copy.delivery.centre,
-                hint: copy.delivery.centreHint,
-                search: copy.delivery.centre,
-                useCurrent: copy.delivery.useShop,
-                outside: copy.delivery.centreError,
-              }}
-            />
-            {activeRadius !== null ? (
-              <p className="text-sm text-muted">{copy.delivery.currentArea(activeRadius)}</p>
-            ) : null}
+          )}
+
+          <p className="text-xs text-muted">
+            {scope === 'all_bd'
+              ? c.delivery.allArea
+              : c.delivery.currentArea(Number.isFinite(radiusNumber) ? radiusNumber : 10)}
+          </p>
+
+          {deliveryError && <p className="text-sm font-medium text-danger">{deliveryError}</p>}
+
+          <Button type="submit" loading={saveDelivery.isPending}>
+            {c.delivery.save}
+          </Button>
+        </form>
+      </Card>
+
+      <Card padded>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold text-text">{c.schedule.title}</h2>
+            <p className="mt-1 text-sm text-muted">{c.schedule.lead}</p>
           </div>
+          {liveSchedule && (
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                liveSchedule.is_open
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+              }`}
+            >
+              {liveSchedule.enabled
+                ? liveSchedule.is_open
+                  ? liveSchedule.closes_at
+                    ? c.schedule.closesAtLabel(formatHhMm(liveSchedule.closes_at, language))
+                    : c.schedule.openNow
+                  : c.schedule.closedNow
+                : c.schedule.open24Hours}
+            </span>
+          )}
         </div>
-      ) : (
-        <p className="rounded-2xl bg-surface-2 p-4 text-sm text-muted">{copy.delivery.allArea}</p>
-      )}
 
-      <TextField
-        label={copy.delivery.charge}
-        inputMode="numeric"
-        value={charge}
-        onChange={(e) => setCharge(e.target.value.replace(/[^0-9]/g, ''))}
-        hint={`0 – ${MAX_TAKA}`}
-      />
+        <form onSubmit={(e) => void submitSchedule(e)} className="mt-5 space-y-4">
+          <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-border p-3 text-sm font-medium text-text">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-green-700"
+              checked={scheduleEnabled}
+              onChange={(e) => setScheduleEnabled(e.target.checked)}
+            />
+            <span>{c.schedule.enableLabel}</span>
+          </label>
 
-      {error ? <Alert tone="danger" title={error} /> : null}
+          {!scheduleEnabled ? (
+            <p className="rounded-xl bg-surface-2 px-3 py-2 text-xs text-muted">
+              {c.schedule.alwaysOpenNote}
+            </p>
+          ) : (
+            <div className="divide-y divide-border rounded-xl border border-border">
+              {DAY_KEYS.map((dayKey) => {
+                const row = days[dayKey];
+                return (
+                  <div
+                    key={dayKey}
+                    className="flex flex-wrap items-center justify-between gap-3 p-3 text-sm"
+                  >
+                    <label className="flex min-w-[140px] cursor-pointer items-center gap-2 font-medium text-text">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-green-700"
+                        checked={row.open}
+                        onChange={(e) => updateDay(dayKey, { open: e.target.checked })}
+                      />
+                      <span>{c.schedule.days[dayKey]}</span>
+                    </label>
+                    {row.open ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-xs text-muted">
+                          <span>{c.schedule.opensAt}</span>
+                          <input
+                            type="time"
+                            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm text-text"
+                            value={row.start}
+                            onChange={(e) => updateDay(dayKey, { start: e.target.value })}
+                          />
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-muted">
+                          <span>{c.schedule.closesAt}</span>
+                          <input
+                            type="time"
+                            className="h-9 rounded-lg border border-border bg-surface px-2 text-sm text-text"
+                            value={row.end === '24:00' ? '23:59' : row.end}
+                            onChange={(e) => updateDay(dayKey, { end: e.target.value })}
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted">{c.schedule.dayClosed}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
-      <div className="flex justify-end">
-        <Button type="button" onClick={() => void submit()} loading={save.isPending}>
-          <Save size={16} aria-hidden /> {copy.delivery.save}
-        </Button>
-      </div>
-    </Card>
+          {scheduleError && <p className="text-sm font-medium text-danger">{scheduleError}</p>}
+
+          <Button type="submit" loading={saveSchedule.isPending}>
+            {c.schedule.save}
+          </Button>
+        </form>
+      </Card>
+    </div>
   );
 }

@@ -207,3 +207,14 @@ export async function fetchAllPushDevices(): Promise<PushDevice[]> {
   const [webPush, fcm] = await Promise.all([fetchMyPushDevices(), fetchMyFcmDevices()]);
   return [...webPush, ...fcm].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
+
+export async function fetchPublicPushConfigFromDb(): Promise<string | null> {
+  const { data, error } = await getSupabase().rpc('push_public_config');
+  if (error) return null;
+  const payload = data as { vapid_public_key?: unknown } | null;
+  const key =
+    payload !== null && typeof payload === 'object' && typeof payload.vapid_public_key === 'string'
+      ? payload.vapid_public_key.trim()
+      : '';
+  return key.length >= 80 ? key : null;
+}
