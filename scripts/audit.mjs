@@ -1495,6 +1495,9 @@ check('B-17', 'Database', 'A post is saved once, or not at all', () => {
   const repository = read('main-site/src/lib/content/post-repository.ts');
   const proof = read('main-site/scripts/db-prove/t82.mjs');
   const unit = read('main-site/src/lib/content/save-post.test.ts');
+  const android = read(
+    'android-app/feature/compose/src/main/kotlin/bd/info/bsdc/app/feature/compose/ComposeRepository.kt',
+  );
   const save = repository.slice(repository.indexOf('export async function savePost('));
   return {
     ok:
@@ -1506,6 +1509,10 @@ check('B-17', 'Database', 'A post is saved once, or not at all', () => {
       !save.includes(".from('post_tags')") &&
       !save.includes(".from('post_media')") &&
       !save.includes(".from('post_mentions')") &&
+      // Both clients go through it: a phone with the same nine-request save has
+      // the same defect, and fixing only the browser would leave it there.
+      android.includes('supabase.rpcText("save_post"') &&
+      !android.includes('postJson("post_tags"') &&
       // And the transaction claim is asserted from the database side, including a
       // failure that must leave no post behind.
       proof.includes('the failed save published nothing') &&

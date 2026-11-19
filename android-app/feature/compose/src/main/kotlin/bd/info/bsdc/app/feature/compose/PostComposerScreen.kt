@@ -679,7 +679,7 @@ fun PostComposerScreen(
                             errorMsg = null
                             scope.launch {
                                 runCatching {
-                                    composeRepository.savePost(authorUid, draft, publish = false)
+                                    composeRepository.savePost(draft, publish = false)
                                 }.onSuccess {
                                     statusMsg = if (bn) "খসড়া সংরক্ষিত হয়েছে।" else "Draft saved to your profile."
                                 }.onFailure { err ->
@@ -713,7 +713,7 @@ fun PostComposerScreen(
                             errorMsg = null
                             scope.launch {
                                 runCatching {
-                                    composeRepository.savePost(authorUid, draft, publish = true)
+                                    composeRepository.savePost(draft, publish = true)
                                 }.onSuccess { res ->
                                     draft = PostComposerDraft(language = language)
                                     onPublished(res)
