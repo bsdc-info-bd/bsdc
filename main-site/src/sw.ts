@@ -366,27 +366,41 @@ self.addEventListener('pushsubscriptionchange', (event: Event) => {
   const change = event as Event & SubscriptionChange;
   change.waitUntil(
     (async () => {
-      if (change.newSubscription) return;
-      let publicKey = VAPID_PUBLIC_KEY;
-      if (publicKey.length === 0) {
-        try {
-          const res = await fetch('/api/push/config', { cache: 'no-store' });
-          if (res.ok) {
-            const cfg = (await res.json()) as { vapidPublicKey?: unknown };
-            if (typeof cfg.vapidPublicKey === 'string') publicKey = cfg.vapidPublicKey.trim();
+      let replacement = change.newSubscription ?? null;
+      if (replacement === null) {
+        let publicKey = VAPID_PUBLIC_KEY;
+        if (publicKey.length === 0) {
+          try {
+            const res = await fetch('/api/push/config', { cache: 'no-store' });
+            if (res.ok) {
+              const cfg = (await res.json()) as { vapidPublicKey?: unknown };
+              if (typeof cfg.vapidPublicKey === 'string') publicKey = cfg.vapidPublicKey.trim();
+            }
+          } catch {
+            return;
           }
+        }
+        if (publicKey.length === 0) return;
+        try {
+          replacement = await self.registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
         } catch {
+          // Permission may be revoked while closed; app handles re-opt-in when opened.
           return;
         }
       }
-      if (publicKey.length === 0) return;
-      try {
-        await self.registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
-        });
-      } catch {
-        // Permission may be revoked while closed; app handles re-opt-in when opened.
+
+      // A service worker has no authenticated Supabase session. Do not pretend
+      // this replacement is saved: hand off to an open signed-in page, whose
+      // usePush hook can call register_push_subscription. If no page is open,
+      // its normal mount-time registration repairs the endpoint next visit.
+      if (replacement !== null) {
+        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        for (const client of windows) {
+          client.postMessage({ type: 'BSDC_PUSH_SUBSCRIPTION_CHANGED' });
+        }
       }
     })(),
   );

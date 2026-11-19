@@ -77,6 +77,8 @@ export function Approvals(): ReactElement {
       </Banner>
       <Shops />
       <Campaigns />
+      <AdCreditPurchases />
+      <MarketplaceCreditPurchases />
       <AdPayments />
     </div>
   );
@@ -300,6 +302,36 @@ function Campaigns(): ReactElement {
   );
 }
 
+interface PendingAdCreditPurchaseRow {
+  readonly id: string;
+  readonly uid: string;
+  readonly display_name: string | null;
+  readonly username: string | null;
+  readonly credits: number;
+  readonly price_poisha: number;
+  readonly sender_number: string;
+  readonly txn_id: string;
+  readonly status: string;
+  readonly created_at: string;
+}
+
+interface PendingMarketplaceCreditPurchaseRow {
+  readonly id: string;
+  readonly owner_uid: string;
+  readonly owner_name: string;
+  readonly vendor_id: string;
+  readonly vendor_name: string;
+  readonly vendor_slug: string;
+  readonly package_code: string;
+  readonly orders: number;
+  readonly price_poisha: number;
+  readonly sender_number: string;
+  readonly account_holder: string;
+  readonly txn_id: string;
+  readonly status: string;
+  readonly created_at: string;
+}
+
 interface PendingAdPaymentRow {
   readonly id: string;
   readonly owner_uid: string;
@@ -317,6 +349,247 @@ interface PendingAdPaymentRow {
  * against the bKash statement. Approving credits the advertiser's wallet with
  * the amount paid; rejecting asks for the reason, which the advertiser sees.
  */
+function AdCreditPurchases(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    async () =>
+      oldestFirst(
+        await listRpc<PendingAdCreditPurchaseRow>(env, 'ad_credit_queue', {
+          p_status: 'pending',
+          p_limit: 100,
+        }),
+      ),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  return (
+    <Card
+      title="Advertising credit purchases waiting for approval"
+      description="Check the bKash transaction. Approval adds the purchased amount to the advertiser’s wallet; rejection requires a reason."
+      actions={
+        <Button variant="quiet" size="small" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
+      {state.status === 'loading' ? (
+        <Loading label="Loading advertising credit purchases." />
+      ) : null}
+      {state.status === 'error' ? (
+        <Banner tone="bad" title="The advertising credit queue did not load">
+          <p className="kit-small">{state.message}</p>
+        </Banner>
+      ) : null}
+      {state.status === 'ready' && state.data.length === 0 ? (
+        <Empty>No advertising credit purchases are waiting for review.</Empty>
+      ) : null}
+      {state.status === 'ready' && state.data.length > 0 ? (
+        <div className="kit-stack">
+          {state.data.map((purchase) => (
+            <AdCreditPurchaseRow key={purchase.id} purchase={purchase} onDecided={reload} />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function AdCreditPurchaseRow({
+  purchase,
+  onDecided,
+}: {
+  purchase: PendingAdCreditPurchaseRow;
+  onDecided: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const name = purchase.display_name?.trim() || purchase.username || purchase.uid;
+
+  const decide = (decision: 'approve' | 'reject'): void => {
+    if (decision === 'reject' && note.trim().length < 5) {
+      setError('Write a rejection reason of at least five characters; the advertiser will see it.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    callRpc(env, 'decide_ad_credit_request', {
+      p_purchase_id: purchase.id,
+      p_decision: decision,
+      p_note: decision === 'reject' ? note.trim() : '',
+    })
+      .then(() => {
+        setNote('');
+        onDecided();
+      })
+      .catch((failure: unknown) => setError(messageOf(failure)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <strong>{name}</strong> · {purchase.credits.toLocaleString()} advertising credits ·{' '}
+          {money(purchase.price_poisha)}
+          <div className="kit-small kit-muted">
+            From {purchase.sender_number} · transaction <code>{purchase.txn_id}</code>
+          </div>
+        </div>
+        <Badge tone={waitingTone(purchase.created_at)}>
+          waiting {waitingFor(purchase.created_at)}
+        </Badge>
+      </div>
+      <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
+        <TextArea
+          label="Reason, if you refuse"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="For example: transaction not found on the statement."
+        />
+        {error ? (
+          <Banner tone="bad" title="Not saved">
+            <p className="kit-small">{error}</p>
+          </Banner>
+        ) : null}
+        <div className="kit-row" style={{ justifyContent: 'flex-end' }}>
+          <Button variant="danger" size="small" disabled={busy} onClick={() => decide('reject')}>
+            Refuse
+          </Button>
+          <Button size="small" disabled={busy} onClick={() => decide('approve')}>
+            Approve and credit wallet
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MarketplaceCreditPurchases(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    async () =>
+      oldestFirst(
+        await listRpc<PendingMarketplaceCreditPurchaseRow>(env, 'mk_admin_list_credit_purchases', {
+          p_status: 'pending',
+          p_limit: 100,
+        }),
+      ),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  return (
+    <Card
+      title="Vendor order-credit purchases waiting for approval"
+      description="Post-approval vendor top-ups appear here. The first package submitted with a vendor application is reviewed in the shop queue above."
+      actions={
+        <Button variant="quiet" size="small" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
+      {state.status === 'loading' ? (
+        <Loading label="Loading vendor order-credit purchases." />
+      ) : null}
+      {state.status === 'error' ? (
+        <Banner tone="bad" title="The vendor credit queue did not load">
+          <p className="kit-small">{state.message}</p>
+        </Banner>
+      ) : null}
+      {state.status === 'ready' && state.data.length === 0 ? (
+        <Empty>No vendor order-credit purchases are waiting for review.</Empty>
+      ) : null}
+      {state.status === 'ready' && state.data.length > 0 ? (
+        <div className="kit-stack">
+          {state.data.map((purchase) => (
+            <MarketplaceCreditPurchaseRow
+              key={purchase.id}
+              purchase={purchase}
+              onDecided={reload}
+            />
+          ))}
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function MarketplaceCreditPurchaseRow({
+  purchase,
+  onDecided,
+}: {
+  purchase: PendingMarketplaceCreditPurchaseRow;
+  onDecided: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const decide = (decision: 'approve' | 'reject'): void => {
+    if (decision === 'reject' && note.trim().length < 5) {
+      setError('Write a rejection reason of at least five characters; the vendor will see it.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    callRpc(env, 'mk_admin_decide_credit_purchase', {
+      p_purchase_id: purchase.id,
+      p_decision: decision,
+      p_note: decision === 'reject' ? note.trim() : '',
+    })
+      .then(() => {
+        setNote('');
+        onDecided();
+      })
+      .catch((failure: unknown) => setError(messageOf(failure)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <div>
+          <strong>{purchase.vendor_name}</strong> · {purchase.owner_name} · {purchase.orders} order
+          credits · {money(purchase.price_poisha)}
+          <div className="kit-small kit-muted">
+            Package {purchase.package_code} · From {purchase.sender_number} · account{' '}
+            {purchase.account_holder} · transaction <code>{purchase.txn_id}</code>
+          </div>
+          <div className="kit-small kit-muted">Vendor /{purchase.vendor_slug}</div>
+        </div>
+        <Badge tone={waitingTone(purchase.created_at)}>
+          waiting {waitingFor(purchase.created_at)}
+        </Badge>
+      </div>
+      <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
+        <TextArea
+          label="Reason, if you refuse"
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          placeholder="For example: transaction not found on the statement."
+        />
+        {error ? (
+          <Banner tone="bad" title="Not saved">
+            <p className="kit-small">{error}</p>
+          </Banner>
+        ) : null}
+        <div className="kit-row" style={{ justifyContent: 'flex-end' }}>
+          <Button variant="danger" size="small" disabled={busy} onClick={() => decide('reject')}>
+            Refuse
+          </Button>
+          <Button size="small" disabled={busy} onClick={() => decide('approve')}>
+            Approve and credit vendor
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdPayments(): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(

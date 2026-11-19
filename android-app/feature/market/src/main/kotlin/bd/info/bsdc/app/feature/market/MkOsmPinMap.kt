@@ -115,6 +115,7 @@ fun MkOsmPinMap(
                     }
 
                     override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.refreshOsmMapSize()
                         state.loaded = true
                         val pin = state.applied
                         if (view != null && pin != null) {
@@ -127,6 +128,11 @@ fun MkOsmPinMap(
                                 null,
                             )
                         }
+                    }
+                }
+                addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                    if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                        (view as? WebView)?.refreshOsmMapSize()
                     }
                 }
                 addJavascriptInterface(
@@ -242,6 +248,15 @@ fun MkOsmViewMap(
                         if (!MkLogic.isOsmTileRequest(uri.scheme, uri.host)) return null
                         return fetchTile(uri.toString())
                     }
+
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        view?.refreshOsmMapSize()
+                    }
+                }
+                addOnLayoutChangeListener { view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+                    if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                        (view as? WebView)?.refreshOsmMapSize()
+                    }
                 }
                 loadDataWithBaseURL(
                     BsdcHosts.SITE_ORIGIN + "/",
@@ -338,6 +353,21 @@ fun MkOsmViewMapDialog(
                 }
             }
         }
+    }
+}
+
+/**
+ * Re-measure Leaflet after AndroidView layout and page load. The initial timeout in the
+ * document is only a best-effort first pass: on a slow WebView or while a dialog is
+ * entering, it can fire before Compose gives the view its final viewport and leave every
+ * tile positioned outside the visible canvas.
+ */
+private fun WebView.refreshOsmMapSize() {
+    post {
+        evaluateJavascript(
+            "if (window.map) { window.map.invalidateSize({ pan: false }); }",
+            null,
+        )
     }
 }
 
