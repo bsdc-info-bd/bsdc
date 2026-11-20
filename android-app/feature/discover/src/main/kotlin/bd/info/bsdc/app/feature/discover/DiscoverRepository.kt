@@ -1270,7 +1270,7 @@ class DiscoverRepository(
                     putNullableInt("p_budget_max", budgetMax)
                     put("p_is_hourly", isHourly)
                     putNullableInt("p_duration_days", durationDays)
-                    put("p_skills", buildJsonArray { skills.forEach { add(it) } })
+                    put("p_skills", buildJsonArray { skills.forEach { add(JsonPrimitive(it)) } })
                     put("p_cover_url", coverUrl.trim())
                 },
                 requireAuth = true,
@@ -1348,7 +1348,7 @@ class DiscoverRepository(
                     putNullableInt("p_salary_min", salaryMin)
                     putNullableInt("p_salary_max", salaryMax)
                     put("p_salary_period", salaryPeriod)
-                    put("p_skills", buildJsonArray { skills.forEach { add(it) } })
+                    put("p_skills", buildJsonArray { skills.forEach { add(JsonPrimitive(it)) } })
                     put("p_apply_url", applyUrl.trim())
                     if (expiresAt.isNullOrBlank()) {
                         put("p_expires_at", JsonNull)

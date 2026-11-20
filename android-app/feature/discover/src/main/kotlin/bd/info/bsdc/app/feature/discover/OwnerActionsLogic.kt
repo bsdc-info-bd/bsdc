@@ -90,17 +90,17 @@ object OwnerActionsLogic {
     fun deleteMessage(key: DeleteMessage, count: Int, bn: Boolean): String = when (key) {
         DeleteMessage.GIG -> when {
             count <= 0 -> if (bn) "এই কাজটি মুছে যাবে। এটি ফেরানো যাবে না।" else "The gig is removed. This cannot be undone."
-            bn -> "এই কাজটি তার $countটি প্রস্তাবসহ মুছে যাবে। প্রস্তাব দেওয়া প্রত্যেককে জানানো হবে।"
+            bn -> "এই কাজটি তার ${count}টি প্রস্তাবসহ মুছে যাবে। প্রস্তাব দেওয়া প্রত্যেককে জানানো হবে।"
             else -> "The gig is removed with its $count proposal${if (count == 1) "" else "s"}. Every freelancer who bid is told."
         }
         DeleteMessage.JOB -> when {
             count <= 0 -> if (bn) "এই পদটি মুছে যাবে। এটি ফেরানো যাবে না।" else "The role is removed. This cannot be undone."
-            bn -> "এই পদটি তার $countটি আবেদনসহ মুছে যাবে। অপেক্ষমাণ প্রত্যেককে জানানো হবে।"
+            bn -> "এই পদটি তার ${count}টি আবেদনসহ মুছে যাবে। অপেক্ষমাণ প্রত্যেককে জানানো হবে।"
             else -> "The role is removed with its $count application${if (count == 1) "" else "s"}. Every applicant still waiting is told."
         }
         DeleteMessage.EVENT -> when {
             count <= 0 -> if (bn) "ইভেন্টটি মুছে যাবে।" else "The event is removed."
-            bn -> "ইভেন্ট ও তার $countটি আরএসভি মুছে যাবে, এবং সবাইকে জানানো হবে।"
+            bn -> "ইভেন্ট ও তার ${count}টি আরএসভি মুছে যাবে, এবং সবাইকে জানানো হবে।"
             else -> "The event and its $count RSVP${if (count == 1) "" else "s"} are removed, and everybody is told."
         }
         DeleteMessage.GROUP -> if (bn) {
