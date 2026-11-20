@@ -50,6 +50,7 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
@@ -87,6 +88,9 @@ fun GroupDetailScreen(
     var channels by remember(slug) { mutableStateOf<List<GroupChannelDto>>(emptyList()) }
     var members by remember(slug) { mutableStateOf<List<GroupMemberDto>>(emptyList()) }
     var membersFailed by remember(slug) { mutableStateOf(false) }
+    var pendingDelete by remember(slug) { mutableStateOf(false) }
+    var ownerBusy by remember(slug) { mutableStateOf(false) }
+    var ownerError by remember(slug) { mutableStateOf<String?>(null) }
     var loading by remember(slug) { mutableStateOf(true) }
     var failed by remember(slug) { mutableStateOf(false) }
     var reloadNonce by remember(slug) { mutableStateOf(0) }
@@ -115,6 +119,20 @@ fun GroupDetailScreen(
                 .onFailure { membersFailed = true }
         }
         loading = false
+    }
+
+    fun deleteGroup(current: GroupDetailDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            repository.deleteGroup(current.id)
+                .onSuccess {
+                    pendingDelete = false
+                    onBack()
+                }
+                .onFailure { ownerError = ownerFailureMessage(it, bn) }
+            ownerBusy = false
+        }
     }
 
     fun runAction(current: GroupDetailDto, action: GroupJoinAction) {
@@ -371,6 +389,51 @@ fun GroupDetailScreen(
                             }
                         }
 
+                        // A moderator may correct the group; only its owner may delete
+                        // it, and `OwnerActionsLogic` is where that difference lives so
+                        // the app and the website cannot disagree about it.
+                        val groupControls = OwnerActionsLogic.groupControls(viewer.role, isStaff = false)
+                        if (groupControls.any) {
+                            item {
+                                BsdcCard(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    BsdcSectionHeader(
+                                        title = if (bn) "আপনার গ্রুপ" else "Your group",
+                                        subtitle = if (groupControls.canDelete) {
+                                            if (bn) "গ্রুপের তথ্য ঠিক করুন বা গ্রুপটি মুছে ফেলুন।" else "Correct the group, or remove it."
+                                        } else {
+                                            if (bn) "গ্রুপের তথ্য ঠিক করুন।" else "Correct the group."
+                                        },
+                                    )
+                                    if (!ownerError.isNullOrBlank()) {
+                                        BsdcStatusBanner(
+                                            title = ownerError.orEmpty(),
+                                            body = "",
+                                            tone = BsdcTone.WARN,
+                                        )
+                                    }
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        BsdcButton(
+                                            label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
+                                            onClick = { onOpenExternal(GroupDetailLogic.webUrl(current.slug)) },
+                                            secondary = true,
+                                            leadingIcon = Icons.Rounded.Language,
+                                        )
+                                        if (groupControls.canDelete) {
+                                            BsdcButton(
+                                                label = if (bn) "গ্রুপ মুছুন" else "Delete group",
+                                                onClick = { pendingDelete = true },
+                                                secondary = true,
+                                                busy = ownerBusy,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         val rules = current.rules.orEmpty().trim()
                         if (rules.isNotBlank()) {
                             item {
@@ -545,4 +608,19 @@ private fun GroupMemberDto.profile(): MemberView {
         displayName = name.ifBlank { "•" },
         avatarUrl = profiles?.avatarUrl,
     )
+    val confirmGroup = group
+    if (confirmGroup != null && pendingDelete) {
+        BsdcConfirmDialog(
+            visible = true,
+            title = if (bn) "এই গ্রুপটি মুছবেন?" else "Delete this group?",
+            message = OwnerActionsLogic.deleteMessage(OwnerActionsLogic.DeleteMessage.GROUP, 0, bn),
+            confirmLabel = if (bn) "মুছুন" else "Delete",
+            cancelLabel = if (bn) "বাতিল" else "Cancel",
+            onConfirm = { deleteGroup(confirmGroup) },
+            onDismiss = { pendingDelete = false },
+            busy = ownerBusy,
+            destructive = true,
+        )
+    }
+
 }

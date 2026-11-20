@@ -39,6 +39,8 @@ export interface Gig {
   slug: string;
   title: string;
   description: string;
+  /** An ImgBB-hosted cover, or `''` for a gig posted without one. */
+  coverUrl: string;
   budgetMin: number | null;
   budgetMax: number | null;
   currency: string;
@@ -196,6 +198,45 @@ export interface ProjectDetail extends Project {
   isOwner: boolean;
 }
 
+/**
+ * What an edit form may change on a gig, as `update_gig` (migration 0128)
+ * takes it.
+ *
+ * A `null` means "leave this alone" for every optional field, which is what a
+ * partial save sends; `undefined` is treated the same way. The routine applies
+ * the same rule, so a form that forgets a field cannot blank it.
+ */
+export interface GigUpdate {
+  title: string;
+  description: string;
+  budgetMin: number | null;
+  budgetMax: number | null;
+  isHourly: boolean;
+  durationDays: number | null;
+  skills: string[];
+  coverUrl?: string | null;
+  slug?: string | null;
+}
+
+export interface JobUpdate {
+  title: string;
+  company: string;
+  description: string;
+  jobType: JobType;
+  workMode: WorkMode;
+  level: ExperienceLevel;
+  city: string;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  salaryPeriod: string;
+  skills: string[];
+  applyUrl: string;
+  /** An ISO timestamp, or null to leave the role open-ended. */
+  expiresAt: string | null;
+  coverUrl?: string | null;
+  slug?: string | null;
+}
+
 export interface Sketch {
   id: string;
   title: string;
@@ -337,6 +378,8 @@ export interface JobDetail extends JobListing {
   description: string;
   country: string;
   applyUrl: string;
+  /** An ImgBB-hosted cover, or `''` for a role posted without one. */
+  coverUrl: string;
   status: ListingStatus;
   expiresAt: string | null;
   posterUid: string;

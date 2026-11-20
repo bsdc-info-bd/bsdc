@@ -14,8 +14,19 @@ import {
   LinkButton,
   PageSkeleton,
 } from '@/design-system';
-import { useEventDetail } from '@/hooks/use-communities';
-import { isEventFull, isEventLive, type RsvpStatus } from '@/lib/communities/community-types';
+import { EventEditDialog } from '@/components/communities/CommunityEditForm';
+import { OwnerActions } from '@/components/listings/OwnerActions';
+import { useEventDetail, useEventGroupRole, useEventOwnerActions } from '@/hooks/use-communities';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import { dataErrorKey } from '@/lib/supabase/errors';
+import {
+  canModerateGroup,
+  isEventFull,
+  isEventLive,
+  type RsvpStatus,
+} from '@/lib/communities/community-types';
 import { calendarFileForDetail } from '@/lib/communities/event-calendar-file';
 import { formatNumber } from '@/lib/format';
 import { eventJsonLd, formatInZone, safeExternalUrl } from '@/lib/listings/listing-schema';
@@ -33,6 +44,11 @@ export default function EventPage() {
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const detail = useEventDetail(slug);
+  const groupRole = useEventGroupRole(detail.event?.groupId ?? null);
+  const ownerActions = useEventOwnerActions();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
+  const isStaff = useAuthStore((state) => state.claims?.staff ?? false);
 
   if (detail.isLoading) return <PageSkeleton label={t('events.detail.loading')} />;
 
@@ -88,6 +104,9 @@ export default function EventPage() {
   const showOnline = event.mode !== 'in_person';
   const showVenue = event.mode !== 'online' && event.venue.length > 0;
   const joinLink = safeExternalUrl(event.joinUrl);
+  // The routine lets the host, a moderator of the organising group, or staff
+  // correct an event; only those people are offered the controls here.
+  const canManage = isHost || isStaff || canModerateGroup(groupRole);
   const path = eventPath(event.slug);
   const url = `${SITE.url}${path}`;
   const summary = event.description.replace(/\s+/g, ' ').trim().slice(0, 155);
@@ -203,6 +222,55 @@ export default function EventPage() {
                   {t('events.detail.joinHidden')}
                 </p>
               ) : null}
+
+              {/* The host's controls. Correcting is the host's, the organising
+                  group's moderators' and staff's; cancelling keeps the page and
+                  every RSVP while deleting removes both — so the delete is
+                  offered behind a dialog that says exactly that. */}
+              {canManage ? (
+                <div className="border-t border-border pt-3">
+                  <OwnerActions
+                    labels={{
+                      edit: t('events.manage.edit'),
+                      ...(event.isCancelled ? {} : { close: t('events.manage.cancel') }),
+                      delete: t('events.manage.delete'),
+                      closeTitle: t('events.manage.cancelTitle'),
+                      closeBody: t('events.manage.cancelBody'),
+                      closeConfirm: t('events.manage.cancelConfirm'),
+                      deleteTitle: t('events.manage.deleteTitle'),
+                      deleteBody: t('events.manage.deleteBody'),
+                      deleteConfirm: t('events.manage.deleteConfirm'),
+                      cancel: t('common.cancel'),
+                    }}
+                    onEdit={() => {
+                      setEditing(true);
+                    }}
+                    {...(event.isCancelled
+                      ? {}
+                      : {
+                          onClose: async () => {
+                            try {
+                              await ownerActions.cancel(event.id);
+                              toast.success(t('events.manage.cancelledDone'));
+                            } catch (error) {
+                              toast.error(t(dataErrorKey(error)));
+                            }
+                          },
+                        })}
+                    onDelete={async () => {
+                      try {
+                        await ownerActions.remove(event.id);
+                        toast.success(t('events.manage.deleted'));
+                        navigate(ROUTES.events);
+                      } catch (error) {
+                        toast.error(t(dataErrorKey(error)));
+                      }
+                    }}
+                    isClosing={ownerActions.isCancelling}
+                    isDeleting={ownerActions.isRemoving}
+                  />
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -239,6 +307,27 @@ export default function EventPage() {
           </Card>
         </div>
       </article>
+
+      {canManage ? (
+        <EventEditDialog
+          open={editing}
+          event={event}
+          isSaving={ownerActions.isSaving}
+          onClose={() => {
+            setEditing(false);
+          }}
+          onSave={async (draft) => {
+            try {
+              const saved = await ownerActions.save(event.id, draft);
+              setEditing(false);
+              toast.success(t('events.manage.saved'));
+              if (saved.length > 0 && saved !== event.slug) navigate(eventPath(saved));
+            } catch (error) {
+              toast.error(t(dataErrorKey(error)));
+            }
+          }}
+        />
+      ) : null}
     </>
   );
 }

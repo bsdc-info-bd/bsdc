@@ -406,6 +406,12 @@ end;
 $$;
 
 -- The job board in one round trip, with this member's own application state.
+-- Dropped before it is created: migration 0128 re-creates this function with an
+-- added `cover_url` OUT column, and `create or replace` cannot change a return
+-- type. Without this line the whole set stops replaying at this file (t48).
+-- The grants live in 0014, which runs immediately after this one.
+drop function if exists public.job_board(integer, bsdc_work_mode, text);
+
 create or replace function public.job_board(
   p_limit     integer default 40,
   p_work_mode bsdc_work_mode default null,

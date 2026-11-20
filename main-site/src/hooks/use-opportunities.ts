@@ -5,6 +5,8 @@ import {
   filterJobs,
   skillFacets,
   type Gig,
+  type GigUpdate,
+  type JobUpdate,
   type JobDetail,
   type JobFilters,
   type JobListing,
@@ -349,6 +351,114 @@ export function useProjectOwnerActions(): ProjectOwnerActions {
     save: (projectId, draft, screenshots) => save.mutateAsync({ projectId, draft, screenshots }),
     remove: (projectId) => remove.mutateAsync(projectId),
     isSaving: save.isPending,
+    isRemoving: remove.isPending,
+  };
+}
+
+export interface GigOwnerActions {
+  /** Corrects the gig and returns the address it now lives at. */
+  save: (gigId: string, draft: GigUpdate) => Promise<string>;
+  close: (gigId: string) => Promise<void>;
+  remove: (gigId: string, confirmBids: boolean) => Promise<void>;
+  isSaving: boolean;
+  isClosing: boolean;
+  isRemoving: boolean;
+}
+
+/**
+ * What the client of a gig may do to it (migration 0128).
+ *
+ * Every call re-checks ownership on the server, so this hook is a convenience
+ * and not a permission: offering the buttons to the wrong person would produce
+ * a refusal, never a write.
+ */
+export function useGigOwnerActions(): GigOwnerActions {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['gig-detail'] });
+    void queryClient.invalidateQueries({ queryKey: ['gig-board'] });
+    void queryClient.invalidateQueries({ queryKey: ['my-gigs'] });
+    void queryClient.invalidateQueries({ queryKey: ['search'] });
+  };
+
+  const save = useMutation({
+    mutationFn: async ({ gigId, draft }: { gigId: string; draft: GigUpdate }) =>
+      (await repository()).updateGig(gigId, draft),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const close = useMutation({
+    mutationFn: async (gigId: string) => (await repository()).closeGig(gigId),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async ({ gigId, confirm }: { gigId: string; confirm: boolean }) =>
+      (await repository()).deleteGig(gigId, confirm),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  return {
+    save: (gigId, draft) => save.mutateAsync({ gigId, draft }),
+    close: (gigId) => close.mutateAsync(gigId),
+    remove: (gigId, confirmBids) => remove.mutateAsync({ gigId, confirm: confirmBids }),
+    isSaving: save.isPending,
+    isClosing: close.isPending,
+    isRemoving: remove.isPending,
+  };
+}
+
+export interface JobOwnerActions {
+  save: (jobId: string, draft: JobUpdate) => Promise<string>;
+  close: (jobId: string) => Promise<void>;
+  remove: (jobId: string, confirmApplications: boolean) => Promise<void>;
+  isSaving: boolean;
+  isClosing: boolean;
+  isRemoving: boolean;
+}
+
+/** What the poster of a job may do to it. The server re-checks every call. */
+export function useJobOwnerActions(): JobOwnerActions {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
+    void queryClient.invalidateQueries({ queryKey: ['job-board'] });
+    void queryClient.invalidateQueries({ queryKey: ['job-applications'] });
+    void queryClient.invalidateQueries({ queryKey: ['search'] });
+  };
+
+  const save = useMutation({
+    mutationFn: async ({ jobId, draft }: { jobId: string; draft: JobUpdate }) =>
+      (await repository()).updateJob(jobId, draft),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const close = useMutation({
+    mutationFn: async (jobId: string) => (await repository()).closeJob(jobId),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async ({ jobId, confirm }: { jobId: string; confirm: boolean }) =>
+      (await repository()).deleteJob(jobId, confirm),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  return {
+    save: (jobId, draft) => save.mutateAsync({ jobId, draft }),
+    close: (jobId) => close.mutateAsync(jobId),
+    remove: (jobId, confirmApplications) =>
+      remove.mutateAsync({ jobId, confirm: confirmApplications }),
+    isSaving: save.isPending,
+    isClosing: close.isPending,
     isRemoving: remove.isPending,
   };
 }

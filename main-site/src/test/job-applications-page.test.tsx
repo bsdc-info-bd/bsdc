@@ -56,6 +56,7 @@ const job: JobDetail = {
   workMode: 'remote',
   level: 'senior',
   city: 'Dhaka',
+  coverUrl: '',
   salaryMin: 120000,
   salaryMax: 180000,
   currency: 'BDT',

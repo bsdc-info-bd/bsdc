@@ -46,6 +46,7 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
@@ -80,6 +81,12 @@ fun EventDetailScreen(
     var loading by remember(slug) { mutableStateOf(true) }
     var failed by remember(slug) { mutableStateOf(false) }
     var reloadNonce by remember(slug) { mutableStateOf(0) }
+    // The viewer's role in the group that organised the event, when there is one; the
+    // host and that group's moderators are the people the routines admit.
+    var groupRole by remember(slug) { mutableStateOf<String?>(null) }
+    var pendingCancel by remember(slug) { mutableStateOf(false) }
+    var pendingDelete by remember(slug) { mutableStateOf(false) }
+    var ownerBusy by remember(slug) { mutableStateOf(false) }
     var rsvpBusy by remember(slug) { mutableStateOf(false) }
     var actionError by remember(slug) { mutableStateOf<String?>(null) }
     // The countdown has to move on its own while the page is open, so it ticks once a minute.
@@ -96,9 +103,48 @@ fun EventDetailScreen(
         loading = true
         failed = false
         repository.fetchEventDetail(slug)
-            .onSuccess { event = it }
+            .onSuccess { loaded ->
+                event = loaded
+                // Only asked when the event belongs to a group and somebody is signed in;
+                // `group_members` answers for a member and stays silent for everybody else.
+                val groupId = loaded?.groupId
+                val uid = viewerUid
+                groupRole = if (!groupId.isNullOrBlank() && !uid.isNullOrBlank()) {
+                    repository.fetchGroupRole(groupId, uid).getOrNull()
+                } else {
+                    null
+                }
+            }
             .onFailure { failed = true }
         loading = false
+    }
+
+    fun cancelEvent(current: EventDetailDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            repository.cancelEvent(current.id)
+                .onSuccess {
+                    pendingCancel = false
+                    reloadNonce += 1
+                }
+                .onFailure { actionError = ownerFailureMessage(it, bn) }
+            ownerBusy = false
+        }
+    }
+
+    fun deleteEvent(current: EventDetailDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            repository.deleteEvent(current.id)
+                .onSuccess {
+                    pendingDelete = false
+                    onBack()
+                }
+                .onFailure { actionError = ownerFailureMessage(it, bn) }
+            ownerBusy = false
+        }
     }
 
     fun rsvp(current: EventDetailDto, choice: String) {
@@ -239,6 +285,53 @@ fun EventDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             modifier = Modifier.fillMaxSize(),
                         ) {
+                            val eventControls = OwnerActionsLogic.eventControls(
+                                isHost = !viewerUid.isNullOrBlank() && current.hostUid == viewerUid,
+                                groupRole = groupRole,
+                                isCancelled = current.isCancelled,
+                                isStaff = false,
+                            )
+                            if (eventControls.any) {
+                                item {
+                                    BsdcCard {
+                                        BsdcSectionHeader(
+                                            title = if (bn) "আপনার ইভেন্ট" else "Your event",
+                                            subtitle = if (bn) {
+                                                "ইভেন্টের তথ্য ঠিক করুন, বাতিল করুন, বা মুছে ফেলুন।"
+                                            } else {
+                                                "Correct the details, cancel it, or remove it."
+                                            },
+                                        )
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            BsdcButton(
+                                                label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
+                                                onClick = { onOpenExternal(EventDetailLogic.webUrl(current.slug)) },
+                                                secondary = true,
+                                                leadingIcon = Icons.Rounded.Language,
+                                            )
+                                            if (eventControls.canClose) {
+                                                BsdcButton(
+                                                    label = if (bn) "বাতিল করুন" else "Cancel event",
+                                                    onClick = { pendingCancel = true },
+                                                    secondary = true,
+                                                    busy = ownerBusy,
+                                                )
+                                            }
+                                            if (eventControls.canDelete) {
+                                                BsdcButton(
+                                                    label = if (bn) "মুছুন" else "Delete event",
+                                                    onClick = { pendingDelete = true },
+                                                    secondary = true,
+                                                    enabled = !ownerBusy,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             item {
                                 // The cover carries the one fact a reader needs before they RSVP:
                                 // how long they have left. It floats over the image so the page
@@ -475,4 +568,35 @@ fun EventDetailScreen(
             }
         }
     }
+    val confirmEvent = event
+    if (confirmEvent != null && pendingCancel) {
+        BsdcConfirmDialog(
+            visible = true,
+            title = if (bn) "ইভেন্টটি বাতিল করবেন?" else "Cancel this event?",
+            message = OwnerActionsLogic.closeMessage(OwnerActionsLogic.DeleteMessage.EVENT, bn),
+            confirmLabel = if (bn) "বাতিল করুন" else "Cancel it",
+            cancelLabel = if (bn) "রাখুন" else "Keep it",
+            onConfirm = { cancelEvent(confirmEvent) },
+            onDismiss = { pendingCancel = false },
+            busy = ownerBusy,
+        )
+    }
+    if (confirmEvent != null && pendingDelete) {
+        BsdcConfirmDialog(
+            visible = true,
+            title = if (bn) "ইভেন্টটি মুছবেন?" else "Delete this event?",
+            message = OwnerActionsLogic.deleteMessage(
+                OwnerActionsLogic.DeleteMessage.EVENT,
+                confirmEvent.goingCount,
+                bn,
+            ),
+            confirmLabel = if (bn) "মুছুন" else "Delete",
+            cancelLabel = if (bn) "বাতিল" else "Cancel",
+            onConfirm = { deleteEvent(confirmEvent) },
+            onDismiss = { pendingDelete = false },
+            busy = ownerBusy,
+            destructive = true,
+        )
+    }
+
 }

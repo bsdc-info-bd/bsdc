@@ -1,7 +1,10 @@
 import { ArrowLeft, Banknote, Briefcase, CalendarClock, MapPin, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { JobEditDialog } from '@/components/listings/ListingEditForm';
+import { OwnerActions } from '@/components/listings/OwnerActions';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -16,13 +19,36 @@ import {
 } from '@/design-system';
 import { JobApplicationForm } from '@/components/jobs/JobApplicationForm';
 import { useJobApplicationPrefill } from '@/components/jobs/use-job-application-prefill';
-import { useJobDetail } from '@/hooks/use-opportunities';
+import { useJobDetail, useJobOwnerActions } from '@/hooks/use-opportunities';
+import type { JobDetail, JobUpdate } from '@/lib/opportunities/opportunity-types';
+import { dataErrorKey } from '@/lib/supabase/errors';
+import { toast } from 'sonner';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { jobIsLive, jobPostingJsonLd, safeExternalUrl } from '@/lib/listings/listing-schema';
 import { formatSalaryRange, isApplied } from '@/lib/opportunities/opportunity-types';
 import type { JobApplicationSubmission } from '@/lib/opportunities/job-application';
 import { ROUTES, SITE, jobApplicationsPath, jobPath } from '@/lib/site';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
+
+/** The published job as the edit dialog's draft, with the instant it expires as an ISO string. */
+function jobToDraft(job: JobDetail): JobUpdate {
+  return {
+    title: job.title,
+    company: job.company,
+    description: job.description,
+    jobType: job.jobType,
+    workMode: job.workMode,
+    level: job.level,
+    city: job.city,
+    salaryMin: job.salaryMin,
+    salaryMax: job.salaryMax,
+    salaryPeriod: job.period,
+    skills: job.skills,
+    applyUrl: job.applyUrl,
+    expiresAt: job.expiresAt,
+    coverUrl: job.coverUrl,
+  };
+}
 
 /** One job in full: the role, its terms, and the reader's own application. */
 export default function JobPage() {
@@ -32,6 +58,9 @@ export default function JobPage() {
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const detail = useJobDetail(slug);
+  const ownerActions = useJobOwnerActions();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
   const applicationPrefill = useJobApplicationPrefill();
   const isStaff = useAuthStore((state) => state.claims?.staff ?? false);
   const [applying, setApplying] = useState(false);
@@ -127,8 +156,19 @@ export default function JobPage() {
             {t('jobs.detail.back')}
           </LinkButton>
 
-          <Card>
-            <div className="flex flex-col gap-3">
+          <Card padded={false} className="overflow-hidden">
+            {job.coverUrl.trim().length > 0 ? (
+              <div className="aspect-[16/6] w-full bg-surface-2">
+                <MediaImage
+                  src={job.coverUrl.trim()}
+                  alt=""
+                  slotWidth={960}
+                  priority
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-3 p-4 sm:p-6">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge tone="neutral">{t(`jobs.types.${job.jobType}`)}</Badge>
                 <Badge tone="neutral">{t(`jobs.levels.${job.level}`)}</Badge>
@@ -222,6 +262,54 @@ export default function JobPage() {
                 ) : null}
                 <ShareLinkButton title={job.title} url={url} size="md" />
               </div>
+
+              {isPoster ? (
+                <div className="border-t border-border pt-3">
+                  <OwnerActions
+                    labels={{
+                      edit: t('jobs.manage.edit'),
+                      ...(live ? { close: t('jobs.manage.close') } : {}),
+                      delete: t('jobs.manage.delete'),
+                      closeTitle: t('jobs.manage.closeTitle'),
+                      closeBody: t('jobs.manage.closeBody'),
+                      closeConfirm: t('jobs.manage.closeConfirm'),
+                      deleteTitle: t('jobs.manage.deleteTitle'),
+                      deleteBody:
+                        job.applications === 0
+                          ? t('jobs.manage.deleteBodyNoApplications')
+                          : t('jobs.manage.deleteBody', { total: job.applications }),
+                      deleteConfirm: t('jobs.manage.deleteConfirm'),
+                      cancel: t('common.cancel'),
+                    }}
+                    onEdit={() => {
+                      setEditing(true);
+                    }}
+                    {...(live
+                      ? {
+                          onClose: async () => {
+                            try {
+                              await ownerActions.close(job.id);
+                              toast.success(t('jobs.manage.closedDone'));
+                            } catch (error) {
+                              toast.error(t(dataErrorKey(error)));
+                            }
+                          },
+                        }
+                      : {})}
+                    onDelete={async () => {
+                      try {
+                        await ownerActions.remove(job.id, job.applications > 0);
+                        toast.success(t('jobs.manage.deleted'));
+                        navigate(ROUTES.jobs);
+                      } catch (error) {
+                        toast.error(t(dataErrorKey(error)));
+                      }
+                    }}
+                    isClosing={ownerActions.isClosing}
+                    isDeleting={ownerActions.isRemoving}
+                  />
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -240,6 +328,27 @@ export default function JobPage() {
           </Card>
         </div>
       </article>
+
+      {isPoster ? (
+        <JobEditDialog
+          open={editing}
+          initial={jobToDraft(job)}
+          isSaving={ownerActions.isSaving}
+          onClose={() => {
+            setEditing(false);
+          }}
+          onSave={async (draft: JobUpdate) => {
+            try {
+              const saved = await ownerActions.save(job.id, draft);
+              setEditing(false);
+              toast.success(t('jobs.manage.saved'));
+              if (saved.length > 0 && saved !== job.slug) navigate(jobPath(saved));
+            } catch (error) {
+              toast.error(t(dataErrorKey(error)));
+            }
+          }}
+        />
+      ) : null}
 
       <JobApplicationForm
         open={applying}

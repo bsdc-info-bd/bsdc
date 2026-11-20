@@ -1,9 +1,11 @@
 import { Hash, Lock, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MediaImage } from '@/components/media/MediaImage';
+import { GroupEditDialog } from '@/components/communities/CommunityEditForm';
+import { OwnerActions } from '@/components/listings/OwnerActions';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -16,15 +18,16 @@ import {
   Tabs,
   type TabItem,
 } from '@/design-system';
-import { useGroup } from '@/hooks/use-communities';
+import { useGroup, useGroupOwnerActions } from '@/hooks/use-communities';
 import {
+  canAdministerGroup,
   canModerateGroup,
   joinAction,
   sortMembers,
   type GroupMemberEntry,
 } from '@/lib/communities/community-types';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { groupPath, profilePath, SITE } from '@/lib/site';
+import { ROUTES, groupPath, profilePath, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -36,6 +39,10 @@ export default function GroupPage() {
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const [tab, setTab] = useState('channels');
   const detail = useGroup(slug);
+  const ownerActions = useGroupOwnerActions();
+  const isStaff = useAuthStore((state) => state.claims?.staff ?? false);
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
   const group = detail.group;
 
   if (detail.isLoading) {
@@ -64,6 +71,12 @@ export default function GroupPage() {
 
   const action = joinAction(group, isSignedIn);
   const moderator = canModerateGroup(group.myRole);
+  // What `update_group` and `delete_group` will actually allow: a moderator may
+  // correct, only the owner or staff may delete. Offering edit to a moderator
+  // matches the routine; `OwnerActions` still gates the delete dialog on the
+  // same rule the routine applies.
+  const isOwner = canAdministerGroup(group.myRole) || isStaff;
+  const canEdit = canModerateGroup(group.myRole) || isStaff;
   const members = sortMembers(detail.members);
 
   async function act() {
@@ -277,11 +290,66 @@ export default function GroupPage() {
               </Button>
             )}
           </div>
+
+          {/* Correcting a group is a moderator's job on the same rule the
+              routine applies; deleting it belongs to the owner. The routine
+              re-checks both, so hiding is a courtesy and not the boundary. */}
+          {canEdit ? (
+            <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 pb-4 pt-3 sm:px-6">
+              <OwnerActions
+                labels={{
+                  edit: t('groups.manage.edit'),
+                  delete: t('groups.manage.delete'),
+                  deleteTitle: t('groups.manage.deleteTitle'),
+                  deleteBody: t('groups.manage.deleteBody'),
+                  deleteConfirm: t('groups.manage.deleteConfirm'),
+                  cancel: t('common.cancel'),
+                }}
+                onEdit={() => {
+                  setEditing(true);
+                }}
+                {...(isOwner
+                  ? {
+                      onDelete: async () => {
+                        try {
+                          await ownerActions.remove(group.id);
+                          toast.success(t('groups.manage.deleted'));
+                          navigate(ROUTES.groups);
+                        } catch (error) {
+                          toast.error(t(dataErrorKey(error)));
+                        }
+                      },
+                    }
+                  : {})}
+                isDeleting={ownerActions.isRemoving}
+              />
+            </div>
+          ) : null}
         </Card>
 
         <div className="mt-5">
           <Tabs items={items} activeId={tab} onChange={setTab} label={group.name} />
         </div>
+
+        {canEdit ? (
+          <GroupEditDialog
+            open={editing}
+            group={group}
+            isSaving={ownerActions.isSaving}
+            onClose={() => {
+              setEditing(false);
+            }}
+            onSave={async (draft) => {
+              try {
+                await ownerActions.save(group.id, draft);
+                setEditing(false);
+                toast.success(t('groups.manage.saved'));
+              } catch (error) {
+                toast.error(t(dataErrorKey(error)));
+              }
+            }}
+          />
+        ) : null}
       </div>
     </>
   );
