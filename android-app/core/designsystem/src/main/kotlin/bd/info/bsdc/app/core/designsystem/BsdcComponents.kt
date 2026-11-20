@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -920,4 +921,68 @@ fun BsdcDirectorySkeletonCard(modifier: Modifier = Modifier) {
                 .bsdcShimmerPlaceholder(),
         )
     }
+}
+
+/**
+ * A confirmation before something that cannot be undone.
+ *
+ * Every owner action on the web goes through one `Modal` with a typed
+ * consequence and a busy state; this is that dialog for the app, so the two
+ * platforms ask the same question the same way. The message is supplied by the
+ * caller (`OwnerActionsLogic` has the sentences) because only the screen knows
+ * how many proposals, applications or RSVPs a delete would take with it.
+ */
+@Composable
+fun BsdcConfirmDialog(
+    visible: Boolean,
+    title: String,
+    message: String,
+    confirmLabel: String,
+    cancelLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    busy: Boolean = false,
+    destructive: Boolean = false,
+) {
+    if (!visible) return
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(title, style = MaterialTheme.typography.titleMedium) },
+        text = { Text(message, style = MaterialTheme.typography.bodyMedium) },
+        confirmButton = {
+            // A destructive confirm is drawn in the danger colour rather than the brand
+            // green, so "delete" never looks like the same weight of decision as "save".
+            val danger = BsdcThemeTokens.colors.danger
+            if (destructive) {
+                Button(
+                    onClick = onConfirm,
+                    enabled = !busy,
+                    colors = ButtonDefaults.buttonColors(containerColor = danger),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.heightIn(min = 48.dp),
+                ) {
+                    if (busy) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                        )
+                    } else {
+                        Text(confirmLabel)
+                    }
+                }
+            } else {
+                BsdcButton(
+                    label = confirmLabel,
+                    onClick = onConfirm,
+                    enabled = !busy,
+                    busy = busy,
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) { Text(cancelLabel) }
+        },
+        containerColor = MaterialTheme.colorScheme.surface,
+    )
 }

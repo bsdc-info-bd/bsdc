@@ -184,6 +184,10 @@ const HARNESSES = [
     't87.mjs',
     'both web registration transports refresh metadata and isolate device management by UID',
   ],
+  [
+    't88.mjs',
+    '0128: gigs, jobs, groups and events can be corrected, closed and deleted — and the gig proposal queue loads',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

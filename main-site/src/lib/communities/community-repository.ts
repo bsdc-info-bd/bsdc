@@ -244,6 +244,52 @@ export async function createChannel(
   if (error) throw toDataError(error);
 }
 
+/**
+ * Corrects a group in place (migration 0128).
+ *
+ * `update_group` decides who may do this — `bsdc.can_moderate_group`, the same
+ * rule the row-level policy applies — so this module carries no opinion about
+ * it. A `null` for an optional argument leaves that field untouched.
+ */
+export async function updateGroup(
+  groupId: string,
+  input: {
+    name: string;
+    description: string;
+    rules?: string | null;
+    privacy?: GroupPrivacy | null;
+    language?: string | null;
+    avatarUrl?: string | null;
+    coverUrl?: string | null;
+  },
+): Promise<void> {
+  const { error } = await getSupabase().rpc('update_group', {
+    p_group_id: groupId,
+    p_name: input.name,
+    p_description: input.description,
+    p_rules: input.rules ?? null,
+    p_privacy: input.privacy ?? null,
+    p_language: input.language ?? null,
+    p_avatar_url: input.avatarUrl ?? null,
+    p_cover_url: input.coverUrl ?? null,
+  });
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Ends a group. Owner or staff only.
+ *
+ * The consequences are the server's to state and this comment repeats them so
+ * the confirmation a member reads matches what will happen: the channels go
+ * with the group, its posts are detached from the channel and archived rather
+ * than destroyed, and events that belonged to it lose their group and keep
+ * their RSVPs.
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('delete_group', { p_group_id: groupId });
+  if (error) throw toDataError(error);
+}
+
 // -------------------------------- events ------------------------------------
 
 function toEvent(row: EventCalendarRow): CommunityEvent {
@@ -303,6 +349,88 @@ export async function fetchEventDetail(slug: string): Promise<EventDetail | null
   if (error) throw toDataError(error);
   const row = data?.[0];
   return row ? toEventDetail(row) : null;
+}
+
+/**
+ * The viewer's role in the group that is organising an event.
+ *
+ * `event_detail` reports the event, not what the reader may do to it, and
+ * extending a proven routine's return type to answer a question about a
+ * *different* table would be worse than asking the table. `group_members` is
+ * readable to its own members under the policy in 0012, so this answers for a
+ * member and quietly answers `null` for everybody else — which is exactly the
+ * shape `canModerateGroup` wants.
+ */
+export async function fetchEventGroupRole(
+  groupId: string,
+  viewerUid: string,
+): Promise<GroupRole | null> {
+  const { data, error } = await getSupabase()
+    .from('group_members')
+    .select('role')
+    .eq('group_id', groupId)
+    .eq('uid', viewerUid)
+    .maybeSingle();
+  if (error) throw toDataError(error);
+  return data?.role ?? null;
+}
+
+// ------------------------- correcting an event -------------------------------
+
+/** What `update_event` takes, as the page's edit form sends it. */
+export interface EventUpdate {
+  title: string;
+  description: string;
+  startsAt: string;
+  endsAt: string;
+  mode?: EventDetail['mode'];
+  venue?: string;
+  city?: string;
+  joinUrl?: string;
+  coverUrl?: string | null;
+  timezone?: string;
+  capacity?: number | null;
+  slug?: string | null;
+}
+
+/**
+ * Corrects an event in place (migration 0128).
+ *
+ * Its host, a moderator of the group it belongs to, or staff — decided by the
+ * routine. Attendees are told when the date moves, because a moved event is the
+ * one correction somebody else has to hear about.
+ */
+export async function updateEvent(eventId: string, draft: EventUpdate): Promise<string> {
+  const { data, error } = await getSupabase().rpc('update_event', {
+    p_event_id: eventId,
+    p_title: draft.title,
+    p_description: draft.description,
+    p_starts_at: draft.startsAt,
+    p_ends_at: draft.endsAt,
+    p_mode: draft.mode ?? null,
+    p_venue: draft.venue ?? null,
+    p_city: draft.city ?? null,
+    p_join_url: draft.joinUrl ?? null,
+    p_cover_url: draft.coverUrl ?? null,
+    p_timezone: draft.timezone ?? null,
+    p_capacity: draft.capacity ?? null,
+    p_slug: draft.slug ?? null,
+  });
+  if (error) throw toDataError(error);
+  return typeof data === 'string' ? data : '';
+}
+
+/** Marks an event cancelled. Its page and every RSVP survive; attendees are told. */
+export async function cancelEvent(eventId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('cancel_event', { p_event_id: eventId });
+  if (error) throw toDataError(error);
+  wakePushDelivery();
+}
+
+/** Removes an event and its RSVPs. Everyone who had not declined is told. */
+export async function deleteEvent(eventId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('delete_event', { p_event_id: eventId });
+  if (error) throw toDataError(error);
 }
 
 // --------------------------------- pages -------------------------------------

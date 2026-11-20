@@ -60,7 +60,12 @@ begin
     raise exception 'gig id required' using errcode = '22023';
   end if;
 
-  select * into v_gig from public.gigs where id = p_gig_id;
+  -- Qualified deliberately. This function's OUT parameter is called `id`, and a
+  -- PL/pgSQL variable shadows a column of the same name: `where id = p_gig_id`
+  -- is therefore read as `v_row.id = p_gig_id` against the OUT row, and raises
+  -- 42702 ("column reference id is ambiguous") for *every* caller. The queue
+  -- this file exists to provide could never load. t87 keeps it proved.
+  select * into v_gig from public.gigs g where g.id = p_gig_id;
   if not found then
     raise exception 'gig not found' using errcode = 'P0002';
   end if;
@@ -77,7 +82,7 @@ begin
       gp.id,
       gp.gig_id,
       gp.freelancer_uid,
-      coalesce(p.username, '')                                   as username,
+      coalesce(p.username::text, '')                             as username,
       coalesce(nullif(btrim(p.display_name), ''), 'Member')      as display_name,
       coalesce(p.avatar_url, '')                                 as avatar_url,
       (p.role in ('moderator', 'manager', 'admin', 'owner'))     as verified,
@@ -121,7 +126,7 @@ begin
     return 0;
   end if;
 
-  select * into v_gig from public.gigs where id = p_gig_id;
+  select * into v_gig from public.gigs g where g.id = p_gig_id;
   if not found then
     return 0;
   end if;

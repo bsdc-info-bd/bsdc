@@ -5,11 +5,13 @@ import type {
   EventDetail,
   Group,
   GroupMemberEntry,
+  GroupRole,
   GroupSummary,
   JoinRequest,
   JoinStatus,
   RsvpStatus,
 } from '@/lib/communities/community-types';
+import type { EventUpdate } from '@/lib/communities/community-repository';
 import { useAuthStore } from '@/store/auth-store';
 
 // Loaded on demand: the Supabase client must stay out of the entry chunk.
@@ -247,5 +249,137 @@ export function useEventDetail(slug: string): EventDetailResult {
     },
     isSaving: mutation.isPending,
     saveFailed: mutation.isError,
+  };
+}
+
+/**
+ * The viewer's role in the group organising an event, if it belongs to one.
+ *
+ * Only asked when the event names a group and the reader is signed in; the
+ * answer decides whether the page offers its edit controls, and the routine
+ * decides again on the write.
+ */
+export function useEventGroupRole(groupId: string | null): GroupRole | null {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const query = useQuery({
+    queryKey: ['event-group-role', groupId, uid],
+    queryFn: async () => {
+      if (groupId === null || uid === null) return null;
+      return (await repository()).fetchEventGroupRole(groupId, uid);
+    },
+    enabled: groupId !== null && uid !== null,
+    staleTime: 60_000,
+  });
+  return query.data ?? null;
+}
+
+// ----------------------- correcting and ending a group -----------------------
+
+/**
+ * What `update_group` takes. Named here rather than reached for with an inline
+ * `import()` type, which the lint rules forbid for good reason: an inline import
+ * type is invisible to the module graph and hides the dependency.
+ */
+export type GroupUpdateInput = {
+  name: string;
+  description: string;
+  rules?: string | null;
+  privacy?: Group['privacy'] | null;
+  language?: string | null;
+  avatarUrl?: string | null;
+  coverUrl?: string | null;
+};
+
+export interface GroupOwnerActions {
+  save: (groupId: string, input: GroupUpdateInput) => Promise<void>;
+  remove: (groupId: string) => Promise<void>;
+  isSaving: boolean;
+  isRemoving: boolean;
+}
+
+/**
+ * What a group's moderators may do to it (migration 0128).
+ *
+ * `update_group` decides who may correct a group — a moderator, admin or owner,
+ * or staff — and only its owner (or staff) may delete it. The button that opens
+ * this hook's form is offered on the same rule, so a member never sees a control
+ * that would refuse them.
+ */
+export function useGroupOwnerActions(): GroupOwnerActions {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['group'] });
+    void queryClient.invalidateQueries({ queryKey: ['group-directory'] });
+    void queryClient.invalidateQueries({ queryKey: ['groups'] });
+    void queryClient.invalidateQueries({ queryKey: ['search'] });
+  };
+
+  const save = useMutation({
+    mutationFn: async ({ groupId, input }: { groupId: string; input: GroupUpdateInput }) =>
+      (await repository()).updateGroup(groupId, input),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (groupId: string) => (await repository()).deleteGroup(groupId),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  return {
+    save: (groupId, input) => save.mutateAsync({ groupId, input }),
+    remove: (groupId) => remove.mutateAsync(groupId),
+    isSaving: save.isPending,
+    isRemoving: remove.isPending,
+  };
+}
+
+export interface EventOwnerActions {
+  save: (eventId: string, draft: EventUpdate) => Promise<string>;
+  cancel: (eventId: string) => Promise<void>;
+  remove: (eventId: string) => Promise<void>;
+  isSaving: boolean;
+  isCancelling: boolean;
+  isRemoving: boolean;
+}
+
+/** What an event's host may do to it. The server re-checks host, group and staff. */
+export function useEventOwnerActions(): EventOwnerActions {
+  const queryClient = useQueryClient();
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['event-detail'] });
+    void queryClient.invalidateQueries({ queryKey: ['event-calendar'] });
+    void queryClient.invalidateQueries({ queryKey: ['search'] });
+  };
+
+  const save = useMutation({
+    mutationFn: async ({ eventId, draft }: { eventId: string; draft: EventUpdate }) =>
+      (await repository()).updateEvent(eventId, draft),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const cancel = useMutation({
+    mutationFn: async (eventId: string) => (await repository()).cancelEvent(eventId),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: async (eventId: string) => (await repository()).deleteEvent(eventId),
+    onSuccess: invalidate,
+    onError: invalidate,
+  });
+
+  return {
+    save: (eventId, draft) => save.mutateAsync({ eventId, draft }),
+    cancel: (eventId) => cancel.mutateAsync(eventId),
+    remove: (eventId) => remove.mutateAsync(eventId),
+    isSaving: save.isPending,
+    isCancelling: cancel.isPending,
+    isRemoving: remove.isPending,
   };
 }

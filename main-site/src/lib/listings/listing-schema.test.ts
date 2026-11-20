@@ -27,6 +27,7 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
     period: 'month',
     skills: ['node', 'postgres'],
     applications: 3,
+    coverUrl: '',
     publishedAt: '2026-10-01T00:00:00Z',
     myStatus: null,
     description: 'Build payment rails.',

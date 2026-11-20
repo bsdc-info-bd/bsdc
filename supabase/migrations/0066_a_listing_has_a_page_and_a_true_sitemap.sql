@@ -343,6 +343,12 @@ $function$;
 -- said they are going, the host, or staff.
 -- ---------------------------------------------------------------------------
 
+-- Dropped before it is created for the same reason as `job_board` above:
+-- migration 0128 re-creates this with a `cover_url` OUT column, and a changed
+-- return type cannot go through `create or replace`. The grant at the foot of
+-- this file names the function again, so the drop costs no permission.
+drop function if exists public.job_detail(text);
+
 create or replace function public.job_detail(p_slug text)
 returns table (
   id                 uuid,

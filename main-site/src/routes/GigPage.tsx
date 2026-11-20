@@ -1,8 +1,11 @@
 import { ArrowLeft, Banknote, CalendarClock, HandCoins, Users } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { GigEditDialog } from '@/components/listings/ListingEditForm';
+import { OwnerActions } from '@/components/listings/OwnerActions';
+import { MediaImage } from '@/components/media/MediaImage';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -17,12 +20,33 @@ import {
   TextareaField,
   TextField,
 } from '@/design-system';
-import { useGigDetail } from '@/hooks/use-opportunities';
+import { useGigDetail, useGigOwnerActions } from '@/hooks/use-opportunities';
+import type { Gig, GigUpdate } from '@/lib/opportunities/opportunity-types';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { formatSalaryRange } from '@/lib/opportunities/opportunity-types';
 import { ROUTES, SITE, gigPath, gigProposalsPath } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
+
+/**
+ * The published gig as the edit dialog's draft.
+ *
+ * A gig has no published cover until one is set, and `null` means "leave the
+ * cover alone" to the routine — so an empty string is sent deliberately, which
+ * is how removing a published cover is expressed.
+ */
+function gigToDraft(gig: Gig): GigUpdate {
+  return {
+    title: gig.title,
+    description: gig.description,
+    budgetMin: gig.budgetMin,
+    budgetMax: gig.budgetMax,
+    isHourly: gig.isHourly,
+    durationDays: gig.durationDays,
+    skills: gig.skills,
+    coverUrl: gig.coverUrl,
+  };
+}
 
 /** One freelance gig in full: its budget and terms, and the reader's own proposal. */
 export default function GigPage() {
@@ -32,6 +56,9 @@ export default function GigPage() {
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const detail = useGigDetail(slug);
+  const ownerActions = useGigOwnerActions();
+  const navigate = useNavigate();
+  const [editing, setEditing] = useState(false);
   const [proposing, setProposing] = useState(false);
   const [pitch, setPitch] = useState('');
   const [bid, setBid] = useState('');
@@ -160,8 +187,19 @@ export default function GigPage() {
             {t('freelance.detail.back')}
           </LinkButton>
 
-          <Card>
-            <div className="flex flex-col gap-3">
+          <Card padded={false} className="overflow-hidden">
+            {gig.coverUrl.trim().length > 0 ? (
+              <div className="aspect-[16/6] w-full bg-surface-2">
+                <MediaImage
+                  src={gig.coverUrl.trim()}
+                  alt=""
+                  slotWidth={960}
+                  priority
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : null}
+            <div className="flex flex-col gap-3 p-4 sm:p-6">
               <div className="flex flex-wrap items-center gap-2">
                 {gig.isHourly ? <Badge tone="neutral">{t('freelance.detail.hourly')}</Badge> : null}
                 {open ? null : (
@@ -255,6 +293,60 @@ export default function GigPage() {
                   <p className="text-sm text-muted">{t('freelance.detail.notAccepting')}</p>
                 )}
               </div>
+
+              {/* The client's own controls. The database refuses anybody else
+                  regardless; not offering them means a stranger is never
+                  invited to press something that would be refused. */}
+              {isOwner ? (
+                <div className="border-t border-border pt-3">
+                  <OwnerActions
+                    labels={{
+                      edit: t('freelance.manage.edit'),
+                      ...(open ? { close: t('freelance.manage.close') } : {}),
+                      delete: t('freelance.manage.delete'),
+                      closeTitle: t('freelance.manage.closeTitle'),
+                      closeBody: t('freelance.manage.closeBody'),
+                      closeConfirm: t('freelance.manage.closeConfirm'),
+                      deleteTitle: t('freelance.manage.deleteTitle'),
+                      deleteBody:
+                        gig.proposals === 0
+                          ? t('freelance.manage.deleteBodyNoBids')
+                          : t('freelance.manage.deleteBody', { total: gig.proposals }),
+                      deleteConfirm: t('freelance.manage.deleteConfirm'),
+                      cancel: t('common.cancel'),
+                    }}
+                    onEdit={() => {
+                      setEditing(true);
+                    }}
+                    {...(open
+                      ? {
+                          onClose: async () => {
+                            try {
+                              await ownerActions.close(gig.id);
+                              toast.success(t('freelance.manage.closedDone'));
+                            } catch (error) {
+                              toast.error(t(dataErrorKey(error)));
+                            }
+                          },
+                        }
+                      : {})}
+                    onDelete={async () => {
+                      try {
+                        // `gig.proposals` is the number the dialog just read
+                        // out, so the confirmation the member gave is the one
+                        // the server asks for.
+                        await ownerActions.remove(gig.id, gig.proposals > 0);
+                        toast.success(t('freelance.manage.deleted'));
+                        navigate(ROUTES.freelance);
+                      } catch (error) {
+                        toast.error(t(dataErrorKey(error)));
+                      }
+                    }}
+                    isClosing={ownerActions.isClosing}
+                    isDeleting={ownerActions.isRemoving}
+                  />
+                </div>
+              ) : null}
             </div>
           </Card>
 
@@ -273,6 +365,27 @@ export default function GigPage() {
           </Card>
         </div>
       </article>
+
+      {isOwner ? (
+        <GigEditDialog
+          open={editing}
+          initial={gigToDraft(gig)}
+          isSaving={ownerActions.isSaving}
+          onClose={() => {
+            setEditing(false);
+          }}
+          onSave={async (draft: GigUpdate) => {
+            try {
+              const saved = await ownerActions.save(gig.id, draft);
+              setEditing(false);
+              toast.success(t('freelance.manage.saved'));
+              if (saved.length > 0 && saved !== gig.slug) navigate(gigPath(saved));
+            } catch (error) {
+              toast.error(t(dataErrorKey(error)));
+            }
+          }}
+        />
+      ) : null}
 
       <Modal
         open={proposing}

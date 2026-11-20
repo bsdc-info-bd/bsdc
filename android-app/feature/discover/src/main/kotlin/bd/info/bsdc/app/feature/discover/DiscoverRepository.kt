@@ -24,6 +24,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -1233,4 +1234,311 @@ class DiscoverRepository(
                 platformApi.updatePrivacyPrefs(uid, privacy)
             }
         }
+
+    // ---- Correcting and ending a listing (migration 0128) ----
+    //
+    // Every routine here decides who may write. The app never asks the database whether the
+    // reader is the owner before offering a control; it works that out from the row it already
+    // has (`OwnerActionsLogic`) and sends the write anyway — a refusal arrives as a `Result`
+    // failure and the screen shows it, rather than the app inventing a permission rule of its
+    // own that could drift from the one the SQL enforces.
+
+    /**
+     * Corrects a gig. Every field is sent, because the routine treats a JSON null as "leave
+     * this column alone" and an empty string as "clear it" — which is how a cover is removed.
+     * Returns the gig's slug, which changes only when a new one is passed.
+     */
+    suspend fun updateGig(
+        gigId: String,
+        title: String,
+        description: String,
+        budgetMin: Int?,
+        budgetMax: Int?,
+        isHourly: Boolean,
+        durationDays: Int?,
+        skills: List<String>,
+        coverUrl: String,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "update_gig",
+                params = buildJsonObject {
+                    put("p_gig_id", gigId)
+                    put("p_title", title.trim())
+                    put("p_description", description.trim())
+                    putNullableInt("p_budget_min", budgetMin)
+                    putNullableInt("p_budget_max", budgetMax)
+                    put("p_is_hourly", isHourly)
+                    putNullableInt("p_duration_days", durationDays)
+                    put("p_skills", buildJsonArray { skills.forEach { add(JsonPrimitive(it)) } })
+                    put("p_cover_url", coverUrl.trim())
+                },
+                requireAuth = true,
+            )
+            // A scalar return arrives as a bare JSON string (`"slug"`), which the JSON
+            // decoder refuses — trim the quotes the same way `joinGroup` does.
+            runCatching { supabase.decode<String>(raw) }.getOrDefault(raw.trim().trim('"'))
+        }
+    }
+
+    /** Closes a gig: it stops taking proposals, and every bidder is told. Nothing is removed. */
+    suspend fun closeGig(gigId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "close_gig",
+                params = buildJsonObject { put("p_gig_id", gigId) },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("gig-closed")
+            Unit
+        }
+    }
+
+    /**
+     * Deletes a gig and, with it, every proposal on it. [confirmBids] must be true when the
+     * client was told how many proposals would go; the routine refuses the delete otherwise,
+     * so a stale screen cannot destroy work nobody was warned about.
+     */
+    suspend fun deleteGig(gigId: String, confirmBids: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "delete_gig",
+                    params = buildJsonObject {
+                        put("p_gig_id", gigId)
+                        put("p_confirm_bids", confirmBids)
+                    },
+                    requireAuth = true,
+                )
+                supabase.wakePushDelivery("gig-deleted")
+                Unit
+            }
+        }
+
+    /** Corrects a job. Null budget-like fields clear the column; the slug only moves on request. */
+    suspend fun updateJob(
+        jobId: String,
+        title: String,
+        company: String,
+        description: String,
+        jobType: String,
+        workMode: String,
+        level: String,
+        city: String,
+        salaryMin: Int?,
+        salaryMax: Int?,
+        salaryPeriod: String,
+        skills: List<String>,
+        applyUrl: String,
+        expiresAt: String?,
+        coverUrl: String,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "update_job",
+                params = buildJsonObject {
+                    put("p_job_id", jobId)
+                    put("p_title", title.trim())
+                    put("p_company", company.trim())
+                    put("p_description", description.trim())
+                    put("p_job_type", jobType)
+                    put("p_work_mode", workMode)
+                    put("p_level", level)
+                    put("p_city", city.trim())
+                    putNullableInt("p_salary_min", salaryMin)
+                    putNullableInt("p_salary_max", salaryMax)
+                    put("p_salary_period", salaryPeriod)
+                    put("p_skills", buildJsonArray { skills.forEach { add(JsonPrimitive(it)) } })
+                    put("p_apply_url", applyUrl.trim())
+                    if (expiresAt.isNullOrBlank()) {
+                        put("p_expires_at", JsonNull)
+                    } else {
+                        put("p_expires_at", expiresAt)
+                    }
+                    put("p_cover_url", coverUrl.trim())
+                },
+                requireAuth = true,
+            )
+            runCatching { supabase.decode<String>(raw) }.getOrDefault(raw.trim().trim('"'))
+        }
+    }
+
+    /** Closes a job: no further applications, and everyone still waiting is told. */
+    suspend fun closeJob(jobId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "close_job",
+                params = buildJsonObject { put("p_job_id", jobId) },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("job-closed")
+            Unit
+        }
+    }
+
+    /** Deletes a job and every application on it; [confirmApplications] records the warning. */
+    suspend fun deleteJob(jobId: String, confirmApplications: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "delete_job",
+                    params = buildJsonObject {
+                        put("p_job_id", jobId)
+                        put("p_confirm_applications", confirmApplications)
+                    },
+                    requireAuth = true,
+                )
+                supabase.wakePushDelivery("job-deleted")
+                Unit
+            }
+        }
+
+    /** Corrects a group. Its address is not a setting: `update_group` does not take a slug. */
+    suspend fun updateGroup(
+        groupId: String,
+        name: String,
+        description: String,
+        rules: String?,
+        privacy: String?,
+        language: String?,
+        avatarUrl: String?,
+        coverUrl: String?,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "update_group",
+                params = buildJsonObject {
+                    put("p_group_id", groupId)
+                    put("p_name", name.trim())
+                    put("p_description", description.trim())
+                    putNullableText("p_rules", rules)
+                    putNullableText("p_privacy", privacy)
+                    putNullableText("p_language", language)
+                    putNullableText("p_avatar_url", avatarUrl)
+                    putNullableText("p_cover_url", coverUrl)
+                },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    /**
+     * Deletes a group. Its channels go with it; posts inside them are kept by their authors but
+     * detached from the channel and archived, so a private discussion never becomes public.
+     */
+    suspend fun deleteGroup(groupId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "delete_group",
+                params = buildJsonObject { put("p_group_id", groupId) },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    /**
+     * Corrects an event. Its host, a moderator of its group, or staff — decided by the routine.
+     * Attendees are told when the date moves, which is why [startsAt] and [endsAt] are required
+     * rather than optional: a correction that silently leaves the old instant is the one case
+     * somebody else has to hear about.
+     */
+    suspend fun updateEvent(
+        eventId: String,
+        title: String,
+        description: String,
+        startsAt: String,
+        endsAt: String,
+        mode: String?,
+        venue: String?,
+        city: String?,
+        joinUrl: String?,
+        coverUrl: String?,
+        timezone: String?,
+        capacity: Int?,
+    ): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "update_event",
+                params = buildJsonObject {
+                    put("p_event_id", eventId)
+                    put("p_title", title.trim())
+                    put("p_description", description.trim())
+                    put("p_starts_at", startsAt)
+                    put("p_ends_at", endsAt)
+                    putNullableText("p_mode", mode)
+                    putNullableText("p_venue", venue)
+                    putNullableText("p_city", city)
+                    putNullableText("p_join_url", joinUrl)
+                    putNullableText("p_cover_url", coverUrl)
+                    putNullableText("p_timezone", timezone)
+                    putNullableInt("p_capacity", capacity)
+                },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("event-update")
+            runCatching { supabase.decode<String>(raw) }.getOrDefault(raw.trim().trim('"'))
+        }
+    }
+
+    /** Cancels an event: the page stays, the RSVPs stay, and everyone who did not decline is told. */
+    suspend fun cancelEvent(eventId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "cancel_event",
+                params = buildJsonObject { put("p_event_id", eventId) },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("event-cancelled")
+            Unit
+        }
+    }
+
+    /** Deletes an event and its RSVPs; everybody who had not declined is told. */
+    suspend fun deleteEvent(eventId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "delete_event",
+                params = buildJsonObject { put("p_event_id", eventId) },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("event-deleted")
+            Unit
+        }
+    }
+
+    /**
+     * The viewer's own role in the group organising an event.
+     *
+     * `event_detail` reports the event, not what the reader may do to it, and the group that
+     * owns it may be private — so this asks `group_members`, whose policy admits a member and
+     * quietly answers nothing for anybody else.
+     */
+    suspend fun fetchGroupRole(groupId: String, uid: String): Result<String?> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val raw = supabase.getJsonText(
+                    table = "group_members",
+                    queryPairs = listOf(
+                        "select" to "role",
+                        "group_id" to "eq.$groupId",
+                        "uid" to "eq.$uid",
+                        "limit" to "1",
+                    ),
+                    requireAuth = true,
+                )
+                supabase.decode<List<GroupRoleRowDto>>(raw).firstOrNull()?.role
+            }
+        }
+
+}
+
+/** A JSON null where the routine expects "leave this column alone". */
+private fun JsonObjectBuilder.putNullableInt(key: String, value: Int?) {
+    if (value == null) put(key, JsonNull) else put(key, value)
+}
+
+private fun JsonObjectBuilder.putNullableText(key: String, value: String?) {
+    if (value == null) put(key, JsonNull) else put(key, value)
 }

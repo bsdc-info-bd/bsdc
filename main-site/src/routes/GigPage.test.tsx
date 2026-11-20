@@ -5,9 +5,24 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { Gig } from '@/lib/opportunities/opportunity-types';
 import GigPage from './GigPage';
 
-const hooks = vi.hoisted(() => ({ useGigDetail: vi.fn() }));
+const hooks = vi.hoisted(() => ({
+  useGigDetail: vi.fn(),
+  // The owner controls are exercised by their own test; here they only have to
+  // exist, so a page rendered for a stranger never reaches a real query client.
+  owner: vi.fn(() => ({
+    save: vi.fn(() => Promise.resolve('')),
+    close: vi.fn(() => Promise.resolve()),
+    remove: vi.fn(() => Promise.resolve()),
+    isSaving: false,
+    isClosing: false,
+    isRemoving: false,
+  })),
+}));
 
-vi.mock('@/hooks/use-opportunities', () => ({ useGigDetail: hooks.useGigDetail }));
+vi.mock('@/hooks/use-opportunities', () => ({
+  useGigDetail: hooks.useGigDetail,
+  useGigOwnerActions: () => hooks.owner(),
+}));
 vi.mock('@/components/seo/Seo', () => ({ Seo: () => null }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -41,6 +56,7 @@ function gig(overrides: Partial<Gig> = {}): Gig {
     clientUid: 'client-uid',
     publishedAt: '2026-10-01T00:00:00Z',
     status: 'open',
+    coverUrl: '',
     ...overrides,
   } as Gig;
 }
@@ -182,6 +198,49 @@ describe('GigPage', () => {
     renderGig();
     expect(screen.getByText('freelance.detail.postedByYou')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'freelance.propose' })).toBeNull();
+  });
+
+  it('offers the client edit, close and delete, and names the bids a delete would take', () => {
+    auth.user = { uid: 'client-uid' };
+    hooks.useGigDetail.mockReturnValue(state());
+    renderGig();
+    expect(screen.getByRole('button', { name: 'freelance.manage.edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'freelance.manage.close' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'freelance.manage.delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'freelance.manage.deleteTitle' });
+    // The consequence is counted, not described vaguely: three proposals are
+    // on this gig, so the sentence has to say three.
+    expect(within(dialog).getByText('freelance.manage.deleteBody')).toBeInTheDocument();
+  });
+
+  it('offers no owner controls to a signed-out reader', () => {
+    hooks.useGigDetail.mockReturnValue(state());
+    renderGig();
+    expect(screen.queryByRole('button', { name: 'freelance.manage.edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'freelance.manage.delete' })).toBeNull();
+  });
+
+  it('offers edit but not close on a gig that is already closed', () => {
+    auth.user = { uid: 'client-uid' };
+    hooks.useGigDetail.mockReturnValue(state({ gig: gig({ status: 'closed' }) }));
+    renderGig();
+    expect(screen.getByRole('button', { name: 'freelance.manage.edit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'freelance.manage.close' })).toBeNull();
+  });
+
+  it('opens the edit form with the published gig already in it', () => {
+    auth.user = { uid: 'client-uid' };
+    hooks.useGigDetail.mockReturnValue(state());
+    renderGig();
+    fireEvent.click(screen.getByRole('button', { name: 'freelance.manage.edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'freelance.manage.editTitle' });
+    const title = within(dialog).getByLabelText<HTMLInputElement>('freelance.manage.titleLabel');
+    expect(title.value).toBe('Payments API build');
+    const budget = within(dialog).getByLabelText<HTMLInputElement>(
+      'freelance.manage.budgetMinLabel',
+    );
+    expect(budget.value).toBe('300');
   });
 
   it('marks a closed gig as closed and accepts no proposals', () => {

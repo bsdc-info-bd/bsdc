@@ -13,8 +13,33 @@ const hooks = vi.hoisted(() => ({
   useEventDetail: vi.fn(),
 }));
 
-vi.mock('@/hooks/use-opportunities', () => ({ useJobDetail: hooks.useJobDetail }));
-vi.mock('@/hooks/use-communities', () => ({ useEventDetail: hooks.useEventDetail }));
+vi.mock('@/hooks/use-opportunities', () => ({
+  useJobDetail: hooks.useJobDetail,
+  // Mounted on the page but only exercised by its own test; a plain stub keeps
+  // the stranger's render free of a real query client.
+  useJobOwnerActions: () => ({
+    save: () => Promise.resolve(''),
+    close: () => Promise.resolve(),
+    remove: () => Promise.resolve(),
+    isSaving: false,
+    isClosing: false,
+    isRemoving: false,
+  }),
+}));
+vi.mock('@/hooks/use-communities', () => ({
+  useEventDetail: hooks.useEventDetail,
+  // The event's owner controls are covered by their own case below; every
+  // other test only needs the hook to exist so no real query client is built.
+  useEventGroupRole: () => null,
+  useEventOwnerActions: () => ({
+    save: () => Promise.resolve(''),
+    cancel: () => Promise.resolve(),
+    remove: () => Promise.resolve(),
+    isSaving: false,
+    isCancelling: false,
+    isRemoving: false,
+  }),
+}));
 vi.mock('@/components/seo/Seo', () => ({ Seo: () => null }));
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -53,6 +78,7 @@ function job(overrides: Partial<JobDetail> = {}): JobDetail {
     description: 'Build payment rails.\nOn call twice a month.',
     country: 'BD',
     applyUrl: '',
+    coverUrl: '',
     status: 'open',
     expiresAt: null,
     posterUid: 'poster-uid',
@@ -217,6 +243,39 @@ describe('JobPage', () => {
     expect(screen.queryByRole('button', { name: 'jobs.apply' })).toBeNull();
   });
 
+  it('offers the poster edit and close, and no such controls to anybody else', () => {
+    auth.user = { uid: 'poster-uid' };
+    hooks.useJobDetail.mockReturnValue(jobState());
+    const first = renderJob();
+    expect(screen.getByRole('button', { name: 'jobs.manage.edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'jobs.manage.close' })).toBeInTheDocument();
+    first.unmount();
+
+    auth.user = { uid: 'reader-uid' };
+    renderJob();
+    expect(screen.queryByRole('button', { name: 'jobs.manage.edit' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'jobs.manage.delete' })).toBeNull();
+  });
+
+  it('names the applications a delete would take with the job', () => {
+    auth.user = { uid: 'poster-uid' };
+    hooks.useJobDetail.mockReturnValue(jobState());
+    renderJob();
+    fireEvent.click(screen.getByRole('button', { name: 'jobs.manage.delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'jobs.manage.deleteTitle' });
+    expect(within(dialog).getByText('jobs.manage.deleteBody')).toBeInTheDocument();
+  });
+
+  it('opens the edit form with the published role already in it', () => {
+    auth.user = { uid: 'poster-uid' };
+    hooks.useJobDetail.mockReturnValue(jobState());
+    renderJob();
+    fireEvent.click(screen.getByRole('button', { name: 'jobs.manage.edit' }));
+    const dialog = screen.getByRole('dialog', { name: 'jobs.manage.editTitle' });
+    const title = within(dialog).getByLabelText<HTMLInputElement>('create.fields.title');
+    expect(title.value).toBe('Senior Backend Engineer');
+  });
+
   it('links to the company site only for a web address', () => {
     hooks.useJobDetail.mockReturnValue(
       jobState({ job: job({ applyUrl: 'https://careers.example.com/role' }) }),
@@ -308,5 +367,39 @@ describe('EventPage', () => {
     hooks.useEventDetail.mockReturnValue(eventState({ saveFailed: true }));
     renderEvent();
     expect(screen.getByRole('alert')).toHaveTextContent('events.detail.rsvpFailed');
+  });
+
+  it('offers the host edit and cancel, and no owner controls to a stranger', () => {
+    auth.user = { uid: 'host-uid' };
+    hooks.useEventDetail.mockReturnValue(eventState());
+    const first = renderEvent();
+    expect(screen.getByRole('button', { name: 'events.manage.edit' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'events.manage.cancel' })).toBeInTheDocument();
+    first.unmount();
+
+    auth.user = { uid: 'reader-uid' };
+    hooks.useEventDetail.mockReturnValue(eventState());
+    renderEvent();
+    expect(screen.queryByRole('button', { name: 'events.manage.edit' })).toBeNull();
+  });
+
+  it('asks before cancelling an event and says the page and RSVPs stay', () => {
+    auth.user = { uid: 'host-uid' };
+    hooks.useEventDetail.mockReturnValue(eventState());
+    renderEvent();
+    fireEvent.click(screen.getByRole('button', { name: 'events.manage.cancel' }));
+    const dialog = screen.getByRole('dialog', { name: 'events.manage.cancelTitle' });
+    expect(within(dialog).getByText('events.manage.cancelBody')).toBeInTheDocument();
+    expect(
+      within(dialog).getByRole('button', { name: 'events.manage.cancelConfirm' }),
+    ).toBeInTheDocument();
+  });
+
+  it('does not offer to cancel an event that is already cancelled', () => {
+    auth.user = { uid: 'host-uid' };
+    hooks.useEventDetail.mockReturnValue(eventState({ event: event({ isCancelled: true }) }));
+    renderEvent();
+    expect(screen.getByRole('button', { name: 'events.manage.edit' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'events.manage.cancel' })).toBeNull();
   });
 });

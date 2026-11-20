@@ -112,6 +112,8 @@ data class EventDetailDto(
     @SerialName("going_count") val goingCount: Int = 0,
     @SerialName("is_cancelled") val isCancelled: Boolean = false,
     @SerialName("host_uid") val hostUid: String? = null,
+    /** The organising group, when there is one — needed to know whether the viewer moderates it. */
+    @SerialName("group_id") val groupId: String? = null,
     @SerialName("my_status") val myStatus: String? = null,
 )
 
@@ -130,6 +132,8 @@ data class JobBoardDto(
     @SerialName("salary_currency") val salaryCurrency: String = "BDT",
     @SerialName("salary_period") val salaryPeriod: String = "month",
     val skills: List<String> = emptyList(),
+    /** Added by 0128 to `job_board`, so a card can show the role's cover. */
+    @SerialName("cover_url") val coverUrl: String = "",
     @SerialName("applications_count") val applicationsCount: Int = 0,
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("my_status") val myStatus: String? = null,
@@ -160,6 +164,8 @@ data class JobDetailDto(
     @SerialName("expires_at") val expiresAt: String? = null,
     @SerialName("poster_uid") val posterUid: String = "",
     @SerialName("my_status") val myStatus: String? = null,
+    /** Sent by `job_detail` since 0128 re-created it with the column; '' for none. */
+    @SerialName("cover_url") val coverUrl: String = "",
 )
 
 @Serializable
@@ -498,4 +504,10 @@ data class GroupMemberDto(
     val role: String = "member",
     @SerialName("joined_at") val joinedAt: String? = null,
     val profiles: GroupMemberProfileDto? = null,
+)
+
+/** Just the viewer's role on `group_members`, asked on its own rather than as part of a group. */
+@Serializable
+data class GroupRoleRowDto(
+    val role: String = "member",
 )

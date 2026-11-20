@@ -825,6 +825,8 @@ export type GigRow = {
   status: DbListingStatus;
   client_uid: string;
   proposals_count: number;
+  /** An ImgBB-hosted cover (migration 0128), or '' for none. */
+  cover_url: string;
   published_at: string | null;
   created_at: string;
   updated_at: string;
@@ -990,6 +992,8 @@ export type JobDetailRow = {
   salary_period: string;
   skills: string[];
   apply_url: string;
+  /** An ImgBB-hosted cover (migration 0128), or '' for none. */
+  cover_url: string;
   status: DbListingStatus;
   applications_count: number;
   published_at: string | null;
@@ -2935,6 +2939,83 @@ export type Database = {
         Returns: JobBoardRow[];
       };
       job_detail: { Args: { p_slug: string }; Returns: JobDetailRow[] };
+      update_gig: {
+        Args: {
+          p_gig_id: string;
+          p_title: string;
+          p_description: string;
+          p_budget_min?: number | null;
+          p_budget_max?: number | null;
+          p_is_hourly?: boolean | null;
+          p_duration_days?: number | null;
+          p_skills?: string[] | null;
+          p_cover_url?: string | null;
+          p_slug?: string | null;
+        };
+        Returns: string;
+      };
+      close_gig: { Args: { p_gig_id: string }; Returns: undefined };
+      delete_gig: { Args: { p_gig_id: string; p_confirm_bids?: boolean }; Returns: undefined };
+      update_job: {
+        Args: {
+          p_job_id: string;
+          p_title: string;
+          p_company: string;
+          p_description: string;
+          p_job_type?: DbJobType | null;
+          p_work_mode?: DbWorkMode | null;
+          p_level?: DbExperienceLevel | null;
+          p_city?: string | null;
+          p_salary_min?: number | null;
+          p_salary_max?: number | null;
+          p_salary_period?: string | null;
+          p_skills?: string[] | null;
+          p_apply_url?: string | null;
+          p_expires_at?: string | null;
+          p_cover_url?: string | null;
+          p_slug?: string | null;
+        };
+        Returns: string;
+      };
+      close_job: { Args: { p_job_id: string }; Returns: undefined };
+      delete_job: {
+        Args: { p_job_id: string; p_confirm_applications?: boolean };
+        Returns: undefined;
+      };
+      update_group: {
+        Args: {
+          p_group_id: string;
+          p_name: string;
+          p_description: string;
+          p_rules?: string | null;
+          p_privacy?: DbGroupPrivacy | null;
+          p_language?: string | null;
+          p_avatar_url?: string | null;
+          p_cover_url?: string | null;
+        };
+        Returns: undefined;
+      };
+      delete_group: { Args: { p_group_id: string }; Returns: undefined };
+      update_event: {
+        Args: {
+          p_event_id: string;
+          p_title: string;
+          p_description: string;
+          p_starts_at: string;
+          p_ends_at: string;
+          p_mode?: DbEventMode | null;
+          p_venue?: string | null;
+          p_city?: string | null;
+          p_join_url?: string | null;
+          p_cover_url?: string | null;
+          p_timezone?: string | null;
+          p_capacity?: number | null;
+          p_slug?: string | null;
+        };
+        Returns: string;
+      };
+      cancel_event: { Args: { p_event_id: string }; Returns: undefined };
+      delete_event: { Args: { p_event_id: string }; Returns: undefined };
       increment_job_view: { Args: { p_job_id: string }; Returns: undefined };
       create_group: {
         Args: {

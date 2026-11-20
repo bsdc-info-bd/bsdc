@@ -54,6 +54,7 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
@@ -102,6 +103,9 @@ fun JobDetailScreen(
     var applied by remember(slug) { mutableStateOf(false) }
     var saved by remember(slug) { mutableStateOf(false) }
     var applicants by remember(slug) { mutableStateOf<List<JobApplicationDto>>(emptyList()) }
+    var pendingClose by remember(slug) { mutableStateOf(false) }
+    var pendingDelete by remember(slug) { mutableStateOf(false) }
+    var ownerBusy by remember(slug) { mutableStateOf(false) }
     var applicantsBusy by remember(slug) { mutableStateOf(false) }
     var banner by remember(slug) { mutableStateOf<String?>(null) }
     var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
@@ -128,6 +132,37 @@ fun JobDetailScreen(
                     applicantsBusy = false
                 }
             }
+        }
+    }
+
+    fun closeJob(current: JobDetailDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            repository.closeJob(current.id)
+                .onSuccess {
+                    pendingClose = false
+                    applyError = null
+                    reloadNonce += 1
+                }
+                .onFailure { applyError = ownerFailureMessage(it, bn) }
+            ownerBusy = false
+        }
+    }
+
+    fun deleteJob(current: JobDetailDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            // The confirmation promises the number the poster was shown; the routine
+            // refuses the delete when applications exist and nobody confirmed them.
+            repository.deleteJob(current.id, confirmApplications = current.applicationsCount > 0)
+                .onSuccess {
+                    pendingDelete = false
+                    onBack()
+                }
+                .onFailure { applyError = ownerFailureMessage(it, bn) }
+            ownerBusy = false
         }
     }
 
@@ -578,6 +613,51 @@ fun JobDetailScreen(
 
                             if (isOwner) {
                                 item {
+                                    val controls = OwnerActionsLogic.listingControls(
+                                        status = current.status,
+                                        isOwner = true,
+                                        isStaff = false,
+                                    )
+                                    BsdcCard {
+                                        BsdcSectionHeader(
+                                            title = if (bn) "আপনার পদ" else "Your role",
+                                            subtitle = if (bn) {
+                                                "আবেদন নেওয়া বন্ধ করুন বা পদটি মুছে ফেলুন।"
+                                            } else {
+                                                "Stop taking applications, or remove the role."
+                                            },
+                                        )
+                                        FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            if (controls.canClose) {
+                                                BsdcButton(
+                                                    label = if (bn) "আবেদন বন্ধ করুন" else "Close to applications",
+                                                    onClick = { pendingClose = true },
+                                                    secondary = true,
+                                                    busy = ownerBusy,
+                                                )
+                                            }
+                                            if (controls.canDelete) {
+                                                BsdcButton(
+                                                    label = if (bn) "পদ মুছুন" else "Delete role",
+                                                    onClick = { pendingDelete = true },
+                                                    secondary = true,
+                                                    enabled = !ownerBusy,
+                                                )
+                                            }
+                                            BsdcButton(
+                                                label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
+                                                onClick = {
+                                                    onOpenExternal(JobDetailLogic.webUrl(current.slug))
+                                                },
+                                                secondary = true,
+                                            )
+                                        }
+                                    }
+                                }
+                                item {
                                     BsdcSectionHeader(
                                         title = if (bn) "আবেদনকারীরা" else "Applicants",
                                         subtitle = if (applicants.isEmpty()) {
@@ -671,6 +751,40 @@ fun JobDetailScreen(
                                 }
                             }
                         }
+                    }
+
+                    val confirmJob = job
+                    if (confirmJob != null && pendingClose) {
+                        BsdcConfirmDialog(
+                            visible = true,
+                            title = if (bn) "আবেদন নেওয়া বন্ধ করবেন?" else "Stop taking applications?",
+                            message = OwnerActionsLogic.closeMessage(
+                                OwnerActionsLogic.DeleteMessage.JOB,
+                                bn,
+                            ),
+                            confirmLabel = if (bn) "বন্ধ করুন" else "Close it",
+                            cancelLabel = if (bn) "বাতিল" else "Keep it open",
+                            onConfirm = { closeJob(confirmJob) },
+                            onDismiss = { pendingClose = false },
+                            busy = ownerBusy,
+                        )
+                    }
+                    if (confirmJob != null && pendingDelete) {
+                        BsdcConfirmDialog(
+                            visible = true,
+                            title = if (bn) "এই পদটি মুছবেন?" else "Delete this role?",
+                            message = OwnerActionsLogic.deleteMessage(
+                                OwnerActionsLogic.DeleteMessage.JOB,
+                                confirmJob.applicationsCount,
+                                bn,
+                            ),
+                            confirmLabel = if (bn) "মুছুন" else "Delete",
+                            cancelLabel = if (bn) "বাতিল" else "Cancel",
+                            onConfirm = { deleteJob(confirmJob) },
+                            onDismiss = { pendingDelete = false },
+                            busy = ownerBusy,
+                            destructive = true,
+                        )
                     }
 
                     if (showApply) {

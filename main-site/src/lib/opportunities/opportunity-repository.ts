@@ -31,6 +31,8 @@ import type {
   ProjectDetail,
   ProjectScreenshot,
   ProjectSort,
+  GigUpdate,
+  JobUpdate,
   Sketch,
   SketchLanguage,
   WorkMode,
@@ -244,6 +246,7 @@ function toJobDetail(row: JobDetailRow): JobDetail {
     description: row.description,
     country: row.country,
     applyUrl: row.apply_url,
+    coverUrl: row.cover_url ?? '',
     status: row.status,
     expiresAt: row.expires_at,
     posterUid: row.poster_uid,
@@ -275,6 +278,7 @@ function toGig(row: GigRow): Gig {
     durationDays: row.duration_days,
     skills: normaliseSkills(row.skills),
     proposals: row.proposals_count,
+    coverUrl: row.cover_url ?? '',
     clientUid: row.client_uid,
     publishedAt: row.published_at,
     status: row.status,
@@ -388,6 +392,105 @@ export async function submitProposal(
   if (error) throw toDataError(error);
   wakePushDelivery();
   return typeof data === 'string' ? data : '';
+}
+
+// ------------------------ correcting and withdrawing -------------------------
+
+/**
+ * Corrects a gig in place (migration 0128).
+ *
+ * `update_gig` re-checks on the server that the caller is the gig's client or
+ * staff, validates the cover against the same ImgBB host family the renderer
+ * uses, and returns the address the page now lives at — the slug only moves
+ * when the caller sends one, so a corrected typo does not break a shared link.
+ */
+export async function updateGig(gigId: string, draft: GigUpdate): Promise<string> {
+  const { data, error } = await getSupabase().rpc('update_gig', {
+    p_gig_id: gigId,
+    p_title: draft.title,
+    p_description: draft.description,
+    p_budget_min: draft.budgetMin,
+    p_budget_max: draft.budgetMax,
+    p_is_hourly: draft.isHourly,
+    p_duration_days: draft.durationDays,
+    p_skills: normaliseSkills(draft.skills),
+    p_cover_url: draft.coverUrl ?? null,
+    p_slug: draft.slug ?? null,
+  });
+  if (error) throw toDataError(error);
+  return typeof data === 'string' ? data : '';
+}
+
+/** Stops a gig accepting proposals, keeping its page and its queue. */
+export async function closeGig(gigId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('close_gig', { p_gig_id: gigId });
+  if (error) throw toDataError(error);
+  wakePushDelivery();
+}
+
+/**
+ * Removes a gig.
+ *
+ * `confirmBids` is not a formality: `delete_gig` refuses with 22023 while
+ * proposals exist unless it is true, because deleting the gig destroys each
+ * freelancer's record of what they offered. The page reads the number out of
+ * `gig.proposals` and asks before calling this with `true`.
+ */
+export async function deleteGig(gigId: string, confirmBids = false): Promise<void> {
+  const { error } = await getSupabase().rpc('delete_gig', {
+    p_gig_id: gigId,
+    p_confirm_bids: confirmBids,
+  });
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Corrects a job in place (migration 0128).
+ *
+ * The poster or staff only, decided by the routine rather than by this module.
+ */
+export async function updateJob(jobId: string, draft: JobUpdate): Promise<string> {
+  const { data, error } = await getSupabase().rpc('update_job', {
+    p_job_id: jobId,
+    p_title: draft.title,
+    p_company: draft.company,
+    p_description: draft.description,
+    p_job_type: draft.jobType,
+    p_work_mode: draft.workMode,
+    p_level: draft.level,
+    p_city: draft.city,
+    p_salary_min: draft.salaryMin,
+    p_salary_max: draft.salaryMax,
+    p_salary_period: draft.salaryPeriod,
+    p_skills: normaliseSkills(draft.skills),
+    p_apply_url: draft.applyUrl,
+    p_expires_at: draft.expiresAt,
+    p_cover_url: draft.coverUrl ?? null,
+    p_slug: draft.slug ?? null,
+  });
+  if (error) throw toDataError(error);
+  return typeof data === 'string' ? data : '';
+}
+
+/**
+ * Stops a job accepting applications.
+ *
+ * The applicant queue stays readable to the poster afterwards, on purpose:
+ * closing a role does not answer the people who applied for it.
+ */
+export async function closeJob(jobId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('close_job', { p_job_id: jobId });
+  if (error) throw toDataError(error);
+  wakePushDelivery();
+}
+
+/** Removes a job. `confirmApplications` is required by the server while applications exist. */
+export async function deleteJob(jobId: string, confirmApplications = false): Promise<void> {
+  const { error } = await getSupabase().rpc('delete_job', {
+    p_job_id: jobId,
+    p_confirm_applications: confirmApplications,
+  });
+  if (error) throw toDataError(error);
 }
 
 // ------------------------------- projects ------------------------------------

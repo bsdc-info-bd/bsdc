@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +60,7 @@ import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
@@ -113,6 +115,12 @@ fun GigDetailScreen(
     var pitch by remember(slug) { mutableStateOf("") }
     var bid by remember(slug) { mutableStateOf("") }
     var days by remember(slug) { mutableStateOf("7") }
+    // Owner controls. Which of them are offered is decided by
+    // `OwnerActionsLogic` from the row and the viewer, not guessed here; the
+    // routines re-check on the write regardless.
+    var pendingClose by remember(slug) { mutableStateOf(false) }
+    var pendingDelete by remember(slug) { mutableStateOf(false) }
+    var ownerBusy by remember(slug) { mutableStateOf(false) }
 
     fun showInfo(message: String, tone: BsdcTone = BsdcTone.OK) {
         banner = message
@@ -141,6 +149,38 @@ fun GigDetailScreen(
             }
         }
         repository.recordJobView(current?.id.orEmpty())
+    }
+
+    fun closeGig(current: GigDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            repository.closeGig(current.id)
+                .onSuccess {
+                    pendingClose = false
+                    showInfo(if (bn) "গিগটি বন্ধ হয়েছে এবং প্রস্তাবদাতাদের জানানো হয়েছে।" else "The gig is closed and every bidder was told.")
+                    reloadNonce += 1
+                }
+                .onFailure { showInfo(ownerFailureMessage(it, bn), BsdcTone.WARN) }
+            ownerBusy = false
+        }
+    }
+
+    fun deleteGig(current: GigDto) {
+        if (ownerBusy) return
+        ownerBusy = true
+        scope.launch {
+            // The banner the client just read said how many proposals would go, so the
+            // confirmation the routine asks for is the one they actually gave.
+            repository.deleteGig(current.id, confirmBids = current.proposalsCount > 0)
+                .onSuccess {
+                    pendingDelete = false
+                    showInfo(if (bn) "গিগটি মুছে ফেলা হয়েছে।" else "The gig was deleted.")
+                    onBack()
+                }
+                .onFailure { showInfo(ownerFailureMessage(it, bn), BsdcTone.WARN) }
+            ownerBusy = false
+        }
     }
 
     fun share(current: GigDto, budgetLabel: String) {
@@ -462,6 +502,61 @@ fun GigDetailScreen(
                     }
                 }
 
+                val controls = OwnerActionsLogic.listingControls(
+                    status = current.status,
+                    isOwner = isOwner,
+                    isStaff = false,
+                )
+                if (controls.any) {
+                    item {
+                        BsdcCard {
+                            BsdcSectionHeader(
+                                title = if (bn) "আপনার গিগ" else "Your gig",
+                                subtitle = if (bn) {
+                                    "গিগের লেখা ঠিক করুন, প্রস্তাব নেওয়া বন্ধ করুন, বা মুছে ফেলুন।"
+                                } else {
+                                    "Correct the brief, stop taking proposals, or remove it."
+                                },
+                            )
+                            FlowRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (controls.canClose) {
+                                    BsdcButton(
+                                        label = if (bn) "প্রস্তাব বন্ধ করুন" else "Close to proposals",
+                                        onClick = { pendingClose = true },
+                                        secondary = true,
+                                        busy = ownerBusy,
+                                    )
+                                }
+                                if (controls.canDelete) {
+                                    BsdcButton(
+                                        label = if (bn) "গিগ মুছুন" else "Delete gig",
+                                        onClick = { pendingDelete = true },
+                                        secondary = true,
+                                        enabled = !ownerBusy,
+                                    )
+                                }
+                                BsdcButton(
+                                    label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
+                                    onClick = {
+                                        // The app has no multi-field editor yet; the web
+                                        // editor is the same routine and the same rules, so
+                                        // the honest control opens it rather than pretending.
+                                        val intent = Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("${GigDetailLogic.webUrl(current.slug)}"),
+                                        )
+                                        runCatching { context.startActivity(intent) }
+                                    },
+                                    secondary = true,
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (current.skills.isNotEmpty()) {
                     item {
                         BsdcCard {
@@ -758,6 +853,37 @@ fun GigDetailScreen(
         }
     }
 
+    val confirmGig = gig
+    if (confirmGig != null && pendingClose) {
+        BsdcConfirmDialog(
+            visible = true,
+            title = if (bn) "প্রস্তাব নেওয়া বন্ধ করবেন?" else "Stop taking proposals?",
+            message = OwnerActionsLogic.closeMessage(OwnerActionsLogic.DeleteMessage.GIG, bn),
+            confirmLabel = if (bn) "বন্ধ করুন" else "Close it",
+            cancelLabel = if (bn) "বাতিল" else "Keep it open",
+            onConfirm = { closeGig(confirmGig) },
+            onDismiss = { pendingClose = false },
+            busy = ownerBusy,
+        )
+    }
+    if (confirmGig != null && pendingDelete) {
+        BsdcConfirmDialog(
+            visible = true,
+            title = if (bn) "এই গিগটি মুছবেন?" else "Delete this gig?",
+            message = OwnerActionsLogic.deleteMessage(
+                OwnerActionsLogic.DeleteMessage.GIG,
+                confirmGig.proposalsCount,
+                bn,
+            ),
+            confirmLabel = if (bn) "মুছুন" else "Delete",
+            cancelLabel = if (bn) "বাতিল" else "Cancel",
+            onConfirm = { deleteGig(confirmGig) },
+            onDismiss = { pendingDelete = false },
+            busy = ownerBusy,
+            destructive = true,
+        )
+    }
+
     if (showProposalSheet) {
         val current = gig
         AlertDialog(
@@ -870,4 +996,32 @@ internal fun proposalProblemMessage(code: String, bn: Boolean): String = when (c
         "Delivery cannot exceed ${DiscoverSearchEngine.MAX_DELIVERY_DAYS} days."
     }
     else -> if (bn) "তথ্যগুলো আবার দেখুন।" else "Please check the details."
+}
+
+/**
+ * What to tell the owner when a write is refused.
+ *
+ * The routines speak in SQLSTATEs and English sentences; a member should read neither.
+ * 42501 is "not yours", P0002 is "it is already gone", and anything else is the generic
+ * failure — the same three answers the website gives through `dataErrorKey`.
+ */
+internal fun ownerFailureMessage(error: Throwable, bn: Boolean): String {
+    val message = error.message.orEmpty()
+    return when {
+        message.contains("42501") -> if (bn) {
+            "এই কাজটি করার অনুমতি আপনার নেই।"
+        } else {
+            "You are not allowed to do that."
+        }
+        message.contains("P0002") || message.contains("not found") -> if (bn) {
+            "এটি আর নেই।"
+        } else {
+            "It is already gone."
+        }
+        else -> if (bn) {
+            "কিছু একটা ভুল হয়েছে। আবার চেষ্টা করুন।"
+        } else {
+            "Something went wrong. Please try again."
+        }
+    }
 }
