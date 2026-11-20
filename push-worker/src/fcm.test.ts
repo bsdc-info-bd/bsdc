@@ -135,6 +135,7 @@ describe('FCM HTTP v1 delivery', () => {
 
   it('classifies FCM HTTP v1 status and error bodies accurately', () => {
     expect(classifyFcmError(200, '{}')).toBe('sent');
+    expect(classifyFcmError(410, '')).toBe('dead');
     expect(classifyFcmError(404, '{"error":{"status":"NOT_FOUND"}}')).toBe('dead');
     expect(classifyFcmError(400, '{"error":{"details":[{"errorCode":"UNREGISTERED"}]}}')).toBe(
       'dead',
@@ -293,6 +294,7 @@ describe('FCM HTTP v1 delivery', () => {
     expect(outcome).toBe('sent');
     const msg = sent[0]?.body['message'] as Record<string, unknown>;
     expect(msg['notification']).toBeDefined();
+    expect(msg['webpush']).toMatchObject({ headers: { Urgency: 'high', TTL: '86400' } });
     expect((msg['webpush'] as { fcm_options?: { link?: string } }).fcm_options?.link).toBe(
       'https://www.bsdc.info.bd/messages/c1',
     );

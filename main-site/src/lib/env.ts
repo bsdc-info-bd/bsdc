@@ -79,16 +79,6 @@ const raw: PublicEnv = {
 
 export const env: PublicEnv = validate(raw);
 
-export function effectivePushVapidConfig(
-  push: PublicEnv['push'],
-): { mode: 'webpush' | 'fcm'; publicKey: string } | null {
-  const webPush = push.webPushPublicKey.trim();
-  if (webPush.length > 0) return { mode: 'webpush', publicKey: webPush };
-  const fcm = push.vapidPublicKey.trim();
-  if (fcm.length > 0) return { mode: 'fcm', publicKey: fcm };
-  return null;
-}
-
 /** Service clients are only constructed when their configuration is present. */
 export const isConfigured = {
   firebase: raw.firebase.apiKey.length > 0 && raw.firebase.projectId.length > 0,

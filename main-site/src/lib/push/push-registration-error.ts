@@ -12,10 +12,11 @@ export function pushRegistrationErrorKey(error: unknown): string {
   const cause = error instanceof PushStageError ? error.cause : error;
   const key = dataErrorKey(cause);
   if (error instanceof PushStageError) {
-    if (error.stage === 'subscribeRefused' && cause instanceof Error) {
-      if (cause.name === 'NotAllowedError') return 'push.errors.subscribeNotAllowed';
-      if (cause.name === 'AbortError') return 'push.errors.subscribeAborted';
-      if (cause.name === 'InvalidStateError') return 'push.errors.subscribeInvalidState';
+    if (error.stage === 'subscribeRefused') {
+      const name = browserErrorName(cause);
+      if (name === 'NotAllowedError') return 'push.errors.subscribeNotAllowed';
+      if (name === 'AbortError') return 'push.errors.subscribeAborted';
+      if (name === 'InvalidStateError') return 'push.errors.subscribeInvalidState';
     }
     if (key !== 'data.errors.generic' && key !== 'push.errors.failed') return key;
     return `push.errors.${error.stage}`;
@@ -47,4 +48,14 @@ export function recordPushAttempt(mode: string, result: string, error?: unknown)
   } catch {
     // Debugging must not interfere with registration.
   }
+}
+
+// DOMException is not necessarily an Error from this JavaScript realm.
+export function browserErrorName(error: unknown): string | undefined {
+  return typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    typeof error.name === 'string'
+    ? error.name
+    : undefined;
 }

@@ -103,6 +103,12 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
 
         {blocked ? (
           <Alert tone={push.permission === 'denied' ? 'warning' : 'info'} title={t(push.blockKey)}>
+            {push.block === 'unconfigured' ? (
+              <Button size="sm" variant="secondary" onClick={push.retryConfiguration}>
+                {t('common.retry')}
+              </Button>
+            ) : null}
+
             {push.permission === 'denied' ? t('push.denied.body') : t('push.blocked.body')}
           </Alert>
         ) : null}

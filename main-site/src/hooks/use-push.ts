@@ -26,6 +26,7 @@ import { dataErrorKey } from '@/lib/supabase/errors';
 import { resolvePushConfig } from '@/lib/push/push-config';
 import { readyServiceWorker } from '@/lib/push/ready-worker';
 import {
+  browserErrorName,
   recordPushAttempt,
   pushRegistrationErrorKey,
   PushStageError,
@@ -52,6 +53,7 @@ export interface PushControl {
   busy: boolean;
   errorKey: string | null;
   dismissError: () => void;
+  retryConfiguration: () => void;
   enable: () => Promise<boolean>;
   disable: () => Promise<boolean>;
   removeDevice: (endpoint: string) => Promise<boolean>;
@@ -118,7 +120,7 @@ async function subscribeHere(
       applicationServerKey: keyBytes,
     });
   } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
+    if (browserErrorName(error) === 'AbortError') {
       await new Promise((resolve) => setTimeout(resolve, 300));
       return registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -126,8 +128,8 @@ async function subscribeHere(
       });
     }
     if (
-      error instanceof Error &&
-      (error.name === 'InvalidStateError' || error.message.includes('applicationServerKey'))
+      browserErrorName(error) === 'InvalidStateError' ||
+      (error instanceof Error && error.message.includes('applicationServerKey'))
     ) {
       const stale = await registration.pushManager.getSubscription().catch(() => null);
       if (stale !== null) {
@@ -412,6 +414,9 @@ export function usePush(): PushControl {
     busy,
     errorKey,
     dismissError,
+    retryConfiguration: () => {
+      void runtimeQuery.refetch();
+    },
     enable,
     disable,
     removeDevice,
