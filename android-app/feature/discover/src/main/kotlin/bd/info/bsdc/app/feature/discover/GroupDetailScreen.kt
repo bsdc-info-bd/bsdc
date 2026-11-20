@@ -595,19 +595,7 @@ fun GroupDetailScreen(
             }
         }
     }
-}
 
-private enum class GroupTab { CHANNELS, MEMBERS }
-
-private data class MemberView(val username: String, val displayName: String, val avatarUrl: String?)
-
-private fun GroupMemberDto.profile(): MemberView {
-    val name = profiles?.displayName?.takeIf { it.isNotBlank() } ?: profiles?.username.orEmpty()
-    return MemberView(
-        username = profiles?.username.orEmpty(),
-        displayName = name.ifBlank { "•" },
-        avatarUrl = profiles?.avatarUrl,
-    )
     val confirmGroup = group
     if (confirmGroup != null && pendingDelete) {
         BsdcConfirmDialog(
@@ -622,5 +610,17 @@ private fun GroupMemberDto.profile(): MemberView {
             destructive = true,
         )
     }
+}
 
+private enum class GroupTab { CHANNELS, MEMBERS }
+
+private data class MemberView(val username: String, val displayName: String, val avatarUrl: String?)
+
+private fun GroupMemberDto.profile(): MemberView {
+    val name = profiles?.displayName?.takeIf { it.isNotBlank() } ?: profiles?.username.orEmpty()
+    return MemberView(
+        username = profiles?.username.orEmpty(),
+        displayName = name.ifBlank { "•" },
+        avatarUrl = profiles?.avatarUrl,
+    )
 }

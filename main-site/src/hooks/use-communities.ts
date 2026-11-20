@@ -291,10 +291,7 @@ export type GroupUpdateInput = {
 };
 
 export interface GroupOwnerActions {
-  save: (
-    groupId: string,
-    input: GroupUpdateInput,
-  ) => Promise<void>;
+  save: (groupId: string, input: GroupUpdateInput) => Promise<void>;
   remove: (groupId: string) => Promise<void>;
   isSaving: boolean;
   isRemoving: boolean;
@@ -319,13 +316,8 @@ export function useGroupOwnerActions(): GroupOwnerActions {
   };
 
   const save = useMutation({
-    mutationFn: async ({
-      groupId,
-      input,
-    }: {
-      groupId: string;
-      input: GroupUpdateInput;
-    }) => (await repository()).updateGroup(groupId, input),
+    mutationFn: async ({ groupId, input }: { groupId: string; input: GroupUpdateInput }) =>
+      (await repository()).updateGroup(groupId, input),
     onSuccess: invalidate,
     onError: invalidate,
   });
@@ -345,10 +337,7 @@ export function useGroupOwnerActions(): GroupOwnerActions {
 }
 
 export interface EventOwnerActions {
-  save: (
-    eventId: string,
-    draft: EventUpdate,
-  ) => Promise<string>;
+  save: (eventId: string, draft: EventUpdate) => Promise<string>;
   cancel: (eventId: string) => Promise<void>;
   remove: (eventId: string) => Promise<void>;
   isSaving: boolean;
@@ -367,13 +356,8 @@ export function useEventOwnerActions(): EventOwnerActions {
   };
 
   const save = useMutation({
-    mutationFn: async ({
-      eventId,
-      draft,
-    }: {
-      eventId: string;
-      draft: EventUpdate;
-    }) => (await repository()).updateEvent(eventId, draft),
+    mutationFn: async ({ eventId, draft }: { eventId: string; draft: EventUpdate }) =>
+      (await repository()).updateEvent(eventId, draft),
     onSuccess: invalidate,
     onError: invalidate,
   });
