@@ -356,12 +356,10 @@ check(
   'and the group the RPC made still has exactly one member: its owner',
 );
 
-// The same migration leaves channels alone, because a group's moderators write
-// them directly and there is no routine for it.
+// The group's owner shapes its channels through the 0130 routine.
 const channel = await as(
   ada,
-  `insert into public.channels (group_id, slug, name, "position")
-     values ('${groupId}', 'announcements', 'announcements', 1) returning slug`,
+  `select public.create_channel('${groupId}', 'announcements', 'announcements', '') as id`,
 );
 check(
   channel.ok,

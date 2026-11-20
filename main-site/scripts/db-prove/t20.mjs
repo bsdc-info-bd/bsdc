@@ -97,9 +97,12 @@ const restore = (db, uid, table, id) =>
 // ---------------------------------------------------------------------------
 // Before: what a delete does today
 // ---------------------------------------------------------------------------
-// 0068, 0085, 0088, 0092 and 0106 depend on deleted_at from 0050; omit them only in this historical pre-trash fixture.
+// 0068, 0085, 0088, 0092 and 0106 depend on deleted_at from 0050, and 0129
+// reads bsdc.can_read_channel (defined in 0068); omit all of them only in this
+// historical pre-trash, pre-channel-rules fixture. The real database always
+// has both.
 const before = await makeDb({
-  skip: ['0050_', '0052_', '0053_', '0068_', '0085_', '0088_', '0092_', '0106_'],
+  skip: ['0050_', '0052_', '0053_', '0068_', '0085_', '0088_', '0092_', '0106_', '0129_'],
 });
 await before.exec(`
   insert into public.profiles (uid, display_name, username) values

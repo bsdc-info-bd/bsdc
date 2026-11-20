@@ -34,6 +34,7 @@ const MessagesPage = lazy(() => import('@/routes/MessagesPage'));
 const GroupsPage = lazy(() => import('@/routes/GroupsPage'));
 const CreatePage = lazy(() => import('@/routes/CreatePage'));
 const GroupPage = lazy(() => import('@/routes/GroupPage'));
+const ChannelPage = lazy(() => import('@/routes/ChannelPage'));
 const EventsPage = lazy(() => import('@/routes/EventsPage'));
 const EventPage = lazy(() => import('@/routes/EventPage'));
 const JobsPage = lazy(() => import('@/routes/JobsPage'));
@@ -175,6 +176,7 @@ const router = createBrowserRouter([
       // Communities are public surfaces; privacy is enforced by the database.
       { path: ROUTES.groups, element: withSuspense(<GroupsPage />) },
       { path: '/g/:slug', element: withSuspense(<GroupPage />) },
+      { path: '/g/:slug/c/:channelSlug', element: withSuspense(<ChannelPage />) },
       { path: ROUTES.events, element: withSuspense(<EventsPage />) },
       { path: `${ROUTES.events}/:slug`, element: withSuspense(<EventPage />) },
 

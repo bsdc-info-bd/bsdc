@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { MediaImage } from '@/components/media/MediaImage';
+import { ChannelManager, ChannelRowControls } from '@/components/communities/ChannelManager';
 import { GroupEditDialog } from '@/components/communities/CommunityEditForm';
 import { OwnerActions } from '@/components/listings/OwnerActions';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
@@ -20,6 +21,12 @@ import {
 } from '@/design-system';
 import { useGroup, useGroupOwnerActions } from '@/hooks/use-communities';
 import {
+  closeChannel,
+  createChannel,
+  openChannel,
+  updateChannel,
+} from '@/lib/communities/community-repository';
+import {
   canAdministerGroup,
   canModerateGroup,
   joinAction,
@@ -27,7 +34,7 @@ import {
   type GroupMemberEntry,
 } from '@/lib/communities/community-types';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { ROUTES, groupPath, profilePath, SITE } from '@/lib/site';
+import { ROUTES, channelPath, groupPath, profilePath, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -43,6 +50,7 @@ export default function GroupPage() {
   const isStaff = useAuthStore((state) => state.claims?.staff ?? false);
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
+  const [channelSaving, setChannelSaving] = useState(false);
   const group = detail.group;
 
   if (detail.isLoading) {
@@ -94,6 +102,18 @@ export default function GroupPage() {
     }
   }
 
+  async function withChannelSave(run: () => Promise<void>): Promise<void> {
+    setChannelSaving(true);
+    try {
+      await run();
+      detail.refresh();
+    } catch (error) {
+      toast.error(t(dataErrorKey(error)));
+    } finally {
+      setChannelSaving(false);
+    }
+  }
+
   const items: TabItem[] = [
     {
       id: 'channels',
@@ -106,20 +126,60 @@ export default function GroupPage() {
             description={t('groups.noChannelsBody')}
           />
         ) : (
-          <ul className="flex flex-col gap-2">
-            {detail.channels.map((channel) => (
-              <Card as="li" key={channel.id} padded={false} className="p-3">
-                <p className="flex items-center gap-1 text-sm font-semibold">
-                  <Hash size={14} aria-hidden="true" />
-                  {channel.name}
-                  {channel.isReadOnly ? <Badge tone="neutral">{t('groups.readOnly')}</Badge> : null}
-                </p>
-                {channel.topic.length > 0 ? (
-                  <p className="mt-1 text-xs text-muted">{channel.topic}</p>
-                ) : null}
-              </Card>
-            ))}
-          </ul>
+          <div className="flex flex-col gap-2">
+            {moderator ? (
+              <div className="flex justify-end">
+                <ChannelManager
+                  isSaving={channelSaving}
+                  onCreate={(draft) =>
+                    withChannelSave(() =>
+                      createChannel(group.id, draft.slug, draft.name, draft.topic),
+                    )
+                  }
+                />
+              </div>
+            ) : null}
+            <ul className="flex flex-col gap-2">
+              {detail.channels.map((channel, index) => (
+                <Card as="li" key={channel.id} padded={false} className="p-3">
+                  <p className="flex items-center gap-1 text-sm font-semibold">
+                    <Hash size={14} aria-hidden="true" />
+                    <Link to={channelPath(group.slug, channel.slug)}>{channel.name}</Link>
+                    {channel.isReadOnly ? (
+                      <Badge tone="neutral">{t('groups.readOnly')}</Badge>
+                    ) : null}
+                  </p>
+                  {channel.topic.length > 0 ? (
+                    <p className="mt-1 text-xs text-muted">{channel.topic}</p>
+                  ) : null}
+                  <p className="mt-0.5 text-xs text-muted">
+                    {t('channels.posts', { count: channel.postCount })}
+                  </p>
+                  {moderator ? (
+                    <div className="mt-2">
+                      <ChannelRowControls
+                        channel={channel}
+                        index={index}
+                        total={detail.channels.length}
+                        isSaving={channelSaving}
+                        onRename={(channelId, name, topic) =>
+                          withChannelSave(() => updateChannel(channelId, { name, topic }))
+                        }
+                        onMove={(channelId, position) =>
+                          withChannelSave(() => updateChannel(channelId, { position }))
+                        }
+                        onToggleReadOnly={(ch) =>
+                          withChannelSave(() =>
+                            ch.isReadOnly ? openChannel(ch.id) : closeChannel(ch.id),
+                          )
+                        }
+                      />
+                    </div>
+                  ) : null}
+                </Card>
+              ))}
+            </ul>
+          </div>
         ),
     },
     {

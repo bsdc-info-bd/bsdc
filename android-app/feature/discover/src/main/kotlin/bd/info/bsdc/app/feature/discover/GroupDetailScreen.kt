@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -98,6 +99,9 @@ fun GroupDetailScreen(
     var notice by remember(slug) { mutableStateOf<Pair<String, BsdcTone>?>(null) }
     var tab by remember(slug) { mutableStateOf(GroupTab.CHANNELS) }
     var memberQuery by rememberSaveable(slug) { mutableStateOf("") }
+    var channelSaving by remember(slug) { mutableStateOf(false) }
+    var showAddChannel by remember(slug) { mutableStateOf(false) }
+    var editingChannelId by remember(slug) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -165,6 +169,23 @@ fun GroupDetailScreen(
                     notice = (err.localizedMessage ?: if (bn) "অনুরোধটি সম্পন্ন হয়নি।" else "That did not work.") to BsdcTone.BAD
                 }
             busy = false
+        }
+    }
+
+    /** Runs a channel-management action, reloading the group's channels after. */
+    fun runChannelAction(action: suspend () -> Result<Unit>, onDone: () -> Unit = {}) {
+        if (channelSaving) return
+        channelSaving = true
+        scope.launch {
+            action()
+                .onSuccess {
+                    reloadNonce += 1
+                    onDone()
+                }
+                .onFailure {
+                    notice = (it.localizedMessage ?: if (bn) "অনুরোধটি সম্পন্ন হয়নি।" else "That did not work.") to BsdcTone.BAD
+                }
+            channelSaving = false
         }
     }
 
@@ -468,6 +489,26 @@ fun GroupDetailScreen(
 
                         when (tab) {
                             GroupTab.CHANNELS -> {
+                                val canModerate = GroupDetailLogic.canModerate(viewer.role)
+                                if (canModerate) {
+                                    item {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 4.dp),
+                                        ) {
+                                            Text(
+                                                text = if (bn) "চ্যানেল যোগ করুন" else "Add channel",
+                                                style = MaterialTheme.typography.labelLarge,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier
+                                                    .clickable(enabled = !channelSaving) { showAddChannel = true }
+                                                    .padding(vertical = 4.dp),
+                                            )
+                                        }
+                                    }
+                                }
                                 if (channels.isEmpty()) {
                                     item {
                                         BsdcEmptyState(
@@ -493,6 +534,31 @@ fun GroupDetailScreen(
                                         }
                                         channel.topic?.takeIf { it.isNotBlank() }?.let { topic ->
                                             Text(text = topic, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        if (canModerate) {
+                                            ChannelRowControls(
+                                                channel = channel,
+                                                index = channels.indexOf(channel),
+                                                total = channels.size,
+                                                saving = channelSaving,
+                                                editing = editingChannelId == channel.id,
+                                                onStartEdit = { editingChannelId = channel.id },
+                                                onCancelEdit = { editingChannelId = null },
+                                                onRename = { name, topic ->
+                                                    runChannelAction({ repository.updateChannel(channel.id, name, topic) }) {
+                                                        editingChannelId = null
+                                                    }
+                                                },
+                                                onMove = { position ->
+                                                    runChannelAction({ repository.updateChannel(channel.id, position = position) })
+                                                },
+                                                onToggleReadOnly = {
+                                                    runChannelAction({
+                                                        if (channel.isReadOnly) repository.openChannel(channel.id) else repository.closeChannel(channel.id)
+                                                    })
+                                                },
+                                                bn = bn,
+                                            )
                                         }
                                     }
                                 }
@@ -610,6 +676,162 @@ fun GroupDetailScreen(
             destructive = true,
         )
     }
+
+    val addGroup = group
+    if (addGroup != null && showAddChannel) {
+        AddChannelDialog(
+            visible = true,
+            saving = channelSaving,
+            onDismiss = { showAddChannel = false },
+            onCreate = { slug, name, topic ->
+                runChannelAction({ repository.createChannel(addGroup.id, slug, name, topic) }) {
+                    showAddChannel = false
+                }
+            },
+            bn = bn,
+        )
+    }
+}
+
+/**
+ * One channel's row controls: rename, move up or down, and close or open.
+ * The rename is committed with a single `update_channel` call.
+ */
+@Composable
+private fun ChannelRowControls(
+    channel: GroupChannelDto,
+    index: Int,
+    total: Int,
+    saving: Boolean,
+    editing: Boolean,
+    onStartEdit: () -> Unit,
+    onCancelEdit: () -> Unit,
+    onRename: (name: String, topic: String) -> Unit,
+    onMove: (position: Int) -> Unit,
+    onToggleReadOnly: () -> Unit,
+    bn: Boolean,
+) {
+    if (editing) {
+        var name by remember { mutableStateOf(channel.name) }
+        var topic by remember { mutableStateOf(channel.topic.orEmpty()) }
+        Column(modifier = Modifier.padding(top = 8.dp)) {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(if (bn) "নাম" else "Name") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = topic,
+                onValueChange = { topic = it },
+                label = { Text(if (bn) "টপিক" else "Topic") },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.End, modifier = Modifier.padding(top = 4.dp)) {
+                BsdcButton(
+                    onClick = onCancelEdit,
+                    enabled = !saving,
+                    secondary = true,
+                    label = if (bn) "বাতিল" else "Cancel",
+                )
+                BsdcButton(
+                    onClick = { onRename(name.trim(), topic.trim()) },
+                    enabled = !saving,
+                    label = if (bn) "সংরক্ষণ" else "Save",
+                )
+            }
+        }
+    } else {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(top = 4.dp),
+        ) {
+            BsdcButton(
+                onClick = onStartEdit,
+                enabled = !saving,
+                secondary = true,
+                label = if (bn) "নাম পরিবর্তন" else "Rename",
+            )
+            BsdcButton(
+                onClick = { onMove(channel.position - 1) },
+                enabled = !saving && index > 0,
+                secondary = true,
+                label = "↑",
+            )
+            BsdcButton(
+                onClick = { onMove(channel.position + 1) },
+                enabled = !saving && index < total - 1,
+                secondary = true,
+                label = "↓",
+            )
+            BsdcButton(
+                onClick = onToggleReadOnly,
+                enabled = !saving,
+                secondary = true,
+                label = if (channel.isReadOnly) (if (bn) "খুলুন" else "Open") else (if (bn) "বন্ধ করুন" else "Close"),
+            )
+        }
+    }
+}
+
+/** The dialog that builds a new channel through the 0130 routine. */
+@Composable
+private fun AddChannelDialog(
+    visible: Boolean,
+    saving: Boolean,
+    onDismiss: () -> Unit,
+    onCreate: (slug: String, name: String, topic: String) -> Unit,
+    bn: Boolean,
+) {
+    var slug by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf("") }
+    var topic by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { if (!saving) onDismiss() },
+        title = { Text(if (bn) "নতুন চ্যানেল" else "New channel") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = slug,
+                    onValueChange = { slug = it },
+                    label = { Text(if (bn) "ঠিকানা" else "Address") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text(if (bn) "নাম" else "Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = topic,
+                    onValueChange = { topic = it },
+                    label = { Text(if (bn) "টপিক" else "Topic") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            BsdcButton(
+                onClick = { onCreate(slug.trim(), name.trim(), topic.trim()) },
+                enabled = !saving && name.isNotBlank(),
+                busy = saving,
+                label = if (bn) "তৈরি করুন" else "Create",
+            )
+        },
+        dismissButton = {
+            BsdcButton(
+                onClick = onDismiss,
+                enabled = !saving,
+                secondary = true,
+                label = if (bn) "বাতিল" else "Cancel",
+            )
+        },
+    )
 }
 
 private enum class GroupTab { CHANNELS, MEMBERS }

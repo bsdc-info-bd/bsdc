@@ -23,6 +23,15 @@ import {
   type TabItem,
 } from '@/design-system';
 import { useDraftAutosave } from '@/hooks/use-draft-autosave';
+import { usePostableChannels } from '@/hooks/use-channels';
+import {
+  channelSelectGroups,
+  channelIdFromValue,
+  channelValue,
+  reconcileVisibility,
+  visibilityAllowedInChannel,
+  type ChannelPickerCopy,
+} from '@/lib/channels/channel-options';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaGallery } from '@/components/media/MediaGallery';
 import { MediaTray } from '@/components/media/MediaTray';
@@ -216,6 +225,19 @@ export default function ComposePage() {
     poll: t('compose.kinds.poll'),
     snippet: t('compose.kinds.snippet'),
     media: t('compose.kinds.media'),
+  };
+
+  // The rooms this member may post into. A member of no group sees the
+  // composer they always had: no channel selector at all.
+  const { channels } = usePostableChannels();
+  const pickerCopy: ChannelPickerCopy = {
+    feed: t('compose.channelFeed'),
+    reason: {
+      'channel/read-only': t('channels.reasons.readOnly'),
+      'channel/not-member': t('channels.reasons.notMember'),
+      'channel/archived': t('channels.reasons.archived'),
+      'channel/not-found': t('channels.reasons.notFound'),
+    },
   };
 
   async function submit(status: 'draft' | 'published') {
@@ -587,6 +609,29 @@ export default function ComposePage() {
                 <Tabs items={tabs} activeId={tab} onChange={setTab} label={t('compose.title')} />
               </Card>
 
+              {channels.length > 0 ? (
+                <Card className="mt-4">
+                  <SelectField
+                    label={t('compose.fields.channel')}
+                    value={channelValue(draft.channelId)}
+                    onChange={(event) => {
+                      const channelId = channelIdFromValue(event.target.value);
+                      setDraft((current) => ({
+                        ...current,
+                        channelId,
+                        visibility: reconcileVisibility(current.visibility, channelId),
+                      }));
+                    }}
+                    groups={channelSelectGroups(channels, pickerCopy)}
+                    hint={
+                      draft.channelId !== null
+                        ? t('compose.channelHintGroup')
+                        : t('compose.channelHintFeed')
+                    }
+                  />
+                </Card>
+              ) : null}
+
               <Card className="mt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <SelectField
@@ -596,7 +641,13 @@ export default function ComposePage() {
                     options={VISIBILITIES.map((visibility) => ({
                       value: visibility,
                       label: t(`compose.visibility.${visibility}`),
+                      // `private` cannot survive inside a channel: the option is
+                      // greyed out and the save would be refused anyway.
+                      disabled: !visibilityAllowedInChannel(visibility, draft.channelId),
                     }))}
+                    hint={
+                      draft.channelId !== null ? t('compose.visibilityInChannelHint') : undefined
+                    }
                   />
                   <SelectField
                     label={t('compose.fields.language')}

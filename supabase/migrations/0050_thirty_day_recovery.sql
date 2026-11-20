@@ -123,6 +123,11 @@ create policy comments_insert_self on public.comments
 --   sync_comment_counts a comment in the trash is not a comment on anything
 -- ---------------------------------------------------------------------------
 
+-- Dropped first because 0129 widened this routine's OUT list (a channel post
+-- needs to say which channel it came from) and `create or replace` cannot
+-- change a return type. Precedent: 0013 and 0066.
+drop function if exists public.feed_candidates(integer, timestamptz);
+
 CREATE OR REPLACE FUNCTION public.feed_candidates(p_limit integer DEFAULT 60, p_before timestamp with time zone DEFAULT NULL::timestamp with time zone)
  RETURNS TABLE(post_id uuid, author_uid text, published_at timestamp with time zone, likes_count integer, comments_count integer, views_count integer, language text, is_sensitive boolean, kind bsdc_post_kind, author_followed boolean, affinity real, already_seen boolean, tags text[])
  LANGUAGE sql

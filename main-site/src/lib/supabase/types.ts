@@ -291,6 +291,23 @@ export type FeedCandidateRow = {
   affinity: number;
   already_seen: boolean;
   tags: string[];
+  channel_id: string | null;
+  channel_name: string | null;
+  channel_slug: string | null;
+  group_slug: string | null;
+  group_name: string | null;
+};
+
+/** One row of `channel_post_block_many`: the verdict on a channel. */
+export type ChannelPostBlockRow = {
+  channel_id: string;
+  block: string | null;
+};
+
+/** One row of `channel_post_counts`: the published posts of a channel. */
+export type ChannelPostCountRow = {
+  channel_id: string;
+  post_count: number;
 };
 
 export type DbReaction = 'like' | 'insightful' | 'celebrate' | 'support' | 'curious';
@@ -2604,6 +2621,22 @@ export type Database = {
         Args: { p_limit: number; p_before: string | null };
         Returns: FeedCandidateRow[];
       };
+      channel_feed: {
+        Args: { p_channel_id: string; p_limit: number; p_before: string | null };
+        Returns: FeedCandidateRow[];
+      };
+      channel_post_block: {
+        Args: { p_channel_id: string };
+        Returns: string | null;
+      };
+      channel_post_block_many: {
+        Args: { p_channel_ids: string[] };
+        Returns: ChannelPostBlockRow[];
+      };
+      channel_post_counts: {
+        Args: { p_group_id: string };
+        Returns: ChannelPostCountRow[];
+      };
       toggle_reaction: {
         Args: { p_post_id: string; p_reaction: DbReaction };
         Returns: ToggleReactionRow[];
@@ -3037,6 +3070,26 @@ export type Database = {
         Args: { p_group_id: string; p_uid: string; p_role: DbGroupRole };
         Returns: undefined;
       };
+      create_channel: {
+        Args: {
+          p_group_id: string;
+          p_slug: string;
+          p_name: string;
+          p_topic?: string;
+        };
+        Returns: string;
+      };
+      update_channel: {
+        Args: {
+          p_channel_id: string;
+          p_name?: string | null;
+          p_topic?: string | null;
+          p_position?: number | null;
+        };
+        Returns: undefined;
+      };
+      close_channel: { Args: { p_channel_id: string }; Returns: undefined };
+      open_channel: { Args: { p_channel_id: string }; Returns: undefined };
       rsvp_event: { Args: { p_event_id: string; p_status: DbRsvpStatus }; Returns: number };
       toggle_page_follow: { Args: { p_page_id: string }; Returns: boolean };
       group_directory: { Args: { p_limit: number }; Returns: GroupDirectoryRow[] };

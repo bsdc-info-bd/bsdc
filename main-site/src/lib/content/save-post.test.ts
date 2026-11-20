@@ -17,6 +17,7 @@ interface SaveArgs {
     reading_time: number;
     is_sensitive: boolean;
     allow_comments: boolean;
+    channel_id: string | null;
   };
   p_tags: string[];
   p_media: { media_id: string; position: number; alt_text: string }[];
@@ -77,6 +78,7 @@ function draft(overrides: Partial<PostDraft> = {}): PostDraft {
     pollOptions: [],
     isSensitive: false,
     allowComments: true,
+    channelId: null,
     ...overrides,
   } as PostDraft;
 }
@@ -135,6 +137,20 @@ describe('a post is saved in one call', () => {
     await savePost(draft({ kind: 'poll', pollOptions: ['Neovim', 'VS Code'] }), 'published');
 
     expect(firstCall().args.p_poll).toEqual(['Neovim', 'VS Code']);
+  });
+
+  it('sends an explicit null channel for a feed post', async () => {
+    await savePost(draft(), 'published');
+
+    expect(firstCall().args.p_post.channel_id).toBeNull();
+  });
+
+  it('sends the chosen channel id, and null again when it is cleared', async () => {
+    await savePost(draft({ channelId: 'channel-general' }), 'published');
+    expect(firstCall().args.p_post.channel_id).toBe('channel-general');
+
+    await savePost(draft({ channelId: null }), 'published');
+    expect(calls[1]?.args.p_post.channel_id).toBeNull();
   });
 
   it('keeps the language of a snippet and does not carry its code language elsewhere', async () => {

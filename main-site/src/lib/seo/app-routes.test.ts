@@ -112,6 +112,11 @@ describe('matching an address', () => {
       kind: 'param',
       pattern: '/projects/:slug/edit',
     });
+    // Four segments: the group address with its channel, not a handle.
+    expect(matchAppRoute('/g/sylhet-php/c/general')).toEqual({
+      kind: 'param',
+      pattern: '/g/:slug/c/:channelSlug',
+    });
   });
 
   it('treats a single unclaimed segment as a member handle, with or without @', () => {

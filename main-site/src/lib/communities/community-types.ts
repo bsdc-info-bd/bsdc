@@ -42,6 +42,11 @@ export interface Channel {
   topic: string;
   position: number;
   isReadOnly: boolean;
+  /**
+   * Published posts in this channel, from `channel_post_counts`. Defaults to 0
+   * when the count has not been fetched, so a card never shows a blank.
+   */
+  postCount: number;
 }
 
 export interface GroupMemberEntry {

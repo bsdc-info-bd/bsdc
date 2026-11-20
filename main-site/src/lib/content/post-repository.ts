@@ -63,6 +63,16 @@ export interface Post {
   tags: string[];
   media: PostMediaItem[];
   poll: PollOption[];
+  /**
+   * The channel this post was written into and the group that owns it, or
+   * null for a feed post. A post's address is its channel; these five fields
+   * are how a card says which room it came from.
+   */
+  channelId: string | null;
+  channelName: string | null;
+  channelSlug: string | null;
+  groupSlug: string | null;
+  groupName: string | null;
 }
 
 export interface JoinedPostRow extends PostRow {
@@ -71,6 +81,11 @@ export interface JoinedPostRow extends PostRow {
     username: string | null;
     display_name: string;
     avatar_url: string;
+  } | null;
+  channels?: {
+    slug: string;
+    name: string;
+    groups: { slug: string; name: string } | null;
   } | null;
   post_tags?: { tag_slug: string }[] | null;
   poll_options?: PollOptionRow[] | null;
@@ -92,6 +107,7 @@ export interface JoinedPostRow extends PostRow {
 export const POST_SELECT = `
   *,
   profiles:author_uid (uid, username, display_name, avatar_url),
+  channels:channel_id (slug, name, groups (slug, name)),
   post_tags (tag_slug),
   poll_options (id, post_id, position, label, votes),
   post_media (media_id, position, alt_text, media_assets (url, thumb_url, width, height))
@@ -160,6 +176,11 @@ export function toPost(row: JoinedPostRow): Post {
         position: option.position,
       }))
       .sort((a, b) => a.position - b.position),
+    channelId: row.channel_id ?? null,
+    channelName: row.channels?.name ?? null,
+    channelSlug: row.channels?.slug ?? null,
+    groupSlug: row.channels?.groups?.slug ?? null,
+    groupName: row.channels?.groups?.name ?? null,
   };
 }
 
@@ -384,6 +405,11 @@ export async function savePost(
       reading_time: readingTimeMinutes(`${title} ${body} ${draft.code}`),
       is_sensitive: draft.isSensitive,
       allow_comments: draft.allowComments,
+      // Always sent, including null: `save_post` reads an absent key as
+      // "leave the post's channel alone" and a present null as "move the
+      // post out of its channel into the feed". The draft carries a value
+      // in every case, so the composer's decision is what the save honours.
+      channel_id: draft.channelId,
     },
     // The arrays are the whole post's worth, not a patch: the save replaces what
     // the post carried, exactly as the four syncs did.

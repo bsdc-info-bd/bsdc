@@ -118,6 +118,14 @@ export async function fetchChannels(groupId: string): Promise<Channel[]> {
     .returns<ChannelRow[]>();
   if (error) throw toDataError(error);
 
+  // The post counts come in one round trip for the whole group, rather than
+  // one query per channel card.
+  const { data: counts, error: countError } = await getSupabase()
+    .rpc('channel_post_counts', { p_group_id: groupId })
+    .returns<{ channel_id: string; post_count: number }[]>();
+  if (countError) throw toDataError(countError);
+  const countsByChannel = new Map((counts ?? []).map((row) => [row.channel_id, row.post_count]));
+
   return (data ?? []).map((row) => ({
     id: row.id,
     groupId: row.group_id,
@@ -126,6 +134,7 @@ export async function fetchChannels(groupId: string): Promise<Channel[]> {
     topic: row.topic,
     position: row.position,
     isReadOnly: row.is_read_only,
+    postCount: countsByChannel.get(row.id) ?? 0,
   }));
 }
 
@@ -232,15 +241,63 @@ export async function setGroupRole(groupId: string, uid: string, role: GroupRole
   if (error) throw toDataError(error);
 }
 
+/**
+ * Adds a channel to a group (migration 0130).
+ *
+ * `create_channel` decides who may do this — `bsdc.can_moderate_group`, the
+ * same rule the row-level policy applies — and validates the slug, name and
+ * topic before the table constraint can. The room is appended after the
+ * group's current order.
+ */
 export async function createChannel(
   groupId: string,
   slug: string,
   name: string,
   topic: string,
 ): Promise<void> {
-  const { error } = await getSupabase()
-    .from('channels')
-    .insert({ group_id: groupId, slug, name, topic });
+  const { error } = await getSupabase().rpc('create_channel', {
+    p_group_id: groupId,
+    p_slug: slug,
+    p_name: name,
+    p_topic: topic,
+  });
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Renames a channel, sets its topic, or moves it in the group's order
+ * (migration 0130). A `null` for an optional argument leaves that field
+ * untouched; a moderator of the group, decided by the routine.
+ */
+export async function updateChannel(
+  channelId: string,
+  input: { name?: string | null; topic?: string | null; position?: number | null },
+): Promise<void> {
+  const { error } = await getSupabase().rpc('update_channel', {
+    p_channel_id: channelId,
+    p_name: input.name ?? null,
+    p_topic: input.topic ?? null,
+    p_position: input.position ?? null,
+  });
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Closes a channel to member posts — it becomes read-only (migration 0130).
+ * Already closed, nothing happens. A moderator of the group, decided by the
+ * routine.
+ */
+export async function closeChannel(channelId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('close_channel', { p_channel_id: channelId });
+  if (error) throw toDataError(error);
+}
+
+/**
+ * Opens a closed channel to member posts again (migration 0130). Already
+ * open, nothing happens. A moderator of the group, decided by the routine.
+ */
+export async function openChannel(channelId: string): Promise<void> {
+  const { error } = await getSupabase().rpc('open_channel', { p_channel_id: channelId });
   if (error) throw toDataError(error);
 }
 
