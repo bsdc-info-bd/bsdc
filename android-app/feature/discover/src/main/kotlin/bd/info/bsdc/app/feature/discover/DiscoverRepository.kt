@@ -343,6 +343,84 @@ class DiscoverRepository(
         }
     }
 
+    /**
+     * Adds a channel to a group (migration 0130). The routine decides who may
+     * do this and validates the slug, name and topic. The room is appended
+     * after the group's current order.
+     */
+    suspend fun createChannel(groupId: String, slug: String, name: String, topic: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                supabase.rpcText(
+                    "create_channel",
+                    params = buildJsonObject {
+                        put("p_group_id", groupId)
+                        put("p_slug", slug)
+                        put("p_name", name)
+                        put("p_topic", topic)
+                    },
+                    requireAuth = true,
+                )
+                Unit
+            }
+        }
+
+    /**
+     * Renames a channel, sets its topic, or moves it in the group's order
+     * (migration 0130). A null for an optional argument leaves that field
+     * untouched.
+     */
+    suspend fun updateChannel(
+        channelId: String,
+        name: String? = null,
+        topic: String? = null,
+        position: Int? = null,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "update_channel",
+                params = buildJsonObject {
+                    put("p_channel_id", channelId)
+                    name?.let { put("p_name", it) }
+                    topic?.let { put("p_topic", it) }
+                    position?.let { put("p_position", it) }
+                },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    /**
+     * Closes a channel to member posts — it becomes read-only (migration 0130).
+     * Already closed, nothing happens.
+     */
+    suspend fun closeChannel(channelId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "close_channel",
+                params = buildJsonObject { put("p_channel_id", channelId) },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
+    /**
+     * Opens a closed channel to member posts again (migration 0130). Already
+     * open, nothing happens.
+     */
+    suspend fun openChannel(channelId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "open_channel",
+                params = buildJsonObject { put("p_channel_id", channelId) },
+                requireAuth = true,
+            )
+            Unit
+        }
+    }
+
     suspend fun fetchGroupMembers(groupId: String): Result<List<GroupMemberDto>> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.getJsonText(

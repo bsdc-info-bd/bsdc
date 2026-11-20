@@ -3070,6 +3070,26 @@ export type Database = {
         Args: { p_group_id: string; p_uid: string; p_role: DbGroupRole };
         Returns: undefined;
       };
+      create_channel: {
+        Args: {
+          p_group_id: string;
+          p_slug: string;
+          p_name: string;
+          p_topic?: string;
+        };
+        Returns: string;
+      };
+      update_channel: {
+        Args: {
+          p_channel_id: string;
+          p_name?: string | null;
+          p_topic?: string | null;
+          p_position?: number | null;
+        };
+        Returns: undefined;
+      };
+      close_channel: { Args: { p_channel_id: string }; Returns: undefined };
+      open_channel: { Args: { p_channel_id: string }; Returns: undefined };
       rsvp_event: { Args: { p_event_id: string; p_status: DbRsvpStatus }; Returns: number };
       toggle_page_follow: { Args: { p_page_id: string }; Returns: boolean };
       group_directory: { Args: { p_limit: number }; Returns: GroupDirectoryRow[] };

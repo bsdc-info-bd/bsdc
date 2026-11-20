@@ -94,12 +94,17 @@ check(Boolean(generalChannelId), 'create_group seeded the general channel');
 const roRes = await as(
   'gowner-1',
   {},
-  `insert into public.channels (group_id, slug, name, topic, is_read_only)
-   values ('${groupId}', 'announcements', 'Announcements', 'Staff notices', true)
-   returning id`,
+  `select public.create_channel('${groupId}', 'announcements', 'Announcements', 'Staff notices') as id`,
 );
 const roChannelId = roRes.rows?.[0]?.id;
-check(roRes.ok && Boolean(roChannelId), 'group owner creates a read-only channel', roRes.message);
+check(roRes.ok && Boolean(roChannelId), 'group owner creates an announcements channel', roRes.message);
+
+const roClose = await as(
+  'gowner-1',
+  {},
+  `select public.close_channel('${roChannelId}')`,
+);
+check(roClose.ok, 'group owner closes it to member posts', roClose.message);
 
 const outsiderPost = await as(
   'outsider-1',

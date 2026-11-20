@@ -192,6 +192,10 @@ const HARNESSES = [
     't89.mjs',
     '0129: a post can be placed in a channel, read from it, attributed by the feed and refused with a reason',
   ],
+  [
+    't90.mjs',
+    '0130: a channel can be built, named, ordered and closed',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
