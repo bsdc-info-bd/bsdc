@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Alert, Badge, Button, Card, IconButton, Switch, TimeAgo } from '@/design-system';
-import { useErrorToast } from '@/hooks/use-error-toast';
 import { usePush } from '@/hooks/use-push';
 import {
   describeDeviceState,
@@ -36,8 +35,6 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
   const { t, i18n } = useTranslation();
   const push = usePush();
   const [dismissed, setDismissed] = useState(false);
-
-  useErrorToast(push.errorKey, push.dismissError, { title: t('push.title') });
 
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const blocked = push.block !== 'ok';
@@ -75,6 +72,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold">{t('push.prompt.title')}</h2>
             <p className="mt-1 text-body-sm text-ink-2">{t('push.prompt.body')}</p>
+            {push.errorKey ? <p role="alert">{t(push.errorKey)}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void turnOn()} loading={push.busy}>
                 {t('push.prompt.accept')}
@@ -105,7 +103,26 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
 
         {blocked ? (
           <Alert tone={push.permission === 'denied' ? 'warning' : 'info'} title={t(push.blockKey)}>
+            {push.block === 'unconfigured' ? (
+              <Button size="sm" variant="secondary" onClick={push.retryConfiguration}>
+                {t('common.retry')}
+              </Button>
+            ) : null}
+
             {push.permission === 'denied' ? t('push.denied.body') : t('push.blocked.body')}
+          </Alert>
+        ) : null}
+
+        {push.permission === 'denied' && !blocked ? (
+          <Alert tone="warning" title={t('push.errors.permissionDenied')}>
+            {t('push.denied.body')}
+          </Alert>
+        ) : null}
+        {push.errorKey ? (
+          <Alert tone="warning" title={t(push.errorKey)}>
+            <Button size="sm" onClick={push.dismissError}>
+              {t('common.close')}
+            </Button>
           </Alert>
         ) : null}
 
@@ -156,6 +173,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                         ) : null}
                       </p>
                       <p className="text-2xs text-ink-3">
+                        {device.platform ?? 'web'} · {device.language.toUpperCase()} ·{' '}
                         {device.lastUsedAt !== null ? (
                           <>
                             {t('push.devices.lastUsed', {
@@ -175,8 +193,8 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                       size="sm"
                       disabled={push.busy}
                       onClick={() =>
-                        void push.removeDevice(device.endpoint).then(() => {
-                          toast.success(t('push.deviceRemoved'));
+                        void push.removeDevice(device.endpoint).then((removed) => {
+                          if (removed) toast.success(t('push.deviceRemoved'));
                         })
                       }
                     />

@@ -58,6 +58,7 @@ export type PushDeviceState = 'live' | 'invalid' | 'dead';
 export interface PushDevice {
   endpoint: string;
   userAgent: string;
+  platform?: string;
   language: 'bn' | 'en';
   createdAt: string;
   /** When a push was last accepted for this device, if ever. */
@@ -160,6 +161,7 @@ export const FCM_DEVICE_PREFIX = 'fcm:';
 function fromFcmDevice(row: FcmDeviceRow): PushDevice {
   return {
     endpoint: `${FCM_DEVICE_PREFIX}${row.token_hash}`,
+    platform: row.platform,
     userAgent: row.user_agent ?? '',
     language: toLanguage(row.language),
     createdAt: row.created_at,

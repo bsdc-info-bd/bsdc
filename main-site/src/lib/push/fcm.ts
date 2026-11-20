@@ -7,18 +7,28 @@
  */
 import { env, isConfigured } from '@/lib/env';
 
-export async function getFcmBrowserToken(vapidKey: string): Promise<string | null> {
-  if (!isConfigured.firebase || vapidKey.trim().length === 0) return null;
-  const { getMessaging, getToken, isSupported } = await import('firebase/messaging');
-  if (!(await isSupported())) return null;
-  const registration = await globalThis.navigator.serviceWorker.ready;
+export async function supportsFcmBrowser(): Promise<boolean> {
+  if (!isConfigured.firebase) return false;
+  try {
+    return await (await import('firebase/messaging')).isSupported();
+  } catch {
+    return false;
+  }
+}
+
+export async function getFcmBrowserToken(
+  vapidKey: string,
+  registration: ServiceWorkerRegistration,
+): Promise<string> {
+  const { getMessaging, getToken } = await import('firebase/messaging');
   const { getFirebaseApp } = await import('@/lib/firebase');
   const messaging = getMessaging(getFirebaseApp());
   const token = await getToken(messaging, {
     vapidKey: vapidKey.trim(),
     serviceWorkerRegistration: registration,
   });
-  return typeof token === 'string' && token.length > 0 ? token : null;
+  if (!token) throw new Error('Firebase returned no browser token');
+  return token;
 }
 
 export async function deleteFcmBrowserToken(): Promise<void> {
@@ -66,5 +76,25 @@ export async function removeFcmTokenFromFirestore(uid: string, tokenHash: string
     await deleteDoc(doc(getDb(), 'devices', uid, 'tokens', tokenHash));
   } catch {
     // Best-effort Firestore cleanup.
+  }
+}
+
+// Firebase's modular Web SDK has no onTokenRefresh. getToken revalidates its
+// cached token; keep only the previously persisted hash for replacement.
+export function readRegisteredFcmHash(uid: string): string | null {
+  try {
+    return localStorage.getItem(`bsdc.push.fcm.${uid}`);
+  } catch {
+    return null;
+  }
+}
+
+export function writeRegisteredFcmHash(uid: string, hash: string | null): void {
+  try {
+    const key = `bsdc.push.fcm.${uid}`;
+    if (hash) localStorage.setItem(key, hash);
+    else localStorage.removeItem(key);
+  } catch {
+    // Storage can be disabled; the authoritative registration still succeeded.
   }
 }

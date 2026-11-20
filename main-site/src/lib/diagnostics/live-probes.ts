@@ -7,7 +7,9 @@
  * because a member watching a spinner learns nothing.
  */
 import { isConfigured } from '@/lib/env';
-import type { Probes } from './checks';
+import { resolvePushConfig } from '@/lib/push/push-config';
+import { latestPushAttempt } from '@/lib/push/push-registration-error';
+import type { CheckResult, Probes } from './checks';
 
 /** No probe may take longer than this. */
 const PROBE_TIMEOUT_MS = 8_000;
@@ -56,6 +58,53 @@ export function liveProbes(): Probes {
           : null;
         return { status: response.status, body };
       });
+    },
+
+    async pushDetails() {
+      const checks: CheckResult[] = [];
+      const add = (id: string, label: string, ok: boolean, detail: string) =>
+        checks.push({ id, label, state: ok ? 'ok' : 'warn', detail });
+      const [api, db, worker, mode] = await Promise.all([
+        this.api('/api/push/config').catch(() => null),
+        this.rpc('push_public_config').catch(() => ({ ok: false, error: 'unreachable' })),
+        navigator.serviceWorker?.getRegistration('/').catch(() => undefined),
+        resolvePushConfig().catch(() => null),
+      ]);
+      const enabled = (api?.body as { enabled?: unknown } | null)?.enabled === true;
+      add(
+        'push.api',
+        'Pages push config',
+        enabled,
+        `HTTP ${api?.status ?? 'unreachable'}; enabled: ${enabled}`,
+      );
+      add(
+        'push.db',
+        'Database push config',
+        db.ok,
+        db.ok ? 'RPC callable' : `RPC failed (${db.error ?? 'unknown'})`,
+      );
+      add(
+        'push.sw',
+        'Push worker',
+        worker?.active?.state === 'activated',
+        worker ? `${worker.scope}; ${worker.active?.state ?? 'inactive'}` : 'No root registration',
+      );
+      add(
+        'push.mode',
+        'Push mode',
+        mode !== null,
+        `${mode?.mode ?? 'none'}; permission: ${this.capabilities.notificationPermission}`,
+      );
+      const attempt = latestPushAttempt();
+      add(
+        'push.attempt',
+        'Last registration attempt',
+        attempt?.result === 'registered',
+        attempt
+          ? `${attempt.mode}: ${attempt.result} (${attempt.at})`
+          : 'No attempt recorded on this page load. Try enabling push, then rerun this check.',
+      );
+      return checks;
     },
 
     async token() {

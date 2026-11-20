@@ -13,7 +13,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { effectivePushVapidConfig, env, isConfigured } from '@/lib/env';
+import { isConfigured } from '@/lib/env';
 import {
   PUSH_BLOCK_KEYS,
   describePushEnvironment,
@@ -23,7 +23,14 @@ import {
 import { uint8ArrayToUrlBase64, urlBase64ToUint8Array } from '@/lib/push/webpush';
 import type { PushDevice } from '@/lib/push/push-repository';
 import { dataErrorKey } from '@/lib/supabase/errors';
-import { pushRegistrationErrorKey } from '@/lib/push/push-registration-error';
+import { resolvePushConfig } from '@/lib/push/push-config';
+import { readyServiceWorker } from '@/lib/push/ready-worker';
+import {
+  browserErrorName,
+  recordPushAttempt,
+  pushRegistrationErrorKey,
+  PushStageError,
+} from '@/lib/push/push-registration-error';
 import { useAuthStore } from '@/store/auth-store';
 
 // The repository pulls in the Supabase client, so it is imported lazily: this
@@ -46,36 +53,27 @@ export interface PushControl {
   busy: boolean;
   errorKey: string | null;
   dismissError: () => void;
+  retryConfiguration: () => void;
   enable: () => Promise<boolean>;
   disable: () => Promise<boolean>;
-  removeDevice: (endpoint: string) => Promise<void>;
+  removeDevice: (endpoint: string) => Promise<boolean>;
 }
 
-const SW_READY_TIMEOUT_MS = 10_000;
-
-async function readyServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  const sw = globalThis.navigator?.serviceWorker;
-  if (!sw) return null;
-
+function optedOut(uid: string): boolean {
   try {
-    const existing = await sw.getRegistration('/');
-    if (!existing && typeof sw.register === 'function') {
-      await sw.register('/sw.js', { scope: '/', updateViaCache: 'none' }).catch(() => undefined);
-    }
+    return localStorage.getItem(`bsdc.push.off.${uid}`) === '1';
   } catch {
-    // Proceed to sw.ready check below.
+    return false;
   }
+}
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
+function setOptOut(uid: string, off: boolean): void {
   try {
-    return await Promise.race([
-      sw.ready,
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => resolve(null), SW_READY_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timer !== undefined) clearTimeout(timer);
+    const key = `bsdc.push.off.${uid}`;
+    if (off) localStorage.setItem(key, '1');
+    else localStorage.removeItem(key);
+  } catch {
+    // Server-side device removal still works when browser storage is disabled.
   }
 }
 
@@ -103,7 +101,7 @@ async function subscribeHere(
   store?: Awaited<ReturnType<typeof repository>>,
 ): Promise<PushSubscription | null> {
   const registration = await readyServiceWorker();
-  if (registration === null) return null;
+  if (registration === null) throw new PushStageError('swNotReady');
 
   const existing = await registration.pushManager.getSubscription();
   if (existing !== null) {
@@ -122,13 +120,21 @@ async function subscribeHere(
       applicationServerKey: keyBytes,
     });
   } catch (error) {
+    if (browserErrorName(error) === 'AbortError') {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: keyBytes,
+      });
+    }
     if (
-      error instanceof Error &&
-      (error.name === 'InvalidStateError' || error.message.includes('applicationServerKey'))
+      browserErrorName(error) === 'InvalidStateError' ||
+      (error instanceof Error && error.message.includes('applicationServerKey'))
     ) {
       const stale = await registration.pushManager.getSubscription().catch(() => null);
       if (stale !== null) {
-        await stale.unsubscribe().catch(() => false);
+        await stale.unsubscribe();
+        if (store) await store.unregisterPushSubscription(stale.endpoint);
       }
       return registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -139,70 +145,46 @@ async function subscribeHere(
   }
 }
 
-async function fetchRuntimeVapidConfig(): Promise<{
-  mode: 'webpush' | 'fcm';
-  publicKey: string;
-} | null> {
-  const staticConfig = effectivePushVapidConfig(env.push);
-  if (staticConfig !== null) return staticConfig;
-  if (typeof fetch === 'function') {
-    try {
-      const response = await fetch('/api/push/config', { cache: 'no-store' });
-      if (response.ok) {
-        const payload = (await response.json()) as { enabled?: unknown; vapidPublicKey?: unknown };
-        if (
-          payload.enabled === true &&
-          typeof payload.vapidPublicKey === 'string' &&
-          payload.vapidPublicKey.trim().length > 0
-        ) {
-          return { mode: 'webpush', publicKey: payload.vapidPublicKey.trim() };
-        }
-      }
-    } catch {
-      // Fall through to database public config RPC below.
-    }
-  }
-
-  if (isConfigured.supabase) {
-    try {
-      const dbKey = await (await repository()).fetchPublicPushConfigFromDb();
-      if (dbKey !== null) {
-        return { mode: 'webpush', publicKey: dbKey };
-      }
-    } catch {
-      // Ignore if database is unreachable.
-    }
-  }
-
-  return null;
-}
-
 async function registerCurrentBrowser(
   uid: string,
   language: string,
   config: { mode: 'webpush' | 'fcm'; publicKey: string } | null,
 ): Promise<boolean> {
-  if (config === null) return false;
+  if (config === null) throw new PushStageError('configUnavailable');
   const store = await repository();
-
-  if (config.mode === 'webpush') {
-    const subscription = await subscribeHere(config.publicKey, store);
-    if (subscription === null) return false;
-    await store.registerPushSubscription(subscription, language, globalThis.navigator.userAgent);
+  let stage: 'subscribeRefused' | 'fcmTokenFailed' | 'registerRpcFailed' =
+    config.mode === 'fcm' ? 'fcmTokenFailed' : 'subscribeRefused';
+  try {
+    if (globalThis.navigator.onLine === false) throw new PushStageError('networkOffline');
+    if (config.mode === 'webpush') {
+      const subscription = await subscribeHere(config.publicKey, store);
+      if (subscription === null) throw new PushStageError('swNotReady');
+      stage = 'registerRpcFailed';
+      await store.registerPushSubscription(subscription, language, globalThis.navigator.userAgent);
+    } else {
+      const fcm = await fcmClient();
+      const registration = await readyServiceWorker();
+      if (registration === null) throw new PushStageError('swNotReady');
+      const token = await fcm.getFcmBrowserToken(config.publicKey, registration);
+      const lang = language === 'en' ? 'en' : 'bn';
+      stage = 'registerRpcFailed';
+      const hash = await store.registerFcmToken(token, 'web', lang, globalThis.navigator.userAgent);
+      if (!hash) throw new Error('register_fcm_token returned no hash');
+      const previous = fcm.readRegisteredFcmHash(uid);
+      if (previous && previous !== hash) {
+        await store.forgetFcmDevice(previous);
+        void fcm.removeFcmTokenFromFirestore(uid, previous);
+      }
+      fcm.writeRegisteredFcmHash(uid, hash);
+      void fcm.syncFcmTokenToFirestore(uid, hash, 'web', lang);
+    }
+    recordPushAttempt(config.mode, 'registered');
     return true;
+  } catch (error) {
+    const failure = error instanceof PushStageError ? error : new PushStageError(stage, error);
+    recordPushAttempt(config.mode, pushRegistrationErrorKey(failure), error);
+    throw failure;
   }
-
-  // FCM Web Push mode (when VITE_PUSH_VAPID_PUBLIC_KEY is unset and
-  // VITE_FIREBASE_VAPID_PUBLIC_KEY is configured).
-  const fcm = await fcmClient();
-  const token = await fcm.getFcmBrowserToken(config.publicKey);
-  if (token === null) return false;
-  const lang: 'bn' | 'en' = language === 'en' ? 'en' : 'bn';
-  const hash = await store.registerFcmToken(token, 'web', lang, globalThis.navigator.userAgent);
-  if (hash.length > 0 && isConfigured.firebase) {
-    void fcm.syncFcmTokenToFirestore(uid, hash, 'web', lang);
-  }
-  return true;
 }
 
 export function usePush(): PushControl {
@@ -217,23 +199,20 @@ export function usePush(): PushControl {
   // One silent re-registration per page load, per member.
   const refreshedFor = useRef<string | null>(null);
 
-  const staticConfig = effectivePushVapidConfig(env.push);
   const runtimeQuery = useQuery({
     queryKey: ['push-runtime-config'],
-    queryFn: fetchRuntimeVapidConfig,
-    enabled: staticConfig === null,
+    queryFn: resolvePushConfig,
     staleTime: 5 * 60_000,
     retry: false,
   });
 
-  const pushConfig = staticConfig ?? runtimeQuery.data ?? null;
+  const pushConfig = runtimeQuery.data ?? null;
   const activeKey = pushConfig?.publicKey ?? '';
-  const supported = block === 'ok';
 
   const devicesQuery = useQuery({
     queryKey: ['push-devices', uid],
     queryFn: async () => (await repository()).fetchAllPushDevices(),
-    enabled: uid !== null && supported,
+    enabled: uid !== null,
     staleTime: 60_000,
   });
 
@@ -251,6 +230,7 @@ export function usePush(): PushControl {
         event.data.type !== 'BSDC_PUSH_SUBSCRIPTION_CHANGED'
       )
         return;
+      if (optedOut(uid)) return;
       void registerCurrentBrowser(uid, i18n.language, pushConfig)
         .then((registered) =>
           registered
@@ -279,7 +259,7 @@ export function usePush(): PushControl {
       return;
     }
     const syncKey = `${uid}:${i18n.language === 'en' ? 'en' : 'bn'}`;
-    if (asked !== 'granted' || refreshedFor.current === syncKey) return;
+    if (asked !== 'granted' || optedOut(uid) || refreshedFor.current === syncKey) return;
     refreshedFor.current = syncKey;
 
     void (async () => {
@@ -302,7 +282,9 @@ export function usePush(): PushControl {
       return false;
     }
     if (block !== 'ok') {
-      setErrorKey(PUSH_BLOCK_KEYS[block]);
+      setErrorKey(
+        block === 'unconfigured' ? 'push.errors.configUnavailable' : PUSH_BLOCK_KEYS[block],
+      );
       return false;
     }
     setBusy(true);
@@ -318,6 +300,7 @@ export function usePush(): PushControl {
         setErrorKey('push.errors.failed');
         return false;
       }
+      setOptOut(uid, false);
       refreshedFor.current = `${uid}:${i18n.language === 'en' ? 'en' : 'bn'}`;
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
@@ -356,10 +339,13 @@ export function usePush(): PushControl {
           void fcmClient().then((fcm) => fcm.removeFcmTokenFromFirestore(uid, hash));
         }
       }
-      if (pushConfig?.mode === 'fcm') {
-        await (await fcmClient()).deleteFcmBrowserToken();
-      }
+      const fcm = await fcmClient();
+      const localHash = fcm.readRegisteredFcmHash(uid);
+      if (localHash) await store.forgetFcmDevice(localHash);
+      if (localHash || pushConfig?.mode === 'fcm') await fcm.deleteFcmBrowserToken();
+      fcm.writeRegisteredFcmHash(uid, null);
       if (subscription !== null) await subscription.unsubscribe();
+      setOptOut(uid, true);
 
       setErrorKey(null);
       await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
@@ -374,7 +360,7 @@ export function usePush(): PushControl {
 
   const removeDevice = useCallback(
     async (endpoint: string) => {
-      if (uid === null) return;
+      if (uid === null) return false;
       setBusy(true);
       try {
         const store = await repository();
@@ -384,8 +370,11 @@ export function usePush(): PushControl {
           if (isConfigured.firebase) {
             void fcmClient().then((fcm) => fcm.removeFcmTokenFromFirestore(uid, hash));
           }
-          if (pushConfig?.mode === 'fcm') {
-            await (await fcmClient()).deleteFcmBrowserToken();
+          const fcm = await fcmClient();
+          if (fcm.readRegisteredFcmHash(uid) === hash) {
+            await fcm.deleteFcmBrowserToken();
+            fcm.writeRegisteredFcmHash(uid, null);
+            setOptOut(uid, true);
           }
         } else {
           await store.unregisterPushSubscription(endpoint);
@@ -393,18 +382,23 @@ export function usePush(): PushControl {
           // does not immediately re-register the row that was just removed.
           if (block === 'ok') {
             const here = await currentSubscription().catch(() => null);
-            if (here !== null && here.endpoint === endpoint)
-              await here.unsubscribe().catch(() => false);
+            if (here !== null && here.endpoint === endpoint) {
+              await here.unsubscribe();
+              setOptOut(uid, true);
+            }
           }
         }
         await queryClient.invalidateQueries({ queryKey: ['push-devices', uid] });
+        setErrorKey(null);
+        return true;
       } catch (error) {
         setErrorKey(dataErrorKey(error));
+        return false;
       } finally {
         setBusy(false);
       }
     },
-    [uid, block, queryClient, pushConfig?.mode],
+    [uid, block, queryClient],
   );
 
   const dismissError = useCallback(() => setErrorKey(null), []);
@@ -420,6 +414,9 @@ export function usePush(): PushControl {
     busy,
     errorKey,
     dismissError,
+    retryConfiguration: () => {
+      void runtimeQuery.refetch();
+    },
     enable,
     disable,
     removeDevice,

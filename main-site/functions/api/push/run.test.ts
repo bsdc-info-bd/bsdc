@@ -526,6 +526,7 @@ describe('POST /api/push/wake and FCM fallback', () => {
     expect(outcome.body['sent']).toBe(1);
     expect(pushedHeaders['content-encoding']).toBe('aes128gcm');
     expect(pushedHeaders['urgency']).toBe('high');
+    expect(Number(pushedHeaders['ttl'])).toBeGreaterThan(0);
     expect(pushedBodyLength).toBeGreaterThan(86);
   });
 });

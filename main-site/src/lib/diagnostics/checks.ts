@@ -53,6 +53,7 @@ export interface Probes {
     storage: boolean;
     online: boolean;
   };
+  pushDetails?: () => Promise<CheckResult[]>;
   /** Configuration this build was compiled with. Public values only. */
   config: {
     firebase: boolean;
@@ -365,6 +366,8 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
         ),
   );
 
+  if (probes.pushDetails) checks.push(...(await probes.pushDetails()));
+
   if (!capabilities.pushManager || !capabilities.notifications) {
     checks.push(
       result(
@@ -409,7 +412,7 @@ export async function runChecks(probes: Probes): Promise<CheckResult[]> {
           'push.support',
           'Notifications',
           'ok',
-          'This device can be woken while the browser is closed.',
+          'Permission is granted. This does not prove registration or background delivery.',
         ),
       );
     } else {
