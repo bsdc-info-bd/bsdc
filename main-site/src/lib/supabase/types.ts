@@ -840,13 +840,52 @@ export type JobApplicationRow = {
   id: string;
   job_id: string;
   applicant_uid: string;
+  applicant_name: string;
   username: string;
   display_name: string;
   avatar_url: string;
   verified: boolean;
+  phone: string;
+  email: string;
+  location: string;
+  years_experience: number | null;
+  education: string;
+  expected_salary_poisha: number | null;
+  portfolio_url: string;
+  linkedin_url: string;
+  notice_period: string;
+  skills: string[];
+  certification_image_urls: string[];
   cover_letter: string;
   resume_url: string;
   status: DbApplicationStatus;
+  rejection_reason: string;
+  decided_at: string | null;
+  created_at: string;
+};
+
+export type MyJobApplicationRow = {
+  id: string;
+  job_id: string;
+  job_slug: string;
+  job_title: string;
+  company: string;
+  job_status: DbListingStatus;
+  expires_at: string | null;
+  applicant_name: string;
+  cover_letter: string;
+  resume_url: string;
+  portfolio_url: string;
+  linkedin_url: string;
+  location: string;
+  years_experience: number | null;
+  education: string;
+  expected_salary_poisha: number | null;
+  notice_period: string;
+  skills: string[];
+  certification_image_urls: string[];
+  status: DbApplicationStatus;
+  rejection_reason: string;
   decided_at: string | null;
   created_at: string;
 };
@@ -2857,12 +2896,28 @@ export type Database = {
       trending_searches: { Args: { p_limit?: number }; Returns: TrendingSearchRow[] };
       log_search: { Args: { p_term: string; p_results: number }; Returns: undefined };
       apply_to_job: {
-        Args: { p_job_id: string; p_cover_letter: string; p_resume_url?: string };
+        Args: {
+          p_job_id: string;
+          p_cover_letter: string;
+          p_resume_url?: string;
+          p_applicant_name?: string;
+          p_phone?: string;
+          p_email?: string;
+          p_location?: string;
+          p_years_experience?: number | null;
+          p_education?: string;
+          p_expected_salary_poisha?: number | null;
+          p_portfolio_url?: string;
+          p_linkedin_url?: string;
+          p_notice_period?: string;
+          p_skills?: string[];
+          p_certification_image_urls?: string[];
+        };
         Returns: string;
       };
       withdraw_application: { Args: { p_application_id: string }; Returns: undefined };
       decide_application: {
-        Args: { p_application_id: string; p_status: DbApplicationStatus };
+        Args: { p_application_id: string; p_status: DbApplicationStatus; p_reason?: string };
         Returns: undefined;
       };
       submit_proposal: {
@@ -2991,6 +3046,11 @@ export type Database = {
       job_application_queue: {
         Args: { p_job_id: string; p_limit?: number };
         Returns: JobApplicationRow[];
+      };
+      /** The signed-in applicant's contact-free status tracker (0126). */
+      my_job_applications: {
+        Args: { p_limit?: number };
+        Returns: MyJobApplicationRow[];
       };
       // Advertising credits: 1 credit = 1 taka, minimum 500, paid by bKash (0115).
       request_ad_credits: {

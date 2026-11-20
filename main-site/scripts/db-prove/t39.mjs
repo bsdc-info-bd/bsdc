@@ -136,7 +136,8 @@ await as(
   rahim,
   `select public.apply_to_job(
      (select id from public.jobs where slug = '${JOB_OPEN}'),
-     'I have shipped three production Node services on Postgres.', '')`,
+     'I have shipped three production Node services on Postgres.', '', 'Rahim Ahmed', '+880 1712-345678'
+   )`,
   'applicant applies to the open job',
 );
 const after = await as(

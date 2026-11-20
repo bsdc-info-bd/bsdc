@@ -251,7 +251,12 @@ check(eventNotif?.target_url === '/events/sylhet-conf', 'rsvp_event notifies org
 const jobId = (
   await db.query(`insert into public.jobs (poster_uid, slug, title, company, city, description) values ('${rahim}', 'senior-pg', 'Senior Postgres Eng', 'BSDC', 'Sylhet', 'Build scalable systems') returning id`)
 ).rows[0].id;
-await as('authenticated', ada, 'member', `select public.apply_to_job('${jobId}', 'I love Postgres')`);
+await as(
+  'authenticated',
+  ada,
+  'member',
+  `select public.apply_to_job('${jobId}', 'I love PostgreSQL and production systems.', '', 'Ada Rahman', '+880 1812-345678')`,
+);
 const jobNotif = (
   await db.query(`select kind::text, target_url from public.notifications where uid = '${rahim}' and kind = 'job'`)
 ).rows[0];

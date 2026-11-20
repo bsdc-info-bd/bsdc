@@ -79,13 +79,53 @@ export interface JobApplication {
   id: string;
   jobId: string;
   applicantUid: string;
+  applicantName: string;
   displayName: string;
   username: string;
   avatarUrl: string | null;
   verified: boolean;
+  phone: string;
+  email: string;
+  location: string;
+  yearsExperience: number | null;
+  education: string;
+  expectedSalaryPoisha: number | null;
+  portfolioUrl: string;
+  linkedinUrl: string;
+  noticePeriod: string;
+  skills: string[];
+  certificationImageUrls: string[];
   coverLetter: string;
   resumeUrl: string;
   status: ApplicationStatus;
+  rejectionReason: string;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+/** Contact-free applicant-side status and application snapshot for My Applications. */
+export interface MyJobApplication {
+  id: string;
+  jobId: string;
+  jobSlug: string;
+  jobTitle: string;
+  company: string;
+  jobStatus: ListingStatus;
+  expiresAt: string | null;
+  applicantName: string;
+  coverLetter: string;
+  resumeUrl: string;
+  portfolioUrl: string;
+  linkedinUrl: string;
+  location: string;
+  yearsExperience: number | null;
+  education: string;
+  expectedSalaryPoisha: number | null;
+  noticePeriod: string;
+  skills: string[];
+  certificationImageUrls: string[];
+  status: ApplicationStatus;
+  rejectionReason: string;
   decidedAt: string | null;
   createdAt: string;
 }

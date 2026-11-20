@@ -42,6 +42,7 @@ const FreelancePage = lazy(() => import('@/routes/FreelancePage'));
 const GigPage = lazy(() => import('@/routes/GigPage'));
 const GigProposalsPage = lazy(() => import('@/routes/GigProposalsPage'));
 const JobApplicationsPage = lazy(() => import('@/routes/JobApplicationsPage'));
+const MyJobApplicationsPage = lazy(() => import('@/routes/MyJobApplicationsPage'));
 const AdminAdsPage = lazy(() => import('@/routes/AdminAdsPage'));
 const ProjectsPage = lazy(() => import('@/routes/ProjectsPage'));
 const ProjectPage = lazy(() => import('@/routes/ProjectPage'));
@@ -133,6 +134,7 @@ const router = createBrowserRouter([
           // database refuses the write besides.
           { path: `${ROUTES.compose}/:postId`, element: withSuspense(<ComposePage />) },
           { path: ROUTES.notifications, element: withSuspense(<NotificationsPage />) },
+          { path: ROUTES.myJobApplications, element: withSuspense(<MyJobApplicationsPage />) },
           { path: ROUTES.bookmarks, element: withSuspense(<BookmarksPage />) },
           { path: ROUTES.trash, element: withSuspense(<TrashPage />) },
           { path: ROUTES.messages, element: withSuspense(<MessagesPage />) },

@@ -1,11 +1,18 @@
 import { wakePushDelivery } from '@/lib/push/wake';
+import {
+  isValidApplicationHttpsUrl,
+  isValidApplicationImgBbUrl,
+  type JobApplicationSubmission,
+} from './job-application';
 import { normaliseSkills } from '@/lib/opportunities/skills';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';
+import type { UploadResult } from '@/lib/storage/upload';
 import type {
   GigProposalRow,
   GigRow,
   JobApplicationRow,
+  MyJobApplicationRow,
   JobBoardRow,
   JobDetailRow,
   PlaygroundSketchRow,
@@ -16,6 +23,7 @@ import type {
   Gig,
   GigProposal,
   JobApplication,
+  MyJobApplication,
   ProposalStatus,
   JobDetail,
   JobListing,
@@ -61,15 +69,66 @@ export async function fetchJobBoard(
   return (data ?? []).map(toJob);
 }
 
+async function recordApplicationImages(ownerUid: string, urls: readonly string[]): Promise<void> {
+  const distinct = [...new Set(urls.map((url) => url.trim()).filter(Boolean))];
+  if (distinct.length === 0) return;
+  if (ownerUid.trim().length === 0) throw new Error('authentication required');
+
+  const { recordMediaAsset } = await import('@/lib/data/media-repository');
+  for (const url of distinct) {
+    if (!isValidApplicationImgBbUrl(url)) throw new Error('certification image URL is invalid');
+    const { data, error } = await getSupabase()
+      .from('media_assets')
+      .select('id')
+      .eq('owner_uid', ownerUid)
+      .eq('url', url)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw toDataError(error);
+    if (data !== null) continue;
+
+    // A pasted public ImgBB link is registered, not uploaded. With no delete
+    // token the existing sweeper cannot claim or delete a file the member does
+    // not own; no new image-storage pipeline is introduced here.
+    const result: UploadResult = {
+      provider: 'imgbb',
+      kind: 'image',
+      url,
+      thumbUrl: url,
+      deleteToken: '',
+      width: null,
+      height: null,
+      bytes: 0,
+      mimeType: 'image/*',
+      expiresAt: null,
+    };
+    const recorded = await recordMediaAsset(ownerUid, result);
+    if (recorded === null) throw new Error('media.errors.recordFailed');
+  }
+}
+
 export async function applyToJob(
   jobId: string,
-  coverLetter: string,
-  resumeUrl = '',
+  application: JobApplicationSubmission,
+  applicantUid: string,
 ): Promise<string> {
+  await recordApplicationImages(applicantUid, application.certificationImageUrls);
   const { data, error } = await getSupabase().rpc('apply_to_job', {
     p_job_id: jobId,
-    p_cover_letter: coverLetter,
-    p_resume_url: resumeUrl,
+    p_cover_letter: application.coverLetter,
+    p_resume_url: application.resumeUrl,
+    p_applicant_name: application.applicantName,
+    p_phone: application.phone,
+    p_email: application.email,
+    p_location: application.location,
+    p_years_experience: application.yearsExperience,
+    p_education: application.education,
+    p_expected_salary_poisha: application.expectedSalaryPoisha,
+    p_portfolio_url: application.portfolioUrl,
+    p_linkedin_url: application.linkedinUrl,
+    p_notice_period: application.noticePeriod,
+    p_skills: application.skills,
+    p_certification_image_urls: application.certificationImageUrls,
   });
   if (error) throw toDataError(error);
   wakePushDelivery();
@@ -90,21 +149,35 @@ export async function fetchJobApplications(jobId: string, limit = 100): Promise<
     .rpc('job_application_queue', { p_job_id: jobId, p_limit: limit })
     .returns<JobApplicationRow[]>();
   if (error) throw toDataError(error);
-  return (data ?? []).map(toJobApplication);
+  return (data ?? []).map(mapJobApplication);
 }
 
-function toJobApplication(row: JobApplicationRow): JobApplication {
+export function mapJobApplication(row: JobApplicationRow): JobApplication {
+  const applicantName = row.applicant_name.trim() || row.display_name.trim() || 'Member';
   return {
     id: row.id,
     jobId: row.job_id,
     applicantUid: row.applicant_uid,
-    displayName: row.display_name,
+    applicantName,
+    displayName: row.display_name.trim() || applicantName,
     username: row.username,
     avatarUrl: row.avatar_url.length > 0 ? row.avatar_url : null,
     verified: row.verified,
+    phone: row.phone,
+    email: row.email,
+    location: row.location,
+    yearsExperience: row.years_experience,
+    education: row.education,
+    expectedSalaryPoisha: row.expected_salary_poisha,
+    portfolioUrl: isValidApplicationHttpsUrl(row.portfolio_url) ? row.portfolio_url : '',
+    linkedinUrl: isValidApplicationHttpsUrl(row.linkedin_url) ? row.linkedin_url : '',
+    noticePeriod: row.notice_period,
+    skills: normaliseSkills(row.skills),
+    certificationImageUrls: row.certification_image_urls.filter(isValidApplicationImgBbUrl),
     coverLetter: row.cover_letter,
-    resumeUrl: row.resume_url,
+    resumeUrl: isValidApplicationHttpsUrl(row.resume_url) ? row.resume_url : '',
     status: row.status,
+    rejectionReason: row.rejection_reason,
     decidedAt: row.decided_at,
     createdAt: row.created_at,
   };
@@ -113,13 +186,51 @@ function toJobApplication(row: JobApplicationRow): JobApplication {
 export async function decideApplication(
   applicationId: string,
   status: ApplicationStatus,
+  reason = '',
 ): Promise<void> {
   const { error } = await getSupabase().rpc('decide_application', {
     p_application_id: applicationId,
     p_status: status,
+    p_reason: reason,
   });
   if (error) throw toDataError(error);
   wakePushDelivery();
+}
+
+export function mapMyJobApplication(row: MyJobApplicationRow): MyJobApplication {
+  return {
+    id: row.id,
+    jobId: row.job_id,
+    jobSlug: row.job_slug,
+    jobTitle: row.job_title,
+    company: row.company,
+    jobStatus: row.job_status,
+    expiresAt: row.expires_at,
+    applicantName: row.applicant_name,
+    coverLetter: row.cover_letter,
+    resumeUrl: isValidApplicationHttpsUrl(row.resume_url) ? row.resume_url : '',
+    portfolioUrl: isValidApplicationHttpsUrl(row.portfolio_url) ? row.portfolio_url : '',
+    linkedinUrl: isValidApplicationHttpsUrl(row.linkedin_url) ? row.linkedin_url : '',
+    location: row.location,
+    yearsExperience: row.years_experience,
+    education: row.education,
+    expectedSalaryPoisha: row.expected_salary_poisha,
+    noticePeriod: row.notice_period,
+    skills: normaliseSkills(row.skills),
+    certificationImageUrls: row.certification_image_urls.filter(isValidApplicationImgBbUrl),
+    status: row.status,
+    rejectionReason: row.rejection_reason,
+    decidedAt: row.decided_at,
+    createdAt: row.created_at,
+  };
+}
+
+export async function fetchMyJobApplications(limit = 40): Promise<MyJobApplication[]> {
+  const { data, error } = await getSupabase()
+    .rpc('my_job_applications', { p_limit: limit })
+    .returns<MyJobApplicationRow[]>();
+  if (error) throw toDataError(error);
+  return (data ?? []).map(mapMyJobApplication);
 }
 
 export async function recordJobView(jobId: string): Promise<void> {

@@ -462,22 +462,39 @@ class DiscoverRepository(
         }
     }
 
-    suspend fun applyToJob(jobId: String, coverLetter: String, resumeUrl: String): Result<Unit> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                supabase.rpcText(
-                    "apply_to_job",
-                    params = buildJsonObject {
-                        put("p_job_id", jobId)
-                        put("p_cover_letter", coverLetter.trim())
-                        put("p_resume_url", resumeUrl.trim())
-                    },
-                    requireAuth = true,
-                )
-                supabase.wakePushDelivery("job-apply")
-                Unit
-            }
+    suspend fun applyToJob(
+        jobId: String,
+        submission: JobDetailLogic.ApplicationSubmission,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            supabase.rpcText(
+                "apply_to_job",
+                params = buildJsonObject {
+                    put("p_job_id", jobId)
+                    put("p_cover_letter", submission.coverLetter)
+                    put("p_resume_url", submission.resumeUrl)
+                    put("p_applicant_name", submission.applicantName)
+                    put("p_phone", submission.phone)
+                    put("p_email", submission.email)
+                    put("p_location", submission.location)
+                    put("p_years_experience", submission.yearsExperience?.let(::JsonPrimitive) ?: JsonNull)
+                    put("p_education", submission.education)
+                    put("p_expected_salary_poisha", submission.expectedSalaryPoisha?.let(::JsonPrimitive) ?: JsonNull)
+                    put("p_portfolio_url", submission.portfolioUrl)
+                    put("p_linkedin_url", submission.linkedinUrl)
+                    put("p_notice_period", submission.noticePeriod)
+                    put("p_skills", buildJsonArray { submission.skills.forEach { add(JsonPrimitive(it)) } })
+                    put(
+                        "p_certification_image_urls",
+                        buildJsonArray { submission.certificationImageUrls.forEach { add(JsonPrimitive(it)) } },
+                    )
+                },
+                requireAuth = true,
+            )
+            supabase.wakePushDelivery("job-apply")
+            Unit
         }
+    }
 
     /**
      * A signed-in applicant retracts their application on this job. The decision RPC takes an

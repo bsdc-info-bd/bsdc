@@ -2,6 +2,21 @@ package bd.info.bsdc.app.feature.market
 
 import java.util.Locale
 
+/** Allowed subresources for the Android map's small, self-contained WebView. */
+internal enum class OsmMapResource {
+    LEAFLET_JS,
+    LEAFLET_CSS,
+    OSM_TILE,
+    BLOCKED,
+}
+
+/** Visual state derived from WebView callbacks and Leaflet's tile events. */
+internal enum class OsmMapStatus {
+    LOADING,
+    READY,
+    ERROR,
+}
+
 /**
  * Pure marketplace rules shared by the customer and vendor screens.
  * Mirrors main-site/src/lib/mk/mk-logic.ts so Android and web agree on money, status and phone rules.
@@ -420,26 +435,83 @@ object MkLogic {
         }
     }
 
-    /** OpenStreetMap's canonical tile host. The map page requests this one. */
+    /** OpenStreetMap's canonical raster-tile host. */
     const val OSM_TILE_HOST: String = "tile.openstreetmap.org"
+
+    /** The two Leaflet files are served from the app bundle through these exact virtual paths. */
+    const val OSM_MAP_JS_PATH: String = "/__bsdc_map/leaflet.js"
+    const val OSM_MAP_CSS_PATH: String = "/__bsdc_map/leaflet.css"
+    const val OSM_MAP_CONSOLE_PREFIX: String = "[BSDC_MAP]"
+
+    private val OSM_TILE_SHARDS = setOf("a.$OSM_TILE_HOST", "b.$OSM_TILE_HOST", "c.$OSM_TILE_HOST")
+    private val OSM_TILE_EVENT = Regex(
+        """^${Regex.escape(OSM_MAP_CONSOLE_PREFIX)} tile(load|error) ok=(\d+) errors=(\d+)$""",
+    )
 
     /**
      * Whether a request is for an OpenStreetMap raster tile.
      *
-     * The page asks for [OSM_TILE_HOST], but OSM answers by redirecting to its `a.`/`b.`/`c.`
-     * shards, so the bare host and any `*.tile.openstreetmap.org` subdomain both have to be
-     * recognised. A strict `host ==` test dropped every sharded tile and left the Android map
-     * a blank white canvas while the web map loaded fine.
-     *
-     * Lives here, beside the other pure rules, so it can be unit tested: `MkOsmPinMap.kt`
-     * imports `android.webkit.WebView`, and a JVM unit test that touched a declaration in that
-     * file would drag the Android stubs in with it.
+     * OSM may redirect the canonical host to an `a.`, `b.`, or `c.` shard. Keep the HTTPS host
+     * allowlist in one pure rule shared by the original request and every redirect hop. A
+     * non-default port is not part of the public tile service and is refused too.
      */
-    internal fun isOsmTileRequest(scheme: String?, host: String?): Boolean {
-        if (!scheme.equals("https", ignoreCase = true)) return false
-        val clean = host?.trim()?.lowercase() ?: return false
-        return clean == OSM_TILE_HOST || clean.endsWith(".$OSM_TILE_HOST")
+    internal fun isOsmTileRequest(scheme: String?, host: String?, port: Int? = null): Boolean {
+        if (!scheme.equals("https", ignoreCase = true) || !isHttpsPort(port)) return false
+        val clean = host?.trim()?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return false
+        return clean == OSM_TILE_HOST || clean in OSM_TILE_SHARDS
     }
+
+    /**
+     * Only these two bundled Leaflet assets may be loaded from BSDC's virtual document origin.
+     * Keeping both host and path exact prevents a lookalike domain or another site path from
+     * becoming a general-purpose WebView asset fetch.
+     */
+    internal fun isOsmMapAssetRequest(
+        scheme: String?,
+        host: String?,
+        path: String?,
+        siteHost: String,
+        port: Int? = null,
+    ): Boolean {
+        if (!scheme.equals("https", ignoreCase = true) || !isHttpsPort(port)) return false
+        val cleanHost = host?.trim()?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return false
+        val cleanSiteHost = siteHost.trim().trimEnd('.').lowercase(Locale.ROOT)
+        if (cleanHost != cleanSiteHost) return false
+        return path == OSM_MAP_JS_PATH || path == OSM_MAP_CSS_PATH
+    }
+
+    /** Classifies every WebView subresource before the client serves or blocks it. */
+    internal fun classifyOsmMapResource(
+        scheme: String?,
+        host: String?,
+        path: String?,
+        siteHost: String,
+        port: Int? = null,
+    ): OsmMapResource = when {
+        isOsmMapAssetRequest(scheme, host, path, siteHost, port) && path == OSM_MAP_JS_PATH ->
+            OsmMapResource.LEAFLET_JS
+        isOsmMapAssetRequest(scheme, host, path, siteHost, port) && path == OSM_MAP_CSS_PATH ->
+            OsmMapResource.LEAFLET_CSS
+        isOsmTileRequest(scheme, host, port) -> OsmMapResource.OSM_TILE
+        else -> OsmMapResource.BLOCKED
+    }
+
+    /**
+     * Reads the small status protocol printed by Leaflet's tile events. The WebChromeClient
+     * consumes this without adding a JavaScript bridge to read-only maps.
+     */
+    internal fun osmMapStatusFromConsoleMessage(message: String): OsmMapStatus? {
+        val match = OSM_TILE_EVENT.matchEntire(message) ?: return null
+        val successfulTiles = match.groupValues[2].toIntOrNull() ?: return null
+        match.groupValues[3].toIntOrNull() ?: return null
+        return when (match.groupValues[1]) {
+            "load" -> OsmMapStatus.READY
+            "error" -> if (successfulTiles == 0) OsmMapStatus.ERROR else null
+            else -> null
+        }
+    }
+
+    private fun isHttpsPort(port: Int?): Boolean = port == null || port == -1 || port == 443
 
     /**
      * A Google Maps directions link for a delivery pin.

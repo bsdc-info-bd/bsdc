@@ -10,8 +10,16 @@
 --
 -- This is the same shape as `gig_proposal_queue()` (0112), deliberately: two
 -- queues that answer the same question should not answer it differently.
+--
+-- 0126 expands this function's returned columns. PostgreSQL does not let
+-- CREATE OR REPLACE change a table-returning function's OUT signature, so
+-- remove either version before recreating this historical definition. This
+-- keeps the complete migration set replayable; 0126 restores its richer shape
+-- later in the same ordered run.
 
-create or replace function public.job_application_queue(
+drop function if exists public.job_application_queue(uuid, integer);
+
+create function public.job_application_queue(
   p_job_id uuid,
   p_limit  integer default 100
 )

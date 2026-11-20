@@ -282,13 +282,26 @@ data class JobApplicationDto(
     val id: String = "",
     @SerialName("job_id") val jobId: String = "",
     @SerialName("applicant_uid") val applicantUid: String = "",
-    // Flat columns from `job_application_queue()` (migration 0113).
+    // Flat columns from `job_application_queue()` (migration 0126).
+    @SerialName("applicant_name") val applicantName: String = "",
     val username: String? = null,
     @SerialName("display_name") val displayName: String? = null,
     @SerialName("avatar_url") val avatarUrl: String? = null,
     val verified: Boolean = false,
+    val phone: String = "",
+    val email: String = "",
+    val location: String = "",
+    @SerialName("years_experience") val yearsExperience: Int? = null,
+    val education: String = "",
+    @SerialName("expected_salary_poisha") val expectedSalaryPoisha: Long? = null,
+    @SerialName("portfolio_url") val portfolioUrl: String = "",
+    @SerialName("linkedin_url") val linkedinUrl: String = "",
+    @SerialName("notice_period") val noticePeriod: String = "",
+    val skills: List<String> = emptyList(),
+    @SerialName("certification_image_urls") val certificationImageUrls: List<String> = emptyList(),
     @SerialName("cover_letter") val coverLetter: String = "",
     @SerialName("resume_url") val resumeUrl: String = "",
+    @SerialName("rejection_reason") val rejectionReason: String = "",
     val status: String = "submitted",
     @SerialName("decided_at") val decidedAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
@@ -305,6 +318,34 @@ data class JobApplicationDto(
             verified = verified,
         )
 }
+
+/** Contact-free response for the signed-in applicant's private tracker. */
+@Serializable
+data class MyJobApplicationDto(
+    val id: String = "",
+    @SerialName("job_id") val jobId: String = "",
+    @SerialName("job_slug") val jobSlug: String = "",
+    @SerialName("job_title") val jobTitle: String = "",
+    val company: String = "",
+    @SerialName("job_status") val jobStatus: String = "",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("applicant_name") val applicantName: String = "",
+    @SerialName("cover_letter") val coverLetter: String = "",
+    @SerialName("resume_url") val resumeUrl: String = "",
+    @SerialName("portfolio_url") val portfolioUrl: String = "",
+    @SerialName("linkedin_url") val linkedinUrl: String = "",
+    val location: String = "",
+    @SerialName("years_experience") val yearsExperience: Int? = null,
+    val education: String = "",
+    @SerialName("expected_salary_poisha") val expectedSalaryPoisha: Long? = null,
+    @SerialName("notice_period") val noticePeriod: String = "",
+    val skills: List<String> = emptyList(),
+    @SerialName("certification_image_urls") val certificationImageUrls: List<String> = emptyList(),
+    val status: String = "submitted",
+    @SerialName("rejection_reason") val rejectionReason: String = "",
+    @SerialName("decided_at") val decidedAt: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+)
 
 /** A saved opportunity, kept on the device so the shelf survives a cold start offline. */
 @Serializable

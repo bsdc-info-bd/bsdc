@@ -1,4 +1,12 @@
-import { LogOut, PlusCircle, Store, Trash2, Settings, User as UserIcon } from 'lucide-react';
+import {
+  Briefcase,
+  LogOut,
+  PlusCircle,
+  Store,
+  Trash2,
+  Settings,
+  User as UserIcon,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';
@@ -93,6 +101,14 @@ export function AccountMenu() {
               {t('onboarding.title')}
             </Link>
           )}
+          <Link
+            role="menuitem"
+            to={ROUTES.myJobApplications}
+            className="fab-tap flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2"
+          >
+            <Briefcase size={16} aria-hidden="true" />
+            {t('jobs.application.myApplications')}
+          </Link>
           <Link
             role="menuitem"
             to={ROUTES.create}

@@ -2,7 +2,6 @@ import { Briefcase, MapPin } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { toast } from 'sonner';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -14,10 +13,8 @@ import {
   EmptyState,
   LinkButton,
   ListHero,
-  Modal,
   PageSkeleton,
   SelectField,
-  TextareaField,
   TextField,
 } from '@/design-system';
 import { useJobBoard } from '@/hooks/use-opportunities';
@@ -29,7 +26,9 @@ import {
 } from '@/lib/opportunities/opportunity-types';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { ROUTES, SITE, jobPath } from '@/lib/site';
-import { dataErrorKey } from '@/lib/supabase/errors';
+import { JobApplicationForm } from '@/components/jobs/JobApplicationForm';
+import { useJobApplicationPrefill } from '@/components/jobs/use-job-application-prefill';
+import type { JobApplicationSubmission } from '@/lib/opportunities/job-application';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 const WORK_MODES: WorkMode[] = ['onsite', 'remote', 'hybrid'];
@@ -40,19 +39,16 @@ export default function JobsPage() {
   const language = i18n.language === 'en' ? 'en' : 'bn';
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const board = useJobBoard();
+  const applicationPrefill = useJobApplicationPrefill();
   const [applyingTo, setApplyingTo] = useState<JobListing | null>(null);
-  const [coverLetter, setCoverLetter] = useState('');
 
-  async function submitApplication() {
+  async function submitApplication(application: JobApplicationSubmission) {
     if (applyingTo === null) return;
-    try {
-      await board.apply(applyingTo.id, coverLetter.trim());
-      toast.success(t('jobs.applied'));
-      setApplyingTo(null);
-      setCoverLetter('');
-    } catch (error) {
-      toast.error(t(dataErrorKey(error)));
-    }
+    await board.apply(applyingTo.id, application);
+  }
+
+  function closeApplication() {
+    setApplyingTo(null);
   }
 
   return (
@@ -146,7 +142,17 @@ export default function JobsPage() {
         </Card>
 
         {board.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
-        {board.isError ? <Alert tone="danger" title={t('jobs.failed')} className="mt-4" /> : null}
+        {board.isError ? (
+          <Alert tone="danger" title={t('jobs.failed')} className="mt-4">
+            <button
+              type="button"
+              onClick={() => void board.refetch()}
+              className="font-semibold underline"
+            >
+              {t('common.retry')}
+            </button>
+          </Alert>
+        ) : null}
 
         {!board.isLoading && !board.isError && board.jobs.length === 0 ? (
           <div className="mt-4">
@@ -241,44 +247,14 @@ export default function JobsPage() {
         </ul>
       </div>
 
-      <Modal
+      <JobApplicationForm
         open={applyingTo !== null}
-        onClose={() => {
-          setApplyingTo(null);
-        }}
-        title={t('jobs.applyTo', { title: applyingTo?.title ?? '' })}
-        closeLabel={t('common.close')}
-      >
-        <TextareaField
-          label={t('jobs.coverLetter')}
-          hint={t('jobs.coverLetterHint')}
-          rows={6}
-          value={coverLetter}
-          maxLength={6000}
-          counterMax={6000}
-          onChange={(event) => {
-            setCoverLetter(event.target.value);
-          }}
-        />
-        <div className="mt-4 flex gap-2">
-          <Button
-            disabled={board.isApplying || coverLetter.trim().length < 20}
-            onClick={() => {
-              void submitApplication();
-            }}
-          >
-            {t('jobs.sendApplication')}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setApplyingTo(null);
-            }}
-          >
-            {t('common.cancel')}
-          </Button>
-        </div>
-      </Modal>
+        jobTitle={applyingTo?.title ?? ''}
+        initial={applicationPrefill}
+        isSubmitting={board.isApplying}
+        onClose={closeApplication}
+        onSubmit={submitApplication}
+      />
     </>
   );
 }
