@@ -196,7 +196,9 @@ check(stillOpen.rows[0]?.status === 'open', 'so the posting is still open');
 
 const applications = await as(
   rahim,
-  `select public.apply_to_job('${jobId}', 'I have run this queue for three years.', '') as status`,
+  `select public.apply_to_job(
+     '${jobId}', 'I have run this queue for three years.', '', 'Rahim Ahmed', '+880 1712-345678'
+   ) as status`,
 );
 check(
   applications.ok && typeof applications.rows?.[0]?.status === 'string',

@@ -310,7 +310,10 @@ object JobDetailLogic {
 
     /** Queues an employer's review by what still needs a decision, then newest first. */
     fun sortApplicationsForEmployer(applications: List<JobApplicationDto>): List<JobApplicationDto> =
-        filterAndSortApplicationsForEmployer(applications)
+        applications.sortedWith(
+            compareBy<JobApplicationDto> { if (isDecided(it.status)) 1 else 0 }
+                .thenByDescending { parseTimestampMillis(it.createdAt) ?: 0L },
+        )
 
     /** Pure search, status filter and stable sort used by the employer queue. */
     fun filterAndSortApplicationsForEmployer(

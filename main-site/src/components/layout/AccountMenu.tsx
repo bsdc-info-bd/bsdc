@@ -1,4 +1,12 @@
-import { Briefcase, LogOut, PlusCircle, Store, Trash2, Settings, User as UserIcon } from 'lucide-react';
+import {
+  Briefcase,
+  LogOut,
+  PlusCircle,
+  Store,
+  Trash2,
+  Settings,
+  User as UserIcon,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation } from 'react-router-dom';

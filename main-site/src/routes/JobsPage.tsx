@@ -144,7 +144,11 @@ export default function JobsPage() {
         {board.isLoading ? <PageSkeleton label={t('common.loading')} /> : null}
         {board.isError ? (
           <Alert tone="danger" title={t('jobs.failed')} className="mt-4">
-            <button type="button" onClick={() => void board.refetch()} className="font-semibold underline">
+            <button
+              type="button"
+              onClick={() => void board.refetch()}
+              className="font-semibold underline"
+            >
               {t('common.retry')}
             </button>
           </Alert>

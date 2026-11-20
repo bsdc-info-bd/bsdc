@@ -36,12 +36,16 @@ export interface JobApplicationSubmission {
   resumeUrl: string;
 }
 
-export type JobApplicationValidationErrors = Partial<Record<keyof JobApplicationDraft | 'contact', string>>;
+export type JobApplicationValidationErrors = Partial<
+  Record<keyof JobApplicationDraft | 'contact', string>
+>;
 
 /** Optional phone, restricted to the database's digits/+ /space/dash contract. */
 export function isValidApplicationPhone(raw: string): boolean {
   const value = raw.trim();
-  return value.length === 0 || (value.length <= 20 && /^[0-9+ -]+$/.test(value) && /[0-9]/.test(value));
+  return (
+    value.length === 0 || (value.length <= 20 && /^[0-9+ -]+$/.test(value) && /[0-9]/.test(value))
+  );
 }
 
 /** Optional email, checked before it reaches the RPC (the database checks again). */
@@ -133,15 +137,26 @@ export function validateJobApplicationDraft(
   ) {
     errors.yearsExperience = 'jobs.application.validation.experience';
   }
-  if (draft.education.trim().length > 200) errors.education = 'jobs.application.validation.education';
-  if (draft.expectedSalaryTaka.trim().length > 0 && takaToPoisha(draft.expectedSalaryTaka) === null) {
+  if (draft.education.trim().length > 200)
+    errors.education = 'jobs.application.validation.education';
+  if (
+    draft.expectedSalaryTaka.trim().length > 0 &&
+    takaToPoisha(draft.expectedSalaryTaka) === null
+  ) {
     errors.expectedSalaryTaka = 'jobs.application.validation.salary';
   }
-  if (!isValidApplicationHttpsUrl(draft.resumeUrl)) errors.resumeUrl = 'jobs.application.validation.url';
-  if (!isValidApplicationHttpsUrl(draft.portfolioUrl)) errors.portfolioUrl = 'jobs.application.validation.url';
-  if (!isValidApplicationHttpsUrl(draft.linkedinUrl)) errors.linkedinUrl = 'jobs.application.validation.url';
-  if (draft.noticePeriod.trim().length > 60) errors.noticePeriod = 'jobs.application.validation.notice';
-  if (draft.skills.length > 30 || draft.skills.some((skill) => skill.trim().length === 0 || skill.trim().length > 64)) {
+  if (!isValidApplicationHttpsUrl(draft.resumeUrl))
+    errors.resumeUrl = 'jobs.application.validation.url';
+  if (!isValidApplicationHttpsUrl(draft.portfolioUrl))
+    errors.portfolioUrl = 'jobs.application.validation.url';
+  if (!isValidApplicationHttpsUrl(draft.linkedinUrl))
+    errors.linkedinUrl = 'jobs.application.validation.url';
+  if (draft.noticePeriod.trim().length > 60)
+    errors.noticePeriod = 'jobs.application.validation.notice';
+  if (
+    draft.skills.length > 30 ||
+    draft.skills.some((skill) => skill.trim().length === 0 || skill.trim().length > 64)
+  ) {
     errors.skills = 'jobs.application.validation.skills';
   }
   const imageUrls = draft.certificationImageUrls.map((url) => url.trim()).filter(Boolean);

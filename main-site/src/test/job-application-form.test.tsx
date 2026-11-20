@@ -3,7 +3,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { JobApplicationSubmission } from '@/lib/opportunities/job-application';
-import { JobApplicationForm, type JobApplicationPrefill } from '@/components/jobs/JobApplicationForm';
+import {
+  JobApplicationForm,
+  type JobApplicationPrefill,
+} from '@/components/jobs/JobApplicationForm';
 
 vi.mock('react-i18next', async (original) => ({
   ...(await original<typeof ReactI18Next>()),
@@ -12,7 +15,9 @@ vi.mock('react-i18next', async (original) => ({
 
 function renderForm(
   initial: JobApplicationPrefill = {},
-  onSubmit: (application: JobApplicationSubmission) => Promise<void> = vi.fn().mockResolvedValue(undefined),
+  onSubmit: (application: JobApplicationSubmission) => Promise<void> = vi
+    .fn()
+    .mockResolvedValue(undefined),
 ) {
   return render(
     <MemoryRouter>
@@ -45,9 +50,15 @@ describe('JobApplicationForm', () => {
     expect(screen.getByLabelText('jobs.application.email')).toHaveValue('nusrat@example.com');
     expect(screen.getByLabelText('jobs.application.location')).toHaveValue('Sylhet');
 
-    fireEvent.change(screen.getByLabelText('jobs.application.phone'), { target: { value: '+880 1712-345678' } });
-    fireEvent.change(screen.getByLabelText('jobs.application.expectedSalary'), { target: { value: '45000.50' } });
-    fireEvent.change(screen.getByLabelText('jobs.application.resume'), { target: { value: 'https://drive.google.com/file/d/resume/view' } });
+    fireEvent.change(screen.getByLabelText('jobs.application.phone'), {
+      target: { value: '+880 1712-345678' },
+    });
+    fireEvent.change(screen.getByLabelText('jobs.application.expectedSalary'), {
+      target: { value: '45000.50' },
+    });
+    fireEvent.change(screen.getByLabelText('jobs.application.resume'), {
+      target: { value: 'https://drive.google.com/file/d/resume/view' },
+    });
     fireEvent.change(screen.getByLabelText('jobs.coverLetter'), {
       target: { value: 'I have shipped reliable applications for several years.' },
     });
@@ -76,8 +87,12 @@ describe('JobApplicationForm', () => {
 
   it('shows inline validation instead of submitting when contact data is invalid', () => {
     renderForm({ applicantName: 'Nusrat' });
-    fireEvent.change(screen.getByLabelText('jobs.application.email'), { target: { value: 'not-an-email' } });
-    fireEvent.change(screen.getByLabelText('jobs.coverLetter'), { target: { value: 'A valid enough cover letter for this role.' } });
+    fireEvent.change(screen.getByLabelText('jobs.application.email'), {
+      target: { value: 'not-an-email' },
+    });
+    fireEvent.change(screen.getByLabelText('jobs.coverLetter'), {
+      target: { value: 'A valid enough cover letter for this role.' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'jobs.application.reviewApplication' }));
 
     expect(screen.getByText('jobs.application.validation.email')).toBeInTheDocument();

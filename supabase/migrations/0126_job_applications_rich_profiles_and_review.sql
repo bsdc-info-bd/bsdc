@@ -180,7 +180,13 @@ comment on column public.job_applications.rejection_reason is
 
 -- Change the apply RPC signature deliberately. PostgreSQL would keep the old
 -- 3-argument function as an overload if it were only CREATE OR REPLACE'd.
+-- Drop the rich signature too so this migration remains replayable after its
+-- first deploy; CREATE FUNCTION cannot replace an existing definition.
 drop function if exists public.apply_to_job(uuid, text, text);
+drop function if exists public.apply_to_job(
+  uuid, text, text, text, text, text, text, integer, text, bigint,
+  text, text, text, text[], text[]
+);
 
 create function public.apply_to_job(
   p_job_id                  uuid,
@@ -492,7 +498,9 @@ grant execute on function public.my_job_applications(integer) to authenticated;
 
 -- Store the decline note on the same application and send it through the
 -- existing notification path. The employer write remains this single RPC.
+-- Remove both generations before creation so a full ordered replay is safe.
 drop function if exists public.decide_application(uuid, bsdc_application_status);
+drop function if exists public.decide_application(uuid, bsdc_application_status, text);
 
 create function public.decide_application(
   p_application_id uuid,

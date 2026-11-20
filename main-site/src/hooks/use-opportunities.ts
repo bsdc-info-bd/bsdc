@@ -63,8 +63,13 @@ export function useJobBoard(): JobBoardResult {
   const jobs = useMemo(() => filterJobs(all, filters), [all, filters]);
   const facets = useMemo(() => skillFacets(all), [all]);
   const applicationMutation = useMutation({
-    mutationFn: async ({ jobId, application }: { jobId: string; application: JobApplicationSubmission }) =>
-      (await repository()).applyToJob(jobId, application, uid ?? ''),
+    mutationFn: async ({
+      jobId,
+      application,
+    }: {
+      jobId: string;
+      application: JobApplicationSubmission;
+    }) => (await repository()).applyToJob(jobId, application, uid ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['job-board'] });
       void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
@@ -441,8 +446,13 @@ export function useJobDetail(slug: string): JobDetailResult {
   }, [jobId]);
 
   const mutation = useMutation({
-    mutationFn: async ({ jobId: target, application }: { jobId: string; application: JobApplicationSubmission }) =>
-      (await repository()).applyToJob(target, application, uid ?? ''),
+    mutationFn: async ({
+      jobId: target,
+      application,
+    }: {
+      jobId: string;
+      application: JobApplicationSubmission;
+    }) => (await repository()).applyToJob(target, application, uid ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
       void queryClient.invalidateQueries({ queryKey: ['job-board'] });
@@ -600,7 +610,11 @@ export function useJobApplications(jobId: string | null, enabled: boolean): JobA
     staleTime: 30_000,
   });
 
-  async function decide(applicationId: string, status: ApplicationStatus, reason = ''): Promise<void> {
+  async function decide(
+    applicationId: string,
+    status: ApplicationStatus,
+    reason = '',
+  ): Promise<void> {
     setDecidingId(applicationId);
     try {
       await (await repository()).decideApplication(applicationId, status, reason);

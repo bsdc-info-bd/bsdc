@@ -130,10 +130,12 @@ function renderPage() {
 }
 
 function signInAs(uid: string, staff = false) {
-  useAuthStore.getState().setSession(
-    { uid, displayName: 'Signed in', email: 'member@example.test', photoURL: null } as never,
-    { ...DEFAULT_CLAIMS, staff },
-  );
+  useAuthStore
+    .getState()
+    .setSession(
+      { uid, displayName: 'Signed in', email: 'member@example.test', photoURL: null } as never,
+      { ...DEFAULT_CLAIMS, staff },
+    );
 }
 
 beforeEach(() => {
@@ -160,12 +162,21 @@ describe('job application review queue', () => {
     expect(screen.getByText('I have shipped three Firebase platforms.')).toBeTruthy();
     expect(screen.getByText('@nusrat')).toHaveAttribute('href', '/@nusrat');
     expect(screen.getByText('+880 1712-345678')).toHaveAttribute('href', 'tel:+8801712345678');
-    expect(screen.getByText('nusrat@example.test')).toHaveAttribute('href', 'mailto:nusrat@example.test');
+    expect(screen.getByText('nusrat@example.test')).toHaveAttribute(
+      'href',
+      'mailto:nusrat@example.test',
+    );
     expect(screen.getByText('BSc in Computer Science')).toBeTruthy();
     expect(screen.getByText('Firebase')).toBeTruthy();
     expect(screen.getByText('Kotlin')).toBeTruthy();
-    expect(screen.getByText('jobs.applications.openResume').closest('a')).toHaveAttribute('href', 'https://resume.example.com/cv');
-    expect(screen.getByText('jobs.application.portfolio').closest('a')).toHaveAttribute('href', 'https://nusrat.example.com');
+    expect(screen.getByText('jobs.applications.openResume').closest('a')).toHaveAttribute(
+      'href',
+      'https://resume.example.com/cv',
+    );
+    expect(screen.getByText('jobs.application.portfolio').closest('a')).toHaveAttribute(
+      'href',
+      'https://nusrat.example.com',
+    );
   });
 
   it('requires confirmation before moving an application into review', async () => {
@@ -204,7 +215,11 @@ describe('job application review queue', () => {
     await waitFor(() => expect(confirm).toBeEnabled());
     fireEvent.click(confirm);
     await waitFor(() =>
-      expect(mocks.decide).toHaveBeenCalledWith('app-1', 'rejected', 'Not enough production experience'),
+      expect(mocks.decide).toHaveBeenCalledWith(
+        'app-1',
+        'rejected',
+        'Not enough production experience',
+      ),
     );
   });
 
@@ -270,7 +285,12 @@ describe('job application review queue', () => {
     signInAs(POSTER_UID);
     mocks.applications = [
       application(),
-      application({ id: 'app-2', applicantName: 'Farhan Ahmed', displayName: 'Farhan Ahmed', location: 'Dhaka' }),
+      application({
+        id: 'app-2',
+        applicantName: 'Farhan Ahmed',
+        displayName: 'Farhan Ahmed',
+        location: 'Dhaka',
+      }),
     ];
     renderPage();
     fireEvent.change(screen.getByRole('searchbox', { name: 'jobs.applications.search' }), {

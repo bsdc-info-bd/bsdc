@@ -390,10 +390,12 @@ select set_config('request.jwt.claims',
   '{"sub":"bob","role":"authenticated","bsdc_role":"member"}', true);
 select pg_temp.expect_rows(
   'select public.apply_to_job(
-     (select id from public.jobs where slug = ''alice-job''), ''please hire me'')', 1, 1);
+     (select id from public.jobs where slug = ''alice-job''),
+     ''Please hire me; I have production experience.'', '''', ''Bob'', ''+880 1712-345678'')', 1, 1);
 select pg_temp.expect_fail(
   'select public.apply_to_job(
-     (select id from public.jobs where slug = ''alice-job''), ''please hire me'')',
+     (select id from public.jobs where slug = ''alice-job''),
+     ''Please hire me; I have production experience.'', '''', ''Bob'', ''+880 1712-345678'')',
   '23505', 'job/already-applied');
 select pg_temp.expect_rows(
   'select public.submit_proposal(

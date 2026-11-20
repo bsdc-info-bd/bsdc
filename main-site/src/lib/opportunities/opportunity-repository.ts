@@ -1,5 +1,9 @@
 import { wakePushDelivery } from '@/lib/push/wake';
-import { isValidApplicationHttpsUrl, isValidApplicationImgBbUrl, type JobApplicationSubmission } from './job-application';
+import {
+  isValidApplicationHttpsUrl,
+  isValidApplicationImgBbUrl,
+  type JobApplicationSubmission,
+} from './job-application';
 import { normaliseSkills } from '@/lib/opportunities/skills';
 import { getSupabase } from '@/lib/supabase/client';
 import { toDataError } from '@/lib/supabase/errors';

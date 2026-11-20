@@ -1853,13 +1853,16 @@ export const en = {
       reviewStep: 'Step 2 of 2 · Review and submit',
       reviewApplication: 'Review application',
       reviewTitle: 'Check everything before sending',
-      reviewHint: 'The employer will receive the details below. Your account profile remains separate.',
+      reviewHint:
+        'The employer will receive the details below. Your account profile remains separate.',
       editApplication: 'Edit details',
       submit: 'Submit application',
       successTitle: 'Application sent',
       successBody: 'The employer can now review your application and any links you shared.',
-      successPrivacy: 'Your contact details are visible only to the job poster and authorised staff.',
-      privateNotice: 'Your application and contact details are private to you, the job poster and authorised staff.',
+      successPrivacy:
+        'Your contact details are visible only to the job poster and authorised staff.',
+      privateNotice:
+        'Your application and contact details are private to you, the job poster and authorised staff.',
       section: {
         contact: 'Contact details',
         background: 'Experience and preferences',
@@ -1884,7 +1887,8 @@ export const en = {
       portfolio: 'Portfolio link',
       linkedin: 'LinkedIn profile',
       certifications: 'Certification images',
-      certificationHint: 'Paste up to three public ImgBB HTTPS image links. No file upload is used.',
+      certificationHint:
+        'Paste up to three public ImgBB HTTPS image links. No file upload is used.',
       certificationLink: 'Certification image {{count}}',
       certificationImageAlt: 'Applicant certification image',
       notProvided: 'Not provided',
@@ -1952,7 +1956,8 @@ export const en = {
       emptyBody: 'Nobody has applied to this role yet. When someone does, they appear here.',
       notFoundTitle: 'This role is not available',
       ownerOnlyTitle: 'You cannot read these applicants',
-      ownerOnlyBody: 'Only the person who posted this role or authorised staff can review applications.',
+      ownerOnlyBody:
+        'Only the person who posted this role or authorised staff can review applications.',
       backToJob: 'Back to the role',
       verified: 'Verified member',
       coverLetter: 'Cover letter',

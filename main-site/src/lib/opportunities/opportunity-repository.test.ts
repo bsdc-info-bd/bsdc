@@ -21,10 +21,7 @@ const employerRow: JobApplicationRow = {
   linkedin_url: 'https://www.linkedin.com/in/nusrat',
   notice_period: '30 days',
   skills: [' Firebase ', 'Kotlin', 'firebase'],
-  certification_image_urls: [
-    'https://i.ibb.co/a/cert.png',
-    'https://evil.example/cert.png',
-  ],
+  certification_image_urls: ['https://i.ibb.co/a/cert.png', 'https://evil.example/cert.png'],
   cover_letter: 'I have shipped reliable applications.',
   resume_url: 'https://drive.google.com/file/d/resume/view',
   status: 'submitted',

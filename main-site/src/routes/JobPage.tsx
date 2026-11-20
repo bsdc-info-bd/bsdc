@@ -49,7 +49,11 @@ export default function JobPage() {
         />
         <div className="fab-container py-6">
           <Alert tone="danger" title={t('jobs.detail.failed')}>
-            <button type="button" onClick={() => void detail.refetch()} className="font-semibold underline">
+            <button
+              type="button"
+              onClick={() => void detail.refetch()}
+              className="font-semibold underline"
+            >
               {t('common.retry')}
             </button>
           </Alert>
@@ -187,7 +191,9 @@ export default function JobPage() {
                   // The count above is a promise that the applications can be
                   // read somewhere. This is that somewhere.
                   <div className="flex flex-wrap items-center gap-3">
-                    {isPoster ? <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p> : null}
+                    {isPoster ? (
+                      <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p>
+                    ) : null}
                     <LinkButton
                       to={jobApplicationsPath(slug)}
                       size="sm"
