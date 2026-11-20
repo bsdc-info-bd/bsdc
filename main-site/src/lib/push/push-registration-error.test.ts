@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pushRegistrationErrorKey } from './push-registration-error';
+import { PushStageError, pushRegistrationErrorKey } from './push-registration-error';
 
 describe('push registration errors', () => {
   it('replaces an unknown database fallback with the push recovery message', () => {
@@ -27,4 +27,30 @@ describe('push registration errors', () => {
       ),
     ).toBe('push.errors.permissionDenied');
   });
+});
+
+it.each([
+  ['NotAllowedError', 'subscribeNotAllowed'],
+  ['AbortError', 'subscribeAborted'],
+  ['InvalidStateError', 'subscribeInvalidState'],
+])('keeps browser subscription failure %s actionable', (name, key) => {
+  expect(
+    pushRegistrationErrorKey(new PushStageError('subscribeRefused', new DOMException('', name))),
+  ).toBe(`push.errors.${key}`);
+});
+
+it('identifies a missing registration RPC without overriding known auth errors', () => {
+  expect(
+    pushRegistrationErrorKey(
+      new PushStageError('registerRpcFailed', { code: 'PGRST202', message: 'missing function' }),
+    ),
+  ).toBe('push.errors.registerRpcFailed');
+  expect(
+    pushRegistrationErrorKey(
+      new PushStageError('registerRpcFailed', {
+        code: '42501',
+        message: 'authentication required',
+      }),
+    ),
+  ).toBe('data.errors.signInRequired');
 });

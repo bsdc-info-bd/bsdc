@@ -239,6 +239,17 @@ check(
   approve.error?.message,
 );
 
+const applicationNotice = await db.query(
+  `select kind, target_url, body from public.notifications where uid = $1 and target_url = '/vendor/console'`,
+  [vendorUid],
+);
+check(
+  applicationNotice.rows.length === 1 &&
+    applicationNotice.rows[0]?.kind === 'moderation' &&
+    applicationNotice.rows[0]?.body.includes('Vendor application approved'),
+  'approval creates one vendor console notice, not a second initial-package notice',
+);
+
 const dash = await run(`select public.mk_vendor_dashboard() as d`, vendorUid);
 check(
   dash.rows[0]?.d?.credits === 10 && dash.rows[0]?.d?.listed === true,
@@ -633,6 +644,17 @@ check(
   'staff approve the purchase',
   approvePurchase.error?.message,
 );
+const purchaseNotice = await db.query(
+  `select kind, target_url, body from public.notifications where uid = $1 and target_url = '/vendor/console'`,
+  [vendorUid],
+);
+check(
+  purchaseNotice.rows.some(
+    (row) => row.kind === 'moderation' && row.body.includes('Order credits approved'),
+  ),
+  'credit decision reaches the vendor console',
+);
+
 const relisted = await run(`select public.mk_vendor_dashboard() as d`, vendorUid);
 check(
   relisted.rows[0]?.d?.credits === 50 && relisted.rows[0]?.d?.listed === true,

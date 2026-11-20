@@ -9,6 +9,42 @@ import { dataErrorKey } from '@/lib/supabase/errors';
  * turn only the generic fallback into the push-specific recovery message.
  */
 export function pushRegistrationErrorKey(error: unknown): string {
-  const key = dataErrorKey(error);
+  const cause = error instanceof PushStageError ? error.cause : error;
+  const key = dataErrorKey(cause);
+  if (error instanceof PushStageError) {
+    if (error.stage === 'subscribeRefused' && cause instanceof Error) {
+      if (cause.name === 'NotAllowedError') return 'push.errors.subscribeNotAllowed';
+      if (cause.name === 'AbortError') return 'push.errors.subscribeAborted';
+      if (cause.name === 'InvalidStateError') return 'push.errors.subscribeInvalidState';
+    }
+    if (key !== 'data.errors.generic' && key !== 'push.errors.failed') return key;
+    return `push.errors.${error.stage}`;
+  }
   return key === 'data.errors.generic' ? 'push.errors.failed' : key;
+}
+
+export class PushStageError extends Error {
+  constructor(
+    readonly stage: string,
+    cause?: unknown,
+  ) {
+    super(stage, { cause });
+  }
+}
+
+let lastAttempt: { mode: string; result: string; at: string } | null = null;
+
+export function latestPushAttempt(): typeof lastAttempt {
+  return lastAttempt;
+}
+
+export function recordPushAttempt(mode: string, result: string, error?: unknown): void {
+  lastAttempt = { mode, result, at: new Date().toISOString() };
+  try {
+    if (localStorage.getItem('bsdc.push.debug') === '1') {
+      console.debug('[BSDC push]', lastAttempt, error);
+    }
+  } catch {
+    // Debugging must not interfere with registration.
+  }
 }

@@ -9,6 +9,7 @@
  * When upgrading from an earlier offline-caching worker, `install` and
  * `activate` delete any leftover Workbox/image/font caches immediately.
  */
+import { readPushPayload } from '@/lib/push/payload';
 import {
   notificationBody,
   notificationTag,
@@ -63,106 +64,6 @@ self.addEventListener('activate', (event: ExtendableEvent) => {
 interface ContentAnswer {
   ok: boolean;
   items: PushContent[];
-}
-
-/** A payload, when one was sent. Supports RFC 8291 JSON and FCM shapes. */
-interface RawPushPayload {
-  title?: unknown;
-  body?: unknown;
-  url?: unknown;
-  icon?: unknown;
-  tag?: unknown;
-  notification?: {
-    title?: unknown;
-    body?: unknown;
-    icon?: unknown;
-    tag?: unknown;
-    click_action?: unknown;
-  };
-  data?: {
-    title?: unknown;
-    body?: unknown;
-    url?: unknown;
-    path?: unknown;
-    link?: unknown;
-    icon?: unknown;
-    tag?: unknown;
-  };
-  fcmOptions?: {
-    link?: unknown;
-  };
-}
-
-interface NormalizedPushPayload {
-  title: string;
-  body: string;
-  url: string;
-  tag: string;
-  icon: string;
-}
-
-function normalizeTargetPath(raw: string): string {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) return '/notifications';
-  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) return trimmed.slice(0, 300);
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.origin === self.location.origin) {
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`.slice(0, 300);
-    }
-  } catch {
-    // Invalid URL; fall back safely.
-  }
-  return '/notifications';
-}
-
-function readPayload(event: PushEvent): NormalizedPushPayload | null {
-  const data = event.data;
-  if (data === null || typeof data === 'undefined') return null;
-  try {
-    const parsed = data.json() as unknown;
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
-    const raw = parsed as RawPushPayload;
-    const title =
-      payloadText(raw.title, 120) ||
-      payloadText(raw.notification?.title, 120) ||
-      payloadText(raw.data?.title, 120);
-    if (title.length === 0) return null;
-
-    const body =
-      payloadText(raw.body, 240) ||
-      payloadText(raw.notification?.body, 240) ||
-      payloadText(raw.data?.body, 240);
-    const rawUrl =
-      payloadText(raw.url, 500) ||
-      payloadText(raw.data?.url, 500) ||
-      payloadText(raw.data?.path, 500) ||
-      payloadText(raw.data?.link, 500) ||
-      payloadText(raw.fcmOptions?.link, 500) ||
-      payloadText(raw.notification?.click_action, 500);
-    const tag =
-      payloadText(raw.tag, 80) ||
-      payloadText(raw.data?.tag, 80) ||
-      payloadText(raw.notification?.tag, 80);
-    const icon =
-      payloadText(raw.icon, 500) ||
-      payloadText(raw.data?.icon, 500) ||
-      payloadText(raw.notification?.icon, 500);
-
-    return {
-      title,
-      body,
-      url: normalizeTargetPath(rawUrl),
-      tag,
-      icon,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function payloadText(value: unknown, max: number): string {
-  return typeof value === 'string' ? value.slice(0, max).trim() : '';
 }
 
 async function fetchContent(endpoint: string): Promise<ContentAnswer> {
@@ -230,7 +131,7 @@ async function notifyOpenClients(url: string, tag: string): Promise<void> {
 }
 
 async function handlePush(event: PushEvent): Promise<void> {
-  const payload = readPayload(event);
+  const payload = readPushPayload(event.data, self.location.origin);
   if (payload !== null) {
     await Promise.all([
       show(
@@ -358,6 +259,7 @@ self.addEventListener('notificationclose', (event: NotificationEvent) => {
 });
 
 interface SubscriptionChange {
+  oldSubscription?: PushSubscription | null;
   newSubscription?: PushSubscription | null;
   waitUntil(promise: Promise<unknown>): void;
 }
@@ -368,8 +270,9 @@ self.addEventListener('pushsubscriptionchange', (event: Event) => {
     (async () => {
       let replacement = change.newSubscription ?? null;
       if (replacement === null) {
+        const oldKey = change.oldSubscription?.options?.applicationServerKey;
         let publicKey = VAPID_PUBLIC_KEY;
-        if (publicKey.length === 0) {
+        if (!oldKey && publicKey.length === 0) {
           try {
             const res = await fetch('/api/push/config', { cache: 'no-store' });
             if (res.ok) {
@@ -380,11 +283,11 @@ self.addEventListener('pushsubscriptionchange', (event: Event) => {
             return;
           }
         }
-        if (publicKey.length === 0) return;
+        if (!oldKey && publicKey.length === 0) return;
         try {
           replacement = await self.registration.pushManager.subscribe({
             userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(publicKey),
+            applicationServerKey: oldKey ?? urlBase64ToUint8Array(publicKey),
           });
         } catch {
           // Permission may be revoked while closed; app handles re-opt-in when opened.

@@ -85,7 +85,7 @@ export async function getFcmAccessToken(
 
 export function classifyFcmError(status: number, bodyText: string): DeliveryOutcome {
   if (status >= 200 && status < 300) return 'sent';
-  if (status === 404) return 'dead';
+  if (status === 404 || status === 410) return 'dead';
   if (status === 401 || status === 403) return 'unauthorized';
   if (status === 429 || status >= 500) return 'retry';
 
@@ -241,7 +241,7 @@ export async function sendFcmNotification(request: FcmSendRequest): Promise<Deli
           },
           data,
           webpush: {
-            headers: { Urgency: urgency },
+            headers: { Urgency: urgency, TTL: '86400' },
             notification: {
               title: request.words.title,
               body: request.words.body,

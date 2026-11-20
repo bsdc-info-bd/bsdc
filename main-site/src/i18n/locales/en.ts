@@ -1029,6 +1029,19 @@ export const en = {
     },
     errors: {
       permissionDenied: 'The browser refused the permission, so there is nothing to send to.',
+      configUnavailable: 'Push is not configured. Ask support to check the public push keys.',
+      swNotReady: 'The background worker is not ready. Reload this page and retry.',
+      subscribeRefused: 'The browser could not create a push subscription. Retry.',
+      subscribeNotAllowed:
+        'The browser refused the subscription. Check this site’s notification settings.',
+      subscribeAborted: 'The browser’s push service stopped responding. Retry.',
+      subscribeInvalidState:
+        'The browser still has an incompatible subscription. Reload and retry.',
+      fcmTokenFailed:
+        'Firebase could not issue a token. Retry or ask support to check the Firebase Web Push configuration.',
+      registerRpcFailed:
+        'The server could not save this device. Retry or ask support to check the registration RPCs.',
+      networkOffline: 'You are offline. Reconnect and try again.',
       failed:
         'This device could not be registered. Try again, or check the browser blocked nothing.',
     },

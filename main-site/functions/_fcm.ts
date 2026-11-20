@@ -340,7 +340,7 @@ export function buildWordsForGroup(rows: readonly FcmPendingRow[]) {
 
 function classifyStatus(status: number, bodyText: string): 'sent' | 'dead' | 'invalid' | 'failed' {
   if (status >= 200 && status < 300) return 'sent';
-  if (status === 404) return 'dead';
+  if (status === 404 || status === 410) return 'dead';
   if (status === 400) {
     const upper = bodyText.toUpperCase();
     if (upper.includes('UNREGISTERED')) return 'dead';
@@ -519,7 +519,7 @@ export async function fcmFallbackDispatch(
               notification: { title: w.title, body: w.body },
               data,
               webpush: {
-                headers: { Urgency: 'high' },
+                headers: { Urgency: 'high', TTL: '86400' },
                 notification: {
                   title: w.title,
                   body: w.body,

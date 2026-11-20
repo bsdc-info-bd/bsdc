@@ -178,6 +178,7 @@ const HARNESSES = [
   ],
   [
     't86.mjs',
+    't87.mjs',
     '0126: rich job applications, private review queue, direct-link validation, decisions and no legacy RPC overload',
   ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
