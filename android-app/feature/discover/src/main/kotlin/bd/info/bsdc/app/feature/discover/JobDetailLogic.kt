@@ -1,6 +1,14 @@
 package bd.info.bsdc.app.feature.discover
 
+import bd.info.bsdc.app.core.common.BanglaDigitFormatter
+import bd.info.bsdc.app.core.media.ImgbbUrlAllowlist
 import bd.info.bsdc.app.core.model.BsdcHosts
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.util.Locale
+import java.net.URI
 import java.net.URLEncoder
 import java.time.OffsetDateTime
 import java.time.format.DateTimeParseException
@@ -12,6 +20,181 @@ object JobDetailLogic {
 
     /** A cover letter must be at least this many characters, as on the website. */
     const val MIN_COVER_LETTER = 20
+
+    data class ApplicationDraft(
+        val applicantName: String = "",
+        val phone: String = "",
+        val email: String = "",
+        val location: String = "",
+        val yearsExperience: String = "",
+        val education: String = "",
+        val expectedSalaryTaka: String = "",
+        val portfolioUrl: String = "",
+        val linkedinUrl: String = "",
+        val noticePeriod: String = "",
+        val skillsInput: String = "",
+        val certificationImageUrls: List<String> = emptyList(),
+        val coverLetter: String = "",
+        val resumeUrl: String = "",
+    )
+
+    data class ApplicationSubmission(
+        val applicantName: String,
+        val phone: String,
+        val email: String,
+        val location: String,
+        val yearsExperience: Int?,
+        val education: String,
+        val expectedSalaryPoisha: Long?,
+        val portfolioUrl: String,
+        val linkedinUrl: String,
+        val noticePeriod: String,
+        val skills: List<String>,
+        val certificationImageUrls: List<String>,
+        val coverLetter: String,
+        val resumeUrl: String,
+    )
+
+    private const val MAX_SAFE_POISHA = 9_007_199_254_740_991L
+
+    /** Prefill from the member's public profile, never an unshared account email. */
+    fun prefillApplicationDraft(
+        displayName: String,
+        accountEmail: String,
+        showEmail: Boolean,
+        location: String,
+        skills: List<String>,
+    ): ApplicationDraft = ApplicationDraft(
+        applicantName = displayName.trim(),
+        email = if (showEmail) accountEmail.trim() else "",
+        location = location.trim(),
+        skillsInput = applicationSkills(skills.joinToString(", ")).joinToString(", "),
+    )
+
+    private val emailPattern = Regex("""^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?(?:\.[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?)+$""", RegexOption.IGNORE_CASE)
+    private val phonePattern = Regex("^[0-9+ -]+$")
+    private val yearsPattern = Regex("""^\d{1,2}$""")
+    private val salaryPattern = Regex("""^\d{1,15}(?:\.\d{1,2})?$""")
+
+    fun isValidApplicationPhone(raw: String): Boolean {
+        val value = raw.trim()
+        return value.isEmpty() || (value.length <= 20 && phonePattern.matches(value) && value.any { it.isDigit() })
+    }
+
+    fun isValidApplicationEmail(raw: String): Boolean {
+        val value = raw.trim()
+        return value.isEmpty() || (value.length <= 320 && emailPattern.matches(value))
+    }
+
+    /** Absolute HTTPS only; no credentials, whitespace or control characters. */
+    fun isValidApplicationHttpsUrl(raw: String): Boolean {
+        val value = raw.trim()
+        if (value.isEmpty()) return true
+        if (value.any { it.isWhitespace() || it == '<' || it == '>' }) return false
+        return runCatching {
+            val uri = URI(value)
+            uri.scheme.equals("https", ignoreCase = true) &&
+                !uri.host.isNullOrBlank() &&
+                uri.rawUserInfo == null &&
+                (uri.port == -1 || uri.port in 1..65535)
+        }.getOrDefault(false)
+    }
+
+    /** Require HTTPS and the platform's repairable, ImgBB-only image hosts. */
+    fun isValidApplicationImageUrl(raw: String): Boolean {
+        val value = raw.trim()
+        if (value.isEmpty() || !isValidApplicationHttpsUrl(value)) return false
+        // The Java image allowlist intentionally accepts canonical lower-case https URLs only;
+        // normalize the scheme here so valid user input remains case-insensitive like URL rules.
+        val canonical = if (value.startsWith("https://", ignoreCase = true)) {
+            "https://${value.substringAfter("://")}"
+        } else {
+            value
+        }
+        return ImgbbUrlAllowlist.isAllowedImageUrl(canonical) &&
+            ImgbbUrlAllowlist.isRepairableImageUrl(canonical)
+    }
+
+    /** Exact taka-to-poisha conversion; malformed fractions are never rounded. */
+    fun takaToPoisha(raw: String): Long? {
+        val value = raw.trim()
+        if (value.isEmpty() || !salaryPattern.matches(value)) return null
+        return runCatching {
+            BigDecimal(value)
+                .movePointRight(2)
+                .setScale(0, RoundingMode.UNNECESSARY)
+                .longValueExact()
+                .takeIf { it <= MAX_SAFE_POISHA }
+        }.getOrNull()
+    }
+
+    fun formatApplicationSalary(poisha: Long, bn: Boolean): String {
+        val formatter = DecimalFormat("#,##,##0.##", DecimalFormatSymbols.getInstance(Locale.US)).apply {
+            maximumFractionDigits = 2
+            minimumFractionDigits = 0
+            isGroupingUsed = true
+            roundingMode = RoundingMode.UNNECESSARY
+        }
+        val amount = formatter.format(BigDecimal.valueOf(poisha, 2))
+        return "৳${if (bn) BanglaDigitFormatter.toBanglaDigits(amount) else amount}"
+    }
+
+    private fun applicationSkills(raw: String): List<String> = raw
+        .split(',')
+        .map { it.trim().replace(Regex("\\s+"), " ").lowercase() }
+        .filter { it.isNotEmpty() }
+        .distinct()
+        .sorted()
+
+    /** Field names are stable identifiers for bilingual inline validation copy. */
+    fun validateApplicationDraft(draft: ApplicationDraft): Set<String> {
+        val errors = linkedSetOf<String>()
+        val name = draft.applicantName.trim()
+        val phone = draft.phone.trim()
+        val email = draft.email.trim()
+        if (name.isEmpty() || name.length > 60) errors += "name"
+        if (!isValidApplicationPhone(phone)) errors += "phone"
+        if (!isValidApplicationEmail(email)) errors += "email"
+        if (phone.isEmpty() && email.isEmpty()) errors += "contact"
+        if (draft.location.trim().length > 80) errors += "location"
+        if (draft.yearsExperience.isNotBlank()) {
+            val experience = draft.yearsExperience.trim().toIntOrNull()
+            if (!yearsPattern.matches(draft.yearsExperience.trim()) || experience == null || experience !in 0..60) {
+                errors += "experience"
+            }
+        }
+        if (draft.education.trim().length > 200) errors += "education"
+        if (draft.expectedSalaryTaka.isNotBlank() && takaToPoisha(draft.expectedSalaryTaka) == null) errors += "salary"
+        if (!isValidApplicationHttpsUrl(draft.resumeUrl)) errors += "resume"
+        if (!isValidApplicationHttpsUrl(draft.portfolioUrl)) errors += "portfolio"
+        if (!isValidApplicationHttpsUrl(draft.linkedinUrl)) errors += "linkedin"
+        if (draft.noticePeriod.trim().length > 60) errors += "notice"
+        val skills = applicationSkills(draft.skillsInput)
+        if (skills.size > 30 || skills.any { it.length > 64 }) errors += "skills"
+        val images = draft.certificationImageUrls.map { it.trim() }.filter { it.isNotEmpty() }
+        if (images.size > 3 || images.any { !isValidApplicationImageUrl(it) }) errors += "certifications"
+        val coverLength = draft.coverLetter.trim().length
+        if (coverLength !in MIN_COVER_LETTER..6000) errors += "coverLetter"
+        return errors
+    }
+
+    /** Call only after [validateApplicationDraft] returns no errors. */
+    fun toApplicationSubmission(draft: ApplicationDraft): ApplicationSubmission = ApplicationSubmission(
+        applicantName = draft.applicantName.trim(),
+        phone = draft.phone.trim(),
+        email = draft.email.trim().lowercase(),
+        location = draft.location.trim(),
+        yearsExperience = draft.yearsExperience.trim().takeIf { it.isNotEmpty() }?.toInt(),
+        education = draft.education.trim(),
+        expectedSalaryPoisha = draft.expectedSalaryTaka.trim().takeIf { it.isNotEmpty() }?.let(::takaToPoisha),
+        portfolioUrl = draft.portfolioUrl.trim(),
+        linkedinUrl = draft.linkedinUrl.trim(),
+        noticePeriod = draft.noticePeriod.trim(),
+        skills = applicationSkills(draft.skillsInput),
+        certificationImageUrls = draft.certificationImageUrls.map { it.trim() }.filter { it.isNotEmpty() },
+        coverLetter = draft.coverLetter.trim(),
+        resumeUrl = draft.resumeUrl.trim(),
+    )
 
     private val shortOffset = Regex("([+-]\\d{2})$")
 
@@ -127,10 +310,51 @@ object JobDetailLogic {
 
     /** Queues an employer's review by what still needs a decision, then newest first. */
     fun sortApplicationsForEmployer(applications: List<JobApplicationDto>): List<JobApplicationDto> =
-        applications.sortedWith(
-            compareBy<JobApplicationDto> { if (isDecided(it.status)) 1 else 0 }
-                .thenByDescending { parseTimestampMillis(it.createdAt) ?: 0L },
-        )
+        filterAndSortApplicationsForEmployer(applications)
+
+    /** Pure search, status filter and stable sort used by the employer queue. */
+    fun filterAndSortApplicationsForEmployer(
+        applications: List<JobApplicationDto>,
+        statusFilter: String = "all",
+        query: String = "",
+        sortMode: String = "priority",
+    ): List<JobApplicationDto> {
+        val needle = query.trim().lowercase()
+        val filtered = applications.filter { application ->
+            val matchesStatus = statusFilter == "all" || application.status.equals(statusFilter, ignoreCase = true)
+            val haystack = listOf(
+                application.applicantName,
+                application.applicantCard.displayName.orEmpty(),
+                application.applicantCard.username.orEmpty(),
+                application.phone,
+                application.email,
+                application.location,
+                application.yearsExperience?.toString().orEmpty(),
+                application.education,
+                application.expectedSalaryPoisha?.toString().orEmpty(),
+                application.portfolioUrl,
+                application.linkedinUrl,
+                application.noticePeriod,
+                application.skills.joinToString(" "),
+                application.coverLetter,
+                application.resumeUrl,
+            ).joinToString(" ").lowercase()
+            matchesStatus && (needle.isEmpty() || haystack.contains(needle))
+        }
+        val date = { application: JobApplicationDto -> parseTimestampMillis(application.createdAt) ?: 0L }
+        return when (sortMode) {
+            "oldest" -> filtered.sortedBy(date)
+            "newest" -> filtered.sortedByDescending(date)
+            else -> filtered.sortedWith(
+                compareBy<JobApplicationDto> { when (it.status.trim().lowercase()) {
+                    "submitted" -> 0
+                    "reviewing" -> 1
+                    "shortlisted" -> 2
+                    else -> 3
+                } }.thenByDescending(date),
+            )
+        }
+    }
 
     /**
      * The same monthly figure shown over a year, so a reader weighing two offers does not have

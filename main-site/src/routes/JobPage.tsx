@@ -2,7 +2,6 @@ import { ArrowLeft, Banknote, Briefcase, CalendarClock, MapPin, Users } from 'lu
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
-import { toast } from 'sonner';
 import { ShareLinkButton } from '@/components/share/ShareLinkButton';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -13,16 +12,16 @@ import {
   EmptyState,
   ExternalLink,
   LinkButton,
-  Modal,
   PageSkeleton,
-  TextareaField,
 } from '@/design-system';
+import { JobApplicationForm } from '@/components/jobs/JobApplicationForm';
+import { useJobApplicationPrefill } from '@/components/jobs/use-job-application-prefill';
 import { useJobDetail } from '@/hooks/use-opportunities';
 import { formatAbsoluteDate, formatNumber, formatRelativeTime } from '@/lib/format';
 import { jobIsLive, jobPostingJsonLd, safeExternalUrl } from '@/lib/listings/listing-schema';
 import { formatSalaryRange, isApplied } from '@/lib/opportunities/opportunity-types';
+import type { JobApplicationSubmission } from '@/lib/opportunities/job-application';
 import { ROUTES, SITE, jobApplicationsPath, jobPath } from '@/lib/site';
-import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 /** One job in full: the role, its terms, and the reader's own application. */
@@ -33,8 +32,9 @@ export default function JobPage() {
   const isSignedIn = useAuthStore(selectIsSignedIn);
   const uid = useAuthStore((state) => state.user?.uid ?? null);
   const detail = useJobDetail(slug);
+  const applicationPrefill = useJobApplicationPrefill();
+  const isStaff = useAuthStore((state) => state.claims?.staff ?? false);
   const [applying, setApplying] = useState(false);
-  const [coverLetter, setCoverLetter] = useState('');
 
   if (detail.isLoading) return <PageSkeleton label={t('jobs.detail.loading')} />;
 
@@ -48,7 +48,11 @@ export default function JobPage() {
           noindex
         />
         <div className="fab-container py-6">
-          <Alert tone="danger" title={t('jobs.detail.failed')} />
+          <Alert tone="danger" title={t('jobs.detail.failed')}>
+            <button type="button" onClick={() => void detail.refetch()} className="font-semibold underline">
+              {t('common.retry')}
+            </button>
+          </Alert>
         </div>
       </>
     );
@@ -84,6 +88,7 @@ export default function JobPage() {
   const remote = job.workMode === 'remote';
   const applied = isApplied(job.myStatus);
   const isPoster = uid !== null && uid === job.posterUid;
+  const canReviewApplications = isPoster || isStaff;
   const salary = formatSalaryRange(job.salaryMin, job.salaryMax, job.currency, language);
   const applyLink = live ? safeExternalUrl(job.applyUrl) : null;
   const path = jobPath(job.slug);
@@ -92,15 +97,8 @@ export default function JobPage() {
   const summary = job.description.replace(/\s+/g, ' ').trim().slice(0, 155);
   const jobId = job.id;
 
-  async function submitApplication() {
-    try {
-      await detail.apply(jobId, coverLetter.trim());
-      toast.success(t('jobs.applied'));
-      setApplying(false);
-      setCoverLetter('');
-    } catch (error) {
-      toast.error(t(dataErrorKey(error)));
-    }
+  async function submitApplication(application: JobApplicationSubmission) {
+    await detail.apply(jobId, application);
   }
 
   return (
@@ -185,11 +183,11 @@ export default function JobPage() {
                     {t('jobs.detail.applicationStatus')}
                     <Badge tone="green">{t(`jobs.statuses.${job.myStatus ?? 'submitted'}`)}</Badge>
                   </p>
-                ) : isPoster ? (
+                ) : canReviewApplications ? (
                   // The count above is a promise that the applications can be
                   // read somewhere. This is that somewhere.
                   <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p>
+                    {isPoster ? <p className="text-sm text-muted">{t('jobs.detail.postedByYou')}</p> : null}
                     <LinkButton
                       to={jobApplicationsPath(slug)}
                       size="sm"
@@ -237,44 +235,14 @@ export default function JobPage() {
         </div>
       </article>
 
-      <Modal
+      <JobApplicationForm
         open={applying}
-        onClose={() => {
-          setApplying(false);
-        }}
-        title={t('jobs.applyTo', { title: job.title })}
-        closeLabel={t('common.close')}
-      >
-        <TextareaField
-          label={t('jobs.coverLetter')}
-          hint={t('jobs.coverLetterHint')}
-          rows={6}
-          value={coverLetter}
-          maxLength={6000}
-          counterMax={6000}
-          onChange={(event) => {
-            setCoverLetter(event.target.value);
-          }}
-        />
-        <div className="mt-4 flex gap-2">
-          <Button
-            disabled={detail.isApplying || coverLetter.trim().length < 20}
-            onClick={() => {
-              void submitApplication();
-            }}
-          >
-            {t('jobs.sendApplication')}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setApplying(false);
-            }}
-          >
-            {t('common.cancel')}
-          </Button>
-        </div>
-      </Modal>
+        jobTitle={job.title}
+        initial={applicationPrefill}
+        isSubmitting={detail.isApplying}
+        onClose={() => setApplying(false)}
+        onSubmit={submitApplication}
+      />
     </>
   );
 }

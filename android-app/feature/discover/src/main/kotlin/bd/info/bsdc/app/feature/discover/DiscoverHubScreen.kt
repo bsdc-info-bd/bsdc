@@ -193,6 +193,9 @@ fun DiscoverHubScreen(
     var applyingJob by remember { mutableStateOf<JobBoardDto?>(null) }
     var coverLetterInput by remember { mutableStateOf("") }
     var resumeUrlInput by remember { mutableStateOf("") }
+    var applicantNameInput by remember { mutableStateOf("") }
+    var applicantPhoneInput by remember { mutableStateOf("") }
+    var applicantEmailInput by remember { mutableStateOf("") }
 
     // Bidding happens on GigDetailScreen, where the brief, the payout estimate and the
     // reader's own proposal status are all visible together.
@@ -948,6 +951,9 @@ fun DiscoverHubScreen(
                                             applyingJob = job
                                             coverLetterInput = ""
                                             resumeUrlInput = ""
+                                            applicantNameInput = ""
+                                            applicantPhoneInput = ""
+                                            applicantEmailInput = ""
                                         }
                                     },
                                     modifier = Modifier.weight(1f),
@@ -1413,11 +1419,40 @@ fun DiscoverHubScreen(
 
     // Apply to Job dialog
     applyingJob?.let { job ->
+        val applicationDraft = JobDetailLogic.ApplicationDraft(
+            applicantName = applicantNameInput,
+            phone = applicantPhoneInput,
+            email = applicantEmailInput,
+            coverLetter = coverLetterInput,
+            resumeUrl = resumeUrlInput,
+        )
+        val applicationErrors = JobDetailLogic.validateApplicationDraft(applicationDraft)
         AlertDialog(
             onDismissRequest = { applyingJob = null },
             title = { Text(job.title) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = applicantNameInput,
+                        onValueChange = { applicantNameInput = it.take(60) },
+                        label = { Text(if (bn) "আপনার নাম" else "Your name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = applicantPhoneInput,
+                        onValueChange = { applicantPhoneInput = it.take(20) },
+                        label = { Text(if (bn) "ফোন" else "Phone") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        value = applicantEmailInput,
+                        onValueChange = { applicantEmailInput = it.take(320) },
+                        label = { Text(if (bn) "ইমেইল" else "Email") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     OutlinedTextField(
                         value = coverLetterInput,
                         onValueChange = { coverLetterInput = it },
@@ -1432,13 +1467,22 @@ fun DiscoverHubScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    if (applicationErrors.isNotEmpty()) {
+                        Text(
+                            text = if (bn) "নাম, ফোন বা ইমেইল, এবং অন্তত ২০ অক্ষরের কভার লেটার দিন।"
+                            else "Add your name, a phone number or email, and a cover letter of at least 20 characters.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
             },
             confirmButton = {
                 TextButton(
+                    enabled = applicationErrors.isEmpty(),
                     onClick = {
                         scope.launch {
-                            repository.applyToJob(job.id, coverLetterInput, resumeUrlInput)
+                            repository.applyToJob(job.id, JobDetailLogic.toApplicationSubmission(applicationDraft))
                                 .onSuccess {
                                     applyingJob = null
                                     showInfo(if (bn) "চাকরির আবেদন জমা হয়েছে।" else "Application submitted.")

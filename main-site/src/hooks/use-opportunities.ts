@@ -21,10 +21,12 @@ import type {
   ProjectScreenshotDraft,
   ProjectUpdate,
 } from '@/lib/opportunities/opportunity-repository';
+import type { JobApplicationSubmission } from '@/lib/opportunities/job-application';
 import type {
   ApplicationStatus,
   GigProposal,
   JobApplication,
+  MyJobApplication,
   ProposalStatus,
 } from '@/lib/opportunities/opportunity-types';
 
@@ -37,8 +39,9 @@ export interface JobBoardResult {
   setFilters: (next: JobFilters) => void;
   isLoading: boolean;
   isError: boolean;
-  apply: (jobId: string, coverLetter: string) => Promise<void>;
+  apply: (jobId: string, application: JobApplicationSubmission) => Promise<void>;
   isApplying: boolean;
+  refetch: () => Promise<void>;
 }
 
 /**
@@ -59,12 +62,13 @@ export function useJobBoard(): JobBoardResult {
   const all = useMemo(() => query.data ?? [], [query.data]);
   const jobs = useMemo(() => filterJobs(all, filters), [all, filters]);
   const facets = useMemo(() => skillFacets(all), [all]);
-
-  const mutation = useMutation({
-    mutationFn: async ({ jobId, coverLetter }: { jobId: string; coverLetter: string }) =>
-      (await repository()).applyToJob(jobId, coverLetter),
+  const applicationMutation = useMutation({
+    mutationFn: async ({ jobId, application }: { jobId: string; application: JobApplicationSubmission }) =>
+      (await repository()).applyToJob(jobId, application, uid ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['job-board'] });
+      void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-job-applications'] });
     },
   });
 
@@ -75,10 +79,13 @@ export function useJobBoard(): JobBoardResult {
     setFilters,
     isLoading: query.isLoading,
     isError: query.isError,
-    apply: async (jobId, coverLetter) => {
-      await mutation.mutateAsync({ jobId, coverLetter });
+    apply: async (jobId, application) => {
+      await applicationMutation.mutateAsync({ jobId, application });
     },
-    isApplying: mutation.isPending,
+    isApplying: applicationMutation.isPending,
+    refetch: async () => {
+      await query.refetch();
+    },
   };
 }
 
@@ -400,9 +407,11 @@ export interface JobDetailResult {
   job: JobDetail | null;
   isLoading: boolean;
   isError: boolean;
+  error: unknown;
+  refetch: () => Promise<void>;
   /** True when the reader may not see this job: closed, expired, or no such slug. */
   isNotFound: boolean;
-  apply: (jobId: string, coverLetter: string) => Promise<void>;
+  apply: (jobId: string, application: JobApplicationSubmission) => Promise<void>;
   isApplying: boolean;
 }
 
@@ -432,11 +441,12 @@ export function useJobDetail(slug: string): JobDetailResult {
   }, [jobId]);
 
   const mutation = useMutation({
-    mutationFn: async ({ jobId: target, coverLetter }: { jobId: string; coverLetter: string }) =>
-      (await repository()).applyToJob(target, coverLetter),
+    mutationFn: async ({ jobId: target, application }: { jobId: string; application: JobApplicationSubmission }) =>
+      (await repository()).applyToJob(target, application, uid ?? ''),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['job-detail'] });
       void queryClient.invalidateQueries({ queryKey: ['job-board'] });
+      void queryClient.invalidateQueries({ queryKey: ['my-job-applications'] });
     },
   });
 
@@ -444,9 +454,13 @@ export function useJobDetail(slug: string): JobDetailResult {
     job: query.data ?? null,
     isLoading: query.isLoading,
     isError: query.isError,
+    error: query.error,
+    refetch: async () => {
+      await query.refetch();
+    },
     isNotFound: !query.isLoading && !query.isError && query.data === null,
-    apply: async (target, coverLetter) => {
-      await mutation.mutateAsync({ jobId: target, coverLetter });
+    apply: async (target, application) => {
+      await mutation.mutateAsync({ jobId: target, application });
     },
     isApplying: mutation.isPending,
   };
@@ -558,8 +572,11 @@ export interface JobApplicationsResult {
   applications: JobApplication[];
   isLoading: boolean;
   isError: boolean;
+  error: unknown;
   /** Move one application to a decided status; resolves when the server has written it. */
-  decide: (applicationId: string, status: ApplicationStatus) => Promise<void>;
+  decide: (applicationId: string, status: ApplicationStatus, reason?: string) => Promise<void>;
+  /** Retry an explicit queue read failure. */
+  refetch: () => Promise<void>;
   isDeciding: boolean;
   decidingId: string | null;
 }
@@ -583,12 +600,13 @@ export function useJobApplications(jobId: string | null, enabled: boolean): JobA
     staleTime: 30_000,
   });
 
-  async function decide(applicationId: string, status: ApplicationStatus): Promise<void> {
+  async function decide(applicationId: string, status: ApplicationStatus, reason = ''): Promise<void> {
     setDecidingId(applicationId);
     try {
-      await (await repository()).decideApplication(applicationId, status);
+      await (await repository()).decideApplication(applicationId, status, reason);
       await queryClient.invalidateQueries({ queryKey: ['job-applications', jobId] });
       await queryClient.invalidateQueries({ queryKey: ['job-detail'] });
+      await queryClient.invalidateQueries({ queryKey: ['my-job-applications'] });
     } finally {
       setDecidingId(null);
     }
@@ -598,8 +616,40 @@ export function useJobApplications(jobId: string | null, enabled: boolean): JobA
     applications: query.data ?? [],
     isLoading: query.isLoading,
     isError: query.isError,
+    error: query.error,
     decide,
+    refetch: async () => {
+      await query.refetch();
+    },
     isDeciding: decidingId !== null,
     decidingId,
+  };
+}
+
+export interface MyJobApplicationsResult {
+  applications: MyJobApplication[];
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  refetch: () => Promise<void>;
+}
+
+/** The signed-in member's own application history; the RPC returns no contact fields. */
+export function useMyJobApplications(enabled: boolean): MyJobApplicationsResult {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const query = useQuery({
+    queryKey: ['my-job-applications', uid],
+    queryFn: async () => (await repository()).fetchMyJobApplications(),
+    enabled: enabled && uid !== null,
+    staleTime: 30_000,
+  });
+  return {
+    applications: query.data ?? [],
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    refetch: async () => {
+      await query.refetch();
+    },
   };
 }

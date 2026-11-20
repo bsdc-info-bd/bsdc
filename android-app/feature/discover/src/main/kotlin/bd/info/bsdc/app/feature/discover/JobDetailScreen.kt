@@ -94,6 +94,9 @@ fun JobDetailScreen(
     var showApply by remember(slug) { mutableStateOf(false) }
     var coverLetter by remember(slug) { mutableStateOf("") }
     var resumeLink by remember(slug) { mutableStateOf("") }
+    var applicantName by remember(slug) { mutableStateOf("") }
+    var applicantPhone by remember(slug) { mutableStateOf("") }
+    var applicantEmail by remember(slug) { mutableStateOf("") }
     var applying by remember(slug) { mutableStateOf(false) }
     var applyError by remember(slug) { mutableStateOf<String?>(null) }
     var applied by remember(slug) { mutableStateOf(false) }
@@ -132,9 +135,21 @@ fun JobDetailScreen(
         if (applying) return
         applying = true
         applyError = null
-        val resume = if (resumeLink.isBlank()) "" else DiscoverSearchEngine.safeHttpUrlOrEmpty(resumeLink)
+        val draft = JobDetailLogic.ApplicationDraft(
+            applicantName = applicantName,
+            phone = applicantPhone,
+            email = applicantEmail,
+            coverLetter = coverLetter,
+            resumeUrl = resumeLink,
+        )
+        val validation = JobDetailLogic.validateApplicationDraft(draft)
+        if (validation.isNotEmpty()) {
+            applyError = if (bn) "নাম, বৈধ যোগাযোগের তথ্য এবং কমপক্ষে ২০ অক্ষরের আবেদনপত্র দিন।" else "Enter your name, valid contact details, and a cover letter of at least 20 characters."
+            applying = false
+            return
+        }
         scope.launch {
-            repository.applyToJob(current.id, coverLetter, resume)
+            repository.applyToJob(current.id, JobDetailLogic.toApplicationSubmission(draft))
                 .onSuccess {
                     showApply = false
                     applied = true
@@ -205,7 +220,16 @@ fun JobDetailScreen(
     }
 
     val current = job
-    val resumeValid = resumeLink.isBlank() || DiscoverSearchEngine.safeHttpUrlOrEmpty(resumeLink).isNotBlank()
+    val applicationErrors = JobDetailLogic.validateApplicationDraft(
+        JobDetailLogic.ApplicationDraft(
+            applicantName = applicantName,
+            phone = applicantPhone,
+            email = applicantEmail,
+            coverLetter = coverLetter,
+            resumeUrl = resumeLink,
+        ),
+    )
+    val resumeValid = "resume" !in applicationErrors
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -656,6 +680,30 @@ fun JobDetailScreen(
                             text = {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     OutlinedTextField(
+                                        value = applicantName,
+                                        onValueChange = { applicantName = it.take(60) },
+                                        label = { Text(if (bn) "আপনার নাম" else "Your name") },
+                                        isError = applicantName.isNotBlank() && "name" in applicationErrors,
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    OutlinedTextField(
+                                        value = applicantPhone,
+                                        onValueChange = { applicantPhone = it.take(20) },
+                                        label = { Text(if (bn) "ফোন" else "Phone") },
+                                        isError = applicantPhone.isNotBlank() && "phone" in applicationErrors,
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    OutlinedTextField(
+                                        value = applicantEmail,
+                                        onValueChange = { applicantEmail = it.take(320) },
+                                        label = { Text(if (bn) "ইমেইল" else "Email") },
+                                        isError = applicantEmail.isNotBlank() && "email" in applicationErrors,
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    )
+                                    OutlinedTextField(
                                         value = coverLetter,
                                         onValueChange = { coverLetter = it },
                                         label = { Text(if (bn) "কভার লেটার" else "Cover letter") },
@@ -696,7 +744,7 @@ fun JobDetailScreen(
                             },
                             confirmButton = {
                                 TextButton(
-                                    enabled = JobDetailLogic.coverLetterValid(coverLetter) && resumeValid && !applying,
+                                    enabled = applicationErrors.isEmpty() && !applying,
                                     onClick = { submitApplication(current) },
                                 ) {
                                     Text(if (bn) "জমা দিন" else "Submit")

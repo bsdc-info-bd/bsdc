@@ -76,6 +76,7 @@ export const ROUTES = {
   groups: '/groups',
   events: '/events',
   jobs: '/jobs',
+  myJobApplications: '/jobs/my-applications',
   freelance: '/freelance',
   projects: '/projects',
   playground: '/playground',

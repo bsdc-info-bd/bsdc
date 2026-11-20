@@ -169,23 +169,19 @@ describe('JobPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'jobs.apply' }));
     const dialog = await screen.findByRole('dialog');
-    const send = within(dialog).getByRole('button', { name: 'jobs.sendApplication' });
-    expect(send).toBeDisabled();
-
-    const letter = within(dialog).getByRole('textbox');
-    fireEvent.change(letter, {
+    fireEvent.change(within(dialog).getByLabelText('jobs.application.name'), { target: { value: 'Asha Rahman' } });
+    fireEvent.change(within(dialog).getByLabelText('jobs.application.phone'), { target: { value: '+880 1712-345678' } });
+    fireEvent.change(within(dialog).getByLabelText('jobs.coverLetter'), {
       target: { value: 'I have shipped three production Node services.' },
     });
-    expect(send).not.toBeDisabled();
-    fireEvent.click(send);
-    expect(state.apply).toHaveBeenCalledWith(
+    fireEvent.click(within(dialog).getByRole('button', { name: 'jobs.application.reviewApplication' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'jobs.application.submit' }));
+    await waitFor(() => expect(state.apply).toHaveBeenCalledWith(
       'job-1',
-      'I have shipped three production Node services.',
-    );
-    // The dialog closes only once the application has been accepted.
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull();
-    });
+      expect.objectContaining({ applicantName: 'Asha Rahman', phone: '+880 1712-345678' }),
+    ));
+    // The form remains open to show an explicit success state and tracker link.
+    expect(await within(dialog).findByText('jobs.application.successTitle')).toBeInTheDocument();
   });
 
   it('shows the status of an application already sent, and no second apply button', () => {

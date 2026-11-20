@@ -176,6 +176,10 @@ const HARNESSES = [
     't85.mjs',
     'the existing marketplace.settings RPCs seed, update, validate, and permission-check vendor credit packages',
   ],
+  [
+    't86.mjs',
+    '0126: rich job applications, private review queue, direct-link validation, decisions and no legacy RPC overload',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

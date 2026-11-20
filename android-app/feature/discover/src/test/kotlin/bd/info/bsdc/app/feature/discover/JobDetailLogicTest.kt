@@ -168,4 +168,66 @@ class JobDetailLogicTest {
         assertFalse(JobDetailLogic.coverLetterValid("   short letter   "))
         assertTrue(JobDetailLogic.coverLetterValid("  I have shipped Android apps.  "))
     }
+
+    @Test
+    fun richApplicationDraftAcceptsTheSharedContractAndNormalisesSubmission() {
+        val draft = JobDetailLogic.ApplicationDraft(
+            applicantName = "  Nusrat Jahan  ",
+            phone = "+880 1712-345678",
+            email = "NUSRAT@EXAMPLE.COM",
+            location = " Sylhet ",
+            yearsExperience = "5",
+            education = "BSc in Computer Science",
+            expectedSalaryTaka = "125000.50",
+            portfolioUrl = "https://portfolio.example.com",
+            linkedinUrl = "https://www.linkedin.com/in/nusrat",
+            noticePeriod = "30 days",
+            skillsInput = " Firebase, kotlin, FIREBASE ",
+            certificationImageUrls = listOf("https://i.ibb.co/abcd1234/certificate.png"),
+            coverLetter = "  I have shipped reliable Android and Firebase products.  ",
+            resumeUrl = "https://resume.example.com/nusrat.pdf",
+        )
+
+        assertTrue(JobDetailLogic.validateApplicationDraft(draft).isEmpty())
+        val submission = JobDetailLogic.toApplicationSubmission(draft)
+        assertEquals("Nusrat Jahan", submission.applicantName)
+        assertEquals("nusrat@example.com", submission.email)
+        assertEquals(12_500_050L, submission.expectedSalaryPoisha)
+        assertEquals(listOf("firebase", "kotlin"), submission.skills)
+    }
+
+    @Test
+    fun richApplicationValidationRejectsUnsafeAndIncompleteValues() {
+        val invalid = JobDetailLogic.ApplicationDraft(
+            applicantName = "",
+            phone = "01712abc",
+            email = "not-an-email",
+            expectedSalaryTaka = "1.999",
+            portfolioUrl = "http://portfolio.example.com",
+            certificationImageUrls = listOf("https://example.com/certificate.png"),
+            coverLetter = "too short",
+            resumeUrl = "javascript:alert(1)",
+        )
+        val errors = JobDetailLogic.validateApplicationDraft(invalid)
+
+        assertTrue("name" in errors)
+        assertTrue("phone" in errors)
+        assertTrue("email" in errors)
+        assertTrue("salary" in errors)
+        assertTrue("portfolio" in errors)
+        assertTrue("certifications" in errors)
+        assertTrue("coverLetter" in errors)
+        assertTrue("resume" in errors)
+    }
+
+    @Test
+    fun profilePrefillOnlyUsesAccountEmailWhenTheMemberOptedIn() {
+        val hidden = JobDetailLogic.prefillApplicationDraft(" Nusrat ", "nusrat@example.com", false, " Sylhet ", listOf("Kotlin"))
+        val shared = JobDetailLogic.prefillApplicationDraft(" Nusrat ", "nusrat@example.com", true, " Sylhet ", listOf("Kotlin"))
+
+        assertEquals("Nusrat", hidden.applicantName)
+        assertEquals("", hidden.email)
+        assertEquals("nusrat@example.com", shared.email)
+        assertEquals("kotlin", shared.skillsInput)
+    }
 }
