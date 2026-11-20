@@ -35,10 +35,12 @@ $$;
 
 revoke all on function bsdc.notify_marketplace_review() from public, anon, authenticated;
 
+drop trigger if exists mk_vendor_application_review_notification on public.mk_vendor_applications;
 create trigger mk_vendor_application_review_notification
   after update of status on public.mk_vendor_applications
   for each row execute function bsdc.notify_marketplace_review();
 
+drop trigger if exists mk_credit_purchase_review_notification on public.mk_credit_purchases;
 create trigger mk_credit_purchase_review_notification
   after update of status on public.mk_credit_purchases
   for each row execute function bsdc.notify_marketplace_review();
