@@ -27,7 +27,7 @@ import {
   type GroupMemberEntry,
 } from '@/lib/communities/community-types';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
-import { ROUTES, groupPath, profilePath, SITE } from '@/lib/site';
+import { ROUTES, channelPath, groupPath, profilePath, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
@@ -111,12 +111,15 @@ export default function GroupPage() {
               <Card as="li" key={channel.id} padded={false} className="p-3">
                 <p className="flex items-center gap-1 text-sm font-semibold">
                   <Hash size={14} aria-hidden="true" />
-                  {channel.name}
+                  <Link to={channelPath(group.slug, channel.slug)}>{channel.name}</Link>
                   {channel.isReadOnly ? <Badge tone="neutral">{t('groups.readOnly')}</Badge> : null}
                 </p>
                 {channel.topic.length > 0 ? (
                   <p className="mt-1 text-xs text-muted">{channel.topic}</p>
                 ) : null}
+                <p className="mt-0.5 text-xs text-muted">
+                  {t('channels.posts', { count: channel.postCount })}
+                </p>
               </Card>
             ))}
           </ul>

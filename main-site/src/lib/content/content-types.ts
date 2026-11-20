@@ -80,6 +80,16 @@ export interface PostDraft {
   allowComments: boolean;
   isSensitive: boolean;
   coverUrl: string;
+  /**
+   * The channel this post is written into, or null for the feed.
+   *
+   * Three states, matching the three states `save_post` accepts:
+   * absent leaves the post's channel alone, `null` moves it out of its
+   * channel into the feed, and a uuid places it in that channel. The draft
+   * always carries a value: the composer decides, and the save sends what
+   * the draft says.
+   */
+  channelId: string | null;
   updatedAt: string;
 }
 
@@ -137,6 +147,7 @@ export function draftFromPost(post: {
   allowComments: boolean;
   isSensitive: boolean;
   coverUrl: string;
+  channelId?: string | null;
 }): PostDraft {
   const codeLanguage = CODE_LANGUAGES.find((value) => value === post.codeLanguage);
   return {
@@ -162,6 +173,7 @@ export function draftFromPost(post: {
     allowComments: post.allowComments,
     isSensitive: post.isSensitive,
     coverUrl: post.coverUrl,
+    channelId: post.channelId ?? null,
     updatedAt: new Date(0).toISOString(),
   };
 }
@@ -182,6 +194,7 @@ export const EMPTY_DRAFT: PostDraft = {
   allowComments: true,
   isSensitive: false,
   coverUrl: '',
+  channelId: null,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -215,6 +228,9 @@ export const storedDraftSchema = z.object({
   allowComments: z.boolean(),
   isSensitive: z.boolean(),
   coverUrl: z.string(),
+  // Optional: a draft stored on this device before channels existed still
+  // opens, as a feed post.
+  channelId: z.string().nullable().optional().default(null),
   updatedAt: z.string(),
 });
 

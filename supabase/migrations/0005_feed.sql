@@ -140,6 +140,11 @@ $$;
 -- Returns the raw candidate set with the signals the client needs to score
 -- it. RLS on public.posts still applies, so nothing a viewer may not read can
 -- ever appear here.
+-- Dropped first because 0129 widened this routine's OUT list (a channel post
+-- needs to say which channel it came from) and `create or replace` cannot
+-- change a return type. Precedent: 0013 and 0066.
+drop function if exists public.feed_candidates(integer, timestamptz);
+
 create or replace function public.feed_candidates(
   p_limit integer default 60,
   p_before timestamptz default null

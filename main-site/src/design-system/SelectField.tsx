@@ -4,21 +4,41 @@ import { cn } from '@/lib/cn';
 export interface SelectOption {
   value: string;
   label: string;
+  disabled?: boolean;
+}
+
+export interface SelectGroup {
+  label: string;
+  options: readonly SelectOption[];
 }
 
 export interface SelectFieldProps extends SelectHTMLAttributes<HTMLSelectElement> {
   label: string;
-  options: readonly SelectOption[];
-  hint?: string;
+  /**
+   * A flat option list. Optional because a select with neither options nor
+   * groups is a bug the component cannot fix, but it must be explicit — the
+   * grouped form below is not a fallback for a missing list.
+   */
+  options?: readonly SelectOption[];
+  /** Grouped option list, rendered as <optgroup> elements. */
+  groups?: readonly SelectGroup[];
+  hint?: string | undefined;
   error?: string | undefined;
 }
 
 export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(function SelectField(
-  { label, options, hint, error, className, id, ...rest },
+  { label, options, groups, hint, error, className, id, ...rest },
   ref,
 ) {
   const generatedId = useId();
   const fieldId = id ?? generatedId;
+
+  const renderOptions = (items: readonly SelectOption[]) =>
+    items.map((option) => (
+      <option key={option.value} value={option.value} disabled={option.disabled}>
+        {option.label}
+      </option>
+    ));
 
   return (
     <div className={cn('w-full', className)}>
@@ -35,11 +55,13 @@ export const SelectField = forwardRef<HTMLSelectElement, SelectFieldProps>(funct
         )}
         {...rest}
       >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
+        {groups
+          ? groups.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {renderOptions(group.options)}
+              </optgroup>
+            ))
+          : renderOptions(options ?? [])}
       </select>
       {hint ? <p className="mt-1 text-xs text-muted">{hint}</p> : null}
       {error ? (

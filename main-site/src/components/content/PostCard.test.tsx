@@ -55,6 +55,11 @@ function post(overrides: Partial<Post> = {}): Post {
     editedAt: null,
     createdAt: '2026-11-01T10:00:00.000Z',
     poll: [],
+    channelId: null,
+    channelName: null,
+    channelSlug: null,
+    groupSlug: null,
+    groupName: null,
     ...overrides,
   } as Post;
 }
@@ -66,6 +71,30 @@ function renderCard(entry: Post, priority = false) {
     </MemoryRouter>,
   );
 }
+
+describe('a post in a channel', () => {
+  it('links the channel and the group of a channel post', () => {
+    renderCard(
+      post({
+        channelId: 'ch-1',
+        channelName: 'announcements',
+        channelSlug: 'announcements',
+        groupSlug: 'sylhet-php',
+        groupName: 'Sylhet PHP Community',
+      }),
+    );
+    const channelLink = screen.getByRole('link', { name: 'announcements' });
+    const groupLink = screen.getByRole('link', { name: 'Sylhet PHP Community' });
+    expect(channelLink).toHaveAttribute('href', '/g/sylhet-php/c/announcements');
+    expect(groupLink).toHaveAttribute('href', '/g/sylhet-php');
+  });
+
+  it('shows no channel line for a plain feed post', () => {
+    renderCard(post());
+    expect(screen.queryByRole('link', { name: 'announcements' })).toBeNull();
+    expect(screen.queryByText(/announcements/)).toBeNull();
+  });
+});
 
 describe('a post in the feed', () => {
   it('makes the title the link, and keeps the card itself out of the anchor', () => {

@@ -119,6 +119,11 @@ export function groupPath(slug: string): string {
   return `/g/${slug}`;
 }
 
+/** Channel permalink: /g/groupSlug/c/channelSlug. */
+export function channelPath(groupSlug: string, channelSlug: string): string {
+  return `/g/${encodeURIComponent(groupSlug)}/c/${encodeURIComponent(channelSlug)}`;
+}
+
 /** Project permalink: /projects/slug. */
 export function projectPath(slug: string): string {
   return `${ROUTES.projects}/${encodeURIComponent(slug.trim())}`;

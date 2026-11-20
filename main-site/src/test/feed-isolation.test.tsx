@@ -54,6 +54,11 @@ function makePost(id: string, authorUid: string): Post {
     tags: [],
     media: [],
     poll: [],
+    channelId: null,
+    channelName: null,
+    channelSlug: null,
+    groupSlug: null,
+    groupName: null,
   };
 }
 

@@ -118,6 +118,14 @@ export async function fetchChannels(groupId: string): Promise<Channel[]> {
     .returns<ChannelRow[]>();
   if (error) throw toDataError(error);
 
+  // The post counts come in one round trip for the whole group, rather than
+  // one query per channel card.
+  const { data: counts, error: countError } = await getSupabase()
+    .rpc('channel_post_counts', { p_group_id: groupId })
+    .returns<{ channel_id: string; post_count: number }[]>();
+  if (countError) throw toDataError(countError);
+  const countsByChannel = new Map((counts ?? []).map((row) => [row.channel_id, row.post_count]));
+
   return (data ?? []).map((row) => ({
     id: row.id,
     groupId: row.group_id,
@@ -126,6 +134,7 @@ export async function fetchChannels(groupId: string): Promise<Channel[]> {
     topic: row.topic,
     position: row.position,
     isReadOnly: row.is_read_only,
+    postCount: countsByChannel.get(row.id) ?? 0,
   }));
 }
 

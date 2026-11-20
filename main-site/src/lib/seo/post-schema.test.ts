@@ -38,6 +38,11 @@ function samplePost(overrides: Partial<Post> = {}): Post {
     tags: ['typescript', 'architecture'],
     poll: [],
     media: [],
+    channelId: null,
+    channelName: null,
+    channelSlug: null,
+    groupSlug: null,
+    groupName: null,
     ...overrides,
   };
 }

@@ -1230,6 +1230,30 @@ export const en = {
       notAUrl: 'That has to be a full link, starting with https://',
     },
   },
+  channels: {
+    errors: {
+      readOnly: 'This channel is read-only; a moderator posts here.',
+      notMember: 'You are not a member of the group that owns this channel.',
+      archived: 'This group is archived, so its channels accept no posts.',
+      notFound: 'That channel does not exist.',
+      privatePost: '"Only me" cannot be used inside a channel; choose another visibility.',
+    },
+    reasons: {
+      readOnly: 'read-only',
+      notMember: 'not a member',
+      archived: 'archived',
+      notFound: 'missing',
+    },
+    posts: '{{count, number}} posts',
+    postsOne: '{{count, number}} post',
+    emptyTitle: 'No posts yet',
+    emptyBody: 'Posts written into this channel appear here. Ask in {{group}}.',
+    failed: 'This channel could not be loaded',
+    backToGroup: 'Back to {{group}}',
+    breadcrumb: 'Group channels',
+    notFoundTitle: 'This channel is not here',
+    notFoundBody: 'No channel opens at this address.',
+  },
   compose: {
     metaTitle: 'Write on BSDC',
     editMetaTitle: 'Edit your post — BSDC',
@@ -1328,7 +1352,14 @@ export const en = {
       pollOption: 'Option {{number}}',
       visibility: 'Who can see this',
       language: 'Content language',
+      channel: 'Channel',
     },
+    channelFeed: 'The main feed',
+    channelHintFeed: 'This post appears in the main feed of everyone who can read it.',
+    channelHintGroup:
+      'This post appears only in this channel, for the people who can read the group.',
+    visibilityInChannelHint:
+      'A channel post is read by everyone who can read the room; "Only me" is not available here.',
     hints: {
       title: 'A clear title helps people find this later.',
       body: 'Markdown is supported. Use @username to mention and #tag to tag.',

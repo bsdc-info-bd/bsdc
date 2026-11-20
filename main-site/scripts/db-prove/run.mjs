@@ -188,6 +188,10 @@ const HARNESSES = [
     't88.mjs',
     '0128: gigs, jobs, groups and events can be corrected, closed and deleted — and the gig proposal queue loads',
   ],
+  [
+    't89.mjs',
+    '0129: a post can be placed in a channel, read from it, attributed by the feed and refused with a reason',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

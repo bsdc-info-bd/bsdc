@@ -1,4 +1,4 @@
-import { Clock, Eye, MessageSquare } from 'lucide-react';
+import { Clock, Eye, Hash, MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { MediaGallery } from '@/components/media/MediaGallery';
@@ -9,7 +9,7 @@ import { formatNumber, formatRelativeTime } from '@/lib/format';
 import { placementFor } from '@/lib/media/arrangement';
 import { toGalleryItems } from '@/lib/media/gallery-items';
 import { isRepairableMediaHost } from '@/lib/media/hosts';
-import { profilePath } from '@/lib/site';
+import { channelPath, groupPath, profilePath } from '@/lib/site';
 
 function safeCoverUrl(raw: string): string {
   const trimmed = raw.trim();
@@ -123,6 +123,18 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
             {t(`compose.kinds.${post.kind}`)}
           </Badge>
         </div>
+
+        {/* A post written into a channel says where it was written: the
+            channel links to the room, the group links to the group. A feed
+            post has no room and shows no line. */}
+        {post.channelName !== null && post.groupSlug !== null ? (
+          <p className="mt-1.5 flex items-center gap-1 text-xs text-muted">
+            <Hash size={12} aria-hidden="true" />
+            <Link to={channelPath(post.groupSlug, post.channelSlug ?? '')}>{post.channelName}</Link>
+            <span aria-hidden="true">·</span>
+            <Link to={groupPath(post.groupSlug)}>{post.groupName ?? post.groupSlug}</Link>
+          </p>
+        ) : null}
 
         <div className="mt-3">
           {post.title.length > 0 ? (

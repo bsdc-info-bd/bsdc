@@ -43,6 +43,15 @@ const MESSAGE_MAP: Record<string, string> = {
   // that" — the same wrong-sentence problem as the comment picture.
   'authentication required': 'data.errors.signInRequired',
   'gig/already-proposed': 'data.errors.alreadyProposed',
+  // 0129's channel refusals. `save_post` raises the reason string verbatim,
+  // so each one is mapped to a sentence a form can show; the private-post
+  // refusal arrives as 22023 with its own message, which is what a member
+  // needs to hear: the channel kept the post, the "only me" did not survive.
+  'channel/read-only': 'channels.errors.readOnly',
+  'channel/not-member': 'channels.errors.notMember',
+  'channel/archived': 'channels.errors.archived',
+  'channel/not-found': 'channels.errors.notFound',
+  'channel/private-post': 'channels.errors.privatePost',
 };
 
 const CODE_MAP: Record<string, string> = {

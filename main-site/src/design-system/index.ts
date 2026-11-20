@@ -25,7 +25,12 @@ export { Switch, type SwitchProps } from './Switch';
 export { Tabs, type TabItem, type TabsProps } from './Tabs';
 export { PasswordField, type PasswordFieldProps } from './PasswordField';
 export { PasswordStrength } from './PasswordStrength';
-export { SelectField, type SelectFieldProps, type SelectOption } from './SelectField';
+export {
+  SelectField,
+  type SelectFieldProps,
+  type SelectGroup,
+  type SelectOption,
+} from './SelectField';
 export { Stepper, type StepperProps } from './Stepper';
 export { TagInput, type TagInputProps } from './TagInput';
 export { TextField, type TextFieldProps } from './TextField';
