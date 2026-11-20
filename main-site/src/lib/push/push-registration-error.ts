@@ -43,7 +43,7 @@ export function recordPushAttempt(mode: string, result: string, error?: unknown)
   lastAttempt = { mode, result, at: new Date().toISOString() };
   try {
     if (localStorage.getItem('bsdc.push.debug') === '1') {
-      console.debug('[BSDC push]', lastAttempt, error);
+      console.warn('[BSDC push]', lastAttempt, error);
     }
   } catch {
     // Debugging must not interfere with registration.

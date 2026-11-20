@@ -178,8 +178,11 @@ const HARNESSES = [
   ],
   [
     't86.mjs',
-    't87.mjs',
     '0126: rich job applications, private review queue, direct-link validation, decisions and no legacy RPC overload',
+  ],
+  [
+    't87.mjs',
+    'both web registration transports refresh metadata and isolate device management by UID',
   ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
