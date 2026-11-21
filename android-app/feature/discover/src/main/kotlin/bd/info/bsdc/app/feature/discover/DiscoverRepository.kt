@@ -60,12 +60,12 @@ private data class MemberPostMediaDto(
 )
 
 @Serializable
-@Serializable
 private data class ChannelPostCountDto(
     @SerialName("channel_id") val channelId: String = "",
     @SerialName("post_count") val postCount: Int = 0,
 )
 
+@Serializable
 private data class MemberPollOptionDto(
     val id: String = "",
     val label: String = "",
