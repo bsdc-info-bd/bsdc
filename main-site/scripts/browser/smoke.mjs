@@ -303,7 +303,11 @@ try {
     });
     assert(small.length === 0, `targets under 44px: ${small.slice(0, 8).join(', ')}`);
   });
-  await touch.close();
+  // No `touch.close()`. Closing a context and then its browser races Playwright's
+  // own teardown and surfaced as `browserContext.close: Target page, context or
+  // browser has been closed` — a failure of the harness, after every check had
+  // passed, which is the worst kind of red: it teaches the reader to ignore the
+  // gate. `browser.close()` already disposes both contexts.
   await browser.close();
   browser = undefined;
 } catch (error) {
