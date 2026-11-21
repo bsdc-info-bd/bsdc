@@ -208,28 +208,24 @@ const median = (values) => {
  * a zero are different facts — and which one it is decides whether this is a
  * hydration problem or a bytes problem.
  */
-function readLcpBreakdown(audit) {
-  if (!audit) return null;
+function readLcpBreakdown(audits) {
+  const ids = Object.keys(audits).filter((id) => /lcp|largest-contentful-paint/.test(id));
+  const candidates = ids.map((id) => audits[id]);
+  const collect = (audit, nodes, rows) => {
+    walkInto(audit?.details ?? audit, 0, nodes, rows);
+  };
+  const nodes = [];
+  const rows = [];
+  for (const audit of candidates) collect(audit, nodes, rows);
+  return summarise(nodes, rows, ids);
+}
+
+function summarise(nodes, rows, ids) {
   const text = (value) => {
     if (typeof value === 'string') return value;
     if (value && typeof value === 'object') return String(value.text ?? value.value ?? '');
     return '';
   };
-  const nodes = [];
-  const rows = [];
-  const walk = (value, depth) => {
-    if (depth > 6 || value === null || typeof value !== 'object') return;
-    if (Array.isArray(value)) {
-      for (const entry of value) walk(entry, depth + 1);
-      return;
-    }
-    if (value.node && (value.node.snippet || value.node.selector)) nodes.push(value.node);
-    if (typeof value.numericValue === 'number' && (value.phase || value.label || value.name)) {
-      rows.push(value);
-    }
-    for (const key of Object.keys(value)) walk(value[key], depth + 1);
-  };
-  walk(audit.details ?? audit, 0);
   const phase = (...labels) => {
     const row = rows.find((entry) =>
       labels.some((label) =>
@@ -240,9 +236,9 @@ function readLcpBreakdown(audit) {
     );
     if (!row) return null;
     // Lighthouse has expressed these in seconds (`numericValue`) and in
-    // milliseconds (`ms`, `timing`) across versions. The heuristic on magnitude
-    // is deliberate: a phase of 0.42 is 420 ms and a phase of 420 is 420 ms, and
-    // no LCP phase is ever 0.42 ms.
+    // milliseconds (`ms`, `timing`) across versions. The magnitude test is
+    // deliberate: a phase of 0.42 is 420 ms and a phase of 420 is 420 ms, and no
+    // LCP phase is ever 0.42 ms.
     const raw = row.numericValue ?? row.ms ?? row.timing ?? 0;
     return Math.round(raw > 100 ? raw : raw * 1000);
   };
@@ -253,7 +249,21 @@ function readLcpBreakdown(audit) {
     loadDelay: phase('load delay'),
     loadTime: phase('load time'),
     renderDelay: phase('render delay'),
+    available: rows.length === 0 && !element ? ids : undefined,
   };
+}
+
+function walkInto(value, depth, nodes, rows) {
+  if (depth > 6 || value === null || typeof value !== 'object') return;
+  if (Array.isArray(value)) {
+    for (const entry of value) walkInto(entry, depth + 1, nodes, rows);
+    return;
+  }
+  if (value.node && (value.node.snippet || value.node.selector)) nodes.push(value.node);
+  if (typeof value.numericValue === 'number' && (value.phase || value.label || value.name)) {
+    rows.push(value);
+  }
+  for (const key of Object.keys(value)) walkInto(value[key], depth + 1, nodes, rows);
 }
 
 async function main() {
@@ -331,7 +341,13 @@ async function main() {
           // optimisation moves it; the same score with "load time" is a byte
           // problem. The audit's own table is the only honest way to tell them
           // apart, and guessing is how a week gets spent on the wrong lever.
-          lcp: readLcpBreakdown(audits['largest-contentful-paint-element']),
+          // Not a named audit: the breakdown has lived under
+          // `largest-contentful-paint-element` and moved since, so every audit
+          // whose id mentions the metric is searched and the first one carrying
+          // phase rows wins. If none does, `available` says which ids this version
+          // really exposed — a diagnosis that can name its own ignorance is worth
+          // more than one that prints `unknown`.
+          lcp: readLcpBreakdown(audits),
           savings: Object.entries(audits)
             .filter(([, audit]) => (audit.details?.overallSavingsMs ?? 0) > 200)
             .sort(
@@ -382,13 +398,18 @@ async function main() {
               : '') +
             `  LCP element: ${representative.lcp?.selector ?? 'unknown'}\n` +
             `  LCP phases: ${
-              representative.lcp
+              representative.lcp &&
+              (representative.lcp.ttfb !== null || representative.lcp.renderDelay !== null)
                 ? `ttfb ${representative.lcp.ttfb ?? '?'} ms, load delay ${
                     representative.lcp.loadDelay ?? '?'
                   } ms, load time ${representative.lcp.loadTime ?? '?'} ms, render delay ${
                     representative.lcp.renderDelay ?? '?'
                   } ms`
-                : 'unknown'
+                : `not in this Lighthouse payload${
+                    representative.lcp?.available?.length
+                      ? ` (audits mentioning it: ${representative.lcp.available.join(', ')})`
+                      : ''
+                  }`
             }\n`,
         );
         failures.push({ route, below, medians });
