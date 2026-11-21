@@ -1,7 +1,7 @@
 import { Eye, ImagePlus, Plus, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CoverImagePicker } from '@/components/content/CoverImagePicker';
 import { MarkdownEditor } from '@/components/content/MarkdownEditor';
@@ -32,6 +32,12 @@ import {
   visibilityAllowedInChannel,
   type ChannelPickerCopy,
 } from '@/lib/channels/channel-options';
+import {
+  CHANNEL_QUERY_PARAM,
+  applyChannelSeed,
+  seedChannelFromParam,
+  type ChannelSeedNotice,
+} from '@/lib/channels/channel-seed';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaGallery } from '@/components/media/MediaGallery';
 import { MediaTray } from '@/components/media/MediaTray';
@@ -130,6 +136,7 @@ export default function ComposePage() {
   const [busy, setBusy] = useState(false);
   const [errorKeys, setErrorKeys] = useState<string[]>([]);
   const [saveErrorKey, setSaveErrorKey] = useState<string | null>(null);
+  const [channelNotice, setChannelNotice] = useState<ChannelSeedNotice | null>(null);
   const [existing, setExisting] = useState<'loading' | 'ready' | 'missing' | 'forbidden'>(
     isEditing ? 'loading' : 'ready',
   );
@@ -230,6 +237,27 @@ export default function ComposePage() {
   // The rooms this member may post into. A member of no group sees the
   // composer they always had: no channel selector at all.
   const { channels } = usePostableChannels();
+  // A link from a channel page arrives as `/compose?channel=<id>`. It is read
+  // once, after the browser draft has been offered back, so a stale local copy
+  // cannot overwrite the room the member actually clicked into — and so the room
+  // cannot silently overwrite an unfinished post they were restoring.
+  const [query] = useSearchParams();
+  // The channel a link named, applied to the draft — or refused, with the
+  // reason the picker and the database would give.
+  useEffect(() => {
+    if (isEditing) return;
+    const seed = seedChannelFromParam(query.get(CHANNEL_QUERY_PARAM), channels);
+    if (seed.kind === 'none') return;
+    setDraft((current) => {
+      const applied = applyChannelSeed(current, seed);
+      setChannelNotice(applied.notice);
+      return applied.draft;
+    });
+    // Runs when the channel list arrives, not on every draft keystroke: the
+    // link is honoured once, and after that the picker owns the choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, channels]);
+
   const pickerCopy: ChannelPickerCopy = {
     feed: t('compose.channelFeed'),
     reason: {
@@ -630,6 +658,16 @@ export default function ComposePage() {
                     }
                   />
                 </Card>
+              ) : null}
+
+              {channelNotice !== null ? (
+                <Alert tone="warning" title={t('compose.channelLinkTitle')} className="mt-4">
+                  {channelNotice.kind === 'blocked'
+                    ? t('compose.channelLinkBlocked', {
+                        reason: pickerCopy.reason[channelNotice.reason],
+                      })
+                    : t('compose.channelLinkUnknown')}
+                </Alert>
               ) : null}
 
               <Card className="mt-4">

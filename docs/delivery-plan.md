@@ -26,6 +26,33 @@ working, wired-up features — never scaffolding for its own sake.
 | 19  | PWA, i18n, Android, performance                 | Done   |
 | 20  | Verification, audit and launch                  | Done   |
 
+## Response 27 scope (delivered)
+
+Phase 4 of the channel arc: a channel became writable from the channel.
+
+- `ChannelPage` offers **Post in this channel**, addressing the composer as
+  `/compose?channel=<id>`. A read-only room says why there is no button, and a
+  visitor is asked to sign in rather than linked to a composer that cannot save.
+- `lib/channels/channel-seed.ts` (new) is the whole contract: `seedChannelFromParam`
+  decides whether a link's channel is seeded, blocked or gone, and
+  `applyChannelSeed` moves only the target and its visibility, so arriving from a
+  room can retarget a draft but cannot rewrite its title, body or pictures. A
+  stale link is _reported_ — a blocked channel clears the target and says so,
+  because silently posting a `#release-notes` draft to the open feed is the
+  worst outcome available. A `null` channel list (the query has not answered)
+  seeds anyway rather than refusing a working button to a race; the database
+  keeps the last word on save.
+- `LinkButton.to` widened to react-router's `To`, which is what lets the CTA
+  pass `{ pathname, search }` instead of hand-assembling a query string.
+- 18 new tests (8 seed, 5 apply, 2 link, 3 channel page), i18n in both locales,
+  and checkpoint **F-26** holds the loop shut — negative-tested by replacing the
+  CTA's target with a bare `/compose` and watching it fail 1-of-7.
+
+Green: tsc, eslint, prettier, vitest 132 files / 1345 tests, build with 16
+prerendered routes, contrast audit PASS, launch audit 143 passed / 0 failed.
+No migration was needed — 0129 already accepts a channel on update — so no SQL
+harness changed.
+
 ## Response 26 scope (delivered)
 
 The colour system was audited and found to be lying in three ways, each now held

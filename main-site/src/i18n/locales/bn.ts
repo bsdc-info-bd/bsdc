@@ -1241,6 +1241,9 @@ export const bn: Translation = {
     backToGroup: '{{group}} এ ফিরে যান',
     breadcrumb: 'গ্রুপের চ্যানেল',
     notFoundTitle: 'এই চ্যানেলটি নেই',
+    postHere: 'এই চ্যানেলে পোস্ট করুন',
+    postHereReadOnly: 'শুধু মডারেটররা এই চ্যানেলে পোস্ট করতে পারেন।',
+    postHereSignedOut: 'এই চ্যানেলে পোস্ট করতে সাইন ইন করুন।',
     notFoundBody: 'এই ঠিকানায় কোনো চ্যানেল খোলা যায় না।',
     admin: {
       title: 'চ্যানেল',
@@ -1372,6 +1375,11 @@ export const bn: Translation = {
       language: 'কনটেন্টের ভাষা',
       channel: 'চ্যানেল',
     },
+    channelLinkTitle: 'এই পোস্টটি লিংকের চ্যানেলে যাবে না',
+    channelLinkBlocked:
+      'ওই চ্যানেলে আপনার পোস্ট চলবে না: {{reason}}। লেখাটি থাকছে, নতুন ঘর না বেছে নিলে তা মূল ফিডে যাবে।',
+    channelLinkUnknown:
+      'সেই চ্যানেলটি আর নেই। লেখাটি থাকছে, নতুন ঘর না বেছে নিলে তা মূল ফিডে যাবে।',
     channelFeed: 'মূল ফিड',
     channelHintFeed: 'এই পোস্টটি এটি দেখতে পারা প্রত্যেকের মূল ফিडে দেখা যাবে।',
     channelHintGroup: 'এই পোস্টটি শুধু এই চ্যানেলে দেখা যাবে, গ্রুপ দেখতে পারা লোকদের কাছে।',

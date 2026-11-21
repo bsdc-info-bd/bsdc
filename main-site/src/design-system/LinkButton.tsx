@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import type { To } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import type { ButtonSize, ButtonVariant } from './Button';
 
 export interface LinkButtonProps {
-  to: string;
+  /**
+   * A react-router target: a path, or `{ pathname, search, hash }`. Both reach
+   * `Link` unchanged, so a caller with query parameters does not have to
+   * assemble and encode a URL string itself.
+   */
+  to: To;
   variant?: ButtonVariant;
   size?: ButtonSize;
   block?: boolean;

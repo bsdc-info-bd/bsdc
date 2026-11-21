@@ -6,9 +6,12 @@ import type { Channel, Group } from '@/lib/communities/community-types';
 import type { Post } from '@/lib/content/post-repository';
 import ChannelPage from './ChannelPage';
 
+const auth = vi.hoisted(() => ({ user: { uid: 'u1' } as { uid: string } | null }));
+
 const hooks = vi.hoisted(() => ({
   useGroup: vi.fn(),
   useChannelFeed: vi.fn(),
+  usePostableChannels: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-communities', () => ({
@@ -18,6 +21,13 @@ vi.mock('@/hooks/use-channel-feed', () => ({
   useChannelFeed: hooks.useChannelFeed,
 }));
 vi.mock('@/components/seo/Seo', () => ({ Seo: () => null }));
+vi.mock('@/hooks/use-channels', () => ({
+  usePostableChannels: hooks.usePostableChannels,
+}));
+vi.mock('@/store/auth-store', () => ({
+  selectIsSignedIn: (state: { user: unknown }) => state.user !== null,
+  useAuthStore: (selector: (state: { user: unknown }) => unknown) => selector(auth),
+}));
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof I18nModule>();
@@ -136,6 +146,13 @@ function renderAt(path: string) {
 describe('the channel page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    auth.user = { uid: 'u1' };
+    hooks.usePostableChannels.mockReturnValue({
+      channels: [],
+      writeable: [],
+      isLoading: false,
+      isError: false,
+    });
   });
 
   it('shows the channel name, the topic and the posts', () => {
@@ -231,5 +248,36 @@ describe('the channel page', () => {
 
     expect(screen.getByText('channels.posts')).toBeInTheDocument();
     expect(hooks.useChannelFeed).toHaveBeenCalledWith('channel-general');
+  });
+
+  it('offers to write in the room, and addresses the composer for this channel', () => {
+    hooks.useGroup.mockReturnValue(groupState());
+    hooks.useChannelFeed.mockReturnValue(feedState());
+
+    renderAt('/g/sylhet-php/c/general');
+
+    const cta = screen.getByRole('link', { name: 'channels.postHere' });
+    expect(cta).toHaveAttribute('href', '/compose?channel=channel-general');
+  });
+
+  it('does not offer a post in a read-only room, and says why instead', () => {
+    hooks.useGroup.mockReturnValue(groupState({ channels: [channel({ isReadOnly: true })] }));
+    hooks.useChannelFeed.mockReturnValue(feedState());
+
+    renderAt('/g/sylhet-php/c/general');
+
+    expect(screen.queryByRole('link', { name: 'channels.postHere' })).toBeNull();
+    expect(screen.getByText('channels.postHereReadOnly')).toBeInTheDocument();
+  });
+
+  it('asks a visitor to sign in rather than link them to a composer that cannot save', () => {
+    auth.user = null;
+    hooks.useGroup.mockReturnValue(groupState());
+    hooks.useChannelFeed.mockReturnValue(feedState());
+
+    renderAt('/g/sylhet-php/c/general');
+
+    expect(screen.queryByRole('link', { name: 'channels.postHere' })).toBeNull();
+    expect(screen.getByText('channels.postHereSignedOut')).toBeInTheDocument();
   });
 });

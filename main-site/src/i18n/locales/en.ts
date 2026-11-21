@@ -1253,6 +1253,9 @@ export const en = {
     breadcrumb: 'Group channels',
     notFoundTitle: 'This channel is not here',
     notFoundBody: 'No channel opens at this address.',
+    postHere: 'Post in this channel',
+    postHereReadOnly: 'Only moderators post in a read-only channel.',
+    postHereSignedOut: 'Sign in to post in this channel.',
     admin: {
       title: 'Channels',
       createTitle: 'New channel',
@@ -1384,6 +1387,11 @@ export const en = {
       language: 'Content language',
       channel: 'Channel',
     },
+    channelLinkTitle: 'This post is not aimed at the channel in the link',
+    channelLinkBlocked:
+      'That channel takes no posts from you: {{reason}}. Your draft is kept, and it will go to the main feed unless you choose a room.',
+    channelLinkUnknown:
+      'That channel is no longer here. Your draft is kept, and it will go to the main feed unless you choose a room.',
     channelFeed: 'The main feed',
     channelHintFeed: 'This post appears in the main feed of everyone who can read it.',
     channelHintGroup:

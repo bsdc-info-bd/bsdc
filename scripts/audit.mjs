@@ -2058,6 +2058,41 @@ check(
   },
 );
 
+check('F-26', 'Performance', 'A channel is writable from the channel itself', () => {
+  // The room has a page, a feed, a count and a moderator. What a reader could
+  // not do was start the next post *there*: the composer only ever opened on
+  // the blank draft, and its channel picker was the one place a member had to
+  // know the room's name already. That is the difference between a feature
+  // that exists and one that is reachable, and it is what the brief refuses
+  // to call complete. So the page links to the composer with the channel
+  // attached, the composer honours it, and a link that can no longer be
+  // honoured says so rather than posting to the feed behind the member's back.
+  const page = read('main-site/src/routes/ChannelPage.tsx');
+  const compose = read('main-site/src/routes/ComposePage.tsx');
+  const seed = read('main-site/src/lib/channels/channel-seed.ts');
+  const locales = ['en', 'bn'].map((l) => read(`main-site/src/i18n/locales/${l}.ts`));
+  const guards = [
+    /composeChannelHref\(channel\.id\)/.test(page),
+    // A read-only room must not dangle a button that fails on save.
+    /channel\.isReadOnly/.test(page),
+    /seedChannelFromParam\(query\.get\(CHANNEL_QUERY_PARAM\), channels\)/.test(compose),
+    /applyChannelSeed\(current, seed\)/.test(compose),
+    /kind === 'seeded'/.test(seed),
+    // A refusal is only a refusal if it is legible in both languages.
+    ...locales.map(
+      (bundle) => /channelLinkBlocked/.test(bundle) && /channelLinkUnknown/.test(bundle),
+    ),
+  ];
+  const missing = guards.filter((ok) => !ok).length;
+  return {
+    ok: missing === 0,
+    evidence:
+      missing === 0
+        ? 'the channel page addresses /compose?channel=<id>; the composer seeds it, refuses a closed room aloud, and touches nothing but the target and its visibility'
+        : `${missing} of ${guards.length} links in the loop are absent`,
+  };
+});
+
 check(
   'F-18',
   'Performance',
