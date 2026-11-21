@@ -192,6 +192,70 @@ const median = (values) => {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 };
 
+/**
+ * The LCP element and its phases, read from a Lighthouse audit without assuming
+ * its shape.
+ *
+ * This table has moved between majors — `items` became `rows` in one, the phase
+ * label is a bare string in some versions and a `{ type: 'text', text }` object in
+ * others, and the element row and the phase rows are two sub-tables whose order is
+ * not contractual. Naming the fields at one guessed depth produced `unknown` and
+ * four `?`s on a real run, which is a diagnosis that diagnoses nothing. So the
+ * tree is walked instead: whatever the layout, a node with a snippet is the
+ * element and a row with a numeric value and a label is a phase.
+ *
+ * A missing phase stays `null` and prints `?`, because an absent measurement and
+ * a zero are different facts — and which one it is decides whether this is a
+ * hydration problem or a bytes problem.
+ */
+function readLcpBreakdown(audit) {
+  if (!audit) return null;
+  const text = (value) => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') return String(value.text ?? value.value ?? '');
+    return '';
+  };
+  const nodes = [];
+  const rows = [];
+  const walk = (value, depth) => {
+    if (depth > 6 || value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry, depth + 1);
+      return;
+    }
+    if (value.node && (value.node.snippet || value.node.selector)) nodes.push(value.node);
+    if (typeof value.numericValue === 'number' && (value.phase || value.label || value.name)) {
+      rows.push(value);
+    }
+    for (const key of Object.keys(value)) walk(value[key], depth + 1);
+  };
+  walk(audit.details ?? audit, 0);
+  const phase = (...labels) => {
+    const row = rows.find((entry) =>
+      labels.some((label) =>
+        text(entry.phase ?? entry.label ?? entry.name)
+          .toLowerCase()
+          .includes(label),
+      ),
+    );
+    if (!row) return null;
+    // Lighthouse has expressed these in seconds (`numericValue`) and in
+    // milliseconds (`ms`, `timing`) across versions. The heuristic on magnitude
+    // is deliberate: a phase of 0.42 is 420 ms and a phase of 420 is 420 ms, and
+    // no LCP phase is ever 0.42 ms.
+    const raw = row.numericValue ?? row.ms ?? row.timing ?? 0;
+    return Math.round(raw > 100 ? raw : raw * 1000);
+  };
+  const element = nodes[0];
+  return {
+    selector: element ? (element.snippet ?? element.selector) : null,
+    ttfb: phase('first byte', 'ttfb'),
+    loadDelay: phase('load delay'),
+    loadTime: phase('load time'),
+    renderDelay: phase('render delay'),
+  };
+}
+
 async function main() {
   let lighthouse;
   let launch;
@@ -267,35 +331,7 @@ async function main() {
           // optimisation moves it; the same score with "load time" is a byte
           // problem. The audit's own table is the only honest way to tell them
           // apart, and guessing is how a week gets spent on the wrong lever.
-          lcp: (() => {
-            // The table's shape has moved between Lighthouse majors — `items`
-            // became `rows` in one of them — so both are read and nothing is
-            // assumed. A missing phase prints `?`, because an absent measurement
-            // and a zero are different facts, and which one it is decides whether
-            // this is a hydration problem or a bytes problem.
-            const audit = audits['largest-contentful-paint-element'];
-            const groups = audit?.details?.items ?? audit?.details?.rows ?? [];
-            const rows = groups.flatMap((group) => group?.items ?? group?.rows ?? []);
-            // The element row and the phase rows sit in two sub-tables, and
-            // which one comes first is not contractual — searching all of them
-            // costs nothing and survives either order.
-            const node = rows.find((entry) => entry?.node)?.node;
-            const phase = (...labels) => {
-              const row = rows.find((entry) =>
-                labels.some((label) => String(entry?.phase).toLowerCase().includes(label)),
-              );
-              return typeof row?.numericValue === 'number'
-                ? Math.round(row.numericValue * 1000)
-                : null;
-            };
-            return {
-              selector: node?.snippet ?? node?.selector ?? null,
-              ttfb: phase('first byte', 'ttfb'),
-              loadDelay: phase('load delay'),
-              loadTime: phase('load time'),
-              renderDelay: phase('render delay'),
-            };
-          })(),
+          lcp: readLcpBreakdown(audits['largest-contentful-paint-element']),
           savings: Object.entries(audits)
             .filter(([, audit]) => (audit.details?.overallSavingsMs ?? 0) > 200)
             .sort(

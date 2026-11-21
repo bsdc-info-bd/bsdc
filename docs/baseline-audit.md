@@ -18,23 +18,24 @@ status. `audit.mjs` re-runs the audit gates itself (F-17, F-22, F-23, F-24,
 F-26, F-27 read these numbers live), so the register below cannot silently
 disagree with the tree it describes.
 
-| Gate                 | Command                                                     | Result                                                                                    | Exit |
-| -------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ---- |
-| Typecheck, app       | `cd main-site && npx tsc --noEmit`                          | no diagnostics                                                                            | 0    |
-| Typecheck, functions | `npm run typecheck`                                         | no diagnostics                                                                            | 0    |
-| Lint                 | `npx eslint . --max-warnings 0`                             | 0 errors, 0 warnings                                                                      | 0    |
-| Format               | `npx prettier --check src`                                  | all matched files formatted                                                               | 0    |
-| Tests                | `npx vitest run`                                            | **133 files / 1350 tests** passed                                                         | 0    |
-| Build                | `npm run build`                                             | built, **16 routes prerendered**                                                          | 0    |
-| Initial JS budget    | `npm run audit` F-01, summing `index-*`/`vendor-*` gzip     | **main-site 158 kB** against 250 kB                                                       | 0    |
-| Single-chunk budget  | F-28: per-file gzip of the eager graph in `dist/index.html` | 9 eager modules, largest **64.0 kB**, total **159.9 kB**, against 200 kB each             | 0    |
-| Launch audit         | `node scripts/audit.mjs`                                    | **145 passed, 0 failed, 4 recorded**                                                      | 0    |
-| Contrast floor       | `node scripts/contrast-audit.mjs`                           | 1632 pairs × 2 themes; 0 certain, 0 floors, 0 dead names, 0 off-scale alphas, 0 off-token | 0    |
-| Hardcoded colour     | `§11`'s grep, verbatim                                      | **0 lines** outside the design system and tests                                           | 0    |
-| Built stylesheet     | read of `dist/assets/index-*.css`                           | 158 `color-mix()` rules, **0 invalid stops, 0 NaN**, 21/21 token mirrors present          | 0    |
-| SQL schema           | `python3 scripts/sql-schema-check.py`                       | 0 problems across 130 files                                                               | 0    |
-| Database proofs      | `cd main-site && npm run db:prove`                          | 73 of 73 harnesses passed                                                                 | 0    |
-| i18n parity          | `vitest run src/i18n`                                       | identical key sets in `en` and `bn`, no empty strings                                     | 0    |
+| Gate                 | Command                                                     | Result                                                                                                                                            | Exit |
+| -------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| Typecheck, app       | `cd main-site && npx tsc --noEmit`                          | no diagnostics                                                                                                                                    | 0    |
+| Typecheck, functions | `npm run typecheck`                                         | no diagnostics                                                                                                                                    | 0    |
+| Lint                 | `npx eslint . --max-warnings 0`                             | 0 errors, 0 warnings                                                                                                                              | 0    |
+| Format               | `npx prettier --check src`                                  | all matched files formatted                                                                                                                       | 0    |
+| Tests                | `npx vitest run`                                            | **133 files / 1350 tests** passed                                                                                                                 | 0    |
+| Browser smoke        | `cd main-site && npm run test:browser`                      | **57 checks passed, 0 failed** — desktop + Pixel emulation, nine responsive widths from 320 to 2560, and the 44 px touch floor in a phone context | 0    |
+| Build                | `npm run build`                                             | built, **16 routes prerendered**                                                                                                                  | 0    |
+| Initial JS budget    | `npm run audit` F-01, summing `index-*`/`vendor-*` gzip     | **main-site 158 kB** against 250 kB                                                                                                               | 0    |
+| Single-chunk budget  | F-28: per-file gzip of the eager graph in `dist/index.html` | 9 eager modules, largest **64.0 kB**, total **159.9 kB**, against 200 kB each                                                                     | 0    |
+| Launch audit         | `node scripts/audit.mjs`                                    | **145 passed, 0 failed, 4 recorded**                                                                                                              | 0    |
+| Contrast floor       | `node scripts/contrast-audit.mjs`                           | 1632 pairs × 2 themes; 0 certain, 0 floors, 0 dead names, 0 off-scale alphas, 0 off-token                                                         | 0    |
+| Hardcoded colour     | `§11`'s grep, verbatim                                      | **0 lines** outside the design system and tests                                                                                                   | 0    |
+| Built stylesheet     | read of `dist/assets/index-*.css`                           | 158 `color-mix()` rules, **0 invalid stops, 0 NaN**, 21/21 token mirrors present                                                                  | 0    |
+| SQL schema           | `python3 scripts/sql-schema-check.py`                       | 0 problems across 130 files                                                                                                                       | 0    |
+| Database proofs      | `cd main-site && npm run db:prove`                          | 73 of 73 harnesses passed                                                                                                                         | 0    |
+| i18n parity          | `vitest run src/i18n`                                       | identical key sets in `en` and `bn`, no empty strings                                                                                             | 0    |
 
 ### Measured in CI, and failing
 
