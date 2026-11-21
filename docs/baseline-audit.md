@@ -24,11 +24,11 @@ disagree with the tree it describes.
 | Typecheck, functions | `npm run typecheck`                                         | no diagnostics                                                                            | 0    |
 | Lint                 | `npx eslint . --max-warnings 0`                             | 0 errors, 0 warnings                                                                      | 0    |
 | Format               | `npx prettier --check src`                                  | all matched files formatted                                                               | 0    |
-| Tests                | `npx vitest run`                                            | **132 files / 1350 tests** passed                                                         | 0    |
+| Tests                | `npx vitest run`                                            | **133 files / 1350 tests** passed                                                         | 0    |
 | Build                | `npm run build`                                             | built, **16 routes prerendered**                                                          | 0    |
 | Initial JS budget    | `npm run audit` F-01, summing `index-*`/`vendor-*` gzip     | **main-site 158 kB** against 250 kB                                                       | 0    |
 | Single-chunk budget  | F-28: per-file gzip of the eager graph in `dist/index.html` | 9 eager modules, largest **64.0 kB**, total **159.9 kB**, against 200 kB each             | 0    |
-| Launch audit         | `node scripts/audit.mjs`                                    | **144 passed, 0 failed, 4 recorded**                                                      | 0    |
+| Launch audit         | `node scripts/audit.mjs`                                    | **145 passed, 0 failed, 4 recorded**                                                      | 0    |
 | Contrast floor       | `node scripts/contrast-audit.mjs`                           | 1632 pairs × 2 themes; 0 certain, 0 floors, 0 dead names, 0 off-scale alphas, 0 off-token | 0    |
 | Hardcoded colour     | `§11`'s grep, verbatim                                      | **0 lines** outside the design system and tests                                           | 0    |
 | Built stylesheet     | read of `dist/assets/index-*.css`                           | 158 `color-mix()` rules, **0 invalid stops, 0 NaN**, 21/21 token mirrors present          | 0    |
