@@ -3,9 +3,9 @@ name: Production-build browser smoke
 on:
   push:
     branches: ['**']
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
+    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml', 'scripts/lighthouse.mjs']
   pull_request:
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
+    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml', 'scripts/lighthouse.mjs']
   workflow_dispatch:
 
 permissions:
@@ -82,5 +82,79 @@ jobs:
         with:
           name: corporate-browser-failure
           path: main-site/.browser-evidence/corporate-failure.png
+          include-hidden-files: true
+          retention-days: 14
+
+  lighthouse:
+    name: Lighthouse budget on every public route
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: main-site/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      # The repository does not carry Lighthouse: it is 40 MB of browser
+      # tooling this one script uses, and `--no-save` is what
+      # scripts/lighthouse.mjs asks for when it cannot resolve the module.
+      - name: Install the auditor
+        run: npm install --no-save lighthouse chrome-launcher
+      - name: Resolve a browser
+        id: chrome
+        shell: bash
+        # Not the @sparticuz Chromium the smoke suites use. That build needs an
+        # LD_LIBRARY_PATH pointing at its bundled shared objects, which
+        # chrome-launcher cannot be told about, and a half-loaded page is worse
+        # than no measurement — it is a low score that looks real. GitHub's
+        # runner ships a complete Chrome instead, so the number below is the
+        # one the budget was written against. A hard failure if it is ever
+        # absent: a skipped audit that reads as a green check is how this file
+        # got a table of unrun gates in the first place.
+        run: |
+          set -euo pipefail
+          for candidate in "$(command -v google-chrome-stable || true)" \
+                           "$(command -v google-chrome || true)" \
+                           "$(command -v chromium-browser || true)" \
+                           "$(command -v chromium || true)"; do
+            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+              echo "path=$candidate" >> "$GITHUB_OUTPUT"
+              echo "Using $candidate ($("$candidate" --version | head -1))"
+              exit 0
+            fi
+          done
+          echo "::error::No Chrome on this runner. scripts/lighthouse.mjs refuses to estimate a score, so this job must not either."
+          exit 1
+      - name: Measure every route, five samples each, median must clear 95
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}
+        # The table is the artifact as well as the verdict: a score quoted in a
+        # run log cannot be re-read next quarter, and "we ran Lighthouse" without
+        # the per-route numbers is the same claim as not having run it. The
+        # status is carried out of the pipe by hand, because the exit code is the
+        # gate and `tee` would otherwise decide it.
+        shell: bash
+        run: |
+          mkdir -p .browser-evidence
+          set +e
+          node ../scripts/lighthouse.mjs | tee .browser-evidence/lighthouse.txt
+          status=${PIPESTATUS[0]}
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::error title=Lighthouse budget failed::One or more routes missed the floor of 95 — see .browser-evidence/lighthouse.txt"
+          fi
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-evidence
+          path: main-site/.browser-evidence/lighthouse*
+          if-no-files-found: ignore
           include-hidden-files: true
           retention-days: 14
