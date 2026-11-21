@@ -173,7 +173,11 @@ surface change was internal, which is the point of putting the renderer behind t
   (with its `a.`/`b.`/`c.` shards) and the community mirror `tile.openstreetmap.de` as separate
   operators. osmdroid picks a base URL per request, so a dead host costs a fraction of tiles instead
   of the map; `ProviderHealth` sets a provider aside for two minutes after a failed probe, and a
-  retry re-probes and rebuilds the source only when the verdict changed the host set.
+  retry re-probes and rebuilds the source only when the verdict changed the host set. One finding from the test pass is worth keeping: the first version _demoted_ a
+  cooling provider to the end of the list, which is a no-op against a loader that selects a base URL
+  at random. `ProviderHealth.availableProviders` excludes cooling hosts instead, and
+  `aCoolingProviderIsExcludedRatherThanReordered` pins that — a failover rule that cannot change a
+  byte on the wire is worse than none, because it reads like a fix.
 - _A bounded cache instead of a 256-entry memory LRU._ Tiles live in `cacheDir/osm_tiles` (so the
   system may still reclaim them under storage pressure) and `BsdcMapKit.pruneCache` enforces 50 MB
   oldest-first on every map open.
