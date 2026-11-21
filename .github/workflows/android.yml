@@ -88,14 +88,32 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
 
-      # The map's page layer, checked against the app's own rules. Both sides of the
-      # WebView's asset contract are in this repository — the generated page and the
-      # classifier that decides which requests it answers — and the failure mode when they
-      # stop agreeing is a blank grey rectangle rather than an error, which no test on a
-      # device would notice until a user did. It runs before Gradle because a two-second
-      # check that can explain a blank map should not wait nine minutes behind a build.
-      - name: Check the OSM map page against the app's own interception rules
-        run: node scripts/osm-page-check.mjs
+      # The map is rendered natively, and that is a decision with a history: the WebView page,
+      # bridge and asset interceptor each passed every check that could be run against them while
+      # the surface stayed blank (docs/android-osm-map-audit.md). Reverting to that design would
+      # put the bug back, so the rule is asserted here rather than remembered — and before Gradle,
+      # because a two-second check should not wait nine minutes behind a build.
+      - name: Check the map is native (no WebView, no bundled Leaflet)
+        run: |
+          set -euo pipefail
+          MARKET=android-app/feature/market/src/main/kotlin
+          if grep -rn "android\.webkit" "$MARKET"; then
+            echo "::error file=.github/workflows/android.yml#L96::feature/market must not use WebView. The map is osmdroid; see docs/android-osm-map-audit.md for why."
+            exit 1
+          fi
+          if [ -e android-app/feature/market/src/main/assets/leaflet ]; then
+            echo "::error::android-app/feature/market/src/main/assets/leaflet is dead weight now that the map is native — delete it."
+            exit 1
+          fi
+          grep -q "libs.osmdroid.android" android-app/feature/market/build.gradle.kts || {
+            echo "::error::osmdroid is not wired into feature/market, so the map cannot render tiles."
+            exit 1
+          }
+          grep -q "osmdroid = \"6\.1\.20\"" android-app/gradle/libs.versions.toml || {
+            echo "::error::the osmdroid version must stay pinned in the version catalog."
+            exit 1
+          }
+          echo "map engine: osmdroid $(grep -m1 '^osmdroid =' android-app/gradle/libs.versions.toml | tr -d ' '), no WebView, no bundled Leaflet"
 
       - name: Verify native manifest & zero-Capacitor invariants
         working-directory: android-app

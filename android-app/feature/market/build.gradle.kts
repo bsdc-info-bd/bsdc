@@ -48,6 +48,9 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    // OpenStreetMap rendered natively — see feature/market/.../map/MkNativeMap.kt. Raster tiles,
+    // a bounded on-disk cache and no WebView, no JS bridge and no generated map page.
+    implementation(libs.osmdroid.android)
     implementation(libs.androidx.activity.compose)
     implementation(libs.play.services.location)
     implementation(libs.kotlinx.coroutines.play.services)
