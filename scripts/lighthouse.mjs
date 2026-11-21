@@ -209,18 +209,55 @@ const median = (values) => {
  * hydration problem or a bytes problem.
  */
 function readLcpBreakdown(audits) {
-  const ids = Object.keys(audits).filter((id) => /lcp|largest-contentful-paint/.test(id));
-  const candidates = ids.map((id) => audits[id]);
-  const collect = (audit, nodes, rows) => {
-    walkInto(audit?.details ?? audit, 0, nodes, rows);
-  };
-  const nodes = [];
-  const rows = [];
-  for (const audit of candidates) collect(audit, nodes, rows);
-  return summarise(nodes, rows, ids, audits);
+  // Every audit whose id mentions the metric is a candidate, because the
+  // breakdown has lived under three different ids across Lighthouse majors. They
+  // are searched *separately* and the richest one wins: merging their rows was
+  // the earlier design, and it let a hint from `lcp-discovery-insight` be
+  // reported as a phase of the paint — two audits that count different things
+  // added into one confident wrong number.
+  const norm = (value) =>
+    typeof value === 'string'
+      ? value.toLowerCase()
+      : value && typeof value === 'object'
+        ? String(value.text ?? value.value ?? '').toLowerCase()
+        : '';
+  const candidates = Object.keys(audits)
+    .filter((id) => /lcp|largest-contentful-paint/.test(id))
+    .map((id) => {
+      const nodes = [];
+      const rows = [];
+      walkInto(audits[id]?.details ?? audits[id], 0, nodes, rows);
+      const phases = rows.filter((row) =>
+        /delay|byte|ttfb|time|request|render/.test(
+          norm(row.phase ?? row.label ?? row.name ?? row.key),
+        ),
+      );
+      // A phase table without phase-shaped labels is a hint list, not a
+      // breakdown; counting it as one is how the numbers get invented.
+      return { id, nodes, rows: phases.length > 0 ? phases : [], hasNode: nodes.length > 0 };
+    })
+    .sort((a, b) => b.rows.length + (b.hasNode ? 1 : 0) - (a.rows.length + (a.hasNode ? 1 : 0)));
+  const best = candidates[0];
+  if (!best) return { selector: null, available: [], raw: null };
+  const usable = best.rows.length > 0 || best.hasNode;
+  return summarise(
+    best.hasNode ? best.nodes : [],
+    best.rows,
+    candidates.map((c) => c.id),
+    audits,
+    {
+      source: usable ? best.id : null,
+      raw: usable
+        ? null
+        : candidates
+            .map((c) => `${c.id}: ${JSON.stringify(audits[c.id]?.details ?? null)}`)
+            .join(' | ')
+            .slice(0, 900),
+    },
+  );
 }
 
-function summarise(nodes, rows, ids, audits) {
+function summarise(nodes, rows, ids, audits, meta = {}) {
   const text = (value) => {
     if (typeof value === 'string') return value;
     if (value && typeof value === 'object') return String(value.text ?? value.value ?? '');
@@ -255,21 +292,14 @@ function summarise(nodes, rows, ids, audits) {
     loadTime: phase('load time'),
     renderDelay: phase('render delay'),
     available: rows.length === 0 && !element ? ids : undefined,
-    // When nothing matched, the payload's own shape is the only honest next
-    // clue: this version has an `lcp-breakdown-insight` whose fields a reader
-    // written against documentation would keep missing. Dumping a fragment of
-    // what is actually there ends the guessing loop for whoever fixes it — the
-    // alternative is another committed guess and another red run.
-    raw:
-      rows.length === 0 && !element
-        ? ids
-            .map(
-              (id) =>
-                `${id}: ${JSON.stringify(audits[id]?.details ?? audits[id]?.displayValue ?? null)}`,
-            )
-            .join(' | ')
-            .slice(0, 900)
-        : undefined,
+    source: meta.source ?? null,
+    // When nothing matched, a fragment of the payload as received is the only
+    // honest next clue: this version keeps the breakdown in an audit whose fields
+    // a reader written against documentation would keep missing, and dumping what
+    // is there ends the guessing loop for whoever fixes it next. A duplicate key
+    // here once made this the dead half of the pair — the reason it is now the
+    // caller's decision and not a second computation.
+    raw: meta.raw ?? null,
   };
 }
 
@@ -427,7 +457,9 @@ async function main() {
             (representative.savings.length > 0
               ? `  savings Lighthouse claims: ${representative.savings.join('; ')}\n`
               : '') +
-            `  LCP element: ${representative.lcp?.selector ?? 'unknown'}\n` +
+            `  LCP element: ${representative.lcp?.selector ?? 'unknown'}${
+              representative.lcp?.source ? ` (from ${representative.lcp.source})` : ''
+            }\n` +
             `  LCP phases: ${
               representative.lcp &&
               (representative.lcp.ttfb !== null || representative.lcp.renderDelay !== null)
