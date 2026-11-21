@@ -33,7 +33,24 @@ jobs:
       - run: npm ci --no-audit --no-fund
       # Bundled Chromium is installed from npm. No paid device service or
       # production credentials; this does not validate provider integrations.
-      - run: npm run test:browser
+      - name: Serve the production build to a browser
+        shell: bash
+        # The same reason the messenger step below does this and the auditor
+        # step learns it the hard way: an exit code is not a finding. The suite
+        # prints `FAIL <check> — <why>` per check, and that line is the whole
+        # value of the run.
+        run: |
+          set +e
+          npm run test:browser > /tmp/browser-smoke.log 2>&1
+          status=$?
+          cat /tmp/browser-smoke.log
+          if [ "$status" -ne 0 ]; then
+            message=$(grep -E '^FAIL|passed' /tmp/browser-smoke.log | tail -20 | head -c 5000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Production-build browser smoke failed::${message:-see the run log}"
+          fi
+          exit "$status"
       - name: Messenger interactions with mocked providers
         shell: bash
         run: |

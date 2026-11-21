@@ -227,6 +227,71 @@ try {
     await browser.close();
     browser = undefined;
   }
+
+  /* ------------------------------------------------------------------ *
+   * The responsive matrix.
+   *
+   * The brief names nine widths and two invariants: no horizontal scroll, and a
+   * touch target you can hit. The device pass above covers one desktop and one
+   * phone; a layout can pass both and still break at 2560 or at the 768 seam
+   * where the rail stops being a rail. So the matrix sweeps the widths on the
+   * routes a stranger actually lands on, in one browser, and reads the document
+   * box rather than trusting a screenshot.
+   * ------------------------------------------------------------------ */
+  browser = await launch();
+  const matrix = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    serviceWorkers: 'block',
+    // Touch is what makes a 30px control a defect rather than a preference.
+    hasTouch: true,
+  });
+  const page = await matrix.newPage();
+  activePage = page;
+  for (const width of [320, 375, 414, 540, 768, 1024, 1440, 1920, 2560]) {
+    await check(`${width}px: no horizontal scroll on the public pages`, async () => {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ['/', '/jobs', '/events', '/marketplace', '/about']) {
+        await page.goto(server.origin + route, { waitUntil: 'networkidle' });
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - innerWidth,
+        );
+        assert(overflow <= 0, `${route} scrolls ${overflow}px sideways at ${width}px`);
+      }
+    });
+  }
+
+  await check('412px touch: the shell controls a thumb has to hit are 44x44', async () => {
+    await page.setViewportSize({ width: 412, height: 915 });
+    await page.goto(server.origin + '/', { waitUntil: 'networkidle' });
+    const small = await page.evaluate(() => {
+      // Only the chrome — header and navigation — is gated. WCAG 2.5.8 exempts
+      // a target that sits inside a line of prose, and a feed card's text link is
+      // exactly that: measuring it would produce a wall of findings nobody may
+      // act on, which is how a11y checks get switched off.
+      const selectors = ['header a', 'header button', 'nav a', 'nav button', '[role="tab"]'];
+      const seen = new Set();
+      const out = [];
+      for (const selector of selectors) {
+        for (const el of document.querySelectorAll(selector)) {
+          if (seen.has(el)) continue;
+          seen.add(el);
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          if (rect.width < 44 || rect.height < 44) {
+            const name =
+              el.getAttribute('aria-label') ??
+              el.textContent?.trim().slice(0, 24) ??
+              el.tagName.toLowerCase();
+            out.push(`${name} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+          }
+        }
+      }
+      return out;
+    });
+    assert(small.length === 0, `targets under 44px: ${small.slice(0, 8).join(', ')}`);
+  });
+  await browser.close();
+  browser = undefined;
 } catch (error) {
   if (activePage && !activePage.isClosed())
     await activePage

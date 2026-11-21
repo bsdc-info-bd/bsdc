@@ -29,6 +29,14 @@
  *
  * `--verbose` prints every performance sample, so a low median can be read as the
  * regression or the shared machine it actually is.
+ *
+ * `--strict` additionally gates the §5.1 lab floors (LCP 1.5 s, FCP 1.0 s, CLS
+ * 0.1, TBT 200 ms) on the median of each metric. Off by default: those floors
+ * were written for field data, `interaction-to-next-paint` and time-to-first-byte
+ * are not lab-measurable at all, and a gate that fails a push on a shared
+ * runner's worst minute is a gate that gets muted. The numbers are printed for
+ * every route that misses the score floor either way, which is the part a reader
+ * can act on.
  */
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -54,6 +62,25 @@ const FLOOR = Number(flag('floor', '95'));
 const VERBOSE = args.includes('--verbose');
 const RUNS = Number(flag('runs', '5'));
 const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo'];
+/**
+ * The §5.1 budgets, as lab numbers.
+ *
+ * Lighthouse's score is a curve over several metrics, so a 91 says "something is
+ * slow" and not what a reader can act on. These are the floors the brief states,
+ * printed next to every route that misses the score floor — and gated only under
+ * `--strict`, because a simulated lab run on a shared runner is not what the
+ * brief's floors were written against: `interaction-to-next-paint` and time to
+ * first byte are field measurements, and a lab CLS on a prerendered page flatters
+ * the page. Reporting them beside the score is honest; failing a push on a lab
+ * proxy of a field metric is how a gate gets muted.
+ */
+const LAB_FLOORS = {
+  'largest-contentful-paint': { label: 'LCP', limit: 1500, unit: 'ms' },
+  'first-contentful-paint': { label: 'FCP', limit: 1000, unit: 'ms' },
+  'cumulative-layout-shift': { label: 'CLS', limit: 0.1, unit: '' },
+  'total-blocking-time': { label: 'TBT', limit: 200, unit: 'ms' },
+};
+const STRICT = args.includes('--strict');
 const DEFAULT_ROUTES = [
   '/',
   '/about',
@@ -214,6 +241,7 @@ async function main() {
       if (!first) await freshBrowser();
       first = false;
       const samples = { performance: [], accessibility: [], 'best-practices': [], seo: [] };
+      const runs = [];
       for (let run = 0; run < RUNS; run += 1) {
         const runner = await lighthouse(`${origin}${route}`, {
           port: chrome.port,
@@ -225,16 +253,65 @@ async function main() {
         for (const category of CATEGORIES) {
           samples[category].push(Math.round((runner.lhr.categories[category]?.score ?? 0) * 100));
         }
+        const audits = runner.lhr.audits ?? {};
+        runs.push({
+          score: Math.round((runner.lhr.categories.performance?.score ?? 0) * 100),
+          metrics: Object.fromEntries(
+            Object.keys(LAB_FLOORS).map((key) => [key, audits[key]?.numericValue ?? null]),
+          ),
+          // `overallSavingsMs` is what Lighthouse itself claims an opportunity
+          // would return, so the list is ordered by the tool's own estimate of
+          // what matters rather than by a guess about which audit sounds scary.
+          savings: Object.entries(audits)
+            .filter(([, audit]) => (audit.details?.overallSavingsMs ?? 0) > 200)
+            .sort(
+              (a, b) => (b[1].details.overallSavingsMs ?? 0) - (a[1].details.overallSavingsMs ?? 0),
+            )
+            .slice(0, 3)
+            .map(
+              ([, audit]) => `${audit.title} (−${Math.round(audit.details.overallSavingsMs)} ms)`,
+            ),
+        });
       }
       const medians = Object.fromEntries(CATEGORIES.map((c) => [c, median(samples[c])]));
       const below = CATEGORIES.filter((c) => medians[c] < FLOOR);
+      // The run chosen for the diagnosis is the one that scored the median, not
+      // the last one: reporting the slowest sample's metrics beside a median
+      // score would blame the page for the machine's worst minute.
+      const representative = runs.find((entry) => entry.score === medians.performance) ?? {
+        metrics: {},
+        savings: [],
+        score: 0,
+        // `??` on the find alone would leave `--runs 0` with an undefined
+        // representative and a TypeError where the point was a table.
+      };
+      const measured = Object.entries(representative.metrics)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([key, value]) => {
+          const floor = LAB_FLOORS[key];
+          const shown = floor.unit === '' ? value.toFixed(3) : `${Math.round(value)}${floor.unit}`;
+          return {
+            label: floor.label,
+            text: `${floor.label} ${shown}${value > floor.limit ? ` over ${floor.limit}${floor.unit}` : ''}`,
+            over: value > floor.limit,
+          };
+        });
+      if (STRICT) for (const entry of measured) if (entry.over) below.push(entry.label);
       rows.push({ route, medians, samples, below });
-      if (below.length > 0) failures.push({ route, below, medians });
       process.stdout.write(
         `${route.padEnd(20)} ${CATEGORIES.map((c) => `${c.slice(0, 4)} ${medians[c]}`).join('  ')}${
           below.length > 0 ? `   ← below ${FLOOR}: ${below.join(', ')}` : ''
         }\n`,
       );
+      if (below.length > 0) {
+        process.stdout.write(
+          `  ${measured.map((entry) => entry.text).join(' · ')}\n` +
+            (representative.savings.length > 0
+              ? `  savings Lighthouse claims: ${representative.savings.join('; ')}\n`
+              : ''),
+        );
+        failures.push({ route, below, medians });
+      }
       if (VERBOSE) {
         process.stdout.write(`  performance samples: ${samples.performance.join(', ')}\n`);
       }
@@ -256,7 +333,12 @@ async function main() {
     const row = rows.find((entry) => entry.route === failure.route);
     process.stdout.write(
       `  ${failure.route}: ${failure.below
-        .map((c) => `${c} ${failure.medians[c]} (samples ${row ? row.samples[c].join(', ') : '?'})`)
+        .map((c) =>
+          c in failure.medians
+            ? `${c} ${failure.medians[c]} (samples ${row ? row.samples[c].join(', ') : '?'})`
+            : // a lab metric named by --strict, which reports the number itself
+              `${c} over its lab floor`,
+        )
         .join(', ')}\n`,
     );
   }
