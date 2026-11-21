@@ -68,8 +68,8 @@ the four lab metrics, the LCP element and its phase breakdown for the median run
 of every route under the floor. The next run's numbers, which name the cause:
 
 | Route         | LCP         | FCP     | CLS   | TBT    |
-| ------------- | ----------- | ------- | ----- | ------ |
-| `/learn`      | **3483 ms** | 694 ms  | 0.000 | 119 ms |
+| ------------- | ----------- | ------- | ----- | ------ | ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/learn`      | **3483 ms** | 694 ms  | 0.000 | 11     | Lighthouse 95+ on every route | **Measured in CI; 4 of 16 routes miss performance** | the `lighthouse` job gates the median of five runs per category on all 16 prerendered routes; a11y/best-practices/SEO are 100 everywhere, and the misses are LCP-only — ~3.4–3.7 s with FCP ~0.7 s, CLS 0.000, TBT < 165 ms, which is render delay (content that cannot paint until hydration finishes), not bytes |
 | `/playground` | **3429 ms** | 668 ms  | 0.000 | 84 ms  |
 | `/projects`   | over floor  | ~665 ms | 0.000 | 141 ms |
 
