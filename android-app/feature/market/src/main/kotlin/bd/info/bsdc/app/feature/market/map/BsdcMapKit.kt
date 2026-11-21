@@ -153,8 +153,9 @@ object BsdcMapKit {
     /**
      * The base URLs to hand the tile loader, given which providers are healthy right now.
      *
-     * Three rules, in order: a provider in cooldown is left out entirely, the preference order is
-     * preserved so the primary host still serves most tiles, and every base must satisfy
+     * Three rules, in order: a provider in cooldown is excluded outright (see
+     * [ProviderHealth.availableProviders] for why ordering would not be enough), the preference
+     * order is preserved, and every base must satisfy
      * [isAllowedTileUrl] before it appears. That last one is what stops a typo in [PROVIDERS] from
      * turning the map into a general-purpose proxy — the failure is silent otherwise, because the
      * map still draws tiles, just from wherever the typo points.
@@ -163,13 +164,15 @@ object BsdcMapKit {
      * operator is repairing beats a map that refused to draw, and the health record already says
      * what is wrong.
      */
-    fun tileBases(nowMs: Long, health: ProviderHealth): List<String> =
-        health.orderFor(nowMs)
+    fun tileBases(nowMs: Long, health: ProviderHealth): List<String> {
+        val usable = health.availableProviders(nowMs)
             .filter { provider -> provider.hosts.any { isAllowedTileUrl(it.base + "3/4/5.png") } }
-            .ifEmpty { listOf(PROVIDERS.first()) }
+        val chosen = usable.ifEmpty { listOf(PROVIDERS.first()) }
+        return chosen
             .flatMap { provider -> listOf(provider.baseUrl) + provider.shards }
             .map { it.trimEnd('/') + "/" }
             .distinct()
+    }
 
     private fun cosOf(degrees: Double): Double =
         kotlin.math.cos(Math.toRadians(degrees.coerceIn(-85.0, 85.0)))
@@ -236,14 +239,18 @@ class ProviderHealth(
     private val failures = HashMap<String, Int>()
     private val cooldownUntil = HashMap<String, Long>()
 
-    /** Providers in the order they should be used: available ones first, in preference order. */
-    fun orderFor(
+    /**
+     * The providers to use right now, in preference order, with cooling ones left out.
+     *
+     * "Left out", not "moved to the back": the tile loader picks a base URL at random per request,
+     * so ordering the list would change nothing a user could see, while excluding a provider removes
+     * every one of its hosts from the rotation. A rule that cannot take effect is worse than no
+     * rule, because it reads like one that has.
+     */
+    fun availableProviders(
         nowMs: Long,
         providers: List<BsdcTileProvider> = BsdcMapKit.PROVIDERS,
-    ): List<BsdcTileProvider> {
-        val (ready, cooling) = providers.partition { isAvailable(nowMs, it.id) }
-        return ready + cooling
-    }
+    ): List<BsdcTileProvider> = providers.filter { isAvailable(nowMs, it.id) }
 
     fun isAvailable(nowMs: Long, providerId: String): Boolean = (cooldownUntil[providerId] ?: 0L) <= nowMs
 

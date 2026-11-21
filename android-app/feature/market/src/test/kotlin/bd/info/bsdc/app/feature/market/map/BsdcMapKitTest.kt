@@ -121,16 +121,22 @@ class BsdcMapKitTest {
         health.recordSuccess("osm")
         assertEquals(0, health.failuresFor("osm"))
         assertTrue(health.isAvailable(1_000L, "osm"))
-        val order = health.orderFor(1_000L)
+        val order = health.availableProviders(1_000L)
         assertEquals("preference order must survive a clean bill of health", BsdcMapKit.PROVIDERS, order)
     }
 
     @Test
-    fun coolingProvidersAreDemotedNotDeleted() {
+    fun aCoolingProviderIsExcludedRatherThanReordered() {
+        // The loader chooses a base URL at random, so a demotion would be a no-op with a comment
+        // claiming it was a failover. Exclusion is the only thing that changes what a tile asks for.
         val health = ProviderHealth(failuresBeforeCooldown = 1, cooldownMs = 60_000L)
         health.recordFailure(0L, "osm")
-        val order = health.orderFor(nowMs = 1_000L)
-        assertEquals(listOf("osm-de", "osm"), order.map { it.id })
+        val available = health.availableProviders(nowMs = 1_000L)
+        assertEquals(listOf("osm-de"), available.map { it.id })
+        val bases = BsdcMapKit.tileBases(nowMs = 1_000L, health = health)
+        assertFalse("the primary's own host must be gone while it cools down", bases.contains("https://tile.openstreetmap.org/"))
+        assertFalse("and so must every shard of it", bases.any { it.contains(".tile.openstreetmap.org") })
+        assertEquals(listOf("https://tile.openstreetmap.de/"), bases)
     }
 
     @Test
