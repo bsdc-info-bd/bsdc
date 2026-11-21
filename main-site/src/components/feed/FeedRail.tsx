@@ -57,7 +57,7 @@ export function FeedRail({ className }: { className?: string }): ReactNode {
           end={item.to === ROUTES.home}
           className={({ isActive }) =>
             cn(
-              'flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors duration-150 ease-app',
+              'fab-tap flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors duration-150 ease-app',
               isActive
                 ? 'bg-success-soft font-semibold text-success'
                 : 'text-text hover:bg-surface-2',
@@ -69,7 +69,7 @@ export function FeedRail({ className }: { className?: string }): ReactNode {
       ))}
       <Link
         to={ROUTES.compose}
-        className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-success transition-colors duration-150 ease-app hover:bg-success-soft "
+        className="fab-tap mt-2 flex items-center justify-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-success transition-colors duration-150 ease-app hover:bg-success-soft "
       >
         <PenLine size={16} aria-hidden="true" />
         {t('rail.write', { defaultValue: 'Create post' })}

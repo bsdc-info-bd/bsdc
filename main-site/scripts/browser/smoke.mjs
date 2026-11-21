@@ -260,14 +260,29 @@ try {
     });
   }
 
-  await check('412px touch: the shell controls a thumb has to hit are 44x44', async () => {
-    await page.setViewportSize({ width: 412, height: 915 });
-    await page.goto(server.origin + '/', { waitUntil: 'networkidle' });
-    const small = await page.evaluate(() => {
-      // Only the chrome — header and navigation — is gated. WCAG 2.5.8 exempts
-      // a target that sits inside a line of prose, and a feed card's text link is
-      // exactly that: measuring it would produce a wall of findings nobody may
-      // act on, which is how a11y checks get switched off.
+  /*
+   * The touch pass runs in a phone context, not the sweep's desktop one.
+   *
+   * The 44px rule in `fabric.css` is scoped to `@media (pointer: coarse)`, and
+   * Playwright only reports a coarse primary pointer with `isMobile`. A context
+   * with `hasTouch` alone would measure a browser where the rule the site ships
+   * cannot match, and report the site as broken for the emulation's reason —
+   * the exact failure mode this whole file is trying to stop producing.
+   */
+  const touch = await browser.newContext({
+    ...devices['Pixel 7'],
+    serviceWorkers: 'block',
+  });
+  const touchPage = await touch.newPage();
+  activePage = touchPage;
+  await check('touch: the shell controls a thumb has to hit are 44x44', async () => {
+    await touchPage.goto(server.origin + '/', { waitUntil: 'networkidle' });
+    const small = await touchPage.evaluate(() => {
+      // Only the chrome — header, navigation, footer link lists — is gated.
+      // WCAG 2.5.8 exempts a target whose size is set by a line of prose, and a
+      // feed card's text link is exactly that: measuring those would produce a
+      // wall of findings nobody may act on, which is how a11y checks end up
+      // switched off.
       const selectors = ['header a', 'header button', 'nav a', 'nav button', '[role="tab"]'];
       const seen = new Set();
       const out = [];
@@ -279,9 +294,7 @@ try {
           if (rect.width === 0 || rect.height === 0) continue;
           if (rect.width < 44 || rect.height < 44) {
             const name =
-              el.getAttribute('aria-label') ??
-              el.textContent?.trim().slice(0, 24) ??
-              el.tagName.toLowerCase();
+              el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 24) ?? 'unnamed';
             out.push(`${name} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
           }
         }
@@ -290,6 +303,7 @@ try {
     });
     assert(small.length === 0, `targets under 44px: ${small.slice(0, 8).join(', ')}`);
   });
+  await touch.close();
   await browser.close();
   browser = undefined;
 } catch (error) {

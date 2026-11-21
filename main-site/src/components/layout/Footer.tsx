@@ -31,7 +31,7 @@ export function Footer() {
           <ul className="mt-2 space-y-1.5">
             {PLATFORM_LINKS.map((link) => (
               <li key={link.to}>
-                <Link to={link.to} className="text-sm text-muted hover:text-text">
+                <Link to={link.to} className="fab-tap inline-flex items-center text-sm text-muted hover:text-text">
                   {t(link.labelKey)}
                 </Link>
               </li>

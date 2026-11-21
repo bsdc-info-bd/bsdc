@@ -262,6 +262,40 @@ async function main() {
           // `overallSavingsMs` is what Lighthouse itself claims an opportunity
           // would return, so the list is ordered by the tool's own estimate of
           // what matters rather than by a guess about which audit sounds scary.
+          // Which part of the LCP is the expensive one. A score of 81 with
+          // "render delay" is a hydration problem and no amount of image
+          // optimisation moves it; the same score with "load time" is a byte
+          // problem. The audit's own table is the only honest way to tell them
+          // apart, and guessing is how a week gets spent on the wrong lever.
+          lcp: (() => {
+            // The table's shape has moved between Lighthouse majors — `items`
+            // became `rows` in one of them — so both are read and nothing is
+            // assumed. A missing phase prints `?`, because an absent measurement
+            // and a zero are different facts, and which one it is decides whether
+            // this is a hydration problem or a bytes problem.
+            const audit = audits['largest-contentful-paint-element'];
+            const groups = audit?.details?.items ?? audit?.details?.rows ?? [];
+            const rows = groups.flatMap((group) => group?.items ?? group?.rows ?? []);
+            // The element row and the phase rows sit in two sub-tables, and
+            // which one comes first is not contractual — searching all of them
+            // costs nothing and survives either order.
+            const node = rows.find((entry) => entry?.node)?.node;
+            const phase = (...labels) => {
+              const row = rows.find((entry) =>
+                labels.some((label) => String(entry?.phase).toLowerCase().includes(label)),
+              );
+              return typeof row?.numericValue === 'number'
+                ? Math.round(row.numericValue * 1000)
+                : null;
+            };
+            return {
+              selector: node?.snippet ?? node?.selector ?? null,
+              ttfb: phase('first byte', 'ttfb'),
+              loadDelay: phase('load delay'),
+              loadTime: phase('load time'),
+              renderDelay: phase('render delay'),
+            };
+          })(),
           savings: Object.entries(audits)
             .filter(([, audit]) => (audit.details?.overallSavingsMs ?? 0) > 200)
             .sort(
@@ -281,6 +315,7 @@ async function main() {
       const representative = runs.find((entry) => entry.score === medians.performance) ?? {
         metrics: {},
         savings: [],
+        lcp: null,
         score: 0,
         // `??` on the find alone would leave `--runs 0` with an undefined
         // representative and a TypeError where the point was a table.
@@ -308,7 +343,17 @@ async function main() {
           `  ${measured.map((entry) => entry.text).join(' · ')}\n` +
             (representative.savings.length > 0
               ? `  savings Lighthouse claims: ${representative.savings.join('; ')}\n`
-              : ''),
+              : '') +
+            `  LCP element: ${representative.lcp?.selector ?? 'unknown'}\n` +
+            `  LCP phases: ${
+              representative.lcp
+                ? `ttfb ${representative.lcp.ttfb ?? '?'} ms, load delay ${
+                    representative.lcp.loadDelay ?? '?'
+                  } ms, load time ${representative.lcp.loadTime ?? '?'} ms, render delay ${
+                    representative.lcp.renderDelay ?? '?'
+                  } ms`
+                : 'unknown'
+            }\n`,
         );
         failures.push({ route, below, medians });
       }
