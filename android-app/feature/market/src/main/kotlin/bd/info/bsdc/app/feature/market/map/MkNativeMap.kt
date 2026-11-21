@@ -1,5 +1,6 @@
 package bd.info.bsdc.app.feature.market.map
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Color
@@ -216,11 +217,21 @@ private class MapDecorOverlay : Overlay() {
     private val ringCentrePoint = Point()
     private val scratchPoint = Point()
 
-    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+    /**
+     * The draw entry point. `draw(Canvas, Projection)`, not the older `draw(Canvas, MapView, Boolean)`.
+     *
+     * osmdroid's `DefaultOverlayManager` calls one or the other depending on how the map is being
+     * rendered (a live view draws through the `MapView` form, snapshots and the projection-only path
+     * draw through this one), and the legacy three-argument form forwards here by default. Overriding
+     * *this* method is therefore correct on every path; overriding the three-argument form would be
+     * silently skipped on the projection-only ones — a pin that never paints, and a map stuck
+     * reporting LOADING, with nothing in a compile log to say so.
+     */
+    override fun draw(canvas: Canvas, projection: Projection) {
         val current = decor
         if (current != null) {
-            val centre = mapView.projection.toPixels(GeoPoint(current.latitude, current.longitude), centrePoint)
-            if (centre != null) paint(canvas, mapView.projection, current, centre.x, centre.y)
+            val centre = projection.toPixels(GeoPoint(current.latitude, current.longitude), centrePoint)
+            if (centre != null) paint(canvas, projection, current, centre.x, centre.y)
         }
         val drawn = onDrawn
         if (drawn != null) {
@@ -426,12 +437,12 @@ internal fun MkNativeMap(
                 overlays.add(overlay)
                 overlay.onPinTap = if (interactive) latestTap?.let { tap -> { lat, lng -> tap(lat, lng) } } else null
                 overlay.onDrawn = { latestDrawn() }
-                addOnLayoutChangeListener { view, left, top, right, bottom, olt, odt, olb, odb ->
+                addOnLayoutChangeListener { _, left, top, right, bottom, olt, odt, olb, odb ->
                     if (left != olt || top != odt || right != olb || bottom != odb) {
                         // The native equivalent of the page's `invalidateSize()`: the projection is
                         // rebuilt from the new size on the next draw, so a dialog that opens at a
                         // different height cannot keep the old viewport.
-                        view.invalidate()
+                        invalidate()
                         // Framing must come from the measured box, not from a composition-time
                         // guess: ask a Compose size before the first layout pass and you get zero,
                         // which is how the old page ended up centred on a viewport it never had.
@@ -444,7 +455,7 @@ internal fun MkNativeMap(
                                 shorterSidePx = side,
                             )
                             appliedZoom = fitted
-                            view.controller.setZoom(fitted)
+                            controller.setZoom(fitted)
                         }
                     }
                 }
@@ -536,6 +547,7 @@ internal fun rememberNetworkAvailable(context: Context): Boolean {
     return available
 }
 
+@SuppressLint("MissingPermission")
 private fun hasInternet(manager: ConnectivityManager): Boolean {
     val capabilities = manager.getNetworkCapabilities(manager.activeNetwork) ?: return false
     return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)

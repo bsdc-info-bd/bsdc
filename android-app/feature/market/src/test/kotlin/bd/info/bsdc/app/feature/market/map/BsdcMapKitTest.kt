@@ -32,13 +32,24 @@ class BsdcMapKitTest {
     }
 
     @Test
-    fun tileUrlsRotateOverShardsAndWrapAround() {
+    fun tileUrlsCycleCanonicalHostThenShardsAndWrapAround() {
         val osm = BsdcMapKit.PROVIDERS.first { it.id == "osm" }
         assertEquals(3, osm.shards.size)
+        assertEquals("the canonical host plus three shards", 4, osm.hosts.size)
         val hosts = (0 until 6).map { index ->
             osm.urlFor(5, 16, 10, shardIndex = index).substringAfter("://").substringBefore('/')
         }
-        assertEquals(listOf("a.", "b.", "c.", "a.", "b.", "c."), hosts.map { it.removeSuffix(".tile.openstreetmap.org") })
+        assertEquals(
+            listOf(
+                "tile.openstreetmap.org",
+                "a.tile.openstreetmap.org",
+                "b.tile.openstreetmap.org",
+                "c.tile.openstreetmap.org",
+                "tile.openstreetmap.org",
+                "a.tile.openstreetmap.org",
+            ),
+            hosts,
+        )
     }
 
     @Test
