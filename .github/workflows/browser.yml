@@ -214,7 +214,15 @@ jobs:
             echo '```'
           } >>"$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            digest=$(tail -c 1400 .browser-evidence/lighthouse.txt | tr '\n' ' | ' | tr -s ' ')
+            # The verdict line first, then the tail. Per-route detail no longer has
+            # to fit in here — the script annotates each failing route itself — so
+            # this digest can stay short without cutting the worst route's numbers.
+            digest=$(
+              {
+                grep -E "route\(s\) below the floor" .browser-evidence/lighthouse.txt
+                tail -c 1400 .browser-evidence/lighthouse.txt
+              } | tr '\n' ' | ' | tr -s ' '
+            )
             echo "::error title=Lighthouse failed (exit $status)::${digest:-no output}"
           fi
           exit "$status"
