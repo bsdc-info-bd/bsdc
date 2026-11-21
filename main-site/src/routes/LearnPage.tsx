@@ -201,7 +201,7 @@ export default function LearnPage() {
                     </Link>
                   </p>
                   {certificate.revoked_at !== null ? (
-                    <p className="mt-1 text-xs text-red-700">{t('learn.revoked')}</p>
+                    <p className="mt-1 text-xs text-danger-text">{t('learn.revoked')}</p>
                   ) : null}
                 </Card>
               ))}

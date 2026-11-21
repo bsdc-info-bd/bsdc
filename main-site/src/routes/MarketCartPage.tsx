@@ -109,7 +109,7 @@ export default function MarketCartPage() {
                 </div>
 
                 {shopClosed ? (
-                  <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-800 dark:text-rose-200">
+                  <p className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-xs font-medium text-danger-text">
                     {copy.schedule.closedBanner}
                   </p>
                 ) : null}
@@ -145,7 +145,7 @@ export default function MarketCartPage() {
                             {formatTaka(line.price_poisha, language)}
                           </p>
                           {!line.orderable ? (
-                            <p className="text-xs font-semibold text-red-600">
+                            <p className="text-xs font-semibold text-danger-text">
                               {line.vendor_open === false
                                 ? copy.schedule.closedNow
                                 : copy.buyer.outOfStock}
@@ -167,7 +167,7 @@ export default function MarketCartPage() {
                           type="button"
                           aria-label={`${copy.cancel} ${line.product_name}`}
                           onClick={() => void change(line.product_id, 0)}
-                          className="rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-600"
+                          className="rounded-lg p-2 text-muted hover:bg-danger-soft hover:text-danger-text"
                         >
                           <Trash2 size={16} aria-hidden />
                         </button>

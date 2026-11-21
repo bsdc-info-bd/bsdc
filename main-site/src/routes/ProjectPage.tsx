@@ -165,7 +165,7 @@ export default function ProjectPage() {
           </LinkButton>
 
           <Card padded={false} className="overflow-hidden">
-            <div className="relative aspect-[16/7] w-full bg-gradient-to-br from-green-950 to-green-700">
+            <div className="relative aspect-[16/7] w-full bg-gradient-to-br from-hero-from to-hero-via">
               {project.coverUrl.length > 0 ? (
                 <MediaImage
                   src={project.coverUrl}
@@ -176,7 +176,7 @@ export default function ProjectPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-white/90">
+                <div className="flex h-full items-center justify-center text-on-hero/90">
                   <Rocket size={42} aria-hidden="true" />
                 </div>
               )}
@@ -325,7 +325,7 @@ export default function ProjectPage() {
                   <ExternalLink
                     href={project.repoUrl}
                     userGenerated
-                    className="rounded-lg bg-green-700 px-3 py-2 text-xs font-semibold text-white no-underline hover:bg-green-600"
+                    className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-on-primary no-underline hover:bg-primary"
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <Github size={14} aria-hidden="true" />

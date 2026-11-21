@@ -128,12 +128,12 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                   </span>
                 )}
 
-                <span className="absolute start-1 top-1 rounded-full bg-green-950/70 px-1.5 py-0.5 text-2xs font-semibold text-white tabular-nums">
+                <span className="absolute start-1 top-1 rounded-full bg-scrim/70 px-1.5 py-0.5 text-2xs font-semibold text-white tabular-nums">
                   {index + 1}
                 </span>
 
                 {busy ? (
-                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-green-950/55 text-white">
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-scrim/55 text-white">
                     {item.status === 'uploading' ? (
                       <>
                         <span className="text-sm font-semibold tabular-nums">{item.progress}%</span>
@@ -153,7 +153,7 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                 ) : null}
 
                 {broken ? (
-                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-danger/70 p-2 text-center text-white">
+                  <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-danger/70 p-2 text-center text-on-danger">
                     <span className="text-2xs font-semibold">
                       {t(item.errorKey ?? 'media.errors.failed')}
                     </span>
@@ -169,13 +169,13 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                 ) : null}
 
                 {!busy && !broken ? (
-                  <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-green-950/85 to-transparent p-1 opacity-0 transition-opacity duration-150 ease-app focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
+                  <span className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-gradient-to-t from-scrim/85 to-transparent p-1 opacity-0 transition-opacity duration-150 ease-app focus-within:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100">
                     <span className="flex items-center gap-0.5">
                       <IconButton
                         label={t('media.tray.moveEarlier')}
                         icon={<ArrowLeft size={14} />}
                         size="sm"
-                        className="h-8 w-8 text-white hover:bg-white/20 disabled:opacity-35"
+                        className="h-8 w-8 text-white hover:bg-on-hero/20 disabled:opacity-35"
                         disabled={index === 0}
                         onClick={() => controller.move(item.id, -1)}
                       />
@@ -183,7 +183,7 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                         label={t('media.tray.moveLater')}
                         icon={<ArrowRight size={14} />}
                         size="sm"
-                        className="h-8 w-8 text-white hover:bg-white/20 disabled:opacity-35"
+                        className="h-8 w-8 text-white hover:bg-on-hero/20 disabled:opacity-35"
                         disabled={index === attachments.length - 1}
                         onClick={() => controller.move(item.id, 1)}
                       />
@@ -194,7 +194,7 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                         icon={<Type size={14} />}
                         size="sm"
                         className={cn(
-                          'h-8 w-8 hover:bg-white/20',
+                          'h-8 w-8 hover:bg-on-hero/20',
                           altFor === item.id ? 'bg-white/25 text-white' : 'text-white',
                         )}
                         onClick={() => setAltFor(altFor === item.id ? null : item.id)}
@@ -205,7 +205,7 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                           label={t('media.tray.edit')}
                           icon={<Pencil size={14} />}
                           size="sm"
-                          className="h-8 w-8 text-white hover:bg-white/20"
+                          className="h-8 w-8 text-white hover:bg-on-hero/20"
                           onClick={() => onEdit(item)}
                         />
                       ) : null}
@@ -213,7 +213,7 @@ export function MediaTray({ controller, onEdit, noun }: MediaTrayProps) {
                         label={t('media.tray.remove')}
                         icon={<X size={14} />}
                         size="sm"
-                        className="h-8 w-8 text-white hover:bg-danger"
+                        className="h-8 w-8 text-on-danger hover:bg-danger"
                         onClick={() => {
                           if (altFor === item.id) setAltFor(null);
                           controller.remove(item.id);

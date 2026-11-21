@@ -46,7 +46,7 @@ export function MarketNav({ copy }: { copy: MkCopy }) {
                 <Icon size={16} aria-hidden />
                 {label}
                 {to === ROUTES.marketCart && count > 0 ? (
-                  <span className="ml-1 rounded-full bg-green-700 px-2 py-0.5 text-xs font-bold text-white tabular-nums">
+                  <span className="ml-1 rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-on-primary tabular-nums">
                     {count}
                   </span>
                 ) : null}

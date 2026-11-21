@@ -340,7 +340,7 @@ export default function OnboardingPage() {
                         </p>
                       ) : null}
                       {availability === 'available' ? (
-                        <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-green-500/12 px-2.5 py-0.5 text-xs font-medium text-green-700">
+                        <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-green-500/15 px-2.5 py-0.5 text-xs font-medium text-green-700">
                           <Check size={14} aria-hidden="true" />
                           {t('onboarding.availability.available')}
                         </p>
@@ -432,7 +432,7 @@ export default function OnboardingPage() {
                         <p className="truncate text-sm font-medium text-green-700">@{username}</p>
                         {location ? <p className="mt-0.5 text-xs text-muted">{location}</p> : null}
                       </div>
-                      <Sparkles size={20} className="text-green-600" aria-hidden="true" />
+                      <Sparkles size={20} className="text-success" aria-hidden="true" />
                     </div>
 
                     <p className="text-sm text-muted">{t('onboarding.reviewNote')}</p>

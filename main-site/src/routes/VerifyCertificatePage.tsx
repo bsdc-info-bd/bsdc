@@ -90,7 +90,7 @@ export default function VerifyCertificatePage() {
         {certificate !== null ? (
           <Card className="mt-4">
             {certificate.revoked ? (
-              <p className="flex items-center gap-2 text-sm font-semibold text-red-700">
+              <p className="flex items-center gap-2 text-sm font-semibold text-danger-text">
                 <ShieldAlert size={18} aria-hidden="true" />
                 {t('verify.revoked')}
               </p>

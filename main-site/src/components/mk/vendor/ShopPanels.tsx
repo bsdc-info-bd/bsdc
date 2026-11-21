@@ -79,11 +79,11 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
       </h2>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-        <div className="relative h-40 bg-gradient-to-br from-green-700 to-green-500 sm:h-52">
+        <div className="relative h-40 bg-gradient-to-br from-hero-from to-hero-via sm:h-52">
           {cover ? (
             <MediaImage src={cover} alt="" slotWidth={960} className="h-full w-full object-cover" />
           ) : null}
-          <label className="absolute right-3 top-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-black/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70">
+          <label className="absolute right-3 top-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-scrim/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70">
             <ImageUp size={14} aria-hidden /> {copy.coverUrl}
             <input
               type="file"
@@ -103,7 +103,7 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
             ) : (
               <Store className="m-6 text-muted" aria-hidden />
             )}
-            <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-black/50 py-1 text-center text-[10px] font-medium text-white">
+            <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-scrim/50 py-1 text-center text-[10px] font-medium text-white">
               {copy.logoUrl}
               <input
                 type="file"

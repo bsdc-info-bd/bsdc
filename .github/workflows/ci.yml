@@ -147,6 +147,14 @@ jobs:
             exit 1
           fi
 
+      # Contrast is arithmetic between two resolved colours, so it is measured
+      # rather than asserted: the script reads the palette tokens for BOTH
+      # themes and every class string in the app, and fails where a label
+      # cannot be read. A light-theme ratio proves nothing about the dark one.
+      - name: Contrast floor (WCAG 2.2 AA, both themes)
+        if: matrix.app == 'main-site'
+        run: node ../scripts/contrast-audit.mjs
+
       # Record total emitted JS gzip (including lazy chunks) for successful
       # main-branch builds. A missing credential or an unavailable database is
       # reported but does not block CI. Feature-branch builds are not production

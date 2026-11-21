@@ -16,7 +16,7 @@ export function Chip({ selected = false, icon, className, children, ...rest }: C
         'fab-tap inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold',
         'transition-colors duration-150 ease-app',
         selected
-          ? 'border-green-700 bg-green-700 text-white'
+          ? 'border-primary bg-primary text-on-primary'
           : 'border-border bg-surface text-muted hover:bg-surface-2',
         className,
       )}

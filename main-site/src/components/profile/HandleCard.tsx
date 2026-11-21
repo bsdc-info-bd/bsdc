@@ -83,11 +83,11 @@ export function HandleCard() {
       <div className="grid gap-4">
         <div>
           <h2 className="text-base font-semibold">{t('handle.title')}</h2>
-          <p className="mt-1 text-body-sm text-ink-2">{t('handle.body')}</p>
+          <p className="mt-1 text-sm text-muted">{t('handle.body')}</p>
         </div>
 
         {current !== null ? (
-          <p className="text-sm text-ink-2">
+          <p className="text-sm text-muted">
             {t('handle.current')}{' '}
             <Link to={profilePath(current)} className="font-semibold hover:underline">
               @{current}

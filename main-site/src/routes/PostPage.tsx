@@ -390,7 +390,7 @@ export default function PostPage() {
             </ul>
           ) : null}
 
-          <div className="mt-6 border-t border-line pt-4">
+          <div className="mt-6 border-t border-border pt-4">
             <ReactionBar
               postId={post.id}
               slug={post.slug}

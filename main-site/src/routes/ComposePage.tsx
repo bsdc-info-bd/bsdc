@@ -719,7 +719,7 @@ export default function ComposePage() {
       {dragging ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-green-950/60 p-6"
+          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-scrim/60 p-6"
         >
           <div className="flex flex-col items-center gap-2 rounded-card border-2 border-dashed border-white/70 px-8 py-6 text-center text-white">
             <ImagePlus size={28} />

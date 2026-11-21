@@ -89,7 +89,7 @@ export function CoverPicker({
             {labels.title}
           </h2>
         ) : (
-          <span id={id} className="text-body-sm font-semibold text-ink">
+          <span id={id} className="text-sm font-semibold text-text">
             {labels.title}
           </span>
         )}

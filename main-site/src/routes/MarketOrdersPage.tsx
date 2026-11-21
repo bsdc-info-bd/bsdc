@@ -61,7 +61,7 @@ export default function MarketOrdersPage() {
             type="button"
             aria-selected={tab === id}
             onClick={() => setTab(id)}
-            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${tab === id ? 'border-green-700 bg-green-700 text-white' : 'border-border bg-surface hover:bg-surface-2'}`}
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${tab === id ? 'border-primary bg-primary text-on-primary' : 'border-border bg-surface hover:bg-surface-2'}`}
           >
             {id === 'active'
               ? `${copy.buyer.activeOrders} (${active.length})`
@@ -222,7 +222,7 @@ function OrderCard({
         <div>
           {order.reviewed ? (
             <p className="inline-flex items-center gap-2 text-sm font-semibold text-green-700">
-              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />
+              <Star size={14} className="fill-rating text-rating" aria-hidden />
               {copy.buyer.reviewed}
             </p>
           ) : open === 'review' ? (

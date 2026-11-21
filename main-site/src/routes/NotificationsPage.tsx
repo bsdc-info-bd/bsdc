@@ -105,7 +105,7 @@ export default function NotificationsPage() {
           {notifications.map((item) => {
             const actorName = item.actor?.displayName || t('notifications.someone');
             const rowClass = cn(
-              'flex items-start gap-3 rounded-xl border border-line bg-surface p-3 transition hover:border-green-600',
+              'flex items-start gap-3 rounded-xl border border-border bg-surface p-3 transition hover:border-primary',
               item.isUnread && 'border-green-500 bg-green-700/[0.04]',
             );
             const target = item.targetUrl || ROUTES.notifications;
@@ -138,7 +138,7 @@ export default function NotificationsPage() {
                 {item.isUnread ? (
                   <span
                     aria-label={t('notifications.unreadOne')}
-                    className="mt-1.5 size-2 shrink-0 rounded-full bg-green-600"
+                    className="mt-1.5 size-2 shrink-0 rounded-full bg-primary"
                   />
                 ) : null}
               </>

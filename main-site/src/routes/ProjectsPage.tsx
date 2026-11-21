@@ -205,7 +205,7 @@ export default function ProjectsPage() {
             <Card as="li" padded={false} key={project.id} className="overflow-hidden">
               <Link
                 to={projectPath(project.slug)}
-                className="group relative block aspect-[16/8] overflow-hidden bg-gradient-to-br from-green-950 to-green-700"
+                className="group relative block aspect-[16/8] overflow-hidden bg-gradient-to-br from-hero-from to-hero-via"
                 aria-label={project.name}
               >
                 {project.coverUrl.length > 0 ? (
@@ -218,7 +218,7 @@ export default function ProjectsPage() {
                     className="h-full w-full object-cover transition-transform duration-300 ease-app group-hover:scale-[1.02]"
                   />
                 ) : (
-                  <span className="flex h-full w-full items-center justify-center text-white/90">
+                  <span className="flex h-full w-full items-center justify-center text-on-hero/90">
                     <Rocket size={32} aria-hidden="true" />
                   </span>
                 )}

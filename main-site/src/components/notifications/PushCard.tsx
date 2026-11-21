@@ -71,7 +71,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold">{t('push.prompt.title')}</h2>
-            <p className="mt-1 text-body-sm text-ink-2">{t('push.prompt.body')}</p>
+            <p className="mt-1 text-sm text-muted">{t('push.prompt.body')}</p>
             {push.errorKey ? <p role="alert">{t(push.errorKey)}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void turnOn()} loading={push.busy}>
@@ -98,7 +98,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
       <div className="grid gap-3">
         <div>
           <h2 className="text-base font-semibold">{t('push.title')}</h2>
-          <p className="mt-1 text-body-sm text-ink-2">{t('push.body')}</p>
+          <p className="mt-1 text-sm text-muted">{t('push.body')}</p>
         </div>
 
         {blocked ? (
@@ -147,7 +147,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
 
         {push.devices.length > 0 ? (
           <div>
-            <h3 className="text-sm font-semibold text-ink-2">{t('push.devices.title')}</h3>
+            <h3 className="text-sm font-semibold text-muted">{t('push.devices.title')}</h3>
             {staleNote !== null ? (
               <Alert tone="warning" title={t('push.devices.title')} className="mt-2">
                 {staleNote}
@@ -160,7 +160,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                 return (
                   <li
                     key={device.endpoint}
-                    className="flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2"
+                    className="flex items-center gap-3 rounded-card border border-border bg-surface px-3 py-2"
                     title={t(words.key)}
                   >
                     <div className="min-w-0 flex-1">
@@ -172,7 +172,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                           </Badge>
                         ) : null}
                       </p>
-                      <p className="text-2xs text-ink-3">
+                      <p className="text-2xs text-muted">
                         {device.platform ?? 'web'} · {device.language.toUpperCase()} ·{' '}
                         {device.lastUsedAt !== null ? (
                           <>

@@ -14,12 +14,12 @@ export interface LinkButtonProps {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-green-700 text-white hover:bg-green-500',
+  primary: 'bg-primary text-on-primary hover:bg-primary-hover',
   secondary: 'bg-surface-2 text-text border border-border hover:bg-surface',
   outline: 'border border-green-700 text-green-700 hover:bg-surface-2',
   ghost: 'text-text hover:bg-surface-2',
-  danger: 'bg-danger text-white hover:opacity-90',
-  blue: 'bg-blue text-white hover:opacity-90',
+  danger: 'bg-danger text-on-danger hover:opacity-90',
+  blue: 'bg-blue-fill text-on-blue hover:opacity-90',
 };
 
 const SIZES: Record<ButtonSize, string> = {

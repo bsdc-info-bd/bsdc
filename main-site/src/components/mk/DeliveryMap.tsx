@@ -24,7 +24,7 @@ const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
  * broken image, so the pin is inline SVG — the same shape the picker uses.
  */
 const PIN_SVG =
-  '<svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>';
+  '<svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" style="fill:var(--bsdc-primary)"/><circle cx="15" cy="15" r="6" style="fill:var(--bsdc-on-primary)"/></svg>';
 
 const MAP_COPY = {
   bn: {
@@ -242,7 +242,7 @@ export function DeliveryMapDialog({
           type="button"
           onClick={onClose}
           aria-label={copy.close}
-          className="rounded-full p-2 text-muted hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+          className="rounded-full p-2 text-muted hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           <X size={20} aria-hidden />
         </button>
@@ -264,7 +264,7 @@ export function DeliveryMapDialog({
               href={googleMapsDirectionsUrl(lat, lng)}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white hover:bg-green-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-on-primary hover:bg-primary-active focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <ExternalLink size={16} aria-hidden />
               {copy.google}

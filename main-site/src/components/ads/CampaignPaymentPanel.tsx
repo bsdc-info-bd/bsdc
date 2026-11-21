@@ -88,7 +88,7 @@ export function CampaignPaymentPanel({
         </Alert>
       ) : null}
 
-      <div className="rounded-xl bg-green-50 p-4 dark:bg-green-950/30">
+      <div className="rounded-xl bg-success-soft p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">
           {t('ads.builder.payNumber')}
         </p>

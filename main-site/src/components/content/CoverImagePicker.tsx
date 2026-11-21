@@ -90,7 +90,7 @@ export function CoverImagePicker({
         )}
 
         {uploading ? (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 text-xs font-medium text-white">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-scrim/40 text-xs font-medium text-white">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             {t('compose.cover.uploading')}
           </div>
@@ -150,7 +150,7 @@ export function CoverImagePicker({
               }}
               className={cn(
                 'h-12 w-16 overflow-hidden rounded-lg border-2',
-                candidate.url === value ? 'border-brand' : 'border-line hover:border-brand',
+                candidate.url === value ? 'border-primary' : 'border-border hover:border-primary',
               )}
             >
               <img

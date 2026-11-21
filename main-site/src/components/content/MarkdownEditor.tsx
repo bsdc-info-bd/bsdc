@@ -255,14 +255,14 @@ export function MarkdownEditor({
       <div
         className={cn(
           'overflow-hidden rounded-xl border border-border bg-bg',
-          'focus-within:border-brand focus-within:ring-1 focus-within:ring-brand',
+          'focus-within:border-primary focus-within:ring-1 focus-within:ring-primary',
         )}
       >
         <div
           role="toolbar"
           aria-label={t('compose.editor.toolbar')}
           aria-controls={fieldId}
-          className="flex flex-wrap items-center gap-0.5 border-b border-line bg-surface-2 px-1 py-1"
+          className="flex flex-wrap items-center gap-0.5 border-b border-border bg-surface-2 px-1 py-1"
         >
           {tools.map((tool) => (
             <button
@@ -285,7 +285,7 @@ export function MarkdownEditor({
 
           {uploadImage ? (
             <>
-              <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
               <input
                 ref={fileRef}
                 type="file"

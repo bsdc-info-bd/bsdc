@@ -26,6 +26,57 @@ working, wired-up features — never scaffolding for its own sake.
 | 19  | PWA, i18n, Android, performance                 | Done   |
 | 20  | Verification, audit and launch                  | Done   |
 
+## Response 26 scope (delivered)
+
+The colour system was audited and found to be lying in three ways, each now held
+by a gate that measures rather than pattern-matches.
+
+- **Two thirds of the translucent colour utilities emitted no CSS at all.**
+  Colours were declared as the bare string `var(--bsdc-x)`, and Tailwind v3 has
+  to parse a colour to apply an opacity modifier, so `bg-primary/10`,
+  `bg-warn/10`, `border-border/70` and 66 more compiled to nothing — no error,
+  no fallback, no rule. Measured against the built stylesheet with the colour
+  functions swapped back to bare strings: of 86 colour-with-alpha utilities in
+  `src`, 69 emitted no rule; after the fix, 0. `token(name)` in
+  `tailwind.config.ts` now answers `opacityValue` with
+  `color-mix(in srgb, var(--bsdc-x) N%, transparent)`, and it answers all three
+  shapes Tailwind sends (`undefined`, a number, and the `<alpha-value>` /
+  `var(--tw-*-opacity)` placeholder path) inside `calc(… * 100%)`, because a
+  bare number there is invalid CSS and a missed shape ships `NaN%`.
+- **White-on-brand failed in dark mode.** The palette was a raw Tailwind ramp and
+  a ramp inverts with the theme, so white on `bg-green-700` read 6.4:1 by day
+  and 2.04:1 by night; `--bsdc-danger` 2.77, `--bsdc-blue` 2.82, `text-warn` on
+  a light surface 2.16. Fixed with semantic tokens rather than dark hexes at 60
+  call sites: on-fill inks (`on-primary`, `on-danger`, `on-blue`, `on-hero`),
+  `*-text` pairs for colour-as-font, `success-soft`/`danger-soft`/`warn-soft` for
+  status-as-background, plus `selection`, `scrim` and `hero-*`; `.bsdc-hero`
+  carries the hero gradient and its own ink.
+- **The components spoke a vocabulary this repository does not define.** 61
+  utilities named a colour the theme never had (`border-line` ×21, `text-ink-2`,
+  `text-foreground`, `bg-brand-soft`, `text-body-sm`), and two more used an alpha
+  modifier off `theme.opacity` (`bg-scrim/92`, `bg-green-500/12`). Tailwind emits
+  no rule for either class of mistake. All are now real tokens.
+
+`scripts/contrast-audit.mjs` (new, 48 advisory findings reported and not gated)
+parses both theme blocks, the config's colour map and every class literal in
+`main-site/src`, then measures certain pairs, `dark:` supersession, 24 token
+floors, undefined utility names, off-scale alphas and off-token palette use. It
+refuses to report success while measuring too little, which caught it three
+times during development, and every new check was proven by planting a known-bad
+string. `node scripts/audit.mjs` now reads its verdict (F-17), and F-22–F-25
+hold the colour-function shape, the utility vocabulary, the hardcoded-hex
+allowlist with a per-file cap, and the design-system import rule. CI runs the
+audit for `main-site`. `design-system/color.ts` (new, 10 tests) gives the few APIs
+that cannot take `var()` a token-reading path, and picks an advertiser's CTA ink
+by measured contrast instead of assuming white.
+
+Raw Tailwind-palette classes in `main-site/src/**/*.tsx`: 45 → 0. Dead colour
+utilities: 61 → 0. Alpha utilities emitting nothing: 69 → 0. The launch audit is
+142 passed / 0 failed; the full gate set (tsc, functions tsc, eslint, prettier,
+1327 tests, build with 16 prerendered routes, 142.5 kB gz eager JS,
+sql-schema-check 0/130, db:prove 73/73) is green. Lighthouse and the Android
+toolchain are not runnable in this environment and were not claimed.
+
 ## Response 1 scope (delivered)
 
 - Monorepo skeleton: 14 web app folders, the Android shell folder and the

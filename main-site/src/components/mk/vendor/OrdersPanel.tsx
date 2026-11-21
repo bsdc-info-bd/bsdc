@@ -100,7 +100,7 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
               onClick={() => setFilter(status)}
               className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium transition ${
                 active
-                  ? 'border-green-700 bg-green-700 text-white'
+                  ? 'border-primary bg-primary text-on-primary'
                   : 'border-border bg-surface text-text hover:bg-surface-2'
               }`}
             >

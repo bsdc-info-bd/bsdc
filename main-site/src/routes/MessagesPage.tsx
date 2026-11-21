@@ -389,7 +389,7 @@ export default function MessagesPage() {
                   'fab-tap rounded-full border px-3 py-1 text-xs',
                   inbox.filter === filter && !showSaved
                     ? 'border-green-700 bg-green-700/10 font-semibold'
-                    : 'border-line bg-surface',
+                    : 'border-border bg-surface',
                 )}
                 onClick={() => {
                   setShowSaved(false);
@@ -406,7 +406,7 @@ export default function MessagesPage() {
                 'fab-tap flex items-center gap-1 rounded-full border px-3 py-1 text-xs',
                 showSaved
                   ? 'border-green-700 bg-green-700/10 font-semibold'
-                  : 'border-line bg-surface',
+                  : 'border-border bg-surface',
               )}
               onClick={() => setShowSaved((open) => !open)}
             >
@@ -416,7 +416,7 @@ export default function MessagesPage() {
           </div>
 
           {searchAll ? (
-            <div className="mt-3 rounded-card border border-line bg-surface p-3">
+            <div className="mt-3 rounded-card border border-border bg-surface p-3">
               <label className="relative block">
                 <span className="fab-sr-only">{t('chat.searchAll')}</span>
                 <input

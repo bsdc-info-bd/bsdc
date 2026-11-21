@@ -98,7 +98,7 @@ export default function AdminPluginsPage() {
                         <p className="mt-1 font-mono text-2xs text-muted">{plugin.key}</p>
 
                         {plugin.blockedBy.length > 0 ? (
-                          <p className="mt-1 text-xs text-warn">
+                          <p className="mt-1 text-xs text-warn-text">
                             {t('admin.plugins.blockedBy', { keys: plugin.blockedBy.join(', ') })}
                           </p>
                         ) : null}

@@ -1896,25 +1896,167 @@ check(
   },
 );
 
-check('F-17', 'Performance', 'Blue that renders words clears the contrast floor', () => {
-  // #1877f2 on our surface is 3.9:1. The fill token stays for artwork; text
-  // uses --bsdc-blue-text, which measures 6.1:1 on the same background.
-  const base = read('main-site/src/styles/base.css');
-  const tailwind = read('main-site/tailwind.config.ts');
-  const offenders = shLines(
-    `grep -rn "text-blue[^-a-zA-Z]" main-site/src --include=*.tsx | grep -v "text-blue-text" | head -10`,
-  );
+check(
+  'F-17',
+  'Performance',
+  'Every colour pairing the interface paints clears the contrast floor',
+  () => {
+    // A checkpoint that greps for a CSS custom property can only ever confirm the
+    // spelling. Contrast is arithmetic between two resolved colours, and the two
+    // themes resolve the same token to opposite ends of the ramp, so the floor is
+    // measured by scripts/contrast-audit.mjs against base.css and every class
+    // string in main-site — and this checkpoint reads its verdict rather than a
+    // pattern it hopes to see.
+    const out = sh('node scripts/contrast-audit.mjs --json');
+    const report = JSON.parse(out);
+    const shown = report.certain
+      .slice(0, 4)
+      .map((o) => `${o.file}:${o.line} ${o.theme} ${o.foreground}/${o.background} ${o.ratio}:1`);
+    return {
+      ok: report.ok === true,
+      evidence: report.ok
+        ? `${report.measured} pair(s) measured in both themes; ${report.certain.length} certain and ${report.tokenFails.length} token-level floor(s) clear, ${report.advisory.length} listed as advisory`
+        : `${report.certain.length} pairing(s) below AA: ${shown.join(' | ') || report.tokenFails.map((t) => `${t.label} ${t.theme} ${t.ratio}`).join(' | ')}`,
+    };
+  },
+);
+
+check(
+  'F-22',
+  'Performance',
+  'A token colour can carry an alpha, so bg-x/10 compiles instead of vanishing',
+  () => {
+    // Colors written as a bare `var(--bsdc-x)` string cannot receive Tailwind's
+    // opacity modifier: no rule is emitted, the utility is inert, and every
+    // wash, tint and scrim border it stood for renders as nothing. Each colour
+    // must therefore go through the helper that resolves alpha with
+    // color-mix(). Checked structurally, because the failure is invisible in a
+    // screenshot of a component that simply never got its background.
+    const tailwind = read('main-site/tailwind.config.ts');
+    const palette = tailwind.slice(
+      tailwind.indexOf('const themeColors'),
+      tailwind.indexOf('const config: Config'),
+    );
+    const bare = (palette.match(/:\s*'var\(--bsdc-[a-z0-9-]+\)'/g) ?? []).slice(0, 6);
+    const usesHelper = (palette.match(/:\s*token\('/g) ?? []).length;
+    return {
+      ok: bare.length === 0 && usesHelper > 20,
+      evidence:
+        bare.length === 0
+          ? `${usesHelper} colour(s) declared through token(), which answers with color-mix() when an alpha is asked for`
+          : `declared as a bare var(), so /NN on it emits nothing: ${bare.join(', ')}`,
+    };
+  },
+);
+
+check('F-23', 'Performance', 'No component paints a colour the theme does not define', () => {
+  // `text-foreground`, `border-line`, `bg-brand-soft`: the vocabulary of a
+  // different palette. Tailwind emits no rule, the class is inert, and the
+  // element inherits whatever was already there — which reads as restraint in
+  // a screenshot review and is a bug. The contrast audit resolves every colour
+  // utility against the real theme, so the same run reports them.
+  const report = JSON.parse(sh('node scripts/contrast-audit.mjs --json'));
+  const dead = (report.dead ?? []).concat(report.deadAlpha ?? []);
   return {
-    ok:
-      base.includes('--bsdc-blue-text') &&
-      tailwind.includes("text: 'var(--bsdc-blue-text)'") &&
-      offenders.length === 0,
+    ok: dead.length === 0 && (report.offToken ?? []).length === 0,
     evidence:
-      offenders.length === 0
-        ? 'text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders'
-        : offenders.join(' | '),
+      dead.length === 0 && (report.offToken ?? []).length === 0
+        ? 'every colour utility resolves to a token that swaps with the theme, and every alpha modifier is on the scale'
+        : `${dead.length} utility name(s) resolve to nothing, ${
+            (report.offToken ?? []).length
+          } raw palette colour(s): ${dead
+            .slice(0, 4)
+            .map((d) => `${d.file}:${d.line} ${d.utility}`)
+            .join(' | ')}`,
   };
 });
+
+check('F-24', 'Performance', 'No component paints a hex that no theme can swap', () => {
+  // The rule the design brief states outright: components name tokens, never
+  // hex. `scripts/contrast-audit.mjs` enforces the palette side of that, and
+  // this enforces the literal side, over exactly the grep the brief asks for.
+  // What is allowed here is a constraint of an API rather than a preference,
+  // so the list should shrink as those APIs improve and must not grow
+  // because a hex happened to be convenient.
+  // The exemption is capped per file, not merely granted to it: an allowlist of
+  // names would let a sixth Google colour, or a stray hex added beside a
+  // legitimate one, pass unseen. Each number is what that file holds today, so
+  // the list can only shrink, and a file that wants one more literal has to
+  // change this line and say why.
+  const ALLOW = {
+    // Third-party brand marks. Google's four colours and Apple's are the
+    // sign-in buttons' identity; restyling them is a policy violation, not a
+    // design choice, and they are identical in both themes by requirement.
+    'main-site/src/components/auth/OAuthButtons.tsx': 5,
+    // A Canvas 2D context takes a string it paints immediately and knows
+    // nothing about — no cascade, no custom properties, no theme.
+    'main-site/src/lib/media/edit.ts': 1,
+    // The helper that reads a token back out for those APIs. Its fallbacks
+    // are the only literals the rest of the app leans on, and they are
+    // exercised by colour.test.tsx.
+    'main-site/src/design-system/color.ts': 3,
+  };
+  const isProse = (line) => {
+    const code = line.slice(line.indexOf(':') + 1).trim();
+    return (
+      code.startsWith('//') || code.startsWith('/*') || code.startsWith('*') || code.startsWith('`')
+    );
+  };
+  const lines = shLines(
+    `grep -rn "#[0-9a-fA-F]\\{3,8\\}" main-site/src --include=*.tsx --include=*.ts || true`,
+  )
+    .filter((line) => !/\.test\.tsx?:/.test(line))
+    // tokenColor(token, '#rrggbb') names a hex as the last resort behind a
+    // token read, so the token stays the source of truth.
+    .filter((line) => !line.includes('tokenColor('))
+    // Prose that quotes a hex while explaining something is not a component
+    // painting a colour.
+    .filter((line) => !isProse(line));
+  const byFile = new Map();
+  for (const line of lines)
+    byFile.set(line.split(':')[0], (byFile.get(line.split(':')[0]) ?? 0) + 1);
+  const hits = lines.filter((line) => !(line.split(':')[0] in ALLOW));
+  const overCap = Object.entries(ALLOW).filter(([file, cap]) => (byFile.get(file) ?? 0) > cap);
+  return {
+    ok: hits.length === 0 && overCap.length === 0,
+    evidence:
+      hits.length > 0
+        ? hits.slice(0, 5).join(' | ')
+        : overCap.length > 0
+          ? overCap
+              .map(([f, c]) => `${f} holds ${byFile.get(f)} literals against a cap of ${c}`)
+              .join(' | ')
+          : `every other colour in the app is a token; ${[...byFile].reduce((n, [, c]) => n + c, 0)} literal(s) across ${Object.keys(ALLOW).length} exempt file(s), each at or under its recorded cap`,
+  };
+});
+
+check(
+  'F-25',
+  'Performance',
+  'A design-system module does not reach back through its own barrel',
+  () => {
+    // `design-system/color.ts` is called from the theme store, and the barrel that
+    // re-exports it also re-exports `ThemeToggle`, which reads that store. Routing
+    // the helper through the barrel would close a cycle — which bundles without
+    // complaint and then hands `undefined` to whichever module loses the race, so
+    // the failure shows up as a blank swatch three screens away from the cause.
+    // The rule is therefore structural, and this is what keeps it structural:
+    // nothing inside the design system may import the design system barrel.
+    const offenders = shLines(
+      `grep -rn "from '@/design-system'" main-site/src/design-system --include=*.ts --include=*.tsx || true`,
+    ).filter((line) => !/design-system\/index\.ts/.test(line));
+    const stale = shLines(
+      `grep -rln "from '@/lib/color'" main-site/src --include=*.ts --include=*.tsx || true`,
+    );
+    return {
+      ok: offenders.length === 0 && stale.length === 0,
+      evidence:
+        offenders.length === 0 && stale.length === 0
+          ? 'colour helpers are imported by path; no self-import through the barrel'
+          : `barrel self-imports: ${offenders.slice(0, 3).join(' | ')}${stale.length ? `; stale @/lib/color in ${stale.join(', ')}` : ''}`,
+    };
+  },
+);
 
 check(
   'F-18',

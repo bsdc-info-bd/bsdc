@@ -174,10 +174,10 @@ function EventCard({
         <div className="flex flex-wrap items-start gap-4">
           <div
             aria-hidden="true"
-            className="flex w-14 shrink-0 flex-col items-center rounded-xl bg-brand-soft py-2 text-center"
+            className="flex w-14 shrink-0 flex-col items-center rounded-xl bg-primary/10 py-2 text-center"
           >
-            <span className="text-xl font-bold leading-none text-brand-strong">{dayNumber}</span>
-            <span className="mt-1 text-[11px] font-semibold uppercase text-brand-strong">
+            <span className="text-xl font-bold leading-none text-primary">{dayNumber}</span>
+            <span className="mt-1 text-[11px] font-semibold uppercase text-primary">
               {monthName}
             </span>
           </div>

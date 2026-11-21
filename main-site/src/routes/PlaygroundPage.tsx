@@ -178,7 +178,7 @@ export default function PlaygroundPage() {
                     '*',
                   )
                 }
-                className="mt-3 h-96 w-full rounded-lg border border-line bg-white"
+                className="mt-3 h-96 w-full rounded-lg border border-border bg-white"
               />
             )}
           </Card>

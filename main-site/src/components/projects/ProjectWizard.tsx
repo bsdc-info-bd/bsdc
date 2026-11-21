@@ -273,7 +273,7 @@ export function ProjectWizard({
                 />
               </div>
             ) : (
-              <div className="flex aspect-[16/7] items-center justify-center bg-gradient-to-br from-green-900 to-green-700 text-white">
+              <div className="flex aspect-[16/7] items-center justify-center bg-gradient-to-br from-hero-from to-hero-via text-on-hero">
                 <Rocket size={34} aria-hidden="true" />
               </div>
             )}

@@ -24,7 +24,7 @@ export function StarRating({
         const icon = (
           <Star
             size={size}
-            className={filled ? 'fill-amber-400 text-amber-400' : 'text-muted'}
+            className={filled ? 'fill-rating text-rating' : 'text-muted'}
             aria-hidden
           />
         );

@@ -24,7 +24,9 @@
     "test:browser": "npm run build && node scripts/browser/smoke.mjs",
     "test:corporate-browser": "node scripts/browser/corporate-smoke.mjs",
     "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs",
-    "lighthouse": "node ../scripts/lighthouse.mjs"
+    "lighthouse": "node ../scripts/lighthouse.mjs",
+    "contrast": "node ../scripts/contrast-audit.mjs",
+    "contrast:strict": "node ../scripts/contrast-audit.mjs --strict"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

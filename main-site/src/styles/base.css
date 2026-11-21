@@ -34,18 +34,62 @@
   --bsdc-green-300: #74c69d;
   --bsdc-green-200: #52b788;
 
-  /* The brand blue, for fills, borders and the gradient mark. */
+  /* The brand blue, for artwork, borders and the gradient mark. */
   --bsdc-blue: #1877f2;
   --bsdc-blue-soft: #e7f0fe;
   /* The same blue for text: darker, because #1877f2 on this surface is 3.9:1
      and 4.5:1 is the floor for body copy (WCAG 2.2 AA, 1.4.3). */
   --bsdc-blue-text: #1461c9;
+  /* A blue a label can sit ON. White on #1877f2 is 4.23:1 — short of the
+     floor by a hair, so the fill darkens to the same blue the text uses. */
+  --bsdc-blue-fill: #1461c9;
+  --bsdc-on-blue: #ffffff;
   --bsdc-danger: #d9363e;
+  /* Danger as a fill and the ink that reads on it. White on #d9363e is
+     4.62:1 and holds; the dark theme's lighter coral does not take white. */
+  --bsdc-on-danger: #ffffff;
+  /* Danger as a word, not a fill: #d9363e on a card is 4.27:1. */
+  --bsdc-danger-text: #c22b33;
   --bsdc-warn: #e5a50a;
+  /* Status, as a pair: an ink and a wash that belong together.
+     The green ramp cannot carry these meanings, because the ramp INVERTS with
+     the theme — `bg-green-900 text-green-800` is a dark chip with a light
+     label in light mode and, once the ramp flips, a pale chip with a
+     near-white label in dark. Status is named by what it means, not by a
+     shade number, and each theme supplies both halves. */
+  --bsdc-success: #1b4332;
+  --bsdc-success-soft: #e4f0e9;
+  --bsdc-danger-soft: #fbe9ea;
+  --bsdc-warn-soft: #fdf3d9;
+  /* Warn as a word: #e5a50a on white is 2.16:1, so the text token is the same
+     hue pushed down until it reads. */
+  --bsdc-warn-text: #7a5600;
   --bsdc-online: #31a24c;
+  /* The brand fill, and the ink on it. A fill that carries words has to own
+     its ink, because a ramp that inverts with the theme inverts the ratio. */
+  --bsdc-primary: #2d6a4f;
+  --bsdc-primary-hover: #245741;
+  --bsdc-primary-active: #1b4332;
+  --bsdc-on-primary: #ffffff;
+  /* A wash over photography and media, in both themes: a scrim is a scrim. */
+  --bsdc-scrim: #05140f;
+  /* Stars, ratings, the one gold the interface allows itself. */
+  --bsdc-rating: #b45309;
   /* Message bubbles keep white text legible in both color schemes. */
   --bsdc-chat-outgoing: #245d44;
   --bsdc-chat-outgoing-hover: #194c36;
+
+  /* The hero band on list pages: a brand gradient with an ink of its own, so
+     the label is legible at whichever end of the ramp it happens to sit. */
+  --bsdc-hero-from: #12291e;
+  --bsdc-hero-via: #1b4332;
+  --bsdc-hero-to: #2d6a4f;
+  --bsdc-on-hero: #ffffff;
+
+  /* Selected text. The green wash is the brand; the ink flips so the words
+     survive it — white on #52b788 measured 2.47:1. */
+  --bsdc-selection-bg: #b7e4c7;
+  --bsdc-selection-ink: #081c15;
 
   --bsdc-ring: var(--bsdc-green-500);
   --bsdc-app-bar-h: 56px;
@@ -72,9 +116,36 @@
   --bsdc-blue: #4e9bff;
   --bsdc-blue-soft: #15263c;
   --bsdc-blue-text: #4e9bff;
+  --bsdc-blue-fill: #4e9bff;
+  --bsdc-on-blue: #041023;
   --bsdc-danger: #ff6b70;
+  /* The dark theme's coral is light enough to take a dark ink and nothing
+     else: white on #ff6b70 measures 2.77:1. */
+  --bsdc-on-danger: #2b0508;
+  --bsdc-danger-text: #ff8a8e;
   --bsdc-warn: #f4c04b;
+  --bsdc-success: #74c69d;
+  --bsdc-success-soft: #16281f;
+  --bsdc-danger-soft: #2a1418;
+  --bsdc-warn-soft: #2a2410;
+  --bsdc-warn-text: #f4c04b;
   --bsdc-online: #42b72a;
+  /* Dark mode runs the hero the other way up: a mint ramp under a dark ink. */
+  --bsdc-hero-from: #52b788;
+  --bsdc-hero-via: #74c69d;
+  --bsdc-hero-to: #b7e4c7;
+  --bsdc-on-hero: #081c15;
+  /* The mint this theme wants as its brand fill, with an ink dark enough to
+     read on it — the inverse of light mode, and the reason the ink is a token
+     rather than a literal `text-white` in sixty-one places. */
+  --bsdc-primary: #74c69d;
+  --bsdc-primary-hover: #8fd4b1;
+  --bsdc-primary-active: #b7e4c7;
+  --bsdc-on-primary: #081c15;
+  --bsdc-scrim: #05140f;
+  --bsdc-rating: #f4c04b;
+  --bsdc-selection-bg: #2d6a4f;
+  --bsdc-selection-ink: #e9f2ed;
 
   --bsdc-ring: var(--bsdc-green-200);
   color-scheme: dark;
@@ -141,8 +212,8 @@
   }
 
   ::selection {
-    background: var(--bsdc-green-200);
-    color: #ffffff;
+    background: var(--bsdc-selection-bg);
+    color: var(--bsdc-selection-ink);
   }
 
   img,

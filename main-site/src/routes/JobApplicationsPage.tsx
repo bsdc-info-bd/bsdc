@@ -370,7 +370,7 @@ export default function JobApplicationsPage() {
                 type="button"
                 aria-pressed={filter === 'all'}
                 onClick={() => setFilter('all')}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium ${filter === 'all' ? 'border-green-700 bg-green-700 text-white' : 'border-border text-text hover:bg-surface-2'}`}
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium ${filter === 'all' ? 'border-primary bg-primary text-on-primary' : 'border-border text-text hover:bg-surface-2'}`}
               >
                 {t('jobs.applications.all')} · {formatNumber(queue.applications.length, language)}
               </button>
@@ -380,7 +380,7 @@ export default function JobApplicationsPage() {
                   type="button"
                   aria-pressed={filter === status}
                   onClick={() => setFilter(status)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${filter === status ? 'border-green-700 bg-green-700 text-white' : 'border-border text-text hover:bg-surface-2'}`}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium ${filter === status ? 'border-primary bg-primary text-on-primary' : 'border-border text-text hover:bg-surface-2'}`}
                 >
                   {t(`jobs.statuses.${status}`)} · {formatNumber(counts.get(status) ?? 0, language)}
                 </button>

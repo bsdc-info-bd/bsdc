@@ -166,7 +166,7 @@ export function CommentForm({
       />
 
       {image === null ? null : (
-        <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2 p-2">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-2">
           <div className="flex items-start gap-2">
             <img
               src={image.thumbUrl}
@@ -175,7 +175,7 @@ export function CommentForm({
               height={96}
               loading="lazy"
               decoding="async"
-              className="h-24 w-24 shrink-0 rounded-lg border border-line object-cover"
+              className="h-24 w-24 shrink-0 rounded-lg border border-border object-cover"
             />
             <div className="min-w-0 flex-1">
               <TextField

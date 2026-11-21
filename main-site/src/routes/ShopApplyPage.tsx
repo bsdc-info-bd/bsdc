@@ -532,9 +532,9 @@ function Shell({
 }) {
   return (
     <div className="fab-container max-w-3xl py-6 sm:py-10">
-      <header className="mb-6 rounded-3xl bg-gradient-to-br from-green-700 to-green-500 p-6 text-white shadow-lg">
+      <header className="mb-6 rounded-3xl bsdc-hero p-6 shadow-lg">
         <h1 className="text-2xl font-bold sm:text-3xl">{copy.applyTitle}</h1>
-        <p className="mt-2 max-w-xl text-sm text-white/90">{copy.applyLead}</p>
+        <p className="mt-2 max-w-xl text-sm text-on-hero/90">{copy.applyLead}</p>
       </header>
       {children}
     </div>

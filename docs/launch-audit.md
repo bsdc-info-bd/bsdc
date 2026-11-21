@@ -180,6 +180,54 @@ workflow:
     directly under the page's `h1`, which is a heading-order failure on
     `/marketplace` — the one page whose first card is an empty state. It now
     renders an `h2` unless a caller asks for `h3`.
+16. **Two thirds of the translucent token colours emitted no CSS at all.** Every
+    colour was declared as the string `var(--bsdc-x)`, and Tailwind v3 can only
+    apply an opacity modifier to a colour it can parse, so `bg-primary/10`,
+    `bg-warn/10`, `border-border/70` and 64 more utilities compiled to nothing —
+    no error, no fallback, no rule in the output. 103 of the 170 alpha utilities
+    in the app resolved to Tailwind's stock palette or to nothing, which is every
+    wash, tint, scrim and separator in the design. `token()` in
+    `tailwind.config.ts` now answers the runtime's `opacityValue` with
+    `color-mix(in srgb, var(--bsdc-x) N%, transparent)`, verified against the
+    built stylesheet rather than the build's exit code, since a missing rule
+    never fails a build. F-22 holds the shape of the colour map in place.
+17. **White-on-brand failed in dark mode, not in light.** The palette was written
+    as a raw Tailwind ramp — `bg-green-700`, `text-green-800` — and a ramp
+    inverts with the theme, so the brand fill that white text sits on at 6.4:1 by
+    day became `#74c69d` at night: **2.04:1**. The same inversion put white on
+    `--bsdc-danger` at 2.77:1 and on `--bsdc-blue` at 2.82:1, and `text-warn` on
+    a light surface was 2.16:1, because an amber that is legible as a fill is not
+    legible as a font. The fix is not a darker literal at 60 call sites but the
+    tokens that were missing: an on-fill ink for every fill (`on-primary`,
+    `on-danger`, `on-blue`, `on-hero`), a `*-text` pair for colour as a font, and
+    `success-soft` / `danger-soft` / `warn-soft` for status as a background, so a
+    component states a role and the theme decides the shade. `scripts/contrast-audit.mjs`
+    now measures both themes and every one of those floors, so the inversion
+    cannot come back as a "dark mode tweak".
+18. **The components spoke the vocabulary of a palette this repository does not
+    use.** `text-foreground`, `border-line`, `text-ink-2`, `text-body-sm`,
+    `bg-brand-soft` — 61 of them, 26 occurrences of `bg-primary` alone at one
+    count. Tailwind emits no rule for a utility whose colour the theme does not
+    define, so those classes were inert in production: the text inherited
+    whatever was already there and the border never appeared. They are now the
+    tokens that do exist, and the audit refuses any colour utility that does not
+    resolve to one (F-23).
+19. **A hardcoded-colour rule that could not be satisfied was satisfied.** The
+    design brief asks that no hex appear outside the design system; the grep said
+    twelve places disagreed. Four of them were not style choices but API
+    constraints, and they are now named as such rather than hidden: third-party
+    brand marks (Google's four colours and Apple's are the sign-in buttons'
+    identity, and restyling them is a policy violation), a Canvas 2D context that
+    paints a string it knows nothing else about, and `lib/color.ts`, the one
+    module allowed to hold a fallback because its whole job is reading a token
+    back out for APIs that cannot take `var()`. Everything else moved onto
+    tokens — including `Logo.tsx`, whose docstring claimed the mark "follows the
+    current theme" while hardcoding four hexes; it now paints from
+    `--bsdc-green-700`/`-800`/`-200` and `--bsdc-on-primary`, which resolve to
+    exactly the same values in light mode and to the inverted ramp in dark. An
+    advertiser's accent colour, previously assumed to want white text, is measured
+    instead (`readableInkOn`), because a CTA typed as pale cream was shipping
+    white-on-cream. F-24 keeps the allowlist from growing.
 
 ### Findings from the last full pass
 
@@ -382,29 +430,33 @@ Regenerate with `node scripts/audit.mjs --markdown`.
 
 ### Performance
 
-| #    | Checkpoint                                                             | Result | Evidence                                                                                                                     |
-| ---- | ---------------------------------------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere         | Pass   | main-site 157 KB                                                                                                             |
-| F-02 | Routes are code split, so a visitor pays only for the page             | Pass   | React.lazy per route in main-site/src/App.tsx                                                                                |
-| F-03 | Field measurement is collected and stored                              | Pass   | a hand-written collector, a beacon endpoint and the web_vitals table                                                         |
-| F-04 | Speed is reported at the 75th percentile with its sample count         | Pass   | percentile_cont(0.75) in vitals_by_route, with samples returned beside it                                                    |
-| F-05 | Build weight is recorded on every push, next to the field data         | Pass   | CI posts the gzipped size of each main-site push into bundle_sizes                                                           |
-| F-06 | Images below the fold are loaded lazily                                | Pass   | 12 image sites opt into lazy loading                                                                                         |
-| F-07 | No render-blocking font or stylesheet is fetched from a third party    | Pass   | system font stack; nothing is fetched from a font CDN                                                                        |
-| F-08 | Query caching is configured rather than left at the defaults           | Pass   | React Query is given explicit staleTime, gcTime, retry and focus behaviour                                                   |
-| F-09 | No source map is shipped to production                                 | Pass   | none in any dist/                                                                                                            |
-| F-10 | Stylesheets stay small enough to inline-parse quickly                  | Pass   | main-site 18 KB                                                                                                              |
-| F-11 | The stylesheet is inlined, so nothing blocks the first paint           | Pass   | prerender inlines every stylesheet the template links into every page                                                        |
-| F-12 | Each prerendered page preloads the chunk that renders it               | Pass   | 16 routes name a real route component and are preloaded                                                                      |
-| F-13 | The first paint is the page, not a placeholder                         | Pass   | 7 routes carry the copy a reader sees first: /about, /guidelines, /contact, /playground, /privacy, /terms, /account-deletion |
-| F-14 | Only the visitor's language is downloaded                              | Pass   | both locale bundles are dynamic imports, fetched one at a time                                                               |
-| F-15 | The router does not pull a validation library onto the first paint     | Pass   | the router guard and the environment check import no schema library; zod ships only with the forms that use it               |
-| F-16 | The footer starts below the fold, so its arrival cannot shift the page | Pass   | main reserves a viewport height whenever the page has a footer                                                               |
-| F-17 | Blue that renders words clears the contrast floor                      | Pass   | text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders                                                    |
-| F-18 | The font is preloaded and cached, not revalidated every visit          | Pass   | index.html preloads the Bangla face and \_headers marks /fonts/\* immutable for a year                                       |
-| F-19 | An empty state starts a section, not a skipped heading level           | Pass   | EmptyState renders an h2 by default; a page that needs h3 asks for it                                                        |
-| F-20 | The home page puts the feed before the sidebar on a phone              | Pass   | the rail follows the feed below the lg breakpoint and is skipped for layout until then                                       |
-| F-21 | A decorative animation does not keep the main thread awake             | Pass   | the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion                                      |
+| #    | Checkpoint                                                                    | Result | Evidence                                                                                                                                |
+| ---- | ----------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| F-01 | Initial JavaScript is inside the 250 KB gzip budget everywhere                | Pass   | main-site 157 KB                                                                                                                        |
+| F-02 | Routes are code split, so a visitor pays only for the page                    | Pass   | React.lazy per route in main-site/src/App.tsx                                                                                           |
+| F-03 | Field measurement is collected and stored                                     | Pass   | a hand-written collector, a beacon endpoint and the web_vitals table                                                                    |
+| F-04 | Speed is reported at the 75th percentile with its sample count                | Pass   | percentile_cont(0.75) in vitals_by_route, with samples returned beside it                                                               |
+| F-05 | Build weight is recorded on every push, next to the field data                | Pass   | CI posts the gzipped size of each main-site push into bundle_sizes                                                                      |
+| F-06 | Images below the fold are loaded lazily                                       | Pass   | 12 image sites opt into lazy loading                                                                                                    |
+| F-07 | No render-blocking font or stylesheet is fetched from a third party           | Pass   | system font stack; nothing is fetched from a font CDN                                                                                   |
+| F-08 | Query caching is configured rather than left at the defaults                  | Pass   | React Query is given explicit staleTime, gcTime, retry and focus behaviour                                                              |
+| F-09 | No source map is shipped to production                                        | Pass   | none in any dist/                                                                                                                       |
+| F-10 | Stylesheets stay small enough to inline-parse quickly                         | Pass   | main-site 18 KB                                                                                                                         |
+| F-11 | The stylesheet is inlined, so nothing blocks the first paint                  | Pass   | prerender inlines every stylesheet the template links into every page                                                                   |
+| F-12 | Each prerendered page preloads the chunk that renders it                      | Pass   | 16 routes name a real route component and are preloaded                                                                                 |
+| F-13 | The first paint is the page, not a placeholder                                | Pass   | 7 routes carry the copy a reader sees first: /about, /guidelines, /contact, /playground, /privacy, /terms, /account-deletion            |
+| F-14 | Only the visitor's language is downloaded                                     | Pass   | both locale bundles are dynamic imports, fetched one at a time                                                                          |
+| F-15 | The router does not pull a validation library onto the first paint            | Pass   | the router guard and the environment check import no schema library; zod ships only with the forms that use it                          |
+| F-16 | The footer starts below the fold, so its arrival cannot shift the page        | Pass   | main reserves a viewport height whenever the page has a footer                                                                          |
+| F-17 | Every colour pairing the interface paints clears the contrast floor           | Pass   | node scripts/contrast-audit.mjs measures 1632 pair(s) across both themes; 0 certain failures, 0 token floors below AA                   |
+| F-18 | The font is preloaded and cached, not revalidated every visit                 | Pass   | index.html preloads the Bangla face and \_headers marks /fonts/\* immutable for a year                                                  |
+| F-19 | An empty state starts a section, not a skipped heading level                  | Pass   | EmptyState renders an h2 by default; a page that needs h3 asks for it                                                                   |
+| F-20 | The home page puts the feed before the sidebar on a phone                     | Pass   | the rail follows the feed below the lg breakpoint and is skipped for layout until then                                                  |
+| F-21 | A decorative animation does not keep the main thread awake                    | Pass   | the glow is a CSS keyframe animation on transform, stopped under prefers-reduced-motion                                                 |
+| F-22 | A token colour can carry an alpha, so `bg-x/10` compiles instead of vanishing | Pass   | every colour is declared through token(), which answers opacityValue with color-mix(); 86 of 86 alpha utilities emit a rule             |
+| F-23 | No component paints a colour the theme does not define                        | Pass   | 0 utilities name a colour the theme lacks and 0 use an alpha modifier off theme.opacity; the gate resolves both against the real config |
+| F-24 | No component paints a hex that no theme can swap                              | Pass   | the §11 grep is clean outside three named exceptions: third-party brand marks, a Canvas context, and lib/color.ts                       |
+| F-25 | A design-system module does not reach back through its own barrel             | Pass   | colour helpers are imported by path, not via the barrel that re-exports ThemeToggle, which reads the store that calls them              |
 
 ### Web delivery
 
