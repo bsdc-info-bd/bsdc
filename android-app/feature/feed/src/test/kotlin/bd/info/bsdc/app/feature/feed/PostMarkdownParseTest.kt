@@ -63,10 +63,9 @@ class PostMarkdownParseTest {
 
     @Test
     fun numberedItemsKeepTheNumberTheAuthorWrote() {
+        // Every item keeps the number the author wrote, gaps included: a list that silently
+        // renumbers "1, 3" into "1, 2" has changed what the steps were.
         assertEquals(
-            listOf(
-            // Every item is numbered as written, gaps included: a list that silently renumbers
-            // "1, 3" into "1, 2" has changed what the author said the steps were.
             listOf(
                 MarkdownBlock.Ordered(1, "plan"),
                 MarkdownBlock.Ordered(2, "cook"),
