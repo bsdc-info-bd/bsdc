@@ -74,9 +74,13 @@ of every route under the floor. The next run's numbers, which name the cause:
 | `/projects`   | over floor  | ~665 ms | 0.000 | 141 ms |
 
 The shape is the finding: **first paint is fast, layout is stable, the main
-thread is idle, and the largest element arrives about 2.7 s late**. That is a
-render-delay problem — content that cannot paint until a client round trip
-finishes — not a bytes problem, and no amount of image compression moves it.
+thread is idle, and the largest element arrives about 2.7 s late**. The phase
+breakdown the auditor now prints from the real payload says it in the tool's own
+words — `ttfb 114 ms, load delay ? ms, load time ? ms, render delay 1074 ms`, with
+the two _load_ phases absent because there is nothing to load. The largest element
+is text, and it is late because rendering is late. That is a render-delay problem —
+content that cannot paint until the client has hydrated it — not a bytes problem,
+and no amount of image compression moves it.
 `--strict` would additionally gate the §5.1 lab floors; it stays off in CI, since
 INP and TTFB are field measurements that a simulated lab run does not produce.
 
