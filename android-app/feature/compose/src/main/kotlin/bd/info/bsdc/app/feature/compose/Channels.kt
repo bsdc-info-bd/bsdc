@@ -77,7 +77,16 @@ sealed interface ChannelOption {
 /** A picker section: one group's channels, under the group's name. */
 data class ChannelOptionSection(val label: String, val options: List<ChannelOption>)
 
-/** Picker copy, in the language the member is reading. */
+/**
+ * Picker copy, in the language the member is reading.
+ *
+ * Every string here is the website's own, from `main-site/src/i18n/locales/{en,bn}.ts`:
+ * `compose.channelFeed`, the four `channels.reasons.*`, `compose.visibilityInChannelHint` and
+ * `channels.errors.privatePost`. That is not politeness. A member who is refused in a room reads the
+ * database's sentence in one client and the app's paraphrase in the other, and then has to work out
+ * whether they are two different rules or one rule in two voices — which is exactly the question
+ * parity should settle before the member has to ask it.
+ */
 data class ChannelPickerCopy(
     val feed: String,
     val readOnly: String,
@@ -87,6 +96,10 @@ data class ChannelPickerCopy(
     val inChannelHint: String,
     /** Why `private` is unavailable while a channel is chosen — one sentence, both languages. */
     val privateNeedsFeed: String,
+    /** Where a feed post goes, shown while no channel is picked. */
+    val feedHint: String,
+    /** Where a channel post goes, shown once one is picked. */
+    val groupHint: String,
 ) {
     fun reason(reason: ChannelBlockReason?): String = when (reason) {
         ChannelBlockReason.READ_ONLY -> readOnly
@@ -103,23 +116,29 @@ data class ChannelPickerCopy(
          */
         fun forLanguage(bn: Boolean): ChannelPickerCopy = if (bn) {
             ChannelPickerCopy(
-                feed = "ফিড",
-                readOnly = "শুধু পড়া",
+                feed = "মূল ফিড",
+                readOnly = "পড়া-র জন্য",
                 notMember = "সদস্য নন",
-                archived = "সংরক্ষিত",
+                archived = "আর্কাইভ করা",
                 missing = "নেই",
-                inChannelHint = "চ্যানেলে পোস্ট করলে সবাই তা দেখবে, তাই «শুধু আমি» এখানে রাখা যায় না।",
-                privateNeedsFeed = "চ্যানেলের সঙ্গে «শুধু আমি» রাখা যাবে না — ফিড বা অনুসারী বেছে নিন।",
+                inChannelHint =
+                    "একটি চ্যানেল পোস্ট ঘরটি দেখতে পারা প্রত্যেকের কাছে দেখা যায়; এখানে «শুধু আমি» ব্যবহার করা যাবে না।",
+                privateNeedsFeed = "চ্যানেলের ভিতরে «শুধু আমি» ব্যবহার করা যাবে না; অন্য দেখার সেটিং বেছে নিন।",
+                feedHint = "এই পোস্টটি এটি দেখতে পারা প্রত্যেকের মূল ফিডে দেখা যাবে।",
+                groupHint = "এই পোস্টটি শুধু এই চ্যানেলে দেখা যাবে, গ্রুপ দেখতে পারা লোকদের কাছে।",
             )
         } else {
             ChannelPickerCopy(
-                feed = "Feed",
+                feed = "The main feed",
                 readOnly = "read-only",
                 notMember = "not a member",
                 archived = "archived",
                 missing = "missing",
-                inChannelHint = "A channel post is read by the whole room, so “only me” cannot be combined with one.",
-                privateNeedsFeed = "“Only me” cannot live in a channel — pick the feed or followers.",
+                inChannelHint =
+                    "A channel post is read by everyone who can read the room; “Only me” is not available here.",
+                privateNeedsFeed = "“Only me” cannot be used inside a channel; choose another visibility.",
+                feedHint = "This post appears in the main feed of everyone who can read it.",
+                groupHint = "This post appears only in this channel, for the people who can read the group.",
             )
         }
     }

@@ -1,12 +1,11 @@
 package bd.info.bsdc.app.feature.compose
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -213,11 +212,15 @@ fun MkAudienceRow(
                 onClick = onPickVisibility,
             )
         }
-        AnimatedVisibility(
-            visible = hasChannel || privateBlocked,
-            enter = expandVertically() + composableFadeIn(),
-            exit = shrinkVertically() + fadeOut(),
-        ) {
+        val hint = when {
+            privateBlocked -> copy.privateNeedsFeed
+            channel != null -> copy.groupHint
+            else -> copy.feedHint
+        }
+        // Cross-faded rather than swapped: this line is the composer answering "so who will read
+        // this?", and the answer changes under the member's thumbs as a room is picked. A hard text
+        // replacement reads as a flicker; a short crossfade reads as the sentence being re-typed.
+        Crossfade(targetState = hint, animationSpec = tween(180), label = "audienceHint") { line ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = if (privateBlocked) Icons.Rounded.WarningAmber else Icons.Rounded.Tune,
@@ -231,7 +234,7 @@ fun MkAudienceRow(
                 )
                 Spacer(Modifier.width(6.dp))
                 Text(
-                    text = if (privateBlocked) copy.privateNeedsFeed else copy.inChannelHint,
+                    text = line,
                     style = MaterialTheme.typography.labelSmall,
                     color = tokens.mutedText,
                 )
@@ -289,8 +292,9 @@ private fun MkAudienceChip(
 }
 
 internal fun visibilityLabel(visibility: ComposerVisibility, bn: Boolean): String = when (visibility) {
+    // The web's `compose.visibility.*`, word for word: one name for one audience.
     ComposerVisibility.PUBLIC -> if (bn) "সবাই" else "Everyone"
-    ComposerVisibility.FOLLOWERS -> if (bn) "অনুসারীরা" else "Followers"
+    ComposerVisibility.FOLLOWERS -> if (bn) "শুধু অনুসারীরা" else "Followers only"
     ComposerVisibility.PRIVATE -> if (bn) "শুধু আমি" else "Only me"
 }
 
