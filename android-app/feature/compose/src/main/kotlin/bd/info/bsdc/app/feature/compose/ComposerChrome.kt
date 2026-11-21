@@ -518,20 +518,10 @@ internal fun markdownNoteText(kind: MarkdownNoteKind, line: Int, bn: Boolean): S
     } else {
         "Line $line: the app styles three heading levels; deeper ones read as plain text."
     }
-    MarkdownNoteKind.ORDERED_LIST -> if (bn) {
-        "লাইন $line: সংখ্যা-তালিকা অ্যাপে তালিকা হিসেবে ধরা পড়ে না — «- » ব্যবহার করুন।"
-    } else {
-        "Line $line: numbered lists are not a list here; use “- ” instead."
-    }
     MarkdownNoteKind.TABLE -> if (bn) {
         "লাইন $line: টেবিল অ্যাপের রিডারে নেই — লাইনগুলো সাধারণ লেখা থাকবে।"
     } else {
         "Line $line: pipe tables are not part of this reader; the rows will stay plain text."
-    }
-    MarkdownNoteKind.TASK_ITEM -> if (bn) {
-        "লাইন $line: চেকবক্স তালিকা সাধারণ বুলেট হিসেবে দেখাবে।"
-    } else {
-        "Line $line: task items render as ordinary bullets here."
     }
     MarkdownNoteKind.EMPTY_HEADING -> if (bn) {
         "লাইন $line: হেডিংয়ের পর কিছু লেখা নেই।"

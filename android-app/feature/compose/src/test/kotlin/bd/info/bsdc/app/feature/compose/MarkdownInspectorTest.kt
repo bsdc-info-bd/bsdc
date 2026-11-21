@@ -87,11 +87,12 @@ class MarkdownInspectorTest {
     fun syntaxTheReaderHasNoBlockForIsNamed() {
         // Every line of the list is named: the reader shows no list at all, so a note on line 1 only
         // would leave the member fixing one row and still seeing plain text.
-        assertEquals(
-            listOf(MarkdownNoteKind.ORDERED_LIST to 1, MarkdownNoteKind.ORDERED_LIST to 2),
-            notes("1. first\n2. second"),
-        )
-        assertEquals(listOf(MarkdownNoteKind.TASK_ITEM to 1), notes("- [ ] buy milk"))
+        // Numbered items and task boxes used to be reported here. The reader learned both rules, so
+        // the strip must stay quiet about them: a note about syntax that now renders is a false alarm,
+        // and false alarms are how a warning strip stops being read at all.
+        assertTrue(notes("1. first\n2. second").isEmpty())
+        assertTrue(notes("- [ ] buy milk").isEmpty())
+        assertTrue(notes("+ plus bullet").isEmpty())
         assertEquals(listOf(MarkdownNoteKind.TABLE to 1), notes("| a | b |"))
         assertEquals(listOf(MarkdownNoteKind.EMPTY_HEADING to 1), notes("##   "))
         assertEquals(listOf(MarkdownNoteKind.IMAGE_WITHOUT_URL to 2), notes("look\n![no address]()"))
@@ -101,8 +102,8 @@ class MarkdownInspectorTest {
 
     @Test
     fun notesReadTopDown() {
-        val report = MarkdownInspector.analyze("| a | b |\n\n| a | b |\n1. x\n")
-        assertEquals(listOf(1, 3, 4), report.notes.map { it.line })
+        val report = MarkdownInspector.analyze("| a | b |\n\n| a | b |\nplain line\n")
+        assertEquals(listOf(1, 3), report.notes.map { it.line })
         assertEquals(2, report.notes.count { it.kind == MarkdownNoteKind.TABLE })
     }
 

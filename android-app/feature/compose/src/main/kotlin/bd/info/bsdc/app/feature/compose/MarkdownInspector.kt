@@ -4,10 +4,13 @@ package bd.info.bsdc.app.feature.compose
  * What the composer's Markdown is made of, and what the app's reader will not render.
  *
  * The editor is only half a promise: a member can write anything, but the post is *read* through
- * [bd.info.bsdc.app.feature.feed.PostMarkdownRenderer], whose grammar is deliberately small — three
- * heading levels, one kind of bullet, a quote, a fence, paragraphs. An editor that silently accepts
- * `####`, a table or an ordered list has written a cheque the reader cannot cash: the post looks right
- * in the composer and arrives as a wall of plain text.
+ * [bd.info.bsdc.app.feature.feed.parseMarkdownBlocks], whose grammar is deliberately small — three
+ * heading levels, bullets, numbered items, task boxes, a quote, a fence, paragraphs. An editor that
+ * silently accepts `####` or a pipe table has written a cheque the reader cannot cash: the post looks
+ * right in the composer and arrives as a wall of plain text.
+ *
+ * Numbered items and task boxes are not on that list any more. They were, which is why this file once
+ * warned about them; the reader learned both rules, so the warning went.
  *
  * So the inspector reads the body against the reader's own rules and says, before publishing, what
  * will render as-is and what will show as plain text. It is pure and total: no document is refused,
@@ -28,14 +31,8 @@ enum class MarkdownNoteKind {
     /** `####` and deeper: the reader styles three levels and treats the rest as a paragraph. */
     HEADING_TOO_DEEP,
 
-    /** `1.` items: the reader has no ordered list, so they read as plain paragraphs. */
-    ORDERED_LIST,
-
     /** A pipe table, which the reader has no block for. */
     TABLE,
-
-    /** `- [ ] x`, which the reader shows as a bullet whose text is "[ ] x". */
-    TASK_ITEM,
 
     /** A heading marker with nothing after it. */
     EMPTY_HEADING,
@@ -70,8 +67,6 @@ object MarkdownInspector {
     // marker — mirroring that is the point, and CommonMark's three-space limit is not what this app does.
     private val HEADING = Regex("""^\s*(#{1,3})\s+(.*)$""")
     private val DEEP_HEADING = Regex("""^\s*(#{4,})\s*(.*)$""")
-    private val ORDERED = Regex("""^\s{0,3}\d{1,9}[.)]\s+\S""")
-    private val TASK = Regex("""^\s{0,3}[-*+]\s+\[[ xX]]\s""")
     private val TABLE_ROW = Regex("""^\s*\|.*\|""")
     private val TABLE_DIVIDER = Regex("""^\s*\|?[\s:|-]{3,}\|?\s*$""")
     private val EMPTY_IMAGE = Regex("""!\[[^\]]*]\(\s*\)""")
@@ -117,12 +112,6 @@ object MarkdownInspector {
             }
             if (DEEP_HEADING.matches(line)) {
                 notes += MarkdownNote(MarkdownNoteKind.HEADING_TOO_DEEP, number)
-            }
-            if (ORDERED.matches(line)) {
-                notes += MarkdownNote(MarkdownNoteKind.ORDERED_LIST, number)
-            }
-            if (TASK.matches(line)) {
-                notes += MarkdownNote(MarkdownNoteKind.TASK_ITEM, number)
             }
             val looksLikeTable = TABLE_ROW.matches(line) || (line.contains('|') && TABLE_DIVIDER.matches(line))
             if (looksLikeTable) {
