@@ -217,21 +217,26 @@ function readLcpBreakdown(audits) {
   const nodes = [];
   const rows = [];
   for (const audit of candidates) collect(audit, nodes, rows);
-  return summarise(nodes, rows, ids);
+  return summarise(nodes, rows, ids, audits);
 }
 
-function summarise(nodes, rows, ids) {
+function summarise(nodes, rows, ids, audits) {
   const text = (value) => {
     if (typeof value === 'string') return value;
     if (value && typeof value === 'object') return String(value.text ?? value.value ?? '');
     return '';
   };
+  // Compared with spaces and case removed, so the label `Render delay`, the key
+  // `renderDelay` and a `{ type: 'text', text: 'Render delay' }` object all hit.
+  const norm = (value) =>
+    text(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
   const phase = (...labels) => {
+    const wanted = labels.map(norm);
     const row = rows.find((entry) =>
-      labels.some((label) =>
-        text(entry.phase ?? entry.label ?? entry.name)
-          .toLowerCase()
-          .includes(label),
+      wanted.some((label) =>
+        norm(entry.phase ?? entry.label ?? entry.name ?? entry.key).includes(label),
       ),
     );
     if (!row) return null;
@@ -239,7 +244,7 @@ function summarise(nodes, rows, ids) {
     // milliseconds (`ms`, `timing`) across versions. The magnitude test is
     // deliberate: a phase of 0.42 is 420 ms and a phase of 420 is 420 ms, and no
     // LCP phase is ever 0.42 ms.
-    const raw = row.numericValue ?? row.ms ?? row.timing ?? 0;
+    const raw = row.numericValue ?? row.duration ?? row.ms ?? row.timing ?? 0;
     return Math.round(raw > 100 ? raw : raw * 1000);
   };
   const element = nodes[0];
@@ -250,6 +255,21 @@ function summarise(nodes, rows, ids) {
     loadTime: phase('load time'),
     renderDelay: phase('render delay'),
     available: rows.length === 0 && !element ? ids : undefined,
+    // When nothing matched, the payload's own shape is the only honest next
+    // clue: this version has an `lcp-breakdown-insight` whose fields a reader
+    // written against documentation would keep missing. Dumping a fragment of
+    // what is actually there ends the guessing loop for whoever fixes it — the
+    // alternative is another committed guess and another red run.
+    raw:
+      rows.length === 0 && !element
+        ? ids
+            .map(
+              (id) =>
+                `${id}: ${JSON.stringify(audits[id]?.details ?? audits[id]?.displayValue ?? null)}`,
+            )
+            .join(' | ')
+            .slice(0, 900)
+        : undefined,
   };
 }
 
@@ -260,7 +280,18 @@ function walkInto(value, depth, nodes, rows) {
     return;
   }
   if (value.node && (value.node.snippet || value.node.selector)) nodes.push(value.node);
-  if (typeof value.numericValue === 'number' && (value.phase || value.label || value.name)) {
+  // Two field conventions carry these numbers: `phase` with `numericValue` in
+  // seconds, and `key` with `duration` in milliseconds. Both are read, because
+  // the payload this script dumped from a real run used the second while the
+  // documentation still describes the first.
+  const labelled = value.phase ?? value.label ?? value.name ?? value.key;
+  if (
+    labelled !== undefined &&
+    (typeof value.numericValue === 'number' ||
+      typeof value.duration === 'number' ||
+      typeof value.ms === 'number' ||
+      typeof value.timing === 'number')
+  ) {
     rows.push(value);
   }
   for (const key of Object.keys(value)) walkInto(value[key], depth + 1, nodes, rows);
@@ -407,9 +438,12 @@ async function main() {
                   } ms`
                 : `not in this Lighthouse payload${
                     representative.lcp?.available?.length
-                      ? ` (audits mentioning it: ${representative.lcp.available.join(', ')})`
+                      ? ` (searched: ${representative.lcp.available.join(', ')})`
                       : ''
-                  }`
+                  }` +
+                  (representative.lcp?.raw
+                    ? `\n  payload as received: ${representative.lcp.raw}`
+                    : '')
             }\n`,
         );
         failures.push({ route, below, medians });
