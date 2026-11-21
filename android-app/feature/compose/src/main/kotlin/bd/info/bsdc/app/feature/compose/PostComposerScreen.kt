@@ -253,6 +253,8 @@ fun PostComposerScreen(
         }
     }
 
+    val markdownReport = remember(draft.body) { MarkdownInspector.analyze(draft.body) }
+
     val detectedHashtags = remember(draft.body) {
         ComposerValidationEngine.extractHashtags(draft.body)
             .filterNot { it in draft.tags }
@@ -581,6 +583,19 @@ fun PostComposerScreen(
                         }
                     }
                 }
+            }
+        }
+
+        if (mode != MkComposerMode.PREVIEW) {
+            item("editor_inspector") {
+                MkComposerInspector(
+                    report = markdownReport,
+                    bn = bn,
+                    onJumpToLine = { line ->
+                        val (from, to) = MarkdownInspector.lineRange(draft.body, line)
+                        bodyField = TextFieldValue(draft.body, TextRange(from, to))
+                    },
+                )
             }
         }
 

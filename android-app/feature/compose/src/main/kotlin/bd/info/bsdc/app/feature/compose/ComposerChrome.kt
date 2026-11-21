@@ -13,6 +13,8 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Tune
@@ -58,6 +61,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import bd.info.bsdc.app.core.designsystem.BsdcAnimatedEntrance
+import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
 import bd.info.bsdc.app.core.designsystem.BsdcMotionSpecs
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.pressBounceScale
@@ -486,6 +491,137 @@ fun MkVisibilityPickerSheet(
                 }
             }
             Spacer(Modifier.height(24.dp))
+        }
+    }
+}
+
+/**
+ * One line of the reader's grammar, in the member's language.
+ *
+ * Phrased as what the *app will show*, never as what the member did wrong: `#### x` is valid
+ * Markdown and a full-featured web reader would style it. The composer's job is to say that this
+ * reader will not, before the post is published rather than after.
+ */
+internal fun markdownNoteText(kind: MarkdownNoteKind, line: Int, bn: Boolean): String = when (kind) {
+    MarkdownNoteKind.UNCLOSED_FENCE -> if (bn) {
+        "লাইন $line: কোড-ফেন্স বন্ধ করা হয়নি — বাকি পোস্টটাই কোড হিসেবে দেখাবে।"
+    } else {
+        "Line $line: a code fence is left open, so the rest of the post renders as code."
+    }
+    MarkdownNoteKind.UNBALANCED_BOLD -> if (bn) {
+        "লাইন $line: «**» জোড়া নয় — বোল্ড হিসেবে দেখাবে না।"
+    } else {
+        "Line $line: an unmatched ** — it will print as typed."
+    }
+    MarkdownNoteKind.HEADING_TOO_DEEP -> if (bn) {
+        "লাইন $line: তিন স্তরের বেশি হেডিং এই অ্যাপে সাধারণ লেখা হিসেবে দেখাবে।"
+    } else {
+        "Line $line: the app styles three heading levels; deeper ones read as plain text."
+    }
+    MarkdownNoteKind.ORDERED_LIST -> if (bn) {
+        "লাইন $line: সংখ্যা-তালিকা অ্যাপে তালিকা হিসেবে ধরা পড়ে না — «- » ব্যবহার করুন।"
+    } else {
+        "Line $line: numbered lists are not a list here; use “- ” instead."
+    }
+    MarkdownNoteKind.TABLE -> if (bn) {
+        "লাইন $line: টেবিল অ্যাপের রিডারে নেই — লাইনগুলো সাধারণ লেখা থাকবে।"
+    } else {
+        "Line $line: pipe tables are not part of this reader; the rows will stay plain text."
+    }
+    MarkdownNoteKind.TASK_ITEM -> if (bn) {
+        "লাইন $line: চেকবক্স তালিকা সাধারণ বুলেট হিসেবে দেখাবে।"
+    } else {
+        "Line $line: task items render as ordinary bullets here."
+    }
+    MarkdownNoteKind.EMPTY_HEADING -> if (bn) {
+        "লাইন $line: হেডিংয়ের পর কিছু লেখা নেই।"
+    } else {
+        "Line $line: a heading marker with no text after it."
+    }
+    MarkdownNoteKind.IMAGE_WITHOUT_URL -> if (bn) {
+        "লাইন $line: ছবির ঠিকানা খালি — কিছুই দেখাবে না।"
+    } else {
+        "Line $line: an image with no address will show nothing."
+    }
+}
+
+/**
+ * The live strip under the body field: how long, how structured, and what the reader will not show.
+ *
+ * The outline chips move the field's selection to the heading's line. That is not a scroll trick for
+ * show: the composer's formatting buttons act on the selection, so choosing a heading in the outline
+ * and pressing "H2" is a two-tap restructure of a long post.
+ *
+ * It is deliberately not a validator. Nothing here stops a publish — every note is a sentence about
+ * how the *app's* renderer treats the text, and a member who wants a table on the web may keep it.
+ * Stopping them would be the composer deciding the reader is the only client that matters, which it
+ * is not.
+ */
+@Composable
+fun MkComposerInspector(
+    report: MarkdownReport,
+    bn: Boolean,
+    onJumpToLine: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val tokens = BsdcThemeTokens.colors
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = if (bn) {
+                    "${report.words} শব্দ · ${report.characters} অক্ষর"
+                } else {
+                    "${report.words} words · ${report.characters} characters"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = tokens.mutedText,
+            )
+            AnimatedVisibility(visible = report.readingMinutes > 0) {
+                Text(
+                    text = if (bn) {
+                        "${report.readingMinutes} মিনিট পড়া"
+                    } else {
+                        "${report.readingMinutes} min read"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+        }
+        if (report.headings.isNotEmpty()) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                report.headings.forEach { heading ->
+                    val indent = "  ".repeat((heading.level - 1).coerceIn(0, 2))
+                    BsdcFilterPill(
+                        label = "$indent${heading.text.take(22)}",
+                        selected = false,
+                        onClick = { onJumpToLine(heading.line) },
+                    )
+                }
+            }
+        }
+        report.notes.forEach { note ->
+            // Each note enters on its own: the strip is read while the member is still typing, so a
+            // note that appears without a beat reads as a warning light, and with one reads as an answer.
+            BsdcAnimatedEntrance {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Rounded.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(13.dp),
+                        tint = tokens.mutedText,
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = markdownNoteText(note.kind, note.line, bn),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.mutedText,
+                    )
+                }
+            }
         }
     }
 }
