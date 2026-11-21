@@ -15,7 +15,7 @@
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -2105,6 +2105,47 @@ check('F-27', 'Performance', 'The built stylesheet proves what the source only c
           : `${invalid} invalid color-mix stop(s), ${missing.length} missing mirror(s): ${missing.slice(0, 6).join(', ')}`,
   };
 });
+
+check(
+  'F-28',
+  'Performance',
+  'No chunk the first paint waits for is a 200 kB download on its own',
+  () => {
+    // The brief's main-JS budget is about *a file*, not a sum: one 200 kB chunk
+    // on the critical path is a different failure from five 40 kB ones, and the
+    // sum is already F-01's business. This reads the eager module graph out of
+    // the built `index.html` — what the browser fetches before it paints — and
+    // holds each file to the budget, so a bundle cannot turn into a monolith by
+    // accretion of imports nobody reviewed.
+    const dist = join(root, 'main-site', 'dist');
+    const htmlPath = join(dist, 'index.html');
+    if (!existsSync(htmlPath)) {
+      return { ok: true, evidence: 'no build to read; `npm run build` enables it' };
+    }
+    const html = readFileSync(htmlPath, 'utf8');
+    const eager = [
+      ...new Set(
+        [...html.matchAll(/(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((match) => match[1]),
+      ),
+    ];
+    if (eager.length === 0) {
+      return { ok: false, evidence: 'index.html references no module script at all' };
+    }
+    const sizes = eager.map((file) => ({
+      file: basename(file),
+      kb: Number(sh(`gzip -c "${join(dist, file)}" | wc -c`)) / 1024,
+    }));
+    const over = sizes.filter((entry) => entry.kb > 200);
+    const total = sizes.reduce((sum, entry) => sum + entry.kb, 0);
+    return {
+      ok: over.length === 0,
+      evidence:
+        `${eager.length} eager module(s), largest ${Math.max(...sizes.map((s) => s.kb)).toFixed(1)} kB gz, ` +
+        `${total.toFixed(1)} kB gz in total; over budget: ` +
+        (over.length === 0 ? 'none' : over.map((entry) => `${entry.file} ${entry.kb.toFixed(1)} kB`).join(', ')),
+    };
+  },
+);
 
 check(
   'F-18',
