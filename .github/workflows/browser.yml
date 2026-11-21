@@ -146,8 +146,20 @@ jobs:
           node ../scripts/lighthouse.mjs | tee .browser-evidence/lighthouse.txt
           status=${PIPESTATUS[0]}
           set -e
+          # The table goes on the run page as well as in an artifact. A job that
+          # fails with "Process completed with exit code 1" makes a reader
+          # download a zip to learn which route and which category, and nobody
+          # downloads the zip — which is how a measured budget stops being read.
+          {
+            echo '### Lighthouse — median of 5 runs per route, floor 95'
+            echo
+            echo '```text'
+            cat .browser-evidence/lighthouse.txt
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
           if [ "$status" -ne 0 ]; then
-            echo "::error title=Lighthouse budget failed::One or more routes missed the floor of 95 — see .browser-evidence/lighthouse.txt"
+            routes=$(grep '← below' .browser-evidence/lighthouse.txt | tr -s ' ' | tr '\n' ' | ')
+            echo "::error title=Lighthouse budget failed::route(s) below the floor of 95: ${routes:-see the run summary}"
           fi
           exit "$status"
       - uses: actions/upload-artifact@v4
