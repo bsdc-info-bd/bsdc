@@ -88,6 +88,15 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
 
+      # The map's page layer, checked against the app's own rules. Both sides of the
+      # WebView's asset contract are in this repository — the generated page and the
+      # classifier that decides which requests it answers — and the failure mode when they
+      # stop agreeing is a blank grey rectangle rather than an error, which no test on a
+      # device would notice until a user did. It runs before Gradle because a two-second
+      # check that can explain a blank map should not wait nine minutes behind a build.
+      - name: Check the OSM map page against the app's own interception rules
+        run: node scripts/osm-page-check.mjs
+
       - name: Verify native manifest & zero-Capacitor invariants
         working-directory: android-app
         run: |
