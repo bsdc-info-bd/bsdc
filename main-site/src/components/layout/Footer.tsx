@@ -31,7 +31,10 @@ export function Footer() {
           <ul className="mt-2 space-y-1.5">
             {PLATFORM_LINKS.map((link) => (
               <li key={link.to}>
-                <Link to={link.to} className="fab-tap inline-flex items-center text-sm text-muted hover:text-text">
+                <Link
+                  to={link.to}
+                  className="fab-tap inline-flex items-center text-sm text-muted hover:text-text"
+                >
                   {t(link.labelKey)}
                 </Link>
               </li>
@@ -43,14 +46,20 @@ export function Footer() {
           <h2 className="text-sm font-semibold">{t('footer.sections.community')}</h2>
           <ul className="mt-2 space-y-1.5">
             <li>
-              <ExternalLink href={SITE.repository} className="text-sm">
+              <ExternalLink
+                href={SITE.repository}
+                className="fab-tap inline-flex items-center text-sm"
+              >
                 <span className="inline-flex items-center gap-1">
                   <Github size={14} aria-hidden="true" /> GitHub
                 </span>
               </ExternalLink>
             </li>
             <li>
-              <ExternalLink href={SITE.owner.site} className="text-sm">
+              <ExternalLink
+                href={SITE.owner.site}
+                className="fab-tap inline-flex items-center text-sm"
+              >
                 {SITE.owner.name}
               </ExternalLink>
             </li>
@@ -62,7 +71,11 @@ export function Footer() {
           <ul className="mt-2 space-y-1.5">
             {ECOSYSTEM_LINKS.map((link) => (
               <li key={link.href}>
-                <ExternalLink href={link.href} className="text-sm" showIcon={false}>
+                <ExternalLink
+                  href={link.href}
+                  className="fab-tap inline-flex items-center text-sm"
+                  showIcon={false}
+                >
                   {t(link.labelKey)}
                 </ExternalLink>
               </li>

@@ -3,9 +3,31 @@ name: Production-build browser smoke
 on:
   push:
     branches: ['**']
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml', 'scripts/lighthouse.mjs']
+    paths:
+      [
+        'main-site/**',
+        'corporate-kit/**',
+        'admin-site/**',
+        'certificate-site/**',
+        'notice-site/**',
+        'performance-site/**',
+        'vf-site/**',
+        '.github/workflows/browser.yml',
+        'scripts/lighthouse.mjs',
+      ]
   pull_request:
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml', 'scripts/lighthouse.mjs']
+    paths:
+      [
+        'main-site/**',
+        'corporate-kit/**',
+        'admin-site/**',
+        'certificate-site/**',
+        'notice-site/**',
+        'performance-site/**',
+        'vf-site/**',
+        '.github/workflows/browser.yml',
+        'scripts/lighthouse.mjs',
+      ]
   workflow_dispatch:
 
 permissions:
@@ -45,7 +67,7 @@ jobs:
           status=$?
           cat /tmp/browser-smoke.log
           if [ "$status" -ne 0 ]; then
-            message=$(grep -E '^FAIL|passed' /tmp/browser-smoke.log | tail -20 | head -c 5000)
+            message=$(grep -E '^FAIL|^FAILURES|passed' /tmp/browser-smoke.log | tail -20 | head -c 5000)
             message=${message//'%'/'%25'}
             message=${message//$'\n'/'%0A'}
             echo "::error title=Production-build browser smoke failed::${message:-see the run log}"

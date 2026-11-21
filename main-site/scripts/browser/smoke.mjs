@@ -311,7 +311,10 @@ try {
     await activePage
       .screenshot({ path: join(output, 'failure.png'), fullPage: true })
       .catch(() => {});
-  results.push({ passed: false, error: String(error) });
+  // Named, so the report and the workflow annotation both say *which* failure an
+  // escaping exception is. An unnamed entry in `results` was how one run came
+  // back "2 failed" with a single `FAIL` line and no way to read the other.
+  results.push({ name: 'unexpected error', passed: false, error: String(error) });
   process.exitCode = 1;
   console.error(error);
 } finally {
@@ -334,5 +337,18 @@ try {
   console.log(
     `${results.length - failed.length} passed${failed.length > 0 ? `, ${failed.length} failed` : ''}; report: ${output}`,
   );
+  // One greppable line, because CI mirrors `^FAIL` into a workflow annotation and
+  // a runner log is not readable from everywhere: without this a check that dies
+  // outside `check()` fails the job invisibly.
+  if (failed.length > 0) {
+    console.log(
+      `FAILURES ${failed
+        .map(
+          (failure) =>
+            `${failure.name ?? 'unnamed'}: ${failure.error.split('\n')[0].slice(0, 180)}`,
+        )
+        .join(' || ')}`,
+    );
+  }
   for (const failure of failed) console.log(`  ${failure.name}: ${failure.error.split('\n')[0]}`);
 }
