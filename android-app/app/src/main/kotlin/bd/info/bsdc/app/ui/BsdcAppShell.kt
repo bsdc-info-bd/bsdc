@@ -922,7 +922,9 @@ fun BsdcAppShell(
                         initialMode = if (incomingDestination is LinkDestination.NativeRoute &&
                             incomingDestination.path.startsWith("/create")
                         ) {
-                            CreateHubMode.EVENT
+                            // `/create?kind=group` means the group screen, as it does on the web; the
+                            // hub used to read every create link as an event.
+                            CreateHubMode.fromRoute(incomingDestination.path)
                         } else {
                             CreateHubMode.POST
                         },

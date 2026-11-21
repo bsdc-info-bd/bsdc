@@ -12,6 +12,40 @@ enum class CreateHubMode(val labelEn: String, val labelBn: String) {
     GIG("Freelance Gig", "গিগ"),
     PROJECT("Project", "প্রজেক্ট"),
     GROUP("Group", "গ্রুপ"),
+    ;
+
+    companion object {
+        /**
+         * Which creation screen a deep link opens.
+         *
+         * The website's `/create?kind=job` has five kinds and one default: `CreatePage.tsx` reads
+         * `params.get('kind')`, keeps it if `isKind` recognises it, and falls back to the event form.
+         * The app used to answer every `/create` link with the event form whatever it said, so a job
+         * link opened the wrong screen and a group link opened it too. Same query, same answer here —
+         * including the fallback, because an unrecognised kind is not an error, it is the page the
+         * member would have seen in a browser.
+         *
+         * A link with no query at all keeps [POST] only for the shell's `/compose` route; `/create`
+         * alone means the event form, exactly as the web's default.
+         */
+        fun fromRoute(path: String?): CreateHubMode {
+            val query = path?.substringAfter('?', "")?.substringBefore('#') ?: return EVENT
+            val kind = query.split('&')
+                .firstNotNullOfOrNull { part ->
+                    val key = part.substringBefore('=').trim().lowercase()
+                    if (key != "kind") return@firstNotNullOfOrNull null
+                    part.substringAfter('=', "").trim().lowercase().ifBlank { null }
+                }
+            return when (kind) {
+                "event" -> EVENT
+                "job" -> JOB
+                "gig" -> GIG
+                "project" -> PROJECT
+                "group" -> GROUP
+                else -> EVENT
+            }
+        }
+    }
 }
 
 enum class AttachmentUploadStage {

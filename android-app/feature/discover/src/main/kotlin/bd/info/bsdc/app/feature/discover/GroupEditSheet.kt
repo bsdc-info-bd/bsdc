@@ -85,6 +85,10 @@ fun MkGroupEditSheet(
             // has landed. Cascading every field instead would replay a fade under the member's fingers
             // the moment the keyboard opens, which reads as a bug, not as motion design.
             BsdcAnimatedEntrance {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
             Text(
                 text = if (bn) "গ্রুপ সম্পাদনা" else "Edit group",
                 style = MaterialTheme.typography.titleLarge,
@@ -254,6 +258,7 @@ fun MkGroupEditSheet(
                 )
             }
             Spacer(Modifier.height(4.dp))
+            }
             }
         }
     }
