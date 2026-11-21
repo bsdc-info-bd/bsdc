@@ -36,6 +36,38 @@ disagree with the tree it describes.
 | Database proofs      | `cd main-site && npm run db:prove`                          | 73 of 73 harnesses passed                                                                 | 0    |
 | i18n parity          | `vitest run src/i18n`                                       | identical key sets in `en` and `bn`, no empty strings                                     | 0    |
 
+### Measured in CI, and failing
+
+The `lighthouse` job in `.github/workflows/browser.yml` runs the auditor in
+`scripts/` on every push: it builds `main-site`, serves `dist`, and takes five
+samples per public route in a fresh browser, gating the **median** of each
+category at 95. Run at commit `604fee9`, 16 routes:
+
+| Category       | Result across the 16 prerendered routes   |
+| -------------- | ----------------------------------------- |
+| Accessibility  | **100 on every route**                    |
+| Best practices | **100 on every route**                    |
+| SEO            | **100 on every route**                    |
+| Performance    | 12 of 16 at 99–100; **4 below the floor** |
+
+| Route         | Median | Samples            |
+| ------------- | ------ | ------------------ |
+| `/`           | **81** | 71, 81, 81, 82, 83 |
+| `/projects`   | **91** | 91, 91, 91, 90, 91 |
+| `/learn`      | **91** | 89, 91, 89, 91, 91 |
+| `/playground` | **91** | 91, 92, 91, 90, 91 |
+
+So `§5.3`'s "95+ on all four categories, every route" is **not met on the home
+page**, and the samples say it is not noise either: `/` put up a 71 once. This is
+the one claim in the brief that the repository can now measure and cannot yet pass,
+which is why it stays open in the register instead of being rounded to a 95.
+
+The same commit measured the score but not the cause, so the auditor now prints
+LCP, FCP, CLS and TBT for the median run of every route under the floor, plus the
+three savings Lighthouse claims. The next slice reads those and fixes the home
+page; `/projects`, `/learn` and `/playground` at 91 are expected to move with it,
+because they share its feed chrome and its image loading path.
+
 ### Unrun, and why
 
 These are the gates in `§5.3`, `§6.2` and `§8.2` that this environment cannot
