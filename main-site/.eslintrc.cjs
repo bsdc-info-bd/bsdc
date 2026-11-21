@@ -19,7 +19,7 @@ module.exports = {
   },
   plugins: ['@typescript-eslint', 'react-refresh'],
   settings: { react: { version: 'detect' } },
-  ignorePatterns: ['dist', 'dev-dist', 'node_modules', '.eslintrc.cjs', 'postcss.config.js', 'functions'],
+  ignorePatterns: ['dist', 'dev-dist', 'node_modules', '.eslintrc.cjs', 'postcss.config.js', 'functions', 'coverage'],
   rules: {
     '@typescript-eslint/no-explicit-any': 'error',
     '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],

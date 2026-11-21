@@ -116,7 +116,18 @@ jobs:
         run: npx prettier --check "src/**/*.{ts,tsx,css}"
 
       - name: Unit tests
-        run: npm run test
+        shell: bash
+        run: |
+          if [ "${{ matrix.app }}" = "main-site" ]; then
+            # main-site's suite doubles as its coverage ratchet (thresholds in
+            # `vite.config.ts`), so a drop in tested surface fails the same run
+            # that reports a failing test. Other sites keep the plain command:
+            # they carry no coverage config, and a gate that errors for want of
+            # a provider reads as a broken pull request.
+            npm run test:coverage
+          else
+            npm run test
+          fi
 
       # The migrations are the database. This replays every one of them, in
       # order, into an in-process Postgres and then asks that database the

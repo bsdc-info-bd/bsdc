@@ -372,8 +372,13 @@ check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
  * 3. Front end quality
  * ------------------------------------------------------------------ */
 
+// Generated trees are pruned here rather than in each check, because the audit
+// walks the working tree and some reports are written *about* the source: the
+// coverage report's HTML copies of `MessageComposer.tsx` and `message-text.ts`
+// duly re-triggered the emoji rule that those two files are allowed to break. A
+// check that reads its own output as input is not measuring the project any more.
 const sourceFiles = shLines(
-  `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print`,
+  `find . -name node_modules -prune -o -name dist -prune -o -name dev-dist -prune -o -name coverage -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print`,
 );
 
 check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member input', () => {
@@ -382,7 +387,7 @@ check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member 
   // same ranges consistently on every runner. Emoji are permitted as member
   // content and in the explicit chat input/reaction palettes, not as chrome.
   const files = shLines(
-    `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print`,
+    `find . -name node_modules -prune -o -name dist -prune -o -name dev-dist -prune -o -name coverage -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print`,
   );
   const pattern = new RegExp(
     `[${String.fromCodePoint(0x1f300)}-${String.fromCodePoint(0x1faff)}${String.fromCodePoint(0x2600)}-${String.fromCodePoint(0x27bf)}${String.fromCodePoint(0xfe0f)}]`,
@@ -2142,7 +2147,9 @@ check(
       evidence:
         `${eager.length} eager module(s), largest ${Math.max(...sizes.map((s) => s.kb)).toFixed(1)} kB gz, ` +
         `${total.toFixed(1)} kB gz in total; over budget: ` +
-        (over.length === 0 ? 'none' : over.map((entry) => `${entry.file} ${entry.kb.toFixed(1)} kB`).join(', ')),
+        (over.length === 0
+          ? 'none'
+          : over.map((entry) => `${entry.file} ${entry.kb.toFixed(1)} kB`).join(', ')),
     };
   },
 );

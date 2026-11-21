@@ -26,7 +26,8 @@
     "test:messenger-browser": "node scripts/browser/messenger-smoke.mjs",
     "lighthouse": "node ../scripts/lighthouse.mjs",
     "contrast": "node ../scripts/contrast-audit.mjs",
-    "contrast:strict": "node ../scripts/contrast-audit.mjs --strict"
+    "contrast:strict": "node ../scripts/contrast-audit.mjs --strict",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -70,6 +71,7 @@
     "@typescript-eslint/eslint-plugin": "8.7.0",
     "@typescript-eslint/parser": "8.7.0",
     "@vitejs/plugin-react": "4.3.1",
+    "@vitest/coverage-v8": "2.1.1",
     "autoprefixer": "10.4.20",
     "eslint": "8.57.1",
     "eslint-plugin-jsx-a11y": "6.10.0",

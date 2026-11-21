@@ -80,5 +80,31 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     css: false,
     include: ['src/**/*.test.{ts,tsx}', 'functions/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'lcov'],
+      reportsDirectory: 'coverage',
+      // The app only. Two other trees are deliberately out of the denominator:
+      // `functions/**` is edge code whose real proofs are the SQL harnesses in
+      // `npm run db:prove` (73 of them), and a unit-test percentage would
+      // describe neither. And the browser suites under `scripts/**` are the
+      // harness itself — counting a 359-line smoke script against the app's
+      // coverage measures the test runner, which is how a coverage gate becomes
+      // theatre.
+      include: ['src/**/*.{ts,tsx}'],
+      exclude: [
+        'src/**/*.test.{ts,tsx}',
+        'src/**/*.d.ts',
+        'src/main.tsx',
+        'src/test/**',
+        'src/vite-env.d.ts',
+      ],
+      // A ratchet, not a target: 46.99% of lines and 57.31% of functions are
+      // what the suite covers today (measured 2026-11-21), and the floors sit a
+      // point under so that only a real regression fails the run. The brief's
+      // 80% lines / 90% functions is the goal, and it is not met — it is met by
+      // writing tests, one raised number per slice, and never by lowering this.
+      thresholds: { lines: 46, functions: 57, branches: 75, statements: 46 },
+    },
   },
 });
