@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { tokenColor } from '@/design-system/color';
+import { paintToken, THEME_CHROME_FALLBACK } from '@/design-system/paint';
 
 export const THEME_STORAGE_KEY = 'bsdc.theme';
 
@@ -47,8 +47,8 @@ export function applyTheme(resolved: ResolvedTheme): void {
     // `tokenColor` reads the token from the document; the second argument is
     // what paints when there is no document at all, so it is a fallback and not
     // a second copy of the palette.
-    if (dark) meta.content = tokenColor('--bsdc-bg', '#0b1512');
-    else meta.content = tokenColor('--bsdc-green-800', '#1b4332');
+    if (dark) meta.content = paintToken('--bsdc-bg', THEME_CHROME_FALLBACK.dark);
+    else meta.content = paintToken('--bsdc-green-800', THEME_CHROME_FALLBACK.light);
   }
 }
 

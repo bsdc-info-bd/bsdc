@@ -26,6 +26,44 @@ working, wired-up features — never scaffolding for its own sake.
 | 19  | PWA, i18n, Android, performance                 | Done   |
 | 20  | Verification, audit and launch                  | Done   |
 
+## Response 28 scope (delivered)
+
+Phase 1 of the quality brief — the audit and the baseline — plus the two design
+gaps it exposed. Recorded in `docs/baseline-audit.md`, which separates
+_measured_ from _not measurable here_ rather than rounding the two together.
+
+- **The brief's hardcoded-colour rule now holds literally.** Its `§11` grep
+  (`grep -rn "#[0-9a-fA-F]{3,8}" main-site/src/ … | grep -v design-system |
+grep -v test`) returned 9 lines, all of them exemptions I had granted. They are
+  now moved instead: `design-system/paint.ts` holds Google's and Yahoo's mark
+  colours (a brand policy fixes them, a theme must not), the white a JPEG needs
+  in place of alpha (a file format fixes it), and the three fallbacks behind a
+  token read. **0 lines** outside the design system, no footnote on the grep, and
+  F-24 rewritten to run the brief's own command.
+- **The brief's token names exist.** `--text-*`, `--space-1…12`, `--radius-*`
+  were not defined anywhere: the scales lived only in the Tailwind config, so a
+  hand-written rule in `components.css` had nothing to name and restated a
+  `clamp()` — a restated number is a drifting one. A `tokenMirror` plugin now
+  emits 21 mirrors read out of the resolved theme at build time (colours as a
+  pointer to the `--bsdc-*` token, never its value, and never through
+  `token()`, because an alias cannot carry an alpha), so both spellings move
+  together. F-27 checks the built stylesheet for them.
+- **The audit reads build output when it exists.** A `color-mix()` stop that is
+  not a percentage is an invalid declaration that survives a green build, so
+  `contrast-audit.mjs` now greps `dist/assets/index-*.css` for it — and reports
+  "no build to read" instead of failing a pre-build `npm run lint`. Both halves
+  were negative-tested: a planted `0.1` stop is caught, and the regex that first
+  reported 76 phantom failures was fixed before anything was believed.
+- 5 tests pin the exceptions themselves, including "no brand colour may equal a
+  BSDC ramp colour", so a palette edit cannot quietly recolour Google's logo.
+
+Green: tsc (app + functions), eslint, prettier, vitest 132 files / 1350 tests,
+build with 16 prerendered routes, `§11` grep 0, 158 `color-mix()` rules with 0
+invalid stops, contrast audit PASS, launch audit 144 passed / 0 failed,
+sql-schema-check 0 across 130 files. Lighthouse, the Android toolchain and
+coverage remain unrunnable here and are recorded as open in
+`docs/baseline-audit.md`, not as passing.
+
 ## Response 27 scope (delivered)
 
 Phase 4 of the channel arc: a channel became writable from the channel.

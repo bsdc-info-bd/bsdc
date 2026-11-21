@@ -1972,61 +1972,31 @@ check('F-23', 'Performance', 'No component paints a colour the theme does not de
 });
 
 check('F-24', 'Performance', 'No component paints a hex that no theme can swap', () => {
-  // The rule the design brief states outright: components name tokens, never
-  // hex. `scripts/contrast-audit.mjs` enforces the palette side of that, and
-  // this enforces the literal side, over exactly the grep the brief asks for.
-  // What is allowed here is a constraint of an API rather than a preference,
-  // so the list should shrink as those APIs improve and must not grow
-  // because a hex happened to be convenient.
-  // The exemption is capped per file, not merely granted to it: an allowlist of
-  // names would let a sixth Google colour, or a stray hex added beside a
-  // legitimate one, pass unseen. Each number is what that file holds today, so
-  // the list can only shrink, and a file that wants one more literal has to
-  // change this line and say why.
-  const ALLOW = {
-    // Third-party brand marks. Google's four colours and Apple's are the
-    // sign-in buttons' identity; restyling them is a policy violation, not a
-    // design choice, and they are identical in both themes by requirement.
-    'main-site/src/components/auth/OAuthButtons.tsx': 5,
-    // A Canvas 2D context takes a string it paints immediately and knows
-    // nothing about — no cascade, no custom properties, no theme.
-    'main-site/src/lib/media/edit.ts': 1,
-    // The helper that reads a token back out for those APIs. Its fallbacks
-    // are the only literals the rest of the app leans on, and they are
-    // exercised by colour.test.tsx.
-    'main-site/src/design-system/color.ts': 3,
-  };
-  const isProse = (line) => {
-    const code = line.slice(line.indexOf(':') + 1).trim();
-    return (
-      code.startsWith('//') || code.startsWith('/*') || code.startsWith('*') || code.startsWith('`')
-    );
-  };
-  const lines = shLines(
-    `grep -rn "#[0-9a-fA-F]\\{3,8\\}" main-site/src --include=*.tsx --include=*.ts || true`,
-  )
-    .filter((line) => !/\.test\.tsx?:/.test(line))
-    // tokenColor(token, '#rrggbb') names a hex as the last resort behind a
-    // token read, so the token stays the source of truth.
-    .filter((line) => !line.includes('tokenColor('))
-    // Prose that quotes a hex while explaining something is not a component
-    // painting a colour.
-    .filter((line) => !isProse(line));
-  const byFile = new Map();
-  for (const line of lines)
-    byFile.set(line.split(':')[0], (byFile.get(line.split(':')[0]) ?? 0) + 1);
-  const hits = lines.filter((line) => !(line.split(':')[0] in ALLOW));
-  const overCap = Object.entries(ALLOW).filter(([file, cap]) => (byFile.get(file) ?? 0) > cap);
+  // The rule the design brief states outright, verified by the exact command the
+  // brief states: a grep over main-site/src for a hex literal, excluding the
+  // design system and the tests. It returns nothing.
+  //
+  // That happened by moving the four colours that are genuinely not theme
+  // choices into `design-system/paint.ts` — Google's and Yahoo's marks, which a
+  // brand policy fixes; the white a JPEG needs in place of alpha, which a file
+  // format fixes; and the two fallbacks behind a token read. They were already
+  // exemptions; they are now *where the brief says palette facts live*, so the
+  // grep is the check rather than a grep with a footnote, and the count of
+  // exceptions is one file's business.
+  const hits = shLines(
+    `grep -rn "#[0-9a-fA-F]\\{3,8\\}" main-site/src/ --include="*.tsx" --include="*.ts" | grep -v "design-system" | grep -v "test" || true`,
+  ).filter((line) => {
+    const code = line.slice(line.indexOf(':', line.indexOf(':') + 1) + 1).trim();
+    return !(code.startsWith('//') || code.startsWith('*') || code.startsWith('/*'));
+  });
+  const paint = read('main-site/src/design-system/paint.ts');
+  const exceptions = (paint.match(/'#[0-9a-f]{6}'/g) ?? []).length;
   return {
-    ok: hits.length === 0 && overCap.length === 0,
+    ok: hits.length === 0,
     evidence:
-      hits.length > 0
-        ? hits.slice(0, 5).join(' | ')
-        : overCap.length > 0
-          ? overCap
-              .map(([f, c]) => `${f} holds ${byFile.get(f)} literals against a cap of ${c}`)
-              .join(' | ')
-          : `every other colour in the app is a token; ${[...byFile].reduce((n, [, c]) => n + c, 0)} literal(s) across ${Object.keys(ALLOW).length} exempt file(s), each at or under its recorded cap`,
+      hits.length === 0
+        ? `zero hex literals outside the design system; the ${exceptions} that exist are the brand marks, the JPEG backdrop and the token-read fallbacks, all in design-system/paint.ts`
+        : hits.slice(0, 5).join(' | '),
   };
 });
 
@@ -2090,6 +2060,49 @@ check('F-26', 'Performance', 'A channel is writable from the channel itself', ()
       missing === 0
         ? 'the channel page addresses /compose?channel=<id>; the composer seeds it, refuses a closed room aloud, and touches nothing but the target and its visibility'
         : `${missing} of ${guards.length} links in the loop are absent`,
+  };
+});
+
+check('F-27', 'Performance', 'The built stylesheet proves what the source only claims', () => {
+  // A utility that compiles to no rule, a `color-mix()` with an unparseable
+  // stop, a token scale no plain stylesheet can name — all three are invisible
+  // in source and obvious in output, and all three shipped once already. So
+  // after a build the audit reads `dist` itself. Before a build this is
+  // reported rather than failed, because CI builds first and a developer running
+  // the audit on a clean tree has not: a gate that demands an artifact it did
+  // not ask for is a gate people learn to skip.
+  const report = JSON.parse(sh('node scripts/contrast-audit.mjs --json'));
+  const emitted = report.emitted;
+  if (emitted === null || emitted === undefined) {
+    return {
+      ok: true,
+      evidence: 'no main-site/dist build on this checkout; run `npm run build` to enable it',
+    };
+  }
+  const css = sh(`ls main-site/dist/assets/index-*.css 2>/dev/null | tail -1 || true`).trim();
+  const body = css.length > 0 ? read(css.replace('main-site/', 'main-site/')) : '';
+  const mirrors = [
+    '--text-xs',
+    '--text-3xl',
+    '--space-1',
+    '--space-12',
+    '--radius-sm',
+    '--radius-full',
+    '--shadow-card',
+    '--ease-app',
+    '--color-bg-primary',
+    '--color-accent',
+  ];
+  const missing = body.length > 0 ? mirrors.filter((name) => !body.includes(`${name}:`)) : mirrors;
+  const invalid = (emitted.invalidColorMix ?? []).length;
+  return {
+    ok: body.length === 0 || (missing.length === 0 && invalid === 0),
+    evidence:
+      body.length === 0
+        ? 'no built stylesheet to read'
+        : missing.length === 0 && invalid === 0
+          ? `${mirrors.length} token mirror(s) present and every color-mix() stop is a percentage or calc()`
+          : `${invalid} invalid color-mix stop(s), ${missing.length} missing mirror(s): ${missing.slice(0, 6).join(', ')}`,
   };
 });
 

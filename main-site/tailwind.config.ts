@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import plugin from 'tailwindcss/plugin';
 
 /**
  * BSDC design system — Tailwind theme.
@@ -217,7 +218,99 @@ const config: Config = {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    /**
+     * The same scale, spelled the way a plain stylesheet spells it.
+     *
+     * Tailwind owns the numbers — `text-sm`, `p-4`, `rounded-md` all read the
+     * theme above — but `base.css`, `components.css` and any hand-written rule
+     * had nothing to name: the only custom properties in this project were the
+     * colour tokens. So a rule that wanted the small size of the type scale had
+     * to restate `clamp(0.75rem, …)`, and a restated number is a number that
+     * drifts.
+     *
+     * These variables are a mirror, not a second source: every one of them is
+     * read out of the resolved theme at build time, so changing the scale in one
+     * place changes both spellings. Colours are mirrored as a pointer to the
+     * `--bsdc-*` token rather than as its resolved value, because a resolved
+     * value would freeze the theme swap — and a frozen swap is the bug that
+     * started this whole audit. They are deliberately *not* mirrored through
+     * `token()`: an alias cannot carry an opacity modifier, and pretending
+     * otherwise is how a colour ends up shipping as `undefined`.
+     */
+    /**
+     * The plugin's own two-function view of Tailwind's API.
+     *
+     * Tailwind types `PluginAPI.theme` as a generic that returns the whole
+     * config, so destructuring it trips this repository's `unbound-method` rule
+     * and every value read through it arrives as `any`, which trips
+     * `no-unsafe-*`. Both rules are right and the type is the problem: naming
+     * the two members this plugin uses, with the shape it actually hands back,
+     * satisfies them without a cast or an ignore comment.
+     */
+    plugin(
+      (api: {
+        addBase: (rules: Record<string, Record<string, string>>) => void;
+        theme: (path: string) => unknown;
+      }) => {
+        const scale = (name: string): Record<string, unknown> => {
+          const value = api.theme(name);
+          return typeof value === 'object' && value !== null
+            ? (value as Record<string, unknown>)
+            : {};
+        };
+        const sizeOf = (entry: unknown): string =>
+          Array.isArray(entry) ? String(entry[0]) : String(entry);
+
+        const base: Record<string, string> = {};
+        for (const [name, entry] of Object.entries(scale('fontSize'))) {
+          base[`--text-${name}`] = sizeOf(entry);
+        }
+        // Tailwind's unit is a quarter rem, so `p-4` and `--space-4` are the same
+        // 16px. The grid the brief asks for and the utilities on the page cannot
+        // disagree, because one number is written here and nowhere else.
+        for (let step = 1; step <= 12; step++) {
+          base[`--space-${step}`] = `${step * 0.25}rem`;
+        }
+        const radius = scale('borderRadius');
+        for (const name of ['sm', 'md', 'lg', 'xl', '2xl', 'full']) {
+          const value = radius[name];
+          if (typeof value === 'string') base[`--radius-${name}`] = value;
+        }
+        const shadow = scale('boxShadow');
+        for (const name of ['card', 'raised', 'sheet']) {
+          const value = shadow[name];
+          if (typeof value === 'string') base[`--shadow-${name}`] = value;
+        }
+        const ease = scale('transitionTimingFunction');
+        for (const name of ['app', 'linear']) {
+          const value = ease[name];
+          if (typeof value === 'string') base[`--ease-${name}`] = value;
+        }
+        // The colours are mirrored as a pointer to the token, never as its
+        // resolved value: freezing a value here is how a theme swap stops
+        // reaching a rule. And they are not run through `token()`, because a
+        // custom property has no channels for an opacity modifier to blend.
+        const colourAliases: Record<string, string> = {
+          '--color-bg-primary': '--bsdc-bg',
+          '--color-bg-surface': '--bsdc-surface',
+          '--color-bg-surface-2': '--bsdc-surface-2',
+          '--color-text-primary': '--bsdc-text',
+          '--color-text-secondary': '--bsdc-text-muted',
+          '--color-accent': '--bsdc-primary',
+          '--color-accent-ink': '--bsdc-on-primary',
+          '--color-danger': '--bsdc-danger',
+          '--color-success': '--bsdc-success',
+          '--color-warning': '--bsdc-warn',
+          '--color-border': '--bsdc-border',
+        };
+        for (const [alias, source] of Object.entries(colourAliases)) {
+          base[alias] = `var(${source})`;
+        }
+        api.addBase({ ':root, [data-theme="dark"]': base });
+      },
+    ),
+  ],
 };
 
 export default config;

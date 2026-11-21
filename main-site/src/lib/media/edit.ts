@@ -15,6 +15,8 @@
  * environment has no canvas to touch.
  */
 
+import { JPEG_BACKDROP } from '@/design-system/paint';
+
 export type Rotation = 0 | 90 | 180 | 270;
 
 /** A crop as fractions of the picture it is taken from, after rotation. */
@@ -327,7 +329,7 @@ export function paintEdit(
   // against whatever the canvas started with. Paint the page white first.
   const type = outputTypeFor(edit, natural.type ?? '');
   if (type === 'image/jpeg') {
-    context.fillStyle = '#ffffff';
+    context.fillStyle = JPEG_BACKDROP;
     context.fillRect(0, 0, final.width, final.height);
   }
 

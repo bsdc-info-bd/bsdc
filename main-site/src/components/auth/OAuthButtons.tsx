@@ -2,6 +2,7 @@ import { Github } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/design-system';
+import { GOOGLE_MARK_COLOURS, YAHOO_MARK_COLOUR } from '@/design-system/paint';
 import { signInWithProvider, type OAuthProviderId } from '@/lib/auth/auth-service';
 import { authErrorKey } from '@/lib/auth/errors';
 import { useAuthStore } from '@/store/auth-store';
@@ -16,16 +17,19 @@ function GoogleMark() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
       <path
-        fill="#4285F4"
+        fill={GOOGLE_MARK_COLOURS.blue}
         d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.4a5.5 5.5 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.6-5.2 3.6-8.8Z"
       />
       <path
-        fill="#34A853"
+        fill={GOOGLE_MARK_COLOURS.green}
         d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3a7.2 7.2 0 0 1-10.7-3.8h-4v3.1A12 12 0 0 0 12 24Z"
       />
-      <path fill="#FBBC05" d="M5.4 14.3a7.2 7.2 0 0 1 0-4.6v-3.1h-4a12 12 0 0 0 0 10.8l4-3.1Z" />
       <path
-        fill="#EA4335"
+        fill={GOOGLE_MARK_COLOURS.yellow}
+        d="M5.4 14.3a7.2 7.2 0 0 1 0-4.6v-3.1h-4a12 12 0 0 0 0 10.8l4-3.1Z"
+      />
+      <path
+        fill={GOOGLE_MARK_COLOURS.red}
         d="M12 4.8c1.8 0 3.4.6 4.6 1.8l3.4-3.4A12 12 0 0 0 1.4 6.6l4 3.1A7.2 7.2 0 0 1 12 4.8Z"
       />
     </svg>
@@ -36,7 +40,7 @@ function YahooMark() {
   return (
     <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
       <path
-        fill="#6001D2"
+        fill={YAHOO_MARK_COLOUR}
         d="M3 5h4.2l3.3 7.1L13.9 5H18l-6.4 13.2H7.4l1.8-3.6L3 5Zm15.1 9.2a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8ZM21 5l-3.2 7.6h-3L18 5h3Z"
       />
     </svg>

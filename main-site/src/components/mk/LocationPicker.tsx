@@ -2,7 +2,7 @@ import { LocateFixed, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 import { Button, TextField } from '@/design-system';
-import { tokenColor } from '@/design-system/color';
+import { MAP_ACCENT_FALLBACK, paintToken } from '@/design-system/paint';
 import { BD_CENTER, isBdPoint, type Language, SYLHET_CENTER } from '@/lib/mk/mk-logic';
 
 export interface PinnedLocation {
@@ -136,7 +136,7 @@ export function LocationPicker({
         radius: radiusKm * 1000,
         // Leaflet writes this into an SVG attribute, where var() does not
         // resolve, so the token is read from the document instead.
-        color: tokenColor('--bsdc-blue-fill', '#1461c9'),
+        color: paintToken('--bsdc-blue-fill', MAP_ACCENT_FALLBACK),
         weight: 2,
         fillOpacity: 0.12,
       }).addTo(map);

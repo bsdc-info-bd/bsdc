@@ -50,7 +50,7 @@
  * where a heading is likeliest to lose the exemption. Unsized text takes the
  * strict floor, because a gate that guesses generously passes itself.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -596,6 +596,69 @@ function checkUtility(file, line, utility, name) {
   dead.push({ file, line, utility });
 }
 
+/* ------------------------------------------------------------------------- *
+ * The built stylesheet, if there is one
+ *
+ * Everything above reads source, which is the only thing available before a
+ * build. But the defect that started this audit — a utility that compiles to
+ * no rule — is only visible in the output, so when `dist` exists the audit
+ * reads it too, and reports what a source-only check cannot see. Absent dist is
+ * not a failure: `npm run lint` before `npm run build` should still work, and a
+ * gate that demands a build artifact it did not ask for teaches people to skip
+ * the gate.
+ * ------------------------------------------------------------------------- */
+const distAssets = join(site, 'dist', 'assets');
+const builtCss = existsSync(distAssets)
+  ? readdirSync(distAssets)
+      .filter((f) => /^index-.*\.css$/.test(f))
+      .sort()
+      .map((f) => join(distAssets, f))
+      .pop()
+  : undefined;
+
+const emitted = { invalidColorMix: [], missingMirror: [] };
+const mirroredTokens = [
+  '--text-xs',
+  '--text-sm',
+  '--text-base',
+  '--text-lg',
+  '--text-xl',
+  '--text-2xl',
+  '--text-3xl',
+  '--space-1',
+  '--space-4',
+  '--space-12',
+  '--radius-sm',
+  '--radius-md',
+  '--radius-lg',
+  '--radius-full',
+  '--color-bg-primary',
+  '--color-text-primary',
+  '--color-accent',
+  '--color-danger',
+  '--color-success',
+  '--color-warning',
+];
+if (builtCss) {
+  const css = read(builtCss);
+  // A `color-mix()` whose stop is not a percentage is an invalid declaration:
+  // the rule is present, and the property is dropped by the browser. This is
+  // the shape the alpha fix could have taken and did not, so it is checked
+  // rather than assumed. `var(--x)` and `calc(...)` are the legal non-literals.
+  for (const m of css.matchAll(/color-mix\(in srgb,\s*var\(--bsdc-[a-z0-9-]+\)\s+([^,)]+)/g)) {
+    const stop = (m[1] ?? '').trim();
+    // The `%` of `60%` is part of the value, so the test is on what follows the
+    // captured number, not on the capture itself: a bare number with no unit is
+    // the invalid shape (`color-mix(… 0.1 …)`), and it is what a naive
+    // `calc(<alpha-value> * 100%)`-less encoding produces.
+    const legal = /^[0-9.]+%$/.test(stop) || stop.startsWith('calc(');
+    if (!legal) emitted.invalidColorMix.push(stop);
+  }
+  for (const name of mirroredTokens) {
+    if (!css.includes(`${name}:`)) emitted.missingMirror.push(name);
+  }
+}
+
 const certain = [];
 const advisory = [];
 const offToken = new Map();
@@ -819,6 +882,7 @@ if (JSON_OUT) {
         measured,
         dead,
         deadAlpha,
+        emitted: builtCss ? emitted : null,
         tokens: { light: Object.fromEntries(themes.light), dark: Object.fromEntries(themes.dark) },
         certain,
         advisory,
@@ -878,6 +942,19 @@ if (dead.length) {
   );
   for (const d of dead) console.log(`  ${d.file}:${d.line}  ${d.utility}`);
 }
+if (builtCss) {
+  console.log(
+    `\nBuilt stylesheet read: ${relative(root, builtCss)} — ${
+      emitted.invalidColorMix.length
+    } invalid color-mix stop(s), ${emitted.missingMirror.length} missing token mirror(s)`,
+  );
+  for (const stop of [...new Set(emitted.invalidColorMix)].slice(0, 8))
+    console.log(`  invalid color-mix stop: ${stop}  (needs a percentage or calc())`);
+  for (const name of emitted.missingMirror) console.log(`  missing mirror: ${name}`);
+} else {
+  console.log('\nNo main-site/dist build to read; output-level checks skipped.');
+}
+
 if (deadAlpha.length) {
   console.log(
     `\nAlpha modifiers outside theme.opacity (${deadAlpha.length}) — the scale is ${opacityScaleSource}, and a modifier not on it produces no utility at all:`,
