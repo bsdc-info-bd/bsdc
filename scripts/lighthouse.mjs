@@ -227,10 +227,19 @@ function readLcpBreakdown(audits, lcpMs = 0) {
       const nodes = [];
       const rows = [];
       walkInto(audits[id]?.details ?? audits[id], 0, nodes, rows);
-      const phases = rows.filter((row) =>
-        /delay|byte|ttfb|time|request|render/.test(
-          norm(row.phase ?? row.label ?? row.name ?? row.key),
-        ),
+      const phases = rows.filter(
+        (row) =>
+          // `subpart` is the producer's own machine-readable key
+          // (`core/audits/insights/lcp-breakdown-insight.js` in Lighthouse 13),
+          // so it is the only name that cannot be renamed by a release or changed
+          // by a locale. The label matching below is the fallback for older and
+          // non-insight payloads, not the primary path: the labels are UI strings
+          // run through i18n, and matching English text against a localised report
+          // quietly finds nothing.
+          typeof row.subpart === 'string' ||
+          /delay|byte|ttfb|time|request|render/.test(
+            norm(row.phase ?? row.label ?? row.name ?? row.key),
+          ),
       );
       // A phase table without phase-shaped labels is a hint list, not a
       // breakdown; counting it as one is how the numbers get invented.
@@ -283,20 +292,34 @@ function summarise(nodes, rows, ids, audits, meta = {}, lcpMs = 0) {
     text(value)
       .toLowerCase()
       .replace(/[^a-z0-9]/g, '');
-  const phase = (...labels) => {
+  /**
+   * Find one phase of the breakdown. `subpart` is tried first and matched exactly,
+   * because the producer sets it (`timeToFirstByte`, `resourceLoadDelay`,
+   * `resourceLoadDuration`, `elementRenderDelay`) and it is not a translated
+   * string; the label forms are kept for payloads predating the insight audits.
+   */
+  const findRow = (subpart, ...labels) => {
+    if (rows.some((entry) => entry.subpart === subpart)) {
+      return rows.find((entry) => entry.subpart === subpart);
+    }
     const wanted = labels.map(norm);
-    const row = rows.find((entry) =>
+    return rows.find((entry) =>
       wanted.some((label) =>
         norm(entry.phase ?? entry.label ?? entry.name ?? entry.key).includes(label),
       ),
     );
+  };
+  const hasSubparts = rows.some((entry) => typeof entry.subpart === 'string');
+  const phase = (subpart, ...labels) => {
+    const row = findRow(subpart, ...labels);
     if (!row) return null;
     // The unit comes from the FIELD NAME, never from the size of the number. A
     // magnitude guess ("> 100 means milliseconds") printed `ttfb 96711 ms` for a
     // 96-second value that was an observation window in seconds, and printed it as
     // a measurement — the exact confident wrong number this reader exists to
-    // avoid. `numericValue` is seconds in Lighthouse's tables; `duration`, `ms`
-    // and `timing` are milliseconds.
+    // avoid. `numericValue` is seconds in Lighthouse's tables, while the breakdown's
+    // `duration` is milliseconds by construction: the producer divides a
+    // microsecond trace range by 1000 and declares the column `valueType: 'ms'`.
     const seconds = typeof row.numericValue === 'number' && row.duration === undefined;
     const ms = Math.round(
       seconds ? row.numericValue * 1000 : (row.duration ?? row.ms ?? row.timing ?? 0),
@@ -310,10 +333,18 @@ function summarise(nodes, rows, ids, audits, meta = {}, lcpMs = 0) {
   const element = nodes[0];
   return {
     selector: element ? (element.snippet ?? element.selector) : null,
-    ttfb: phase('first byte', 'ttfb'),
-    loadDelay: phase('load delay'),
-    loadTime: phase('load time'),
-    renderDelay: phase('render delay'),
+    ttfb: phase('timeToFirstByte', 'first byte', 'ttfb'),
+    loadDelay: phase('resourceLoadDelay', 'load delay'),
+    loadTime: phase('resourceLoadDuration', 'load time', 'resource load'),
+    renderDelay: phase('elementRenderDelay', 'render delay'),
+    // The producer deletes the two load rows when the LCP element had no network
+    // load at all, so inside a subpart table their absence is a measurement and
+    // not a reading failure. Saying "no resource load" instead of two `?`s is the
+    // difference between "the image was never the problem" and "we could not tell".
+    noResourceLoad:
+      hasSubparts &&
+      !rows.some((entry) => entry.subpart === 'resourceLoadDelay') &&
+      !rows.some((entry) => entry.subpart === 'resourceLoadDuration'),
     available: rows.length === 0 && !element ? ids : undefined,
     source: meta.source ?? null,
     elementSource: meta.elementSource ?? null,
@@ -346,6 +377,11 @@ function walkInto(value, depth, nodes, rows, fromKey = '') {
     entry && typeof entry === 'object' ? Boolean(entry.snippet || entry.selector) : false;
   const filed =
     [value.node, value.lcpNode].find(nodeLike) ??
+    // `Audit.makeNodeItem()` returns a node-shaped item rather than an item
+    // holding a node, and the breakdown insight files the element that way — as a
+    // sibling of the subpart table in a list. Only the table-and-node guess was
+    // missing, which is why every route reported `LCP element: unknown`.
+    (value.type === 'node' && nodeLike(value) ? value : undefined) ??
     (value.nodes && typeof value.nodes === 'object'
       ? Object.keys(value.nodes)
           .filter((key) => !/related/i.test(key))
@@ -523,11 +559,15 @@ async function main() {
           `LCP phases: ${
             representative.lcp &&
             (representative.lcp.ttfb !== null || representative.lcp.renderDelay !== null)
-              ? `ttfb ${representative.lcp.ttfb ?? '?'} ms, load delay ${
-                  representative.lcp.loadDelay ?? '?'
-                } ms, load time ${representative.lcp.loadTime ?? '?'} ms, render delay ${
-                  representative.lcp.renderDelay ?? '?'
-                } ms${representative.lcp.source ? ` (from ${representative.lcp.source})` : ''}`
+              ? `ttfb ${representative.lcp.ttfb ?? '?'} ms, ${
+                  representative.lcp.noResourceLoad
+                    ? 'no resource load'
+                    : `load delay ${representative.lcp.loadDelay ?? '?'} ms, load time ${
+                        representative.lcp.loadTime ?? '?'
+                      } ms`
+                }, render delay ${representative.lcp.renderDelay ?? '?'} ms${
+                  representative.lcp.source ? ` (from ${representative.lcp.source})` : ''
+                }`
               : `not in this Lighthouse payload${
                   representative.lcp?.available?.length
                     ? ` (searched: ${representative.lcp.available.join(', ')})`
