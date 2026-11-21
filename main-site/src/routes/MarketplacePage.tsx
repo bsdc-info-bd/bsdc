@@ -253,7 +253,12 @@ function ShopCard({
             <img
               src={shop.cover_url}
               alt=""
-              loading="lazy"
+              // The same rule the feed and the other catalogues keep: the cover
+              // in the first screen is the largest painted element, so it may not
+              // wait for the lazy-load queue. `fetchpriority` is spelled in lower
+              // case because React only forwards the attribute it does not own.
+              loading={index === 0 ? 'eager' : 'lazy'}
+              {...(index === 0 ? { fetchpriority: 'high' } : {})}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : null}
