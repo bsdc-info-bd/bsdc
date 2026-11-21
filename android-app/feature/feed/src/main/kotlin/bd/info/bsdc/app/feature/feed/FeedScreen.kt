@@ -652,6 +652,18 @@ private fun FeedPostCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = tokens.mutedText,
                     )
+                    // Where it was written, when it was written in a room. Plain text, not a link:
+                    // the app has no channel page to land on yet, and a tap that goes nowhere teaches
+                    // the member that nothing here can be trusted. The website links both halves.
+                    post.attribution()?.let { attribution ->
+                        Text(
+                            text = attribution.format(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 

@@ -459,6 +459,17 @@ data class FeedPost(
     val tags: List<String> = emptyList(),
     val media: List<PostMediaModel> = emptyList(),
     val poll: List<PollOptionModel> = emptyList(),
+    /**
+     * The room this post was written in, when it was written in one.
+     *
+     * Three flat fields rather than a nested type, because the card needs nothing else from the row
+     * and `null` here is the whole story: a feed post has no room. The names match what the website's
+     * `PostCard` reads (`channelName`, `groupSlug`, `groupName`), modulo the prefix that keeps them
+     * from looking like the post's own slug and name.
+     */
+    val channelName: String? = null,
+    val channelGroupSlug: String? = null,
+    val channelGroupName: String? = null,
 )
 
 enum class SyncNetworkPolicy(val wireValue: String) {

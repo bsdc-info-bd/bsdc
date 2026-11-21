@@ -100,6 +100,21 @@ private data class PostJoinedDto(
     @SerialName("post_tags") val postTags: List<TagJoinDto>? = null,
     @SerialName("poll_options") val pollOptions: List<PollOptDto>? = null,
     @SerialName("post_media") val postMedia: List<PostMediaDto>? = null,
+    @SerialName("channels") val channels: ChannelJoinDto? = null,
+)
+
+/** The `channels` embed, and the group behind it. Either can be null when the row is hidden. */
+@Serializable
+private data class ChannelJoinDto(
+    val slug: String = "",
+    val name: String = "",
+    val groups: ChannelGroupJoinDto? = null,
+)
+
+@Serializable
+private data class ChannelGroupJoinDto(
+    val slug: String = "",
+    val name: String = "",
 )
 
 @Serializable
@@ -178,7 +193,12 @@ class FeedRepository(
 
     companion object {
         private const val POST_SELECT =
-            "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))"
+            "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))" +
+                // The room the post was written in, and the group that owns it. `posts.channel_id` has
+                // been a real foreign key since 0011, so PostgREST can walk both edges here — which is
+                // what lets every hydration path (feed, single post, by-id) carry attribution without
+                // any of them having to ask separately.
+                ",channels(slug,name,groups(slug,name))"
         private const val COMMENT_SELECT =
             "id,post_id,author_uid,parent_id,root_id,depth,body,status,likes_count,replies_count,is_answer,edited_at,created_at,updated_at," +
                 "image_url,image_thumb_url,image_alt,image_width,image_height," +
@@ -759,6 +779,9 @@ class FeedRepository(
                         avatarUrl = prof.avatarUrl.orEmpty(),
                     )
                 },
+                channelName = dto.channels?.name?.trim()?.takeIf { it.isNotEmpty() },
+                channelGroupSlug = dto.channels?.groups?.slug?.trim()?.takeIf { it.isNotEmpty() },
+                channelGroupName = dto.channels?.groups?.name?.trim()?.takeIf { it.isNotEmpty() },
                 tags = dto.postTags.orEmpty().map { it.tagSlug }.filter { it.isNotBlank() },
                 media = media,
                 poll = dto.pollOptions.orEmpty().sortedBy { it.position }.map { opt ->
