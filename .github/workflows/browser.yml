@@ -105,7 +105,20 @@ jobs:
       # tooling this one script uses, and `--no-save` is what
       # scripts/lighthouse.mjs asks for when it cannot resolve the module.
       - name: Install the auditor
-        run: npm install --no-save lighthouse chrome-launcher
+        shell: bash
+        run: |
+          npm install --no-save lighthouse chrome-launcher
+          # The install above lands in main-site/node_modules, but the auditor
+          # lives at scripts/lighthouse.mjs, and a bare specifier in an ES module
+          # resolves by walking up from the *importing file* — scripts/, the repo
+          # root. NODE_PATH is ignored by the ESM loader, so instead the tree that
+          # exists is made visible where the script looks, rather than downloading
+          # 40 MB of Chromium tooling a second time into a prefix nothing reads.
+          ln -sfn "$PWD/node_modules" ../node_modules
+          # Probed from the directory the auditor actually resolves against, not
+          # from main-site — a check that passes for the wrong reason is how a
+          # green job started measuring nothing.
+          (cd .. && node --input-type=module -e "const m = await import('lighthouse'); console.log('the auditor resolves from the repo root:', typeof m.default);")
       - name: Resolve a browser
         id: chrome
         shell: bash
