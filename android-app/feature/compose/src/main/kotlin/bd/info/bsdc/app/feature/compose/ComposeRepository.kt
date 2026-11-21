@@ -123,6 +123,39 @@ class ComposeRepository(
         )
     }
 
+    /**
+     * Every channel the signed-in member may see, each with the reason it would refuse their post.
+     *
+     * Two round trips, deliberately: `channels` (with the group embedded, so a section header costs
+     * nothing) decides *what to show*, and `channel_post_block_many` decides *what stays enabled*.
+     * Asking the database once per channel would be N+1 on a group with many rooms, and folding the
+     * verdict into the select would mean trusting PostgREST to reach a `bsdc` function it cannot.
+     */
+    suspend fun fetchPostableChannels(): List<PostableChannel> = withContext(Dispatchers.IO) {
+        val rows = supabase.decode<List<PostableChannel>>(
+            supabase.getJsonText(
+                table = "channels",
+                queryPairs = listOf(
+                    "select" to "id,group_id,slug,name,topic,is_read_only,groups(slug,name)",
+                    "order" to "name.asc",
+                    "limit" to "400",
+                ),
+                requireAuth = true,
+            ),
+        )
+        if (rows.isEmpty()) return@withContext emptyList()
+        val verdicts = supabase.decode<List<ChannelBlockRow>>(
+            supabase.rpcText(
+                "channel_post_block_many",
+                params = buildJsonObject {
+                    put("p_channel_ids", buildJsonArray { rows.forEach { add(it.id) } })
+                },
+                requireAuth = true,
+            ),
+        )
+        combineChannelRows(rows, verdicts)
+    }
+
     suspend fun fetchCuratedTags(limit: Int = 50): List<CuratedTagItem> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.getJsonText(
@@ -194,6 +227,13 @@ class ComposeRepository(
                     put("kind", kindWire)
                     put("status", if (publish) "published" else "draft")
                     put("visibility", draft.visibility)
+                    // Absent means "leave this post's channel alone"; an explicit null means "move it
+                    // out to the feed". Only the member can have said either, so the key is written
+                    // only once the channel selector has actually been used.
+                    if (ChannelRules.shouldSendChannelKey(draft.channelTouched)) {
+                        val channel = draft.channelId
+                        if (channel.isNullOrBlank()) put("channel_id", JsonNull) else put("channel_id", channel)
+                    }
                     put("title", cleanTitle)
                     put("body", cleanBody)
                     put("excerpt", excerpt)

@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
+import bd.info.bsdc.app.core.designsystem.BsdcAnimatedEntrance
 import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
@@ -94,6 +95,16 @@ fun PostComposerScreen(
     imageLoader: ImageLoader,
     language: AppLanguage,
     initialDraft: PostComposerDraft = PostComposerDraft(language = language),
+    /**
+     * Opens a fresh composer addressed to one group channel.
+     *
+     * Applied after the draft is seeded, not instead of it, because the two are not in conflict: a
+     * draft restored for editing may already live in a channel, and a caller's target only speaks for
+     * a *new* post. Marking it touched is deliberate — the member came from the channel, so the key
+     * belongs in the payload even though they never opened the picker.
+     */
+    initialChannelId: String? = null,
+    initialChannelName: String? = null,
     onPublished: (PublishedResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -111,7 +122,19 @@ fun PostComposerScreen(
         bodyField = TextFieldValue(edit.text, TextRange(edit.start, edit.end))
         draft = draft.copy(body = edit.text)
     }
-    var previewMode by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(MkComposerMode.WRITE) }
+
+    /**
+     * The rooms this member may post into.
+     *
+     * A failure here is not fatal and must not look like one: the feed needs no channel list, so a
+     * member who cannot load their channels can still publish — the row simply says the list could
+     * not be read, and the pickers stay closed. Nothing about the draft changes on a fetch failure.
+     */
+    var channels by remember { mutableStateOf<List<PostableChannel>>(emptyList()) }
+    var channelsUnavailable by remember { mutableStateOf(false) }
+    var showChannelSheet by remember { mutableStateOf(false) }
+    var showVisibilitySheet by remember { mutableStateOf(false) }
     var curatedTags by remember { mutableStateOf<List<CuratedTagItem>>(emptyList()) }
     var tagInput by remember { mutableStateOf("") }
     var publishing by remember { mutableStateOf(false) }
@@ -124,6 +147,9 @@ fun PostComposerScreen(
 
     LaunchedEffect(Unit) {
         curatedTags = composeRepository.fetchCuratedTags()
+        runCatching { composeRepository.fetchPostableChannels() }
+            .onSuccess { channels = it }
+            .onFailure { channelsUnavailable = true }
     }
 
     // Room offline draft auto-save every time user stops typing for 1.5s
@@ -206,6 +232,26 @@ fun PostComposerScreen(
         }
     }
 
+    LaunchedEffect(initialChannelId, initialDraft.remotePostId) {
+        if (initialChannelId.isNullOrBlank() || initialDraft.remotePostId != null) return@LaunchedEffect
+        draft = draft.copy(
+            channelId = initialChannelId,
+            channelTouched = true,
+            // A channel cannot carry `private`, so the audience moves rather than the destination.
+            visibility = ChannelRules.reconcileVisibility(
+                ComposerVisibility.fromWire(draft.visibility),
+                initialChannelId,
+            ).wire,
+        )
+        if (!initialChannelName.isNullOrBlank()) {
+            statusMsg = if (bn) {
+                "পোস্টটি #$initialChannelName চ্যানেলে যাবে।"
+            } else {
+                "This post will go in #$initialChannelName."
+            }
+        }
+    }
+
     val detectedHashtags = remember(draft.body) {
         ComposerValidationEngine.extractHashtags(draft.body)
             .filterNot { it in draft.tags }
@@ -234,20 +280,11 @@ fun PostComposerScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !previewMode,
-                        onClick = { previewMode = false },
-                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null, Modifier.size(16.dp)) },
-                        label = { Text(if (bn) "লিখুন" else "Write") },
-                    )
-                    FilterChip(
-                        selected = previewMode,
-                        onClick = { previewMode = true },
-                        leadingIcon = { Icon(Icons.Rounded.Preview, contentDescription = null, Modifier.size(16.dp)) },
-                        label = { Text(if (bn) "প্রিভিউ" else "Preview") },
-                    )
-                }
+                MkComposerModeSwitch(
+                    mode = mode,
+                    onModeChange = { next -> mode = next },
+                    bn = bn,
+                )
                 if (savedLocalDrafts.isNotEmpty()) {
                     TextButton(onClick = { showSavedDraftsSheet = true }) {
                         Icon(Icons.Rounded.Drafts, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -309,27 +346,42 @@ fun PostComposerScreen(
             }
         }
 
-        if (previewMode) {
-            item("markdown_preview") {
-                BsdcCard {
-                    if (draft.title.isNotBlank()) {
-                        Text(draft.title, style = MaterialTheme.typography.headlineMedium)
-                    }
-                    if (draft.body.isNotBlank()) {
-                        PostMarkdownRenderer(markdown = draft.body)
-                    } else {
-                        Text(
-                            text = if (bn) "প্রিভিউ দেখতে কিছু লিখুন..." else "Write Markdown content to preview here...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.mutedText,
-                        )
-                    }
-                    if (draft.kind == PostKind.SNIPPET && draft.code.isNotBlank()) {
-                        BsdcCodeSnippetBlock(code = draft.code, language = draft.codeLanguage)
-                    }
+        item("audience") {
+            val selectedChannel = channels.firstOrNull { it.id == draft.channelId }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MkAudienceRow(
+                    channel = selectedChannel,
+                    hasChannel = draft.channelId != null,
+                    visibility = ComposerVisibility.fromWire(draft.visibility),
+                    bn = bn,
+                    onPickChannel = { showChannelSheet = true },
+                    onPickVisibility = { showVisibilitySheet = true },
+                )
+                if (channelsUnavailable) {
+                    Text(
+                        text = if (bn) {
+                            "চ্যানেলের তালিকা আনা যায়নি — পোস্টটি ফিডে যাবে।"
+                        } else {
+                            "Channels could not be loaded — this post will go to the feed."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.danger,
+                    )
+                } else if (draft.channelId != null && selectedChannel == null && channels.isNotEmpty()) {
+                    Text(
+                        text = if (bn) {
+                            "নির্বাচিত চ্যানেলটি এখন আর পাওয়া যাচ্ছে না — আবার বেছে নিন।"
+                        } else {
+                            "The chosen channel is no longer listed. Pick again before publishing."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.danger,
+                    )
                 }
             }
-        } else {
+        }
+
+        if (mode != MkComposerMode.PREVIEW) {
             item("title_body") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -526,6 +578,28 @@ fun PostComposerScreen(
                                 Text(if (bn) "আরও বিকল্প যোগ করুন" else "Add option")
                             }
                         }
+                    }
+                }
+            }
+        }
+
+        if (mode != MkComposerMode.WRITE) {
+            item("markdown_preview") {
+                // `key(mode)` re-enters the card on every mode change, so SPLIT ↔ PREVIEW animates as
+                // well as the first move into preview. The editor above is deliberately *not* animated
+                // the same way: it would replay its entrance while the member is mid-thought, and a
+                // text field that fades in under the cursor feels broken rather than designed.
+                key(mode) {
+                    BsdcAnimatedEntrance {
+                        MkComposerPreviewCard(
+                            title = draft.title,
+                            body = draft.body,
+                            code = draft.code,
+                            codeLanguage = draft.codeLanguage,
+                            showCode = draft.kind == PostKind.SNIPPET && draft.code.isNotBlank(),
+                            split = mode == MkComposerMode.SPLIT,
+                            bn = bn,
+                        )
                     }
                 }
             }
@@ -827,6 +901,38 @@ fun PostComposerScreen(
         }
     }
 
+    MkChannelPickerSheet(
+        visible = showChannelSheet,
+        channels = channels,
+        selectedChannelId = draft.channelId,
+        visibility = ComposerVisibility.fromWire(draft.visibility),
+        bn = bn,
+        onDismiss = { showChannelSheet = false },
+        onPick = { pickedChannelId ->
+            val current = ComposerVisibility.fromWire(draft.visibility)
+            val nextVisibility = ChannelRules.reconcileVisibility(current, pickedChannelId)
+            draft = draft.copy(
+                channelId = pickedChannelId,
+                channelTouched = true,
+                visibility = nextVisibility.wire,
+            )
+            val name = channels.firstOrNull { it.id == pickedChannelId }?.let { channel ->
+                "#${channel.slug}"
+            } ?: (if (bn) "ফিড" else "the feed")
+            statusMsg = if (bn) "পোস্টটি $name-এ যাবে।" else "This post will go to $name."
+        },
+    )
+    MkVisibilityPickerSheet(
+        visible = showVisibilitySheet,
+        visibility = ComposerVisibility.fromWire(draft.visibility),
+        channelId = draft.channelId,
+        bn = bn,
+        onDismiss = { showVisibilitySheet = false },
+        onPick = { picked ->
+            draft = draft.copy(visibility = picked.wire)
+        },
+    )
+
     if (showSavedDraftsSheet) {
         ModalBottomSheet(onDismissRequest = { showSavedDraftsSheet = false }) {
             Column(
@@ -875,6 +981,59 @@ fun PostComposerScreen(
                     }
                 }
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+/**
+ * The rendered post, exactly as a reader will see it.
+ *
+ * It is the reader's own renderer (`PostMarkdownRenderer`), not a second implementation for the
+ * composer: the moment a preview and the real post parse Markdown differently, the preview becomes
+ * the thing members blame when the post looks wrong.
+ */
+@Composable
+private fun MkComposerPreviewCard(
+    title: String,
+    body: String,
+    code: String,
+    codeLanguage: String,
+    showCode: Boolean,
+    split: Boolean,
+    bn: Boolean,
+) {
+    val tokens = BsdcThemeTokens.colors
+    BsdcCard(
+        modifier = Modifier.then(
+            if (split) {
+                // In split mode the preview is a proof, not the page: it is framed as the card the
+                // reader will see, sized down, so the two panes read as one screen rather than two.
+                Modifier.padding(top = 2.dp)
+            } else {
+                Modifier
+            },
+        ),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (title.isNotBlank()) {
+                Text(title, style = MaterialTheme.typography.headlineMedium)
+            }
+            if (body.isNotBlank()) {
+                PostMarkdownRenderer(markdown = body)
+            } else {
+                Text(
+                    text = if (bn) {
+                        "প্রিভিউ দেখতে কিছু লিখুন…"
+                    } else {
+                        "Write Markdown content to preview here…"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.mutedText,
+                )
+            }
+            if (showCode) {
+                BsdcCodeSnippetBlock(code = code, language = codeLanguage)
             }
         }
     }

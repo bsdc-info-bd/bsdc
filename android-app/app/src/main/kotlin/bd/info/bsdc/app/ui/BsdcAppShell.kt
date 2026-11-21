@@ -170,6 +170,14 @@ fun BsdcAppShell(
     var activeJobSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeEventSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeGroupSlug by rememberSaveable { mutableStateOf<String?>(null) }
+    /**
+     * The channel a member chose to write in, carried from the group page to the composer.
+     *
+     * Deliberately not `rememberSaveable`: the composer's own draft persists in Room, and a restored
+     * process landing the member straight into a half-written group post is a surprise, not a
+     * recovery. The target lives only as long as the trip it describes.
+     */
+    var createChannelTarget by remember { mutableStateOf<Pair<String, String>?>(null) }
     var discoverSection by rememberSaveable { mutableStateOf(DiscoverSection.SEARCH) }
     var marketSection by rememberSaveable { mutableStateOf(MarketSection.SHOP) }
     var pendingMessengerTarget by rememberSaveable { mutableStateOf<String?>(null) }
@@ -494,6 +502,12 @@ fun BsdcAppShell(
                     activeProfileTarget = username
                 },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
+                canWriteInChannels = authState.session?.uid != null,
+                onWriteInChannel = { channelId, channelName ->
+                    activeGroupSlug = null
+                    createChannelTarget = channelId to channelName
+                    selectedTab = MainTab.CREATE
+                },
             )
             return
         }
@@ -899,6 +913,8 @@ fun BsdcAppShell(
                     }
                     MainTab.CREATE -> CreateHubScreen(
                         viewerUid = authState.session?.uid,
+                        initialChannelId = createChannelTarget?.first,
+                        initialChannelName = createChannelTarget?.second,
                         composeRepository = container.composeRepository,
                         mediaRepository = container.mediaRepository,
                         imageLoader = container.imageLoader,
@@ -912,6 +928,7 @@ fun BsdcAppShell(
                         },
                         onSignInRequired = { showAuthModal = true },
                         onPostPublished = { res ->
+                            createChannelTarget = null
                             activeDetailPost = null
                             activeDetailSlug = res.slug.ifBlank { res.id }
                             selectedTab = MainTab.HOME

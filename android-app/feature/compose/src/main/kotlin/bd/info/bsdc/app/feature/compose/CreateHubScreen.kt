@@ -69,6 +69,15 @@ fun CreateHubScreen(
     imageLoader: ImageLoader,
     language: AppLanguage,
     initialMode: CreateHubMode = CreateHubMode.POST,
+    /**
+     * A channel to open the post composer aimed at, when the member arrived from a group page.
+     *
+     * The hub only forwards it. It has no opinion about channels, and it should not: the rules that
+     * decide what a channel may hold are in one place (`ChannelRules`) so that the hub, the composer
+     * and the web cannot drift apart and disagree about the same post.
+     */
+    initialChannelId: String? = null,
+    initialChannelName: String? = null,
     onSignInRequired: () -> Unit,
     onPostPublished: (PublishedResult) -> Unit,
     onDirectoryCreated: (CreateHubMode, String) -> Unit,
@@ -259,6 +268,8 @@ fun CreateHubScreen(
                 mediaRepository = mediaRepository,
                 imageLoader = imageLoader,
                 language = language,
+                initialChannelId = initialChannelId,
+                initialChannelName = initialChannelName,
                 onPublished = onPostPublished,
             )
 
