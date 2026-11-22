@@ -59,7 +59,15 @@ describe('what a browser can be asked for', () => {
     // Named rather than counted: a block added to `PushBlock` without a sentence is
     // the bug, and a count would only say that something moved.
     expect(Object.keys(PUSH_BLOCK_KEYS).sort()).toEqual(
-      ['insecure', 'ios-install', 'no-notification', 'no-push', 'no-worker', 'ok', 'unconfigured'].sort(),
+      [
+        'insecure',
+        'ios-install',
+        'no-notification',
+        'no-push',
+        'no-worker',
+        'ok',
+        'unconfigured',
+      ].sort(),
     );
   });
 });
