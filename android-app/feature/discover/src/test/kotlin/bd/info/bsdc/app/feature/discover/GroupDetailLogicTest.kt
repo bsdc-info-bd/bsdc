@@ -121,7 +121,11 @@ class GroupDetailLogicTest {
     private fun localeFile(lang: String): String = readRepoFile("main-site", "src", "i18n", "locales", "$lang.ts")
 
     private fun sectionOf(text: String, parent: String, mustContain: String): String {
-        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
+        // The indent is captured so the section can end at _its own_ `},`. This helper is copied into
+        // three modules' test sources, and a missing bracket here is what `68ed300` found in one of
+        // them: `groupValues[1]` on a regex with no group throws before a string is compared, so the
+        // test fails with IndexOutOfBoundsException rather than with a parity finding.
+        val header = Regex("""(?m)^([ \t]*)""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
         for (match in header.findAll(text)) {
             val indent = match.groupValues[1]
             val rest = text.substring(match.range.last + 1)
