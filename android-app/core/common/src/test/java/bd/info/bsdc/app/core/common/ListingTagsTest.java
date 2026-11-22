@@ -217,12 +217,14 @@ public class ListingTagsTest {
             full,
             ListingTags.added(ListingTags.APPLICATIONS, full, "one more")
         );
-        // The same list is not full for a listing, which caps lower: the ceiling belongs to the rules,
-        // not to the number of things already in the box.
-        assertEquals(
-            ListingTags.MAX_TAGS,
-            ListingTags.normalise(Arrays.asList("kotlin", "react", "go", "rust", "elixir", "erlang")).size()
-        );
+        // The same list is not full for an application, which caps higher: the ceiling belongs to the
+        // rules the caller passes, not to the number of things already sitting in the box.
+        List<String> twenty = new ArrayList<>();
+        for (int i = 0; i < ListingTags.MAX_TAGS; i++) {
+            twenty.add("skill-" + i);
+        }
+        assertNull(ListingTags.accept(ListingTags.LISTINGS, twenty, "one more"));
+        assertEquals("one more", ListingTags.accept(ListingTags.APPLICATIONS, twenty, "one more"));
     }
 
     private static String readWebSkills() throws IOException {
