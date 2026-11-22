@@ -83,6 +83,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -475,6 +478,7 @@ private fun MessengerInboxScreen(
                     ) {
                         items(filteredThreads, key = { it.id }) { thread ->
                             InboxThreadCard(
+                                modifier = Modifier.animateItem(),
                                 item = thread,
                                 imageLoader = imageLoader,
                                 language = language,
@@ -605,14 +609,27 @@ private fun InboxThreadCard(
     onTogglePin: () -> Unit,
     onToggleArchive: () -> Unit,
     onToggleMute: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
     val title = item.displayTitle(bn)
     val avatarUrl = item.other?.avatarUrl?.ifBlank { item.avatarUrl } ?: item.avatarUrl
     var menuExpanded by remember { mutableStateOf(false) }
+    // A thread goes quiet the moment it is opened, and the panel's fill is how a member knows which
+    // row they are in. Snapping that colour is the one place a list used to flicker.
+    val reducedMotion = BsdcThemeTokens.reducedMotion
+    val surfaceColor by animateColorAsState(
+        targetValue = if (item.unreadCount > 0) {
+            BsdcThemeTokens.colors.surfaceElevated
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        animationSpec = if (reducedMotion) snap() else tween(220),
+        label = "threadSurface",
+    )
 
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .combinedClickable(
@@ -620,7 +637,7 @@ private fun InboxThreadCard(
                 onLongClick = { menuExpanded = true },
             ),
         shape = RoundedCornerShape(18.dp),
-        color = if (item.unreadCount > 0) BsdcThemeTokens.colors.surfaceElevated else MaterialTheme.colorScheme.surfaceVariant,
+        color = surfaceColor,
         border = BorderStroke(
             1.dp,
             if (item.pinned) MaterialTheme.colorScheme.primary.copy(alpha = 0.4f) else BsdcThemeTokens.colors.border,
