@@ -298,7 +298,7 @@ class ChannelRulesTest {
         // `([ \t]*)` is a capture, not a skip: the section ends at the first brace at _that_ indent, so a
         // nested `reasons` block stops at its own `},`. Without the group there is no `groupValues[1]`,
         // and the test dies on IndexOutOfBoundsException before it can compare a single string.
-        val header = Regex("""(?m)^([ \t]*)(?:""" + Regex.escape(parent) + """)[ \t]*\{[ \t]*""")
+        val header = Regex("""(?m)^([ \t]*)""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
         for (match in header.findAll(text)) {
             val indent = match.groupValues[1]
             val rest = text.substring(match.range.last + 1)
