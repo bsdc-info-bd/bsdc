@@ -456,6 +456,10 @@ private fun DeliveryAndScheduleCard(
     var perKmText by rememberSaveable { mutableStateOf("20") }
     var centerLat by rememberSaveable { mutableStateOf<Double?>(null) }
     var centerLng by rememberSaveable { mutableStateOf<Double?>(null) }
+    var minOrderText by rememberSaveable { mutableStateOf("") }
+    var minOrderBusy by remember { mutableStateOf(false) }
+    var minOrderSaved by remember { mutableStateOf<String?>(null) }
+    var minOrderError by remember { mutableStateOf<String?>(null) }
     var shopLat by rememberSaveable { mutableStateOf(MkLogic.SYLHET_LAT) }
     var shopLng by rememberSaveable { mutableStateOf(MkLogic.SYLHET_LNG) }
     var deliveryBusy by remember { mutableStateOf(false) }
@@ -476,6 +480,7 @@ private fun DeliveryAndScheduleCard(
             feeMode = d.fee_mode
             fixedFeeText = ((d.fixed_fee_poisha.takeIf { it >= 0L } ?: d.fee_poisha) / 100L).toString()
             perKmText = (d.per_km_rate_poisha / 100L).toString()
+            minOrderText = (d.min_order_poisha / 100L).toString()
             centerLat = d.center_lat
             centerLng = d.center_lng
             shopLat = d.shop_lat
@@ -669,6 +674,76 @@ private fun DeliveryAndScheduleCard(
             BsdcStatusBanner(title = mkText(bn, "Saved", "সংরক্ষিত"), body = it, tone = BsdcTone.OK)
         }
         deliveryError?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Not saved", "সংরক্ষণ হয়নি"), body = it, tone = BsdcTone.BAD)
+        }
+    }
+
+    BsdcCard(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            mkText(bn, "Minimum order", "সর্বনিম্ন অর্ডার"),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(6.dp))
+        Text(
+            mkText(
+                bn,
+                "0 takes any order. The basket is measured against the goods, never the delivery charge.",
+                "০ হলে যেকোনো অর্ডার নেওয়া হবে। হিসাব কেবল পণ্যের ওপর, ডেলিভারি চার্জের ওপর নয়।",
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = BsdcThemeTokens.colors.mutedText,
+        )
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(
+            value = minOrderText,
+            onValueChange = { minOrderText = it.filter(Char::isDigit).take(6) },
+            label = { Text(mkText(bn, "Minimum order (taka, 0–100000)", "সর্বনিম্ন অর্ডার (০–১০০০০০ টাকা)")) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = {
+                val taka = minOrderText.trim().toIntOrNull() ?: 0
+                if (taka !in 0..100_000) {
+                    minOrderError = mkText(
+                        bn,
+                        "Minimum order must be 0–100,000 taka.",
+                        "সর্বনিম্ন অর্ডার ০–১,০০,০০০ টাকা হতে হবে।",
+                    )
+                    return@Button
+                }
+                scope.launch {
+                    minOrderBusy = true
+                    minOrderError = null
+                    minOrderSaved = null
+                    repository.setVendorMinOrder(taka).onSuccess {
+                        minOrderSaved = mkText(
+                            bn,
+                            if (taka == 0) "No minimum. Any order is taken." else "Minimum order set to ${MkLogic.formatTaka(taka * 100L, bn)}.",
+                            if (taka == 0) "কোনো সর্বনিম্ন নেই। যেকোনো অর্ডার নেওয়া হবে।" else "সর্বনিম্ন অর্ডার ${MkLogic.formatTaka(taka * 100L, bn)} নির্ধারিত হয়েছে।",
+                        )
+                        onChanged()
+                    }.onFailure {
+                        minOrderError = it.message
+                            ?: mkText(bn, "Could not save the minimum order.", "সর্বনিম্ন অর্ডার সংরক্ষণ করা যায়নি।")
+                    }
+                    minOrderBusy = false
+                }
+            },
+            enabled = !minOrderBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(mkText(bn, "Save minimum order", "সর্বনিম্ন অর্ডার সংরক্ষণ করুন"))
+        }
+        minOrderSaved?.let {
+            Spacer(Modifier.height(8.dp))
+            BsdcStatusBanner(title = mkText(bn, "Saved", "সংরক্ষিত"), body = it, tone = BsdcTone.OK)
+        }
+        minOrderError?.let {
             Spacer(Modifier.height(8.dp))
             BsdcStatusBanner(title = mkText(bn, "Not saved", "সংরক্ষণ হয়নি"), body = it, tone = BsdcTone.BAD)
         }

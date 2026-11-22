@@ -198,6 +198,13 @@ data class MkShopDeliveryDto(
     val default_fee_poisha: Long = 15000,
     val center_lat: Double? = null,
     val center_lng: Double? = null,
+    /**
+     * What a basket at this shop must reach, in poisha, before the shop takes the order. Zero means
+     * the shop sets no minimum. It travels inside the delivery block because that is the one object
+     * `bsdc.mk_delivery_json` builds for the shop page, the product page and the cart alike: a
+     * second query for the same number would be a second chance to show a different one.
+     */
+    val min_order_poisha: Long = 0,
 )
 
 @Serializable
@@ -213,6 +220,7 @@ data class MkVendorDeliveryDto(
     val center_lng: Double = MkLogic.SYLHET_LNG,
     val shop_lat: Double = MkLogic.SYLHET_LAT,
     val shop_lng: Double = MkLogic.SYLHET_LNG,
+    val min_order_poisha: Long = 0,
     val schedule: MkShopScheduleDto? = null,
 )
 
@@ -276,6 +284,48 @@ data class MkCartLineDto(
     val vendor_name: String = "",
     val line_total: Long = 0,
     val image_url: String = "",
+    /** The shop's minimum order, joined onto the line by `mk_my_cart` so the nudge needs no second call. */
+    val min_order_poisha: Long = 0,
+)
+
+/**
+ * A doorstep the member saved once instead of typing again (migration 0131). The keys are the
+ * order's own names — `customer_name`, `address_line` — because this row is read straight into a
+ * checkout, and a rename in the middle would be one more place for the two to disagree.
+ */
+@Serializable
+data class MkSavedAddressDto(
+    val id: String = "",
+    val label: String = "home",
+    val nickname: String = "",
+    val customer_name: String = "",
+    val customer_phone: String = "",
+    val address_line: String = "",
+    val landmark: String = "",
+    val place_label: String = "",
+    val lat: Double = 0.0,
+    val lng: Double = 0.0,
+    val note: String = "",
+    val is_default: Boolean = false,
+    val times_used: Int = 0,
+)
+
+/** `mk_save_address` answers with the row it wrote and the book that now holds it. */
+@Serializable
+data class MkAddressSaveDto(
+    val address: MkSavedAddressDto = MkSavedAddressDto(),
+    val addresses: List<MkSavedAddressDto> = emptyList(),
+)
+
+/**
+ * `mk_delete_address` answers with the remaining book and whether the deleted row held the default,
+ * which is the one piece of news a screen cannot work out for itself afterwards: it is what tells a
+ * checkout to move its selection instead of going on pointing at a row that is gone.
+ */
+@Serializable
+data class MkAddressDeleteDto(
+    val was_default: Boolean = false,
+    val addresses: List<MkSavedAddressDto> = emptyList(),
 )
 
 @Serializable
@@ -318,7 +368,11 @@ data class MkCustomerOrderItemDto(
     val image_url: String = "",
 )
 
-/** Address sent with mk_place_order. Lat and lng are required (inside Bangladesh) and come from the map pin. */
+/**
+ * An address, whether it is being typed at a checkout or written to the book. The order fields come
+ * first because `mk_place_order` reads them; the four book fields after are what `mk_save_address`
+ * needs on top, and they default so every existing checkout call keeps saying exactly what it said.
+ */
 data class MkAddressInput(
     val customerName: String,
     val customerPhone: String,
@@ -328,6 +382,11 @@ data class MkAddressInput(
     val landmark: String = "",
     val placeLabel: String = "",
     val note: String = "",
+    /** Null inserts a new row; an id updates that row. There is no third meaning. */
+    val id: String? = null,
+    val label: String = "home",
+    val nickname: String = "",
+    val isDefault: Boolean = false,
 )
 
 /** One direct-order line (mk_place_order with items instead of the saved cart). */

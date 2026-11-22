@@ -735,6 +735,19 @@ fun MkVendorPageScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
+                    // Said here rather than discovered at the end: a minimum that only appears in the
+                    // cart is a shop that spent the customer's attention on nothing.
+                    if (MkLogic.hasMinimumOrder(del.min_order_poisha)) {
+                        Text(
+                            text = mkText(
+                                bn,
+                                "Minimum order: " + MkLogic.formatTaka(del.min_order_poisha, bn),
+                                "সর্বনিম্ন অর্ডার: " + MkLogic.formatTaka(del.min_order_poisha, bn),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BsdcThemeTokens.colors.mutedText,
+                        )
+                    }
                 }
                 if (data.vendor.description.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))

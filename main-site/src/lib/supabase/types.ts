@@ -2488,9 +2488,34 @@ export type Database = {
       mk_cart_set: { Args: { p_product_id: string; p_qty: number }; Returns: number };
       mk_my_cart: { Args: never; Returns: Json };
       mk_place_order: {
-        Args: { p_vendor_id: string; p_address: Json; p_items?: Json };
+        Args: {
+          p_vendor_id: string;
+          p_address: Json;
+          p_items?: Json;
+          p_address_id?: string | null;
+        };
         Returns: Json;
       };
+      mk_my_addresses: { Args: never; Returns: Json };
+      mk_save_address: {
+        Args: {
+          p_id?: string | null;
+          p_label: string;
+          p_nickname?: string | null;
+          p_recipient_name: string;
+          p_phone: string;
+          p_address_line: string;
+          p_landmark?: string | null;
+          p_place_label?: string | null;
+          p_lat: number;
+          p_lng: number;
+          p_note?: string | null;
+          p_is_default: boolean;
+        };
+        Returns: Json;
+      };
+      mk_delete_address: { Args: { p_id: string }; Returns: Json };
+      mk_vendor_set_min_order: { Args: { p_taka: number }; Returns: Json };
       mk_my_orders: { Args: { p_limit?: number }; Returns: Json };
       mk_customer_cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: Json };
       mk_submit_review: {

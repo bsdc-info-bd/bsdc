@@ -210,6 +210,12 @@ export interface MkShopDelivery {
   default_fee_poisha?: number;
   center_lat: number;
   center_lng: number;
+  /**
+   * The shop's minimum order, in poisha. It rides in the delivery block rather than beside it
+   * because that is where `bsdc.mk_delivery_json` builds it: one function feeds the shop page, the
+   * product page and the vendor console, and a fourth surface cannot forget to ask.
+   */
+  min_order_poisha?: number;
 }
 
 export interface MkVendorPageData {
@@ -269,6 +275,45 @@ export interface MkProductDetail {
   rating: number;
 }
 
+/**
+ * A doorstep the member saved once instead of typing again (0131). The field names are the order's
+ * own — `customer_name`, `customer_phone`, `address_line` — because the row is read straight into a
+ * checkout, and a rename in the middle would be one more place for the two to disagree.
+ */
+export interface MkSavedAddress {
+  id: string;
+  label: 'home' | 'work' | 'other';
+  nickname: string;
+  customer_name: string;
+  customer_phone: string;
+  address_line: string;
+  landmark: string;
+  place_label: string;
+  lat: number;
+  lng: number;
+  note: string;
+  is_default: boolean;
+  times_used: number;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+/** What `mk_save_address` takes. `id` null inserts; anything else updates that row. */
+export interface MkAddressInput {
+  id: string | null;
+  label: 'home' | 'work' | 'other';
+  nickname: string;
+  customer_name: string;
+  customer_phone: string;
+  address_line: string;
+  landmark: string;
+  place_label: string;
+  lat: number;
+  lng: number;
+  note: string;
+  is_default: boolean;
+}
+
 export interface MkCartLine {
   product_id: string;
   qty: number;
@@ -283,6 +328,8 @@ export interface MkCartLine {
   vendor_name: string;
   line_total: number;
   image_url: string;
+  /** What a basket at this shop must reach before the shop accepts the order. 0 = no minimum. */
+  min_order_poisha?: number;
 }
 
 export interface MkPlacedOrder {

@@ -157,6 +157,11 @@ export default function MarketShopPage() {
                   {copy.buyer.deliveryFee}: {deliveryFeeBadge}
                 </span>
               ) : null}
+              {(deliveryCfg?.min_order_poisha ?? 0) > 0 ? (
+                <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-text">
+                  {copy.buyer.minOrder}: {formatTaka(deliveryCfg?.min_order_poisha ?? 0, language)}
+                </span>
+              ) : null}
               {scheduleBadgeText ? (
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold ${

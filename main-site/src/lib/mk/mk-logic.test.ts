@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ADDRESS_MAX,
   EMPTY_APPLICATION,
   type ApplicationDraft,
+  addressDraftErrors,
+  addressDraftValid,
   canAdvance,
   creditState,
   customerCanCancel,
   customerCanReview,
   distanceKm,
+  evaluateMinimumOrder,
   evaluateShopDelivery,
   formatHhMm,
   formatTaka,
+  isAddressLabel,
   isBdMobile,
   isBdPoint,
   isHttpsUrl,
@@ -17,6 +22,7 @@ import {
   isValidHhMm,
   normaliseBdMobile,
   roundedDistanceKm,
+  savedAddressToDraft,
   stepErrors,
   variantFor,
   timelineIndex,
@@ -322,5 +328,113 @@ describe('variantFor', () => {
     // Identical values would make the srcset advertise the same file twice.
     expect(variantFor(images, { [full]: full }, full)).toBe('');
     expect(variantFor(images, { [full]: '' }, full)).toBe('');
+  });
+});
+
+describe('evaluateMinimumOrder', () => {
+  it('says nothing is required when the shop set no minimum', () => {
+    expect(evaluateMinimumOrder(1, 0)).toEqual({ required: false, met: true, shortfallPoisha: 0 });
+    expect(evaluateMinimumOrder(1, undefined)).toEqual({
+      required: false,
+      met: true,
+      shortfallPoisha: 0,
+    });
+  });
+
+  it('measures the goods, never the ride', () => {
+    // ৳600 of tea at a ৳700 minimum, plus a ৳150 delivery charge: the total clears ৳700 and the
+    // order still fails, because the charge is not something the customer bought. A screen that
+    // compared totals would promise an order the routine then refuses.
+    const subtotal = 60000;
+    const fee = 15000;
+    expect(evaluateMinimumOrder(subtotal, 70000).met).toBe(false);
+    expect(evaluateMinimumOrder(subtotal + fee, 70000).met).toBe(true);
+    expect(evaluateMinimumOrder(subtotal, 70000).shortfallPoisha).toBe(10000);
+  });
+
+  it('counts an exactly-equal basket as met', () => {
+    expect(evaluateMinimumOrder(80000, 80000)).toEqual({
+      required: true,
+      met: true,
+      shortfallPoisha: 0,
+    });
+  });
+
+  it('treats a nonsense minimum as no minimum, the way the routine treats its zero', () => {
+    expect(evaluateMinimumOrder(1, -500).met).toBe(true);
+  });
+});
+
+describe('addressDraftErrors', () => {
+  const good = {
+    name: 'Rahim Uddin',
+    phone: '01712-345678',
+    address: 'House 4, Road 7, Zindabazar',
+    nickname: 'Ammu flat',
+    label: 'home',
+    pin: { lat: 24.8949, lng: 91.8687 },
+  };
+
+  it('accepts a phone typed with separators, because the routine strips them too', () => {
+    expect(addressDraftValid(good)).toBe(true);
+    expect(addressDraftErrors(good).phone).toBe(false);
+  });
+
+  it('refuses what mk_save_address refuses, and only that', () => {
+    expect(addressDraftErrors({ ...good, name: 'A' }).name).toBe(true);
+    expect(addressDraftErrors({ ...good, phone: '0171234567' }).phone).toBe(true);
+    expect(addressDraftErrors({ ...good, address: 'Hous' }).address).toBe(true);
+    expect(addressDraftErrors({ ...good, nickname: 'x'.repeat(41) }).nickname).toBe(true);
+    expect(addressDraftErrors({ ...good, pin: null }).pin).toBe(true);
+    expect(addressDraftErrors({ ...good, label: 'flat' }).label).toBe(true);
+    expect(addressDraftErrors({ ...good, label: 'flat' }).pin).toBe(false);
+  });
+
+  it('refuses a pin outside Bangladesh, which is what makes the fee meaningless', () => {
+    expect(addressDraftErrors({ ...good, pin: { lat: 13.7563, lng: 100.5018 } }).pin).toBe(true);
+    expect(addressDraftErrors({ ...good, pin: { lat: NaN, lng: 90.4 } }).pin).toBe(true);
+  });
+
+  it('knows the three labels the table allows, and the cap it enforces', () => {
+    expect(['home', 'work', 'other'].every(isAddressLabel)).toBe(true);
+    expect(isAddressLabel('flat')).toBe(false);
+    expect(ADDRESS_MAX).toBe(8);
+  });
+});
+
+describe('savedAddressToDraft', () => {
+  it('fills every field the checkout asks for from one row', () => {
+    const draft = savedAddressToDraft({
+      customer_name: 'Ammu',
+      customer_phone: '01712345678',
+      address_line: 'House 9, Road 3, Uposhohor',
+      landmark: 'Near the pharmacy',
+      place_label: 'Uposhohor, Sylhet',
+      lat: 24.9,
+      lng: 91.86,
+      note: 'Third floor',
+    });
+    expect(draft).toEqual({
+      name: 'Ammu',
+      phone: '01712345678',
+      address: 'House 9, Road 3, Uposhohor',
+      landmark: 'Near the pharmacy',
+      note: 'Third floor',
+      pin: { lat: 24.9, lng: 91.86, label: 'Uposhohor, Sylhet' },
+    });
+  });
+
+  it('carries the saved note into the form, where the member can still change it for one order', () => {
+    const draft = savedAddressToDraft({
+      customer_name: 'Ammu',
+      customer_phone: '01712345678',
+      address_line: 'House 9, Road 3',
+      landmark: '',
+      place_label: '',
+      lat: 24.9,
+      lng: 91.86,
+      note: 'Third floor',
+    });
+    expect(draft.note).toBe('Third floor');
   });
 });

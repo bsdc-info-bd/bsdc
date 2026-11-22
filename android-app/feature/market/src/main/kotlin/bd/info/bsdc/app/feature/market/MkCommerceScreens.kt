@@ -253,6 +253,17 @@ fun MkProductScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = BsdcThemeTokens.colors.mutedText,
                 )
+                product.vendor.delivery?.takeIf { MkLogic.hasMinimumOrder(it.min_order_poisha) }?.let { del ->
+                    Text(
+                        text = mkText(
+                            bn,
+                            "This shop takes orders from " + MkLogic.formatTaka(del.min_order_poisha, bn) + ".",
+                            "এই দোকান " + MkLogic.formatTaka(del.min_order_poisha, bn) + " থেকে অর্ডার নেয়।",
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = BsdcThemeTokens.colors.mutedText,
+                    )
+                }
             }
         }
         notice?.let { (text, tone) ->
@@ -434,13 +445,51 @@ fun MkCartScreen(
                     )
                     MkPrice(poisha = subtotal, bn = bn)
                 }
+
+                // The shop's minimum, read off the cart lines themselves: `mk_my_cart` joins it on, so
+                // the nudge costs no second call and cannot quote a number from a stale shop page.
+                val minOrder = shopLines.firstOrNull()?.min_order_poisha ?: 0L
+                val shortfall = MkLogic.minimumOrderShortfallPoisha(subtotal, minOrder)
+                val short = shortfall > 0L
+                if (MkLogic.hasMinimumOrder(minOrder)) {
+                    Spacer(Modifier.height(8.dp))
+                    if (short) {
+                        Text(
+                            text = mkText(
+                                bn,
+                                "Add ${MkLogic.formatTaka(shortfall, bn)} more — this shop takes orders from " +
+                                    "${MkLogic.formatTaka(minOrder, bn)}.",
+                                "আরও ${MkLogic.formatTaka(shortfall, bn)} যোগ করুন — এই দোকান " +
+                                    "${MkLogic.formatTaka(minOrder, bn)} থেকে অর্ডার নেয়।",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    } else {
+                        Text(
+                            text = mkText(
+                                bn,
+                                "Minimum order met (${MkLogic.formatTaka(minOrder, bn)}).",
+                                "সর্বনিম্ন অর্ডার পূরণ হয়েছে (${MkLogic.formatTaka(minOrder, bn)})।",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = { onCheckout(slug, shopName) },
-                    enabled = orderable.isNotEmpty(),
+                    enabled = orderable.isNotEmpty() && !short,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(mkText(bn, "Checkout with this shop", "এই দোকানে অর্ডার করুন"))
+                    Text(
+                        text = if (short) {
+                            mkText(bn, "Below the shop's minimum", "দোকানের সর্বনিম্নের নিচে")
+                        } else {
+                            mkText(bn, "Checkout with this shop", "এই দোকানে অর্ডার করুন")
+                        },
+                    )
                 }
             }
         }

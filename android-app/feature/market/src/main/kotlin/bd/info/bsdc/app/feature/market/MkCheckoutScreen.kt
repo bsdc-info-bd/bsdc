@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -101,6 +103,29 @@ fun MkCheckoutScreen(
     var shopDelivery by remember { mutableStateOf<MkShopDeliveryDto?>(null) }
     var shopSchedule by remember { mutableStateOf<MkShopScheduleDto?>(null) }
 
+    // The address book (0131). Picking a saved door fills the form below rather than replacing it,
+    // so the member can still change the note or move the pin if the flat has shifted — and the
+    // steps, the fee and the summary keep one source of truth instead of two.
+    var savedAddresses by remember { mutableStateOf<List<MkSavedAddressDto>>(emptyList()) }
+    var pickedAddressId by rememberSaveable { mutableStateOf<String?>(null) }
+    var keepAddress by rememberSaveable { mutableStateOf(false) }
+    var addressBusy by remember { mutableStateOf(false) }
+    var addressNotice by remember { mutableStateOf<String?>(null) }
+    /** The sheet's row being edited; null inside it means "a new address". */
+    var addressEditing by remember { mutableStateOf<MkSavedAddressDto?>(null) }
+    var addressEditorOpen by remember { mutableStateOf(false) }
+
+    fun fillFromSaved(address: MkSavedAddressDto) {
+        customerName = address.customer_name
+        phone = address.customer_phone
+        addressLine = address.address_line
+        landmark = address.landmark
+        note = address.note
+        placeLabel = address.place_label
+        pinLat = address.lat
+        pinLng = address.lng
+    }
+
     // Resolve the vendor id, delivery rules, schedule, and subtotal of what is being bought.
     LaunchedEffect(vendorSlug) {
         vendorChecked = false
@@ -108,6 +133,18 @@ fun MkCheckoutScreen(
         val page = repository.fetchVendorPage(vendorSlug).getOrNull()
         shopDelivery = page?.vendor?.delivery
         shopSchedule = page?.vendor?.schedule
+        val book = repository.fetchMyAddresses().getOrNull().orEmpty()
+        savedAddresses = book
+        // The book's first row is the member's default, or their only door; filling the form with it
+        // is the whole point of saving an address, and it happens only into an empty form, so a
+        // half-typed checkout is never overwritten by a fetch that arrived late.
+        val preferred = book.firstOrNull { it.is_default } ?: book.firstOrNull()
+        if (preferred != null &&
+            customerName.isBlank() && addressLine.isBlank() && pinLat == null
+        ) {
+            pickedAddressId = preferred.id
+            fillFromSaved(preferred)
+        }
         if (directItems == null) {
             val lines = repository.fetchMyCart().getOrNull().orEmpty()
                 .filter { it.vendor_slug == vendorSlug && it.orderable }
@@ -180,13 +217,36 @@ fun MkCheckoutScreen(
     val lng = pinLng
     val deliveryEval = MkLogic.evaluateShopDelivery(shopDelivery, lat, lng)
     val shopOpen = shopSchedule?.is_open != false
-    val nameOk = customerName.trim().length >= 2
-    val phoneOk = MkLogic.isBdMobile(phone)
-    val addressOk = addressLine.trim().length >= 5
-    val pinOk = lat != null && lng != null && MkLogic.isInsideBangladesh(lat, lng)
+    val addressCheck = MkLogic.checkAddressDraft(
+        name = customerName,
+        phone = phone,
+        line = addressLine,
+        lat = lat,
+        lng = lng,
+    )
+    val nameOk = !addressCheck.name
+    val phoneOk = !addressCheck.phone
+    val addressOk = !addressCheck.line
+    val pinOk = !addressCheck.pin
+
+    // The saved row is offered to `mk_place_order` by id only while the form still says exactly what
+    // the row says. The routine reads the row — that is the point of an id — so once a member edits
+    // the text or moves the pin, an id would order to the old door while the screen shows the new
+    // one. Falling back to "typed by hand" is the honest answer, and it costs nothing.
+    val picked = savedAddresses.firstOrNull { it.id == pickedAddressId }
+    val formMatchesSaved = picked != null &&
+        customerName.trim() == picked.customer_name &&
+        MkLogic.normaliseBdMobile(phone) == picked.customer_phone &&
+        addressLine.trim() == picked.address_line &&
+        landmark.trim() == picked.landmark &&
+        lat != null && lng != null && lat == picked.lat && lng == picked.lng
+    val addressId = if (formMatchesSaved) picked?.id else null
+
+    val minOrderPoisha = shopDelivery?.min_order_poisha ?: 0L
+    val minShortfall = MkLogic.minimumOrderShortfallPoisha(subtotal ?: 0L, minOrderPoisha)
     val canPlace = vendorId != null && shopOpen && deliveryEval.withinArea &&
         nameOk && phoneOk && addressOk && pinOk && !busy && placedCode == null &&
-        (subtotal ?: 0L) > 0L
+        minShortfall == 0L && (subtotal ?: 0L) > 0L
 
     // Once the order is in, show the confirmation briefly, then go to the orders screen.
     LaunchedEffect(placedCode) {
@@ -246,6 +306,100 @@ fun MkCheckoutScreen(
                         body = message,
                         tone = BsdcTone.BAD,
                     )
+                }
+            }
+
+            if (savedAddresses.isNotEmpty()) {
+                item {
+                    BsdcCard {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = mkText(bn, "Saved addresses", "সংরক্ষণ করা ঠিকানা"),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    addressEditing = null
+                                    addressEditorOpen = true
+                                },
+                            ) {
+                                Text(mkText(bn, "Add", "যোগ"))
+                            }
+                        }
+                        Text(
+                            text = mkText(
+                                bn,
+                                "Tap a door to fill the form. The shop gets the address and the pin together.",
+                                "ফর্ম পূরণ করতে ঠিকানাতে ট্যাপ করুন। দোকান একসাথে ঠিকানা আর পিনই পাবে।",
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        savedAddresses.forEach { address ->
+                            val selected = address.id == addressId
+                            MkAddressChoiceRow(
+                                address = address,
+                                selected = selected,
+                                bn = bn,
+                                onSelect = {
+                                    pickedAddressId = address.id
+                                    fillFromSaved(address)
+                                    error = null
+                                },
+                                onEdit = {
+                                    addressEditing = address
+                                    addressEditorOpen = true
+                                },
+                                onRemove = {
+                                    scope.launch {
+                                        addressBusy = true
+                                        repository.deleteAddress(address.id).onSuccess { result ->
+                                            savedAddresses = result.addresses
+                                            if (pickedAddressId == address.id) {
+                                                // The row is gone, so the checkout stops claiming to use
+                                                // it. What the member typed stays on the form.
+                                                pickedAddressId = null
+                                            }
+                                            // Deleting the default hands the title to another row; the
+                                            // response says whether it moved, which is more than this
+                                            // screen could work out from what it has locally.
+                                            // Deleting the default hands the title to another row. The
+                                            // response says whether it moved, which is more than this
+                                            // screen can work out for itself once the row is gone.
+                                            val heir = result.addresses.firstOrNull { it.is_default }
+                                            addressNotice = if (result.was_default && heir != null) {
+                                                mkText(
+                                                    bn,
+                                                    "Removed. Your default is now " +
+                                                        MkLogic.addressHeadline(heir, bn) + ".",
+                                                    "সরানো হয়েছে। এখন আপনার মূল ঠিকানা " +
+                                                        MkLogic.addressHeadline(heir, bn) + "।",
+                                                )
+                                            } else if (result.was_default) {
+                                                mkText(bn, "Removed. No default address left.", "সরানো হয়েছে। আর কোনো মূল ঠিকানা নেই।")
+                                            } else {
+                                                mkText(bn, "Address removed.", "ঠিকানা সরানো হয়েছে।")
+                                            }
+                                        }.onFailure {
+                                            error = it.message
+                                        }
+                                        addressBusy = false
+                                    }
+                                },
+                            )
+                        }
+                        addressNotice?.let {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -485,6 +639,51 @@ fun MkCheckoutScreen(
                 )
             }
 
+            if (MkLogic.hasMinimumOrder(minOrderPoisha)) {
+                item {
+                    BsdcStatusBanner(
+                        title = mkText(bn, "Minimum order", "সর্বনিম্ন অর্ডার"),
+                        body = if (minShortfall == 0L) {
+                            mkText(
+                                bn,
+                                "This shop takes orders from ${MkLogic.formatTaka(minOrderPoisha, bn)}. Reached.",
+                                "এই দোকান ${MkLogic.formatTaka(minOrderPoisha, bn)} থেকে অর্ডার নেয়। পূরণ হয়েছে।",
+                            )
+                        } else {
+                            mkText(
+                                bn,
+                                "Add ${MkLogic.formatTaka(minShortfall, bn)} more — this shop takes orders from " +
+                                    "${MkLogic.formatTaka(minOrderPoisha, bn)}. The delivery charge does not count toward it.",
+                                "আরও ${MkLogic.formatTaka(minShortfall, bn)} যোগ করুন — এই দোকান " +
+                                    "${MkLogic.formatTaka(minOrderPoisha, bn)} থেকে অর্ডার নেয়। ডেলিভারি চার্জ এতে ধরে না।",
+                            )
+                        },
+                        tone = if (minShortfall == 0L) BsdcTone.OK else BsdcTone.WARN,
+                    )
+                }
+            }
+
+            item {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Checkbox(
+                        checked = keepAddress,
+                        onCheckedChange = { keepAddress = it },
+                        enabled = addressId == null,
+                    )
+                    Text(
+                        text = if (addressId == null) {
+                            mkText(bn, "Save this address for next time", "পরেরবারের জন্য এই ঠিকানাটি সংরক্ষণ করুন")
+                        } else {
+                            mkText(bn, "Using your saved address", "আপনার সংরক্ষিত ঠিকানা ব্যবহার হচ্ছে")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+
             item {
                 Button(
                     onClick = {
@@ -504,9 +703,20 @@ fun MkCheckoutScreen(
                                 placeLabel = placeLabel.trim(),
                                 note = note.trim(),
                             )
-                            repository.placeOrder(vId, address, directItems)
+                            repository.placeOrder(vId, address, directItems, addressId)
                                 .onSuccess { placedCode = it.code }
                                 .onFailure { error = it.message ?: "order_failed" }
+                            // Saved after the order, never before it: a member the shop refused has not
+                            // shown that this door is deliverable, and an address book full of places a
+                            // shop turned down is worse than one more keystroke.
+                            if (placedCode != null && keepAddress && addressId == null) {
+                                repository.saveAddress(
+                                    address.copy(
+                                        id = null,
+                                        isDefault = savedAddresses.isEmpty(),
+                                    ),
+                                ).onSuccess { savedAddresses = it.addresses }
+                            }
                             busy = false
                         }
                     },
@@ -516,6 +726,40 @@ fun MkCheckoutScreen(
                     Text(mkText(bn, "Place order · cash on delivery", "অর্ডার দিন · ক্যাশ অন ডেলিভারি"))
                 }
             }
+        }
+
+        if (addressEditorOpen) {
+            MkAddressEditor(
+                bn = bn,
+                initial = addressEditing,
+                currentPin = lat?.let { l -> lng?.let { g -> l to g } },
+                currentPlaceLabel = placeLabel,
+                onCancel = { addressEditorOpen = false },
+                onSave = { draft ->
+                    scope.launch {
+                        addressBusy = true
+                        repository.saveAddress(draft).onSuccess { result ->
+                            savedAddresses = result.addresses
+                            addressEditorOpen = false
+                            // A row the member just saved is a row they mean to use, so the sheet
+                            // fills the form on the way out — and the "save this address" box below
+                            // has nothing left to do.
+                            val written = result.address
+                            pickedAddressId = written.id
+                            fillFromSaved(written)
+                            keepAddress = false
+                            addressNotice = mkText(
+                                bn,
+                                "Saved " + MkLogic.addressHeadline(written, bn) + ".",
+                                MkLogic.addressHeadline(written, bn) + " সংরক্ষিত হয়েছে।",
+                            )
+                        }.onFailure {
+                            addressNotice = it.message
+                        }
+                        addressBusy = false
+                    }
+                },
+            )
         }
 
         // Confirmation: the card springs in, then the screen moves to the orders list.
@@ -555,6 +799,88 @@ fun MkCheckoutScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One saved address in the picker. The whole row is the target — a member taps a door, they do not
+ * tap "select this door" — and Remove sits beside it as a separate control, because a mistake that
+ * deletes a row cannot be undone by tapping the row again.
+ */
+@Composable
+private fun MkAddressChoiceRow(
+    address: MkSavedAddressDto,
+    selected: Boolean,
+    bn: Boolean,
+    onSelect: () -> Unit,
+    onEdit: () -> Unit,
+    onRemove: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .background(
+                if (selected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+                CircleShape.let { androidx.compose.foundation.shape.RoundedCornerShape(18.dp) },
+            )
+            .clickable(onClick = onSelect)
+            .padding(12.dp),
+    ) {
+        Column {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = MkLogic.addressHeadline(address, bn),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                if (address.is_default) {
+                    BsdcBadge(
+                        label = mkText(bn, "Default", "মূল"),
+                        tone = BsdcTone.OK,
+                    )
+                }
+            }
+            Text(
+                text = "${address.customer_name} · ${address.customer_phone}",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Text(
+                text = listOf(address.address_line, address.landmark)
+                    .filter { it.isNotBlank() }
+                    .joinToString(" — "),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (address.times_used > 0) {
+                    Text(
+                        text = mkText(
+                            bn,
+                            "Used ${address.times_used} times",
+                            "${address.times_used} বার ব্যবহৃত",
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onEdit) {
+                    Text(mkText(bn, "Edit", "সম্পাদনা"))
+                }
+                Spacer(Modifier.width(8.dp))
+                OutlinedButton(onClick = onRemove) {
+                    Text(mkText(bn, "Remove", "সরান"))
                 }
             }
         }

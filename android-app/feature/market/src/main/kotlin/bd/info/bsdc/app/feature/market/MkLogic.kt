@@ -135,6 +135,89 @@ object MkLogic {
         }
     }
 
+    // ---------------------------------------------------------------- the address book (0131)
+    //
+    // The numbers and the sentences here are `mk_save_address`'s and `mk_place_order`'s, in the
+    // order they check them. A form that refuses something else — or in another order — is a form
+    // that has decided to be the authority, and the routine is the authority.
+
+    val ADDRESS_LABELS: List<String> = listOf("home", "work", "other")
+    const val ADDRESS_MAX: Int = 8
+    const val ADDRESS_LINE_MIN: Int = 5
+    const val ADDRESS_LINE_MAX: Int = 240
+    const val RECIPIENT_NAME_MIN: Int = 2
+    const val RECIPIENT_NAME_MAX: Int = 80
+    const val ADDRESS_NICKNAME_MAX: Int = 40
+
+    fun addressLabel(label: String, bn: Boolean): String {
+        val pair = when (label) {
+            "work" -> "অফিস" to "Work"
+            "other" -> "অন্যান্য" to "Other"
+            else -> "বাসা" to "Home"
+        }
+        return if (bn) pair.first else pair.second
+    }
+
+    /** A card's headline: the name the member gave this door, or the kind of place it is. */
+    fun addressHeadline(address: MkSavedAddressDto, bn: Boolean): String {
+        val nickname = address.nickname.trim()
+        return if (nickname.isEmpty()) addressLabel(address.label, bn) else nickname
+    }
+
+    /**
+     * What a basket must reach at this shop, and what is missing. Zero comes back when the shop sets
+     * no minimum *and* when the basket already clears it — a caller that needs to tell the two apart
+     * reads [hasMinimumOrder].
+     *
+     * Measured against the goods and never against the total: the delivery charge is not something
+     * the customer bought, so a 150 taka ride must not be able to carry a 200 taka basket past a
+     * 300 taka minimum. `mk_place_order` compares `subtotal_poisha`, and a screen that compared the
+     * total would promise an order the routine then refuses.
+     */
+    fun minimumOrderShortfallPoisha(subtotalPoisha: Long, minOrderPoisha: Long): Long {
+        if (minOrderPoisha <= 0L) return 0L
+        return (minOrderPoisha - subtotalPoisha).coerceAtLeast(0L)
+    }
+
+    fun hasMinimumOrder(minOrderPoisha: Long): Boolean = minOrderPoisha > 0L
+
+    /**
+     * One refused field per key, so a screen marks the box rather than showing a sentence the member
+     * has to locate. The phone is judged after [normaliseBdMobile], because the routine strips the
+     * separators too — a member who types 01712-345678 has given a valid number.
+     */
+    data class MkAddressCheck(
+        val name: Boolean,
+        val phone: Boolean,
+        val line: Boolean,
+        val nickname: Boolean,
+        val pin: Boolean,
+        val label: Boolean,
+    ) {
+        val ok: Boolean get() = !(name || phone || line || nickname || pin || label)
+    }
+
+    fun checkAddressDraft(
+        name: String,
+        phone: String,
+        line: String,
+        nickname: String = "",
+        label: String = "home",
+        lat: Double? = null,
+        lng: Double? = null,
+    ): MkAddressCheck {
+        val cleanName = name.trim()
+        val cleanLine = line.trim()
+        return MkAddressCheck(
+            name = cleanName.length < RECIPIENT_NAME_MIN || cleanName.length > RECIPIENT_NAME_MAX,
+            phone = !isBdMobile(phone),
+            line = cleanLine.length < ADDRESS_LINE_MIN || cleanLine.length > ADDRESS_LINE_MAX,
+            nickname = nickname.trim().length > ADDRESS_NICKNAME_MAX,
+            pin = lat == null || lng == null || !isInsideBangladesh(lat, lng),
+            label = label !in ADDRESS_LABELS,
+        )
+    }
+
     val DAY_KEYS: List<String> = listOf("0", "1", "2", "3", "4", "5", "6")
 
     fun defaultScheduleDays(): Map<String, MkDayHoursDto> =

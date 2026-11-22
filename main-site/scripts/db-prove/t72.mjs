@@ -32,10 +32,20 @@ for (const row of live.rows) {
 if (bare.length === 0) pass('no live function deletes without a WHERE clause');
 else for (const b of bare) fail(`a live function deletes without a WHERE clause — ${b}`);
 
+// Looked up by name, not by a written-out signature: 0131 gave this function a fourth argument, and a
+// harness that hard-codes an arity fails with "function does not exist" the day a parameter is added —
+// which reads like the invariant broke when in fact the function moved. The invariant is about the
+// body, so the query should be too.
 const fn = await db.query(
-  `select pg_get_functiondef('public.mk_place_order(uuid,jsonb,jsonb)'::regprocedure) as d`,
+  `select pg_get_functiondef(p.oid) as d
+     from pg_proc p
+     join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = 'mk_place_order'
+    order by p.oid
+    limit 1`,
 );
-if (/delete from _mk_order_lines where true/.test(fn.rows[0].d))
+if (!fn.rows[0]) fail('no mk_place_order to inspect — the scratch-table invariant has no owner');
+else if (/delete from _mk_order_lines where true/.test(fn.rows[0].d))
   pass('mk_place_order clears its scratch table with a WHERE');
 else fail('mk_place_order still has a bare delete');
 

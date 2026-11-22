@@ -6,6 +6,7 @@ import {
   Loader2,
   MapPin,
   Phone,
+  Bookmark,
   PackageCheck,
   Receipt,
   ShieldCheck,
@@ -18,31 +19,45 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AddressBook, AddressEditor } from '@/components/mk/customer/AddressBook';
+import { editorFromAddress, type AddressEditorValue } from '@/lib/mk/mk-address';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import { LocationPicker, type PinnedLocation } from '@/components/mk/LocationPicker';
 import { MarketNav } from '@/components/mk/customer/MarketNav';
-import { Button, EmptyState, PageSkeleton, TextField, TextareaField } from '@/design-system';
+import {
+  Button,
+  EmptyState,
+  PageSkeleton,
+  ProgressBar,
+  TextField,
+  TextareaField,
+} from '@/design-system';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/lib/site';
 import {
+  useDeleteAddress,
+  useMyAddresses,
   useMyCart,
   usePaymentInstructions,
   usePlaceOrder,
   useProductDetail,
+  useSaveAddress,
   useVendorPage,
 } from '@/hooks/use-mk';
 import * as repo from '@/lib/mk/mk-repository';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import {
+  evaluateMinimumOrder,
   evaluateShopDelivery,
   formatTaka,
   isBdMobile,
   normaliseBdMobile,
+  savedAddressToDraft,
   type Language,
 } from '@/lib/mk/mk-logic';
-import type { MkAddress, MkPlacedOrder } from '@/lib/mk/mk-types';
+import type { MkAddress, MkAddressInput, MkPlacedOrder, MkSavedAddress } from '@/lib/mk/mk-types';
 
 interface Draft {
   name: string;
@@ -84,6 +99,19 @@ export default function MarketCheckoutPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [showErrors, setShowErrors] = useState(false);
   const [placed, setPlaced] = useState<MkPlacedOrder | null>(null);
+
+  // The address book (0131). Picking a saved door fills the form below rather than replacing it:
+  // the member can still change the note, or the pin if the flat moved, and the summary and the
+  // steps keep working off one set of fields instead of two.
+  const addresses = useMyAddresses(uid !== null);
+  const saveAddress = useSaveAddress();
+  const removeAddress = useDeleteAddress();
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [keepSaving, setKeepSaving] = useState(false);
+  const [editing, setEditing] = useState<{ open: boolean; initial: AddressEditorValue | null }>({
+    open: false,
+    initial: null,
+  });
 
   const lines = useMemo(() => {
     if (isDirect) {
@@ -181,9 +209,28 @@ export default function MarketCheckoutPage() {
     deliveryConfig,
     draft.pin ? { lat: draft.pin.lat, lng: draft.pin.lng } : null,
   );
+  const saved = addresses.data ?? [];
+  const picked = saved.find((address) => address.id === pickedId) ?? null;
+
+  // The id is offered to `mk_place_order` only while the form still says what the row says. The
+  // routine reads the row — that is the point of sending an id — so if a member edits the pin or
+  // the text after picking, an id would order to the old door while the screen shows the new one.
+  // Dropping to "typed by hand" is the honest answer, and it costs nothing: the box can be saved
+  // again from the same place.
+  const matchesSaved =
+    picked !== null &&
+    draft.name.trim() === picked.customer_name &&
+    normaliseBdMobile(draft.phone) === picked.customer_phone &&
+    draft.address.trim() === picked.address_line &&
+    draft.landmark.trim() === picked.landmark &&
+    draft.pin !== null &&
+    draft.pin.lat === picked.lat &&
+    draft.pin.lng === picked.lng;
+  const addressId = matchesSaved ? (picked?.id ?? null) : null;
   const fee = deliveryEval.feePoisha;
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
   const total = subtotal + fee;
+  const minimum = evaluateMinimumOrder(subtotal, deliveryConfig?.min_order_poisha);
   const shopName = shop.data?.vendor.name ?? '';
   const shopSchedule = shop.data?.vendor.schedule;
   const shopOpen = shopSchedule ? shopSchedule.is_open : true;
@@ -194,6 +241,10 @@ export default function MarketCheckoutPage() {
     address: draft.address.trim().length < 5,
     pin: draft.pin === null,
     area: !deliveryEval.withinArea,
+    // Refused here as well as in the routine, for the same reason the radius is: a member who
+    // taps "place order" and is told 200 taka are missing has been made to fill a form for
+    // nothing. The routine still refuses too — a screen is a courtesy, not a gate.
+    minimum: !minimum.met,
     closed: !shopOpen,
   };
   const contactDone = !errors.name && !errors.phone;
@@ -229,11 +280,65 @@ export default function MarketCheckoutPage() {
         vendorId,
         address,
         directItems: isDirect ? [{ product_id: directProduct, qty: directQty }] : null,
+        addressId,
       });
       setPlaced(result);
+      // Saved after the order, never before it: a member who is refused by the shop has not
+      // demonstrated that this door is deliverable, and an address book full of places a shop
+      // turned down is worse than one more keystroke.
+      if (keepSaving && addressId === null) {
+        void saveAddress
+          .mutateAsync({
+            id: null,
+            label: 'other',
+            nickname: '',
+            customer_name: address.customer_name,
+            customer_phone: address.customer_phone,
+            address_line: address.address_line,
+            landmark: address.landmark,
+            place_label: address.place_label,
+            lat: address.lat ?? 0,
+            lng: address.lng ?? 0,
+            note: '',
+            is_default: saved.length === 0,
+          } satisfies MkAddressInput)
+          .then(() => toast.success(copy.buyer.addressSaved))
+          .catch(() => undefined);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.errorGeneric);
     }
+  }
+
+  function pickSaved(address: MkSavedAddress): void {
+    setPickedId(address.id);
+    setDraft(savedAddressToDraft(address));
+  }
+
+  function dropSaved(address: MkSavedAddress): void {
+    void removeAddress
+      .mutateAsync(address.id)
+      .then(() => {
+        if (pickedId === address.id) setPickedId(null);
+        toast.success(copy.buyer.addressDeleted);
+      })
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : copy.errorGeneric),
+      );
+  }
+
+  function commitEditor(input: MkAddressInput): void {
+    void saveAddress
+      .mutateAsync(input)
+      .then((result) => {
+        setEditing({ open: false, initial: null });
+        setPickedId(result.address.id);
+        setDraft(savedAddressToDraft(result.address));
+        toast.success(copy.buyer.addressSaved);
+      })
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : copy.errorGeneric),
+      );
   }
 
   return shell(
@@ -306,6 +411,31 @@ export default function MarketCheckoutPage() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="space-y-5">
           <FormSection
+            icon={<MapPin size={18} aria-hidden />}
+            title={copy.buyer.addressesTitle}
+            done={addressId !== null}
+            doneLabel={copy.buyer.sectionReady}
+          >
+            <p className="mb-4 text-sm text-muted">{copy.buyer.addressesLead}</p>
+            <AddressBook
+              addresses={saved}
+              selectedId={addressId}
+              copy={copy}
+              language={language}
+              delivery={deliveryConfig}
+              onPick={pickSaved}
+              onNew={() => setEditing({ open: true, initial: null })}
+              onEdit={(address) => setEditing({ open: true, initial: editorFromAddress(address) })}
+              onDelete={dropSaved}
+            />
+            {picked !== null && !matchesSaved ? (
+              <p className="mt-3 text-xs font-medium text-warn-text">
+                {copy.buyer.addressEditedFromSaved}
+              </p>
+            ) : null}
+          </FormSection>
+
+          <FormSection
             icon={<UserRound size={18} aria-hidden />}
             title={copy.buyer.sectionContact}
             done={contactDone}
@@ -356,6 +486,20 @@ export default function MarketCheckoutPage() {
                   onChange={(e) => setDraft({ ...draft, note: e.target.value })}
                 />
               </div>
+              {addressId === null ? (
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface-2 p-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 accent-primary"
+                    checked={keepSaving}
+                    onChange={(event) => setKeepSaving(event.target.checked)}
+                  />
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-text">
+                    <Bookmark size={14} aria-hidden />
+                    {copy.buyer.saveThisAddress}
+                  </span>
+                </label>
+              ) : null}
             </div>
           </FormSection>
 
@@ -455,6 +599,44 @@ export default function MarketCheckoutPage() {
                 </ul>
               )}
 
+              {minimum.required ? (
+                <div
+                  className={cn(
+                    'rounded-2xl border p-3 text-xs font-medium',
+                    minimum.met
+                      ? 'border-success/30 bg-success-soft text-success'
+                      : 'border-warn/40 bg-warn-soft text-warn-text',
+                  )}
+                >
+                  <p>
+                    {copy.buyer.minOrder} ·{' '}
+                    {formatTaka(deliveryConfig?.min_order_poisha ?? 0, language)}
+                  </p>
+                  {minimum.met ? (
+                    <p className="mt-1">{copy.buyer.minOrderMet}</p>
+                  ) : (
+                    <>
+                      <p className="mt-1">
+                        <span className="font-bold tabular-nums">
+                          {formatTaka(minimum.shortfallPoisha, language)}
+                        </span>{' '}
+                        {copy.buyer.minOrderShort}
+                      </p>
+                      <ProgressBar
+                        label={copy.buyer.minOrder}
+                        className="mt-2"
+                        value={Math.min(
+                          100,
+                          Math.round(
+                            (subtotal / Math.max(1, deliveryConfig?.min_order_poisha ?? 1)) * 100,
+                          ),
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+              ) : null}
+
               <dl className="space-y-2 rounded-2xl bg-surface-2 p-4 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-muted">{copy.buyer.subtotal}</dt>
@@ -490,7 +672,7 @@ export default function MarketCheckoutPage() {
                 className="w-full rounded-2xl py-3.5 text-base shadow-lg shadow-green-700/25"
                 size="lg"
                 loading={place.isPending}
-                disabled={lines.length === 0 || !shopOpen || errors.area}
+                disabled={lines.length === 0 || !shopOpen || errors.area || errors.minimum}
                 onClick={() => void submit()}
               >
                 {copy.buyer.placeOrder}
@@ -504,6 +686,18 @@ export default function MarketCheckoutPage() {
           </div>
         </aside>
       </div>
+
+      <AddressEditor
+        open={editing.open}
+        title={editing.initial === null ? copy.buyer.addressNew : copy.buyer.addressEditTitle}
+        initial={editing.initial}
+        copy={copy}
+        language={language}
+        saving={saveAddress.isPending}
+        delivery={deliveryConfig}
+        onClose={() => setEditing({ open: false, initial: null })}
+        onSave={commitEditor}
+      />
 
       <AnimatePresence>
         {place.isPending ? (

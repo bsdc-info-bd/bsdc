@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import MarketCheckoutPage from './MarketCheckoutPage';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import type { MkCartLine } from '@/lib/mk/mk-types';
+import type { MkCartLine, MkSavedAddress } from '@/lib/mk/mk-types';
 import type * as I18nModule from 'react-i18next';
 
 const state = vi.hoisted(() => ({
@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
   delivery: {
     scope: 'all_bd' as 'all_bd' | 'radius',
     radius_km: 1,
+    min_order_poisha: undefined as number | undefined,
     fee_mode: 'default' as 'default' | 'fixed' | 'per_km',
     fee_poisha: 15000,
     fixed_fee_poisha: 15000,
@@ -25,6 +26,9 @@ const state = vi.hoisted(() => ({
   schedule: undefined as undefined | { enabled: boolean; is_open: boolean },
   place: vi.fn(),
   placing: false,
+  addresses: [] as unknown[],
+  save: vi.fn(),
+  remove: vi.fn(),
 }));
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -63,6 +67,9 @@ vi.mock('@/lib/mk/mk-repository', () => ({
 
 vi.mock('@/hooks/use-mk', () => ({
   usePaymentInstructions: () => ({ data: { delivery_fee_poisha: 15000 }, isLoading: false }),
+  useMyAddresses: () => ({ data: state.addresses, isLoading: false }),
+  useSaveAddress: () => ({ mutateAsync: state.save, isPending: false }),
+  useDeleteAddress: () => ({ mutateAsync: state.remove, isPending: false }),
   useVendorPage: () => ({
     data: {
       vendor: {
@@ -98,6 +105,28 @@ function cartLine(overrides: Partial<MkCartLine>): MkCartLine {
   };
 }
 
+/** A row as `mk_save_address` returns it: the shape the checkout has to read without guessing. */
+function savedAddress(overrides: Partial<MkSavedAddress> = {}): MkSavedAddress {
+  return {
+    id: 'addr-1',
+    label: 'home',
+    nickname: '',
+    customer_name: 'Rahim Uddin',
+    customer_phone: '01712345678',
+    address_line: 'House 4, Road 7, Zindabazar',
+    landmark: 'Opposite the mosque',
+    place_label: 'Zindabazar, Sylhet',
+    lat: 23.81,
+    lng: 90.41,
+    note: 'Ring twice',
+    is_default: true,
+    times_used: 2,
+    last_used_at: null,
+    created_at: '2026-01-01T00:00:00Z',
+    ...overrides,
+  };
+}
+
 function renderAt(url: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -129,6 +158,7 @@ describe('MarketCheckoutPage', () => {
     state.delivery = {
       scope: 'all_bd',
       radius_km: 1,
+      min_order_poisha: undefined,
       fee_mode: 'default',
       fee_poisha: 15000,
       fixed_fee_poisha: 15000,
@@ -138,6 +168,11 @@ describe('MarketCheckoutPage', () => {
       center_lng: 90.4,
     };
     state.schedule = undefined;
+    state.addresses = [];
+    state.save = vi.fn(() =>
+      Promise.resolve({ address: savedAddress(), addresses: [savedAddress()] }),
+    );
+    state.remove = vi.fn(() => Promise.resolve([]));
     state.place = vi.fn(() =>
       Promise.resolve({
         order_id: 'o1',
@@ -242,6 +277,126 @@ describe('MarketCheckoutPage', () => {
     const button = await screen.findByRole('button', { name: copy.buyer.placeOrder });
     expect((button as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByText(copy.buyer.cartEmpty)).toBeTruthy();
+  });
+
+  it('fills the form from a saved address and places the order with its id', async () => {
+    state.cart = [cartLine({})];
+    state.addresses = [savedAddress()];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+
+    const card = await screen.findByRole('radio', { name: /House 4, Road 7/ });
+    fireEvent.click(card);
+
+    // Picking a door fills the form rather than replacing it, so the member can still change the
+    // note or move the pin — and the summary, the steps and the fee all keep one source of truth.
+    expect(screen.getByLabelText<HTMLInputElement>(copy.buyer.name).value).toBe('Rahim Uddin');
+    expect(screen.getByLabelText<HTMLTextAreaElement>(copy.buyer.addressLine).value).toBe(
+      'House 4, Road 7, Zindabazar',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: copy.buyer.placeOrder }));
+    await waitFor(() => expect(state.place).toHaveBeenCalledTimes(1));
+    expect(state.place.mock.calls[0]?.[0]).toMatchObject({
+      addressId: 'addr-1',
+      address: {
+        customer_name: 'Rahim Uddin',
+        customer_phone: '01712345678',
+        address_line: 'House 4, Road 7, Zindabazar',
+        lat: 23.81,
+        lng: 90.41,
+      },
+    });
+  });
+
+  it('stops sending the id once the member changes what the row says', async () => {
+    state.cart = [cartLine({})];
+    state.addresses = [savedAddress()];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    fireEvent.click(await screen.findByRole('radio', { name: /House 4, Road 7/ }));
+
+    fireEvent.change(screen.getByLabelText(copy.buyer.addressLine), {
+      target: { value: 'House 11, Road 2, Uposhohor' },
+    });
+    expect(await screen.findByText(copy.buyer.addressEditedFromSaved)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: copy.buyer.placeOrder }));
+    await waitFor(() => expect(state.place).toHaveBeenCalledTimes(1));
+    // The saved row would have ordered to the old gate; the form says a new one. The id goes, and
+    // `mk_place_order` uses what is typed instead of a row it no longer agrees with.
+    expect(state.place.mock.calls[0]?.[0]).toMatchObject({
+      addressId: null,
+      address: { address_line: 'House 11, Road 2, Uposhohor' },
+    });
+  });
+
+  it('holds the order button until the shop’s minimum order is met, and says by how much', async () => {
+    state.cart = [cartLine({ qty: 1, line_total: 50000 })];
+    state.delivery = { ...state.delivery, min_order_poisha: 80000 };
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    await fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'pick-pin' }));
+
+    expect(await screen.findByText(/৳300/)).toBeTruthy();
+    const button = screen.getByRole('button', { name: copy.buyer.placeOrder });
+    expect((button as HTMLButtonElement).disabled).toBe(true);
+    expect(state.place).not.toHaveBeenCalled();
+  });
+
+  it('saves the typed address into the book only when the member asks', async () => {
+    state.cart = [cartLine({})];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    await fillForm();
+    fireEvent.click(screen.getByRole('button', { name: 'pick-pin' }));
+
+    fireEvent.click(screen.getByRole('button', { name: copy.buyer.placeOrder }));
+    await waitFor(() => expect(state.place).toHaveBeenCalledTimes(1));
+    expect(state.save).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByLabelText(copy.buyer.saveThisAddress));
+    fireEvent.click(screen.getByRole('button', { name: copy.buyer.placeOrder }));
+    await waitFor(() => expect(state.save).toHaveBeenCalledTimes(1));
+    expect(state.save.mock.calls[0]?.[0]).toMatchObject({
+      id: null,
+      // The first address is the default — the routine decides that too, and the client saying so
+      // here only matches what the response would have said.
+      is_default: true,
+      customer_name: 'Rahim Uddin',
+      customer_phone: '01712345678',
+      address_line: 'House 4, Road 7, Zindabazar',
+      lat: 23.81,
+      lng: 90.41,
+    });
+  });
+
+  it('adds an address from the editor without leaving the checkout', async () => {
+    state.cart = [cartLine({})];
+    renderAt('/marketplace/checkout/sylhet-crafts');
+    fireEvent.click(await screen.findByRole('button', { name: copy.buyer.addressNew }));
+
+    fireEvent.change(await screen.findByLabelText(copy.buyer.addressRecipient), {
+      target: { value: 'Ammu' },
+    });
+    fireEvent.change(screen.getByLabelText(copy.buyer.addressPhone), {
+      target: { value: '01812-345678' },
+    });
+    fireEvent.change(screen.getByLabelText(copy.buyer.addressStreet), {
+      target: { value: 'House 9, Road 3, Uposhohor' },
+    });
+    const pins = screen.getAllByRole('button', { name: 'pick-pin' });
+    fireEvent.click(pins[pins.length - 1] as HTMLElement);
+    fireEvent.click(screen.getByRole('button', { name: copy.buyer.addressSave }));
+
+    await waitFor(() => expect(state.save).toHaveBeenCalledTimes(1));
+    expect(state.save.mock.calls[0]?.[0]).toMatchObject({
+      id: null,
+      label: 'home',
+      customer_name: 'Ammu',
+      customer_phone: '01812-345678',
+      address_line: 'House 9, Road 3, Uposhohor',
+      place_label: 'Dhanmondi',
+      lat: 23.81,
+      lng: 90.41,
+    });
   });
 
   it('marks the details step done once the contact and address are filled', async () => {
