@@ -83,9 +83,11 @@ that distinguished them would be leaking. Paging is the web's rule (`canLoadMore
 the hydrated list, and `p_before` strictly-less-than in the SQL) and the list de-duplicates on append,
 because a repeated id inside `items(...)` is a crash rather than a blemish.
 
-The group page's channel cards are links now — `slug` on the row, a chevron, `onOpenChannel` — as they are
-on the web, and `/g/{group}/c/{channel}` pasted from chat opens the room _on top of_ the group, so Back
-returns to the group rather than to the tab.
+The group page's channel cards are links now — `slug` on the row, the room's name coloured like a link
+where a host wired `onOpenChannel`, plain text where one did not — as they are on the web, and
+`/g/{group}/c/{channel}` pasted from chat opens the room _on top of_ the group, so Back returns to the
+group rather than to the tab. A trailing chevron was the first attempt and is not in this app's icon set:
+`Icons.AutoMirrored.Rounded.ChevronRight` does not exist, and CI named it in three minutes.
 
 ### The group editor
 
@@ -210,6 +212,12 @@ the Gradle log for `e:` lines, which is precise for a compile error and useless 
 now appends up to eight `class.method: message` entries read from the JUnit XML. On a branch where CI is the
 only compiler, an annotation that says only "a test task failed" costs a whole round trip per guess.
 
+The create side above was compiled by CI at `4780788`; the room page was not, and its first run
+failed on two symbols invented in a sandbox with no front end — `BsdcAvatar` imported from `core:designsystem` where it lives in `core:media`,
+and the chevron above — which is the honest error rate of hand-written Compose here, and why each slice is
+pushed and read back rather than declared finished. `check_kt.py`-style balance checks, grep for a symbol's
+definition, and the parity tests all passed over both.
+
 **Device-only, therefore not claimed:** that a bottom sheet behaves with the IME open; that the segmented
 thumb, crossfade and entrance feel right at 120 Hz; that `channels(slug,name,groups(slug,name))` is
 _accepted by the running PostgREST_ (the foreign keys are in the schema, the query is built from
@@ -223,15 +231,15 @@ claim this repository can make from a sandbox with no database.
 
 ## 7. Known gaps, not hidden
 
-| Gap                                     | State                                                                                                                                                                                                                                           |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reading a channel's timeline on Android | Built here: `ChannelFeedScreen`, `channel_feed`, the cursor, the deep link. What it does _not_ have is the web's inline interactivity on the row — no reaction dock, no media strip — because a tap opens the post, where both work.            |
-| Tapping the attribution line            | Still text, not a link. The room page exists now, so this is a wiring job on the feed card rather than a missing feature; it is deliberately not guessed at here, because a tap that goes nowhere is worse than no tap.                         |
-| Tables, `####` and deeper headings      | Not supported by this app's reader; reported before publish rather than after.                                                                                                                                                                  |
-| Group avatar/cover upload               | URL fields, as the web's dialog has them; `update_group` takes URLs. No image picker here.                                                                                                                                                      |
-| Clearing an avatar                      | Not possible from either client: the web sends `null` for a blank box, which means "leave alone" in the routine. Cover clearing works, on both. A deliberate asymmetry inherited from the API, noted here rather than "fixed" in the app alone. |
+| Gap                                     | State                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading a channel's timeline on Android | Built here: `ChannelFeedScreen`, `channel_feed`, the cursor, the deep link. What it does _not_ have is the web's inline interactivity on the row — no reaction dock, no media strip — because a tap opens the post, where both work.                                                                                              |
+| Tapping the attribution line            | Still text, not a link. The room page exists now, so this is a wiring job on the feed card rather than a missing feature; it is deliberately not guessed at here, because a tap that goes nowhere is worse than no tap.                                                                                                           |
+| Tables, `####` and deeper headings      | Not supported by this app's reader; reported before publish rather than after.                                                                                                                                                                                                                                                    |
+| Group avatar/cover upload               | URL fields, as the web's dialog has them; `update_group` takes URLs. No image picker here.                                                                                                                                                                                                                                        |
+| Clearing an avatar                      | Not possible from either client: the web sends `null` for a blank box, which means "leave alone" in the routine. Cover clearing works, on both. A deliberate asymmetry inherited from the API, noted here rather than "fixed" in the app alone.                                                                                   |
 | Motion outside creation                 | Lists settle now — `feed`, `market`, the group page's rooms, the messenger inbox (whose row also tweens out of emphasis as it is read) and the notification list. `news` and the chat transcript are still bare, and the transcript stays that way on purpose: messages that animate in while a member is typing read as a fault. |
-| A room's timeline is read-only          | No pinning, no mute, no "mark read" — the web has none of those either. Writing is the composer's `initialChannelId`, reached from the room header or the group page.                                                                           |
+| A room's timeline is read-only          | No pinning, no mute, no "mark read" — the web has none of those either. Writing is the composer's `initialChannelId`, reached from the room header or the group page.                                                                                                                                                             |
 
 ---
 

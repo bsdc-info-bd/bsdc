@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ChevronRight
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
@@ -604,6 +603,11 @@ fun GroupDetailScreen(
                                                 text = GroupDetailLogic.channelTitle(channel.name),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.SemiBold,
+                                                color = if (canOpenChannels && channel.slug.isNotBlank()) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
                                                 modifier = Modifier.weight(1f),
                                             )
                                             val count = channelCounts[channel.id] ?: 0
@@ -622,17 +626,14 @@ fun GroupDetailScreen(
                                             if (channel.isReadOnly) {
                                                 BsdcBadge(label = if (bn) "শুধু পড়া" else "Read only", tone = BsdcTone.NEUTRAL)
                                             }
-                                            if (canOpenChannels && channel.slug.isNotBlank()) {
-                                                // The room's own name is the accessible label, so a screen
-                                                // reader says "Release notes, button" rather than "Open" out
-                                                // of nowhere, and nothing new has to be worded here.
-                                                Icon(
-                                                    imageVector = Icons.AutoMirrored.Rounded.ChevronRight,
-                                                    contentDescription = GroupDetailLogic.channelTitle(channel.name),
-                                                    modifier = Modifier.size(18.dp),
-                                                    tint = BsdcThemeTokens.colors.mutedText,
-                                                )
-                                            }
+                                            // A glyph was the obvious cue here, and the app has no
+                                            // chevron in its icon set: `ChevronRight` resolves only in
+                                            // material-icons-extended under a name this repo never
+                                            // imports, and CI found that out in three minutes. The
+                                            // room's own name carries the affordance instead — a
+                                            // tappable channel is coloured like a link, one that is not
+                                            // stays plain text. Nothing to translate, nothing to mirror
+                                            // for a right-to-left locale, no icon to get wrong.
                                         }
                                         channel.topic?.takeIf { it.isNotBlank() }?.let { topic ->
                                             Text(text = topic, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

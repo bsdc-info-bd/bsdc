@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
 import bd.info.bsdc.app.core.designsystem.BsdcAnimatedEntrance
-import bd.info.bsdc.app.core.designsystem.BsdcAvatar
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
@@ -45,6 +44,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.FeedPost
 import bd.info.bsdc.app.core.model.PostKind
