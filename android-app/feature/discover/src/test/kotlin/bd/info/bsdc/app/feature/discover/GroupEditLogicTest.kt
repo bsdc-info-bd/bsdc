@@ -68,11 +68,11 @@ class GroupEditLogicTest {
         val engine = readComposeEngine()
         assertTrue(
             "the create form's name limit moved; GroupEditLogic.NAME_MIN/NAME_MAX must follow it",
-            engine.contains("between $GroupEditLogic.NAME_MIN and $GroupEditLogic.NAME_MAX characters"),
+            engine.contains("between ${GroupEditLogic.NAME_MIN} and ${GroupEditLogic.NAME_MAX} characters"),
         )
         assertTrue(
             "the create form's description limit moved; GroupEditLogic.DESCRIPTION_MAX must follow it",
-            engine.contains("exceed $GroupEditLogic.DESCRIPTION_MAX characters"),
+            engine.contains("exceed ${GroupEditLogic.DESCRIPTION_MAX} characters"),
         )
     }
 
@@ -133,8 +133,12 @@ class GroupEditLogicTest {
         // reading them. Walk up from the module directory rather than trusting how Gradle was invoked.
         var dir: File? = File(System.getProperty("user.dir")).absoluteFile
         val relative = listOf(
-            "feature/compose/src/main/java/bd/info/bsdc/app/feature/compose/ComposerValidationEngine.java",
+            // Gradle runs a module's tests with that module as the working directory, so the sibling is
+            // one level up; the other two spellings cover a run started from `android-app` or the repo
+            // root, which is how the same suite is launched by an IDE.
             "../compose/src/main/java/bd/info/bsdc/app/feature/compose/ComposerValidationEngine.java",
+            "feature/compose/src/main/java/bd/info/bsdc/app/feature/compose/ComposerValidationEngine.java",
+            "android-app/feature/compose/src/main/java/bd/info/bsdc/app/feature/compose/ComposerValidationEngine.java",
         )
         repeat(6) {
             val root = dir ?: return@repeat

@@ -536,19 +536,26 @@ fun MkShopListScreen(
         }
 
         items(visibleShops, key = { it.slug }) { shop ->
-            MkShopCard(shop = shop, imageLoader = imageLoader, bn = bn, onClick = { onOpenShop(shop.slug) })
+            MkShopCard(
+                modifier = Modifier.animateItem(),
+                shop = shop,
+                imageLoader = imageLoader,
+                bn = bn,
+                onClick = { onOpenShop(shop.slug) },
+            )
         }
     }
 }
 
 @Composable
 private fun MkShopCard(
+    modifier: Modifier = Modifier,
     shop: MkListedShopDto,
     imageLoader: ImageLoader,
     bn: Boolean,
     onClick: () -> Unit,
 ) {
-    BsdcCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+    BsdcCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MkImage(
                 url = shop.logo_url.ifBlank { shop.cover_url },
