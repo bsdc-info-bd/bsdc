@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AttachFile
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -104,7 +104,7 @@ fun MkListingCoverField(
                 secondary = true,
                 busy = uploading,
                 enabled = enabled,
-                leadingIcon = Icons.Rounded.AttachFile,
+                leadingIcon = Icons.Rounded.Link,
             )
         }
         if (trimmed.isNotBlank() && allowed) {

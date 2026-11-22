@@ -82,12 +82,12 @@ public class ListingTagsTest {
     public void offersOnlySuggestionsThatAreStillWanted() {
         List<String> offered = ListingTags.availableSuggestions(
             Arrays.asList("Kotlin"),
-            Arrays.asList("Kotlin", "KOTLIN", "Compose", "Android", "React", "Node", "Postgres", "Figma", "SEO", "Rust"),
+            Arrays.asList("Kotlin", "KOTLIN", "Compose", "Android", "React", "Node", "Postgres", "Figma", "SEO", "Rust")
         );
         assertEquals(ListingTags.SUGGESTIONS_SHOWN, offered.size());
         assertEquals(
             Arrays.asList("Compose", "Android", "React", "Node", "Postgres", "Figma", "SEO", "Rust"),
-            offered,
+            offered
         );
         assertTrue(ListingTags.availableSuggestions(Arrays.asList("a"), null).isEmpty());
     }
@@ -97,20 +97,20 @@ public class ListingTagsTest {
         String component = readWebTagInput();
         assertEquals(
             ListingTags.MAX_TAGS,
-            Integer.parseInt(defaultOf(component, "max").replace("_", "")),
+            Integer.parseInt(defaultOf(component, "max").replace("_", ""))
         );
         assertEquals(
             ListingTags.TAG_MAX_LENGTH,
-            Integer.parseInt(defaultOf(component, "maxLength").replace("_", "")),
+            Integer.parseInt(defaultOf(component, "maxLength").replace("_", ""))
         );
         // The floor and the cap on suggestions are written inline, not as props.
         assertTrue(
             "the web's minimum tag length moved: " + component,
-            component.contains("tag.length < 2"),
+            component.contains("tag.length < 2")
         );
         assertTrue(
             "the web's suggestion cap moved: " + component,
-            component.contains("slice(0, 8)"),
+            component.contains("slice(0, 8)")
         );
     }
 
@@ -119,7 +119,7 @@ public class ListingTagsTest {
         // `max = 20,` as the component destructures it, and `max?: number;` never, because that
         // half has no default to compare with.
         Matcher matcher = Pattern.compile(
-            "(?m)^\\s*" + prop + "(?:\\s*:\\s*[\\w<>()|\\[\\]]+)?\\s*=\\s*(\\d+),",
+            "(?m)^\\s*" + prop + "(?:\\s*:\\s*[\\w<>()|\\[\\]]+)?\\s*=\\s*(\\d+),"
         ).matcher(source);
         assertTrue("`" + prop + "` has no numeric default in TagInput.tsx", matcher.find());
         return matcher.group(1);
@@ -136,7 +136,7 @@ public class ListingTagsTest {
         // that editing a listing from the app cannot reorder a member's skill list.
         assertEquals(
             Arrays.asList("kotlin", "react"),
-            ListingTags.normalise(Arrays.asList("React", "kotlin", " React ", "", "  ")),
+            ListingTags.normalise(Arrays.asList("React", "kotlin", " React ", "", "  "))
         );
         assertTrue(ListingTags.normalise(null).isEmpty());
 
@@ -165,7 +165,7 @@ public class ListingTagsTest {
         assertTrue("normaliseSkill stopped trimming: " + skills, skills.contains("raw.trim()"));
         assertTrue(
             "normaliseSkill stopped collapsing inner whitespace: " + skills,
-            skills.contains("replace(/\\s+/g, ' ')"),
+            skills.contains("replace(/\\s+/g, ' ')")
         );
         assertTrue("normaliseSkill stopped lower-casing: " + skills, skills.contains("toLowerCase()"));
         assertTrue("the list is no longer sorted: " + skills, skills.contains("[...seen].sort()"));
@@ -179,13 +179,13 @@ public class ListingTagsTest {
         String form = readWebSource(
             "../../../main-site/src/components/jobs/JobApplicationForm.tsx",
             "../main-site/src/components/jobs/JobApplicationForm.tsx",
-            "main-site/src/components/jobs/JobApplicationForm.tsx",
+            "main-site/src/components/jobs/JobApplicationForm.tsx"
         );
         assertTrue("the apply form no longer caps skills at 30: " + form, form.contains("max={30}"));
         assertTrue("the apply form no longer caps length at 64: " + form, form.contains("maxLength={64}"));
         assertTrue(
             "the apply form stopped canonicalising skills on every change: " + form,
-            form.contains("normaliseSkills(skills)"),
+            form.contains("normaliseSkills(skills)")
         );
         assertEquals(30, ListingTags.APPLICATION_MAX_SKILLS);
         assertEquals(64, ListingTags.APPLICATION_SKILL_MAX_LENGTH);
@@ -201,11 +201,11 @@ public class ListingTagsTest {
         }
         assertEquals(
             64,
-            ListingTags.accept(ListingTags.APPLICATIONS, none, longSkill.toString()).length(),
+            ListingTags.accept(ListingTags.APPLICATIONS, none, longSkill.toString()).length()
         );
         assertEquals(
             ListingTags.TAG_MAX_LENGTH,
-            ListingTags.accept(ListingTags.LISTINGS, none, longSkill.toString()).length(),
+            ListingTags.accept(ListingTags.LISTINGS, none, longSkill.toString()).length()
         );
 
         List<String> full = new ArrayList<>();
@@ -215,13 +215,13 @@ public class ListingTagsTest {
         assertNull(ListingTags.accept(ListingTags.APPLICATIONS, full, "one more"));
         assertEquals(
             full,
-            ListingTags.added(ListingTags.APPLICATIONS, full, "one more"),
+            ListingTags.added(ListingTags.APPLICATIONS, full, "one more")
         );
         // The same list is not full for a listing, which caps lower: the ceiling belongs to the rules,
         // not to the number of things already in the box.
         assertEquals(
             ListingTags.MAX_TAGS,
-            ListingTags.normalise(Arrays.asList("kotlin", "react", "go", "rust", "elixir", "erlang")).size(),
+            ListingTags.normalise(Arrays.asList("kotlin", "react", "go", "rust", "elixir", "erlang")).size()
         );
     }
 
@@ -229,7 +229,7 @@ public class ListingTagsTest {
         return readWebSource(
             "../../../main-site/src/lib/opportunities/skills.ts",
             "../main-site/src/lib/opportunities/skills.ts",
-            "main-site/src/lib/opportunities/skills.ts",
+            "main-site/src/lib/opportunities/skills.ts"
         );
     }
 
@@ -237,7 +237,7 @@ public class ListingTagsTest {
         return readWebSource(
             "../../../main-site/src/design-system/TagInput.tsx",
             "../main-site/src/design-system/TagInput.tsx",
-            "main-site/src/design-system/TagInput.tsx",
+            "main-site/src/design-system/TagInput.tsx"
         );
     }
 
