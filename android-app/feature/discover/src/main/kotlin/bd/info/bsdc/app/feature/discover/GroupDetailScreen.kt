@@ -626,14 +626,15 @@ fun GroupDetailScreen(
                                             if (channel.isReadOnly) {
                                                 BsdcBadge(label = if (bn) "শুধু পড়া" else "Read only", tone = BsdcTone.NEUTRAL)
                                             }
-                                            // A glyph was the obvious cue here, and the app has no
-                                            // chevron in its icon set: `ChevronRight` resolves only in
-                                            // material-icons-extended under a name this repo never
-                                            // imports, and CI found that out in three minutes. The
-                                            // room's own name carries the affordance instead — a
-                                            // tappable channel is coloured like a link, one that is not
-                                            // stays plain text. Nothing to translate, nothing to mirror
-                                            // for a right-to-left locale, no icon to get wrong.
+                                            // A glyph was the obvious cue here, and the one this line
+                                            // first asked for does not exist: RTL-flipped chevron
+                                            // support arrived in material-icons-extended as
+                                            // `ChevronLeft` under `Icons.AutoMirrored`, not as a
+                                            // `ChevronRight`, and the compiler named it in three
+                                            // minutes. Rather than import a symbol no other screen in
+                                            // this app uses, the room's own name carries the affordance:
+                                            // tappable is coloured like a link, not tappable is plain
+                                            // text. Nothing to translate, nothing to mirror.
                                         }
                                         channel.topic?.takeIf { it.isNotBlank() }?.let { topic ->
                                             Text(text = topic, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

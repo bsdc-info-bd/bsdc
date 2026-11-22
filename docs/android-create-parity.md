@@ -87,7 +87,9 @@ The group page's channel cards are links now — `slug` on the row, the room's n
 where a host wired `onOpenChannel`, plain text where one did not — as they are on the web, and
 `/g/{group}/c/{channel}` pasted from chat opens the room _on top of_ the group, so Back returns to the
 group rather than to the tab. A trailing chevron was the first attempt and is not in this app's icon set:
-`Icons.AutoMirrored.Rounded.ChevronRight` does not exist, and CI named it in three minutes.
+`Icons.AutoMirrored.Rounded.ChevronRight` does not exist — the RTL-flipped chevron that
+material-icons-extended added is `ChevronLeft`, not a mirrored `ChevronRight` — and CI named it in three
+minutes.
 
 ### The group editor
 
@@ -215,8 +217,10 @@ only compiler, an annotation that says only "a test task failed" costs a whole r
 The create side above was compiled by CI at `4780788`; the room page was not, and its first run
 failed on two symbols invented in a sandbox with no front end — `BsdcAvatar` imported from `core:designsystem` where it lives in `core:media`,
 and the chevron above — which is the honest error rate of hand-written Compose here, and why each slice is
-pushed and read back rather than declared finished. `check_kt.py`-style balance checks, grep for a symbol's
-definition, and the parity tests all passed over both.
+pushed and read back rather than declared finished. Brace-and-quote balance checks, a grep for each symbol's
+definition, and the locale parity tests all passed over both — the grep printed `BsdcImageComponents.kt` as
+the answer, and what I checked was that the name existed somewhere, not that it existed in the package I
+was importing it from.
 
 **Device-only, therefore not claimed:** that a bottom sheet behaves with the IME open; that the segmented
 thumb, crossfade and entrance feel right at 120 Hz; that `channels(slug,name,groups(slug,name))` is

@@ -171,7 +171,11 @@ class ChannelFeedTest {
      * words and pass while proving nothing.
      */
     private fun sectionOf(text: String, parent: String, mustContain: String): String {
-        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
+        // The leading whitespace is captured, not merely skipped: the section ends at the first
+        // brace at _that_ indent, which is how a nested `errors` block stops at its own `},` instead
+        // of at the end of `channels`. Without the group, `groupValues[1]` is an
+        // IndexOutOfBoundsException and CI calls it "No group 1".
+        val header = Regex("""(?m)^([ \t]*)""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
         for (match in header.findAll(text)) {
             val indent = match.groupValues[1]
             val rest = text.substring(match.range.last + 1)
