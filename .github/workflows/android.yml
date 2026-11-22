@@ -186,6 +186,32 @@ jobs:
             if [ -z "$summary" ]; then
               summary=$(tail -c 1400 /tmp/gradle.out | tr '\n' ' ')
             fi
+            # A failed unit test has no `e:` line, so the grep above can only say which task died —
+            # "Execution failed for task ':feature:discover:testDebugUnitTest'" is not a diagnosis.
+            # Name the cases from the JUnit XML instead, so that one push explains itself.
+            failing=$(python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          
+          found = []
+          for path in glob.glob("**/build/test-results/**/*.xml", recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for case in root.iter("testcase"):
+                  for kind in ("failure", "error"):
+                      node = case.find(kind)
+                      if node is None:
+                          continue
+                      lines = (node.get("message") or node.text or "").strip().splitlines()
+                      detail = lines[0][:180] if lines else "?"
+                      found.append("%s.%s: %s" % (case.get("classname"), case.get("name"), detail))
+          print(" | ".join(found[:8]))
+            PY
+            )
+            if [ -n "$failing" ]; then
+              summary="$summary — failing tests: $failing"
+            fi
             echo "::error::Gradle debug build failed: $summary"
             exit "$status"
           fi
