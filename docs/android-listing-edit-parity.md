@@ -103,14 +103,44 @@ A regex in those tests asserts on capture groups and fails loudly when it matche
 (`assertTrue(matcher.find())`), because a parity test whose pattern stopped matching is worse than no
 test: it is a green light.
 
-## Not verified, and how to check it
+## The gates, and what they caught
 
-**Nothing here was compiled.** The sandbox has no JDK and no Android SDK (`java` is absent, `ANDROID_HOME`
-is empty), so there is no `gradlew testDebugUnitTest` behind this. The static checks that were run — a
-brace/literal balance checker and a symbol resolver that reads each module's local declarations — are not
-compile evidence. The gates in `.github/workflows/android.yml` (all-module `testDebugUnitTest`,
-`:app:lintDebug`, `:app:assembleDebug`, the WebView/permission/manifest invariants) run on the push, and
-the results are recorded below by `headSha`.
+No JDK and no Android SDK exist in this sandbox (`java` is absent, `ANDROID_HOME` is empty), so the
+first compile of this work happened in CI. The static checks run locally — a brace-and-literal balance
+checker, and a symbol resolver that reads each module's own declarations — reported every one of the
+following files as clean, and were wrong about three of them. They are not a parser.
+
+| Head | Android | CI | What it settled |
+| --- | --- | --- | --- |
+| `7938336` | cancelled | cancelled | superseded by the next push before it finished |
+| `73f59ca` | failure | success | `ListingTagsTest.java`: 17 × `illegal start of expression` — trailing commas in Java argument lists |
+| `9966c5d` | failure | — | `ListingTagsTest` ran and failed one assertion: a filler `assertEquals` I had written comparing `normalise` of six skills against `MAX_TAGS` |
+| `9966c5d` (retry) | failure | — | `:feature:discover:compileDebugKotlin`: `GigEditPayload` was missing its `durationDays` argument |
+| `ee4cadd` | **success** | **success** | all-module `testDebugUnitTest`, `:app:lintDebug`, `:app:assembleDebug`, the WebView/permission/manifest invariants |
+
+Three of those cycles were the build earning its keep:
+
+* **Java takes no trailing comma.** Kotlin allows one at a call site, and a Java array initializer allows
+  one, so `f(a, b,)` looks fine to anyone who writes mostly Kotlin. `javac` rejects it, and points at the
+  closing paren rather than the comma. Anything written in `core/common`'s Java source sets must drop
+  them, and no local checker here notices.
+* **A dropped named argument is only fatal when the field has no default.** `GigEditPayload`'s
+  `durationDays` was swallowed by an earlier splice that installed a comment. It failed to compile, which
+  is the good outcome: a data-class field with a default would have shipped a gig editor that silently
+  wiped the delivery window of every gig it saved. Every payload builder was then checked the way the
+  compiler checks it — each declared field named exactly once — and `applyToJob`/`submitProposal`, which
+  are called positionally, were checked by hand.
+* **A parity assertion that cannot fail is worse than none.** `normalise` of six skills returns six; I had
+  asserted it equalled `MAX_TAGS` to "prove" the cap comes from the rules. Replaced with the claim worth
+  making: twenty skills fill a `LISTINGS` box and leave room in an `APPLICATIONS` one.
+
+`feature/compose`'s create tests passed after `parseCommaList` began lower-casing skills — nothing in that
+module asserted that a member's own capitalisation reached the wire — but the same change had leaked into
+`createProjectWithScreenshots`, where the list is a project's *tech stack*, rendered verbatim as "Built
+with" chips on the showcase. Canonicalising it is a rename of the member's own words. That is now a
+separate call (`ListingTags.parse`, rules and cap only), and the two helpers are named for what they obey.
+
+Re-running locally, on a machine with the SDK:
 
 ```bash
 cd android-app
@@ -118,17 +148,12 @@ cd android-app
 ./gradlew :app:lintDebug :app:assembleDebug
 ```
 
-Three things only a run can answer, in the order they are likely to be wrong:
+## What is still true after this
 
-1. `ListingTagsTest` has never been executed — its regexes were verified by hand-emulating `javac`'s
-   string decoding, which is not the same as a JUnit pass.
-2. The four sheet composables have never been composed. `MkJobApplySheet`'s certification-image block
-   keeps its own `remember` state inside an `if`, which is legal in Compose and worth an eye on the
-   recomposition cache in a profile run.
-3. `feature/compose`'s create tests may notice that `ComposeRepository.parseCommaList` now lower-cases
-   skills on the create path. If a test asserts that a member's own capitalisation survives to the wire,
-   the test is the thing that is wrong — the database column is canonical — but it will read as a
-   regression, so it should be fixed in the same commit that changes the expectation.
+The three listing editors (gig, role, event) and the group editor are native, and no screen offers to send
+a member to a browser to finish an edit — `grep -rn "Edit on the web" android-app --include=*.kt` returns
+only comments describing what used to be there. An event page and a group page still offer **"Open on
+web"** next to **Share**, which is a link to the public page, not an escape hatch.
 
 ## Follow-ups, deliberately left out
 
