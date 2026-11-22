@@ -135,6 +135,9 @@ object GigEditLogic {
         budgetMin = amount(form.budgetMinText),
         budgetMax = amount(form.budgetMaxText),
         isHourly = form.isHourly,
+        // A blank box is `null`, which is what `update_gig` reads as "the gig does not say"; zero would
+        // be a promise of same-day delivery the client would hold the freelancer to.
+        durationDays = amount(form.durationDaysText),
         // Canonical, deduplicated and sorted — the form `normaliseSkills` puts on the wire in
         // `main-site/src/lib/opportunities/opportunity-repository.ts`, and the form migration 0103 put
         // in the column that the skill filters read. Chips keep the member's own case on screen.
