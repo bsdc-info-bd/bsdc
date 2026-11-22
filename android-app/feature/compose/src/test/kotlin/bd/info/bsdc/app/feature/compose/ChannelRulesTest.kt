@@ -294,11 +294,11 @@ class ChannelRulesTest {
      * catalogue, and a test that matched the wrong one would pass while proving nothing.
      */
     private fun sectionOf(text: String, parent: String, mustContain: String): String {
-        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + r""":[ \t]*\{[ \t]*""")
+        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
         for (match in header.findAll(text)) {
             val indent = match.groupValues[1]
             val rest = text.substring(match.range.last + 1)
-            val close = Regex("""(?m)^""" + Regex.escape(indent) + r"""\},[ \t]*""").find(rest)
+            val close = Regex("""(?m)^""" + Regex.escape(indent) + """\},[ \t]*""").find(rest)
             val body = rest.substring(0, close?.range?.first ?: rest.length)
             if (mustContain in body) return body
         }
@@ -308,9 +308,9 @@ class ChannelRulesTest {
     /** A catalogue entry, single-quoted and possibly wrapped onto its own line, unescaped. */
     private fun valueOf(section: String, name: String): String {
         val entry = Regex(
-            """(?m)^[ \t]*""" + Regex.escape(name) + r"""[ \t]*:[ \t]*(?:\r?\n[ \t]*)?'((?:[^'\\]|\\.)*)',""",
+            """(?m)^[ \t]*""" + Regex.escape(name) + """[ \t]*:[ \t]*(?:\r?\n[ \t]*)?'((?:[^'\\]|\\.)*)',""",
         ).find(section) ?: error("`" + name + "` not found in the locale section")
-        return entry.groupValues[1].replace(r"\'", "'").replace("\\\"", "\"")
+        return entry.groupValues[1].replace("\\'", "'").replace("\\\"", "\"")
     }
 
     private fun readRepoFile(vararg parts: String): String {
