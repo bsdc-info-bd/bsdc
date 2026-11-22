@@ -100,7 +100,7 @@ fun MkOrdersScreen(
             }
         }
         items(orders, key = { it.id }) { order ->
-            BsdcCard(modifier = Modifier.fillMaxWidth()) {
+            BsdcCard(modifier = Modifier.fillMaxWidth().animateItem()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(

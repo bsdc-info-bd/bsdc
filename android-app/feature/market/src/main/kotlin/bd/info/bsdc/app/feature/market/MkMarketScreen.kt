@@ -442,7 +442,7 @@ fun MkShopListScreen(
                     }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(wishlist, key = { it.id }) { item ->
-                            BsdcCard(modifier = Modifier.width(150.dp)) {
+                            BsdcCard(modifier = Modifier.width(150.dp).animateItem()) {
                                 Text(
                                     text = item.name,
                                     style = MaterialTheme.typography.titleSmall,

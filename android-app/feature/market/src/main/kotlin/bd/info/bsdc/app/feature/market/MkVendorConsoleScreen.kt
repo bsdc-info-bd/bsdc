@@ -303,6 +303,7 @@ fun MkVendorConsoleScreen(
         }
         items(orders, key = { it.id }) { order ->
             VendorOrderCard(
+                modifier = Modifier.animateItem(),
                 order = order,
                 bn = bn,
                 imageLoader = imageLoader,
@@ -376,10 +377,11 @@ private fun VendorOrderCard(
     busy: Boolean,
     onAction: (String) -> Unit,
     onOpenMap: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     var mapTarget by remember(order.id) { mutableStateOf<Pair<Double, Double>?>(null) }
 
-    BsdcCard(modifier = Modifier.fillMaxWidth()) {
+    BsdcCard(modifier = modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 text = "#${order.code}",

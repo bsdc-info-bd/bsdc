@@ -457,7 +457,9 @@ private fun ProductEditor(
         Text(mkText(bn, "Photos (up to $MAX_PRODUCT_IMAGES)", "ছবি (সর্বোচ্চ $MAX_PRODUCT_IMAGES)"), style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(draft.images, key = { it }) { url ->
-                Box(modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp))) {
+                // The one place in the listing form where a photo is removed by
+                // hand: the strip closing the gap is the confirmation that it went.
+                Box(modifier = Modifier.size(84.dp).animateItem().clip(RoundedCornerShape(12.dp))) {
                     MkImage(
                         url = url,
                         contentDescription = null,

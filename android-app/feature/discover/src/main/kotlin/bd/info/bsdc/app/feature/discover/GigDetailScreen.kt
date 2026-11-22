@@ -747,7 +747,9 @@ fun GigDetailScreen(
                         items(2) { BsdcDirectorySkeletonCard() }
                     }
                     items(proposals, key = { it.id }) { proposal ->
-                        BsdcCard {
+                        // Accepting a proposal removes the row it was for, and the rows under it
+                        // move up. Without this the queue looks like it lost the client too.
+                        BsdcCard(modifier = Modifier.animateItem()) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),

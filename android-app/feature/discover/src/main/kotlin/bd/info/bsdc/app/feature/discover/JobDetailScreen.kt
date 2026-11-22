@@ -675,7 +675,7 @@ fun JobDetailScreen(
                                     items(2) { BsdcDirectorySkeletonCard() }
                                 }
                                 items(applicants, key = { it.id }) { application ->
-                                    BsdcCard {
+                                    BsdcCard(modifier = Modifier.animateItem()) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp),
