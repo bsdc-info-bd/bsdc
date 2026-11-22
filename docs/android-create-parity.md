@@ -194,9 +194,17 @@ keyboard opens is a bug, not a design).
 
 ## 6. What CI proves, and what it cannot
 
-Proved on this branch: `:feature:compose`, `:feature:discover` and `:feature:feed` compile against the
-project's Compose BOM; the new JVM suites run in `testDebugUnitTest`; Android Lint reports no errors;
-`assembleDebug` builds; the native-map gate still passes.
+Proved on this branch, at `64a744b`: the whole gate is green — `:core:{model,common,permissions,network,
+auth,media,database,sync,push}`, `:feature:{feed,compose,messenger,notifications,verify,discover,market,
+news}`, `:app:testDebugUnitTest`, then `:app:lintDebug` and `:app:assembleDebug`, plus the native-map check
+in its own step. That covers the room page compiling against the project's Compose BOM, the notification
+module's newly declared animation dependency, and the thirteen lists that now settle with `animateItem()`.
+Between `4780788` and that commit stand twenty-one runs: thirteen failed, eight were superseded by a push
+that arrived first. What they died on is the honest ledger of writing Compose with no compiler — two
+invented symbols, a heredoc terminator indented twelve spaces instead of zero, a regex with no capturing
+group copied into three test source sets, and the colon that went missing while the third copy was being
+fixed. Each one cost a push and eight minutes, which is the price of this sandbox and worth paying rather
+than guessing twice.
 
 Test methods added by these slices, counted with `grep -c "@Test"` rather than remembered — the first
 version of this paragraph had 61 and the files hold 63, which is what a hand-typed number is worth:
@@ -226,8 +234,8 @@ the Gradle log for `e:` lines, which is precise for a compile error and useless 
 now appends up to eight `class.method: message` entries read from the JUnit XML. On a branch where CI is the
 only compiler, an annotation that says only "a test task failed" costs a whole round trip per guess.
 
-The create side above was compiled by CI at `4780788`; the room page was not, and its first run
-failed on two symbols invented in a sandbox with no front end — `BsdcAvatar` imported from `core:designsystem` where it lives in `core:media`,
+The room page's first run failed on two symbols invented in a sandbox with no front end —
+`BsdcAvatar` imported from `core:designsystem` where it lives in `core:media`,
 and the chevron above — which is the honest error rate of hand-written Compose here, and why each slice is
 pushed and read back rather than declared finished. Brace-and-quote balance checks, a grep for each symbol's
 definition, and the locale parity tests all passed over both — the grep printed `BsdcImageComponents.kt` as
