@@ -38,9 +38,10 @@ class ChannelRulesTest {
 
     @Test
     fun theFeedIsASentinelAndNotAnEmptyString() {
-        // An empty string is what the web sends for "no channel" and a uuid for "this channel"; the
-        // picker's value must survive that round trip exactly, or selecting the feed would look like
-        // a channel whose id is "".
+        // The website sends an explicit null for "no channel" (`save-post.test.ts` asserts
+        // `channel_id: null`), and this app's picker names that state with a sentinel string so a uuid
+        // can never collide with it. A blank is fed too: `channelId` lives in a Room column, so a
+        // restored draft can say "no channel" as "" — which must not reach the wire as ""::uuid.
         assertNull(ChannelRules.channelIdFromValue(ChannelRules.FEED_OPTION_VALUE))
         assertEquals("7c3e", ChannelRules.channelIdFromValue("7c3e"))
         assertNull(ChannelRules.channelIdFromValue(""))
@@ -294,7 +295,10 @@ class ChannelRulesTest {
      * catalogue, and a test that matched the wrong one would pass while proving nothing.
      */
     private fun sectionOf(text: String, parent: String, mustContain: String): String {
-        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + """:[ \t]*\{[ \t]*""")
+        // `([ \t]*)` is a capture, not a skip: the section ends at the first brace at _that_ indent, so a
+        // nested `reasons` block stops at its own `},`. Without the group there is no `groupValues[1]`,
+        // and the test dies on IndexOutOfBoundsException before it can compare a single string.
+        val header = Regex("""(?m)^([ \t]*)(?:""" + Regex.escape(parent) + """)[ \t]*\{[ \t]*""")
         for (match in header.findAll(text)) {
             val indent = match.groupValues[1]
             val rest = text.substring(match.range.last + 1)

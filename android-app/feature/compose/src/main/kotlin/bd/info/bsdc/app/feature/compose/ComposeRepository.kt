@@ -231,8 +231,8 @@ class ComposeRepository(
                     // out to the feed". Only the member can have said either, so the key is written
                     // only once the channel selector has actually been used.
                     if (ChannelRules.shouldSendChannelKey(draft.channelTouched)) {
-                        val channel = draft.channelId
-                        if (channel.isNullOrBlank()) put("channel_id", JsonNull) else put("channel_id", channel)
+                        val channel = ChannelRules.channelIdFromValue(draft.channelId)
+                        if (channel == null) put("channel_id", JsonNull) else put("channel_id", channel)
                     }
                     put("title", cleanTitle)
                     put("body", cleanBody)

@@ -65,7 +65,11 @@ object MarkdownInspector {
 
     // Leading whitespace of any width, because the reader `trim()`s each line before it looks for a
     // marker — mirroring that is the point, and CommonMark's three-space limit is not what this app does.
-    private val HEADING = Regex("""^\s*(#{1,3})\s+(.*)$""")
+    // The text after the markers is optional, not merely allowed to be empty, because the line the
+    // analysis sees has already been trimmed: a heading whose words were deleted arrives here as `##`,
+    // with no space left to match. `\s+` inside the group is what keeps CommonMark's rule — `#tag` is
+    // not a heading — while `##` on its own still is one, and is the case worth warning about.
+    private val HEADING = Regex("""^\s*(#{1,3})(?:\s+(.*))?$""")
     private val DEEP_HEADING = Regex("""^\s*(#{4,})\s*(.*)$""")
     private val TABLE_ROW = Regex("""^\s*\|.*\|""")
     private val TABLE_DIVIDER = Regex("""^\s*\|?[\s:|-]{3,}\|?\s*$""")

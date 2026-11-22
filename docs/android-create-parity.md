@@ -161,6 +161,14 @@ offered, the app learned them.
 Pipe tables and `####` headings are still reported, because they are still not supported. The boundary moved;
 it did not disappear.
 
+One note in that strip had never fired. `EMPTY_HEADING` was looked for with `^\s*(#{1,3})\s+(.*)$`, but
+the inspector trims each line before matching it, so a heading whose words were deleted arrives at the
+pattern as a bare `##` — no space left for `\s+`, no match, no note, and the member publishes an invisible
+gap. The text is now optional at the level of the whole line (`^\s*(#{1,3})(?:\s+(.*))?$`), which keeps
+CommonMark's own rule that `#hashtag` is not a heading, and `MarkdownInspectorTest`'s expectation for
+`"##   "` is what proved the difference: it had been failing since the test was written, behind two compile
+errors in the queue ahead of it.
+
 ---
 
 ## 5. Motion

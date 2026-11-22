@@ -168,8 +168,15 @@ object ChannelRules {
     /** The value the selector sends for "the feed". A uuid-shaped id can never collide with it. */
     const val FEED_OPTION_VALUE: String = "__feed__"
 
-    /** What a picker's selection means on the wire: a channel id, or null for the feed. */
-    fun channelIdFromValue(value: String): String? = if (value == FEED_OPTION_VALUE) null else value
+    /**
+     * What a picker's selection means on the wire: a channel id, or null for the feed.
+     *
+     * A blank is the feed as well, and that is not padding around the sentinel rule: a draft restored
+     * from Room carries `channelId` as a plain string column, so "no channel" can arrive as `""` rather
+     * than `null`, and `""::uuid` is an error at the database rather than an absence. Deciding it here
+     * is what lets [bd.info.bsdc.app.feature.compose.ComposeRepository] write the key from one rule.
+     */
+    fun channelIdFromValue(value: String?): String? = value?.takeIf { it.isNotBlank() && it != FEED_OPTION_VALUE }
 
     /** The inverse: what a stored post's channel id means for the picker's selection. */
     fun valueForChannel(channelId: String?): String = channelId ?: FEED_OPTION_VALUE
