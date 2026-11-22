@@ -78,22 +78,25 @@ fun ChannelFeedScreen(
     onWriteHere: (channelId: String, channelName: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bn = language == AppLanguage.BN
     val copy = remember(language) { ChannelFeedCopy.forLanguage(language) }
     val scope = rememberCoroutineScope()
 
     var page by remember(groupSlug, channelSlug) { mutableStateOf<ChannelFeedPage?>(null) }
-    var olderPosts by remember(groupSlug, channelSlug) { mutableStateOf<List<FeedPost>>(emptyList()) }
+    var posts by remember(groupSlug, channelSlug) { mutableStateOf<List<FeedPost>>(emptyList()) }
     var cursor by remember(groupSlug, channelSlug) { mutableStateOf<String?>(null) }
     var loadingMore by remember { mutableStateOf(false) }
     var retryNonce by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(groupSlug, channelSlug, retryNonce) {
         page = null
-        olderPosts = emptyList()
+        posts = emptyList()
+        cursor = null
         val first = repository.fetchChannelTimeline(groupSlug, channelSlug)
         page = first
-        cursor = (first as? ChannelFeedPage.Ready)?.nextCursor
+        if (first is ChannelFeedPage.Ready) {
+            posts = first.posts
+            cursor = first.nextCursor
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
@@ -143,7 +146,7 @@ fun ChannelFeedScreen(
                         icon = Icons.Rounded.ChatBubbleOutline,
                         title = copy.failed,
                         subtitle = current.message,
-                        actionLabel = if (bn) "আবার চেষ্টা করুন" else "Try again",
+                        actionLabel = copy.retry,
                         onAction = { retryNonce++ },
                         modifier = Modifier.padding(16.dp),
                     )
@@ -151,7 +154,6 @@ fun ChannelFeedScreen(
             }
 
             is ChannelFeedPage.Ready -> {
-                val posts = current.posts + olderPosts
                 if (current.room.isReadOnly) {
                     BsdcStatusBanner(
                         title = copy.readOnlyNote,
@@ -197,7 +199,13 @@ fun ChannelFeedScreen(
                                     scope.launch {
                                         val next = repository.fetchChannelTimeline(groupSlug, channelSlug, before)
                                         if (next is ChannelFeedPage.Ready) {
-                                            olderPosts = olderPosts + next.posts
+                                            // Append, never replace, and never twice: `channel_feed` pages
+                                            // with a strict `published_at < cursor`, so a repeated id means
+                                            // the same page arrived again (a retry, a tap in a hurry) — and
+                                            // a duplicated key in a `items(...)` list is a crash, not a
+                                            // cosmetic fault.
+                                            val seen = posts.mapTo(mutableSetOf()) { it.id }
+                                            posts = posts + next.posts.filterNot { it.id in seen }
                                             cursor = next.nextCursor
                                         } else {
                                             // A page that stopped answering is not a reason to lose the

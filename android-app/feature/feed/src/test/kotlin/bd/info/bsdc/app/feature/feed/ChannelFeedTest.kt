@@ -116,6 +116,7 @@ class ChannelFeedTest {
             val channels = sectionOf(file, "channels", "privatePost:")
             val errors = sectionOf(channels, "errors", "readOnly:")
             val social = sectionOf(file, "social", "emptyFollowers:")
+            val common = sectionOf(file, "common", "brandFull:")
             val copy = ChannelFeedCopy.forLanguage(if (bn) AppLanguage.BN else AppLanguage.EN)
             assertEquals("empty title", valueOf(channels, "emptyTitle"), copy.emptyTitle)
             assertEquals("empty body", valueOf(channels, "emptyBody"), copy.emptyBody)
@@ -128,6 +129,7 @@ class ChannelFeedTest {
             assertEquals("member note", valueOf(errors, "notMember"), copy.memberNote)
             assertEquals("missing note", valueOf(errors, "notFound"), copy.missingNote)
             assertEquals("load more", valueOf(social, "loadMore"), copy.loadMore)
+            assertEquals("retry", valueOf(common, "retry"), copy.retry)
         }
     }
 

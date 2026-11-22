@@ -151,6 +151,8 @@ data class ChannelFeedCopy(
      * member does notice.
      */
     val loadMore: String,
+    /** `common.retry` — the label on the one control that asks for the request back. */
+    val retry: String,
     val readOnlyNote: String,
     val memberNote: String,
     val missingNote: String,
@@ -175,6 +177,7 @@ data class ChannelFeedCopy(
                 memberNote = "আপনি এই চ্যানেলের মালিক গ্রুপের সদস্য নন।",
                 missingNote = "সেই চ্যানেলটি আছে না।",
                 loadMore = "আরও দেখুন",
+                retry = "আবার চেষ্টা করুন",
             )
         } else {
             ChannelFeedCopy(
@@ -189,6 +192,7 @@ data class ChannelFeedCopy(
                 memberNote = "You are not a member of the group that owns this channel.",
                 missingNote = "That channel does not exist.",
                 loadMore = "Load more",
+                retry = "Try again",
             )
         }
     }

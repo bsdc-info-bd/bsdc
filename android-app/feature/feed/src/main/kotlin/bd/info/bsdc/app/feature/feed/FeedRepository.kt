@@ -425,7 +425,10 @@ class FeedRepository(
             ChannelFeedPage.Ready(
                 room = ChannelFeed.roomOf(row, groupSlug),
                 posts = posts,
-                nextCursor = if (ChannelFeed.canLoadMore(posts.size)) ChannelFeed.cursorFor(rows) else null,
+                // The *query's* size decides, not the hydrated list's: a post whose media failed the
+                // allowlist still occupied a slot in the room, and counting hydrated rows would let a
+                // short page silently end a timeline that has more in it.
+                nextCursor = if (ChannelFeed.canLoadMore(rows.size)) ChannelFeed.cursorFor(rows) else null,
             )
         }.getOrElse { error ->
             ChannelFeedPage.Failed(error.message?.takeIf { it.isNotBlank() } ?: "channel_feed")
