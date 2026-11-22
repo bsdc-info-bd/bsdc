@@ -6,6 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GroupDetailLogicTest {
+    private companion object {
+        /** Stands in for `{{count, number}}` on both sides of the comparison. */
+        const val COUNT_MARK = "\u25e6"
+    }
+
     @Test
     fun webUrlUsesGroupRouteAndEncodesSlug() {
         assertEquals("https://www.bsdc.info.bd/g/dhaka%20devs", GroupDetailLogic.webUrl(" dhaka devs "))
@@ -85,5 +90,62 @@ class GroupDetailLogicTest {
         assertEquals("# general", GroupDetailLogic.channelTitle("general"))
         assertEquals("# general", GroupDetailLogic.channelTitle("  # general  "))
         assertEquals("# help-desk", GroupDetailLogic.channelTitle("help-desk"))
+    }
+
+    @Test
+    fun theCountBadgeSaysWhatTheWebsiteSays() {
+        assertEquals("3 posts", GroupDetailLogic.postCountLabel("3", 3, bn = false))
+        assertEquals("1 post", GroupDetailLogic.postCountLabel("1", 1, bn = false))
+        // Bengali counts with a classifier instead of a plural, so one and many read the same way.
+        assertEquals("৩টি পোস্ট", GroupDetailLogic.postCountLabel("৩", 3, bn = true))
+        assertEquals("১টি পোস্ট", GroupDetailLogic.postCountLabel("১", 1, bn = true))
+    }
+
+    @Test
+    fun theCountSentenceIsTheWebsitesOwnTemplate() {
+        // The badge is not this screen's phrasing: it is `channels.posts` / `channels.postsOne` from
+        // the website's catalogue, rendered. A marker stands in for the number on both sides, so the
+        // test compares sentences rather than digits, and still fails the moment either side reword it
+        // — including the Bengali classifier `টি`, which is what a hand-written label usually drops.
+        for (bn in listOf(true, false)) {
+            val file = localeFile(if (bn) "bn" else "en")
+            val channels = sectionOf(file, "channels", "privatePost:")
+            for (count in listOf(1, 3)) {
+                val key = if (count == 1) "postsOne" else "posts"
+                val rendered = valueOf(channels, key).replace("{{count, number}}", COUNT_MARK)
+                assertEquals(rendered, GroupDetailLogic.postCountLabel(COUNT_MARK, count, bn))
+            }
+        }
+    }
+
+    private fun localeFile(lang: String): String = readRepoFile("main-site", "src", "i18n", "locales", "$lang.ts")
+
+    private fun sectionOf(text: String, parent: String, mustContain: String): String {
+        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + r""":[ \t]*\{[ \t]*""")
+        for (match in header.findAll(text)) {
+            val indent = match.groupValues[1]
+            val rest = text.substring(match.range.last + 1)
+            val close = Regex("""(?m)^""" + Regex.escape(indent) + r"""\},[ \t]*""").find(rest)
+            val body = rest.substring(0, close?.range?.first ?: rest.length)
+            if (mustContain in body) return body
+        }
+        error("no `" + parent + "` section in the locale file")
+    }
+
+    private fun valueOf(section: String, name: String): String {
+        val entry = Regex(
+            """(?m)^[ \t]*""" + Regex.escape(name) + r"""[ \t]*:[ \t]*(?:\r?\n[ \t]*)?'((?:[^'\\]|\\.)*)',""",
+        ).find(section) ?: error("`" + name + "` not found in the locale section")
+        return entry.groupValues[1].replace(r"\'", "'").replace("\\\"", "\"")
+    }
+
+    private fun readRepoFile(vararg parts: String): String {
+        var dir: java.io.File? = java.io.File(System.getProperty("user.dir")).absoluteFile
+        repeat(6) {
+            val candidate = dir?.let { root -> parts.fold(root) { acc, part -> acc.resolve(part) } }
+            if (candidate != null && candidate.isFile) return candidate.readText()
+            dir = dir?.parentFile
+        }
+        error("could not find ${parts.joinToString("/")} above ${System.getProperty("user.dir")}")
     }
 }

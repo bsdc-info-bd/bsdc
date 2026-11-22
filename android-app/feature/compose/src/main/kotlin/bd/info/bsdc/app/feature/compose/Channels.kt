@@ -111,20 +111,24 @@ data class ChannelPickerCopy(
 
     companion object {
         /**
-         * The strings the web's `compose.visibility.*` / channel keys translate to, kept in step by
-         * `ChannelRulesTest`'s label test. Bengali first because the app's default language is BN.
+         * The web's own translations, copied out of `main-site/src/i18n/locales/{en,bn}.ts`: the
+         * `compose.channel*` keys, `compose.visibilityInChannelHint`, `channels.errors.privatePost`,
+         * `channels.reasons.*`. Bengali first, because BN is the app's default language.
+         *
+         * `ChannelRulesTest.thePickersWordsAreTheWebsWords` re-reads both catalogues on every build,
+         * so a translator editing a sentence on either side breaks a test rather than diverging the
+         * two clients in silence.
          */
         fun forLanguage(bn: Boolean): ChannelPickerCopy = if (bn) {
             ChannelPickerCopy(
-                feed = "মূল ফিড",
-                readOnly = "পড়া-র জন্য",
+                feed = "মূল ফিड",
+                readOnly = "পড়া-র জন্য",
                 notMember = "সদস্য নন",
                 archived = "আর্কাইভ করা",
                 missing = "নেই",
-                inChannelHint =
-                    "একটি চ্যানেল পোস্ট ঘরটি দেখতে পারা প্রত্যেকের কাছে দেখা যায়; এখানে «শুধু আমি» ব্যবহার করা যাবে না।",
-                privateNeedsFeed = "চ্যানেলের ভিতরে «শুধু আমি» ব্যবহার করা যাবে না; অন্য দেখার সেটিং বেছে নিন।",
-                feedHint = "এই পোস্টটি এটি দেখতে পারা প্রত্যেকের মূল ফিডে দেখা যাবে।",
+                inChannelHint = "একটি চ্যানেল পোস্ট ঘরটি দেখতে পারা প্রত্যেকের কাছে দেখা যায়; এখানে \"শুধু আমি\" ব্যবহার করা যাবে না।",
+                privateNeedsFeed = "চ্যানেলের ভিতরে \"শুধু আমি\" ব্যবহার করা যাবে না; অন্য দেখার সেটিং বেছে নিন।",
+                feedHint = "এই পোস্টটি এটি দেখতে পারা প্রত্যেকের মূল ফিडে দেখা যাবে।",
                 groupHint = "এই পোস্টটি শুধু এই চ্যানেলে দেখা যাবে, গ্রুপ দেখতে পারা লোকদের কাছে।",
             )
         } else {
@@ -134,9 +138,8 @@ data class ChannelPickerCopy(
                 notMember = "not a member",
                 archived = "archived",
                 missing = "missing",
-                inChannelHint =
-                    "A channel post is read by everyone who can read the room; “Only me” is not available here.",
-                privateNeedsFeed = "“Only me” cannot be used inside a channel; choose another visibility.",
+                inChannelHint = "A channel post is read by everyone who can read the room; \"Only me\" is not available here.",
+                privateNeedsFeed = "\"Only me\" cannot be used inside a channel; choose another visibility.",
                 feedHint = "This post appears in the main feed of everyone who can read it.",
                 groupHint = "This post appears only in this channel, for the people who can read the group.",
             )

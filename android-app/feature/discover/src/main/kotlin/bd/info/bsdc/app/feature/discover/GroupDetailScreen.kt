@@ -574,7 +574,13 @@ fun GroupDetailScreen(
                                     }
                                 }
                                 items(channels, key = { it.id }) { channel ->
-                                    BsdcCard(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    // A room that appears, disappears or moves is a change the member
+                                    // just caused, so it is shown as movement rather than as a repaint.
+                                    BsdcCard(
+                                        modifier = Modifier
+                                            .animateItem()
+                                            .padding(horizontal = 16.dp),
+                                    ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text(
                                                 text = GroupDetailLogic.channelTitle(channel.name),
@@ -588,11 +594,11 @@ fun GroupDetailScreen(
                                             // a channel card with no number read as a broken feature
                                             // rather than as an empty room, which is a real difference.
                                             BsdcBadge(
-                                                label = if (bn) {
-                                                    "${BanglaDigitFormatter.formatCount(count.toLong(), language)} পোস্ট"
-                                                } else {
-                                                    "$count ${if (count == 1) "post" else "posts"}"
-                                                },
+                                                label = GroupDetailLogic.postCountLabel(
+                                                    formattedCount = BanglaDigitFormatter.formatCount(count.toLong(), language),
+                                                    count = count,
+                                                    bn = bn,
+                                                ),
                                                 tone = if (count == 0) BsdcTone.NEUTRAL else BsdcTone.OK,
                                             )
                                             if (channel.isReadOnly) {

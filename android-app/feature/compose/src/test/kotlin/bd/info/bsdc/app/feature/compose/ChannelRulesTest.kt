@@ -1,7 +1,7 @@
 package bd.info.bsdc.app.feature.compose
 
 import bd.info.bsdc.app.core.network.BsdcHttpClientFactory
-import kotlinx.serialization.json.decodeFromString
+import kotlinx.serialization.decodeFromString
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -254,6 +254,63 @@ class ChannelRulesTest {
             "save_post must test for the key's presence, not just its value",
             sql.contains("p_post ? 'channel_id'"),
         )
+    }
+
+    @Test
+    fun thePickersWordsAreTheWebsWords() {
+        // Parity is not only about what the two clients allow. It is also the sentence a member reads
+        // when they are refused, so every string in the picker is the website's own translation, and
+        // this test reads it back out of `main-site/src/i18n/locales` rather than trusting a copy. A
+        // translator editing either catalogue breaks a test instead of quietly splitting the clients.
+        for (bn in listOf(true, false)) {
+            val file = localeFile(if (bn) "bn" else "en")
+            val compose = sectionOf(file, "compose", "channelFeed:")
+            val channels = sectionOf(file, "channels", "privatePost:")
+            val reasons = sectionOf(channels, "reasons", "readOnly:")
+            val visibility = sectionOf(compose, "visibility", "followers:")
+            val copy = ChannelPickerCopy.forLanguage(bn)
+            assertEquals("feed option", valueOf(compose, "channelFeed"), copy.feed)
+            assertEquals("feed hint", valueOf(compose, "channelHintFeed"), copy.feedHint)
+            assertEquals("group hint", valueOf(compose, "channelHintGroup"), copy.groupHint)
+            assertEquals("channel hint", valueOf(compose, "visibilityInChannelHint"), copy.inChannelHint)
+            assertEquals("private refused", valueOf(channels, "privatePost"), copy.privateNeedsFeed)
+            assertEquals("read-only", valueOf(reasons, "readOnly"), copy.readOnly)
+            assertEquals("not a member", valueOf(reasons, "notMember"), copy.notMember)
+            assertEquals("archived", valueOf(reasons, "archived"), copy.archived)
+            assertEquals("missing", valueOf(reasons, "notFound"), copy.missing)
+            // The audience labels are the same three names, for the same reason.
+            ComposerVisibility.entries.forEach { audience ->
+                assertEquals("visibility " + audience.wire, valueOf(visibility, audience.wire), visibilityLabel(audience, bn))
+            }
+        }
+    }
+
+    private fun localeFile(lang: String): String = readRepoFile("main-site", "src", "i18n", "locales", "$lang.ts")
+
+    /**
+     * The body of `parent: { … }` whose text also contains [mustContain].
+     *
+     * The guard matters: leaf names like `posts` and `readOnly` are reused by several sections of the
+     * catalogue, and a test that matched the wrong one would pass while proving nothing.
+     */
+    private fun sectionOf(text: String, parent: String, mustContain: String): String {
+        val header = Regex("""(?m)^[ \t]*""" + Regex.escape(parent) + r""":[ \t]*\{[ \t]*""")
+        for (match in header.findAll(text)) {
+            val indent = match.groupValues[1]
+            val rest = text.substring(match.range.last + 1)
+            val close = Regex("""(?m)^""" + Regex.escape(indent) + r"""\},[ \t]*""").find(rest)
+            val body = rest.substring(0, close?.range?.first ?: rest.length)
+            if (mustContain in body) return body
+        }
+        error("no `" + parent + "` section containing `" + mustContain + "` in the locale file")
+    }
+
+    /** A catalogue entry, single-quoted and possibly wrapped onto its own line, unescaped. */
+    private fun valueOf(section: String, name: String): String {
+        val entry = Regex(
+            """(?m)^[ \t]*""" + Regex.escape(name) + r"""[ \t]*:[ \t]*(?:\r?\n[ \t]*)?'((?:[^'\\]|\\.)*)',""",
+        ).find(section) ?: error("`" + name + "` not found in the locale section")
+        return entry.groupValues[1].replace(r"\'", "'").replace("\\\"", "\"")
     }
 
     private fun readRepoFile(vararg parts: String): String {
