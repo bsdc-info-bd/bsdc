@@ -112,11 +112,11 @@ following files as clean, and were wrong about three of them. They are not a par
 
 | Head | Android | CI | What it settled |
 | --- | --- | --- | --- |
-| `7938336` | cancelled | cancelled | superseded by the next push before it finished |
-| `73f59ca` | failure | success | `ListingTagsTest.java`: 17 × `illegal start of expression` — trailing commas in Java argument lists |
-| `9966c5d` | failure | — | `ListingTagsTest` ran and failed one assertion: a filler `assertEquals` I had written comparing `normalise` of six skills against `MAX_TAGS` |
-| `9966c5d` (retry) | failure | — | `:feature:discover:compileDebugKotlin`: `GigEditPayload` was missing its `durationDays` argument |
-| `ee4cadd` | **success** | **success** | all-module `testDebugUnitTest`, `:app:lintDebug`, `:app:assembleDebug`, the WebView/permission/manifest invariants |
+| `3a36581`…`73f59ca` | failure | success | the first compile this code ever had: `ListingTagsTest.java`, 17 × `illegal start of expression` — trailing commas in Java argument lists |
+| `3163c00` | failure | — | the test file now compiled and failed one assertion: `expected:<20> but was:<6>`, an `assertEquals` I had written as filler |
+| `9966c5d` | failure | — | `:feature:discover:compileDebugKotlin`: `GigEditPayload` had no `durationDays` argument — an earlier splice swallowed the line |
+| `ee4cadd` | **success** | cancelled | all-module `testDebugUnitTest`, `:app:lintDebug`, `:app:assembleDebug`, the WebView/permission/manifest invariants |
+| `31bf5b7` | **success** | **success** | the same gates, re-run with this record in the tree |
 
 Three of those cycles were the build earning its keep:
 
