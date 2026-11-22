@@ -186,6 +186,12 @@ data class GigDto(
     @SerialName("published_at") val publishedAt: String? = null,
     @SerialName("created_at") val createdAt: String? = null,
     @SerialName("updated_at") val updatedAt: String? = null,
+    /**
+     * Added by 0128 next to the edit routines. `''` means no cover. The list endpoints do not select
+     * it, so it defaults to empty there; only the gig page needs the real value, and the editor that
+     * reseeds itself from this row would otherwise offer to save a cover that was never cleared.
+     */
+    @SerialName("cover_url") val coverUrl: String = "",
 )
 
 @Serializable

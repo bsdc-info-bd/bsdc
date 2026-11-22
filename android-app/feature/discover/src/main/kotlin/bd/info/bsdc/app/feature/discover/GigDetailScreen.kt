@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +26,7 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -72,6 +72,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAvatar
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -93,6 +94,7 @@ fun GigDetailScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    mediaRepository: BsdcMediaRepository? = null,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -121,6 +123,9 @@ fun GigDetailScreen(
     var pendingClose by remember(slug) { mutableStateOf(false) }
     var pendingDelete by remember(slug) { mutableStateOf(false) }
     var ownerBusy by remember(slug) { mutableStateOf(false) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
 
     fun showInfo(message: String, tone: BsdcTone = BsdcTone.OK) {
         banner = message
@@ -149,6 +154,40 @@ fun GigDetailScreen(
             }
         }
         repository.recordJobView(current?.id.orEmpty())
+    }
+
+    /**
+     * Writes the gig editor's payload, then reloads the page.
+     *
+     * A nonce bump rather than a poke at [gig]: `update_gig` trims the brief, canonicalises the skills
+     * and hands back the slug it kept, so the page must show the row the database holds rather than the
+     * text that happened to be typed. It is also what makes a rename that changed the address visible.
+     */
+    fun saveGigEdit(payload: GigEditPayload) {
+        val current = gig ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateGig(
+                gigId = current.id,
+                title = payload.title,
+                description = payload.description,
+                budgetMin = payload.budgetMin,
+                budgetMax = payload.budgetMax,
+                isHourly = payload.isHourly,
+                durationDays = payload.durationDays,
+                skills = payload.skills,
+                coverUrl = payload.coverUrl,
+            ).onSuccess {
+                showEditSheet = false
+                showInfo(if (bn) "গিগ সংরক্ষিত হয়েছে" else "Gig saved")
+                reloadNonce += 1
+            }.onFailure { error ->
+                editError = GigEditLogic.editFailureMessage(error, bn)
+            }
+            editSaving = false
+        }
     }
 
     fun closeGig(current: GigDto) {
@@ -538,20 +577,21 @@ fun GigDetailScreen(
                                         enabled = !ownerBusy,
                                     )
                                 }
-                                BsdcButton(
-                                    label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                    onClick = {
-                                        // The app has no multi-field editor yet; the web
-                                        // editor is the same routine and the same rules, so
-                                        // the honest control opens it rather than pretending.
-                                        val intent = Intent(
-                                            Intent.ACTION_VIEW,
-                                            Uri.parse("${GigDetailLogic.webUrl(current.slug)}"),
-                                        )
-                                        runCatching { context.startActivity(intent) }
-                                    },
-                                    secondary = true,
-                                )
+                                if (controls.canEdit) {
+                                    // This used to read "Edit on the web" — an honest signpost, and the
+                                    // gap itself: `update_gig` has been callable from this screen the
+                                    // whole time. `MkGigEditSheet` is the half that was missing.
+                                    BsdcButton(
+                                        label = if (bn) "গিগ সম্পাদনা" else "Edit gig",
+                                        onClick = {
+                                            editError = null
+                                            showEditSheet = true
+                                        },
+                                        secondary = true,
+                                        enabled = !ownerBusy && !editSaving,
+                                        leadingIcon = Icons.Rounded.Edit,
+                                    )
+                                }
                             }
                         }
                     }
@@ -853,6 +893,20 @@ fun GigDetailScreen(
                 }
             }
         }
+    }
+
+    gig?.let { current ->
+        MkGigEditSheet(
+            visible = showEditSheet,
+            gig = current,
+            bn = bn,
+            saving = editSaving,
+            errorMessage = editError.orEmpty(),
+            imageLoader = imageLoader,
+            mediaRepository = mediaRepository,
+            onDismiss = { if (!editSaving) showEditSheet = false },
+            onSave = { payload -> saveGigEdit(payload) },
+        )
     }
 
     val confirmGig = gig

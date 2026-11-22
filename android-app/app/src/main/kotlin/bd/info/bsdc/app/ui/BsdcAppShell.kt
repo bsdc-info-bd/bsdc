@@ -572,6 +572,7 @@ fun BsdcAppShell(
                 onBack = { activeJobSlug = null },
                 onSignInRequired = { showAuthModal = true },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
+                mediaRepository = container.mediaRepository,
             )
             return
         }
@@ -589,6 +590,7 @@ fun BsdcAppShell(
                     activeGigSlug = null
                     activeProfileTarget = target
                 },
+                mediaRepository = container.mediaRepository,
             )
             return
         }

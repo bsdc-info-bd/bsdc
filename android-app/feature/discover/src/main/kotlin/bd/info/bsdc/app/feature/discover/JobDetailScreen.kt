@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Person
@@ -65,6 +66,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAvatar
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -82,6 +84,7 @@ fun JobDetailScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit,
+    mediaRepository: BsdcMediaRepository? = null,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -110,6 +113,9 @@ fun JobDetailScreen(
     var banner by remember(slug) { mutableStateOf<String?>(null) }
     var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
     var actionBusy by remember(slug) { mutableStateOf(false) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -132,6 +138,48 @@ fun JobDetailScreen(
                     applicantsBusy = false
                 }
             }
+        }
+    }
+
+    /**
+     * Writes the job editor's payload, then reloads the page.
+     *
+     * The reload is a `reloadNonce` bump rather than a poke at [job], for the same reason the group host
+     * does it: `update_job` trims, canonicalises the skills, and refuses a deadline that has passed, so
+     * what must appear on screen is the row the database kept. It also matters here more than anywhere,
+     * because a job page shows an application count and a live/closed ribbon that the write itself moves.
+     */
+    fun saveJobEdit(payload: JobEditPayload) {
+        val current = job ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateJob(
+                jobId = current.id,
+                title = payload.title,
+                company = payload.company,
+                description = payload.description,
+                jobType = payload.jobType,
+                workMode = payload.workMode,
+                level = payload.level,
+                city = payload.city,
+                salaryMin = payload.salaryMin,
+                salaryMax = payload.salaryMax,
+                salaryPeriod = payload.salaryPeriod,
+                skills = payload.skills,
+                applyUrl = payload.applyUrl,
+                expiresAt = payload.expiresAt,
+                coverUrl = payload.coverUrl,
+            ).onSuccess {
+                showEditSheet = false
+                banner = if (bn) "পদটি সংরক্ষিত হয়েছে" else "Role saved"
+                bannerTone = BsdcTone.OK
+                reloadNonce += 1
+            }.onFailure { error ->
+                editError = JobEditLogic.editFailureMessage(error, bn)
+            }
+            editSaving = false
         }
     }
 
@@ -647,13 +695,21 @@ fun JobDetailScreen(
                                                     enabled = !ownerBusy,
                                                 )
                                             }
-                                            BsdcButton(
-                                                label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                                onClick = {
-                                                    onOpenExternal(JobDetailLogic.webUrl(current.slug))
-                                                },
-                                                secondary = true,
-                                            )
+                                            if (controls.canEdit) {
+                                                // "Edit on the web" was the whole gap: `update_job` has
+                                                // been callable from this screen since the routine
+                                                // landed, and only the form was missing.
+                                                BsdcButton(
+                                                    label = if (bn) "পদ সম্পাদনা" else "Edit role",
+                                                    onClick = {
+                                                        editError = null
+                                                        showEditSheet = true
+                                                    },
+                                                    secondary = true,
+                                                    enabled = !ownerBusy && !editSaving,
+                                                    leadingIcon = Icons.Rounded.Edit,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -752,6 +808,18 @@ fun JobDetailScreen(
                             }
                         }
                     }
+
+                    MkJobEditSheet(
+                        visible = showEditSheet,
+                        job = current,
+                        bn = bn,
+                        saving = editSaving,
+                        errorMessage = editError.orEmpty(),
+                        imageLoader = imageLoader,
+                        mediaRepository = mediaRepository,
+                        onDismiss = { if (!editSaving) showEditSheet = false },
+                        onSave = { payload -> saveJobEdit(payload) },
+                    )
 
                     val confirmJob = job
                     if (confirmJob != null && pendingClose) {
