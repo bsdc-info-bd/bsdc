@@ -233,8 +233,14 @@ async function registerCurrentBrowser(
     await registerOn(uid, language, config);
     return true;
   } catch (error) {
+    // `registerOn` labels what it got wrong; anything escaping without a label came
+    // from the module or the network below it, and must still be named after the
+    // transport that was tried. A web-push browser reading "Firebase could not
+    // issue a token" is the exact confusion this whole change removed.
     const failure =
-      error instanceof PushStageError ? error : new PushStageError('fcmTokenFailed', error);
+      error instanceof PushStageError
+        ? error
+        : new PushStageError(config.mode === 'fcm' ? 'fcmTokenFailed' : 'subscribeRefused', error);
     recordPushAttempt(config.mode, pushRegistrationErrorKey(failure), error);
 
     // Marking is only safe for a transport the site can live without: Firebase's is
