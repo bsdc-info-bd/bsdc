@@ -33,16 +33,12 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Work
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +59,6 @@ import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
-import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
 import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
 import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
@@ -114,9 +109,8 @@ fun GigDetailScreen(
     var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
     var actionBusy by remember(slug) { mutableStateOf(false) }
     var showProposalSheet by remember(slug) { mutableStateOf(false) }
-    var pitch by remember(slug) { mutableStateOf("") }
-    var bid by remember(slug) { mutableStateOf("") }
-    var days by remember(slug) { mutableStateOf("7") }
+    var proposalSaving by remember(slug) { mutableStateOf(false) }
+    var proposalError by remember(slug) { mutableStateOf<String?>(null) }
     // Owner controls. Which of them are offered is decided by
     // `OwnerActionsLogic` from the row and the viewer, not guessed here; the
     // routines re-check on the write regardless.
@@ -242,32 +236,27 @@ fun GigDetailScreen(
         showInfo(if (bn) "লিংক কপি হয়েছে।" else "Link copied.")
     }
 
-    fun submit(current: GigDto) {
-        val bidValue = bid.trim().toIntOrNull()
-        val daysValue = days.trim().toIntOrNull()
-        val problems = DiscoverSearchEngine.proposalProblems(pitch, bidValue, daysValue)
-        if (problems.isNotEmpty()) {
-            showInfo(proposalProblemMessage(problems.first(), bn), BsdcTone.WARN)
-            return
-        }
-        if (actionBusy) return
-        actionBusy = true
+    /**
+     * Sends the proposal the sheet built.
+     *
+     * The screen does not re-check the pitch or the bid: `MkGigProposalSheet` refuses them where they are
+     * typed, and `submit_proposal` refuses them again in the database. What is worth handling here is
+     * what only the write can know — that the gig closed while the member was writing, or that the bid
+     * came from the client's own account — so those refusals are translated instead of pasted.
+     */
+    fun sendProposal(current: GigDto, pitchText: String, bidAmount: Int, deliveryDays: Int) {
+        if (proposalSaving) return
+        proposalSaving = true
+        proposalError = null
         scope.launch {
-            repository.submitProposal(current.id, pitch, bidValue ?: 0, daysValue ?: 7)
+            repository.submitProposal(current.id, pitchText, bidAmount, deliveryDays)
                 .onSuccess {
                     showProposalSheet = false
-                    pitch = ""
                     reloadNonce += 1
-                    showInfo(if (bn) "প্রস্তাব পাঠানো হয়েছে।" else "Proposal submitted.")
+                    showInfo(if (bn) "প্রস্তাব পাঠানো হয়েছে" else "Your proposal was sent")
                 }
-                .onFailure { err ->
-                    showInfo(
-                        err.localizedMessage
-                            ?: if (bn) "প্রস্তাব পাঠানো যায়নি।" else "The proposal was not sent.",
-                        BsdcTone.BAD,
-                    )
-                }
-            actionBusy = false
+                .onFailure { err -> proposalError = proposalFailureMessage(err, bn) }
+            proposalSaving = false
         }
     }
 
@@ -461,9 +450,7 @@ fun GigDetailScreen(
                             when (action) {
                                 GigDetailLogic.GigAction.SIGN_IN -> onSignInRequired()
                                 GigDetailLogic.GigAction.PROPOSE, GigDetailLogic.GigAction.WITHDRAWN -> {
-                                    bid = (current.budgetMin ?: current.budgetMax ?: 0).toString()
-                                    days = (current.durationDays ?: 7).coerceAtLeast(1).toString()
-                                    pitch = ""
+                                    proposalError = null
                                     showProposalSheet = true
                                 }
                                 GigDetailLogic.GigAction.PROPOSED -> myProposal?.let { unit ->
@@ -940,83 +927,20 @@ fun GigDetailScreen(
         )
     }
 
-    if (showProposalSheet) {
-        val current = gig
-        AlertDialog(
-            onDismissRequest = { showProposalSheet = false },
-            title = { Text(if (bn) "প্রস্তাব পাঠান" else "Send a proposal") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val problems = DiscoverSearchEngine.proposalProblems(
-                        pitch,
-                        bid.trim().toIntOrNull(),
-                        days.trim().toIntOrNull(),
-                    )
-                    OutlinedTextField(
-                        value = pitch,
-                        onValueChange = { pitch = it },
-                        label = {
-                            Text(
-                                if (bn) {
-                                    "কেন আপনি উপযুক্ত (${DiscoverSearchEngine.MIN_PITCH}+ অক্ষর)"
-                                } else {
-                                    "Why you are a fit (${DiscoverSearchEngine.MIN_PITCH}+ characters)"
-                                },
-                            )
-                        },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = if (bn) "${pitch.trim().length} অক্ষর" else "${pitch.trim().length} characters",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BsdcThemeTokens.colors.mutedText,
-                    )
-                    OutlinedTextField(
-                        value = bid,
-                        onValueChange = { bid = it.filter { ch -> ch.isDigit() } },
-                        label = { Text(if (bn) "আপনার মূল্য (${current?.currency ?: "BDT"})" else "Your bid (${current?.currency ?: "BDT"})") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = days,
-                        onValueChange = { days = it.filter { ch -> ch.isDigit() } },
-                        label = { Text(if (bn) "ডেলিভারি (দিন)" else "Delivery days") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    val gross = bid.trim().toIntOrNull() ?: 0
-                    val payout = GigDetailLogic.payout(gross)
-                    HorizontalDivider()
-                    Text(
-                        text = if (bn) {
-                            "প্ল্যাটফর্ম ফি ${payout.feePercent}% · আপনি পাবেন ${DiscoverSearchEngine.formatBudgetShort(payout.net, payout.net, current?.currency ?: "BDT", true)}"
-                        } else {
-                            "Platform fee ${payout.feePercent}% · you receive ${DiscoverSearchEngine.formatBudgetShort(payout.net, payout.net, current?.currency ?: "BDT", false)}"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (problems.isNotEmpty()) {
-                        Text(
-                            text = proposalProblemMessage(problems.first(), bn),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BsdcThemeTokens.colors.warn,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !actionBusy,
-                    onClick = { current?.let { submit(it) } },
-                ) { Text(if (bn) "পাঠান" else "Send") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showProposalSheet = false }) { Text(if (bn) "বাতিল" else "Cancel") }
+    gig?.let { current ->
+        MkGigProposalSheet(
+            visible = showProposalSheet,
+            gig = current,
+            bn = bn,
+            sending = proposalSaving,
+            errorMessage = proposalError.orEmpty(),
+            onDismiss = { if (!proposalSaving) showProposalSheet = false },
+            onSubmit = { pitchText, bidAmount, deliveryDays ->
+                sendProposal(current, pitchText, bidAmount, deliveryDays)
             },
         )
     }
+
 }
 
 @Composable
@@ -1035,6 +959,33 @@ private fun PayoutColumn(label: String, value: String, bn: Boolean) {
         )
     }
     check(bn || !bn)
+}
+
+/**
+ * One sentence for a proposal the routine refused.
+ *
+ * `submit_proposal` knows three things the screen cannot: whether the member is signed in, whether the
+ * gig is still open to proposals, and whether they are the client. Each answer is worth saying plainly,
+ * because the first two read like a bug when the pitch was written ten minutes ago and the third is the
+ * one case where the button should not have been there at all.
+ */
+internal fun proposalFailureMessage(error: Throwable, bn: Boolean): String {
+    val text = error.message.orEmpty()
+    return when {
+        text.contains("authentication required") ->
+            if (bn) "প্রস্তাব পাঠাতে আবার সাইন ইন করুন।" else "Sign in again to send your proposal."
+        text.contains("not accepting proposals") ->
+            if (bn) "এই গিগ আর প্রস্তাব নিচ্ছে না।" else "This gig is not accepting proposals any more."
+        text.contains("your own gig") ->
+            if (bn) "নিজের গিগে প্রস্তাব দেওয়া যায়।" else "You cannot bid on a gig you posted."
+        text.contains("already") ->
+            if (bn) {
+                "এই গিগে আপনার প্রস্তাব আগেই জমা আছে।"
+            } else {
+                "You have already proposed to this gig."
+            }
+        else -> if (bn) "প্রস্তাব পাঠানো যায়নি। আবার চেষ্টা করুন।" else "The proposal was not sent. Try again."
+    }
 }
 
 /** One translated sentence per stable problem code from `DiscoverSearchEngine.proposalProblems`. */
