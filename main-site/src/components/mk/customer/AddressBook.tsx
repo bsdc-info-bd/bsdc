@@ -92,8 +92,11 @@ export function AddressBook({
                 <div
                   className={cn(
                     'group relative h-full rounded-2xl border p-4 transition-all duration-200',
+                    // Tinted with the primary at an alpha, because the theme has no soft primary:
+                    // only danger, warn, success and blue carry one. A name invented here emits no
+                    // rule at all, and the selected card would be distinguished by its border alone.
                     selected
-                      ? 'border-primary bg-primary-soft shadow-md'
+                      ? 'border-primary bg-primary/10 shadow-md'
                       : 'border-border bg-surface hover:border-primary/50 hover:shadow-card',
                   )}
                 >
