@@ -101,6 +101,7 @@ import bd.info.bsdc.app.feature.discover.GroupDetailScreen
 import bd.info.bsdc.app.feature.discover.JobDetailScreen
 import bd.info.bsdc.app.feature.discover.MemberProfileScreen
 import bd.info.bsdc.app.feature.discover.ProjectDetailScreen
+import bd.info.bsdc.app.feature.feed.ChannelFeedScreen
 import bd.info.bsdc.app.feature.feed.FeedScreen
 import bd.info.bsdc.app.feature.feed.PostDetailScreen
 import bd.info.bsdc.app.feature.market.AdsDashboardScreen
@@ -186,6 +187,12 @@ fun BsdcAppShell(
     var localRouteNonce by remember { mutableIntStateOf(0) }
     var activeDetailSlug by rememberSaveable { mutableStateOf<String?>(null) }
     var activeDetailPost by remember { mutableStateOf<FeedPost?>(null) }
+    /**
+     * The room whose timeline is open: group slug to channel slug, which is the website's address for a
+     * channel and the only pair that identifies one, because a channel slug is unique inside a group and
+     * not across them.
+     */
+    var activeChannelFeed by remember { mutableStateOf<Pair<String, String>?>(null) }
 
     LaunchedEffect(onboardingSeen, permissionCoordinator.allGranted, authState.gate) {
         if (!onboardingSeen && !permissionCoordinator.allGranted && authState.gate != AuthGateState.INITIALIZING) {
@@ -290,6 +297,9 @@ fun BsdcAppShell(
                         val gigSlug = slashSlug(p, "/gigs/", "/freelance/", "/gig/")
                         val projectsSlug = slashSlug(p, "/projects/")?.takeUnless { it == "new" }
                         activeGroupSlug = groupsSlug
+                        // `/g/bsdcland/c/ship-it` opens the room on top of the group, so a link pasted
+                        // into chat lands the member where the browser would have.
+                        activeChannelFeed = channelTargetOf(p, listOf("/g/", "/groups/"))
                         activeEventSlug = eventsSlug
                         activeJobSlug = jobsSlug
                         activeGigSlug = gigSlug
@@ -488,6 +498,31 @@ fun BsdcAppShell(
             )
             return
         }
+        activeChannelFeed != null -> {
+            val (channelGroupSlug, channelSlug) = activeChannelFeed!!
+            ChannelFeedScreen(
+                repository = container.feedRepository,
+                groupSlug = channelGroupSlug,
+                channelSlug = channelSlug,
+                language = language,
+                imageLoader = container.imageLoader,
+                onBack = { activeChannelFeed = null },
+                onOpenPost = { post ->
+                    activeChannelFeed = null
+                    activeDetailPost = post
+                    activeDetailSlug = post.slug.ifBlank { post.id }
+                },
+                onWriteHere = { channelId, channelName ->
+                    // Same hop the group page makes: the composer opens aimed at the room, and the
+                    // stack of overlays unwinds so a publish returns to the feed, as it means to.
+                    activeChannelFeed = null
+                    activeGroupSlug = null
+                    createChannelTarget = channelId to channelName
+                    selectedTab = MainTab.CREATE
+                },
+            )
+            return
+        }
         activeGroupSlug != null -> {
             GroupDetailScreen(
                 slug = activeGroupSlug!!,
@@ -503,6 +538,8 @@ fun BsdcAppShell(
                 },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
                 canWriteInChannels = authState.session?.uid != null,
+                canOpenChannels = true,
+                onOpenChannel = { channelSlug -> activeChannelFeed = activeGroupSlug!! to channelSlug },
                 onWriteInChannel = { channelId, channelName ->
                     activeGroupSlug = null
                     createChannelTarget = channelId to channelName
@@ -1078,6 +1115,25 @@ private fun openInCustomTab(context: Context, url: String) {
  * collection, points somewhere else, or carries no slug at all. Trailing slashes and deeper
  * segments (`/projects/<slug>/edit`) are tolerated: the first segment after the prefix wins.
  */
+/**
+ * The room a path names, as `groupSlug to channelSlug`, or null when the path is a group page or
+ * something else entirely. `/g/{group}/c/{channel}` is `channelPath()` in `main-site/src/lib/site.ts`.
+ */
+private fun channelTargetOf(path: String, prefixes: List<String>): Pair<String, String>? {
+    val clean = path.trim()
+    for (prefix in prefixes) {
+        if (!clean.startsWith(prefix)) continue
+        val rest = clean.removePrefix(prefix)
+        val group = rest.substringBefore('/').substringBefore('?').substringBefore('#').trim()
+        val tail = rest.substringAfter('/', "")
+        if (group.isBlank() || !tail.startsWith("c/")) continue
+        val channel = tail.removePrefix("c/").substringBefore('/').substringBefore('?').substringBefore('#').trim()
+        if (channel.isBlank()) continue
+        return group to channel
+    }
+    return null
+}
+
 private fun slashSlug(path: String, vararg prefixes: String): String? {
     val clean = path.trim()
     for (prefix in prefixes) {

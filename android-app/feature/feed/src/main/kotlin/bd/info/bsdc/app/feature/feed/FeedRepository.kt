@@ -42,6 +42,9 @@ private data class CandidateRpcRow(
 )
 
 @Serializable
+private data class ChannelGroupIdDto(val id: String = "")
+
+@Serializable
 private data class AuthorJoinDto(
     val uid: String = "",
     val username: String? = null,
@@ -359,6 +362,74 @@ class FeedRepository(
         val posts = decodeJoinedPosts(raw)
         val order = ids.withIndex().associate { it.value to it.index }
         return posts.sortedBy { order[it.id] ?: Int.MAX_VALUE }
+    }
+
+    /**
+     * One room's timeline, for the channel page.
+     *
+     * Two queries rather than one filter: `groups` for the id, then `channels` filtered by that id and
+     * by the channel slug. A channel slug is unique inside a group and not across groups, so matching
+     * only the slug could hand back a different group's `#general`; and the app resolves the group
+     * itself rather than filtering on the embed, because that keeps the query in the shape every other
+     * call here already uses.
+     *
+     * `channel_feed` (0129) is the part that decides visibility, and the client does not duplicate the
+     * decision: the routine returns rows only for a reader `bsdc.can_read_channel` accepts. The ids then
+     * go through the same hydration the feed uses, so a room's cards are the feed's cards — same select,
+     * same media allowlist, same channel attribution.
+     */
+    suspend fun fetchChannelTimeline(
+        groupSlug: String,
+        channelSlug: String,
+        before: String? = null,
+    ): ChannelFeedPage = withContext(Dispatchers.IO) {
+        runCatching {
+            val groupId = json.decodeFromString<List<ChannelGroupIdDto>>(
+                supabase.getJsonText(
+                    table = "groups",
+                    queryPairs = listOf(
+                        "select" to "id",
+                        "slug" to "eq.${groupSlug.trim()}",
+                        "limit" to "1",
+                    ),
+                    requireAuth = false,
+                ),
+            ).firstOrNull()?.id
+            if (groupId.isNullOrBlank()) return@runCatching ChannelFeedPage.Unreachable
+            val row = json.decodeFromString<List<ChannelRow>>(
+                supabase.getJsonText(
+                    table = "channels",
+                    queryPairs = listOf(
+                        "select" to ChannelFeed.CHANNEL_SELECT,
+                        "slug" to "eq.${channelSlug.trim()}",
+                        "group_id" to "eq.$groupId",
+                        "limit" to "1",
+                    ),
+                    requireAuth = false,
+                ),
+            ).firstOrNull() ?: return@runCatching ChannelFeedPage.Unreachable
+            val rows = json.decodeFromString<List<ChannelFeedRow>>(
+                supabase.rpcText(
+                    ChannelFeed.RPC_NAME,
+                    buildJsonObject {
+                        put(ChannelFeed.PARAM_CHANNEL_ID, row.id)
+                        put(ChannelFeed.PARAM_LIMIT, ChannelFeed.PAGE_SIZE)
+                        // Absent means "from the top", which is the same three-state courtesy
+                        // `save_post` shows `channel_id`: the caller says only what it means.
+                        if (!before.isNullOrBlank()) put(ChannelFeed.PARAM_BEFORE, before)
+                    },
+                    requireAuth = false,
+                ),
+            ).filter { it.postId.isNotBlank() }
+            val posts = hydratePostsByIds(rows.map { it.postId })
+            ChannelFeedPage.Ready(
+                room = ChannelFeed.roomOf(row, groupSlug),
+                posts = posts,
+                nextCursor = if (ChannelFeed.canLoadMore(posts.size)) ChannelFeed.cursorFor(rows) else null,
+            )
+        }.getOrElse { error ->
+            ChannelFeedPage.Failed(error.message?.takeIf { it.isNotBlank() } ?: "channel_feed")
+        }
     }
 
     suspend fun fetchPostBySlugOrId(slugOrId: String): FeedPost? = withContext(Dispatchers.IO) {

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ChevronRight
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
@@ -88,6 +89,16 @@ fun GroupDetailScreen(
      */
     onWriteInChannel: (channelId: String, channelName: String) -> Unit = { _, _ -> },
     canWriteInChannels: Boolean = false,
+    /**
+     * Opens one room's timeline, in-app.
+     *
+     * The card is the link, as it is on the website — `CommunityChannelsSection` makes the channel name
+     * an `<a>` to `/g/{group}/c/{channel}`, so a tap on the row is not an app-side invention. It is
+     * opt-in (`canOpenChannels`) rather than always-on for the same reason the write button is: a host
+     * without a channel screen to go to must not be left with a card that swallows taps.
+     */
+    onOpenChannel: (channelSlug: String) -> Unit = {},
+    canOpenChannels: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -579,7 +590,14 @@ fun GroupDetailScreen(
                                     BsdcCard(
                                         modifier = Modifier
                                             .animateItem()
-                                            .padding(horizontal = 16.dp),
+                                            .padding(horizontal = 16.dp)
+                                            .then(
+                                                if (canOpenChannels && channel.slug.isNotBlank()) {
+                                                    Modifier.clickable { onOpenChannel(channel.slug) }
+                                                } else {
+                                                    Modifier
+                                                },
+                                            ),
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text(
@@ -603,6 +621,17 @@ fun GroupDetailScreen(
                                             )
                                             if (channel.isReadOnly) {
                                                 BsdcBadge(label = if (bn) "শুধু পড়া" else "Read only", tone = BsdcTone.NEUTRAL)
+                                            }
+                                            if (canOpenChannels && channel.slug.isNotBlank()) {
+                                                // The room's own name is the accessible label, so a screen
+                                                // reader says "Release notes, button" rather than "Open" out
+                                                // of nowhere, and nothing new has to be worded here.
+                                                Icon(
+                                                    imageVector = Icons.AutoMirrored.Rounded.ChevronRight,
+                                                    contentDescription = GroupDetailLogic.channelTitle(channel.name),
+                                                    modifier = Modifier.size(18.dp),
+                                                    tint = BsdcThemeTokens.colors.mutedText,
+                                                )
                                             }
                                         }
                                         channel.topic?.takeIf { it.isNotBlank() }?.let { topic ->

@@ -485,6 +485,8 @@ data class GroupRequestDto(val status: String? = null)
 @Serializable
 data class GroupChannelDto(
     val id: String,
+    /** The room's address, so the card can open `/g/{group}/c/{slug}`. Empty when the row predates it. */
+    val slug: String = "",
     val name: String,
     val topic: String? = null,
     val position: Int = 0,

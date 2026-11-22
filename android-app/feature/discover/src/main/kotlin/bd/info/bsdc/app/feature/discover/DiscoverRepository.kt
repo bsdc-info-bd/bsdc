@@ -338,7 +338,7 @@ class DiscoverRepository(
             val raw = supabase.getJsonText(
                 table = "channels",
                 queryPairs = listOf(
-                    "select" to "id,name,topic,position,is_read_only",
+                    "select" to "id,slug,name,topic,position,is_read_only",
                     "group_id" to "eq.$groupId",
                     "order" to "position.asc",
                     "limit" to "100",
