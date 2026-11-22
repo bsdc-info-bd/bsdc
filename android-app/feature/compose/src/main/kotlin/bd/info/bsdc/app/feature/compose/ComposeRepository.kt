@@ -1,5 +1,6 @@
 package bd.info.bsdc.app.feature.compose
 
+import bd.info.bsdc.app.core.common.ListingTags
 import bd.info.bsdc.app.core.database.BsdcDatabase
 import bd.info.bsdc.app.core.database.PendingDraftEntity
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -468,6 +469,14 @@ class ComposeRepository(
         slug
     }
 
-    private fun parseCommaList(raw: String): List<String> =
-        raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(20)
+    /**
+     * A comma-separated skills box, in the one form the database matches skills against.
+     *
+     * This used to be `split → trim → distinct → take(20)`, which kept whatever case the member typed.
+     * Migration 0103 canonicalised `skills` to lower case and the skill filters match the canonical
+     * form, so a job posted from the app carried "Kotlin" while the same job posted from the browser
+     * carried "kotlin" — and only one of the two was ever found by a skill search. Delegating to
+     * `ListingTags` makes the app send what the website sends: canonical, deduplicated, sorted.
+     */
+    private fun parseCommaList(raw: String): List<String> = ListingTags.fromCommaText(raw)
 }
