@@ -558,6 +558,7 @@ fun BsdcAppShell(
                 onBack = { activeEventSlug = null },
                 onSignInRequired = { showAuthModal = true },
                 onOpenExternal = { url -> openInCustomTab(context, url) },
+                mediaRepository = container.mediaRepository,
             )
             return
         }
