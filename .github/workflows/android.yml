@@ -207,7 +207,7 @@ jobs:
                       detail = lines[0][:180] if lines else "?"
                       found.append("%s.%s: %s" % (case.get("classname"), case.get("name"), detail))
           print(" | ".join(found[:8]))
-            PY
+          PY
             )
             if [ -n "$failing" ]; then
               summary="$summary — failing tests: $failing"
