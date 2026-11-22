@@ -20,6 +20,7 @@ The complaint was about looks. The diagnosis came out differently, so it is writ
 | "Groups have no edit buttons"                                 | The button existed and pointed elsewhere.                                                                                                                                 | `GroupDetailScreen` rendered `label = "Edit on the web"` while `DiscoverRepository.updateGroup(...)` sat unused by any screen.         |
 | "Every post type needs its own screen"                        | Five kinds were `private fun …CreateForm` composables inlined in `CreateHubScreen`'s own `LazyColumn`, under a strip of chips.                                            | `CreateHubScreen.kt` was 1047 lines: one picker, five forms.                                                                           |
 | "Advanced editor"                                             | A write/preview boolean, not a mode; and an editor that accepted syntax the app's own reader could not render.                                                            | `previewMode: Boolean`, `MarkdownInsert` with six operations, reader grammar of five block types.                                      |
+| A channel could be written and not read                       | `channel_feed` existed since 0129 and the web's `/g/{group}/c/{channel}` used it; Android had no caller, no screen and no route.                                          | The repository stopped at `hydratePostsByIds` for bookmarks; nothing asked for a room's ids.                                           |
 | Feed posts look the same whether they came from a room or not | The channel columns were dropped before the screen.                                                                                                                       | `CandidateRpcRow` stops at `tags`; `POST_SELECT` had no `channels` embed; the web's `PostCard` links the room.                         |
 
 The order of work followed the diagnosis: **wire the missing capability, give each kind a page, make the
@@ -61,6 +62,30 @@ On the group page (`feature/discover/…/GroupDetailScreen.kt`): each channel ca
 from `channel_post_counts`, and a writable room offers **Write here**, which hops to the composer with the
 channel already chosen (`BsdcAppShell` holds `createChannelTarget` deliberately _not_ `rememberSaveable`:
 the target lives as long as the trip it describes; the draft itself persists in Room).
+
+### Reading the room back
+
+Posting without reading is a megaphone with no ears, so `ChannelFeedScreen` came next: the room's name,
+group and topic in a header, the site's own **Post in this channel** door, then the room's posts oldest-last
+with a cursor. Each row's body goes through `PostMarkdownRenderer` — the reader's parser, not a second
+opinion about the same text — and tapping a row opens the post, where reactions, comments and photos
+already work. A row is a summary on purpose: duplicating the feed card's ten callbacks inside a second
+screen is how two versions of one card start to disagree.
+
+`FeedRepository.fetchChannelTimeline` resolves the group first, then the channel by slug _and_ group id: a
+channel slug is unique inside a group and not across groups, so the one-query version could answer with
+another group's `#general`. The ids ride `hydratePostsByIds`, so a room's cards are the feed's cards — same
+select, same media allowlist, same attribution line.
+
+`ChannelFeedPage` keeps three answers apart, and collapses two of them: a room that is not there and a room
+the member may not read are the same sentence on screen, because RLS hides both identically and a client
+that distinguished them would be leaking. Paging is the web's rule (`canLoadMore` on the _query's_ page, not
+the hydrated list, and `p_before` strictly-less-than in the SQL) and the list de-duplicates on append,
+because a repeated id inside `items(...)` is a crash rather than a blemish.
+
+The group page's channel cards are links now — `slug` on the row, a chevron, `onOpenChannel` — as they are
+on the web, and `/g/{group}/c/{channel}` pasted from chat opens the room _on top of_ the group, so Back
+returns to the group rather than to the tab.
 
 ### The group editor
 
@@ -161,38 +186,52 @@ Proved on this branch: `:feature:compose`, `:feature:discover` and `:feature:fee
 project's Compose BOM; the new JVM suites run in `testDebugUnitTest`; Android Lint reports no errors;
 `assembleDebug` builds; the native-map gate still passes.
 
-Test counts added by this slice: `ChannelRulesTest` 12, `GroupEditLogicTest` 8, `CreateHubRouteTest` 3,
-`MarkdownInspectorTest` 11, `PostMarkdownParseTest` 10, `PostAttributionTest` 6 — **50 new executable
-assertions**, three of which are cross-platform parity gates that read the _other_ side's source:
+Test counts added by this slice: `ChannelRulesTest` 13, `GroupEditLogicTest` 9, `CreateHubRouteTest` 3,
+`MarkdownInspectorTest` 11, `PostMarkdownParseTest` 10, `PostAttributionTest` 6, `ChannelFeedTest` 9 —
+**61 new executable assertions**, of which six are cross-platform parity gates that read the _other_ side's
+source:
 
 - the web's `CHANNEL_BLOCK_REASONS` array must equal `ChannelBlockReason.entries`, in order;
 - migration 0129 must still contain the four reason strings, `channel/private-post`, and the
   `p_post ? 'channel_id'` key-presence test that `shouldSendChannelKey` exists to honour;
 - the Java `ComposerValidationEngine` must still say "between 3 and 80 characters" and "exceed 2000
-  characters" for the group limits `GroupEditLogic` mirrors.
+  characters" for the group limits `GroupEditLogic` mirrors;
+- the app's strings must equal the website's, read out of `main-site/src/i18n/locales/{en,bn}.ts` with a
+  section-scoped parser (`posts`, `readOnly` and `notFound` are all reused leaf names, so a first-match
+  lookup would compare this app against the wrong section and pass while proving nothing) — 24 literals
+  across the picker copy, the audience labels, the room page's twelve sentences and the count template;
+- `channel_feed`'s three argument names must still be the ones migration 0129 declares, in order.
 
 Those fail loudly when either side renames something, which is the point: a parity promise that nothing
 checks is a comment.
+
+The Android workflow also gained a reporter: the debug step's `::error::` annotation is built by grepping
+the Gradle log for `e:` lines, which is precise for a compile error and useless for a failing test, so it
+now appends up to eight `class.method: message` entries read from the JUnit XML. On a branch where CI is the
+only compiler, an annotation that says only "a test task failed" costs a whole round trip per guess.
 
 **Device-only, therefore not claimed:** that a bottom sheet behaves with the IME open; that the segmented
 thumb, crossfade and entrance feel right at 120 Hz; that `channels(slug,name,groups(slug,name))` is
 _accepted by the running PostgREST_ (the foreign keys are in the schema, the query is built from
 `POST_SELECT`, and no local run exercised it); that the feed card's attribution line fits one line on a
 narrow phone; that haptics fire on the back button. The first of those is a one-request check; the rest
-need a phone.
+need a phone. Whether the running PostgREST accepts `channels(slug,name,groups(slug,name))`, and whether
+`channel_feed` answers for a reader the way the site's server does, are one curl each — and neither is a
+claim this repository can make from a sandbox with no database.
 
 ---
 
 ## 7. Known gaps, not hidden
 
-| Gap                                     | State                                                                                                                                                                                                                                                                                                               |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Reading a channel's timeline on Android | Still the web's only. The seam is small and already in place: `channel_feed(p_channel_id, p_limit, p_before)` returns the same columns the feed uses, and `FeedRepository.hydratePostsByIds` preserves order — so a channel screen is the RPC, the ids, and the existing card. Deliberately left for its own slice. |
-| Tapping the attribution line            | Renders as text. Needs the channel page above to have somewhere to go.                                                                                                                                                                                                                                              |
-| Tables, `####` and deeper headings      | Not supported by this app's reader; reported before publish rather than after.                                                                                                                                                                                                                                      |
-| Group avatar/cover upload               | URL fields, as the web's dialog has them; `update_group` takes URLs. No image picker here.                                                                                                                                                                                                                          |
-| Clearing an avatar                      | Not possible from either client: the web sends `null` for a blank box, which means "leave alone" in the routine. Cover clearing works, on both. A deliberate asymmetry inherited from the API, noted here rather than "fixed" in the app alone.                                                                     |
-| Motion outside creation                 | `feed`, `market`, `messenger`, `discover` still use the system thinly. Adoption continues in later slices; the tokens are the same ones.                                                                                                                                                                            |
+| Gap                                     | State                                                                                                                                                                                                                                           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reading a channel's timeline on Android | Built here: `ChannelFeedScreen`, `channel_feed`, the cursor, the deep link. What it does _not_ have is the web's inline interactivity on the row — no reaction dock, no media strip — because a tap opens the post, where both work.            |
+| Tapping the attribution line            | Still text, not a link. The room page exists now, so this is a wiring job on the feed card rather than a missing feature; it is deliberately not guessed at here, because a tap that goes nowhere is worse than no tap.                         |
+| Tables, `####` and deeper headings      | Not supported by this app's reader; reported before publish rather than after.                                                                                                                                                                  |
+| Group avatar/cover upload               | URL fields, as the web's dialog has them; `update_group` takes URLs. No image picker here.                                                                                                                                                      |
+| Clearing an avatar                      | Not possible from either client: the web sends `null` for a blank box, which means "leave alone" in the routine. Cover clearing works, on both. A deliberate asymmetry inherited from the API, noted here rather than "fixed" in the app alone. |
+| Motion outside creation                 | `feed` and `market` lists now settle with `animateItem()`, and the group page's channel rows too; `messenger`, `news` and `notifications` still use the system thinly. Adoption continues screen by screen with the same tokens.                |
+| A room's timeline is read-only          | No pinning, no mute, no "mark read" — the web has none of those either. Writing is the composer's `initialChannelId`, reached from the room header or the group page.                                                                           |
 
 ---
 
@@ -202,6 +241,11 @@ Each commit is self-contained; revert newest first.
 
 | Commit                                 | Revert restores                                                        |
 | -------------------------------------- | ---------------------------------------------------------------------- |
+| `038db5e`/`a717613` the room page      | no channel timeline on Android, no `/g/…/c/…` deep link                |
+| `0903407`/`aa15cc7` CI test reporter   | an annotation that names only the failing task                         |
+| `5f7b8ac` generated copy + parity test | the app's paraphrases, and no gate on the locale files                 |
+| `ec409ae` list settling                | snap-in-place lists, and the `$Name.CONST` interpolation bug           |
+| `d73772e` a lost import                | (broken build only)                                                    |
 | `0db04f5` feed attribution             | no `channels` embed, no line on the card                               |
 | `f1dfc5f` test repair                  | (broken test file only)                                                |
 | `7a28ec1` web-verbatim copy            | the app's own paraphrases                                              |
