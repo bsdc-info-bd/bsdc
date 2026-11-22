@@ -409,7 +409,11 @@ class ComposeRepository(
         draft: ProjectDraftInput,
         screenshots: List<ComposerMediaAttachment>,
     ): String = withContext(Dispatchers.IO) {
-        val tech = parseCommaList(draft.techText)
+        // Project tech is not a skill list. `main-site/src/lib/create/create-repository.ts` writes
+        // `tech: draft.tech` as the member typed it, and the showcase renders those strings as the
+        // "Built with" chips — so this keeps the tag rules and the cap, and nothing else: lower-casing
+        // "Jetpack Compose" to make it look like a canonical skill would quietly rename a project page.
+        val tech = parseTechList(draft.techText)
         val raw = supabase.postJson(
             table = "projects",
             body = buildJsonObject {
@@ -479,4 +483,12 @@ class ComposeRepository(
      * `ListingTags` makes the app send what the website sends: canonical, deduplicated, sorted.
      */
     private fun parseCommaList(raw: String): List<String> = ListingTags.fromCommaText(raw)
+
+    /**
+     * A comma-separated list kept exactly as written, within the tag rules: trimmed, clamped to 32
+     * characters, deduplicated case-insensitively, capped at twenty, and in the order the member typed
+     * it. This is what the website's `TagInput` produces before any normaliser is applied to it, which
+     * is what a project's tech stack wants and a job's skill list deliberately does not.
+     */
+    private fun parseTechList(raw: String): List<String> = ListingTags.parse(raw)
 }
