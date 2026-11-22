@@ -1001,6 +1001,8 @@ export const en = {
       body: 'This is not a setting anybody can change here. The reason is written above.',
       insecure:
         'Push needs a secure connection. Open the site over https:// and the switch will work.',
+      iosInstall:
+        'On iPhone and iPad Safari wakes only an app added to the home screen: tap Share, then “Add to Home Screen”, open BSDC from that icon, and switch this on there.',
       noWorker: 'This browser has no service worker, so it cannot be woken from the outside.',
       noPush:
         'This browser has no push manager. Chrome, Edge, Firefox and Safari on a recent system all do.',
@@ -1038,7 +1040,7 @@ export const en = {
       subscribeInvalidState:
         'The browser still has an incompatible subscription. Reload and retry.',
       fcmTokenFailed:
-        'Firebase could not issue a token. Retry or ask support to check the Firebase Web Push configuration.',
+        'Firebase would not issue a browser token and there was no web-push key of our own to fall back on. Support: check the project’s Web Push certificate against VITE_FIREBASE_VAPID_PUBLIC_KEY, or set VITE_PUSH_VAPID_PUBLIC_KEY and VITE_PUSH_TRANSPORT=webpush.',
       registerRpcFailed:
         'The server could not save this device. Retry or ask support to check the registration RPCs.',
       networkOffline: 'You are offline. Reconnect and try again.',

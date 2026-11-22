@@ -130,7 +130,11 @@ the next run tries again — a run that fails halfway repeats rather than drops.
 | Live web updates | `main-site/src/hooks/use-notification-realtime.ts`, `main-site/src/lib/notifications/notification-channel.ts` | Authenticated Supabase Realtime subscription for instant in-app updates + `wakePushDelivery()` helper |
 | Worker config | `main-site/vite.config.ts` | custom service worker build plugin compiling `src/sw.ts` into `dist/sw.js` |
 | Signing | `main-site/src/lib/push/webpush.ts` | base64url, the VAPID JWT, ES256, dead-status rules. Shared by the edge and the tests |
-| Support checks | `main-site/src/lib/push/support.ts` | which of the four prerequisites is missing, and the device list's names |
+| Support checks | `main-site/src/lib/push/support.ts` | which of the five prerequisites is missing, and the device list's names |
+| **Transport decision** | `main-site/src/lib/push/transport.ts` | which transport this browser is offered — web push signed here, or Firebase — and the code for why the other was declined |
+| Config resolution | `main-site/src/lib/push/push-config.ts` | the public key from the bundle, then `/api/push/config`, then the database; the cooldown mark; the worker's own answer |
+| Worker handshake | `main-site/src/lib/push/ready-worker.ts`, `main-site/src/sw.ts` | `BSDC_PUSH_CAPABILITIES_REQUEST` / `BSDC_PUSH_CAPABILITIES`: the page asks the installed worker what it can actually receive |
+| Installability | `main-site/public/manifest.webmanifest`, `main-site/index.html` | the manifest iOS requires before it will wake a web app at all, proved by `src/test/pwa-manifest.test.ts` |
 | The words | `main-site/src/lib/notifications/copy.ts` | titles per kind per language, the body, the tag, the summary |
 | Subscription store | `main-site/src/lib/push/push-repository.ts` | register, unregister, list |
 | Member control | `main-site/src/hooks/use-push.ts` | permission, subscribe, re-register on load, device list |
@@ -169,6 +173,13 @@ a hole: it is a shared phone that signs somebody else in, and it should wake for
 them and not for the member who signed out.
 
 ## 4. Setting it up, in order
+
+Two of the three push variables are for the browser and two are for the sender, and the
+browser's is `VITE_PUSH_VAPID_PUBLIC_KEY` — this site's own VAPID public key, which is
+what a browser hands to its push service when it subscribes. `VITE_FIREBASE_VAPID_PUBLIC_KEY`
+belongs to a transport this site does not use for browsers (see section 9), and
+`VITE_PUSH_TRANSPORT` exists to say so out loud: `webpush` (the default behaviour, and
+the safe value), or `fcm` to ask for the Firebase path where a worker can hear it.
 
 ```bash
 cd main-site
@@ -324,10 +335,19 @@ it is what to use to prove the database half independently of the Worker.
   who turns it off stops a phone they have lost being woken too.
 - **The device list.** Named from the user agent — "Chrome · Android" — with the
   date it registered and a way to stop waking that one device.
-- **Where push cannot work**, the card says which of the four prerequisites is
+- **Where push cannot work**, the card says which of the five prerequisites is
   missing instead of showing a switch that does nothing: an insecure context, no
-  service worker, no push manager, no notifications at all, or no key on this
-  deployment. Two of those are fixable by the member and the card says so.
+  service worker, no push manager, no notifications at all, no key on this
+  deployment, or an iPhone and an iPad sitting in a browser tab. Three of those are
+  fixable by the member and the card says so — open it over https, and on iOS, share
+  and add it to the home screen, because Apple wakes an installed web app and never a
+  tab.
+- **After a failure**, the alert under the switch carries one muted line — the
+  transport that was tried and what it answered, e.g. `fcm · push.errors.fcmTokenFailed`
+  or `webpush · registered (site-key)`. It is the browser's own record of the attempt
+  (`recordPushAttempt`), not a paraphrase, so a member reporting a problem can quote
+  the thing support needs. Set `localStorage['bsdc.push.debug']='1'` for it in the
+  console too.
 - **What arrives.** A reaction, a comment, a follow, a message: the title names
   the kind in the language the device registered with, the body is the line the
   database already wrote, the icon is the actor's when there is one, and tapping
@@ -394,13 +414,14 @@ editor). Within the scheduler's interval the device should wake.
 
 | Symptom | Where to look |
 | --- | --- |
+| Turning it on said "Firebase could not issue a token" | That was this site offering FCM because `VITE_FIREBASE_VAPID_PUBLIC_KEY` was set, and a browser cannot subscribe to FCM through a worker that has no Firebase code in it. `main-site/src/lib/push/transport.ts` now asks the worker first and web push second, so this message only appears when `VITE_PUSH_TRANSPORT=fcm` was asked for by name *and* no `VITE_PUSH_VAPID_PUBLIC_KEY` exists to fall back on. Check the Web Push certificate in the Firebase console against that env value, or unset it and let the site's own key do the work. |
 | The switch is missing and the card says "no push key" | `VITE_PUSH_VAPID_PUBLIC_KEY` was not set **before the build**. Set it and redeploy. |
 | The card says "needs a secure connection" | The site is open over http, or on a LAN address. Push is https-only, everywhere, for everybody. |
 | The flush answers `forbidden` | The Pages secret and the `bsdc.push_settings` row disagree. Re-run step 2 with the same string. |
 | The flush answers `503 … vapid keypair` | `PUSH_VAPID_PRIVATE_KEY` or `PUSH_VAPID_PUBLIC_KEY` is missing at the edge. |
 | `waiting` is a positive number but nothing arrives | Read the response's `sent`, `failed` and `dead`. `failed` means the push service refused or was unreachable: the rows stay unmarked and are retried. `dead` means it answered 404/410 and the subscription was retired — the browser rotated its keys, and the member's next visit re-registers it. |
 | Notifications arrive twice on one device | Two rows for one browser, which means two endpoints. The list in Settings shows both; remove one. |
-| Nothing arrives on iOS | Safari on iOS delivers web push **only** for a site added to the home screen, and only from iOS 16.4. That is Apple's rule, not this code's. The card still shows the switch, because a home-screen install makes it work. |
+| Nothing arrives on iOS | Safari on iOS delivers web push **only** for a site added to the home screen, and only from iOS 16.4 — Apple's rule, not this code's. The card now says so and asks for the install (`push.blocked.iosInstall`) instead of showing a switch that would report success and stay silent, which needs the manifest at `/manifest.webmanifest` to be linked from `index.html`: without it, "Add to Home Screen" makes a bookmark, not a web app. |
 | `/api/push/run` answers `"path":"local"` every time | `PUSH_WORKER_URL` is unset, or it points somewhere that does not answer. `curl` the Worker's `/health` directly. |
 | The Worker's `/health` says `"status":"unconfigured"` | A VAPID secret is missing from the Worker. `npx wrangler secret list`. |
 | The Worker answers `403` to its own cron | It never should. A `403` from `/run` means `PUSH_FLUSH_SECRET` in the Worker and `bsdc.push_settings` disagree — the secret was rotated in one place. |
@@ -413,12 +434,18 @@ editor). Within the scheduler's interval the device should wake.
   extra request when a device wakes and is the path that keeps working when the
   Worker is not there. Both are shipped; neither is dead code.
 - **Firebase Cloud Messaging (FCM HTTP v1) alongside Web Push.**
-  `VITE_FIREBASE_VAPID_PUBLIC_KEY` (FCM Web Push) and `public.fcm_tokens`
-  (Android app + FCM web fallback when `VITE_PUSH_VAPID_PUBLIC_KEY` is not set)
-  are delivered by `push-worker/` using `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` over
-  FCM HTTP v1 (`https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send`),
-  while RFC 8291 Web Push remains primary whenever `VITE_PUSH_VAPID_PUBLIC_KEY`
-  is present.
+  `public.fcm_tokens` and `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` deliver Android over
+  FCM HTTP v1 (`https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send`) from
+  `push-worker/`, and that is where FCM's use lies. `VITE_FIREBASE_VAPID_PUBLIC_KEY`
+  is *not* a browser subscription request: FCM frames a push in its own format, so a
+  browser can only be woken that way by a worker containing `firebase/messaging`, and
+  this site's `/sw.js` does not contain it. A browser is therefore subscribed over this
+  site's VAPID key, `VITE_PUSH_TRANSPORT=fcm` is honoured only when the installed worker
+  answers the capability ping with `fcm`, and a web row that was registered under FCM
+  earlier is retired the first time that browser takes over on its own key.
+  A deployment that genuinely wants FCM on the web adds the compat `importScripts` to
+  `src/sw.ts`, reports `fcm` in `CAPABILITIES`, and gets the `fcm` reason in the
+  attempt log the moment either half is missing.
 - **No OneSignal.** `VITE_ONESIGNAL_APP_ID` predates this and is not used.
 - **No per-kind filtering of push.** The switches in Settings → Notifications
   decide which notifications are written at all; push delivers what was written.

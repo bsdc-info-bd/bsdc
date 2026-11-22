@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { Alert, Badge, Button, Card, IconButton, Switch, TimeAgo } from '@/design-system';
 import { usePush } from '@/hooks/use-push';
+import { latestPushAttempt } from '@/lib/push/push-registration-error';
 import {
   describeDeviceState,
   describeUserAgent,
@@ -43,6 +44,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
   // devices, how many can a notification actually arrive on *today*.
   const on = push.permission === 'granted' && push.devices.length > 0;
   const reachable = push.liveDevices;
+  const attempt = push.errorKey === null ? null : latestPushAttempt();
   const staleNote = staleDevicesNote(
     push.devices.map((device) => device.state),
     language,
@@ -109,7 +111,15 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
               </Button>
             ) : null}
 
-            {push.permission === 'denied' ? t('push.denied.body') : t('push.blocked.body')}
+            {/* The generic footnote means "nobody can change this here", which is true of a
+                browser with no push manager and false of an iOS tab that needs one tap in
+                Share. The sentence above already carries the instruction, so a second one
+                that contradicts it is worse than none. */}
+            {push.permission === 'denied'
+              ? t('push.denied.body')
+              : push.block === 'ios-install'
+                ? null
+                : t('push.blocked.body')}
           </Alert>
         ) : null}
 
@@ -120,6 +130,14 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
         ) : null}
         {push.errorKey ? (
           <Alert tone="warning" title={t(push.errorKey)}>
+            {/* Which transport was tried and what it answered, in the words the code has
+                rather than the words a member would repeat. Support asks “what does the
+                page say”; this is the line that ends the asking. */}
+            {attempt ? (
+              <p className="mt-1 text-2xs text-muted">
+                {attempt.mode} · {attempt.result}
+              </p>
+            ) : null}
             <Button size="sm" onClick={push.dismissError}>
               {t('common.close')}
             </Button>

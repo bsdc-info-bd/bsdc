@@ -49,6 +49,20 @@
     <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
+    <!--
+      The manifest is not decoration here. iOS delivers a web push only to a web app
+      added to the home screen, and a site without a manifest cannot be added that
+      way, so this one line is the difference between “notifications work on iPhone”
+      and a switch that says yes and never rings. `display: standalone` is what
+      `runningStandalone()` reads, and the settings card asks for the install when it
+      does not. See docs/push-runbook.md.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="BSDC" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
     <!-- The Bangla face is 188 kB of the font the first screen renders with.
          Preloading it starts the download with the HTML rather than after the
          stylesheet has been parsed and matched, and it is cached immutably

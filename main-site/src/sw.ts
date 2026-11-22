@@ -209,6 +209,33 @@ self.addEventListener('push', (event: PushEvent) => {
   event.waitUntil(handlePush(event));
 });
 
+/**
+ * What this worker can be woken by, answered to the page that asked.
+ *
+ * The page holds the sign-in session and the build-time configuration, but it
+ * cannot know what the *installed* worker was compiled with, and a worker is not
+ * replaced the moment a new build ships. So the question goes to the worker: the
+ * answer decides whether `VITE_PUSH_TRANSPORT=fcm` is honoured or declined with a
+ * reason. Web push is what this worker has always handled — an `importScripts` of
+ * the Firebase compat SDKs would add `fcm` to this list, and until it does, asking
+ * the browser for an FCM subscription would produce exactly the silent, working-looking
+ * failure this exchange exists to prevent.
+ */
+const CAPABILITIES: readonly string[] = ['webpush'];
+
+self.addEventListener('message', (event: ExtendableMessageEvent) => {
+  const data = event.data as { type?: unknown } | null;
+  if (data?.type !== 'BSDC_PUSH_CAPABILITIES_REQUEST') return;
+  try {
+    (event.source as Window | null)?.postMessage({
+      type: 'BSDC_PUSH_CAPABILITIES',
+      transports: CAPABILITIES,
+    });
+  } catch {
+    // A client that closed between asking and being answered has nothing to hear.
+  }
+});
+
 function urlOf(notification: Notification): string {
   const data = notification.data as { url?: unknown } | undefined;
   const url = typeof data?.url === 'string' ? data.url : '/notifications';

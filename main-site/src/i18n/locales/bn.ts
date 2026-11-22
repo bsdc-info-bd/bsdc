@@ -990,6 +990,8 @@ export const bn: Translation = {
     blocked: {
       body: 'এটি এখান থেকে বদলানোর কোনো সেটিংস নয়। কারণটি উপরে লেখা আছে।',
       insecure: 'পুশ-এর জন্য নিরাপদ সংযোগ দরকার। সাইটটি https:// দিয়ে খুললে সুইচটি কাজ করবে।',
+      iosInstall:
+        'iPhone ও iPad-এ Safari শুধু হোম স্ক্রিনে যোগ করা অ্যাপকে জাগায়: Share চেপে “Add to Home Screen” বাছুন, সেই আইকন থেকে BSDC খুলুন, সেখানেই এই সুইচ চালু করুন।',
       noWorker: 'এই ব্রাউজারে সার্ভিস ওয়ার্কার নেই, তাই বাইরে থেকে একে জাগানো যাবে না।',
       noPush:
         'এই ব্রাউজারে পুশ ম্যানেজার নেই। নতুন সংস্করণের Chrome, Edge, Firefox আর Safari-তে তা থাকে।',
@@ -1027,7 +1029,7 @@ export const bn: Translation = {
       subscribeInvalidState:
         'ব্রাউজারে অসামঞ্জস্যপূর্ণ সাবস্ক্রিপশন আছে। রিলোড করে আবার চেষ্টা করুন।',
       fcmTokenFailed:
-        'Firebase টোকেন দিতে পারেনি। আবার চেষ্টা করুন বা Firebase Web Push সেটআপ পরীক্ষা করতে বলুন।',
+        'Firebase ব্রাউজারের টোকেন দেয়নি, আর ফিরে যাওয়ার মতো নিজস্ব web-push কীও নেই। সাপোর্ট: প্রজেক্টের Web Push সার্টিফিকেট VITE_FIREBASE_VAPID_PUBLIC_KEY-এর সঙ্গে মিলছে কিনা দেখুন, অথবা VITE_PUSH_VAPID_PUBLIC_KEY বসিয়ে VITE_PUSH_TRANSPORT=webpush দিন।',
       registerRpcFailed:
         'সার্ভার ডিভাইসটি সংরক্ষণ করতে পারেনি। আবার চেষ্টা করুন বা নিবন্ধন RPC পরীক্ষা করতে বলুন।',
       networkOffline: 'আপনি অফলাইনে আছেন। সংযোগ ফিরে এলে আবার চেষ্টা করুন।',

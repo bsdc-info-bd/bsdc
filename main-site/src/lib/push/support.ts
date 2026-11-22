@@ -19,7 +19,9 @@ export type PushBlock =
   | 'no-worker'
   | 'no-push'
   | 'no-notification'
-  | 'unconfigured';
+  | 'unconfigured'
+  /** iOS, in a browser tab. Web push is only delivered to an installed web app there. */
+  | 'ios-install';
 
 export interface PushEnvironment {
   secureContext: boolean;
@@ -27,6 +29,10 @@ export interface PushEnvironment {
   pushManager: boolean;
   notification: boolean;
   vapidPublicKey: string;
+  /** iOS, including an iPad reporting itself as a Mac, which is what Safari 13+ does. */
+  ios: boolean;
+  /** Running from the home-screen icon rather than a tab. */
+  standalone: boolean;
 }
 
 /** The i18n key for each reason, and the one for "it works". */
@@ -37,6 +43,7 @@ export const PUSH_BLOCK_KEYS: Record<PushBlock, string> = {
   'no-push': 'push.blocked.noPush',
   'no-notification': 'push.blocked.noNotification',
   unconfigured: 'push.blocked.unconfigured',
+  'ios-install': 'push.blocked.iosInstall',
 };
 
 export function describePushEnvironment(env: PushEnvironment): {
@@ -49,26 +56,58 @@ export function describePushEnvironment(env: PushEnvironment): {
   // act on. Check its shape before offering the button.
   const configured = /^[A-Za-z0-9_-]{80,140}$/.test(env.vapidPublicKey.trim());
 
+  // Every other reason here is a browser that cannot do push. This one is a browser
+  // that can but will not: iOS 16.4+ delivers a web push only to a web app the member
+  // added to the home screen, and says nothing at all to the tab. Saying "supported"
+  // and then never notifying is the worse answer, so the card asks for the install
+  // instead of offering a switch that lies.
   let block: PushBlock = 'ok';
   if (!env.secureContext) block = 'insecure';
   else if (!env.serviceWorker) block = 'no-worker';
   else if (!env.pushManager) block = 'no-push';
   else if (!env.notification) block = 'no-notification';
   else if (!configured) block = 'unconfigured';
+  else if (env.ios && !env.standalone) block = 'ios-install';
 
   return { block, supported: block === 'ok', blockKey: PUSH_BLOCK_KEYS[block] };
 }
 
 /** Reads the environment this page is actually running in. */
 export function readPushEnvironment(vapidPublicKey: string): PushEnvironment {
-  const navigation = globalThis.navigator as Navigator | undefined;
+  const navigation = globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined;
+  const agent = navigation?.userAgent ?? '';
   return {
     secureContext: globalThis.isSecureContext === true,
     serviceWorker: typeof navigation?.serviceWorker?.register === 'function',
     pushManager: typeof navigation?.serviceWorker?.ready === 'object',
     notification: typeof globalThis.Notification === 'function',
     vapidPublicKey,
+    ios:
+      /(?:iPhone|iPod|iPad)/.test(agent) ||
+      (/Macintosh/.test(agent) && (navigation?.maxTouchPoints ?? 0) > 1),
+    standalone: runningStandalone(),
   };
+}
+
+/**
+ * Whether this is the installed app rather than a tab.
+ *
+ * `display-mode` is the standard answer and `navigator.standalone` is iOS's own,
+ * because Safari reports the display mode of a home-screen web app as `browser` in
+ * some versions. Either one is enough, and no `matchMedia` at all (an old browser,
+ * or a worker context) means a tab.
+ */
+export function runningStandalone(): boolean {
+  try {
+    const media = globalThis.matchMedia;
+    if (typeof media === 'function' && media('(display-mode: standalone)').matches) return true;
+    return (
+      (globalThis.navigator as (Navigator & { standalone?: boolean }) | undefined)?.standalone ===
+      true
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -1240,13 +1240,49 @@ check(
   }),
 );
 
-check('G-04', 'Web delivery', 'Website HTML does not advertise an offline PWA manifest', () => {
-  const html = read('main-site/index.html');
-  return {
-    ok: !/manifest\.webmanifest/.test(html),
-    evidence: 'no manifest.webmanifest link in main-site/index.html',
-  };
-});
+check(
+  'G-04',
+  'Web delivery',
+  'A manifest is advertised for installability only, and claims nothing offline',
+  () => {
+    const html = read('main-site/index.html');
+    const manifestPath = 'main-site/public/manifest.webmanifest';
+    const linked = /<link\s+rel="manifest"\s+href="\/manifest\.webmanifest"\s*\/>/.test(html);
+    if (!has(manifestPath)) {
+      return {
+        ok: false,
+        evidence: 'iOS delivers a web push only to a web app added to the home screen, and only a ' +
+          'manifest makes that install; main-site/public/manifest.webmanifest is missing',
+      };
+    }
+    const manifest = JSON.parse(read(manifestPath));
+    const offlineClaims = [
+      'prefer_related_applications',
+      'serviceworker',
+      'shortcut_manifest',
+      'background_sync',
+    ].filter((key) => key in manifest);
+    const sizes = (manifest.icons ?? []).map((icon) => icon.sizes);
+    const ok =
+      linked &&
+      manifest.display === 'standalone' &&
+      manifest.start_url === '/' &&
+      manifest.scope === '/' &&
+      offlineClaims.length === 0 &&
+      (manifest.icons ?? []).some((icon) => icon.purpose === 'maskable') &&
+      sizes.includes('192x192') &&
+      sizes.includes('512x512');
+    return {
+      ok,
+      evidence:
+        `manifest.webmanifest linked from index.html for the iOS install that web push needs` +
+        ` (display ${manifest.display}, icons ${sizes.join('/')})` +
+        (offlineClaims.length > 0 ? `, but it claims offline behaviour: ${offlineClaims.join(', ')}` : '') +
+        (linked ? '' : ', but index.html does not link it') +
+        ' — no offline bundle ships, which G-01, G-03 and G-05 hold',
+    };
+  },
+);
 
 check(
   'G-05',
