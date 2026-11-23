@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Campaign
+import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocationOn
@@ -28,7 +29,6 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Storefront
-import androidx.compose.material.icons.rounded.Message
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -285,7 +285,7 @@ fun MkVendorDetailsScreen(
                         selected = tab == VendorDetailsTab.REVIEWS,
                         onClick = { tab = VendorDetailsTab.REVIEWS },
                         label = { Text(mkText(bn, "Reviews (${data.review_count})", "রিভিউ (${data.review_count})")) },
-                        leadingIcon = { Icon(Icons.Rounded.Message, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { Icon(Icons.Rounded.ChatBubbleOutline, contentDescription = null, modifier = Modifier.size(16.dp)) },
                     )
                     Spacer(Modifier.weight(1f))
                     FilterChip(
@@ -464,7 +464,7 @@ fun MkVendorDetailsScreen(
                 // Recent reviews preview
                 if (data.recent_reviews.isNotEmpty()) {
                     item {
-                        InfoCard(title = mkText(bn, "Recent reviews", "সাম্প্রতিক রিভিউ"), icon = Icons.Rounded.Message) {
+                        InfoCard(title = mkText(bn, "Recent reviews", "সাম্প্রতিক রিভিউ"), icon = Icons.Rounded.ChatBubbleOutline) {
                             data.recent_reviews.take(3).forEach { r ->
                                 ReviewRow(review = r, bn = bn)
                                 Spacer(Modifier.height(8.dp))
@@ -517,7 +517,7 @@ fun MkVendorDetailsScreen(
                 val visible = if (filterRating == 0) list else list.filter { it.rating == filterRating }
                 if (visible.isEmpty()) {
                     item {
-                        BsdcEmptyState(icon = Icons.Rounded.Message, title = mkText(bn, "No reviews yet", "এখনো রিভিউ নেই"), subtitle = mkText(bn, "Be the first after delivery.", "ডেলিভারির পর প্রথম রিভিউ দিন।"))
+                        BsdcEmptyState(icon = Icons.Rounded.ChatBubbleOutline, title = mkText(bn, "No reviews yet", "এখনো রিভিউ নেই"), subtitle = mkText(bn, "Be the first after delivery.", "ডেলিভারির পর প্রথম রিভিউ দিন।"))
                     }
                 } else {
                     items(visible, key = { it.id }) { r -> Box(Modifier.padding(horizontal = 16.dp)) { Card(Modifier.fillMaxWidth()) { Box(Modifier.padding(12.dp)) { ReviewRow(review = r, bn = bn) } } } }
