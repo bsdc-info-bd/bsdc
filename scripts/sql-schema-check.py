@@ -68,6 +68,36 @@ def columns_of(body):
     return found
 
 
+VIEW_RE = re.compile(
+    r'create\s+(?:or\s+replace\s+)?(?:materialized\s+)?view\s+'
+    r'([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s+as\s+select(.*?)\bfrom\b',
+    re.I | re.S,
+)
+
+
+def view_columns(src):
+    """
+    {view: {columns}} from the aliased output list of each view definition.
+
+    A view is a relation, and a later migration reading one is exactly the kind of
+    reference this tool exists to check: `select r.surface from bsdc.media_references`
+    is as capable of being wrong as `select c.surface from comments`. Without this the
+    only way to satisfy the check was to not use a view, which is a rule the schema
+    never had.
+
+    Only columns given an explicit `as` name are collected. A view written as a bare
+    `select a, b` gets nothing recorded, and references to it are then left unchecked
+    rather than guessed at -- a checker that reports a real query as broken trains you
+    to run it with the new file on the excluded list.
+    """
+    out = collections.defaultdict(set)
+    for match in VIEW_RE.finditer(src):
+        aliases = set(re.findall(r'\bas\s+([a-z_][a-z0-9_]*)\b', match.group(2), re.I))
+        if aliases:
+            out[match.group(1).lower()] |= aliases
+    return out
+
+
 def statement_body(src, open_index):
     """
     The text between the parenthesis at `open_index` and its matching close.
@@ -118,10 +148,12 @@ def vocabulary(src):
         kinds.add(match.group(1))
     for match in re.finditer(r'v_labels constant text\[\] := array\[(.*?)\]', src, re.I | re.S):
         kinds |= set(re.findall(r"'([a-z_]+)'", match.group(1)))
+    views = view_columns(src)
     return {
         'tables': set(re.findall(
-            r'create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)', src, re.I)),
-        'columns': table_columns(src),
+            r'create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)', src, re.I))
+            | set(views),
+        'columns': {**table_columns(src), **views},
         'functions': set(re.findall(
             r'create\s+(?:or\s+replace\s+)?function\s+([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s*\(', src, re.I)),
         'types': set(re.findall(r'create\s+type\s+([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)', src, re.I)),
@@ -136,9 +168,11 @@ def blocks_of(code):
 
 def check(path, vocab, problems):
     code = re.sub(r'--[^\n]*', '', read(path))
-    own_columns = table_columns(code)
+    own_views = view_columns(code)
+    own_columns = {**table_columns(code), **own_views}
     own_tables = set(re.findall(
-        r'create\s+table\s+(?:if\s+not\s+exists\s+)?((?:public|bsdc)\.[a-z_][a-z0-9_]*)', code, re.I))
+        r'create\s+table\s+(?:if\s+not\s+exists\s+)?((?:public|bsdc)\.[a-z_][a-z0-9_]*)', code, re.I)) \
+        | set(own_views)
     own_functions = set(re.findall(
         r'create\s+(?:or\s+replace\s+)?function\s+((?:public|bsdc)\.[a-z_][a-z0-9_]*)\s*\(', code, re.I))
 

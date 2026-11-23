@@ -331,15 +331,41 @@ check(hostForgotten.error !== null, 'a stranger cannot sweep the media table');
 
 // -------------------------------------------------------------- the grants ---
 
-for (const signature of [
-  'public.record_media_asset(text, text, text, text, text, integer, integer, bigint, text, timestamp with time zone)',
-  'public.media_pending_purge(text, integer)',
-  'public.media_claim_purge(text, uuid[])',
-  'public.media_mark_purged(text, uuid[])',
-  'public.media_release_purge(text, uuid[])',
-  'public.media_sweep_forgotten(text, integer)',
-  'public.my_media_assets(integer)',
+/**
+ * Each routine is looked up by name rather than by a spelled-out argument list.
+ *
+ * `record_media_asset` gained an eleventh argument in 0132, and a harness that
+ * hardcoded the old ten would have failed for a reason it could not explain. Asking
+ * the catalog instead proves the claim that actually matters: the name resolves to
+ * exactly ONE candidate — a second overload would make every PostgREST caller of it
+ * ambiguous — and that one is granted to members and not to strangers.
+ */
+for (const routine of [
+  { schema: 'public', name: 'record_media_asset', memberOnly: true },
+  { schema: 'public', name: 'media_pending_purge', memberOnly: false },
+  { schema: 'public', name: 'media_claim_purge', memberOnly: false },
+  { schema: 'public', name: 'media_mark_purged', memberOnly: false },
+  { schema: 'public', name: 'media_release_purge', memberOnly: false },
+  { schema: 'public', name: 'media_sweep_forgotten', memberOnly: false },
+  { schema: 'public', name: 'my_media_assets', memberOnly: true },
+  // 0132: the library a member picks from, and the resolver a pick goes through.
+  // Both are member-only, and both are refused to an anonymous caller outright.
+  { schema: 'public', name: 'my_gallery', memberOnly: true },
+  { schema: 'bsdc', name: 'media_asset_for_pick', memberOnly: true },
 ]) {
+  const found = await db.query(
+    `select p.oid::regprocedure::text as signature, count(*) over () as candidates
+       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = '${routine.schema}' and p.proname = '${routine.name}'`,
+  );
+  check(
+    found.rows.length === 1,
+    `${routine.schema}.${routine.name} is one function, not an ambiguous pair`,
+    JSON.stringify(found.rows.map((row) => row.signature)),
+  );
+  const signature = found.rows[0]?.signature;
+  if (signature === undefined) continue;
+  const server = routine.memberOnly;
   const grant = (
     await db.query(
       `select has_function_privilege(current_user, '${signature}', 'execute') as ok`,
@@ -350,7 +376,6 @@ for (const signature of [
   const member = (
     await db.query(`select has_function_privilege('authenticated', '${signature}', 'execute') as ok`)
   ).rows[0];
-  const server = signature.startsWith('public.record_media_asset') || signature.startsWith('public.my_media_assets');
   check(
     anon.ok === !server && member.ok === true,
     `${signature} is granted to exactly the right role`,

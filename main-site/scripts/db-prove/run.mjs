@@ -197,6 +197,7 @@ const HARNESSES = [
     '0130: a channel can be built, named, ordered and closed',
   ],
   ['t91.mjs', '0131: a marketplace remembers an address, and a shop can set a minimum order'],
+  ['t92.mjs', '0132: an uploaded picture is a picture its owner can find again'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

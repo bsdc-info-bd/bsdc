@@ -173,8 +173,13 @@ const UPLOAD_MAX_EDGE: Record<MediaPurpose, number> = {
   'project-image': 1600,
   'post-image': 1600,
   'comment-image': 1440,
+  'chat-image': 1440,
   'product-image': 1600,
   'ad-creative': 1200,
+  // An upload whose caller never said what it was for is kept as large as the
+  // surface that most often forgets to say: a picture nobody labelled is still a
+  // picture somebody wanted, and shrinking it to 512px is not reversible.
+  other: 1600,
 };
 
 const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
@@ -184,8 +189,10 @@ const UPLOAD_QUALITY: Record<MediaPurpose, number> = {
   'project-image': 0.84,
   'post-image': 0.84,
   'comment-image': 0.84,
+  'chat-image': 0.84,
   'product-image': 0.85,
   'ad-creative': 0.88,
+  other: 0.85,
 };
 
 async function encodeCanvasWebp(

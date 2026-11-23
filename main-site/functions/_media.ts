@@ -118,6 +118,13 @@ export interface EdgeUploadResult {
 
 /**
  * The lifetime an upload is given, by purpose, in seconds (`0` = permanent).
+ *
+ * All of them are zero, and that is the point of the table rather than an
+ * oversight: a picture a member attached to something they wrote is not a
+ * temporary file, and the library added in 0132 is the reason a lifetime is now
+ * visible to the person it affects. A row that expires in the library is a tile
+ * that goes blank, so the map is kept — as the place a lifetime would be set —
+ * with every purpose saying "keep it".
  */
 export const UPLOAD_LIFETIME_SECONDS: Record<MediaPurpose, number> = {
   avatar: 0,
@@ -126,8 +133,13 @@ export const UPLOAD_LIFETIME_SECONDS: Record<MediaPurpose, number> = {
   'project-image': 0,
   'post-image': 0,
   'comment-image': 0,
+  // A chat picture is permanent for the same reason a comment's is: the message
+  // it illustrates stays in the conversation, and a member who scrolls back to
+  // it should still see it.
+  'chat-image': 0,
   'product-image': 0,
   'ad-creative': 0,
+  other: 0,
 };
 
 /** ISO string for `seconds` from now, or null when the host keeps it forever. */

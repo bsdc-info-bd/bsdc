@@ -61,6 +61,10 @@ describe('recordMediaAsset', () => {
       p_bytes: 12_345,
       p_mime_type: 'image/webp',
       p_expires_at: null,
+      // A caller that does not say what the picture was for still says so: 'other' is
+      // what 0132 files it under, and the argument is always sent so the function
+      // never resolves by default in one client and not in another.
+      p_purpose: 'other',
     });
     expect(fromMock).not.toHaveBeenCalled();
     expect(row).toMatchObject({
@@ -76,6 +80,19 @@ describe('recordMediaAsset', () => {
       mime_type: 'image/webp',
     });
     expect('delete_token' in (row ?? {})).toBe(false);
+  });
+
+  it('files a picture under the purpose the surface named', async () => {
+    rpcMock.mockResolvedValueOnce({ data: '00000000-0000-4000-8000-000000000043', error: null });
+
+    await recordMediaAsset('member-1', SAMPLE_UPLOAD, 'avatar');
+
+    // The purpose is the only thing that turns a member's uploads into a library they
+    // can search: "profile pictures" answers because a surface said so at upload time.
+    expect(rpcMock).toHaveBeenCalledWith(
+      'record_media_asset',
+      expect.objectContaining({ p_purpose: 'avatar' }),
+    );
   });
 
   it('accepts an array row mock such as [{ id }] returned by E2E harnesses', async () => {

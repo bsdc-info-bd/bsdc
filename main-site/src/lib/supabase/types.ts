@@ -10,6 +10,25 @@ export type DbRole = 'member' | 'creator' | 'vendor' | 'moderator' | 'manager' |
 
 export type DbAccountStatus = 'active' | 'suspended' | 'deactivated' | 'deleted';
 export type DbMediaKind = 'image' | 'document' | 'audio' | 'video';
+/**
+ * `media_assets.purpose`, added by 0132, and the same list the column checks.
+ *
+ * Declared here rather than imported from `lib/storage/media-contract`, because this
+ * file describes the schema and must not acquire an interest in what the upload
+ * client does with it. A purpose in one and not the other is a migration that forgot
+ * to widen the check, and the client starts failing with 22023.
+ */
+export type DbMediaPurpose =
+  | 'avatar'
+  | 'cover'
+  | 'project-cover'
+  | 'project-image'
+  | 'post-image'
+  | 'comment-image'
+  | 'chat-image'
+  | 'product-image'
+  | 'ad-creative'
+  | 'other';
 export type DbMediaProvider = 'imgbb' | 'external' | 'supabase';
 export type DbReportStatus = 'open' | 'reviewing' | 'actioned' | 'dismissed';
 
@@ -113,6 +132,8 @@ export type MediaAssetRow = {
   bytes: number;
   mime_type: string;
   checksum: string;
+  /** What the member was uploading it for. Provenance, not a permission. */
+  purpose: DbMediaPurpose;
   created_at: string;
 };
 
@@ -2594,8 +2615,35 @@ export type Database = {
           p_bytes?: number;
           p_mime_type?: string;
           p_expires_at?: string | null;
+          p_purpose?: DbMediaPurpose;
         };
         Returns: string;
+      };
+      /** 0132. One page of the member's own library, with where each picture lives. */
+      my_gallery: {
+        Args: {
+          p_limit?: number;
+          p_before?: string | null;
+          p_before_id?: string | null;
+          p_purpose?: string;
+          p_query?: string;
+        };
+        Returns: {
+          id: string;
+          url: string;
+          thumb_url: string;
+          purpose: string;
+          width: number | null;
+          height: number | null;
+          bytes: number;
+          mime_type: string;
+          created_at: string;
+          expires_at: string | null;
+          in_use: boolean;
+          uses: number;
+          surfaces: string[];
+          alt_text: string;
+        }[];
       };
       my_media_assets: {
         Args: { p_limit?: number };

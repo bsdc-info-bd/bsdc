@@ -7,7 +7,12 @@ const ada = 'messenger-ada';
 const bob = 'messenger-bob';
 const eve = 'messenger-eve';
 const dana = 'messenger-dana';
-const db = await makeDb({ skip: ['0082_'] });
+// This proof replays the messenger without 0082, to show the behaviour the platform
+// had before idempotent sends existed. 0132 rewrites `send_message_once` — a
+// function of 0082 — so it has nothing to rewrite here, and replaying it against a
+// schema with no `bsdc.message_send_requests` would fail on the replacement rather
+// than prove anything. The 0132 changes to that function are proved in t92.
+const db = await makeDb({ skip: ['0082_', '0132_'] });
 let failures = 0;
 function check(value, label) {
   if (value) console.log(`ok    ${label}`);
