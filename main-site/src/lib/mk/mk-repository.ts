@@ -487,9 +487,7 @@ export async function fetchVendorReviews(
   return asJson<MkVendorReviewsResponse>(data);
 }
 
-export async function fetchVendorDetails(
-  slug: string,
-): Promise<MkVendorDetails | null> {
+export async function fetchVendorDetails(slug: string): Promise<MkVendorDetails | null> {
   const { data, error } = await getSupabase().rpc('mk_vendor_details', { p_slug: slug });
   if (error) throw asDatabaseError(error);
   return asJson<MkVendorDetails | null>(data);

@@ -121,7 +121,7 @@ begin
   end if;
 
   v_delivery := bsdc.mk_delivery_json(v_vendor);
-  v_schedule := bsdc.mk_schedule_json(v_vendor.id);
+  v_schedule := bsdc.mk_schedule_status(v_vendor.opening_schedule_enabled, v_vendor.opening_schedule);
 
   return jsonb_build_object(
     'vendor', jsonb_build_object(

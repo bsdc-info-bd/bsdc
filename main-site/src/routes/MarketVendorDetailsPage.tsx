@@ -1,5 +1,16 @@
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { ArrowLeft, MapPin, ShoppingBag, Star, Store, Info, MessageSquare, Navigation, Clock, Truck } from 'lucide-react';
+import {
+  ArrowLeft,
+  MapPin,
+  ShoppingBag,
+  Star,
+  Store,
+  Info,
+  MessageSquare,
+  Navigation,
+  Clock,
+  Truck,
+} from 'lucide-react';
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -79,7 +90,11 @@ export default function MarketVendorDetailsPage() {
 
   return (
     <div className="fab-container max-w-6xl pb-10 pt-4 sm:pt-6">
-      <Seo title={`${vendor.name} — ${copy.buyer.marketTitle}`} description={vendor.description || copy.buyer.marketLead} path={`/marketplace/vendor/${slug}`} />
+      <Seo
+        title={`${vendor.name} — ${copy.buyer.marketTitle}`}
+        description={vendor.description || copy.buyer.marketLead}
+        path={`/marketplace/vendor/${slug}`}
+      />
 
       <button
         type="button"
@@ -104,13 +119,18 @@ export default function MarketVendorDetailsPage() {
               loading="eager"
             />
           ) : null}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" aria-hidden />
+          <div
+            className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent"
+            aria-hidden
+          />
           <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between sm:bottom-4 sm:left-5 sm:right-5">
             <span className="inline-flex items-center gap-1 rounded-full bg-black/45 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur">
               <ShopTypeIcon type={vendor.vendor_type} size={12} />
               {copy.typeLabels[vendor.vendor_type]}
             </span>
-            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur ${isOpen ? 'bg-emerald-500 text-white' : 'bg-danger text-white'}`}>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold backdrop-blur ${isOpen ? 'bg-emerald-500 text-white' : 'bg-danger text-white'}`}
+            >
               <span className="h-1.5 w-1.5 rounded-full bg-white" aria-hidden />
               {isOpen ? copy.schedule.openNow : copy.schedule.closedNow}
             </span>
@@ -120,7 +140,12 @@ export default function MarketVendorDetailsPage() {
         <div className="flex flex-col gap-4 px-4 pb-5 sm:flex-row sm:items-end sm:gap-5 sm:px-6">
           <div className="-mt-12 h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-lg sm:-mt-14 sm:h-28 sm:w-28">
             {vendor.logo_url ? (
-              <MediaImage src={vendor.logo_url} alt="" slotWidth={112} className="h-full w-full object-cover" />
+              <MediaImage
+                src={vendor.logo_url}
+                alt=""
+                slotWidth={112}
+                className="h-full w-full object-cover"
+              />
             ) : (
               <Store className="m-6 text-muted sm:m-8" aria-hidden />
             )}
@@ -150,7 +175,9 @@ export default function MarketVendorDetailsPage() {
                   {copy.buyer.minOrder}: {formatTaka(delivery?.min_order_poisha ?? 0, language)}
                 </span>
               ) : null}
-              <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${isOpen ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-danger-soft text-danger-text'}`}>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${isOpen ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-danger-soft text-danger-text'}`}
+              >
                 <Clock size={11} aria-hidden />
                 {scheduleText}
               </span>
@@ -171,9 +198,24 @@ export default function MarketVendorDetailsPage() {
         <div role="tablist" className="flex gap-1 overflow-x-auto py-2">
           {(
             [
-              { id: 'info' as Tab, label: language === 'bn' ? 'তথ্য' : 'Info', icon: Info, count: null as number | null },
-              { id: 'reviews' as Tab, label: language === 'bn' ? 'রিভিউ' : 'Reviews', count: data.review_count, icon: MessageSquare },
-              { id: 'menu' as Tab, label: copy.buyer.products, count: shopPage.products.length, icon: ShoppingBag },
+              {
+                id: 'info' as Tab,
+                label: language === 'bn' ? 'তথ্য' : 'Info',
+                icon: Info,
+                count: null as number | null,
+              },
+              {
+                id: 'reviews' as Tab,
+                label: language === 'bn' ? 'রিভিউ' : 'Reviews',
+                count: data.review_count,
+                icon: MessageSquare,
+              },
+              {
+                id: 'menu' as Tab,
+                label: copy.buyer.products,
+                count: shopPage.products.length,
+                icon: ShoppingBag,
+              },
             ] as const
           ).map((t) => {
             const active = tab === t.id;
@@ -191,7 +233,11 @@ export default function MarketVendorDetailsPage() {
                 <Icon size={14} aria-hidden />
                 {t.label}
                 {typeof c === 'number' ? (
-                  <span className={`ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold ${active ? 'bg-on-primary text-primary' : 'bg-surface-2 text-muted'}`}>{c}</span>
+                  <span
+                    className={`ml-1 rounded-full px-1.5 py-0.5 text-xs font-bold ${active ? 'bg-on-primary text-primary' : 'bg-surface-2 text-muted'}`}
+                  >
+                    {c}
+                  </span>
                 ) : null}
               </button>
             );
@@ -222,7 +268,11 @@ export default function MarketVendorDetailsPage() {
           ) : null}
           {tab === 'menu' ? (
             <div className="rounded-2xl border border-border bg-surface p-6 text-center">
-              <p className="text-sm text-muted">{language === 'bn' ? 'মেনু দেখতে দোকানের পাতায় যান।' : 'Browse the full menu on the shop page.'}</p>
+              <p className="text-sm text-muted">
+                {language === 'bn'
+                  ? 'মেনু দেখতে দোকানের পাতায় যান।'
+                  : 'Browse the full menu on the shop page.'}
+              </p>
               <Link
                 to={`/marketplace/shop/${slug}`}
                 className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary hover:bg-primary-active"

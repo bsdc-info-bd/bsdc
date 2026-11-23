@@ -294,7 +294,17 @@ function useLeafletPin(
     );
   }, [recenter]);
 
-  return { map: mapRef.current, marker: markerRef.current, circle: circleRef.current, zoomIn, zoomOut, recenter, locate, failed, ready };
+  return {
+    map: mapRef.current,
+    marker: markerRef.current,
+    circle: circleRef.current,
+    zoomIn,
+    zoomOut,
+    recenter,
+    locate,
+    failed,
+    ready,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -505,7 +515,8 @@ export function DeliveryMapDialog({
 
   if (!open) return null;
 
-  const coordText = hasPoint && lat !== null && lng !== null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '';
+  const coordText =
+    hasPoint && lat !== null && lng !== null ? `${lat.toFixed(6)}, ${lng.toFixed(6)}` : '';
 
   return (
     <div
@@ -541,7 +552,10 @@ export function DeliveryMapDialog({
       >
         {/* Header — sticky, blurred, with title + close */}
         <header className="relative z-10 flex shrink-0 items-start justify-between gap-3 border-b border-border bg-surface/85 px-4 py-3 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/70 sm:px-5 sm:py-4">
-          <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent" aria-hidden />
+          <div
+            className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent"
+            aria-hidden
+          />
           <div className="flex min-w-0 items-start gap-3">
             <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary sm:grid dark:bg-primary/15">
               <MapPin size={18} aria-hidden />
@@ -553,13 +567,19 @@ export function DeliveryMapDialog({
                 </span>
                 {copy.title}
                 <span className="hidden items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary sm:inline-flex dark:bg-primary/15">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" aria-hidden />
+                  <span
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"
+                    aria-hidden
+                  />
                   Live
                 </span>
               </h2>
               <p className="mt-1 text-xs font-medium text-muted sm:text-sm">{copy.subtitle}</p>
               {heading ? (
-                <p className="mt-1.5 line-clamp-2 text-sm font-medium leading-snug text-text sm:truncate" title={heading}>
+                <p
+                  className="mt-1.5 line-clamp-2 text-sm font-medium leading-snug text-text sm:truncate"
+                  title={heading}
+                >
                   {heading}
                 </p>
               ) : null}
@@ -576,7 +596,11 @@ export function DeliveryMapDialog({
                 aria-label={copy.copyCoords}
                 title={coordText}
               >
-                {copied ? <Check size={13} className="text-emerald-600" aria-hidden /> : <Copy size={13} aria-hidden />}
+                {copied ? (
+                  <Check size={13} className="text-emerald-600" aria-hidden />
+                ) : (
+                  <Copy size={13} aria-hidden />
+                )}
                 {copied ? copy.copied : coordText}
               </button>
             ) : null}
@@ -597,7 +621,12 @@ export function DeliveryMapDialog({
           {/* Map */}
           <div className="relative min-h-0 flex-1 bg-[#dbe8db] dark:bg-zinc-900">
             {hasPoint ? (
-              <div ref={containerRef} className="absolute inset-0 z-0 h-full w-full" role="application" aria-label={copy.title} />
+              <div
+                ref={containerRef}
+                className="absolute inset-0 z-0 h-full w-full"
+                role="application"
+                aria-label={copy.title}
+              />
             ) : null}
 
             {/* Loading / error overlays */}
@@ -609,7 +638,10 @@ export function DeliveryMapDialog({
                   className="absolute inset-0 z-10 grid place-items-center bg-surface-2/60 backdrop-blur-[1px]"
                 >
                   <div className="flex flex-col items-center gap-3 rounded-2xl bg-surface px-6 py-5 shadow-lg">
-                    <div className="h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
+                    <div
+                      className="h-9 w-9 animate-spin rounded-full border-2 border-primary border-t-transparent"
+                      aria-hidden
+                    />
                     <p className="text-xs font-medium text-muted">Loading map…</p>
                   </div>
                 </motion.div>
@@ -622,9 +654,13 @@ export function DeliveryMapDialog({
                   <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-border text-muted">
                     <AlertCircle size={20} aria-hidden />
                   </span>
-                  <p className="text-sm font-medium text-text">{hasPoint ? copy.missing : copy.unavailable}</p>
+                  <p className="text-sm font-medium text-text">
+                    {hasPoint ? copy.missing : copy.unavailable}
+                  </p>
                   <p className="text-xs leading-relaxed text-muted">
-                    {hasPoint ? 'Try refreshing or open in Google Maps.' : 'Add a delivery pin to enable routing.'}
+                    {hasPoint
+                      ? 'Try refreshing or open in Google Maps.'
+                      : 'Add a delivery pin to enable routing.'}
                   </p>
                   {hasPoint && lat !== null && lng !== null && (
                     <a
@@ -645,10 +681,16 @@ export function DeliveryMapDialog({
             {hasPoint && (
               <div className="pointer-events-none absolute left-3 right-3 top-3 z-20 flex items-start justify-between gap-2 sm:left-4 sm:right-4 sm:top-4">
                 <div className="pointer-events-auto flex items-center gap-1.5 rounded-full border border-border bg-surface/90 px-2.5 py-1 shadow-md backdrop-blur sm:px-3 sm:py-1.5">
-                  <span className="hidden h-5 w-5 place-items-center rounded-full bg-primary text-on-primary sm:grid" aria-hidden>
+                  <span
+                    className="hidden h-5 w-5 place-items-center rounded-full bg-primary text-on-primary sm:grid"
+                    aria-hidden
+                  >
                     <MapPin size={10} />
                   </span>
-                  <span className="max-w-[18ch] truncate text-xs font-semibold text-text sm:max-w-[28ch] sm:text-sm" title={coordText}>
+                  <span
+                    className="max-w-[18ch] truncate text-xs font-semibold text-text sm:max-w-[28ch] sm:text-sm"
+                    title={coordText}
+                  >
                     {coordText}
                   </span>
                   <button
@@ -738,7 +780,10 @@ export function DeliveryMapDialog({
                       </button>
                     </div>
                     <div className="px-4 pb-3">
-                      <p className="line-clamp-2 text-sm font-medium leading-snug text-text" title={heading}>
+                      <p
+                        className="line-clamp-2 text-sm font-medium leading-snug text-text"
+                        title={heading}
+                      >
                         {heading ?? coordText}
                       </p>
                       <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
@@ -753,7 +798,11 @@ export function DeliveryMapDialog({
                     {/* Handy quick actions — never more than one tap away */}
                     <div className="grid grid-cols-3 gap-1.5 bg-surface-2/60 px-2.5 py-2.5">
                       <a
-                        href={hasPoint && lat !== null && lng !== null ? googleMapsDirectionsUrl(lat, lng) : undefined}
+                        href={
+                          hasPoint && lat !== null && lng !== null
+                            ? googleMapsDirectionsUrl(lat, lng)
+                            : undefined
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex flex-col items-center justify-center gap-1 rounded-xl bg-primary px-2 py-2.5 text-xs font-semibold text-on-primary shadow-sm transition hover:bg-primary-active focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -779,7 +828,11 @@ export function DeliveryMapDialog({
                         </a>
                       ) : (
                         <a
-                          href={hasPoint && lat !== null && lng !== null ? openStreetMapUrl(lat, lng) : undefined}
+                          href={
+                            hasPoint && lat !== null && lng !== null
+                              ? openStreetMapUrl(lat, lng)
+                              : undefined
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex flex-col items-center justify-center gap-1 rounded-xl border border-border bg-surface px-2 py-2.5 text-xs font-medium text-text shadow-sm transition hover:bg-surface-2"
@@ -831,7 +884,11 @@ export function DeliveryMapDialog({
               <h3 className="text-sm font-semibold text-text">{copy.handyActions}</h3>
               <div className="mt-3 grid gap-2">
                 <a
-                  href={hasPoint && lat !== null && lng !== null ? googleMapsDirectionsUrl(lat, lng) : undefined}
+                  href={
+                    hasPoint && lat !== null && lng !== null
+                      ? googleMapsDirectionsUrl(lat, lng)
+                      : undefined
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-between rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-on-primary shadow-sm transition hover:bg-primary-active focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -843,7 +900,11 @@ export function DeliveryMapDialog({
                   <ExternalLink size={14} aria-hidden className="opacity-80" />
                 </a>
                 <a
-                  href={hasPoint && lat !== null && lng !== null ? openStreetMapUrl(lat, lng) : undefined}
+                  href={
+                    hasPoint && lat !== null && lng !== null
+                      ? openStreetMapUrl(lat, lng)
+                      : undefined
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center justify-between rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text shadow-sm transition hover:bg-surface-2"
@@ -860,7 +921,11 @@ export function DeliveryMapDialog({
                     onClick={() => void handleCopy()}
                     className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text shadow-sm transition hover:bg-surface-2"
                   >
-                    {copied ? <Check size={14} className="text-emerald-600" aria-hidden /> : <Copy size={14} aria-hidden />}
+                    {copied ? (
+                      <Check size={14} className="text-emerald-600" aria-hidden />
+                    ) : (
+                      <Copy size={14} aria-hidden />
+                    )}
                     {copied ? copy.copied : copy.copyCoords}
                   </button>
                   <button
@@ -875,7 +940,9 @@ export function DeliveryMapDialog({
               </div>
 
               <div className="mt-6 rounded-2xl border border-border bg-surface p-4 shadow-sm">
-                <h4 className="text-xs font-semibold uppercase tracking-widest text-muted">{copy.coords}</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-widest text-muted">
+                  {copy.coords}
+                </h4>
                 <p className="mt-2 font-mono text-sm font-medium text-text">{coordText}</p>
                 <p className="mt-1 text-xs leading-relaxed text-muted">
                   {heading ?? 'Pin drop for this order. Share or open in your navigation app.'}
@@ -915,7 +982,11 @@ export function DeliveryMapDialog({
           {hasPoint ? (
             <>
               <a
-                href={hasPoint && lat !== null && lng !== null ? googleMapsDirectionsUrl(lat, lng) : undefined}
+                href={
+                  hasPoint && lat !== null && lng !== null
+                    ? googleMapsDirectionsUrl(lat, lng)
+                    : undefined
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-on-primary shadow-sm transition hover:bg-primary-active focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -924,7 +995,9 @@ export function DeliveryMapDialog({
                 {copy.google}
               </a>
               <a
-                href={hasPoint && lat !== null && lng !== null ? openStreetMapUrl(lat, lng) : undefined}
+                href={
+                  hasPoint && lat !== null && lng !== null ? openStreetMapUrl(lat, lng) : undefined
+                }
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-medium text-text shadow-sm hover:bg-surface-2"

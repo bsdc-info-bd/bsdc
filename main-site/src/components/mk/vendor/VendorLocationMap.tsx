@@ -130,7 +130,9 @@ export function VendorLocationMap({
   }, [lat, lng]);
 
   return (
-    <div className={`relative overflow-hidden rounded-2xl border border-border bg-surface shadow-sm ${heightClassName}`}>
+    <div
+      className={`relative overflow-hidden rounded-2xl border border-border bg-surface shadow-sm ${heightClassName}`}
+    >
       <div ref={containerRef} className="h-full w-full bg-[#e6efe6]" />
       {failed ? (
         <span className="absolute inset-0 grid place-items-center bg-surface-2 p-3 text-center text-xs text-muted">
@@ -151,8 +153,16 @@ export function VendorLocationMap({
           onClick={() => void handleCopy()}
           className="inline-flex items-center gap-1 rounded-full bg-surface/95 px-2.5 py-1.5 text-xs font-medium text-text shadow-md backdrop-blur hover:bg-surface"
         >
-          {copied ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} aria-hidden />}
-          {copied ? (language === 'bn' ? 'কপি হয়েছে' : 'Copied') : `${lat.toFixed(4)}, ${lng.toFixed(4)}`}
+          {copied ? (
+            <Check size={12} className="text-emerald-600" />
+          ) : (
+            <Copy size={12} aria-hidden />
+          )}
+          {copied
+            ? language === 'bn'
+              ? 'কপি হয়েছে'
+              : 'Copied'
+            : `${lat.toFixed(4)}, ${lng.toFixed(4)}`}
         </button>
         <a
           href={googleMapsDirectionsUrl(lat, lng)}

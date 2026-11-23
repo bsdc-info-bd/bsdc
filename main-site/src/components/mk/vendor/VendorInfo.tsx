@@ -1,4 +1,15 @@
-import { Clock, MapPin, Truck, Info, Shield, Store, CalendarDays, Banknote, Package, Navigation } from 'lucide-react';
+import {
+  Clock,
+  MapPin,
+  Truck,
+  Info,
+  Shield,
+  Store,
+  CalendarDays,
+  Banknote,
+  Package,
+  Navigation,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Card } from '@/design-system';
 import { VendorLocationMap } from './VendorLocationMap';
@@ -51,7 +62,9 @@ export function VendorInfo({ details, language }: Props) {
               </p>
             </div>
           </div>
-          {v.description ? <p className="mt-4 text-sm leading-relaxed text-text">{v.description}</p> : null}
+          {v.description ? (
+            <p className="mt-4 text-sm leading-relaxed text-text">{v.description}</p>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-2">
             <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-text">
               <Store size={11} aria-hidden />
@@ -83,7 +96,9 @@ export function VendorInfo({ details, language }: Props) {
                   <Package size={12} aria-hidden />
                   {copy.buyer.minOrder}
                 </dt>
-                <dd className="font-semibold text-text">{formatTaka(delivery?.min_order_poisha ?? 0, language)}</dd>
+                <dd className="font-semibold text-text">
+                  {formatTaka(delivery?.min_order_poisha ?? 0, language)}
+                </dd>
               </div>
             ) : (
               <div className="flex items-center justify-between gap-2">
@@ -154,7 +169,9 @@ export function VendorInfo({ details, language }: Props) {
                   key={k}
                   className={`grid grid-cols-3 items-center px-3 py-2.5 text-sm ${isToday ? 'bg-primary/5 font-semibold' : 'bg-surface'} border-t border-border first:border-t-0`}
                 >
-                  <span className={`flex items-center gap-1.5 ${isToday ? 'text-primary' : 'text-text'}`}>
+                  <span
+                    className={`flex items-center gap-1.5 ${isToday ? 'text-primary' : 'text-text'}`}
+                  >
                     {dayName}
                     {isToday ? (
                       <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
@@ -165,11 +182,16 @@ export function VendorInfo({ details, language }: Props) {
                   <span
                     className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${row?.open ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-surface-2 text-muted'}`}
                   >
-                    <span className={`h-1.5 w-1.5 rounded-full ${row?.open ? 'bg-emerald-500' : 'bg-zinc-400'}`} aria-hidden />
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full ${row?.open ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+                      aria-hidden
+                    />
                     {row?.open ? copy.schedule.dayOpen : copy.schedule.dayClosed}
                   </span>
                   <span className="text-xs tabular-nums text-text">
-                    {row?.open ? `${formatHhMm(row.start, language)} – ${formatHhMm(row.end, language)}` : '—'}
+                    {row?.open
+                      ? `${formatHhMm(row.start, language)} – ${formatHhMm(row.end, language)}`
+                      : '—'}
                   </span>
                 </div>
               );
@@ -215,13 +237,21 @@ export function VendorInfo({ details, language }: Props) {
         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           <span className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2.5 py-1 font-medium text-text">
             <Navigation size={11} aria-hidden />
-            {delivery?.scope === 'all_bd' ? copy.delivery.allArea : delivery?.radius_km ? `${delivery.radius_km} km` : '—'}
+            {delivery?.scope === 'all_bd'
+              ? copy.delivery.allArea
+              : delivery?.radius_km
+                ? `${delivery.radius_km} km`
+                : '—'}
           </span>
           <span className="text-muted">
-            {language === 'bn' ? 'কেন্দ্র' : 'Centre'}: {delivery?.center_lat?.toFixed(4) ?? v.lat.toFixed(4)},{' '}
+            {language === 'bn' ? 'কেন্দ্র' : 'Centre'}:{' '}
+            {delivery?.center_lat?.toFixed(4) ?? v.lat.toFixed(4)},{' '}
             {delivery?.center_lng?.toFixed(4) ?? v.lng.toFixed(4)}
           </span>
-          <Link to={`/marketplace/shop/${v.slug}`} className="ml-auto font-semibold text-primary hover:underline">
+          <Link
+            to={`/marketplace/shop/${v.slug}`}
+            className="ml-auto font-semibold text-primary hover:underline"
+          >
             {language === 'bn' ? 'মেনু দেখুন' : 'View menu'} →
           </Link>
         </div>
@@ -230,7 +260,9 @@ export function VendorInfo({ details, language }: Props) {
       {/* Trust footer */}
       <div className="rounded-2xl bg-primary/5 p-4 text-center">
         <p className="text-sm font-semibold text-text">
-          {language === 'bn' ? 'BSDC মার্কেটপ্লেস — নিরাপদ ক্যাশ অন ডেলিভারি' : 'BSDC Marketplace — safe cash on delivery'}
+          {language === 'bn'
+            ? 'BSDC মার্কেটপ্লেস — নিরাপদ ক্যাশ অন ডেলিভারি'
+            : 'BSDC Marketplace — safe cash on delivery'}
         </p>
         <p className="mt-1 text-xs leading-relaxed text-muted">
           {copy.buyer.codNote} {copy.buyer.trustLine}

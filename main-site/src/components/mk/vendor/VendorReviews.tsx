@@ -77,7 +77,8 @@ function Histogram({
         );
       })}
       <p className="pt-1 text-xs text-muted">
-        {language === 'bn' ? `${total} টি রিভিউ` : `${total} reviews`} · {language === 'bn' ? 'স্টার অনুযায়ী ফিল্টার করুন' : 'Tap a row to filter'}
+        {language === 'bn' ? `${total} টি রিভিউ` : `${total} reviews`} ·{' '}
+        {language === 'bn' ? 'স্টার অনুযায়ী ফিল্টার করুন' : 'Tap a row to filter'}
       </p>
     </div>
   );
@@ -135,8 +136,12 @@ export function VendorReviews({
           </p>
           <div className="mt-3 flex flex-wrap justify-center gap-1.5">
             {[5, 4, 3, 2, 1].map((s) => (
-              <span key={s} className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-muted">
-                {s} <Star size={10} className="fill-rating text-rating" aria-hidden /> · {hist[String(s)] ?? 0}
+              <span
+                key={s}
+                className="inline-flex items-center gap-1 rounded-full bg-surface-2 px-2 py-1 text-xs font-medium text-muted"
+              >
+                {s} <Star size={10} className="fill-rating text-rating" aria-hidden /> ·{' '}
+                {hist[String(s)] ?? 0}
               </span>
             ))}
           </div>
@@ -148,7 +153,13 @@ export function VendorReviews({
             {language === 'bn' ? 'রেটিং বিতরণ' : 'Rating breakdown'}
           </h3>
           <div className="mt-3">
-            <Histogram histogram={hist} total={reviewCount} language={language} onSelect={handleFilter} selected={filter} />
+            <Histogram
+              histogram={hist}
+              total={reviewCount}
+              language={language}
+              onSelect={handleFilter}
+              selected={filter}
+            />
           </div>
           {filter !== null && (
             <button
@@ -195,26 +206,39 @@ export function VendorReviews({
       ) : (
         <ul className="space-y-3">
           {filtered.map((r) => (
-            <li key={r.id} className="rounded-2xl border border-border bg-surface p-4 shadow-sm transition hover:shadow-md">
+            <li
+              key={r.id}
+              className="rounded-2xl border border-border bg-surface p-4 shadow-sm transition hover:shadow-md"
+            >
               <div className="flex items-start gap-3">
                 <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2">
                   {r.customer.avatar_url ? (
-                    <img src={r.customer.avatar_url} alt="" className="h-full w-full object-cover" loading="lazy" />
+                    <img
+                      src={r.customer.avatar_url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
                   ) : (
                     <User size={16} className="text-muted" aria-hidden />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-text">
-                    {r.customer.display_name || r.customer.username || (language === 'bn' ? 'একজন গ্রাহক' : 'A customer')}
+                    {r.customer.display_name ||
+                      r.customer.username ||
+                      (language === 'bn' ? 'একজন গ্রাহক' : 'A customer')}
                   </p>
                   <p className="text-xs text-muted">
                     {r.customer.username ? `@${r.customer.username} · ` : ''}
-                    {new Date(r.created_at).toLocaleDateString(language === 'bn' ? 'bn-BD' : 'en-GB', {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
+                    {new Date(r.created_at).toLocaleDateString(
+                      language === 'bn' ? 'bn-BD' : 'en-GB',
+                      {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      },
+                    )}
                   </p>
                 </div>
                 <span className="inline-flex items-center gap-1 rounded-full bg-rating px-2.5 py-1 text-xs font-bold text-white">
