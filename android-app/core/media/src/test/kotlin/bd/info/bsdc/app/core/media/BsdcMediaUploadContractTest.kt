@@ -196,7 +196,10 @@ class BsdcMediaUploadContractTest {
         server.takeRequest()
         server.takeRequest()
         val insertReq = server.takeRequest()
-        assertEquals("/rest/v1/media_assets", insertReq.path)
+        // The table and the `select` that reads the row back, because
+        // `prefer = return=representation` is answered with a body the caller has to
+        // parse — an insert nobody can name the id of is an insert that will be retried.
+        assertEquals("/rest/v1/media_assets?select=id", insertReq.path)
         assertTrue(insertReq.body.readUtf8().contains("\"purpose\":\"chat-image\""))
     }
 
