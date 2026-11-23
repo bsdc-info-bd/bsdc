@@ -1,6 +1,7 @@
 package bd.info.bsdc.app.core.media
 
 import org.junit.Assert.assertEquals
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue

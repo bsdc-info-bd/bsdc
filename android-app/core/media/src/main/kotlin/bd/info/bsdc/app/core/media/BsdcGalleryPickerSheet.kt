@@ -48,6 +48,8 @@ import bd.info.bsdc.app.core.designsystem.BsdcFormText
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.model.BsdcGalleryCursor
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
