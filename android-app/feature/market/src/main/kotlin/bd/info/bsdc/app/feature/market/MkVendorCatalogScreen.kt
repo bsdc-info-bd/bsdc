@@ -55,6 +55,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcGalleryLogic
 import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.media.GalleryCopy
@@ -427,8 +428,8 @@ private fun ProductEditor(
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val room = MAX_PRODUCT_IMAGES - draft.images.size
-        if (room <= 0) return@rememberLauncherForActivityResult
+        val room = BsdcGalleryLogic.roomFor(draft.images.size, MAX_PRODUCT_IMAGES)
+        if (room == 0) return@rememberLauncherForActivityResult
         scope.launch {
             uploading = true
             uploadError = null
@@ -519,12 +520,21 @@ private fun ProductEditor(
             initialFilter = GalleryFilter.PRODUCT_IMAGE,
             onDismiss = { showLibrary = false },
             onPicked = { picked ->
-                // Addresses, appended in the order they were chosen and deduplicated: a
-                // product keeps one row per picture, and the same photo twice in a strip
-                // is a mistake the seller should not be able to make by tapping twice.
-                val urls = picked.map { it.url }.filter { it.isNotBlank() }
-                if (urls.isNotEmpty()) {
-                    onChange(draft.copy(images = (draft.images + urls).distinct()))
+                // The seller's rows are plain addresses, so the fold is the shared one: what
+                // was tapped, minus what the product already carries, cut to the eight. The
+                // comparison runs on addresses rather than strings, which is the difference
+                // between a strip of eight pictures and eight rows that hold seven — a
+                // `distinct()` would have let `https://x/y` and `https://x/y/` sit side by
+                // side, since to it they are different words.
+                val next = BsdcGalleryLogic.mergeInto(
+                    current = draft.images,
+                    picked = picked,
+                    room = BsdcGalleryLogic.roomFor(draft.images.size, MAX_PRODUCT_IMAGES),
+                    urlOf = { url -> url },
+                    create = { image -> image.url },
+                )
+                if (next.size != draft.images.size) {
+                    onChange(draft.copy(images = next))
                 }
                 showLibrary = false
             },
