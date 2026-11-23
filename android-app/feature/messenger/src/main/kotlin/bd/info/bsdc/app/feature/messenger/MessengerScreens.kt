@@ -905,7 +905,11 @@ private fun ConversationThreadScreen(
             runCatching {
                 val uploaded = mediaRepository.uploadImageUri(
                     uri = uri,
-                    purpose = MediaPurpose.COMMENT_IMAGE,
+                    // A conversation's own shelf, since 0132: a photo sent in chat used
+                    // to be filed with the pictures attached to comments, which put it in
+                    // the wrong place in the member's library and gave the edge the wrong
+                    // size and promise for it.
+                    purpose = MediaPurpose.CHAT_IMAGE,
                     onProgress = { pct -> uploadProgress = pct },
                 )
                 repository.sendMessageWithOutbox(

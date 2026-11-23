@@ -118,9 +118,20 @@ class ImgbbEdgeMediaTransport(
         )
     }
 
+    /**
+     * Writes the row that says this member uploaded this picture.
+     *
+     * `purpose` is not a label the platform keeps for itself: it is what turns a
+     * member's uploads into a library they can search, and 0132 files a row without
+     * one under `other` — which is the one heading the gallery will never offer as a
+     * filter. So every caller says what the picture was for, and says it here and not
+     * only to the edge: the edge uses it to decide how hard to compress, while this
+     * call is the only place the answer is remembered.
+     */
     suspend fun recordMediaAsset(
         ownerUid: String,
         upload: MediaUploadResult,
+        purpose: MediaPurpose = MediaPurpose.OTHER,
     ): String {
         val rpcParams = buildJsonObject {
             put("p_provider", upload.provider)
@@ -133,6 +144,11 @@ class ImgbbEdgeMediaTransport(
             put("p_bytes", upload.bytes)
             put("p_mime_type", upload.mimeType)
             put("p_expires_at", upload.expiresAt?.let { JsonPrimitive(it) } ?: JsonNull)
+            // The tenth argument of 0132. Sent always, including by a caller that has
+            // not been taught it, because Postgres resolves an omitted defaulted
+            // argument here and a stale client elsewhere — and those are two different
+            // rows for one picture.
+            put("p_purpose", purpose.wireValue)
         }
 
         val rpcOutcome = runCatching {
@@ -161,6 +177,9 @@ class ImgbbEdgeMediaTransport(
             put("bytes", upload.bytes)
             put("mime_type", upload.mimeType)
             put("checksum", "")
+            // Same column, same value, on the path that writes it directly because the
+            // RPC call could not be resolved.
+            put("purpose", purpose.wireValue)
         }
         val insertedRaw = supabase.postJson(
             table = "media_assets",
@@ -297,7 +316,7 @@ class BsdcMediaRepository(
                 onProgress = onProgress,
             )
         }
-        val assetId = transport.recordMediaAsset(user.uid, edgeUpload)
+        val assetId = transport.recordMediaAsset(user.uid, edgeUpload, purpose)
         edgeUpload.copy(assetId = assetId)
     }
 }

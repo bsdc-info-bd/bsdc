@@ -220,6 +220,15 @@ enum class NotificationKind(val wireName: String) {
 
 /** Strict ImgBB-only image upload purposes matching main-site/src/lib/storage/media-contract.ts. */
 @Serializable
+/**
+ * What a picture is for, in the words the platform files it under.
+ *
+ * The list is the website's `MEDIA_PURPOSES` and nothing else, and the numbers are its
+ * `UPLOAD_MAX_EDGE`: the edge reads the same strings, `record_media_asset` stores them
+ * in a column with a check constraint over them, and the gallery a member searches is
+ * grouped by them. An entry added on one side and not the other is a picture that is
+ * filed under a heading nobody can find, or an upload the database refuses.
+ */
 enum class MediaPurpose(val wireValue: String, val maxDimensionPx: Int) {
     @SerialName("avatar")
     AVATAR("avatar", 512),
@@ -236,14 +245,25 @@ enum class MediaPurpose(val wireValue: String, val maxDimensionPx: Int) {
     @SerialName("post-image")
     POST_IMAGE("post-image", 1600),
 
+    // A comment's picture is read inside a thread, never full screen: the website
+    // trims it to 1440 and so does the app, whatever the file was when it was chosen.
     @SerialName("comment-image")
-    COMMENT_IMAGE("comment-image", 1600),
+    COMMENT_IMAGE("comment-image", 1440),
+
+    @SerialName("chat-image")
+    CHAT_IMAGE("chat-image", 1440),
 
     @SerialName("product-image")
     PRODUCT_IMAGE("product-image", 1600),
 
     @SerialName("ad-creative")
     AD_CREATIVE("ad-creative", 1200),
+
+    // The heading for an upload whose caller never said what it was for — which is
+    // what 0132 files a legacy row under, and what a client that has not been taught
+    // the argument yet has to be able to say on purpose rather than by omission.
+    @SerialName("other")
+    OTHER("other", 1600),
 }
 
 enum class DevicePermissionKind {
