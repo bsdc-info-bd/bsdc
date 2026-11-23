@@ -409,6 +409,28 @@ class MkRepository(
         Unit
     }
 
+    /** Paginated reviews for one shop — public, anonymous-readable. */
+    suspend fun fetchVendorReviews(slug: String, limit: Int = 20, offset: Int = 0): Result<MkVendorReviewsDto> = call {
+        supabase.decode<MkVendorReviewsDto>(
+            rpc(
+                "mk_vendor_reviews",
+                buildJsonObject {
+                    put("p_slug", slug)
+                    put("p_limit", limit)
+                    put("p_offset", offset)
+                },
+                requireAuth = false,
+            ),
+        )
+    }
+
+    /** Rich vendor fact sheet for the Info tab — public, anonymous-readable. */
+    suspend fun fetchVendorDetails(slug: String): Result<MkVendorDetailsDto?> = call {
+        supabase.decode<MkVendorDetailsDto?>(
+            rpc("mk_vendor_details", buildJsonObject { put("p_slug", slug) }, requireAuth = false),
+        )
+    }
+
     private suspend fun rpc(
         name: String,
         params: JsonObject,

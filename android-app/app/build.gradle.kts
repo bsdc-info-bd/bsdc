@@ -9,19 +9,16 @@ if (file("google-services.json").exists()) {
     apply(plugin = "com.google.gms.google-services")
 }
 
+/**
+ * BSDC Android is version 1.0.0 in production. Every signed APK and AAB that leaves CI
+ * carries this version. The resolver no longer derives a build number from the run count
+ * or from a tag, because a tag that says 0.0.0-build.42 is not a release and a run count
+ * that climbs on every push is not a version.
+ *
+ * The production contract is: a user who triggers a signed build gets 1.0.0, always.
+ */
 fun resolveVersion(): Pair<Int, String> {
-    val runNum = (providers.environmentVariable("GITHUB_RUN_NUMBER").orNull?.toIntOrNull() ?: 1).coerceAtLeast(1)
-    val rawTag = (providers.environmentVariable("RELEASE_TAG").orNull
-        ?: providers.environmentVariable("GITHUB_REF_NAME").orNull
-        ?: "")
-        .trim()
-        .removePrefix("refs/tags/")
-        .removePrefix("android-v")
-        .removePrefix("android-")
-        .removePrefix("v")
-    val isSemver = Regex("^\\d+\\.\\d+\\.\\d+$").matches(rawTag)
-    val name = if (isSemver) rawTag else "0.0.0-build.$runNum"
-    return runNum to name
+    return 1 to "1.0.0"
 }
 
 val (computedVersionCode, computedVersionName) = resolveVersion()

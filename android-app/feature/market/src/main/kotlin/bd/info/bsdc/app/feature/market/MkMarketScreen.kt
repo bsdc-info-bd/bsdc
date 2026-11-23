@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.Campaign
 import androidx.compose.material.icons.rounded.DeleteSweep
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Receipt
@@ -62,6 +63,8 @@ import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
@@ -79,6 +82,7 @@ import kotlinx.coroutines.launch
 sealed interface MkRoute {
     data object Shops : MkRoute
     data class Vendor(val slug: String) : MkRoute
+    data class VendorDetails(val slug: String) : MkRoute
     data class Product(val id: String) : MkRoute
     data object Cart : MkRoute
     data class Checkout(val vendorSlug: String, val vendorName: String, val direct: List<MkDirectItem>?) : MkRoute
@@ -158,6 +162,7 @@ fun MkMarketScreen(
                         text = when (current) {
                             is MkRoute.Shops -> mkText(bn, "Marketplace", "মার্কেটপ্লেস")
                             is MkRoute.Vendor -> mkText(bn, "Shop", "দোকান")
+                            is MkRoute.VendorDetails -> mkText(bn, "Shop details", "দোকানের তথ্য")
                             is MkRoute.Product -> mkText(bn, "Product", "পণ্য")
                             MkRoute.Cart -> mkText(bn, "Cart", "কার্ট")
                             is MkRoute.Checkout -> mkText(bn, "Checkout", "অর্ডার নিশ্চিত")
@@ -218,6 +223,16 @@ fun MkMarketScreen(
                     bn = bn,
                     slug = route.slug,
                     onOpenProduct = { id -> push(MkRoute.Product(id)) },
+                    onOpenDetails = { slug -> push(MkRoute.VendorDetails(slug)) },
+                )
+                is MkRoute.VendorDetails -> MkVendorDetailsScreen(
+                    repository = repository,
+                    imageLoader = imageLoader,
+                    slug = route.slug,
+                    bn = bn,
+                    onBack = { popOrLeave() },
+                    onOpenShop = { slug -> push(MkRoute.Vendor(slug)) },
+                    onOpenGoogleMaps = onOpenGoogleMaps,
                 )
                 is MkRoute.Product -> MkProductScreen(
                     repository = repository,
@@ -621,6 +636,7 @@ fun MkVendorPageScreen(
     bn: Boolean,
     slug: String,
     onOpenProduct: (String) -> Unit,
+    onOpenDetails: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var page by remember { mutableStateOf<MkVendorPageDto?>(null) }
@@ -756,6 +772,37 @@ fun MkVendorPageScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
+                }
+                Spacer(Modifier.height(10.dp))
+                // Foodpanda-style: prominent link to full vendor details (location, schedule, reviews)
+                Card(
+                    onClick = { onOpenDetails(slug) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Rounded.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Column {
+                                Text(
+                                    text = mkText(bn, "Shop info & reviews", "দোকানের তথ্য ও রিভিউ"),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                                Text(
+                                    text = mkText(bn, "${data.review_count} reviews · delivery & schedule", "${data.review_count}টি রিভিউ · ডেলিভারি ও সময়"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                        }
+                        Icon(Icons.Rounded.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
                 }
             }
         }

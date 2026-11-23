@@ -62,6 +62,7 @@ const VendorConsolePage = lazy(() => import('@/routes/VendorConsolePage'));
 const AdminMarketplacePage = lazy(() => import('@/routes/AdminMarketplacePage'));
 const MarketplacePage = lazy(() => import('@/routes/MarketplacePage'));
 const MarketShopPage = lazy(() => import('@/routes/MarketShopPage'));
+const MarketVendorDetailsPage = lazy(() => import('@/routes/MarketVendorDetailsPage'));
 const MarketProductPage = lazy(() => import('@/routes/MarketProductPage'));
 const MarketCartPage = lazy(() => import('@/routes/MarketCartPage'));
 const MarketCheckoutPage = lazy(() => import('@/routes/MarketCheckoutPage'));
@@ -171,6 +172,7 @@ const router = createBrowserRouter([
       // browse, and crawlers index them. Only the cart, checkout and orders are private.
       { path: ROUTES.market, element: withSuspense(<MarketplacePage />) },
       { path: '/marketplace/shop/:slug', element: withSuspense(<MarketShopPage />) },
+      { path: '/marketplace/vendor/:slug', element: withSuspense(<MarketVendorDetailsPage />) },
       { path: '/marketplace/product/:id', element: withSuspense(<MarketProductPage />) },
 
       // Communities are public surfaces; privacy is enforced by the database.

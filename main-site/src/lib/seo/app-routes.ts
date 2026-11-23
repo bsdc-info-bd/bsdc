@@ -50,6 +50,7 @@ export const APP_ROUTES: readonly string[] = [
   '/admin/ads',
   '/marketplace',
   '/marketplace/shop/:slug',
+  '/marketplace/vendor/:slug',
   '/marketplace/product/:id',
   '/marketplace/cart',
   '/marketplace/checkout/:slug',
