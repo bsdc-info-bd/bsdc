@@ -317,3 +317,80 @@
   color: var(--bsdc-green-500);
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------------------
+   Map surfaces.
+
+   Leaflet numbers its own panes 200 (tiles) to 800 (popups) so that a popup
+   paints over a marker, which is correct *inside* a map and disastrous next to
+   app chrome: a `z-50` dialog and a `z-800` pane are not on the same scale, and
+   a map dropped into a card used to send its tiles over the sticky header.
+
+   `isolation: isolate` starts a stacking context at the map container, so those
+   numbers are ordered within the map and the map itself sits wherever its
+   parent put it. That is the whole fix, and it is why neither the vendor order
+   overlay nor the inline card needs a z-index of its own to stay on top.
+
+   The two Leaflet rules below are the other half of it: the container must be
+   paintable at any size (Leaflet writes an inline height only once, on create)
+   and the attribution strip must not steal a full-width row of a 44 px-tall
+   card.
+   --------------------------------------------------------------------------- */
+.bsdc-map-surface {
+  isolation: isolate;
+}
+
+.bsdc-map-surface > .leaflet-container {
+  inline-size: 100%;
+  block-size: 100%;
+  background: var(--bsdc-surface-2);
+  font-family: inherit;
+  /* No tap highlight on a map: the pin is a drag target, not a link. */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Everything Leaflet anchors to the bottom of the map moves up by the height of
+   the chrome this app draws over it. The property is set by the full-screen
+   map from the sheet's measured height; inline contexts leave it unset and get
+   the default, which is where those controls belong anyway. */
+.bsdc-map-surface .leaflet-bottom {
+  bottom: var(--bsdc-map-chrome, 0px);
+}
+
+.bsdc-map-surface .leaflet-control-attribution {
+  /* 12px, not 10: the licence notice is text a person reads, and this app's
+     floor for that is 12px (`C-27` in scripts/audit.mjs). */
+  font-size: 12px;
+  line-height: 1.4;
+  padding-inline: 6px;
+  border-start-start-radius: 6px;
+  background: color-mix(in srgb, var(--bsdc-surface) 88%, transparent);
+  color: var(--bsdc-text-muted);
+}
+
+.bsdc-map-surface .leaflet-control-attribution a {
+  color: var(--bsdc-green-700);
+}
+
+/* The pin carries its own shadow in the SVG; Leaflet's default outline around a
+   keyboard-focusable marker is the only thing to keep. */
+.bsdc-map-surface .bsdc-map-pin {
+  background: none;
+  border: 0;
+}
+
+/* ---------------------------------------------------------------------------
+   The full-screen delivery map.
+
+   `dvh` rather than `vh`, because a phone's `vh` is the height the viewport
+   would have with the browser chrome hidden — a full-screen overlay sized with
+   it hangs below the real bottom edge and the sheet underneath it is cut off.
+   `height` is declared first for anything that does not understand `dvh`.
+   --------------------------------------------------------------------------- */
+.bsdc-map-overlay {
+  height: 100vh;
+  height: 100dvh;
+  /* Leaflet's own gesture handling must win over the overlay's scroll. */
+  touch-action: manipulation;
+  overscroll-behavior: contain;
+}

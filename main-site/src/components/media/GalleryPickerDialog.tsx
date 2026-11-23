@@ -456,7 +456,7 @@ export function GalleryPickerDialog({
                             <span
                               aria-hidden="true"
                               className={cn(
-                                'fab-truncate absolute inset-x-1 bottom-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-4',
+                                'fab-truncate absolute inset-x-1 bottom-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold leading-4',
                                 isAttached
                                   ? 'bg-blue-fill text-on-blue'
                                   : 'bg-surface/85 text-muted',
@@ -534,7 +534,7 @@ export function GalleryPickerDialog({
                       />
                       <span
                         aria-hidden="true"
-                        className="absolute bottom-0 right-0 bg-primary px-1 text-[10px] font-bold text-on-primary"
+                        className="absolute bottom-0 right-0 bg-primary px-1 text-2xs font-bold text-on-primary"
                       >
                         {index + 1}
                       </span>

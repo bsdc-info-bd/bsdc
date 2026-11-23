@@ -121,7 +121,7 @@ export function AddressBook({
                         {addressHeadline(address, copy.buyer.addressLabel)}
                       </span>
                       {address.is_default ? (
-                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success">
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-success-soft px-2 py-0.5 text-2xs font-bold uppercase tracking-wide text-success">
                           <Star size={10} aria-hidden />
                           {copy.buyer.addressDefaultBadge}
                         </span>
@@ -134,7 +134,7 @@ export function AddressBook({
                       {address.address_line}
                       {address.landmark.trim() === '' ? '' : ` — ${address.landmark}`}
                     </span>
-                    <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-muted">
+                    <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs font-medium text-muted">
                       {address.place_label.trim() === '' ? null : (
                         <span className="inline-flex items-center gap-1">
                           <MapPin size={11} aria-hidden />
