@@ -43,6 +43,7 @@ import androidx.compose.material.icons.automirrored.rounded.ExitToApp
 import androidx.compose.material.icons.automirrored.rounded.Reply
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
@@ -131,8 +132,12 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import bd.info.bsdc.app.core.model.MediaPurpose
 import coil3.ImageLoader
 import kotlinx.coroutines.CancellationException
@@ -796,6 +801,8 @@ private fun ConversationThreadScreen(
     var lightboxUrl by remember { mutableStateOf<String?>(null) }
     var uploadProgress by remember { mutableStateOf<Int?>(null) }
     var errorBanner by remember { mutableStateOf<String?>(null) }
+    var showLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
 
     var searchingInThread by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
@@ -931,6 +938,56 @@ private fun ConversationThreadScreen(
             }
         }
     }
+
+    /**
+     * Send a picture this member already hosted, without uploading it again.
+     *
+     * The words in a conversation are worth more than the file: a photo the member posted
+     * somewhere else is already at the host, at its stored size, with a caption they wrote.
+     * The address goes where a fresh upload's would have gone, so the message keeps the
+     * `kind = "image"` shape the outbox, the retry and the push payload already understand —
+     * this is the same send, with the bytes skipped.
+     */
+    fun sendPickedPhoto(picked: List<BsdcGalleryImage>) {
+        val url = picked.firstOrNull()?.url.orEmpty()
+        if (url.isEmpty()) return
+        scope.launch {
+            runCatching {
+                repository.sendMessageWithOutbox(
+                    conversationId = conversationId,
+                    body = draftBody.trim(),
+                    kind = "image",
+                    mediaUrl = url,
+                    mediaName = "image-${System.currentTimeMillis()}.webp",
+                    replyToId = replyTarget?.id,
+                )
+            }.onSuccess {
+                draftBody = ""
+                replyTarget = null
+                loadThread()
+            }.onFailure { err ->
+                errorBanner = err.message
+                    ?: if (bn) "ছবি পাঠানো যায়নি" else "Photo send failed"
+            }
+        }
+    }
+
+    BsdcGalleryPickerSheet(
+        visible = showLibrary,
+        repository = mediaRepository,
+        imageLoader = imageLoader,
+        bn = bn,
+        max = 1,
+        // The chat shelf, because a photo sent in a conversation is filed there: the filter
+        // the member sees when they open the shelf from a message box is the one that finds
+        // the pictures they have already sent.
+        initialFilter = GalleryFilter.CHAT_IMAGE,
+        onDismiss = { showLibrary = false },
+        onPicked = { picked ->
+            showLibrary = false
+            sendPickedPhoto(picked)
+        },
+    )
 
     val confirmedList = serverMessages ?: cachedMessages
     val outboxWithSender = remember(outboxMessages, viewerUid) {
@@ -1144,6 +1201,17 @@ private fun ConversationThreadScreen(
                         Icon(
                             Icons.Rounded.PhotoLibrary,
                             contentDescription = if (bn) "ছবি পাঠান (ImgBB)" else "Send photo (ImgBB)",
+                        )
+                    }
+                    IconButton(
+                        onClick = { showLibrary = true },
+                        enabled = editingTarget == null && uploadProgress == null,
+                    ) {
+                        // An icon with no word beside it, so the description carries both the
+                        // verb and the door — the website labels this one the same way.
+                        Icon(
+                            Icons.Rounded.Image,
+                            contentDescription = library.sendPicture,
                         )
                     }
                     IconButton(

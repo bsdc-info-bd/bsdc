@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material.icons.rounded.PhotoCamera
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Star
@@ -116,7 +117,10 @@ import bd.info.bsdc.app.core.designsystem.bsdcShimmerPlaceholder
 import bd.info.bsdc.app.core.media.BsdcAvatar
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaLightboxDialog
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.media.ImgbbUrlAllowlist
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcHosts
@@ -191,6 +195,9 @@ fun MemberProfileScreen(
     var editInterestsRaw by remember { mutableStateOf("") }
     var editAvatarUrl by remember { mutableStateOf("") }
     var editCoverUrl by remember { mutableStateOf("") }
+    var showAvatarLibrary by remember { mutableStateOf(false) }
+    var showCoverLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
     var editLang by remember { mutableStateOf(language) }
     var saving by remember { mutableStateOf(false) }
     var uploadingAvatar by remember { mutableStateOf(false) }
@@ -236,6 +243,51 @@ fun MemberProfileScreen(
             error = err.localizedMessage ?: "Failed to load profile."
         }
         loading = false
+    }
+
+    /**
+     * Point the profile at a picture this member already hosted.
+     *
+     * An avatar or a banner is replaced, not appended to, so the shelf behind it holds
+     * hundreds of rows and only one address matters: the pick writes the same column the
+     * upload did, through the same function, and the profile re-reads itself the same way.
+     * A file is never fetched or re-encoded on this path — which is the whole point of
+     * offering a member the picture they sent to a group three weeks ago.
+     */
+    fun applyLibraryPhoto(kind: String, url: String) {
+        val p = profile ?: return
+        if (url.isEmpty()) return
+        scope.launch {
+            when (kind) {
+                "avatar" -> uploadingAvatar = true
+                else -> uploadingCover = true
+            }
+            error = null
+            runCatching {
+                if (kind == "avatar") {
+                    repository.updateProfilePhoto(uid = p.uid, avatarUrl = url).getOrThrow()
+                    editAvatarUrl = url
+                } else {
+                    repository.updateProfilePhoto(uid = p.uid, coverUrl = url).getOrThrow()
+                    editCoverUrl = url
+                }
+            }.onSuccess {
+                statusMessage = if (kind == "avatar") {
+                    if (bn) "প্রোফাইল ছবি আপডেট হয়েছে।" else "Profile photo updated."
+                } else {
+                    if (bn) "কভার ছবি আপডেট হয়েছে।" else "Cover photo updated."
+                }
+                onProfileUpdated()
+                load()
+            }.onFailure { err ->
+                error = err.localizedMessage
+                    ?: if (bn) "ছবি আপডেট ব্যর্থ হয়েছে।" else "Photo update failed."
+            }
+            when (kind) {
+                "avatar" -> uploadingAvatar = false
+                else -> uploadingCover = false
+            }
+        }
     }
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -789,6 +841,12 @@ fun MemberProfileScreen(
                                 )
 
                                 if (mediaRepository != null) {
+                                    // Named once, for both the doors and the sheets below: the
+                                    // repository is optional on this screen, because a signed-out
+                                    // visitor has no shelf to open, and a local val carries the
+                                    // null check where the parameter cannot carry it into a
+                                    // click handler.
+                                    val galleryRepo = mediaRepository
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -818,6 +876,64 @@ fun MemberProfileScreen(
                                             modifier = Modifier.weight(1f),
                                         )
                                     }
+                                    // The second row is the shelf, and the two buttons read
+                                    // alike on purpose: this is the website's own pair, where
+                                    // the same two words sit beside whichever upload control
+                                    // they follow. Position says which picture each opens for,
+                                    // and each sheet marks what the profile is already wearing,
+                                    // so a member who cannot remember which banner they mean
+                                    // sees the answer before they choose.
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    ) {
+                                        BsdcButton(
+                                            label = library.open,
+                                            secondary = true,
+                                            busy = uploadingAvatar,
+                                            leadingIcon = Icons.Rounded.Image,
+                                            onClick = { showAvatarLibrary = true },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                        BsdcButton(
+                                            label = library.open,
+                                            secondary = true,
+                                            busy = uploadingCover,
+                                            leadingIcon = Icons.Rounded.Image,
+                                            onClick = { showCoverLibrary = true },
+                                            modifier = Modifier.weight(1f),
+                                        )
+                                    }
+
+                                    BsdcGalleryPickerSheet(
+                                        visible = showAvatarLibrary,
+                                        repository = galleryRepo,
+                                        imageLoader = imageLoader,
+                                        bn = bn,
+                                        max = 1,
+                                        attached = listOf(editAvatarUrl),
+                                        initialFilter = GalleryFilter.AVATAR,
+                                        onDismiss = { showAvatarLibrary = false },
+                                        onPicked = { picked ->
+                                            showAvatarLibrary = false
+                                            applyLibraryPhoto("avatar", picked.firstOrNull()?.url.orEmpty())
+                                        },
+                                    )
+
+                                    BsdcGalleryPickerSheet(
+                                        visible = showCoverLibrary,
+                                        repository = galleryRepo,
+                                        imageLoader = imageLoader,
+                                        bn = bn,
+                                        max = 1,
+                                        attached = listOf(editCoverUrl),
+                                        initialFilter = GalleryFilter.COVER,
+                                        onDismiss = { showCoverLibrary = false },
+                                        onPicked = { picked ->
+                                            showCoverLibrary = false
+                                            applyLibraryPhoto("cover", picked.firstOrNull()?.url.orEmpty())
+                                        },
+                                    )
                                 }
 
                                 OutlinedTextField(
