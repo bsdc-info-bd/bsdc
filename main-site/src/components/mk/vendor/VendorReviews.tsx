@@ -241,8 +241,8 @@ export function VendorReviews({
                     )}
                   </p>
                 </div>
-                <span className="inline-flex items-center gap-1 rounded-full bg-rating px-2.5 py-1 text-xs font-bold text-white">
-                  {r.rating} <Star size={10} className="fill-white text-white" aria-hidden />
+                <span className="inline-flex items-center gap-1 rounded-full bg-rating px-2.5 py-1 text-xs font-bold text-bg">
+                  {r.rating} <Star size={10} className="fill-bg text-bg" aria-hidden />
                 </span>
               </div>
               <div className="mt-2.5 flex items-center gap-1">

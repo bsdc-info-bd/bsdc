@@ -651,7 +651,7 @@ export function DeliveryMapDialog({
             {(failed || !hasPoint) && (
               <div className="absolute inset-0 z-10 grid place-items-center bg-surface-2 p-6 text-center">
                 <div className="max-w-[32ch] space-y-3">
-                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-border text-muted">
+                  <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-border text-text">
                     <AlertCircle size={20} aria-hidden />
                   </span>
                   <p className="text-sm font-medium text-text">
