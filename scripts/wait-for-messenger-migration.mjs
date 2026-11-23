@@ -16,9 +16,26 @@ const exec = promisify(execFile);
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const dryRun = join(root, 'scripts/db-push.mjs');
 const isCurrentPlan = (output) => /^0 would be applied, \d+ skipped\. Nothing was changed\.$/m.test(output);
+// The two routines are looked up by name, not by a spelled-out signature. A signature
+// string is a photograph of one day's parameter list, and the database moves: 0132
+// appended a defaulted `p_media_asset` to send_message_once, after which
+// to_regprocedure of the old eight types resolves to nothing, and this gate — which
+// only ever refuses a publish, never fixes one — would have held the member-site
+// bundle back for a function that had become *more* capable. Arity is the contract the
+// clients actually rely on: they call send_message_once with eight arguments and
+// conversation_messages_page with four, and a defaulted tail may grow without either
+// caller noticing.
 const sql = `select (
-  to_regprocedure('public.send_message_once(uuid,uuid,text,public.bsdc_message_kind,text,text,text,uuid)') is not null
-  and to_regprocedure('public.conversation_messages_page(uuid,timestamp with time zone,uuid,integer)') is not null
+  exists (select 1 from pg_catalog.pg_proc p
+            join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = 'send_message_once'
+             and p.pronargs >= 8
+             and p.prorettype::regtype::text = 'public.messages')
+  and exists (select 1 from pg_catalog.pg_proc p
+            join pg_catalog.pg_namespace n on n.oid = p.pronamespace
+           where n.nspname = 'public' and p.proname = 'conversation_messages_page'
+             and p.pronargs >= 4
+             and p.proretset)
   and exists (select 1 from information_schema.columns
               where table_schema='public' and table_name='messages' and column_name='client_id')
   and has_column_privilege('authenticated','public.conversation_members','uid','SELECT')
@@ -30,6 +47,11 @@ if (process.argv.includes('--self-test')) {
   assert.equal(isCurrentPlan('  skip  0082_file.sql\n\n0 would be applied, 82 skipped. Nothing was changed.\n'), true);
   assert.equal(isCurrentPlan('1 would be applied, 81 skipped. Nothing was changed.\n'), false);
   assert.equal(isCurrentPlan('0 applied, 82 already present.'), false);
+  // And the contract itself: a spelled-out parameter list is the bug this gate had, so
+  // the check is that the query never grows one back.
+  assert.equal(/to_regprocedure\(\s*'[^']*\(/.test(sql), false);
+  assert.equal(/pronargs\s*>=\s*8/.test(sql), true);
+  assert.equal(/pronargs\s*>=\s*4/.test(sql), true);
   console.log('ok    rollout gate accepts only a fully current read-only migration plan');
   process.exit(0);
 }
