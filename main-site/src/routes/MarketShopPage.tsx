@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { MediaImage } from '@/components/media/MediaImage';
-import { Clock, ArrowRight, MapPin, ShoppingBag, Star, Store } from 'lucide-react';
+import { Clock, ArrowRight, MapPin, ShoppingBag, Star, Store, Info, MessageSquare, Truck, Navigation } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -103,6 +103,31 @@ export default function MarketShopPage() {
       />
       <MarketNav copy={copy} />
 
+      {/* Foodpanda-style quick access to vendor details */}
+      <div className="flex flex-wrap gap-2">
+        <Link
+          to={`/marketplace/vendor/${slug}`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text shadow-sm hover:bg-surface-2"
+        >
+          <Info size={14} aria-hidden />
+          {language === 'bn' ? 'দোকানের তথ্য' : 'Shop info'} · {data.vendor.place_label}
+        </Link>
+        <Link
+          to={`/marketplace/vendor/${slug}`}
+          className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-on-primary shadow-sm hover:bg-primary-active"
+        >
+          <MessageSquare size={14} aria-hidden />
+          {data.rating.toFixed(1)} · {data.review_count} {copy.buyer.reviews}
+        </Link>
+        <Link
+          to={`/marketplace/vendor/${slug}`}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text hover:bg-surface-2"
+        >
+          <Navigation size={14} aria-hidden />
+          {language === 'bn' ? 'মানচিত্র' : 'Map & delivery'}
+        </Link>
+      </div>
+
       <header className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
         <div className="relative h-44 bg-gradient-to-br from-hero-from to-hero-via sm:h-60">
           {data.vendor.cover_url ? (
@@ -172,6 +197,29 @@ export default function MarketShopPage() {
                   {scheduleBadgeText}
                 </span>
               ) : null}
+              <Link
+                to={`/marketplace/vendor/${slug}`}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-0.5 font-semibold text-primary hover:bg-primary/15"
+              >
+                <Info size={12} aria-hidden />
+                {language === 'bn' ? 'বিস্তারিত' : 'Details'}
+                <ArrowRight size={12} aria-hidden />
+              </Link>
+            </div>
+            {/* Compact vendor info preview — Foodpanda-style */}
+            <div className="mt-3 grid gap-2 rounded-2xl bg-surface-2/60 p-3 sm:grid-cols-3">
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+                <Truck size={12} aria-hidden />
+                {deliveryCfg?.scope === 'all_bd' ? copy.delivery.allArea : deliveryCfg?.radius_km ? `${deliveryCfg.radius_km} km delivery` : '—'}
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted">
+                <Clock size={12} aria-hidden />
+                {scheduleBadgeText ?? (language === 'bn' ? 'সময়সূচি দেখুন' : 'See schedule')}
+              </span>
+              <Link to={`/marketplace/vendor/${slug}`} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+                <Star size={12} className="fill-rating text-rating" aria-hidden />
+                {data.rating.toFixed(1)} · {language === 'bn' ? 'রিভিউ দেখুন' : 'See reviews'}
+              </Link>
             </div>
           </div>
         </div>

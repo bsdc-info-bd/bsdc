@@ -2569,6 +2569,11 @@ export type Database = {
         };
         Returns: Json;
       };
+      mk_vendor_reviews: {
+        Args: { p_slug: string; p_limit?: number; p_offset?: number };
+        Returns: Json;
+      };
+      mk_vendor_details: { Args: { p_slug: string }; Returns: Json };
       push_public_config: { Args: never; Returns: Json };
       claim_username: { Args: { p_username: string }; Returns: ProfileRow };
       // Self-service account deletion (0119). Returns void; the client deletes

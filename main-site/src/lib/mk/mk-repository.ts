@@ -23,6 +23,8 @@ import type {
   MkPlacedOrder,
   MkProductDetail,
   MkVendorPageData,
+  MkVendorDetails,
+  MkVendorReviewsResponse,
 } from './mk-types';
 
 /**
@@ -469,4 +471,26 @@ export async function submitReview(orderId: string, rating: number, body: string
   });
   if (error) throw asDatabaseError(error);
   wakePushDelivery();
+}
+
+export async function fetchVendorReviews(
+  slug: string,
+  limit = 20,
+  offset = 0,
+): Promise<MkVendorReviewsResponse> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_reviews', {
+    p_slug: slug,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw asDatabaseError(error);
+  return asJson<MkVendorReviewsResponse>(data);
+}
+
+export async function fetchVendorDetails(
+  slug: string,
+): Promise<MkVendorDetails | null> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_details', { p_slug: slug });
+  if (error) throw asDatabaseError(error);
+  return asJson<MkVendorDetails | null>(data);
 }

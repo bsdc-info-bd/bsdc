@@ -365,3 +365,48 @@ export interface MkAddress {
   place_label: string;
   note: string;
 }
+
+export interface MkVendorReview {
+  id: string;
+  rating: number;
+  body: string;
+  created_at: string;
+  order_id?: string;
+  customer: {
+    uid: string;
+    display_name: string;
+    username: string;
+    avatar_url: string;
+  };
+}
+
+export interface MkVendorReviewsResponse {
+  vendor_id: string;
+  vendor_slug: string;
+  rating: number;
+  review_count: number;
+  reviews: MkVendorReview[];
+}
+
+export interface MkVendorDetails {
+  vendor: {
+    id: string;
+    slug: string;
+    name: string;
+    vendor_type: ShopType;
+    description: string;
+    logo_url: string;
+    cover_url: string;
+    place_label: string;
+    lat: number;
+    lng: number;
+    status: string;
+    created_at: string;
+    delivery: MkShopDelivery;
+    schedule: MkShopSchedule | null;
+  };
+  rating: number;
+  review_count: number;
+  histogram: Record<string, number>;
+  recent_reviews: MkVendorReview[];
+}

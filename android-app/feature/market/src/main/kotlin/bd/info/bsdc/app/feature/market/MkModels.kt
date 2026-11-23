@@ -425,6 +425,61 @@ data class MkPlaceDto(
     val longitude: Double? get() = lon.toDoubleOrNull()
 }
 
+/** One customer review for a shop (mk_vendor_reviews). */
+@Serializable
+data class MkVendorReviewDto(
+    val id: String = "",
+    val rating: Int = 0,
+    val body: String = "",
+    val created_at: String = "",
+    val order_id: String = "",
+    val customer: MkReviewCustomerDto = MkReviewCustomerDto(),
+)
+
+@Serializable
+data class MkReviewCustomerDto(
+    val uid: String = "",
+    val display_name: String = "",
+    val username: String = "",
+    val avatar_url: String = "",
+)
+
+@Serializable
+data class MkVendorReviewsDto(
+    val vendor_id: String = "",
+    val vendor_slug: String = "",
+    val rating: Double = 0.0,
+    val review_count: Int = 0,
+    val reviews: List<MkVendorReviewDto> = emptyList(),
+)
+
+@Serializable
+data class MkVendorDetailsDto(
+    val vendor: MkVendorDetailsVendorDto = MkVendorDetailsVendorDto(),
+    val rating: Double = 0.0,
+    val review_count: Int = 0,
+    val histogram: Map<String, Int> = emptyMap(),
+    val recent_reviews: List<MkVendorReviewDto> = emptyList(),
+)
+
+@Serializable
+data class MkVendorDetailsVendorDto(
+    val id: String = "",
+    val slug: String = "",
+    val name: String = "",
+    val vendor_type: String = "",
+    val description: String = "",
+    val logo_url: String = "",
+    val cover_url: String = "",
+    val place_label: String = "",
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val status: String = "active",
+    val created_at: String = "",
+    val delivery: MkShopDeliveryDto? = null,
+    val schedule: MkShopScheduleDto? = null,
+)
+
 /** Top-level sections of the marketplace shell. Ads is its own dashboard, reached from the market. */
 enum class MarketSection {
     SHOP,

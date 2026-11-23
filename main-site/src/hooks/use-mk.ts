@@ -410,3 +410,21 @@ export function useSubmitReview() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] }),
   });
 }
+
+export function useVendorReviews(slug: string, limit = 20, offset = 0) {
+  return useQuery({
+    queryKey: ['mk', 'vendor-reviews', slug, limit, offset],
+    queryFn: () => repo.fetchVendorReviews(slug, limit, offset),
+    enabled: slug !== '',
+    staleTime: 30_000,
+  });
+}
+
+export function useVendorDetails(slug: string) {
+  return useQuery({
+    queryKey: ['mk', 'vendor-details', slug],
+    queryFn: () => repo.fetchVendorDetails(slug),
+    enabled: slug !== '',
+    staleTime: 30_000,
+  });
+}

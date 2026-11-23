@@ -79,6 +79,7 @@ import kotlinx.coroutines.launch
 sealed interface MkRoute {
     data object Shops : MkRoute
     data class Vendor(val slug: String) : MkRoute
+    data class VendorDetails(val slug: String) : MkRoute
     data class Product(val id: String) : MkRoute
     data object Cart : MkRoute
     data class Checkout(val vendorSlug: String, val vendorName: String, val direct: List<MkDirectItem>?) : MkRoute
@@ -179,6 +180,13 @@ fun MkMarketScreen(
                         }
                     }
                 },
+                actions = {
+                    if (current is MkRoute.Shops) {
+                        IconButton(onClick = onOpenAds) {
+                            Icon(Icons.Rounded.Campaign, contentDescription = mkText(bn, "Ads", "বিজ্ঞাপন"))
+                        }
+                    }
+                },
             )
         },
         bottomBar = {
@@ -218,6 +226,16 @@ fun MkMarketScreen(
                     bn = bn,
                     slug = route.slug,
                     onOpenProduct = { id -> push(MkRoute.Product(id)) },
+                    onOpenDetails = { slug -> push(MkRoute.VendorDetails(slug)) },
+                )
+                is MkRoute.VendorDetails -> MkVendorDetailsScreen(
+                    repository = repository,
+                    imageLoader = imageLoader,
+                    slug = route.slug,
+                    bn = bn,
+                    onBack = { popOrLeave() },
+                    onOpenShop = { slug -> push(MkRoute.Vendor(slug)) },
+                    onOpenGoogleMaps = onOpenGoogleMaps,
                 )
                 is MkRoute.Product -> MkProductScreen(
                     repository = repository,
@@ -621,6 +639,7 @@ fun MkVendorPageScreen(
     bn: Boolean,
     slug: String,
     onOpenProduct: (String) -> Unit,
+    onOpenDetails: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var page by remember { mutableStateOf<MkVendorPageDto?>(null) }
@@ -756,6 +775,37 @@ fun MkVendorPageScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
+                }
+                Spacer(Modifier.height(10.dp))
+                // Foodpanda-style: prominent link to full vendor details (location, schedule, reviews)
+                Card(
+                    onClick = { onOpenDetails(slug) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Rounded.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                            Column {
+                                Text(
+                                    text = mkText(bn, "Shop info & reviews", "দোকানের তথ্য ও রিভিউ"),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                                Text(
+                                    text = mkText(bn, "${data.review_count} reviews · delivery & schedule", "${data.review_count}টি রিভিউ · ডেলিভারি ও সময়"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                )
+                            }
+                        }
+                        Icon(Icons.Rounded.Storefront, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
                 }
             }
         }
