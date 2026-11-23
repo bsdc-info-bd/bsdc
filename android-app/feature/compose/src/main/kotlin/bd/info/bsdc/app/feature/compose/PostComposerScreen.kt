@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Drafts
 import androidx.compose.material.icons.rounded.Publish
@@ -70,8 +71,12 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import bd.info.bsdc.app.core.model.MediaPurpose
 import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.feature.feed.BsdcCodeSnippetBlock
@@ -140,6 +145,8 @@ fun PostComposerScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var statusMsg by remember { mutableStateOf<String?>(null) }
     var showSavedDraftsSheet by remember { mutableStateOf(false) }
+    var showLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
 
     val savedLocalDrafts by composeRepository.observeLocalDrafts().collectAsState(initial = emptyList())
 
@@ -213,6 +220,37 @@ fun PostComposerScreen(
                 )
             }
         }
+    }
+
+    /**
+     * Attach pictures the member already hosted, without uploading them.
+     *
+     * The row carries everything an attachment needs — the stored address, the thumbnail the host
+     * made, the caption written when it was first posted and, above all, the `media_assets` id — so
+     * `isReady` is true on arrival and the publish path sees an attachment that finished rather than
+     * one to be waited for. A tile whose address is already in the strip is dropped, and a pick that
+     * would not fit the six slots is not taken: the last picture that fitted is kept, in the order
+     * it was tapped.
+     */
+    fun attachPickedFromLibrary(picked: List<BsdcGalleryImage>) {
+        val remainingSlots = (6 - draft.media.size).coerceAtLeast(0)
+        if (remainingSlots <= 0) return
+        val added = picked
+            .filter { image -> draft.media.none { attached -> attached.url == image.url } }
+            .take(remainingSlots)
+            .map { image ->
+                ComposerMediaAttachment(
+                    localUri = null,
+                    mediaId = image.id,
+                    url = image.url,
+                    thumbUrl = image.thumbUrl.ifEmpty { image.url },
+                    altText = image.altText,
+                    progressPct = 100,
+                    stage = AttachmentUploadStage.READY,
+                )
+            }
+        if (added.isEmpty()) return
+        draft = draft.copy(media = draft.media + added)
     }
 
     val mediaPicker = rememberLauncherForActivityResult(
@@ -630,16 +668,44 @@ fun PostComposerScreen(
                         text = if (bn) "ImgBB ছবি সংযুক্তি (${draft.media.size}/৬)" else "ImgBB Images (${draft.media.size}/6)",
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    BsdcButton(
-                        label = if (bn) "ছবি যোগ করুন" else "Add Photos",
-                        onClick = {
-                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
-                        enabled = draft.media.size < 6,
-                        secondary = true,
-                        leadingIcon = Icons.Rounded.AddPhotoAlternate,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BsdcButton(
+                            label = if (bn) "ছবি যোগ করুন" else "Add Photos",
+                            onClick = {
+                                mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            enabled = draft.media.size < 6,
+                            secondary = true,
+                            leadingIcon = Icons.Rounded.AddPhotoAlternate,
+                        )
+                        // The other door to the same six slots, and the reason a member
+                        // does not save a photo to their own phone to attach it to their
+                        // own post: the shelf holds what they already uploaded, with the
+                        // caption they gave it.
+                        BsdcButton(
+                            label = library.open,
+                            onClick = { showLibrary = true },
+                            enabled = draft.media.size < 6,
+                            secondary = true,
+                            leadingIcon = Icons.Rounded.Image,
+                        )
+                    }
                 }
+
+                BsdcGalleryPickerSheet(
+                    visible = showLibrary,
+                    repository = mediaRepository,
+                    imageLoader = imageLoader,
+                    bn = bn,
+                    max = (6 - draft.media.size).coerceAtLeast(1),
+                    attached = draft.media.map { it.url },
+                    initialFilter = GalleryFilter.POST_IMAGE,
+                    onDismiss = { showLibrary = false },
+                    onPicked = { picked ->
+                        attachPickedFromLibrary(picked)
+                        showLibrary = false
+                    },
+                )
 
                 if (draft.media.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
