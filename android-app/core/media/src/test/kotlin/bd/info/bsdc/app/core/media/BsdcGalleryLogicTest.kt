@@ -160,13 +160,22 @@ class BsdcGalleryLogicTest {
     @Test
     fun theShelvesAreTheWebsShelvesInOrder() {
         val contract = readRepoFile("main-site", "src", "lib", "storage", "media-contract.ts")
-        val block = Regex("""GALLERY_FILTERS\s*:\s*[^=]+=\s*\[(.*?)]""", RegexOption.DOT_MATCHES_ALL)
+        // The list is declared without a type annotation on either side of its `=`, and
+        // `as const` follows the closing bracket — which is why the pattern stops at the
+        // array rather than at the statement.
+        val block = Regex("""GALLERY_FILTERS\s*=\s*\[(.*?)]""", RegexOption.DOT_MATCHES_ALL)
             .find(contract)
             ?.groupValues
             ?.get(1)
             ?: error("GALLERY_FILTERS not found in the web's media contract")
         val web = Regex("'([^']+)'").findAll(block).map { it.groupValues[1] }.toList()
-        assertEquals("both clients must offer the same shelves, in the same order", web, GalleryFilter.entries.map { it.wire })
+        // In order, not merely in kind: the chips are the shelf list read left to right, and
+        // a client that sorts them differently is the same feature two inches apart.
+        assertEquals(
+            "both clients must offer the same shelves, in the same order",
+            web,
+            GalleryFilter.entries.map { it.wire },
+        )
         // `'other'` is absent on purpose: the heading nobody labelled is not a shelf a member
         // should be invited to look for.
         assertFalse(web.contains("other"))

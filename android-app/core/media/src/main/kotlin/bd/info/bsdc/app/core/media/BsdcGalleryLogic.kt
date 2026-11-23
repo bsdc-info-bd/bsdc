@@ -15,13 +15,13 @@ import bd.info.bsdc.app.core.model.MediaPurpose
  */
 enum class GalleryFilter(val wire: String) {
     ALL("all"),
+    POST_IMAGE("post-image"),
+    CHAT_IMAGE("chat-image"),
+    COMMENT_IMAGE("comment-image"),
     AVATAR("avatar"),
     COVER("cover"),
-    PROJECT_COVER("project-cover"),
     PROJECT_IMAGE("project-image"),
-    POST_IMAGE("post-image"),
-    COMMENT_IMAGE("comment-image"),
-    CHAT_IMAGE("chat-image"),
+    PROJECT_COVER("project-cover"),
     PRODUCT_IMAGE("product-image"),
     AD_CREATIVE("ad-creative"),
     ;
@@ -30,13 +30,13 @@ enum class GalleryFilter(val wire: String) {
     val purpose: MediaPurpose?
         get() = when (this) {
             ALL -> null
+            POST_IMAGE -> MediaPurpose.POST_IMAGE
+            CHAT_IMAGE -> MediaPurpose.CHAT_IMAGE
+            COMMENT_IMAGE -> MediaPurpose.COMMENT_IMAGE
             AVATAR -> MediaPurpose.AVATAR
             COVER -> MediaPurpose.COVER
-            PROJECT_COVER -> MediaPurpose.PROJECT_COVER
             PROJECT_IMAGE -> MediaPurpose.PROJECT_IMAGE
-            POST_IMAGE -> MediaPurpose.POST_IMAGE
-            COMMENT_IMAGE -> MediaPurpose.COMMENT_IMAGE
-            CHAT_IMAGE -> MediaPurpose.CHAT_IMAGE
+            PROJECT_COVER -> MediaPurpose.PROJECT_COVER
             PRODUCT_IMAGE -> MediaPurpose.PRODUCT_IMAGE
             AD_CREATIVE -> MediaPurpose.AD_CREATIVE
         }
@@ -45,8 +45,8 @@ enum class GalleryFilter(val wire: String) {
         ALL -> copy.filterAll
         AVATAR -> copy.filterAvatars
         COVER -> copy.filterCovers
-        PROJECT_COVER -> copy.filterProjectCovers
         PROJECT_IMAGE -> copy.filterProjectShots
+        PROJECT_COVER -> copy.filterProjectCovers
         POST_IMAGE -> copy.filterPosts
         COMMENT_IMAGE -> copy.filterComments
         CHAT_IMAGE -> copy.filterChat
