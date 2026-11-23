@@ -80,4 +80,3 @@ fun MkVendorDetailsScreen(
         }
     }
 }
-private fun mkText(bn: Boolean, en: String, bnText: String = en): String = if (bn) bnText else en
