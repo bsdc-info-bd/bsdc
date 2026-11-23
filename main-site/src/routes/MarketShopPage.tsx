@@ -1,6 +1,17 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { MediaImage } from '@/components/media/MediaImage';
-import { Clock, ArrowRight, MapPin, ShoppingBag, Star, Store, Info, MessageSquare, Truck, Navigation } from 'lucide-react';
+import {
+  Clock,
+  ArrowRight,
+  MapPin,
+  ShoppingBag,
+  Star,
+  Store,
+  Info,
+  MessageSquare,
+  Truck,
+  Navigation,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
@@ -210,13 +221,20 @@ export default function MarketShopPage() {
             <div className="mt-3 grid gap-2 rounded-2xl bg-surface-2/60 p-3 sm:grid-cols-3">
               <span className="inline-flex items-center gap-1.5 text-xs text-muted">
                 <Truck size={12} aria-hidden />
-                {deliveryCfg?.scope === 'all_bd' ? copy.delivery.allArea : deliveryCfg?.radius_km ? `${deliveryCfg.radius_km} km delivery` : '—'}
+                {deliveryCfg?.scope === 'all_bd'
+                  ? copy.delivery.allArea
+                  : deliveryCfg?.radius_km
+                    ? `${deliveryCfg.radius_km} km delivery`
+                    : '—'}
               </span>
               <span className="inline-flex items-center gap-1.5 text-xs text-muted">
                 <Clock size={12} aria-hidden />
                 {scheduleBadgeText ?? (language === 'bn' ? 'সময়সূচি দেখুন' : 'See schedule')}
               </span>
-              <Link to={`/marketplace/vendor/${slug}`} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+              <Link
+                to={`/marketplace/vendor/${slug}`}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+              >
                 <Star size={12} className="fill-rating text-rating" aria-hidden />
                 {data.rating.toFixed(1)} · {language === 'bn' ? 'রিভিউ দেখুন' : 'See reviews'}
               </Link>

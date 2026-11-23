@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Campaign
@@ -99,10 +100,10 @@ fun MkVendorDetailsScreen(
     var reviews by remember { mutableStateOf<MkVendorReviewsDto?>(null) }
     var loading by remember { mutableStateOf(true) }
     var error by remember { mutableStateOf<String?>(null) }
-    var tab by rememberSaveable { mutableStateOf(VendorDetailsTab.INFO) }
+    var tab by remember { mutableStateOf(VendorDetailsTab.INFO) }
     var reviewOffset by remember { mutableIntStateOf(0) }
     var reviewsLoading by remember { mutableStateOf(false) }
-    var filterRating by rememberSaveable { mutableIntStateOf(0) }
+    var filterRating by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(slug) {
         loading = true
@@ -125,33 +126,33 @@ fun MkVendorDetailsScreen(
     }
 
     val data = details
+    if (loading && data == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    if (data == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            BsdcEmptyState(
+                icon = Icons.Rounded.Storefront,
+                title = mkText(bn, "Shop not found", "দোকান পাওয়া যায়নি"),
+                subtitle = error ?: mkText(bn, "It may be closed or the link is wrong.", "এটি বন্ধ থাকতে পারে বা লিংকটি ভুল।"),
+            )
+        }
+        return
+    }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(data?.vendor?.name ?: mkText(bn, "Shop details", "দোকানের তথ্য"), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                title = { Text(text = data.vendor.name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Icon(Icons.Rounded.ArrowBack, contentDescription = mkText(bn, "Back", "ফিরে যান")) }
                 },
             )
         },
     ) { innerPadding ->
-        if (loading && data == null) {
-            Box(Modifier.padding(innerPadding).fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-            return@Scaffold
-        }
-        if (data == null) {
-            Box(Modifier.padding(innerPadding).fillMaxSize(), contentAlignment = Alignment.Center) {
-                BsdcEmptyState(
-                    icon = Icons.Rounded.Storefront,
-                    title = mkText(bn, "Shop not found", "দোকান পাওয়া যায়নি"),
-                    subtitle = error ?: mkText(bn, "It may be closed or the link is wrong.", "এটি বন্ধ থাকতে পারে বা লিংকটি ভুল।"),
-                )
-            }
-            return@Scaffold
-        }
 
         val vendor = data.vendor
         val schedule = vendor.schedule

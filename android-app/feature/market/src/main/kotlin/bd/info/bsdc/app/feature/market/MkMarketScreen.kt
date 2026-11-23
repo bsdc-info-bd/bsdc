@@ -162,6 +162,7 @@ fun MkMarketScreen(
                         text = when (current) {
                             is MkRoute.Shops -> mkText(bn, "Marketplace", "মার্কেটপ্লেস")
                             is MkRoute.Vendor -> mkText(bn, "Shop", "দোকান")
+                            is MkRoute.VendorDetails -> mkText(bn, "Shop details", "দোকানের তথ্য")
                             is MkRoute.Product -> mkText(bn, "Product", "পণ্য")
                             MkRoute.Cart -> mkText(bn, "Cart", "কার্ট")
                             is MkRoute.Checkout -> mkText(bn, "Checkout", "অর্ডার নিশ্চিত")
@@ -174,13 +175,6 @@ fun MkMarketScreen(
                 navigationIcon = {
                     IconButton(onClick = { if (!popOrLeave()) onBack() }) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = mkText(bn, "Back", "ফিরে যান"))
-                    }
-                },
-                actions = {
-                    if (current is MkRoute.Shops) {
-                        IconButton(onClick = onOpenAds) {
-                            Icon(Icons.Rounded.Campaign, contentDescription = mkText(bn, "Ads", "বিজ্ঞাপন"))
-                        }
                     }
                 },
                 actions = {
