@@ -10,6 +10,12 @@
       "priority": 1.0,
       "heading": "Bangladesh Software Development Community",
       "summary": "A single place for Bangladeshi developers to publish, learn, hire, be hired, sell and build together.",
+      "hero": {
+        "shape": "home",
+        "eyebrow": "A platform of RRC Development",
+        "title": "The developer community of Bangladesh",
+        "description": "One free home for Bangladeshi and worldwide software developers: write, ask, share code, find work, sell, and build your reputation — in Bangla and in English."
+      },
       "type": "website"
     },
     {
@@ -97,6 +103,11 @@
       "priority": 0.8,
       "heading": "Projects",
       "summary": "What members are building, and which projects want help.",
+      "hero": {
+        "shape": "listHero",
+        "title": "Projects",
+        "description": "What the community is building, and who is looking for help."
+      },
       "type": "website"
     },
     {
@@ -108,6 +119,11 @@
       "priority": 0.9,
       "heading": "Learning",
       "summary": "Structured courses in Bangla and English, ending in a certificate anybody can verify.",
+      "hero": {
+        "shape": "sectionHeading",
+        "title": "Learn",
+        "description": "Courses written by the community, marked by the server, certified on completion."
+      },
       "type": "website"
     },
     {
@@ -141,6 +157,11 @@
       "priority": 0.6,
       "heading": "Playground",
       "summary": "A scratchpad that runs in the browser and can be shared as a link.",
+      "hero": {
+        "shape": "sectionHeading",
+        "title": "Playground",
+        "description": "Write a snippet, run it, keep it. Nothing leaves your browser when you run."
+      },
       "type": "website",
       "opening": [
         "Write a snippet, run it, keep it. Nothing leaves your browser when you run.",
