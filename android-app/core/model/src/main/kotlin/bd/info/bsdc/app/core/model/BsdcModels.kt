@@ -428,6 +428,46 @@ data class MediaUploadResult(
     val assetId: String? = null,
 )
 
+/**
+ * One picture in the member's own library, as `my_gallery` (0132) returns it.
+ *
+ * The keys are the database's, because the row is the database's: what the picture was
+ * filed as, where it is displayed right now, and what the member called it. Nothing here
+ * decides who may read it — the function takes the owner from the caller's token, which
+ * is why no owner id is carried across the wire at all.
+ */
+@Serializable
+data class BsdcGalleryImage(
+    val id: String = "",
+    val url: String = "",
+    @SerialName("thumb_url") val thumbUrl: String = "",
+    val purpose: String = "other",
+    val width: Int? = null,
+    val height: Int? = null,
+    val bytes: Long = 0L,
+    @SerialName("mime_type") val mimeType: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    /** True while some surface is showing this picture. */
+    @SerialName("in_use") val inUse: Boolean = false,
+    val uses: Int = 0,
+    val surfaces: List<String> = emptyList(),
+    @SerialName("alt_text") val altText: String = "",
+)
+
+/** The pair a page resumes from. Both halves or neither: the function refuses a half. */
+data class BsdcGalleryCursor(
+    val before: String,
+    val beforeId: String,
+)
+
+/** A page of the library, plus the cursor that fetches the next one. */
+data class BsdcGalleryPage(
+    val items: List<BsdcGalleryImage>,
+    /** `null` when the library has been walked to the end, or came back empty. */
+    val nextCursor: BsdcGalleryCursor?,
+)
+
 @Serializable
 data class PostAuthorSummary(
     val uid: String,

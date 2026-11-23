@@ -124,6 +124,61 @@ class BsdcMediaPurposeParityTest {
         )
     }
 
+    @Test
+    fun bothClientsAskTheShelfTheSameQuestion() {
+        // `my_gallery` is one function with five arguments, three of which default. An
+        // app that sends four of them gets a different library than the web does — the
+        // newest 60 of everything instead of the member's search — and nothing on
+        // either side would say so.
+        val android = between(
+            readRepoFile(
+                "android-app", "core", "media", "src", "main", "kotlin",
+                "bd", "info", "bsdc", "app", "core", "media", "BsdcMediaRepository.kt",
+            ),
+            "suspend fun listGallery(",
+            "private fun parseAssetId",
+        )
+        val web = between(
+            readRepoFile("main-site", "src", "lib", "data", "media-repository.ts"),
+            "export async function listGallery(",
+            "cursorAfterPage",
+        )
+        val names = listOf("p_limit", "p_purpose", "p_query", "p_before", "p_before_id")
+        names.forEach { name ->
+            assertTrue("the app must send " + name, android.contains("\"" + name + "\""))
+            assertTrue("the web must send " + name, web.contains(name + ":"))
+        }
+        // And the same function, not a cousin of it.
+        assertTrue(android.contains("\"my_gallery\""))
+        assertTrue(web.contains("'my_gallery'"))
+    }
+
+    @Test
+    fun bothClientsFillTheirGridWithTheSameNumberOfTiles() {
+        val android = Regex("GALLERY_PAGE_SIZE = (\\d+)")
+            .find(
+                readRepoFile(
+                    "android-app", "core", "media", "src", "main", "kotlin",
+                    "bd", "info", "bsdc", "app", "core", "media", "BsdcMediaRepository.kt",
+                ),
+            )
+            ?.groupValues
+            ?.get(1)
+        val web = Regex("GALLERY_PAGE_SIZE = (\\d+)")
+            .find(readRepoFile("main-site", "src", "lib", "media", "gallery.ts"))
+            ?.groupValues
+            ?.get(1)
+        assertEquals("a page should be one screenful on both clients", web, android)
+    }
+
+    private fun between(source: String, start: String, end: String): String {
+        val from = source.indexOf(start)
+        if (from < 0) error("could not find `" + start + "` where it is supposed to live")
+        val to = source.indexOf(end, from + start.length)
+        if (to < 0) error("could not find `" + end + "` after `" + start + "`")
+        return source.substring(from, to)
+    }
+
     private fun regexGroup(regex: Regex, source: String, name: String): String =
         regex.find(source)?.groupValues?.get(1)
             ?: error(name + " was not found in the file it is supposed to live in")
