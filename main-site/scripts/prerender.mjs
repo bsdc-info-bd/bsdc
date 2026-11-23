@@ -295,6 +295,22 @@ export function renderShell(route, routes) {
     .join('');
   const shape = route.hero ? HERO_SHAPES[route.hero.shape] : undefined;
   const hero = shape ? shape(route.hero) : '';
+  // A page whose first screen is a tool — the playground's editor — paints a block
+  // far larger than any heading, so the shell has to cover the tool too or LCP moves
+  // to the script. The starter snippet is real content for a reader whose scripts
+  // never run, sized with the field's own classes; the fixed height is the pane the
+  // hydrated page reserves, and it is a style rather than a class because no
+  // component needs a min-height it does not get from `rows`.
+  const snippet = route.hero?.snippet
+    ? [
+        '<div class="mt-4">',
+        `<p class="mb-1 block text-sm font-medium">${escapeHtml(route.hero.snippet.label)}</p>`,
+        `<pre class="w-full rounded-xl border border-border bg-bg p-3 text-sm font-mono" style="min-height:21.5rem"><code>${escapeHtml(
+          route.hero.snippet.code,
+        )}</code></pre>`,
+        '</div>',
+      ].join('')
+    : '';
   const heading = route.path === '/' ? 'text-4xl' : 'text-3xl';
   return [
     '<div data-prerender="true">',
@@ -305,7 +321,7 @@ export function renderShell(route, routes) {
           `<h1 class="${heading}">${escapeHtml(route.heading)}</h1>`,
           `<p class="mt-3 max-w-[60ch] text-base text-muted">${escapeHtml(route.summary)}</p>`,
         ].join('')
-      : hero,
+      : hero + snippet,
     opening === '' ? '' : `<div class="mt-6 max-w-[72ch] text-base">${opening}</div>`,
     `<nav class="mt-5" aria-label="Sections"><ul class="flex flex-wrap gap-2">${links}</ul></nav>`,
     '</section>',

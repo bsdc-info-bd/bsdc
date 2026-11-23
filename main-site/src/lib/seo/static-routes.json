@@ -160,7 +160,11 @@
       "hero": {
         "shape": "sectionHeading",
         "title": "Playground",
-        "description": "Write a snippet, run it, keep it. Nothing leaves your browser when you run."
+        "description": "Write a snippet, run it, keep it. Nothing leaves your browser when you run.",
+        "snippet": {
+          "label": "Code",
+          "code": "const squares = [1, 2, 3, 4].map((n) => n * n);\nconsole.log('squares', squares);"
+        }
       },
       "type": "website",
       "opening": [

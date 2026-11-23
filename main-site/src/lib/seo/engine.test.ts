@@ -277,13 +277,28 @@ describe('the build-time prerender and the application agree', () => {
       const shell = renderShell(route, STATIC_ROUTES);
       const ownerPath = owners[hero.shape];
       if (ownerPath === undefined) throw new Error(`the ${hero.shape} shape names no owner`);
-      const owner = readFileSync(resolve(process.cwd(), ownerPath), 'utf8');
+      // The page's own file is an owner as well: a shell block that stands in for
+      // the page's editor pane is styled with the page's classes, not the heading's.
+      const owner = [
+        ownerPath,
+        `src/routes/${route.component}.tsx`,
+        'src/design-system/TextareaField.tsx',
+      ]
+        .map((one) => readFileSync(resolve(process.cwd(), one), 'utf8'))
+        .join('\n');
 
       // The words are the page's words, not a summary of them.
       expect(locale).toContain(`'${hero.title}'`);
       expect(locale).toContain(`'${hero.description}'`);
       expect(shell).toContain(`>${hero.title}</h1>`);
       expect(shell).toContain(`>${hero.description}</p>`);
+      if (hero.snippet !== undefined) {
+        // The starter code is the page's, not an invention of the shell, and the label
+        // is the field's own word from the catalogue the page reads.
+        expect(owner).toContain(hero.snippet.code);
+        expect(locale).toContain(`'${hero.snippet.label}'`);
+        expect(shell).toContain(`>${hero.snippet.label}</p>`);
+      }
 
       // And every class the shell puts on the hero's own elements is a class the
       // component that owns the shape still uses.

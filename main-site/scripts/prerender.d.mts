@@ -21,6 +21,11 @@ export interface PrerenderRoute {
         readonly eyebrow?: string | undefined;
         readonly title: string;
         readonly description: string;
+        /** A page whose first screen is a tool: the pane's label and its starter contents. */
+        readonly snippet?: {
+          readonly label: string;
+          readonly code: string;
+        };
       }
     | undefined;
 }
