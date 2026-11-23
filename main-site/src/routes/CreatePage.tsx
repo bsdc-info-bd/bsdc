@@ -286,6 +286,7 @@ export default function CreatePage() {
           coverPreviewUrl={projectCover.previewUrl}
           coverUploadProgress={projectCover.progress}
           onCoverFileChange={(file) => projectCover.choose(file)}
+          onCoverPickFromLibrary={(picked) => projectCover.pick(picked)}
           errorFor={errorFor}
           screenshots={screenshots}
         />
@@ -326,7 +327,7 @@ export default function CreatePage() {
       {issues.length > 0 ? (
         <div className="mt-5">
           <Alert tone="warning" title={t('create.issuesTitle')}>
-            <ul className="list-inside list-disc text-body-sm">
+            <ul className="list-inside list-disc text-sm">
               {issues.map((issue) => (
                 <li key={`${issue.field}-${issue.messageKey}`}>{t(issue.messageKey)}</li>
               ))}
@@ -337,7 +338,7 @@ export default function CreatePage() {
 
       <Card className="mt-5 p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-center gap-2 text-body-sm text-ink-2">
+          <p className="flex items-center gap-2 text-sm text-muted">
             <Icon aria-hidden className="size-4" />
             {t(`create.footnote.${kind}`)}
           </p>
@@ -496,6 +497,7 @@ function EventForm({ value, onChange, errorFor, cover }: EventFormProps) {
           previewUrl={cover.previewUrl}
           progress={cover.progress}
           onFileChange={(file) => cover.choose(file)}
+          onPickFromLibrary={(picked) => cover.pick(picked)}
           labels={{
             title: t('create.fields.coverImage'),
             hint: t('create.cover.hint'),

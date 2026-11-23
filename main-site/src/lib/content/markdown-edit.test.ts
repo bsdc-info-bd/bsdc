@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   continueLine,
   countText,
+  imageUrls,
   insertCodeBlock,
   insertImage,
   insertLink,
@@ -79,6 +80,23 @@ describe('links, images, code and tables', () => {
   it('inserts a picture on its own line', () => {
     const result = insertImage(at('a paragraph|'), 'https://i.ibb.co/x.jpg', 'A desk');
     expect(result.value).toBe('a paragraph\n\n![A desk](https://i.ibb.co/x.jpg)\n');
+  });
+
+  it('reads the pictures a body already carries', () => {
+    const markdown =
+      'Before\n\n![A desk](https://i.ibb.co/desk/a.png)\n\n' +
+      'A link with a picture inside: [![Thumb](https://i.ibb.co/desk/a.png)](https://bsdc.test/post/1)\n\n' +
+      '![Again](https://i.ibb.co/other/b.jpg "a title")';
+    // The picture's address, once each, in the order it appears — and never the link's
+    // own target, which is a place rather than a picture.
+    expect(imageUrls(markdown)).toEqual([
+      'https://i.ibb.co/desk/a.png',
+      'https://i.ibb.co/other/b.jpg',
+    ]);
+  });
+
+  it('finds no pictures in text that has none', () => {
+    expect(imageUrls('A [link](https://i.ibb.co/not/a-picture) and a word.')).toEqual([]);
   });
 
   it('fences the selection as code', () => {

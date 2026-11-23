@@ -57,10 +57,10 @@ export function FeedRail({ className }: { className?: string }): ReactNode {
           end={item.to === ROUTES.home}
           className={({ isActive }) =>
             cn(
-              'flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors duration-150 ease-app',
+              'fab-tap flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors duration-150 ease-app',
               isActive
-                ? 'bg-green-50 font-semibold text-green-800 dark:bg-green-950 dark:text-green-200'
-                : 'text-foreground hover:bg-surface-2',
+                ? 'bg-success-soft font-semibold text-success'
+                : 'text-text hover:bg-surface-2',
             )
           }
         >
@@ -69,7 +69,7 @@ export function FeedRail({ className }: { className?: string }): ReactNode {
       ))}
       <Link
         to={ROUTES.compose}
-        className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-green-700 px-3 py-2 text-sm font-semibold text-green-800 transition-colors duration-150 ease-app hover:bg-green-50 dark:border-green-500 dark:text-green-200 dark:hover:bg-green-950"
+        className="fab-tap mt-2 flex items-center justify-center gap-2 rounded-lg border border-primary px-3 py-2 text-sm font-semibold text-success transition-colors duration-150 ease-app hover:bg-success-soft "
       >
         <PenLine size={16} aria-hidden="true" />
         {t('rail.write', { defaultValue: 'Create post' })}
@@ -132,7 +132,7 @@ export function TrendingTags({ className }: { className?: string }): ReactNode {
                   {tag.fresh ? (
                     <span
                       aria-hidden="true"
-                      className="ms-1 inline-block size-1.5 rounded-full bg-green-600 align-middle"
+                      className="ms-1 inline-block size-1.5 rounded-full bg-primary align-middle"
                     />
                   ) : null}
                 </span>

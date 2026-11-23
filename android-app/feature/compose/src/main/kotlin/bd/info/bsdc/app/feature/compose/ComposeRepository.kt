@@ -1,5 +1,6 @@
 package bd.info.bsdc.app.feature.compose
 
+import bd.info.bsdc.app.core.common.ListingTags
 import bd.info.bsdc.app.core.database.BsdcDatabase
 import bd.info.bsdc.app.core.database.PendingDraftEntity
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -123,6 +124,39 @@ class ComposeRepository(
         )
     }
 
+    /**
+     * Every channel the signed-in member may see, each with the reason it would refuse their post.
+     *
+     * Two round trips, deliberately: `channels` (with the group embedded, so a section header costs
+     * nothing) decides *what to show*, and `channel_post_block_many` decides *what stays enabled*.
+     * Asking the database once per channel would be N+1 on a group with many rooms, and folding the
+     * verdict into the select would mean trusting PostgREST to reach a `bsdc` function it cannot.
+     */
+    suspend fun fetchPostableChannels(): List<PostableChannel> = withContext(Dispatchers.IO) {
+        val rows = supabase.decode<List<PostableChannel>>(
+            supabase.getJsonText(
+                table = "channels",
+                queryPairs = listOf(
+                    "select" to "id,group_id,slug,name,topic,is_read_only,groups(slug,name)",
+                    "order" to "name.asc",
+                    "limit" to "400",
+                ),
+                requireAuth = true,
+            ),
+        )
+        if (rows.isEmpty()) return@withContext emptyList()
+        val verdicts = supabase.decode<List<ChannelBlockRow>>(
+            supabase.rpcText(
+                "channel_post_block_many",
+                params = buildJsonObject {
+                    put("p_channel_ids", buildJsonArray { rows.forEach { add(it.id) } })
+                },
+                requireAuth = true,
+            ),
+        )
+        combineChannelRows(rows, verdicts)
+    }
+
     suspend fun fetchCuratedTags(limit: Int = 50): List<CuratedTagItem> = withContext(Dispatchers.IO) {
         runCatching {
             val raw = supabase.getJsonText(
@@ -194,6 +228,13 @@ class ComposeRepository(
                     put("kind", kindWire)
                     put("status", if (publish) "published" else "draft")
                     put("visibility", draft.visibility)
+                    // Absent means "leave this post's channel alone"; an explicit null means "move it
+                    // out to the feed". Only the member can have said either, so the key is written
+                    // only once the channel selector has actually been used.
+                    if (ChannelRules.shouldSendChannelKey(draft.channelTouched)) {
+                        val channel = ChannelRules.channelIdFromValue(draft.channelId)
+                        if (channel == null) put("channel_id", JsonNull) else put("channel_id", channel)
+                    }
                     put("title", cleanTitle)
                     put("body", cleanBody)
                     put("excerpt", excerpt)
@@ -368,7 +409,11 @@ class ComposeRepository(
         draft: ProjectDraftInput,
         screenshots: List<ComposerMediaAttachment>,
     ): String = withContext(Dispatchers.IO) {
-        val tech = parseCommaList(draft.techText)
+        // Project tech is not a skill list. `main-site/src/lib/create/create-repository.ts` writes
+        // `tech: draft.tech` as the member typed it, and the showcase renders those strings as the
+        // "Built with" chips — so this keeps the tag rules and the cap, and nothing else: lower-casing
+        // "Jetpack Compose" to make it look like a canonical skill would quietly rename a project page.
+        val tech = parseTechList(draft.techText)
         val raw = supabase.postJson(
             table = "projects",
             body = buildJsonObject {
@@ -428,6 +473,22 @@ class ComposeRepository(
         slug
     }
 
-    private fun parseCommaList(raw: String): List<String> =
-        raw.split(",").map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(20)
+    /**
+     * A comma-separated skills box, in the one form the database matches skills against.
+     *
+     * This used to be `split → trim → distinct → take(20)`, which kept whatever case the member typed.
+     * Migration 0103 canonicalised `skills` to lower case and the skill filters match the canonical
+     * form, so a job posted from the app carried "Kotlin" while the same job posted from the browser
+     * carried "kotlin" — and only one of the two was ever found by a skill search. Delegating to
+     * `ListingTags` makes the app send what the website sends: canonical, deduplicated, sorted.
+     */
+    private fun parseCommaList(raw: String): List<String> = ListingTags.fromCommaText(raw)
+
+    /**
+     * A comma-separated list kept exactly as written, within the tag rules: trimmed, clamped to 32
+     * characters, deduplicated case-insensitively, capped at twenty, and in the order the member typed
+     * it. This is what the website's `TagInput` produces before any normaliser is applied to it, which
+     * is what a project's tech stack wants and a job's skill list deliberately does not.
+     */
+    private fun parseTechList(raw: String): List<String> = ListingTags.parse(raw)
 }

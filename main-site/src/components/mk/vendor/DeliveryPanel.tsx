@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { Banknote } from 'lucide-react';
 import { Button, Card, PageSkeleton, TextField } from '@/design-system';
 import { LocationPicker, type PinnedLocation } from '@/components/mk/LocationPicker';
-import { useSetVendorDelivery, useSetVendorSchedule, useVendorDelivery } from '@/hooks/use-mk';
+import {
+  useSetVendorDelivery,
+  useSetVendorMinOrder,
+  useSetVendorSchedule,
+  useVendorDelivery,
+} from '@/hooks/use-mk';
 import type { MkCopy } from '@/lib/mk/mk-copy';
 import {
   DAY_KEYS,
@@ -30,6 +36,7 @@ export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
   const query = useVendorDelivery();
   const saveDelivery = useSetVendorDelivery();
   const saveSchedule = useSetVendorSchedule();
+  const saveMinOrder = useSetVendorMinOrder();
 
   const [scope, setScope] = useState<'radius' | 'all_bd'>('radius');
   const [radius, setRadius] = useState('10');
@@ -38,6 +45,9 @@ export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
   const [perKmRate, setPerKmRate] = useState('20');
   const [centre, setCentre] = useState<PinnedLocation | null>(null);
   const [deliveryError, setDeliveryError] = useState('');
+
+  const [minOrder, setMinOrder] = useState('0');
+  const [minOrderError, setMinOrderError] = useState('');
 
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [days, setDays] = useState<Record<DayKey, MkDayHours>>(() => defaultDayHoursMap());
@@ -52,6 +62,7 @@ export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
     setCharge(String(Math.round((d.fixed_fee_poisha ?? d.fee_poisha) / 100)));
     setPerKmRate(String(Math.round((d.per_km_rate_poisha ?? 2000) / 100)));
     setCentre({ lat: d.center_lat, lng: d.center_lng, label: '' });
+    setMinOrder(String(Math.round((d.min_order_poisha ?? 0) / 100)));
 
     if (d.schedule) {
       setScheduleEnabled(d.schedule.enabled);
@@ -315,6 +326,53 @@ export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
       </Card>
 
       <Card padded>
+        <div className="flex items-start gap-3">
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-success-soft text-success"
+            aria-hidden
+          >
+            <Banknote size={18} />
+          </span>
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-text">{c.delivery.minOrderTitle}</h2>
+            <p className="mt-1 text-sm text-muted">{c.delivery.minOrderHint}</p>
+          </div>
+        </div>
+        <form
+          className="mt-4 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const taka = Number(minOrder.trim());
+            // The same range the routine enforces, checked here so a typo is a red field rather
+            // than a database sentence. 0 is a real answer, not an empty one: it means the shop
+            // accepts any order.
+            if (!Number.isInteger(taka) || taka < 0 || taka > 1000000) {
+              setMinOrderError(c.delivery.minOrderError);
+              return;
+            }
+            setMinOrderError('');
+            saveMinOrder.mutate(taka, {
+              onSuccess: () => toast.success(c.delivery.minOrderSaved),
+              onError: (error) =>
+                setMinOrderError(error instanceof Error ? error.message : c.delivery.minOrderError),
+            });
+          }}
+        >
+          <TextField
+            label={c.delivery.minOrder}
+            inputMode="numeric"
+            hint={c.delivery.minOrderNone}
+            value={minOrder}
+            error={minOrderError || undefined}
+            onChange={(event) => setMinOrder(event.target.value)}
+          />
+          <Button type="submit" loading={saveMinOrder.isPending}>
+            {c.delivery.saveMinOrder}
+          </Button>
+        </form>
+      </Card>
+
+      <Card padded>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-lg font-semibold text-text">{c.schedule.title}</h2>
@@ -324,8 +382,8 @@ export function DeliveryPanel({ copy: c, language, shop }: DeliveryPanelProps) {
             <span
               className={`rounded-full px-3 py-1 text-xs font-medium ${
                 liveSchedule.is_open
-                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                  : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                  ? 'bg-success-soft text-success'
+                  : 'bg-danger-soft text-danger-text'
               }`}
             >
               {liveSchedule.enabled

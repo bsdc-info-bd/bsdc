@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type * as I18nModule from 'react-i18next';
 import {
@@ -8,6 +8,8 @@ import {
   type ProjectStep,
 } from '@/lib/create/create-types';
 import { useAttachments } from '@/components/media/use-attachments';
+import type { GalleryPickerDialogProps } from '@/components/media/GalleryPickerDialog';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { ProjectWizard } from './ProjectWizard';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -32,6 +34,46 @@ URL.createObjectURL = vi.fn(() => {
   return `blob:local/${objectUrlSequence}`;
 });
 URL.revokeObjectURL = vi.fn();
+
+/**
+ * The library, as a door the test can walk through.
+ *
+ * The picker `lazy()`-imports the dialog so a page that merely *can* open a gallery
+ * does not download one, which means a test cannot reach the grid without waiting for
+ * a chunk. A stub is the honest shortcut: what the step has to get right is what it
+ * asks the dialog for and what it does with the answer, and both are visible here.
+ */
+const dialog = vi.hoisted(() => ({ current: null as GalleryPickerDialogProps | null }));
+
+vi.mock('@/components/media/GalleryPickerDialog', () => ({
+  GalleryPickerDialog: (props: GalleryPickerDialogProps) => {
+    dialog.current = props;
+    return (
+      <div
+        role="dialog"
+        aria-label="library stub"
+        data-slots={props.max}
+        data-purpose={props.purpose}
+      >
+        {props.max} slots for {props.purpose}
+        <button type="button" onClick={() => props.onPick([PICKED])}>
+          pick it
+        </button>
+      </div>
+    );
+  },
+}));
+
+/** A screenshot the member already hosted, waiting on the shelf. */
+const PICKED: PickedMedia = {
+  mediaId: 'asset-shot',
+  url: 'https://i.ibb.co/picked/launch.png',
+  thumbUrl: 'https://i.ibb.co/picked/launch-medium.png',
+  width: 1200,
+  height: 630,
+  altText: 'The launch page on a phone, held in one hand',
+  purpose: 'project-image',
+};
 
 export interface WizardHarnessProps {
   step: ProjectStep;
@@ -144,6 +186,73 @@ describe('the project publishing wizard', () => {
     expect(screen.getByText('create.projectSteps.reviewTitle')).toBeInTheDocument();
     // With nothing attached, the review says so rather than showing an empty box.
     expect(screen.getByText('create.projectSteps.noScreenshots')).toBeInTheDocument();
+  });
+
+  it('offers the library beside the file input, and a pick needs no upload', async () => {
+    // The controller is read back through a spy rather than a captured variable, so
+    // the assertions see the render the pick caused and not the one before it.
+    const takeController = vi.fn<(controller: ReturnType<typeof useAttachments>) => void>();
+    render(<WizardHarness step={3} onController={takeController} />);
+    const latest = (): ReturnType<typeof useAttachments> => {
+      const calls = takeController.mock.calls;
+      const controller = calls[calls.length - 1]?.[0];
+      if (!controller) throw new Error('the wizard never passed its page-owned queue down');
+      return controller;
+    };
+
+    fireEvent.click(screen.getByRole('button', { name: 'media.gallery.open' }));
+    const opened = await screen.findByRole('dialog', { name: 'library stub' });
+    // The shelf this step files to, and only the room this step has — so the eight
+    // screenshots a project can carry stay eight whether they came from a device or
+    // from a pick, without the step having to notice the difference.
+    expect(opened).toHaveAttribute('data-purpose', 'project-image');
+    expect(opened).toHaveAttribute('data-slots', '8');
+    // And no upload button inside: the file input the step already owns is the one
+    // door to the device, or the same picture could be chosen two ways that behave
+    // differently.
+    expect(dialog.current?.onDevice).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick it' }));
+    // The tray shows the picked picture with its stored caption as the accessible
+    // name — the caption the member wrote the first time is what a screen reader
+    // says now, in the project's own order of pictures.
+    await screen.findByAltText('The launch page on a phone, held in one hand');
+
+    const attached = latest().attachments[0];
+    if (!attached) throw new Error('the pick never reached the queue the step renders');
+    // `attached` and not `queued`: the bytes are already where they need to be, so
+    // the member waits for nothing and the host stores one copy of the file.
+    expect(attached.status).toBe('attached');
+    expect(attached.progress).toBe(100);
+    expect(attached.file).toBeNull();
+    expect(attached.mediaId).toBe('asset-shot');
+    expect(attached.url).toBe('https://i.ibb.co/picked/launch.png');
+    // The caption is the one stored with the picture, so the step's accessibility
+    // check is already satisfied by a pick — no typing, and no empty alt to fix.
+    expect(attached.altText).toBe('The launch page on a phone, held in one hand');
+    // Nothing is uploading, because nothing had to be.
+    expect(screen.queryByText('create.projectSteps.screenshotsUploading')).not.toBeInTheDocument();
+
+    // The shelf is told what the project already carries, so the member is not
+    // invited to add the same picture twice — with the address the project holds,
+    // which for a pick is the stored one and not a local blob.
+    expect(dialog.current?.attached).toEqual(['https://i.ibb.co/picked/launch.png']);
+  });
+
+  it('will not take more picks than the step has room for', () => {
+    const takeController = vi.fn<(controller: ReturnType<typeof useAttachments>) => void>();
+    render(<WizardHarness step={3} onController={takeController} />);
+
+    act(() => {
+      takeController.mock.calls[takeController.mock.calls.length - 1]![0].attachPicked(
+        Array.from({ length: 8 }, (_, index) => ({
+          ...PICKED,
+          mediaId: `asset-shot-${index}`,
+          url: `https://i.ibb.co/picked/s${index}.png`,
+        })),
+      );
+    });
+    expect(screen.getByRole('button', { name: 'media.gallery.open' })).toBeDisabled();
   });
 
   it('names every step for a screen reader, in order', () => {

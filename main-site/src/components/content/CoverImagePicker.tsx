@@ -2,7 +2,9 @@ import { ImagePlus, Loader2, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/design-system';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import { cn } from '@/lib/cn';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { useAuthStore } from '@/store/auth-store';
 
 export interface CoverCandidate {
@@ -17,6 +19,17 @@ export interface CoverImagePickerProps {
   onChange: (url: string) => void;
   /** Pictures already attached to this post, offered as covers. */
   candidates?: readonly CoverCandidate[];
+  /**
+   * Called when the member takes a picture from their own library instead of
+   * uploading one.
+   *
+   * The surface owns `cover_url`, so it owns what a pick means: the composer points
+   * the post at the address the library gave it and re-files that asset as a cover.
+   * Nothing is uploaded, and the address is one the platform wrote — a page cannot
+   * put a stranger's picture on a post through this field, because the gallery only
+   * ever returns the member's own rows. Left out, the library is not offered here.
+   */
+  onPick?: ((picked: PickedMedia) => void) | undefined;
   disabled?: boolean;
 }
 
@@ -27,13 +40,16 @@ export interface CoverImagePickerProps {
  * `cover_url` has been on the post since the first schema and the post page has
  * always rendered it — but nothing in the composer ever set it, so every post
  * was published without one. This is the field that sets it, and it offers the
- * two things a member actually has to hand: a file, or a picture already in the
- * post.
+ * three things a member has to hand: a file, a picture already attached to this
+ * post, and — when the composer passes `onPick` — any picture the member has ever
+ * uploaded to BSDC. The last of those is the one that saves them a photo shoot for
+ * a cover they took six months ago.
  */
 export function CoverImagePicker({
   value,
   onChange,
   candidates = [],
+  onPick,
   disabled = false,
 }: CoverImagePickerProps) {
   const { t } = useTranslation();
@@ -90,7 +106,7 @@ export function CoverImagePicker({
         )}
 
         {uploading ? (
-          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/40 text-xs font-medium text-white">
+          <div className="absolute inset-0 flex items-center justify-center gap-2 bg-scrim/40 text-xs font-medium text-white">
             <Loader2 size={16} className="animate-spin" aria-hidden="true" />
             {t('compose.cover.uploading')}
           </div>
@@ -119,6 +135,21 @@ export function CoverImagePicker({
         >
           {chosen ? t('compose.cover.replace') : t('compose.cover.add')}
         </Button>
+        {onPick ? (
+          <MediaSourcePicker
+            compact
+            showUpload={false}
+            purpose="cover"
+            max={1}
+            disabled={disabled || uploading}
+            attached={value.length > 0 ? [value] : []}
+            onFiles={() => fileRef.current?.click()}
+            onPick={(picked) => {
+              const first = picked[0];
+              if (first !== undefined) onPick(first);
+            }}
+          />
+        ) : null}
         {chosen ? (
           <Button
             type="button"
@@ -150,7 +181,7 @@ export function CoverImagePicker({
               }}
               className={cn(
                 'h-12 w-16 overflow-hidden rounded-lg border-2',
-                candidate.url === value ? 'border-brand' : 'border-line hover:border-brand',
+                candidate.url === value ? 'border-primary' : 'border-border hover:border-primary',
               )}
             >
               <img

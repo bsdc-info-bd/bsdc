@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { Alert, Badge, Button, Card, IconButton, Switch, TimeAgo } from '@/design-system';
 import { usePush } from '@/hooks/use-push';
+import { latestPushAttempt } from '@/lib/push/push-registration-error';
 import {
   describeDeviceState,
   describeUserAgent,
@@ -43,6 +44,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
   // devices, how many can a notification actually arrive on *today*.
   const on = push.permission === 'granted' && push.devices.length > 0;
   const reachable = push.liveDevices;
+  const attempt = push.errorKey === null ? null : latestPushAttempt();
   const staleNote = staleDevicesNote(
     push.devices.map((device) => device.state),
     language,
@@ -71,7 +73,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
           </span>
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold">{t('push.prompt.title')}</h2>
-            <p className="mt-1 text-body-sm text-ink-2">{t('push.prompt.body')}</p>
+            <p className="mt-1 text-sm text-muted">{t('push.prompt.body')}</p>
             {push.errorKey ? <p role="alert">{t(push.errorKey)}</p> : null}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button size="sm" onClick={() => void turnOn()} loading={push.busy}>
@@ -98,7 +100,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
       <div className="grid gap-3">
         <div>
           <h2 className="text-base font-semibold">{t('push.title')}</h2>
-          <p className="mt-1 text-body-sm text-ink-2">{t('push.body')}</p>
+          <p className="mt-1 text-sm text-muted">{t('push.body')}</p>
         </div>
 
         {blocked ? (
@@ -109,7 +111,15 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
               </Button>
             ) : null}
 
-            {push.permission === 'denied' ? t('push.denied.body') : t('push.blocked.body')}
+            {/* The generic footnote means "nobody can change this here", which is true of a
+                browser with no push manager and false of an iOS tab that needs one tap in
+                Share. The sentence above already carries the instruction, so a second one
+                that contradicts it is worse than none. */}
+            {push.permission === 'denied'
+              ? t('push.denied.body')
+              : push.block === 'ios-install'
+                ? null
+                : t('push.blocked.body')}
           </Alert>
         ) : null}
 
@@ -120,6 +130,14 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
         ) : null}
         {push.errorKey ? (
           <Alert tone="warning" title={t(push.errorKey)}>
+            {/* Which transport was tried and what it answered, in the words the code has
+                rather than the words a member would repeat. Support asks “what does the
+                page say”; this is the line that ends the asking. */}
+            {attempt ? (
+              <p className="mt-1 text-2xs text-muted">
+                {attempt.mode} · {attempt.result}
+              </p>
+            ) : null}
             <Button size="sm" onClick={push.dismissError}>
               {t('common.close')}
             </Button>
@@ -147,7 +165,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
 
         {push.devices.length > 0 ? (
           <div>
-            <h3 className="text-sm font-semibold text-ink-2">{t('push.devices.title')}</h3>
+            <h3 className="text-sm font-semibold text-muted">{t('push.devices.title')}</h3>
             {staleNote !== null ? (
               <Alert tone="warning" title={t('push.devices.title')} className="mt-2">
                 {staleNote}
@@ -160,7 +178,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                 return (
                   <li
                     key={device.endpoint}
-                    className="flex items-center gap-3 rounded-card border border-line bg-surface px-3 py-2"
+                    className="flex items-center gap-3 rounded-card border border-border bg-surface px-3 py-2"
                     title={t(words.key)}
                   >
                     <div className="min-w-0 flex-1">
@@ -172,7 +190,7 @@ export function PushCard({ variant = 'settings' }: PushCardProps) {
                           </Badge>
                         ) : null}
                       </p>
-                      <p className="text-2xs text-ink-3">
+                      <p className="text-2xs text-muted">
                         {device.platform ?? 'web'} · {device.language.toUpperCase()} ·{' '}
                         {device.lastUsedAt !== null ? (
                           <>

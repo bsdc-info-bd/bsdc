@@ -29,7 +29,7 @@ export function ComposeBox(): ReactElement | null {
       <Avatar src={user.photoURL ?? undefined} name={user.displayName ?? ''} size="sm" />
       <Link
         to={ROUTES.compose}
-        className="min-w-0 flex-1 rounded-lg px-3 py-2 text-sm text-muted transition-colors duration-150 ease-app hover:bg-surface-2 hover:text-foreground"
+        className="min-w-0 flex-1 rounded-lg px-3 py-2 text-sm text-muted transition-colors duration-150 ease-app hover:bg-surface-2 hover:text-text"
       >
         {t('feed.composePrompt', {
           defaultValue: 'Write a post, ask a question, share a snippet…',
@@ -38,14 +38,14 @@ export function ComposeBox(): ReactElement | null {
       <Link
         to={ROUTES.compose}
         aria-label={t('rail.write', { defaultValue: 'Create post' })}
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-green-700 transition-colors duration-150 ease-app hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-950"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-green-700 transition-colors duration-150 ease-app hover:bg-success-soft "
       >
         <PenLine size={17} aria-hidden="true" />
       </Link>
       <Link
         to={ROUTES.compose}
         aria-label={t('feed.composeImage', { defaultValue: 'Add a picture' })}
-        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-green-700 transition-colors duration-150 ease-app hover:bg-green-50 dark:text-green-300 dark:hover:bg-green-950"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-green-700 transition-colors duration-150 ease-app hover:bg-success-soft "
       >
         <ImagePlus size={17} aria-hidden="true" />
       </Link>

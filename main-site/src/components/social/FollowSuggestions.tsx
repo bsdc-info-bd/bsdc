@@ -121,8 +121,8 @@ function SuggestionRow({ suggestion, language, onDismiss }: SuggestionRowProps) 
         >
           {suggestion.displayName}
         </Link>
-        <p className="truncate text-2xs text-ink-3">@{suggestion.username}</p>
-        <p className="mt-1 text-2xs text-ink-2">{reason}</p>
+        <p className="truncate text-2xs text-muted">@{suggestion.username}</p>
+        <p className="mt-1 text-2xs text-muted">{reason}</p>
       </div>
 
       <div className="flex shrink-0 items-center gap-1">

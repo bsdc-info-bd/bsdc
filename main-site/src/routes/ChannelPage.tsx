@@ -1,13 +1,15 @@
-import { Hash } from 'lucide-react';
+import { Hash, PenLine } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { PostCard } from '@/components/content/PostCard';
 import { Seo } from '@/components/seo/Seo';
-import { Badge, Card, EmptyState, PageSkeleton } from '@/design-system';
+import { Badge, Card, EmptyState, LinkButton, PageSkeleton } from '@/design-system';
 import { useChannelFeed } from '@/hooks/use-channel-feed';
 import { useGroup } from '@/hooks/use-communities';
+import { composeChannelHref } from '@/lib/channels/channel-seed';
 import type { Post } from '@/lib/content/post-repository';
 import { channelPath, groupPath } from '@/lib/site';
+import { selectIsSignedIn, useAuthStore } from '@/store/auth-store';
 
 /**
  * One channel of a group: the room's posts in the home feed's shape.
@@ -27,6 +29,7 @@ export default function ChannelPage() {
   const channel = detail.channels.find((entry) => entry.slug === channelSlug) ?? null;
 
   const feed = useChannelFeed(channel?.id ?? null);
+  const isSignedIn = useAuthStore(selectIsSignedIn);
 
   if (detail.isLoading) {
     return <PageSkeleton label={t('common.loading')} />;
@@ -84,6 +87,26 @@ export default function ChannelPage() {
         {channel.topic.length > 0 ? (
           <p className="mt-2 text-sm text-muted">{channel.topic}</p>
         ) : null}
+
+        {/* Writing into the room starts in the room. A read-only channel is
+            said, not hidden: the reader has to learn why the button is absent,
+            or they will look for it on the next channel too. */}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          {isSignedIn && !channel.isReadOnly ? (
+            <LinkButton
+              variant="primary"
+              size="sm"
+              to={composeChannelHref(channel.id)}
+              iconStart={<PenLine size={16} aria-hidden="true" />}
+            >
+              {t('channels.postHere')}
+            </LinkButton>
+          ) : (
+            <p className="text-sm text-muted">
+              {isSignedIn ? t('channels.postHereReadOnly') : t('channels.postHereSignedOut')}
+            </p>
+          )}
+        </div>
 
         {feed.isLoading ? (
           <PageSkeleton label={t('common.loading')} />

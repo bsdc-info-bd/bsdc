@@ -81,7 +81,7 @@ export default function VendorConsolePage() {
             action={
               <a
                 href={ROUTES.vendorApply}
-                className="inline-flex items-center gap-2 rounded-xl bg-green-700 px-4 py-2 text-sm font-semibold text-white hover:bg-green-800"
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary hover:bg-primary-active"
               >
                 {copy.openApply} <ArrowRight size={16} aria-hidden />
               </a>
@@ -106,16 +106,16 @@ export default function VendorConsolePage() {
         noindex
       />
 
-      <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg">
+      <header className="overflow-hidden rounded-3xl bsdc-hero p-6 shadow-lg">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs uppercase tracking-widest text-white/70">{copy.consoleTitle}</p>
+            <p className="text-xs uppercase tracking-widest text-on-hero/70">{copy.consoleTitle}</p>
             <h1 className="truncate text-2xl font-bold sm:text-3xl">{shop.name}</h1>
-            <p className="mt-1 text-sm text-white/85">{copy.typeLabels[shop.vendor_type]}</p>
+            <p className="mt-1 text-sm text-on-hero/85">{copy.typeLabels[shop.vendor_type]}</p>
           </div>
           <motion.span
             layout
-            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${listed ? 'bg-white text-green-800' : 'bg-red-600 text-white'}`}
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-semibold ${listed ? 'bg-on-hero text-hero-from' : 'bg-danger text-on-danger'}`}
             animate={reduceMotion ? {} : { scale: [1, 1.04, 1] }}
             transition={{ duration: 0.5 }}
           >

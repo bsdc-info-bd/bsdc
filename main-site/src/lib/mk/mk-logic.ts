@@ -152,6 +152,112 @@ export function roundedDistanceKm(
   return Math.max(0, Math.ceil(rawDistanceKm(from, to)));
 }
 
+/** The three chips an address can be given, in the order the editor shows them. */
+export const ADDRESS_LABELS = ['home', 'work', 'other'] as const;
+export type AddressLabel = (typeof ADDRESS_LABELS)[number];
+
+/** `mk_save_address` refuses a ninth row, so a form that knows this never offers one. */
+export const ADDRESS_MAX = 8;
+export const ADDRESS_LINE_MIN = 5;
+export const ADDRESS_LINE_MAX = 240;
+export const RECIPIENT_NAME_MIN = 2;
+export const RECIPIENT_NAME_MAX = 80;
+export const ADDRESS_NICKNAME_MAX = 40;
+
+export function isAddressLabel(input: string): input is AddressLabel {
+  return (ADDRESS_LABELS as readonly string[]).includes(input);
+}
+
+/**
+ * What a basket must be worth at this shop, and what is missing.
+ *
+ * Compared against the goods subtotal and never against the total, exactly as `mk_place_order`
+ * does: the delivery charge is not something the customer bought, so a 150 taka ride must not be
+ * able to carry a 200 taka basket past a 300 taka minimum. A screen that got this wrong would let
+ * an order through to a routine that refuses it, which is the one arrangement worse than no gate.
+ */
+export function evaluateMinimumOrder(
+  subtotalPoisha: number,
+  minOrderPoisha: number | undefined,
+): { required: boolean; met: boolean; shortfallPoisha: number } {
+  const min = Math.max(0, minOrderPoisha ?? 0);
+  if (min === 0) return { required: false, met: true, shortfallPoisha: 0 };
+  if (subtotalPoisha >= min) return { required: true, met: true, shortfallPoisha: 0 };
+  return { required: true, met: false, shortfallPoisha: min - subtotalPoisha };
+}
+
+/**
+ * The checks `mk_save_address` makes, in the order it makes them, so an editor refuses what the
+ * database refuses and never lets a member submit a form the routine will send back. The phone is
+ * judged after `normaliseBdMobile`, because the routine strips the separators too — a member who
+ * types 01712-345678 has given a valid number, and telling them otherwise is the bug.
+ */
+export function addressDraftErrors(draft: {
+  name: string;
+  phone: string;
+  address: string;
+  nickname?: string;
+  label?: string;
+  pin: { lat: number; lng: number } | null;
+}): {
+  name: boolean;
+  phone: boolean;
+  address: boolean;
+  nickname: boolean;
+  pin: boolean;
+  label: boolean;
+} {
+  const name = draft.name.trim();
+  const line = draft.address.trim();
+  return {
+    name: name.length < RECIPIENT_NAME_MIN || name.length > RECIPIENT_NAME_MAX,
+    phone: !isBdMobile(normaliseBdMobile(draft.phone)),
+    address: line.length < ADDRESS_LINE_MIN || line.length > ADDRESS_LINE_MAX,
+    nickname: (draft.nickname ?? '').trim().length > ADDRESS_NICKNAME_MAX,
+    pin: draft.pin === null || !isBdPoint(draft.pin.lat, draft.pin.lng),
+    // Its own key, not folded into the pin: a label the table will not accept is a different
+    // mistake from a missing location, and an editor that reports it under the map is an editor
+    // whose red text points at the wrong half of the form.
+    label: draft.label !== undefined && !isAddressLabel(draft.label),
+  };
+}
+
+export function addressDraftValid(draft: Parameters<typeof addressDraftErrors>[0]): boolean {
+  return !Object.values(addressDraftErrors(draft)).some(Boolean);
+}
+
+/**
+ * A saved row read back into the checkout's form, so picking a door fills every field the shop
+ * needs and the member changes only what changed. The pin keeps the address's own `place_label`
+ * rather than the search text that happened to be on screen: the label is printed on the order.
+ */
+export function savedAddressToDraft(address: {
+  customer_name: string;
+  customer_phone: string;
+  address_line: string;
+  landmark: string;
+  place_label: string;
+  lat: number;
+  lng: number;
+  note: string;
+}): {
+  name: string;
+  phone: string;
+  address: string;
+  landmark: string;
+  note: string;
+  pin: { lat: number; lng: number; label: string };
+} {
+  return {
+    name: address.customer_name,
+    phone: address.customer_phone,
+    address: address.address_line,
+    landmark: address.landmark,
+    note: address.note,
+    pin: { lat: address.lat, lng: address.lng, label: address.place_label },
+  };
+}
+
 /**
  * Evaluates a shop's 3-mode delivery charge and radius eligibility for an optional
  * customer pin, matching `bsdc.mk_compute_delivery_fee` and `mk_place_order` in SQL.

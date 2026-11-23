@@ -2,6 +2,7 @@ import { Upload } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Avatar, Button, ProgressBar } from '@/design-system';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import { isConfigured } from '@/lib/env';
 import { DataError } from '@/lib/supabase/errors';
 
@@ -16,6 +17,12 @@ export interface AvatarUploaderProps {
  * Avatar upload. Raster images are scaled to 512px WebP client-side, uploaded
  * to ImgBB via `/api/media/upload`, and recorded in Postgres for moderation
  * and quota accounting.
+ *
+ * Beside it sits the other door: a face the member has already uploaded. That path
+ * writes no row and costs no quota, because the row exists — `my_gallery` (0132)
+ * only ever returns the member's own pictures, so the address it hands over cannot be
+ * anybody else's, and `profiles.avatar_url` is one of the arms `bsdc.media_references`
+ * reads, so the profile keeps that picture for as long as it shows it.
  */
 export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderProps) {
   const { t } = useTranslation();
@@ -38,7 +45,10 @@ export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderP
 
       if (isConfigured.supabase) {
         const { recordMediaAsset } = await import('@/lib/data/media-repository');
-        const row = await recordMediaAsset(uid, result);
+        // Filed as an avatar, so the member's own library can answer "show me the
+        // faces you have used" — and so this row is the picture the picker offers for
+        // the next account edit rather than an unlabelled upload.
+        const row = await recordMediaAsset(uid, result, 'avatar');
         if (row === null) throw new Error('media.errors.recordFailed');
       }
 
@@ -75,15 +85,38 @@ export function AvatarUploader({ uid, name, value, onUploaded }: AvatarUploaderP
             event.target.value = '';
           }}
         />
-        <Button
-          variant="secondary"
-          size="sm"
-          iconStart={<Upload size={16} />}
-          disabled={progress !== null}
-          onClick={() => inputRef.current?.click()}
-        >
-          {progress === null ? t('media.change') : t('media.uploading')}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            iconStart={<Upload size={16} />}
+            disabled={progress !== null}
+            onClick={() => inputRef.current?.click()}
+          >
+            {progress === null ? t('media.change') : t('media.uploading')}
+          </Button>
+          <MediaSourcePicker
+            purpose="avatar"
+            showUpload={false}
+            compact
+            max={1}
+            attached={value.length > 0 ? [value] : []}
+            disabled={progress !== null}
+            onFiles={(files) => {
+              const file = files[0];
+              if (file !== undefined) void onFile(file);
+            }}
+            // A picture from the library is already recorded and already this
+            // member's, so there is nothing to upload and no row to write — which is
+            // why this handler does not go through `onFile`. What is left is to point
+            // the profile at it: one string, the same one an upload would have
+            // produced for the same photo.
+            onPick={(picked) => {
+              const first = picked[0];
+              if (first !== undefined) onUploaded(first.url);
+            }}
+          />
+        </div>
         <p className="mt-1 text-xs text-muted">{t('media.hint')}</p>
         {progress !== null ? (
           <ProgressBar value={progress} label={t('media.uploading')} className="mt-2" />

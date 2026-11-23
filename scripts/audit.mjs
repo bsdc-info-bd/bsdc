@@ -15,7 +15,7 @@
  */
 import { execSync } from 'node:child_process';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { basename, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -372,8 +372,13 @@ check('B-07', 'Database', 'Permission checks guard the privileged RPCs', () => {
  * 3. Front end quality
  * ------------------------------------------------------------------ */
 
+// Generated trees are pruned here rather than in each check, because the audit
+// walks the working tree and some reports are written *about* the source: the
+// coverage report's HTML copies of `MessageComposer.tsx` and `message-text.ts`
+// duly re-triggered the emoji rule that those two files are allowed to break. A
+// check that reads its own output as input is not measuring the project any more.
 const sourceFiles = shLines(
-  `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print`,
+  `find . -name node_modules -prune -o -name dist -prune -o -name dev-dist -prune -o -name coverage -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" \\) -print`,
 );
 
 check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member input', () => {
@@ -382,7 +387,7 @@ check('C-01', 'Front end', 'Interface icons are vector assets; emoji are member 
   // same ranges consistently on every runner. Emoji are permitted as member
   // content and in the explicit chat input/reaction palettes, not as chrome.
   const files = shLines(
-    `find . -name node_modules -prune -o -name dist -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print`,
+    `find . -name node_modules -prune -o -name dist -prune -o -name dev-dist -prune -o -name coverage -prune -o -name .git -prune -o \\( -name "*.ts" -o -name "*.tsx" -o -name "*.css" -o -name "*.html" \\) -print`,
   );
   const pattern = new RegExp(
     `[${String.fromCodePoint(0x1f300)}-${String.fromCodePoint(0x1faff)}${String.fromCodePoint(0x2600)}-${String.fromCodePoint(0x27bf)}${String.fromCodePoint(0xfe0f)}]`,
@@ -1235,13 +1240,49 @@ check(
   }),
 );
 
-check('G-04', 'Web delivery', 'Website HTML does not advertise an offline PWA manifest', () => {
-  const html = read('main-site/index.html');
-  return {
-    ok: !/manifest\.webmanifest/.test(html),
-    evidence: 'no manifest.webmanifest link in main-site/index.html',
-  };
-});
+check(
+  'G-04',
+  'Web delivery',
+  'A manifest is advertised for installability only, and claims nothing offline',
+  () => {
+    const html = read('main-site/index.html');
+    const manifestPath = 'main-site/public/manifest.webmanifest';
+    const linked = /<link\s+rel="manifest"\s+href="\/manifest\.webmanifest"\s*\/>/.test(html);
+    if (!has(manifestPath)) {
+      return {
+        ok: false,
+        evidence: 'iOS delivers a web push only to a web app added to the home screen, and only a ' +
+          'manifest makes that install; main-site/public/manifest.webmanifest is missing',
+      };
+    }
+    const manifest = JSON.parse(read(manifestPath));
+    const offlineClaims = [
+      'prefer_related_applications',
+      'serviceworker',
+      'shortcut_manifest',
+      'background_sync',
+    ].filter((key) => key in manifest);
+    const sizes = (manifest.icons ?? []).map((icon) => icon.sizes);
+    const ok =
+      linked &&
+      manifest.display === 'standalone' &&
+      manifest.start_url === '/' &&
+      manifest.scope === '/' &&
+      offlineClaims.length === 0 &&
+      (manifest.icons ?? []).some((icon) => icon.purpose === 'maskable') &&
+      sizes.includes('192x192') &&
+      sizes.includes('512x512');
+    return {
+      ok,
+      evidence:
+        `manifest.webmanifest linked from index.html for the iOS install that web push needs` +
+        ` (display ${manifest.display}, icons ${sizes.join('/')})` +
+        (offlineClaims.length > 0 ? `, but it claims offline behaviour: ${offlineClaims.join(', ')}` : '') +
+        (linked ? '' : ', but index.html does not link it') +
+        ' — no offline bundle ships, which G-01, G-03 and G-05 hold',
+    };
+  },
+);
 
 check(
   'G-05',
@@ -1896,25 +1937,258 @@ check(
   },
 );
 
-check('F-17', 'Performance', 'Blue that renders words clears the contrast floor', () => {
-  // #1877f2 on our surface is 3.9:1. The fill token stays for artwork; text
-  // uses --bsdc-blue-text, which measures 6.1:1 on the same background.
-  const base = read('main-site/src/styles/base.css');
-  const tailwind = read('main-site/tailwind.config.ts');
-  const offenders = shLines(
-    `grep -rn "text-blue[^-a-zA-Z]" main-site/src --include=*.tsx | grep -v "text-blue-text" | head -10`,
-  );
+check(
+  'F-17',
+  'Performance',
+  'Every colour pairing the interface paints clears the contrast floor',
+  () => {
+    // A checkpoint that greps for a CSS custom property can only ever confirm the
+    // spelling. Contrast is arithmetic between two resolved colours, and the two
+    // themes resolve the same token to opposite ends of the ramp, so the floor is
+    // measured by scripts/contrast-audit.mjs against base.css and every class
+    // string in main-site — and this checkpoint reads its verdict rather than a
+    // pattern it hopes to see.
+    const out = sh('node scripts/contrast-audit.mjs --json');
+    const report = JSON.parse(out);
+    const shown = report.certain
+      .slice(0, 4)
+      .map((o) => `${o.file}:${o.line} ${o.theme} ${o.foreground}/${o.background} ${o.ratio}:1`);
+    return {
+      ok: report.ok === true,
+      evidence: report.ok
+        ? `${report.measured} pair(s) measured in both themes; ${report.certain.length} certain and ${report.tokenFails.length} token-level floor(s) clear, ${report.advisory.length} listed as advisory`
+        : `${report.certain.length} pairing(s) below AA: ${shown.join(' | ') || report.tokenFails.map((t) => `${t.label} ${t.theme} ${t.ratio}`).join(' | ')}`,
+    };
+  },
+);
+
+check(
+  'F-22',
+  'Performance',
+  'A token colour can carry an alpha, so bg-x/10 compiles instead of vanishing',
+  () => {
+    // Colors written as a bare `var(--bsdc-x)` string cannot receive Tailwind's
+    // opacity modifier: no rule is emitted, the utility is inert, and every
+    // wash, tint and scrim border it stood for renders as nothing. Each colour
+    // must therefore go through the helper that resolves alpha with
+    // color-mix(). Checked structurally, because the failure is invisible in a
+    // screenshot of a component that simply never got its background.
+    const tailwind = read('main-site/tailwind.config.ts');
+    const palette = tailwind.slice(
+      tailwind.indexOf('const themeColors'),
+      tailwind.indexOf('const config: Config'),
+    );
+    const bare = (palette.match(/:\s*'var\(--bsdc-[a-z0-9-]+\)'/g) ?? []).slice(0, 6);
+    const usesHelper = (palette.match(/:\s*token\('/g) ?? []).length;
+    return {
+      ok: bare.length === 0 && usesHelper > 20,
+      evidence:
+        bare.length === 0
+          ? `${usesHelper} colour(s) declared through token(), which answers with color-mix() when an alpha is asked for`
+          : `declared as a bare var(), so /NN on it emits nothing: ${bare.join(', ')}`,
+    };
+  },
+);
+
+check('F-23', 'Performance', 'No component paints a colour the theme does not define', () => {
+  // `text-foreground`, `border-line`, `bg-brand-soft`: the vocabulary of a
+  // different palette. Tailwind emits no rule, the class is inert, and the
+  // element inherits whatever was already there — which reads as restraint in
+  // a screenshot review and is a bug. The contrast audit resolves every colour
+  // utility against the real theme, so the same run reports them.
+  const report = JSON.parse(sh('node scripts/contrast-audit.mjs --json'));
+  const dead = (report.dead ?? []).concat(report.deadAlpha ?? []);
   return {
-    ok:
-      base.includes('--bsdc-blue-text') &&
-      tailwind.includes("text: 'var(--bsdc-blue-text)'") &&
-      offenders.length === 0,
+    ok: dead.length === 0 && (report.offToken ?? []).length === 0,
     evidence:
-      offenders.length === 0
-        ? 'text uses --bsdc-blue-text; --bsdc-blue is reserved for fills and borders'
-        : offenders.join(' | '),
+      dead.length === 0 && (report.offToken ?? []).length === 0
+        ? 'every colour utility resolves to a token that swaps with the theme, and every alpha modifier is on the scale'
+        : `${dead.length} utility name(s) resolve to nothing, ${
+            (report.offToken ?? []).length
+          } raw palette colour(s): ${dead
+            .slice(0, 4)
+            .map((d) => `${d.file}:${d.line} ${d.utility}`)
+            .join(' | ')}`,
   };
 });
+
+check('F-24', 'Performance', 'No component paints a hex that no theme can swap', () => {
+  // The rule the design brief states outright, verified by the exact command the
+  // brief states: a grep over main-site/src for a hex literal, excluding the
+  // design system and the tests. It returns nothing.
+  //
+  // That happened by moving the four colours that are genuinely not theme
+  // choices into `design-system/paint.ts` — Google's and Yahoo's marks, which a
+  // brand policy fixes; the white a JPEG needs in place of alpha, which a file
+  // format fixes; and the two fallbacks behind a token read. They were already
+  // exemptions; they are now *where the brief says palette facts live*, so the
+  // grep is the check rather than a grep with a footnote, and the count of
+  // exceptions is one file's business.
+  const hits = shLines(
+    `grep -rn "#[0-9a-fA-F]\\{3,8\\}" main-site/src/ --include="*.tsx" --include="*.ts" | grep -v "design-system" | grep -v "test" || true`,
+  ).filter((line) => {
+    const code = line.slice(line.indexOf(':', line.indexOf(':') + 1) + 1).trim();
+    return !(code.startsWith('//') || code.startsWith('*') || code.startsWith('/*'));
+  });
+  const paint = read('main-site/src/design-system/paint.ts');
+  const exceptions = (paint.match(/'#[0-9a-f]{6}'/g) ?? []).length;
+  return {
+    ok: hits.length === 0,
+    evidence:
+      hits.length === 0
+        ? `zero hex literals outside the design system; the ${exceptions} that exist are the brand marks, the JPEG backdrop and the token-read fallbacks, all in design-system/paint.ts`
+        : hits.slice(0, 5).join(' | '),
+  };
+});
+
+check(
+  'F-25',
+  'Performance',
+  'A design-system module does not reach back through its own barrel',
+  () => {
+    // `design-system/color.ts` is called from the theme store, and the barrel that
+    // re-exports it also re-exports `ThemeToggle`, which reads that store. Routing
+    // the helper through the barrel would close a cycle — which bundles without
+    // complaint and then hands `undefined` to whichever module loses the race, so
+    // the failure shows up as a blank swatch three screens away from the cause.
+    // The rule is therefore structural, and this is what keeps it structural:
+    // nothing inside the design system may import the design system barrel.
+    const offenders = shLines(
+      `grep -rn "from '@/design-system'" main-site/src/design-system --include=*.ts --include=*.tsx || true`,
+    ).filter((line) => !/design-system\/index\.ts/.test(line));
+    const stale = shLines(
+      `grep -rln "from '@/lib/color'" main-site/src --include=*.ts --include=*.tsx || true`,
+    );
+    return {
+      ok: offenders.length === 0 && stale.length === 0,
+      evidence:
+        offenders.length === 0 && stale.length === 0
+          ? 'colour helpers are imported by path; no self-import through the barrel'
+          : `barrel self-imports: ${offenders.slice(0, 3).join(' | ')}${stale.length ? `; stale @/lib/color in ${stale.join(', ')}` : ''}`,
+    };
+  },
+);
+
+check('F-26', 'Performance', 'A channel is writable from the channel itself', () => {
+  // The room has a page, a feed, a count and a moderator. What a reader could
+  // not do was start the next post *there*: the composer only ever opened on
+  // the blank draft, and its channel picker was the one place a member had to
+  // know the room's name already. That is the difference between a feature
+  // that exists and one that is reachable, and it is what the brief refuses
+  // to call complete. So the page links to the composer with the channel
+  // attached, the composer honours it, and a link that can no longer be
+  // honoured says so rather than posting to the feed behind the member's back.
+  const page = read('main-site/src/routes/ChannelPage.tsx');
+  const compose = read('main-site/src/routes/ComposePage.tsx');
+  const seed = read('main-site/src/lib/channels/channel-seed.ts');
+  const locales = ['en', 'bn'].map((l) => read(`main-site/src/i18n/locales/${l}.ts`));
+  const guards = [
+    /composeChannelHref\(channel\.id\)/.test(page),
+    // A read-only room must not dangle a button that fails on save.
+    /channel\.isReadOnly/.test(page),
+    /seedChannelFromParam\(query\.get\(CHANNEL_QUERY_PARAM\), channels\)/.test(compose),
+    /applyChannelSeed\(current, seed\)/.test(compose),
+    /kind === 'seeded'/.test(seed),
+    // A refusal is only a refusal if it is legible in both languages.
+    ...locales.map(
+      (bundle) => /channelLinkBlocked/.test(bundle) && /channelLinkUnknown/.test(bundle),
+    ),
+  ];
+  const missing = guards.filter((ok) => !ok).length;
+  return {
+    ok: missing === 0,
+    evidence:
+      missing === 0
+        ? 'the channel page addresses /compose?channel=<id>; the composer seeds it, refuses a closed room aloud, and touches nothing but the target and its visibility'
+        : `${missing} of ${guards.length} links in the loop are absent`,
+  };
+});
+
+check('F-27', 'Performance', 'The built stylesheet proves what the source only claims', () => {
+  // A utility that compiles to no rule, a `color-mix()` with an unparseable
+  // stop, a token scale no plain stylesheet can name — all three are invisible
+  // in source and obvious in output, and all three shipped once already. So
+  // after a build the audit reads `dist` itself. Before a build this is
+  // reported rather than failed, because CI builds first and a developer running
+  // the audit on a clean tree has not: a gate that demands an artifact it did
+  // not ask for is a gate people learn to skip.
+  const report = JSON.parse(sh('node scripts/contrast-audit.mjs --json'));
+  const emitted = report.emitted;
+  if (emitted === null || emitted === undefined) {
+    return {
+      ok: true,
+      evidence: 'no main-site/dist build on this checkout; run `npm run build` to enable it',
+    };
+  }
+  const css = sh(`ls main-site/dist/assets/index-*.css 2>/dev/null | tail -1 || true`).trim();
+  const body = css.length > 0 ? read(css.replace('main-site/', 'main-site/')) : '';
+  const mirrors = [
+    '--text-xs',
+    '--text-3xl',
+    '--space-1',
+    '--space-12',
+    '--radius-sm',
+    '--radius-full',
+    '--shadow-card',
+    '--ease-app',
+    '--color-bg-primary',
+    '--color-accent',
+  ];
+  const missing = body.length > 0 ? mirrors.filter((name) => !body.includes(`${name}:`)) : mirrors;
+  const invalid = (emitted.invalidColorMix ?? []).length;
+  return {
+    ok: body.length === 0 || (missing.length === 0 && invalid === 0),
+    evidence:
+      body.length === 0
+        ? 'no built stylesheet to read'
+        : missing.length === 0 && invalid === 0
+          ? `${mirrors.length} token mirror(s) present and every color-mix() stop is a percentage or calc()`
+          : `${invalid} invalid color-mix stop(s), ${missing.length} missing mirror(s): ${missing.slice(0, 6).join(', ')}`,
+  };
+});
+
+check(
+  'F-28',
+  'Performance',
+  'No chunk the first paint waits for is a 200 kB download on its own',
+  () => {
+    // The brief's main-JS budget is about *a file*, not a sum: one 200 kB chunk
+    // on the critical path is a different failure from five 40 kB ones, and the
+    // sum is already F-01's business. This reads the eager module graph out of
+    // the built `index.html` — what the browser fetches before it paints — and
+    // holds each file to the budget, so a bundle cannot turn into a monolith by
+    // accretion of imports nobody reviewed.
+    const dist = join(root, 'main-site', 'dist');
+    const htmlPath = join(dist, 'index.html');
+    if (!existsSync(htmlPath)) {
+      return { ok: true, evidence: 'no build to read; `npm run build` enables it' };
+    }
+    const html = readFileSync(htmlPath, 'utf8');
+    const eager = [
+      ...new Set(
+        [...html.matchAll(/(?:src|href)="\/(assets\/[^"]+\.js)"/g)].map((match) => match[1]),
+      ),
+    ];
+    if (eager.length === 0) {
+      return { ok: false, evidence: 'index.html references no module script at all' };
+    }
+    const sizes = eager.map((file) => ({
+      file: basename(file),
+      kb: Number(sh(`gzip -c "${join(dist, file)}" | wc -c`)) / 1024,
+    }));
+    const over = sizes.filter((entry) => entry.kb > 200);
+    const total = sizes.reduce((sum, entry) => sum + entry.kb, 0);
+    return {
+      ok: over.length === 0,
+      evidence:
+        `${eager.length} eager module(s), largest ${Math.max(...sizes.map((s) => s.kb)).toFixed(1)} kB gz, ` +
+        `${total.toFixed(1)} kB gz in total; over budget: ` +
+        (over.length === 0
+          ? 'none'
+          : over.map((entry) => `${entry.file} ${entry.kb.toFixed(1)} kB`).join(', ')),
+    };
+  },
+);
 
 check(
   'F-18',

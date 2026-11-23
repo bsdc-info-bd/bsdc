@@ -35,19 +35,13 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.designsystem.BsdcCodeTextStyle
 import bd.info.bsdc.app.core.designsystem.BsdcPalette
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 
-private sealed interface MarkdownBlock {
-    data class Heading(val level: Int, val text: String) : MarkdownBlock
-    data class Quote(val text: String) : MarkdownBlock
-    data class Bullet(val text: String) : MarkdownBlock
-    data class CodeFence(val language: String, val code: String) : MarkdownBlock
-    data class Paragraph(val text: String) : MarkdownBlock
-}
 
 @Composable
 fun PostMarkdownRenderer(
@@ -109,6 +103,59 @@ fun PostMarkdownRenderer(
                             text = renderInlineMarkdown(block.text, tokens.brandStrong),
                             style = MaterialTheme.typography.bodyLarge,
                             color = primaryText,
+                        )
+                    }
+                }
+
+                is MarkdownBlock.Ordered -> {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Text(
+                            text = "${block.index}.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = tokens.brandStrong,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            text = renderInlineMarkdown(block.text, tokens.brandStrong),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = primaryText,
+                        )
+                    }
+                }
+
+                is MarkdownBlock.Task -> {
+                    // The box is drawn, not spelled: before this the reader printed the literal
+                    // "[x]" of `- [x] ship it`, which is what a parser that has no rule for a block
+                    // does — it shows the syntax instead of the meaning.
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(RoundedCornerShape(5.dp))
+                                .background(if (block.checked) tokens.brandStrong else Color.Transparent)
+                                .border(1.dp, tokens.border, RoundedCornerShape(5.dp)),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (block.checked) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(13.dp),
+                                    tint = Color(0xFFF2F7F4),
+                                )
+                            }
+                        }
+                        Text(
+                            text = renderInlineMarkdown(block.text, tokens.brandStrong),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (block.checked) tokens.mutedText else primaryText,
+                            textDecoration = if (block.checked) TextDecoration.LineThrough else TextDecoration.None,
                         )
                     }
                 }
@@ -196,76 +243,6 @@ fun BsdcCodeSnippetBlock(
     }
 }
 
-private fun parseMarkdownBlocks(raw: String): List<MarkdownBlock> {
-    if (raw.isBlank()) return emptyList()
-    val lines = raw.replace("\r\n", "\n").lines()
-    val out = mutableListOf<MarkdownBlock>()
-    val paraBuffer = mutableListOf<String>()
-    var inCode = false
-    var codeLang = ""
-    val codeBuffer = mutableListOf<String>()
-
-    fun flushPara() {
-        if (paraBuffer.isNotEmpty()) {
-            out += MarkdownBlock.Paragraph(paraBuffer.joinToString("\n"))
-            paraBuffer.clear()
-        }
-    }
-
-    for (line in lines) {
-        val trimmed = line.trim()
-        if (trimmed.startsWith("```")) {
-            if (inCode) {
-                out += MarkdownBlock.CodeFence(codeLang, codeBuffer.joinToString("\n"))
-                codeBuffer.clear()
-                codeLang = ""
-                inCode = false
-            } else {
-                flushPara()
-                inCode = true
-                codeLang = trimmed.removePrefix("```").trim()
-            }
-            continue
-        }
-        if (inCode) {
-            codeBuffer += line
-            continue
-        }
-        if (trimmed.isEmpty()) {
-            flushPara()
-            continue
-        }
-        when {
-            trimmed.startsWith("### ") -> {
-                flushPara()
-                out += MarkdownBlock.Heading(3, trimmed.removePrefix("### ").trim())
-            }
-            trimmed.startsWith("## ") -> {
-                flushPara()
-                out += MarkdownBlock.Heading(2, trimmed.removePrefix("## ").trim())
-            }
-            trimmed.startsWith("# ") -> {
-                flushPara()
-                out += MarkdownBlock.Heading(1, trimmed.removePrefix("# ").trim())
-            }
-            trimmed.startsWith("> ") -> {
-                flushPara()
-                out += MarkdownBlock.Quote(trimmed.removePrefix("> ").trim())
-            }
-            trimmed.startsWith("- ") || trimmed.startsWith("* ") -> {
-                flushPara()
-                out += MarkdownBlock.Bullet(trimmed.drop(2).trim())
-            }
-            else -> paraBuffer += line
-        }
-    }
-
-    if (inCode && codeBuffer.isNotEmpty()) {
-        out += MarkdownBlock.CodeFence(codeLang, codeBuffer.joinToString("\n"))
-    }
-    flushPara()
-    return out
-}
 
 private fun renderInlineMarkdown(text: String, accentColor: Color): AnnotatedString = buildAnnotatedString {
     var i = 0

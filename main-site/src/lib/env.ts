@@ -24,6 +24,8 @@ export interface PublicEnv {
     vapidPublicKey: string;
     /** This site's own VAPID key, the one web push is signed with. */
     webPushPublicKey: string;
+    /** `fcm` or `webpush`. Empty means: take whichever of the two can actually work. */
+    transport: string;
   };
   oneSignalAppId: string;
 }
@@ -73,6 +75,7 @@ const raw: PublicEnv = {
   push: {
     vapidPublicKey: import.meta.env.VITE_FIREBASE_VAPID_PUBLIC_KEY ?? '',
     webPushPublicKey: import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '',
+    transport: import.meta.env.VITE_PUSH_TRANSPORT ?? '',
   },
   oneSignalAppId: import.meta.env.VITE_ONESIGNAL_APP_ID ?? '',
 };

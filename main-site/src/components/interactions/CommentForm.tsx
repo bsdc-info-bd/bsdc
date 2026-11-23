@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, ProgressBar, TextField, TextareaField } from '@/design-system';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import type { CommentImage } from '@/lib/interactions/interaction-types';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth-store';
@@ -117,6 +118,30 @@ export function CommentForm({
     }
   }
 
+  /**
+   * Puts a picture the member already has into this box.
+   *
+   * No upload, and no `uploadAndRecord` either: the asset row exists and belongs to
+   * them, which is exactly what `prepare_comment` (0120) checks for. What is left to
+   * do is carry the description across — a picture described once should not have to
+   * be described again in the next box, which is how alt text ends up empty.
+   */
+  function attachPicked(picked: {
+    url: string;
+    thumbUrl: string;
+    width: number | null;
+    height: number | null;
+    altText: string;
+  }) {
+    setImage({
+      url: picked.url,
+      thumbUrl: picked.thumbUrl.length > 0 ? picked.thumbUrl : picked.url,
+      width: picked.width,
+      height: picked.height,
+    });
+    setAlt((current) => (current.length > 0 ? current : picked.altText.slice(0, MAX_ALT)));
+  }
+
   async function submit() {
     if (disabled) return;
     setSaving(true);
@@ -166,7 +191,7 @@ export function CommentForm({
       />
 
       {image === null ? null : (
-        <div className="flex flex-col gap-2 rounded-xl border border-line bg-surface-2 p-2">
+        <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface-2 p-2">
           <div className="flex items-start gap-2">
             <img
               src={image.thumbUrl}
@@ -175,7 +200,7 @@ export function CommentForm({
               height={96}
               loading="lazy"
               decoding="async"
-              className="h-24 w-24 shrink-0 rounded-lg border border-line object-cover"
+              className="h-24 w-24 shrink-0 rounded-lg border border-border object-cover"
             />
             <div className="min-w-0 flex-1">
               <TextField
@@ -243,6 +268,20 @@ export function CommentForm({
               <ImagePlus size={14} className={cn(uploading && 'opacity-60')} />
               {t('interactions.addPicture')}
             </Button>
+            <MediaSourcePicker
+              purpose="comment-image"
+              showUpload={false}
+              max={1}
+              disabled={uploading || saving}
+              onFiles={(files) => {
+                const file = files[0];
+                if (file !== undefined) void attach(file);
+              }}
+              onPick={(picked) => {
+                const first = picked[0];
+                if (first !== undefined) attachPicked(first);
+              }}
+            />
           </>
         ) : null}
 

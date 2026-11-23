@@ -118,7 +118,7 @@ export default function AdminMarketplacePage() {
             type="button"
             aria-selected={queue === id}
             onClick={() => setQueue(id)}
-            className={`rounded-xl border px-4 py-2 text-sm font-semibold ${queue === id ? 'border-green-700 bg-green-700 text-white' : 'border-border bg-surface'}`}
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold ${queue === id ? 'border-primary bg-primary text-on-primary' : 'border-border bg-surface'}`}
           >
             {id === 'applications'
               ? `Applications (${apps.length})`

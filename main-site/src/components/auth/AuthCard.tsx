@@ -51,7 +51,7 @@ export function AuthCard({ title, subtitle, children, footer, showcase = false }
                     key={item.text}
                     className="flex items-center gap-3 rounded-card border border-border/80 bg-surface/80 px-3.5 py-2.5 text-sm font-medium text-text"
                   >
-                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-500/12 text-green-700">
+                    <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-green-500/15 text-green-700">
                       <Icon size={17} aria-hidden="true" />
                     </span>
                     <span>{item.text}</span>

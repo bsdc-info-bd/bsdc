@@ -21,22 +21,20 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Star
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Work
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -65,6 +63,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAvatar
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -82,6 +81,7 @@ fun JobDetailScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit,
+    mediaRepository: BsdcMediaRepository? = null,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -93,11 +93,6 @@ fun JobDetailScreen(
     var failed by remember(slug) { mutableStateOf(false) }
     var reloadNonce by remember(slug) { mutableStateOf(0) }
     var showApply by remember(slug) { mutableStateOf(false) }
-    var coverLetter by remember(slug) { mutableStateOf("") }
-    var resumeLink by remember(slug) { mutableStateOf("") }
-    var applicantName by remember(slug) { mutableStateOf("") }
-    var applicantPhone by remember(slug) { mutableStateOf("") }
-    var applicantEmail by remember(slug) { mutableStateOf("") }
     var applying by remember(slug) { mutableStateOf(false) }
     var applyError by remember(slug) { mutableStateOf<String?>(null) }
     var applied by remember(slug) { mutableStateOf(false) }
@@ -110,6 +105,9 @@ fun JobDetailScreen(
     var banner by remember(slug) { mutableStateOf<String?>(null) }
     var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
     var actionBusy by remember(slug) { mutableStateOf(false) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -132,6 +130,48 @@ fun JobDetailScreen(
                     applicantsBusy = false
                 }
             }
+        }
+    }
+
+    /**
+     * Writes the job editor's payload, then reloads the page.
+     *
+     * The reload is a `reloadNonce` bump rather than a poke at [job], for the same reason the group host
+     * does it: `update_job` trims, canonicalises the skills, and refuses a deadline that has passed, so
+     * what must appear on screen is the row the database kept. It also matters here more than anywhere,
+     * because a job page shows an application count and a live/closed ribbon that the write itself moves.
+     */
+    fun saveJobEdit(payload: JobEditPayload) {
+        val current = job ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateJob(
+                jobId = current.id,
+                title = payload.title,
+                company = payload.company,
+                description = payload.description,
+                jobType = payload.jobType,
+                workMode = payload.workMode,
+                level = payload.level,
+                city = payload.city,
+                salaryMin = payload.salaryMin,
+                salaryMax = payload.salaryMax,
+                salaryPeriod = payload.salaryPeriod,
+                skills = payload.skills,
+                applyUrl = payload.applyUrl,
+                expiresAt = payload.expiresAt,
+                coverUrl = payload.coverUrl,
+            ).onSuccess {
+                showEditSheet = false
+                banner = if (bn) "পদটি সংরক্ষিত হয়েছে" else "Role saved"
+                bannerTone = BsdcTone.OK
+                reloadNonce += 1
+            }.onFailure { error ->
+                editError = JobEditLogic.editFailureMessage(error, bn)
+            }
+            editSaving = false
         }
     }
 
@@ -166,36 +206,27 @@ fun JobDetailScreen(
         }
     }
 
-    fun submitApplication(current: JobDetailDto) {
+    /**
+     * Sends the application the sheet built.
+     *
+     * No re-checking here: `MkJobApplySheet` refuses an illegal field under the field itself, and
+     * `apply_to_job` decides ownership and duplicates on the write. What the screen owns is what only the
+     * write can answer — that the role closed while the member was writing, or that they had already
+     * applied — so those sentences are translated rather than pasted from `localizedMessage`, which is
+     * what this call used to do.
+     */
+    fun sendApplication(current: JobDetailDto, draft: JobDetailLogic.ApplicationDraft) {
         if (applying) return
         applying = true
         applyError = null
-        val draft = JobDetailLogic.ApplicationDraft(
-            applicantName = applicantName,
-            phone = applicantPhone,
-            email = applicantEmail,
-            coverLetter = coverLetter,
-            resumeUrl = resumeLink,
-        )
-        val validation = JobDetailLogic.validateApplicationDraft(draft)
-        if (validation.isNotEmpty()) {
-            applyError = if (bn) "নাম, বৈধ যোগাযোগের তথ্য এবং কমপক্ষে ২০ অক্ষরের আবেদনপত্র দিন।" else "Enter your name, valid contact details, and a cover letter of at least 20 characters."
-            applying = false
-            return
-        }
         scope.launch {
             repository.applyToJob(current.id, JobDetailLogic.toApplicationSubmission(draft))
                 .onSuccess {
                     showApply = false
                     applied = true
-                    coverLetter = ""
-                    resumeLink = ""
                     reloadNonce += 1
                 }
-                .onFailure { err ->
-                    applyError = err.localizedMessage
-                        ?: if (bn) "আবেদন জমা হয়নি। আবার চেষ্টা করুন।" else "The application was not sent. Try again."
-                }
+                .onFailure { err -> applyError = applicationFailureMessage(err, bn) }
             applying = false
         }
     }
@@ -254,17 +285,10 @@ fun JobDetailScreen(
         }
     }
 
+    // The screen no longer mirrors the apply form's fields: `MkJobApplySheet` holds the draft and asks
+    // `validateApplicationDraft` for itself, which is what stops the page from showing one combined
+    // sentence about a form whose five boxes each had their own red underline.
     val current = job
-    val applicationErrors = JobDetailLogic.validateApplicationDraft(
-        JobDetailLogic.ApplicationDraft(
-            applicantName = applicantName,
-            phone = applicantPhone,
-            email = applicantEmail,
-            coverLetter = coverLetter,
-            resumeUrl = resumeLink,
-        ),
-    )
-    val resumeValid = "resume" !in applicationErrors
 
     Column(modifier = modifier.fillMaxSize()) {
         Row(
@@ -647,13 +671,21 @@ fun JobDetailScreen(
                                                     enabled = !ownerBusy,
                                                 )
                                             }
-                                            BsdcButton(
-                                                label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                                onClick = {
-                                                    onOpenExternal(JobDetailLogic.webUrl(current.slug))
-                                                },
-                                                secondary = true,
-                                            )
+                                            if (controls.canEdit) {
+                                                // "Edit on the web" was the whole gap: `update_job` has
+                                                // been callable from this screen since the routine
+                                                // landed, and only the form was missing.
+                                                BsdcButton(
+                                                    label = if (bn) "পদ সম্পাদনা" else "Edit role",
+                                                    onClick = {
+                                                        editError = null
+                                                        showEditSheet = true
+                                                    },
+                                                    secondary = true,
+                                                    enabled = !ownerBusy && !editSaving,
+                                                    leadingIcon = Icons.Rounded.Edit,
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -675,7 +707,7 @@ fun JobDetailScreen(
                                     items(2) { BsdcDirectorySkeletonCard() }
                                 }
                                 items(applicants, key = { it.id }) { application ->
-                                    BsdcCard {
+                                    BsdcCard(modifier = Modifier.animateItem()) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -753,6 +785,18 @@ fun JobDetailScreen(
                         }
                     }
 
+                    MkJobEditSheet(
+                        visible = showEditSheet,
+                        job = current,
+                        bn = bn,
+                        saving = editSaving,
+                        errorMessage = editError.orEmpty(),
+                        imageLoader = imageLoader,
+                        mediaRepository = mediaRepository,
+                        onDismiss = { if (!editSaving) showEditSheet = false },
+                        onSave = { payload -> saveJobEdit(payload) },
+                    )
+
                     val confirmJob = job
                     if (confirmJob != null && pendingClose) {
                         BsdcConfirmDialog(
@@ -787,92 +831,54 @@ fun JobDetailScreen(
                         )
                     }
 
-                    if (showApply) {
-                        AlertDialog(
-                            onDismissRequest = { if (!applying) showApply = false },
-                            title = { Text(current.title) },
-                            text = {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    OutlinedTextField(
-                                        value = applicantName,
-                                        onValueChange = { applicantName = it.take(60) },
-                                        label = { Text(if (bn) "আপনার নাম" else "Your name") },
-                                        isError = applicantName.isNotBlank() && "name" in applicationErrors,
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    OutlinedTextField(
-                                        value = applicantPhone,
-                                        onValueChange = { applicantPhone = it.take(20) },
-                                        label = { Text(if (bn) "ফোন" else "Phone") },
-                                        isError = applicantPhone.isNotBlank() && "phone" in applicationErrors,
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    OutlinedTextField(
-                                        value = applicantEmail,
-                                        onValueChange = { applicantEmail = it.take(320) },
-                                        label = { Text(if (bn) "ইমেইল" else "Email") },
-                                        isError = applicantEmail.isNotBlank() && "email" in applicationErrors,
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    OutlinedTextField(
-                                        value = coverLetter,
-                                        onValueChange = { coverLetter = it },
-                                        label = { Text(if (bn) "কভার লেটার" else "Cover letter") },
-                                        supportingText = {
-                                            Text(
-                                                if (bn) {
-                                                    "কমপক্ষে ${BanglaDigitFormatter.formatCount(JobDetailLogic.MIN_COVER_LETTER.toLong(), language)} অক্ষর"
-                                                } else {
-                                                    "At least ${JobDetailLogic.MIN_COVER_LETTER} characters"
-                                                },
-                                            )
-                                        },
-                                        isError = coverLetter.isNotBlank() && !JobDetailLogic.coverLetterValid(coverLetter),
-                                        minLines = 4,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    OutlinedTextField(
-                                        value = resumeLink,
-                                        onValueChange = { resumeLink = it },
-                                        label = { Text(if (bn) "রিজিউমি লিংক (ঐচ্ছিক)" else "Resume link (optional)") },
-                                        supportingText = {
-                                            Text(
-                                                if (resumeValid) {
-                                                    if (bn) "https দিয়ে শুরু হওয়া লিংক" else "An https link"
-                                                } else {
-                                                    if (bn) "একটি বৈধ https লিংক দিন" else "Enter a valid https link"
-                                                },
-                                            )
-                                        },
-                                        isError = !resumeValid,
-                                        singleLine = true,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    )
-                                    applyError?.let { message ->
-                                        Text(text = message, color = MaterialTheme.colorScheme.error)
-                                    }
-                                }
-                            },
-                            confirmButton = {
-                                TextButton(
-                                    enabled = applicationErrors.isEmpty() && !applying,
-                                    onClick = { submitApplication(current) },
-                                ) {
-                                    Text(if (bn) "জমা দিন" else "Submit")
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(enabled = !applying, onClick = { showApply = false }) {
-                                    Text(if (bn) "বাতিল" else "Cancel")
-                                }
-                            },
-                        )
-                    }
+                    MkJobApplySheet(
+                        visible = showApply,
+                        job = current,
+                        bn = bn,
+                        saving = applying,
+                        errorMessage = applyError.orEmpty(),
+                        // The reader's own skills come along, because a form that asks someone to retype
+                        // what their profile already says is doing the wrong kind of favour. The account
+                        // email stays out of it, since `prefillApplicationDraft` may only use it when the
+                        // member has made their profile public.
+                        initialDraft = JobDetailLogic.prefillApplicationDraft(
+                            displayName = "",
+                            accountEmail = "",
+                            showEmail = false,
+                            location = "",
+                            skills = viewerSkills,
+                        ),
+                        onDismiss = { if (!applying) showApply = false },
+                        onSubmit = { draft -> sendApplication(current, draft) },
+                    )
                 }
             }
         }
+    }
+}
+
+/**
+ * One sentence for an application the routine refused.
+ *
+ * `apply_to_job` answers with a permission code, a missing role, or a duplicate. Each is worth saying: a
+ * member who reads "42501" under a form they had just filled in has learned nothing about their own
+ * application, and a role that closed while they were typing is not their mistake.
+ */
+internal fun applicationFailureMessage(error: Throwable, bn: Boolean): String {
+    val text = error.message.orEmpty()
+    return when {
+        text.contains("authentication required") ->
+            if (bn) "আবেদন করতে আবার সাইন ইন করুন।" else "Sign in again to apply."
+        text.contains("not open") || text.contains("closed") ->
+            if (bn) "এই পদটি আর খোলা নেই।" else "This role is no longer open."
+        text.contains("already") ->
+            if (bn) {
+                "আপনি এই পদে আগেই আবেদন করেছেন।"
+            } else {
+                "You have already applied to this role."
+            }
+        text.contains("42501") ->
+            if (bn) "আবেদন করার অনুমতি আপনার নেই।" else "You are not allowed to apply to this role."
+        else -> if (bn) "আবেদন পাঠানো যায়নি। আবার চেষ্টা করুন।" else "The application was not sent. Try again."
     }
 }

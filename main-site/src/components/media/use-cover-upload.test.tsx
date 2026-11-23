@@ -97,6 +97,7 @@ function Harness({ purpose = 'cover' }: { purpose?: MediaPurpose }) {
     <div>
       <output data-testid="file">{upload.file?.name ?? 'none'}</output>
       <output data-testid="preview">{upload.previewUrl}</output>
+      <output data-testid="picked">{upload.picked?.url ?? 'none'}</output>
       <output data-testid="progress">{upload.progress === null ? 'idle' : upload.progress}</output>
     </div>
   );
@@ -248,5 +249,91 @@ describe('one cover picture, uploaded when the member commits', () => {
     await call(() => cover().ensureUploaded('member-1'));
 
     expect(cover().progress).toBeNull();
+  });
+});
+function picked(url = 'https://i.ibb.co/old/sylhet.webp', thumbUrl = `${url}?thumb`) {
+  return {
+    mediaId: 'asset-old',
+    url,
+    thumbUrl,
+    width: 1200,
+    height: 800,
+    altText: 'The Sylhet office wall, painted in 2024',
+    purpose: 'cover' as const,
+  };
+}
+
+describe("a cover taken from the member's own pictures", () => {
+  it('publishes the stored address with no upload and no second row', async () => {
+    open();
+    act(() => cover().pick(picked()));
+
+    // The whole point of the gallery: the bytes are already on the host and the row
+    // is already written, so a reuse neither costs quota nor leaves a twin behind.
+    expect(await call(() => cover().ensureUploaded('member-1'))).toBe(
+      'https://i.ibb.co/old/sylhet.webp',
+    );
+    expect(uploadMedia).not.toHaveBeenCalled();
+    expect(recordMediaAsset).not.toHaveBeenCalled();
+  });
+
+  it('previews the reused picture from its own thumbnail, not from a local file', async () => {
+    open();
+    act(() => cover().pick(picked()));
+
+    await waitFor(() => expect(cover().previewUrl).toBe('https://i.ibb.co/old/sylhet.webp?thumb'));
+    // Nothing was created for it, so there is no object URL left to revoke either.
+    expect(objectUrls).toHaveLength(0);
+  });
+
+  it('falls back to the full address for a row the host never thumbnailed', async () => {
+    open();
+    act(() => cover().pick(picked('https://i.ibb.co/old/no-thumb.webp', '')));
+
+    await waitFor(() => expect(cover().previewUrl).toBe('https://i.ibb.co/old/no-thumb.webp'));
+  });
+
+  it('gives up the picked cover when the member clears the field', async () => {
+    open();
+    act(() => cover().pick(picked()));
+    // This is the hazard a "remove the existing cover" button walks into: the row it
+    // has to clear is the one the field holds, not only the file input next to it.
+    act(() => cover().choose(null));
+
+    expect(cover().picked).toBeNull();
+    expect(cover().previewUrl).toBe('');
+    expect(await call(() => cover().ensureUploaded('member-1'))).toBeNull();
+  });
+
+  it('drops a picked cover on reset, so the next listing cannot inherit it', async () => {
+    open();
+    act(() => cover().pick(picked()));
+    act(() => cover().reset());
+
+    expect(cover().picked).toBeNull();
+    expect(await call(() => cover().ensureUploaded('member-1'))).toBeNull();
+  });
+
+  it('lets a file chosen after a pick take the cover, and upload it', async () => {
+    open();
+    act(() => cover().pick(picked()));
+    act(() => cover().choose(picture('new.png')));
+
+    const url = await call(() => cover().ensureUploaded('member-1'));
+
+    expect(url).toBe('https://i.ibb.co/cover/cover.webp');
+    expect(cover().picked).toBeNull();
+    expect(uploadMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a pick replace the file that came before it, without publishing that file', async () => {
+    open();
+    act(() => cover().choose(picture('abandoned.png')));
+    act(() => cover().pick(picked('https://i.ibb.co/old/chosen.webp')));
+
+    expect(await call(() => cover().ensureUploaded('member-1'))).toBe(
+      'https://i.ibb.co/old/chosen.webp',
+    );
+    expect(uploadMedia).not.toHaveBeenCalled();
   });
 });

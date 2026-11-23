@@ -88,6 +88,33 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-read-only: false
 
+      # The map is rendered natively, and that is a decision with a history: the WebView page,
+      # bridge and asset interceptor each passed every check that could be run against them while
+      # the surface stayed blank (docs/android-osm-map-audit.md). Reverting to that design would
+      # put the bug back, so the rule is asserted here rather than remembered — and before Gradle,
+      # because a two-second check should not wait nine minutes behind a build.
+      - name: Check the map is native (no WebView, no bundled Leaflet)
+        run: |
+          set -euo pipefail
+          MARKET=android-app/feature/market/src/main/kotlin
+          if grep -rn "android\.webkit" "$MARKET"; then
+            echo "::error file=.github/workflows/android.yml#L96::feature/market must not use WebView. The map is osmdroid; see docs/android-osm-map-audit.md for why."
+            exit 1
+          fi
+          if [ -e android-app/feature/market/src/main/assets/leaflet ]; then
+            echo "::error::android-app/feature/market/src/main/assets/leaflet is dead weight now that the map is native — delete it."
+            exit 1
+          fi
+          grep -q "libs.osmdroid.android" android-app/feature/market/build.gradle.kts || {
+            echo "::error::osmdroid is not wired into feature/market, so the map cannot render tiles."
+            exit 1
+          }
+          grep -q "osmdroid = \"6\.1\.20\"" android-app/gradle/libs.versions.toml || {
+            echo "::error::the osmdroid version must stay pinned in the version catalog."
+            exit 1
+          }
+          echo "map engine: osmdroid $(grep -m1 '^osmdroid =' android-app/gradle/libs.versions.toml | tr -d ' '), no WebView, no bundled Leaflet"
+
       - name: Verify native manifest & zero-Capacitor invariants
         working-directory: android-app
         run: |
@@ -158,6 +185,32 @@ jobs:
             summary=$(grep -E '(^e: |error:|FAILURE:|Execution failed for task)' /tmp/gradle.out | head -n 12 | tr '\n' ' ')
             if [ -z "$summary" ]; then
               summary=$(tail -c 1400 /tmp/gradle.out | tr '\n' ' ')
+            fi
+            # A failed unit test has no `e:` line, so the grep above can only say which task died —
+            # "Execution failed for task ':feature:discover:testDebugUnitTest'" is not a diagnosis.
+            # Name the cases from the JUnit XML instead, so that one push explains itself.
+            failing=$(python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          
+          found = []
+          for path in glob.glob("**/build/test-results/**/*.xml", recursive=True):
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for case in root.iter("testcase"):
+                  for kind in ("failure", "error"):
+                      node = case.find(kind)
+                      if node is None:
+                          continue
+                      lines = (node.get("message") or node.text or "").strip().splitlines()
+                      detail = lines[0][:180] if lines else "?"
+                      found.append("%s.%s: %s" % (case.get("classname"), case.get("name"), detail))
+          print(" | ".join(found[:8]))
+          PY
+            )
+            if [ -n "$failing" ]; then
+              summary="$summary — failing tests: $failing"
             fi
             echo "::error::Gradle debug build failed: $summary"
             exit "$status"

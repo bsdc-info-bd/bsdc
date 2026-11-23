@@ -16,7 +16,7 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
   const reduce = useReducedMotion() ?? false;
   if (status === 'cancelled') {
     return (
-      <p className="rounded-xl bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-600">
+      <p className="rounded-xl bg-danger-soft px-3 py-2 text-sm font-semibold text-danger-text">
         {copy.statusLabels.cancelled}
       </p>
     );
@@ -30,7 +30,7 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
         aria-hidden
       />
       <motion.div
-        className="absolute left-[10%] top-4 h-1 origin-left rounded-full bg-green-600"
+        className="absolute left-[10%] top-4 h-1 origin-left rounded-full bg-primary"
         style={{ width: '80%' }}
         initial={reduce ? false : { scaleX: 0 }}
         animate={{ scaleX: progress }}
@@ -46,7 +46,7 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
             <motion.span
               className={`flex h-8 w-8 items-center justify-center rounded-full border-2 ${
                 done
-                  ? 'border-green-600 bg-green-600 text-white'
+                  ? 'border-primary bg-primary text-white'
                   : 'border-border bg-surface text-muted'
               }`}
               animate={active && !reduce ? { scale: [1, 1.15, 1] } : { scale: 1 }}

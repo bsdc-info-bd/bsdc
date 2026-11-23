@@ -15,10 +15,14 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
+import { isSameMedia, type PickedMedia } from '@/lib/media/gallery';
+import type { MediaPurpose } from '@/lib/storage/media-contract';
 import { cn } from '@/lib/cn';
 import {
   continueLine,
   countText,
+  imageUrls,
   insertCodeBlock,
   insertImage,
   insertLink,
@@ -41,6 +45,18 @@ export interface MarkdownEditorProps {
    * `uploadAndRecord` call records the asset against its owner.
    */
   uploadImage?: (file: File) => Promise<string>;
+  /**
+   * The shelf this field's pictures live on. Named, the toolbar gains a library door:
+   * a member writing about the photo they posted last month can put it in the body
+   * without saving it to a disk and uploading it again.
+   *
+   * The editor still writes nothing but markdown. A pick inserts the address the
+   * platform stored, where a freshly uploaded picture's address would have gone, so
+   * `uploadImage` stays the only way bytes leave this component — and the caption the
+   * member wrote for the picture the first time arrives as the alt text, which is the
+   * one part of an inline image nobody wants to type twice.
+   */
+  galleryPurpose?: MediaPurpose;
   disabled?: boolean;
   id?: string;
 }
@@ -64,6 +80,7 @@ export function MarkdownEditor({
   rows = 12,
   maxLength = 60000,
   uploadImage,
+  galleryPurpose,
   disabled = false,
   id,
 }: MarkdownEditorProps) {
@@ -129,6 +146,31 @@ export function MarkdownEditor({
       }
     },
     [apply, t, uploadImage],
+  );
+
+  /**
+   * Writes a picture the member already hosted into the text, and uploads nothing.
+   *
+   * One reference per opening, rather than a multi-select: a body has no image cap for
+   * the dialog to respect, and inventing one to make a checkbox reachable would be a
+   * limit the member meets for no reason. The caret is where it was, so the next
+   * picture in the same paragraph is one more opening away.
+   */
+  const insertPicked = useCallback(
+    (picked: readonly PickedMedia[]) => {
+      const first = picked[0];
+      if (first === undefined) return;
+      // The same picture twice in one body is a mistake more often than a choice, and
+      // the shelf already says which of its rows are in this text — so the refusal is
+      // said back, in the words the queue uses for it, rather than swallowed.
+      if (imageUrls(value).some((url) => isSameMedia(url, first.url))) {
+        setNotice(t('media.gallery.alreadyAttached'));
+        return;
+      }
+      setNotice(null);
+      apply((window) => insertImage(window, first.url, first.altText));
+    },
+    [apply, t, value],
   );
 
   const counts = countText(value);
@@ -255,14 +297,14 @@ export function MarkdownEditor({
       <div
         className={cn(
           'overflow-hidden rounded-xl border border-border bg-bg',
-          'focus-within:border-brand focus-within:ring-1 focus-within:ring-brand',
+          'focus-within:border-primary focus-within:ring-1 focus-within:ring-primary',
         )}
       >
         <div
           role="toolbar"
           aria-label={t('compose.editor.toolbar')}
           aria-controls={fieldId}
-          className="flex flex-wrap items-center gap-0.5 border-b border-line bg-surface-2 px-1 py-1"
+          className="flex flex-wrap items-center gap-0.5 border-b border-border bg-surface-2 px-1 py-1"
         >
           {tools.map((tool) => (
             <button
@@ -285,7 +327,7 @@ export function MarkdownEditor({
 
           {uploadImage ? (
             <>
-              <span aria-hidden="true" className="mx-1 h-5 w-px bg-line" />
+              <span aria-hidden="true" className="mx-1 h-5 w-px bg-border" />
               <input
                 ref={fileRef}
                 type="file"
@@ -314,6 +356,21 @@ export function MarkdownEditor({
                 {uploading ? t('compose.editor.uploading') : null}
               </button>
             </>
+          ) : null}
+
+          {galleryPurpose ? (
+            <MediaSourcePicker
+              purpose={galleryPurpose}
+              showUpload={false}
+              compact
+              // The body's own pictures, so the shelf shows them as taken: the same
+              // address twice in one post is a rendering accident waiting to happen,
+              // and the member who wants it twice wants a caption that differs.
+              attached={imageUrls(value)}
+              disabled={disabled}
+              onPick={insertPicked}
+              className="h-8 shrink-0 gap-1 px-2 text-xs"
+            />
           ) : null}
 
           <span className="ml-auto pr-1 text-2xs text-muted">{counter}</span>

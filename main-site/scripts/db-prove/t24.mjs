@@ -70,10 +70,25 @@ await check(
   1,
   'one update policy on comments after the first pass',
 );
+// The publication is counted by membership, not by a total: a migration that opens one more table
+// to realtime — 0131 added mk_addresses, beside 0094's mk_orders and mk_order_events — is not a
+// duplicate, and a check that says "ten" would fail for it. What has to hold across a replay is that
+// nobody joins twice and the marketplace tables are in there once.
 await check(
-  `select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'`,
-  10,
-  'the realtime publication holds ten tables after the first pass (0094 adds mk_orders and mk_order_events)',
+  `select count(*)::int from (
+     select tablename from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public'
+      group by tablename having count(*) > 1
+   ) d`,
+  0,
+  'no table joins the realtime publication twice after the first pass',
+);
+await check(
+  `select count(*)::int from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public'
+       and tablename in ('mk_orders', 'mk_order_events', 'mk_addresses')`,
+  3,
+  'the marketplace reads 0094 and 0131 opened are each in the publication',
 );
 await check(
   `select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -115,9 +130,20 @@ await check(
   'still one select policy on comments',
 );
 await check(
-  `select count(*)::int from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'`,
-  10,
-  'still ten tables in the publication',
+  `select count(*)::int from (
+     select tablename from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public'
+      group by tablename having count(*) > 1
+   ) d`,
+  0,
+  'still nobody in the publication twice',
+);
+await check(
+  `select count(*)::int from pg_publication_tables
+     where pubname = 'supabase_realtime' and schemaname = 'public'
+       and tablename in ('mk_orders', 'mk_order_events', 'mk_addresses')`,
+  3,
+  'and the marketplace members are still one apiece',
 );
 await check(
   `select count(*)::int from pg_publication_tables

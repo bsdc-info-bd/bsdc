@@ -104,7 +104,7 @@ export default function MarketShopPage() {
       <MarketNav copy={copy} />
 
       <header className="overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
-        <div className="relative h-44 bg-gradient-to-br from-green-800 to-green-500 sm:h-60">
+        <div className="relative h-44 bg-gradient-to-br from-hero-from to-hero-via sm:h-60">
           {data.vendor.cover_url ? (
             <motion.img
               initial={reduce ? false : { scale: 1.06 }}
@@ -143,7 +143,7 @@ export default function MarketShopPage() {
                 {data.vendor.place_label}
               </span>
               <span className="inline-flex items-center gap-1">
-                <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />
+                <Star size={14} className="fill-rating text-rating" aria-hidden />
                 {data.rating.toFixed(1)} · {data.review_count} {copy.buyer.reviews}
               </span>
             </p>
@@ -157,10 +157,15 @@ export default function MarketShopPage() {
                   {copy.buyer.deliveryFee}: {deliveryFeeBadge}
                 </span>
               ) : null}
+              {(deliveryCfg?.min_order_poisha ?? 0) > 0 ? (
+                <span className="rounded-full bg-surface-2 px-2.5 py-0.5 text-text">
+                  {copy.buyer.minOrder}: {formatTaka(deliveryCfg?.min_order_poisha ?? 0, language)}
+                </span>
+              ) : null}
               {scheduleBadgeText ? (
                 <span
                   className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-semibold ${
-                    shopOpen ? 'bg-emerald-500/15 text-emerald-700' : 'bg-rose-500/15 text-rose-700'
+                    shopOpen ? 'bg-success-soft text-success' : 'bg-danger-soft text-danger-text'
                   }`}
                 >
                   <Clock size={12} aria-hidden />
@@ -175,7 +180,7 @@ export default function MarketShopPage() {
       {!shopOpen ? (
         <div
           role="status"
-          className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-800 dark:text-rose-200"
+          className="rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-medium text-danger-text dark:text-danger-text"
         >
           {copy.schedule.closedBanner}
         </div>
@@ -228,17 +233,17 @@ export default function MarketShopPage() {
             animate={{ y: 0, opacity: 1 }}
             exit={reduce ? {} : { y: 80, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-            className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl bg-green-800 px-4 py-3 text-white shadow-2xl"
+            className="fixed inset-x-3 bottom-4 z-40 mx-auto flex max-w-xl items-center justify-between gap-3 rounded-2xl bg-primary px-4 py-3 text-on-primary shadow-2xl"
           >
             <div className="min-w-0">
-              <p className="text-xs text-white/80">
+              <p className="text-xs text-on-hero/80">
                 {shopCount} × {copy.buyer.inCart}
               </p>
               <p className="font-bold tabular-nums">{formatTaka(shopTotal, language)}</p>
             </div>
             <Link
               to={ROUTES.marketCart}
-              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-green-800 transition hover:bg-green-50"
+              className="inline-flex items-center gap-2 rounded-xl bg-on-primary px-4 py-2 text-sm font-bold text-primary transition hover:opacity-90"
             >
               {copy.buyer.cartTitle} <ArrowRight size={16} aria-hidden />
             </Link>
@@ -265,7 +270,7 @@ function CategoryChip({
       onClick={onClick}
       className={`shrink-0 rounded-full border px-4 py-1.5 text-sm font-medium transition ${
         selected
-          ? 'border-green-700 bg-green-700 text-white'
+          ? 'border-primary bg-primary text-on-primary'
           : 'border-border bg-surface hover:bg-surface-2'
       }`}
     >

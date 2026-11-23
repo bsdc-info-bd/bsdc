@@ -113,7 +113,7 @@ function CommentPicture({ image }: { image: CommentImage }) {
         onClick={() => {
           setEnlarged(true);
         }}
-        className="fab-tap block w-full overflow-hidden rounded-xl border border-line"
+        className="fab-tap block w-full overflow-hidden rounded-xl border border-border"
         aria-label={t('interactions.enlargePicture', { description })}
       >
         <MediaImage
@@ -187,7 +187,7 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
     <article
       id={`comment-${node.id}`}
       className={cn(
-        'rounded-xl border border-line bg-surface p-3',
+        'rounded-xl border border-border bg-surface p-3',
         node.isAnswer && 'border-green-500',
       )}
     >
@@ -330,7 +330,7 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
           ) : null}
 
           {node.children.length > 0 ? (
-            <ul className="mt-3 flex flex-col gap-2 border-s border-line ps-3">
+            <ul className="mt-3 flex flex-col gap-2 border-s border-border ps-3">
               {node.children.map((child) => (
                 <li key={child.id}>
                   <CommentItem

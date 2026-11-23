@@ -26,6 +26,122 @@ working, wired-up features — never scaffolding for its own sake.
 | 19  | PWA, i18n, Android, performance                 | Done   |
 | 20  | Verification, audit and launch                  | Done   |
 
+## Response 28 scope (delivered)
+
+Phase 1 of the quality brief — the audit and the baseline — plus the two design
+gaps it exposed. Recorded in `docs/baseline-audit.md`, which separates
+_measured_ from _not measurable here_ rather than rounding the two together.
+
+- **The brief's hardcoded-colour rule now holds literally.** Its `§11` grep
+  (`grep -rn "#[0-9a-fA-F]{3,8}" main-site/src/ … | grep -v design-system |
+grep -v test`) returned 9 lines, all of them exemptions I had granted. They are
+  now moved instead: `design-system/paint.ts` holds Google's and Yahoo's mark
+  colours (a brand policy fixes them, a theme must not), the white a JPEG needs
+  in place of alpha (a file format fixes it), and the three fallbacks behind a
+  token read. **0 lines** outside the design system, no footnote on the grep, and
+  F-24 rewritten to run the brief's own command.
+- **The brief's token names exist.** `--text-*`, `--space-1…12`, `--radius-*`
+  were not defined anywhere: the scales lived only in the Tailwind config, so a
+  hand-written rule in `components.css` had nothing to name and restated a
+  `clamp()` — a restated number is a drifting one. A `tokenMirror` plugin now
+  emits 21 mirrors read out of the resolved theme at build time (colours as a
+  pointer to the `--bsdc-*` token, never its value, and never through
+  `token()`, because an alias cannot carry an alpha), so both spellings move
+  together. F-27 checks the built stylesheet for them.
+- **The audit reads build output when it exists.** A `color-mix()` stop that is
+  not a percentage is an invalid declaration that survives a green build, so
+  `contrast-audit.mjs` now greps `dist/assets/index-*.css` for it — and reports
+  "no build to read" instead of failing a pre-build `npm run lint`. Both halves
+  were negative-tested: a planted `0.1` stop is caught, and the regex that first
+  reported 76 phantom failures was fixed before anything was believed.
+- 5 tests pin the exceptions themselves, including "no brand colour may equal a
+  BSDC ramp colour", so a palette edit cannot quietly recolour Google's logo.
+
+Green: tsc (app + functions), eslint, prettier, vitest 132 files / 1350 tests,
+build with 16 prerendered routes, `§11` grep 0, 158 `color-mix()` rules with 0
+invalid stops, contrast audit PASS, launch audit 144 passed / 0 failed,
+sql-schema-check 0 across 130 files. Lighthouse, the Android toolchain and
+coverage remain unrunnable here and are recorded as open in
+`docs/baseline-audit.md`, not as passing.
+
+## Response 27 scope (delivered)
+
+Phase 4 of the channel arc: a channel became writable from the channel.
+
+- `ChannelPage` offers **Post in this channel**, addressing the composer as
+  `/compose?channel=<id>`. A read-only room says why there is no button, and a
+  visitor is asked to sign in rather than linked to a composer that cannot save.
+- `lib/channels/channel-seed.ts` (new) is the whole contract: `seedChannelFromParam`
+  decides whether a link's channel is seeded, blocked or gone, and
+  `applyChannelSeed` moves only the target and its visibility, so arriving from a
+  room can retarget a draft but cannot rewrite its title, body or pictures. A
+  stale link is _reported_ — a blocked channel clears the target and says so,
+  because silently posting a `#release-notes` draft to the open feed is the
+  worst outcome available. A `null` channel list (the query has not answered)
+  seeds anyway rather than refusing a working button to a race; the database
+  keeps the last word on save.
+- `LinkButton.to` widened to react-router's `To`, which is what lets the CTA
+  pass `{ pathname, search }` instead of hand-assembling a query string.
+- 18 new tests (8 seed, 5 apply, 2 link, 3 channel page), i18n in both locales,
+  and checkpoint **F-26** holds the loop shut — negative-tested by replacing the
+  CTA's target with a bare `/compose` and watching it fail 1-of-7.
+
+Green: tsc, eslint, prettier, vitest 132 files / 1345 tests, build with 16
+prerendered routes, contrast audit PASS, launch audit 143 passed / 0 failed.
+No migration was needed — 0129 already accepts a channel on update — so no SQL
+harness changed.
+
+## Response 26 scope (delivered)
+
+The colour system was audited and found to be lying in three ways, each now held
+by a gate that measures rather than pattern-matches.
+
+- **Two thirds of the translucent colour utilities emitted no CSS at all.**
+  Colours were declared as the bare string `var(--bsdc-x)`, and Tailwind v3 has
+  to parse a colour to apply an opacity modifier, so `bg-primary/10`,
+  `bg-warn/10`, `border-border/70` and 66 more compiled to nothing — no error,
+  no fallback, no rule. Measured against the built stylesheet with the colour
+  functions swapped back to bare strings: of 86 colour-with-alpha utilities in
+  `src`, 69 emitted no rule; after the fix, 0. `token(name)` in
+  `tailwind.config.ts` now answers `opacityValue` with
+  `color-mix(in srgb, var(--bsdc-x) N%, transparent)`, and it answers all three
+  shapes Tailwind sends (`undefined`, a number, and the `<alpha-value>` /
+  `var(--tw-*-opacity)` placeholder path) inside `calc(… * 100%)`, because a
+  bare number there is invalid CSS and a missed shape ships `NaN%`.
+- **White-on-brand failed in dark mode.** The palette was a raw Tailwind ramp and
+  a ramp inverts with the theme, so white on `bg-green-700` read 6.4:1 by day
+  and 2.04:1 by night; `--bsdc-danger` 2.77, `--bsdc-blue` 2.82, `text-warn` on
+  a light surface 2.16. Fixed with semantic tokens rather than dark hexes at 60
+  call sites: on-fill inks (`on-primary`, `on-danger`, `on-blue`, `on-hero`),
+  `*-text` pairs for colour-as-font, `success-soft`/`danger-soft`/`warn-soft` for
+  status-as-background, plus `selection`, `scrim` and `hero-*`; `.bsdc-hero`
+  carries the hero gradient and its own ink.
+- **The components spoke a vocabulary this repository does not define.** 61
+  utilities named a colour the theme never had (`border-line` ×21, `text-ink-2`,
+  `text-foreground`, `bg-brand-soft`, `text-body-sm`), and two more used an alpha
+  modifier off `theme.opacity` (`bg-scrim/92`, `bg-green-500/12`). Tailwind emits
+  no rule for either class of mistake. All are now real tokens.
+
+`scripts/contrast-audit.mjs` (new, 48 advisory findings reported and not gated)
+parses both theme blocks, the config's colour map and every class literal in
+`main-site/src`, then measures certain pairs, `dark:` supersession, 24 token
+floors, undefined utility names, off-scale alphas and off-token palette use. It
+refuses to report success while measuring too little, which caught it three
+times during development, and every new check was proven by planting a known-bad
+string. `node scripts/audit.mjs` now reads its verdict (F-17), and F-22–F-25
+hold the colour-function shape, the utility vocabulary, the hardcoded-hex
+allowlist with a per-file cap, and the design-system import rule. CI runs the
+audit for `main-site`. `design-system/color.ts` (new, 10 tests) gives the few APIs
+that cannot take `var()` a token-reading path, and picks an advertiser's CTA ink
+by measured contrast instead of assuming white.
+
+Raw Tailwind-palette classes in `main-site/src/**/*.tsx`: 45 → 0. Dead colour
+utilities: 61 → 0. Alpha utilities emitting nothing: 69 → 0. The launch audit is
+142 passed / 0 failed; the full gate set (tsc, functions tsc, eslint, prettier,
+1327 tests, build with 16 prerendered routes, 142.5 kB gz eager JS,
+sql-schema-check 0/130, db:prove 73/73) is green. Lighthouse and the Android
+toolchain are not runnable in this environment and were not claimed.
+
 ## Response 1 scope (delivered)
 
 - Monorepo skeleton: 14 web app folders, the Android shell folder and the

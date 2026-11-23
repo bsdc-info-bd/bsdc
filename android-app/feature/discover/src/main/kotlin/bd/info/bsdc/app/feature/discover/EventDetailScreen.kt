@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
@@ -55,6 +56,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -71,6 +73,7 @@ fun EventDetailScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenExternal: (String) -> Unit,
+    mediaRepository: BsdcMediaRepository? = null,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -88,6 +91,9 @@ fun EventDetailScreen(
     var pendingDelete by remember(slug) { mutableStateOf(false) }
     var ownerBusy by remember(slug) { mutableStateOf(false) }
     var rsvpBusy by remember(slug) { mutableStateOf(false) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
     var actionError by remember(slug) { mutableStateOf<String?>(null) }
     // The countdown has to move on its own while the page is open, so it ticks once a minute.
     var clockMillis by remember(slug) { mutableStateOf(System.currentTimeMillis()) }
@@ -117,6 +123,44 @@ fun EventDetailScreen(
             }
             .onFailure { failed = true }
         loading = false
+    }
+
+    /**
+     * Writes the event editor's payload, then reloads the page.
+     *
+     * The nonce bump is the whole point: `update_event` clamps the title, keeps the row's own slug, and
+     * refuses a capacity below the number of people already going, so the page must show what the routine
+     * kept. It is also the moment the attendees were notified — the banner says as much, because a host
+     * who moved an event should know that the notification went out and not infer it later.
+     */
+    fun saveEventEdit(payload: EventEditPayload) {
+        val current = event ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateEvent(
+                eventId = current.id,
+                title = payload.title,
+                description = payload.description,
+                startsAt = payload.startsAt,
+                endsAt = payload.endsAt,
+                mode = payload.mode,
+                venue = payload.venue,
+                city = payload.city,
+                joinUrl = payload.joinUrl,
+                coverUrl = payload.coverUrl,
+                timezone = payload.timezone,
+                capacity = payload.capacity,
+            ).onSuccess {
+                showEditSheet = false
+                actionError = null
+                reloadNonce += 1
+            }.onFailure { error ->
+                editError = EventEditLogic.editFailureMessage(error, bn)
+            }
+            editSaving = false
+        }
     }
 
     fun cancelEvent(current: EventDetailDto) {
@@ -306,12 +350,22 @@ fun EventDetailScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp),
                                         ) {
-                                            BsdcButton(
-                                                label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                                onClick = { onOpenExternal(EventDetailLogic.webUrl(current.slug)) },
-                                                secondary = true,
-                                                leadingIcon = Icons.Rounded.Language,
-                                            )
+                                            if (eventControls.canEdit) {
+                                                // This used to send the host to a browser to reach
+                                                // `update_event`, which this screen could already call.
+                                                // The subtitle repeats the one consequence a host cannot
+                                                // undo: a moved date tells everyone who said they were coming.
+                                                BsdcButton(
+                                                    label = if (bn) "ইভেন্ট সম্পাদনা" else "Edit event",
+                                                    onClick = {
+                                                        editError = null
+                                                        showEditSheet = true
+                                                    },
+                                                    secondary = true,
+                                                    enabled = !ownerBusy && !editSaving,
+                                                    leadingIcon = Icons.Rounded.Edit,
+                                                )
+                                            }
                                             if (eventControls.canClose) {
                                                 BsdcButton(
                                                     label = if (bn) "বাতিল করুন" else "Cancel event",
@@ -568,6 +622,20 @@ fun EventDetailScreen(
             }
         }
     }
+    event?.let { current ->
+        MkEventEditSheet(
+            visible = showEditSheet,
+            event = current,
+            bn = bn,
+            saving = editSaving,
+            errorMessage = editError.orEmpty(),
+            imageLoader = imageLoader,
+            mediaRepository = mediaRepository,
+            onDismiss = { if (!editSaving) showEditSheet = false },
+            onSave = { payload -> saveEventEdit(payload) },
+        )
+    }
+
     val confirmEvent = event
     if (confirmEvent != null && pendingCancel) {
         BsdcConfirmDialog(

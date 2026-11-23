@@ -678,6 +678,7 @@ fun PostDetailScreen(
                 } else {
                     items(orderedThread, key = { it.id }) { comment ->
                         CommentRow(
+                            modifier = Modifier.animateItem(),
                             comment = comment,
                             imageLoader = imageLoader,
                             canMarkAnswer = isPostOwner && activePost.kind == PostKind.QUESTION,
@@ -791,6 +792,7 @@ private fun CommentRow(
     onToggleAnswer: () -> Unit,
     onDelete: () -> Unit,
     onOpenImage: (String, String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val tokens = BsdcThemeTokens.colors
     val indentDp = (comment.depth.coerceIn(0, 3) * 18).dp
@@ -798,7 +800,7 @@ private fun CommentRow(
         ?: comment.author?.uid.orEmpty()
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(start = indentDp),
     ) {

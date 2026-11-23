@@ -29,6 +29,14 @@
  *
  * `--verbose` prints every performance sample, so a low median can be read as the
  * regression or the shared machine it actually is.
+ *
+ * `--strict` additionally gates the §5.1 lab floors (LCP 1.5 s, FCP 1.0 s, CLS
+ * 0.1, TBT 200 ms) on the median of each metric. Off by default: those floors
+ * were written for field data, `interaction-to-next-paint` and time-to-first-byte
+ * are not lab-measurable at all, and a gate that fails a push on a shared
+ * runner's worst minute is a gate that gets muted. The numbers are printed for
+ * every route that misses the score floor either way, which is the part a reader
+ * can act on.
  */
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -54,6 +62,25 @@ const FLOOR = Number(flag('floor', '95'));
 const VERBOSE = args.includes('--verbose');
 const RUNS = Number(flag('runs', '5'));
 const CATEGORIES = ['performance', 'accessibility', 'best-practices', 'seo'];
+/**
+ * The §5.1 budgets, as lab numbers.
+ *
+ * Lighthouse's score is a curve over several metrics, so a 91 says "something is
+ * slow" and not what a reader can act on. These are the floors the brief states,
+ * printed next to every route that misses the score floor — and gated only under
+ * `--strict`, because a simulated lab run on a shared runner is not what the
+ * brief's floors were written against: `interaction-to-next-paint` and time to
+ * first byte are field measurements, and a lab CLS on a prerendered page flatters
+ * the page. Reporting them beside the score is honest; failing a push on a lab
+ * proxy of a field metric is how a gate gets muted.
+ */
+const LAB_FLOORS = {
+  'largest-contentful-paint': { label: 'LCP', limit: 1500, unit: 'ms' },
+  'first-contentful-paint': { label: 'FCP', limit: 1000, unit: 'ms' },
+  'cumulative-layout-shift': { label: 'CLS', limit: 0.1, unit: '' },
+  'total-blocking-time': { label: 'TBT', limit: 200, unit: 'ms' },
+};
+const STRICT = args.includes('--strict');
 const DEFAULT_ROUTES = [
   '/',
   '/about',
@@ -165,6 +192,220 @@ const median = (values) => {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
 };
 
+/**
+ * The LCP element and its phases, read from a Lighthouse audit without assuming
+ * its shape.
+ *
+ * This table has moved between majors — `items` became `rows` in one, the phase
+ * label is a bare string in some versions and a `{ type: 'text', text }` object in
+ * others, and the element row and the phase rows are two sub-tables whose order is
+ * not contractual. Naming the fields at one guessed depth produced `unknown` and
+ * four `?`s on a real run, which is a diagnosis that diagnoses nothing. So the
+ * tree is walked instead: whatever the layout, a node with a snippet is the
+ * element and a row with a numeric value and a label is a phase.
+ *
+ * A missing phase stays `null` and prints `?`, because an absent measurement and
+ * a zero are different facts — and which one it is decides whether this is a
+ * hydration problem or a bytes problem.
+ */
+function readLcpBreakdown(audits, lcpMs = 0) {
+  // Every audit whose id mentions the metric is a candidate, because the
+  // breakdown has lived under three different ids across Lighthouse majors. They
+  // are searched *separately* and the richest one wins: merging their rows was
+  // the earlier design, and it let a hint from `lcp-discovery-insight` be
+  // reported as a phase of the paint — two audits that count different things
+  // added into one confident wrong number.
+  const norm = (value) =>
+    typeof value === 'string'
+      ? value.toLowerCase()
+      : value && typeof value === 'object'
+        ? String(value.text ?? value.value ?? '').toLowerCase()
+        : '';
+  const candidates = Object.keys(audits)
+    .filter((id) => /lcp|largest-contentful-paint/.test(id))
+    .map((id) => {
+      const nodes = [];
+      const rows = [];
+      walkInto(audits[id]?.details ?? audits[id], 0, nodes, rows);
+      const phases = rows.filter(
+        (row) =>
+          // `subpart` is the producer's own machine-readable key
+          // (`core/audits/insights/lcp-breakdown-insight.js` in Lighthouse 13),
+          // so it is the only name that cannot be renamed by a release or changed
+          // by a locale. The label matching below is the fallback for older and
+          // non-insight payloads, not the primary path: the labels are UI strings
+          // run through i18n, and matching English text against a localised report
+          // quietly finds nothing.
+          typeof row.subpart === 'string' ||
+          /delay|byte|ttfb|time|request|render/.test(
+            norm(row.phase ?? row.label ?? row.name ?? row.key),
+          ),
+      );
+      // A phase table without phase-shaped labels is a hint list, not a
+      // breakdown; counting it as one is how the numbers get invented.
+      return { id, nodes, rows: phases.length > 0 ? phases : [], hasNode: nodes.length > 0 };
+    })
+    .sort((a, b) => b.rows.length + (b.hasNode ? 1 : 0) - (a.rows.length + (a.hasNode ? 1 : 0)));
+  if (candidates.length === 0) return { selector: null, available: [], raw: null };
+  // The element and the phases are two facts, and in Lighthouse 12 they are two
+  // different audits: the node is on `largest-contentful-paint`, the duration rows
+  // are on `lcp-breakdown-insight`. Choosing ONE richest audit and taking both
+  // facts from it printed `LCP element: unknown` against a payload that did contain
+  // the node, because the rows-bearing audit simply has no node of its own. So each
+  // fact is taken from the audit that actually carries it, and each is labelled with
+  // its own source.
+  const richest = (list, count) =>
+    [...list].sort((a, b) => count(b) - count(a)).find((c) => count(c) > 0) ?? null;
+  const nodeWinner = richest(candidates, (c) => (c.hasNode ? 1 : 0));
+  const rowWinner = richest(candidates, (c) => c.rows.length);
+  const usable = Boolean(nodeWinner || rowWinner);
+  return summarise(
+    nodeWinner ? nodeWinner.nodes : [],
+    rowWinner ? rowWinner.rows : [],
+    candidates.map((c) => c.id),
+    audits,
+    {
+      source: usable ? (rowWinner?.id ?? nodeWinner?.id) : null,
+      elementSource: nodeWinner?.id ?? null,
+      raw: usable
+        ? null
+        : candidates
+            .map((c) => `${c.id}: ${JSON.stringify(audits[c.id]?.details ?? null)}`)
+            .join(' | ')
+            .slice(0, 900),
+    },
+    // The metric as the ceiling for every phase: nothing inside an LCP can be
+    // longer than the LCP.
+    lcpMs,
+  );
+}
+
+function summarise(nodes, rows, ids, audits, meta = {}, lcpMs = 0) {
+  const text = (value) => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') return String(value.text ?? value.value ?? '');
+    return '';
+  };
+  // Compared with spaces and case removed, so the label `Render delay`, the key
+  // `renderDelay` and a `{ type: 'text', text: 'Render delay' }` object all hit.
+  const norm = (value) =>
+    text(value)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+  /**
+   * Find one phase of the breakdown. `subpart` is tried first and matched exactly,
+   * because the producer sets it (`timeToFirstByte`, `resourceLoadDelay`,
+   * `resourceLoadDuration`, `elementRenderDelay`) and it is not a translated
+   * string; the label forms are kept for payloads predating the insight audits.
+   */
+  const findRow = (subpart, ...labels) => {
+    if (rows.some((entry) => entry.subpart === subpart)) {
+      return rows.find((entry) => entry.subpart === subpart);
+    }
+    const wanted = labels.map(norm);
+    return rows.find((entry) =>
+      wanted.some((label) =>
+        norm(entry.phase ?? entry.label ?? entry.name ?? entry.key).includes(label),
+      ),
+    );
+  };
+  const hasSubparts = rows.some((entry) => typeof entry.subpart === 'string');
+  const phase = (subpart, ...labels) => {
+    const row = findRow(subpart, ...labels);
+    if (!row) return null;
+    // The unit comes from the FIELD NAME, never from the size of the number. A
+    // magnitude guess ("> 100 means milliseconds") printed `ttfb 96711 ms` for a
+    // 96-second value that was an observation window in seconds, and printed it as
+    // a measurement — the exact confident wrong number this reader exists to
+    // avoid. `numericValue` is seconds in Lighthouse's tables, while the breakdown's
+    // `duration` is milliseconds by construction: the producer divides a
+    // microsecond trace range by 1000 and declares the column `valueType: 'ms'`.
+    const seconds = typeof row.numericValue === 'number' && row.duration === undefined;
+    const ms = Math.round(
+      seconds ? row.numericValue * 1000 : (row.duration ?? row.ms ?? row.timing ?? 0),
+    );
+    // A phase longer than the metric it explains, or longer than a minute, is not
+    // a phase: it is some other number wearing the label. Say nothing rather
+    // than say that.
+    if (!(ms >= 0) || ms > 60_000 || (lcpMs && ms > lcpMs + 500)) return null;
+    return ms;
+  };
+  const element = nodes[0];
+  return {
+    selector: element ? (element.snippet ?? element.selector) : null,
+    ttfb: phase('timeToFirstByte', 'first byte', 'ttfb'),
+    loadDelay: phase('resourceLoadDelay', 'load delay'),
+    loadTime: phase('resourceLoadDuration', 'load time', 'resource load'),
+    renderDelay: phase('elementRenderDelay', 'render delay'),
+    // The producer deletes the two load rows when the LCP element had no network
+    // load at all, so inside a subpart table their absence is a measurement and
+    // not a reading failure. Saying "no resource load" instead of two `?`s is the
+    // difference between "the image was never the problem" and "we could not tell".
+    noResourceLoad:
+      hasSubparts &&
+      !rows.some((entry) => entry.subpart === 'resourceLoadDelay') &&
+      !rows.some((entry) => entry.subpart === 'resourceLoadDuration'),
+    available: rows.length === 0 && !element ? ids : undefined,
+    source: meta.source ?? null,
+    elementSource: meta.elementSource ?? null,
+    // When nothing matched, a fragment of the payload as received is the only
+    // honest next clue: this version keeps the breakdown in an audit whose fields
+    // a reader written against documentation would keep missing, and dumping what
+    // is there ends the guessing loop for whoever fixes it next. A duplicate key
+    // here once made this the dead half of the pair — the reason it is now the
+    // caller's decision and not a second computation.
+    raw: meta.raw ?? null,
+  };
+}
+
+function walkInto(value, depth, nodes, rows, fromKey = '') {
+  if (depth > 6 || value === null || typeof value !== 'object') return;
+  // `relatedNodes` / `relatedNode` are the render-blocking scripts attached to a
+  // row, and they carry a perfectly good `selector`. Following them put a
+  // `<script src="/assets/app.js">` on the line labelled "LCP element", which is
+  // worse than printing `unknown`: it points a human at the wrong file.
+  if (/related/i.test(fromKey)) return;
+  if (Array.isArray(value)) {
+    for (const entry of value) walkInto(entry, depth + 1, nodes, rows, fromKey);
+    return;
+  }
+  // The painted element is filed under `node` by the breakdown table, under
+  // `lcpNode` by the metric's own debugdata, and under `nodes.<Something>Node` by
+  // the insight variant. All three are one field convention apart, and guessing
+  // which one a given version uses is how this reader kept printing `unknown`.
+  const nodeLike = (entry) =>
+    entry && typeof entry === 'object' ? Boolean(entry.snippet || entry.selector) : false;
+  const filed =
+    [value.node, value.lcpNode].find(nodeLike) ??
+    // `Audit.makeNodeItem()` returns a node-shaped item rather than an item
+    // holding a node, and the breakdown insight files the element that way — as a
+    // sibling of the subpart table in a list. Only the table-and-node guess was
+    // missing, which is why every route reported `LCP element: unknown`.
+    (value.type === 'node' && nodeLike(value) ? value : undefined) ??
+    (value.nodes && typeof value.nodes === 'object'
+      ? Object.keys(value.nodes)
+          .filter((key) => !/related/i.test(key))
+          .map((key) => value.nodes[key])
+          .find(nodeLike)
+      : undefined);
+  if (filed) nodes.push(filed);
+  // Two field conventions carry these numbers: `phase` with `numericValue` in
+  // seconds, and `key` with `duration` in milliseconds. Both are read, because
+  // the payload this script dumped from a real run used the second while the
+  // documentation still describes the first.
+  const labelled = value.phase ?? value.label ?? value.name ?? value.key;
+  if (
+    labelled !== undefined &&
+    (typeof value.numericValue === 'number' ||
+      typeof value.duration === 'number' ||
+      typeof value.ms === 'number' ||
+      typeof value.timing === 'number')
+  ) {
+    rows.push(value);
+  }
+  for (const key of Object.keys(value)) walkInto(value[key], depth + 1, nodes, rows, key);
+}
+
 async function main() {
   let lighthouse;
   let launch;
@@ -214,6 +455,7 @@ async function main() {
       if (!first) await freshBrowser();
       first = false;
       const samples = { performance: [], accessibility: [], 'best-practices': [], seo: [] };
+      const runs = [];
       for (let run = 0; run < RUNS; run += 1) {
         const runner = await lighthouse(`${origin}${route}`, {
           port: chrome.port,
@@ -225,16 +467,128 @@ async function main() {
         for (const category of CATEGORIES) {
           samples[category].push(Math.round((runner.lhr.categories[category]?.score ?? 0) * 100));
         }
+        const audits = runner.lhr.audits ?? {};
+        runs.push({
+          score: Math.round((runner.lhr.categories.performance?.score ?? 0) * 100),
+          metrics: Object.fromEntries(
+            Object.keys(LAB_FLOORS).map((key) => [key, audits[key]?.numericValue ?? null]),
+          ),
+          // `overallSavingsMs` is what Lighthouse itself claims an opportunity
+          // would return, so the list is ordered by the tool's own estimate of
+          // what matters rather than by a guess about which audit sounds scary.
+          // Which part of the LCP is the expensive one. A score of 81 with
+          // "render delay" is a hydration problem and no amount of image
+          // optimisation moves it; the same score with "load time" is a byte
+          // problem. The audit's own table is the only honest way to tell them
+          // apart, and guessing is how a week gets spent on the wrong lever.
+          // Not a named audit: the breakdown has lived under
+          // `largest-contentful-paint-element` and moved since, so every audit
+          // whose id mentions the metric is searched and the first one carrying
+          // phase rows wins. If none does, `available` says which ids this version
+          // really exposed — a diagnosis that can name its own ignorance is worth
+          // more than one that prints `unknown`.
+          lcp: readLcpBreakdown(
+            audits,
+            // The metric itself, as the bound: Lighthouse reports `numericValue`
+            // for `largest-contentful-paint` in milliseconds, the same unit the
+            // phase rows end up in here.
+            Math.round(audits['largest-contentful-paint']?.numericValue ?? 0),
+          ),
+          savings: Object.entries(audits)
+            .filter(([, audit]) => (audit.details?.overallSavingsMs ?? 0) > 200)
+            .sort(
+              (a, b) => (b[1].details.overallSavingsMs ?? 0) - (a[1].details.overallSavingsMs ?? 0),
+            )
+            .slice(0, 3)
+            .map(
+              ([, audit]) => `${audit.title} (−${Math.round(audit.details.overallSavingsMs)} ms)`,
+            ),
+        });
       }
       const medians = Object.fromEntries(CATEGORIES.map((c) => [c, median(samples[c])]));
       const below = CATEGORIES.filter((c) => medians[c] < FLOOR);
+      // The run chosen for the diagnosis is the one that scored the median, not
+      // the last one: reporting the slowest sample's metrics beside a median
+      // score would blame the page for the machine's worst minute.
+      const representative = runs.find((entry) => entry.score === medians.performance) ?? {
+        metrics: {},
+        savings: [],
+        lcp: null,
+        score: 0,
+        // `??` on the find alone would leave `--runs 0` with an undefined
+        // representative and a TypeError where the point was a table.
+      };
+      const measured = Object.entries(representative.metrics)
+        .filter(([, value]) => typeof value === 'number')
+        .map(([key, value]) => {
+          const floor = LAB_FLOORS[key];
+          const shown = floor.unit === '' ? value.toFixed(3) : `${Math.round(value)}${floor.unit}`;
+          return {
+            label: floor.label,
+            text: `${floor.label} ${shown}${value > floor.limit ? ` over ${floor.limit}${floor.unit}` : ''}`,
+            over: value > floor.limit,
+          };
+        });
+      if (STRICT) for (const entry of measured) if (entry.over) below.push(entry.label);
       rows.push({ route, medians, samples, below });
-      if (below.length > 0) failures.push({ route, below, medians });
       process.stdout.write(
         `${route.padEnd(20)} ${CATEGORIES.map((c) => `${c.slice(0, 4)} ${medians[c]}`).join('  ')}${
           below.length > 0 ? `   ← below ${FLOOR}: ${below.join(', ')}` : ''
         }\n`,
       );
+      if (below.length > 0) {
+        // One diagnosis per failing route, assembled once and used for both the
+        // log and the annotation. The workflow used to annotate `tail -c 1400` of
+        // the log, which kept the LAST route's numbers and threw away the first
+        // ones — the run that proved `/learn` and `/projects` had a render-delay
+        // problem could not show the same for `/`, so the worst route in the sweep
+        // was the one route nobody could read about.
+        const parts = [
+          measured.map((entry) => entry.text).join(' · '),
+          representative.savings.length > 0
+            ? `savings Lighthouse claims: ${representative.savings.join('; ')}`
+            : null,
+          // The audit's name is printed next to the fact it produced, not next to
+          // the fact it failed to: an unknown element attributed to an audit reads
+          // as though that audit claimed there was no element.
+          `LCP element: ${representative.lcp?.selector ?? 'unknown'}${
+            representative.lcp?.selector && representative.lcp?.elementSource
+              ? ` (from ${representative.lcp.elementSource})`
+              : ''
+          }`,
+          `LCP phases: ${
+            representative.lcp &&
+            (representative.lcp.ttfb !== null || representative.lcp.renderDelay !== null)
+              ? `ttfb ${representative.lcp.ttfb ?? '?'} ms, ${
+                  representative.lcp.noResourceLoad
+                    ? 'no resource load'
+                    : `load delay ${representative.lcp.loadDelay ?? '?'} ms, load time ${
+                        representative.lcp.loadTime ?? '?'
+                      } ms`
+                }, render delay ${representative.lcp.renderDelay ?? '?'} ms${
+                  representative.lcp.source ? ` (from ${representative.lcp.source})` : ''
+                }`
+              : `not in this Lighthouse payload${
+                  representative.lcp?.available?.length
+                    ? ` (searched: ${representative.lcp.available.join(', ')})`
+                    : ''
+                }` + (representative.lcp?.raw ? ` — payload: ${representative.lcp.raw}` : '')
+          }`,
+        ].filter(Boolean);
+        process.stdout.write(`${parts.map((part) => `  ${part}`).join('\n')}\n`);
+        if (process.env.GITHUB_ACTIONS) {
+          // A workflow command, not prose: annotations survive a scrolled log and
+          // are the only thing the Checks tab shows. `%0A` and `%25` are the
+          // escaping Actions expects inside `::error::` payloads.
+          const flat = parts
+            .join(' · ')
+            .replace(/\n/g, ' ')
+            .replace(/%/g, '%25')
+            .replace(/\r/g, '%0D');
+          process.stdout.write(`::error title=Lighthouse ${route} (below ${FLOOR})::${flat}\n`);
+        }
+        failures.push({ route, below, medians });
+      }
       if (VERBOSE) {
         process.stdout.write(`  performance samples: ${samples.performance.join(', ')}\n`);
       }
@@ -256,7 +610,12 @@ async function main() {
     const row = rows.find((entry) => entry.route === failure.route);
     process.stdout.write(
       `  ${failure.route}: ${failure.below
-        .map((c) => `${c} ${failure.medians[c]} (samples ${row ? row.samples[c].join(', ') : '?'})`)
+        .map((c) =>
+          c in failure.medians
+            ? `${c} ${failure.medians[c]} (samples ${row ? row.samples[c].join(', ') : '?'})`
+            : // a lab metric named by --strict, which reports the number itself
+              `${c} over its lab floor`,
+        )
         .join(', ')}\n`,
     );
   }

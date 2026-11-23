@@ -92,7 +92,7 @@ export default function JobsPage() {
             </LinkButton>
           }
           footer={
-            <p className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
+            <p className="inline-flex items-center gap-2 rounded-full bg-on-hero/15 px-3 py-1 text-xs font-medium ring-1 ring-white/20">
               <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-green-200" />
               {t('jobs.openCount', { total: formatNumber(board.jobs.length, language) })}
             </p>

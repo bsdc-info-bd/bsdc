@@ -42,6 +42,18 @@ object BsdcMotionSpecs {
         stiffness = Spring.StiffnessMediumLow,
     )
 
+    /**
+     * A sliding thumb or pill that follows a segmented control.
+     *
+     * Segmented controls are *pushed*, not timed: a linear slide reads as a progress bar, while a
+     * low-bouncy spring reads as a physical part of the screen. It is [ReactionPopSpring]'s character
+     * typed for `Dp`, so a control can share the feel without inventing its own numbers.
+     */
+    val SegmentSlideSpring = spring<androidx.compose.ui.unit.Dp>(
+        dampingRatio = Spring.DampingRatioLowBouncy,
+        stiffness = Spring.StiffnessMediumLow,
+    )
+
     val PressScaleSpring = spring<Float>(
         dampingRatio = Spring.DampingRatioNoBouncy,
         stiffness = Spring.StiffnessMedium,

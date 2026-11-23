@@ -16,7 +16,9 @@ import type {
   MkVendorDashboard,
   MkVendorOrder,
   MkAddress,
+  MkAddressInput,
   MkCartLine,
+  MkSavedAddress,
   MkCustomerOrder,
   MkPlacedOrder,
   MkProductDetail,
@@ -278,6 +280,8 @@ export interface MkVendorDelivery {
   center_lng: number;
   shop_lat: number;
   shop_lng: number;
+  /** The owner's own minimum order, so the console can show what is currently set. */
+  min_order_poisha?: number;
   schedule?: MkShopSchedule;
 }
 
@@ -305,6 +309,59 @@ export async function setVendorDelivery(input: {
     p_per_km_taka: input.perKmTaka,
   });
   if (error) throw asDatabaseError(error);
+}
+
+/**
+ * The member's saved doorsteps, in the order the checkout should offer them: the default first,
+ * then whatever was used most recently. That ordering is the routine's decision, not a client's, so
+ * a phone and a browser that fetched at the same moment hand over the same first choice.
+ */
+export async function fetchMyAddresses(): Promise<MkSavedAddress[]> {
+  const { data, error } = await getSupabase().rpc('mk_my_addresses');
+  if (error) throw asDatabaseError(error);
+  return asJson<MkSavedAddress[]>(data ?? []);
+}
+
+/**
+ * Insert or update one saved address, and get the whole book back with it. The list arrives in the
+ * same response because the routine is the only thing that knows what the default ended up being —
+ * the first address is the default whether or not anybody asked — and a client that re-fetched to
+ * learn it would be racing its own write.
+ */
+export async function saveAddress(
+  input: MkAddressInput,
+): Promise<{ address: MkSavedAddress; addresses: MkSavedAddress[] }> {
+  const { data, error } = await getSupabase().rpc('mk_save_address', {
+    p_id: input.id,
+    p_label: input.label,
+    p_nickname: input.nickname,
+    p_recipient_name: input.customer_name,
+    p_phone: input.customer_phone,
+    p_address_line: input.address_line,
+    p_landmark: input.landmark,
+    p_place_label: input.place_label,
+    p_lat: input.lat,
+    p_lng: input.lng,
+    p_note: input.note,
+    p_is_default: input.is_default,
+  });
+  if (error) throw asDatabaseError(error);
+  return asJson<{ address: MkSavedAddress; addresses: MkSavedAddress[] }>(data);
+}
+
+/** Deleting an address answers with the book that is left, and whether the default moved. */
+export async function deleteAddress(id: string): Promise<MkSavedAddress[]> {
+  const { data, error } = await getSupabase().rpc('mk_delete_address', { p_id: id });
+  if (error) throw asDatabaseError(error);
+  const remaining = (data ?? {}) as { addresses?: unknown };
+  return asJson<MkSavedAddress[]>((remaining.addresses ?? []) as Json);
+}
+
+/** A shop's minimum order, in whole taka. Zero means the shop sets no minimum. */
+export async function setVendorMinOrder(taka: number): Promise<number> {
+  const { data, error } = await getSupabase().rpc('mk_vendor_set_min_order', { p_taka: taka });
+  if (error) throw asDatabaseError(error);
+  return Number((data as unknown as { min_order_poisha?: number })?.min_order_poisha ?? 0);
 }
 
 export async function setVendorSchedule(input: {
@@ -373,11 +430,16 @@ export async function placeOrder(
   vendorId: string,
   address: MkAddress,
   directItems: { product_id: string; qty: number }[] | null,
+  addressId: string | null = null,
 ): Promise<MkPlacedOrder> {
   const { data, error } = await getSupabase().rpc('mk_place_order', {
     p_vendor_id: vendorId,
     p_address: address as unknown as Json,
     p_items: directItems === null ? null : (directItems as unknown as Json),
+    // The id, when there is one, *is* the address: the routine reads the row and uses its pin for
+    // the fee, the radius test and the rider's directions, taking only the note from the body
+    // above. A saved address a screen had to copy is a saved address a screen can get wrong.
+    p_address_id: addressId,
   });
   if (error) throw asDatabaseError(error);
   wakePushDelivery();

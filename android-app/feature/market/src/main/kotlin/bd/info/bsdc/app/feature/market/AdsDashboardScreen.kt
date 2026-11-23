@@ -334,7 +334,10 @@ fun AdsDashboardScreen(
         }
 
         items(campaigns, key = { it.id }) { campaign ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier.animateItem(),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
             CampaignCard(
                 campaign = campaign,
                 bn = bn,

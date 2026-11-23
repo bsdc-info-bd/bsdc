@@ -42,6 +42,9 @@ private data class CandidateRpcRow(
 )
 
 @Serializable
+private data class ChannelGroupIdDto(val id: String = "")
+
+@Serializable
 private data class AuthorJoinDto(
     val uid: String = "",
     val username: String? = null,
@@ -100,6 +103,21 @@ private data class PostJoinedDto(
     @SerialName("post_tags") val postTags: List<TagJoinDto>? = null,
     @SerialName("poll_options") val pollOptions: List<PollOptDto>? = null,
     @SerialName("post_media") val postMedia: List<PostMediaDto>? = null,
+    @SerialName("channels") val channels: ChannelJoinDto? = null,
+)
+
+/** The `channels` embed, and the group behind it. Either can be null when the row is hidden. */
+@Serializable
+private data class ChannelJoinDto(
+    val slug: String = "",
+    val name: String = "",
+    val groups: ChannelGroupJoinDto? = null,
+)
+
+@Serializable
+private data class ChannelGroupJoinDto(
+    val slug: String = "",
+    val name: String = "",
 )
 
 @Serializable
@@ -178,7 +196,12 @@ class FeedRepository(
 
     companion object {
         private const val POST_SELECT =
-            "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))"
+            "*,profiles:author_uid(uid,username,display_name,avatar_url),post_tags(tag_slug),poll_options(id,label,votes,position),post_media(media_id,position,alt_text,media_assets(url,thumb_url,width,height))" +
+                // The room the post was written in, and the group that owns it. `posts.channel_id` has
+                // been a real foreign key since 0011, so PostgREST can walk both edges here — which is
+                // what lets every hydration path (feed, single post, by-id) carry attribution without
+                // any of them having to ask separately.
+                ",channels(slug,name,groups(slug,name))"
         private const val COMMENT_SELECT =
             "id,post_id,author_uid,parent_id,root_id,depth,body,status,likes_count,replies_count,is_answer,edited_at,created_at,updated_at," +
                 "image_url,image_thumb_url,image_alt,image_width,image_height," +
@@ -339,6 +362,77 @@ class FeedRepository(
         val posts = decodeJoinedPosts(raw)
         val order = ids.withIndex().associate { it.value to it.index }
         return posts.sortedBy { order[it.id] ?: Int.MAX_VALUE }
+    }
+
+    /**
+     * One room's timeline, for the channel page.
+     *
+     * Two queries rather than one filter: `groups` for the id, then `channels` filtered by that id and
+     * by the channel slug. A channel slug is unique inside a group and not across groups, so matching
+     * only the slug could hand back a different group's `#general`; and the app resolves the group
+     * itself rather than filtering on the embed, because that keeps the query in the shape every other
+     * call here already uses.
+     *
+     * `channel_feed` (0129) is the part that decides visibility, and the client does not duplicate the
+     * decision: the routine returns rows only for a reader `bsdc.can_read_channel` accepts. The ids then
+     * go through the same hydration the feed uses, so a room's cards are the feed's cards — same select,
+     * same media allowlist, same channel attribution.
+     */
+    suspend fun fetchChannelTimeline(
+        groupSlug: String,
+        channelSlug: String,
+        before: String? = null,
+    ): ChannelFeedPage = withContext(Dispatchers.IO) {
+        runCatching {
+            val groupId = json.decodeFromString<List<ChannelGroupIdDto>>(
+                supabase.getJsonText(
+                    table = "groups",
+                    queryPairs = listOf(
+                        "select" to "id",
+                        "slug" to "eq.${groupSlug.trim()}",
+                        "limit" to "1",
+                    ),
+                    requireAuth = false,
+                ),
+            ).firstOrNull()?.id
+            if (groupId.isNullOrBlank()) return@runCatching ChannelFeedPage.Unreachable
+            val row = json.decodeFromString<List<ChannelRow>>(
+                supabase.getJsonText(
+                    table = "channels",
+                    queryPairs = listOf(
+                        "select" to ChannelFeed.CHANNEL_SELECT,
+                        "slug" to "eq.${channelSlug.trim()}",
+                        "group_id" to "eq.$groupId",
+                        "limit" to "1",
+                    ),
+                    requireAuth = false,
+                ),
+            ).firstOrNull() ?: return@runCatching ChannelFeedPage.Unreachable
+            val rows = json.decodeFromString<List<ChannelFeedRow>>(
+                supabase.rpcText(
+                    ChannelFeed.RPC_NAME,
+                    buildJsonObject {
+                        put(ChannelFeed.PARAM_CHANNEL_ID, row.id)
+                        put(ChannelFeed.PARAM_LIMIT, ChannelFeed.PAGE_SIZE)
+                        // Absent means "from the top", which is the same three-state courtesy
+                        // `save_post` shows `channel_id`: the caller says only what it means.
+                        if (!before.isNullOrBlank()) put(ChannelFeed.PARAM_BEFORE, before)
+                    },
+                    requireAuth = false,
+                ),
+            ).filter { it.postId.isNotBlank() }
+            val posts = hydratePostsByIds(rows.map { it.postId })
+            ChannelFeedPage.Ready(
+                room = ChannelFeed.roomOf(row, groupSlug),
+                posts = posts,
+                // The *query's* size decides, not the hydrated list's: a post whose media failed the
+                // allowlist still occupied a slot in the room, and counting hydrated rows would let a
+                // short page silently end a timeline that has more in it.
+                nextCursor = if (ChannelFeed.canLoadMore(rows.size)) ChannelFeed.cursorFor(rows) else null,
+            )
+        }.getOrElse { error ->
+            ChannelFeedPage.Failed(error.message?.takeIf { it.isNotBlank() } ?: "channel_feed")
+        }
     }
 
     suspend fun fetchPostBySlugOrId(slugOrId: String): FeedPost? = withContext(Dispatchers.IO) {
@@ -759,6 +853,9 @@ class FeedRepository(
                         avatarUrl = prof.avatarUrl.orEmpty(),
                     )
                 },
+                channelName = dto.channels?.name?.trim()?.takeIf { it.isNotEmpty() },
+                channelGroupSlug = dto.channels?.groups?.slug?.trim()?.takeIf { it.isNotEmpty() },
+                channelGroupName = dto.channels?.groups?.name?.trim()?.takeIf { it.isNotEmpty() },
                 tags = dto.postTags.orEmpty().map { it.tagSlug }.filter { it.isNotBlank() },
                 media = media,
                 poll = dto.pollOptions.orEmpty().sortedBy { it.position }.map { opt ->

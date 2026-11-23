@@ -216,7 +216,7 @@ function FollowersModal({
                   <Link
                     to={target}
                     onClick={onClose}
-                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   >
                     <Avatar src={member.avatarUrl} name={member.displayName} size="sm" />
                     <span className="min-w-0 flex-1">
@@ -498,13 +498,13 @@ export default function ProfilePage() {
             aria-label={t('profile.social.followersLabel', {
               total: formatNumber(stats?.followers ?? 0, language),
             })}
-            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <StatCard
               icon={<Users size={16} />}
               label={t('profile.stats.followers')}
               value={formatNumber(stats?.followers ?? 0, language)}
-              className="transition-colors hover:border-green-400"
+              className="transition-colors hover:border-primary"
             />
           </button>
           <button
@@ -513,13 +513,13 @@ export default function ProfilePage() {
             aria-label={t('profile.social.followingLabel', {
               total: formatNumber(stats?.following ?? 0, language),
             })}
-            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600"
+            className="text-start rounded-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <StatCard
               icon={<Users size={16} />}
               label={t('profile.stats.following')}
               value={formatNumber(stats?.following ?? 0, language)}
-              className="transition-colors hover:border-green-400"
+              className="transition-colors hover:border-primary"
             />
           </button>
           <StatCard

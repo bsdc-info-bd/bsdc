@@ -10,6 +10,25 @@ export type DbRole = 'member' | 'creator' | 'vendor' | 'moderator' | 'manager' |
 
 export type DbAccountStatus = 'active' | 'suspended' | 'deactivated' | 'deleted';
 export type DbMediaKind = 'image' | 'document' | 'audio' | 'video';
+/**
+ * `media_assets.purpose`, added by 0132, and the same list the column checks.
+ *
+ * Declared here rather than imported from `lib/storage/media-contract`, because this
+ * file describes the schema and must not acquire an interest in what the upload
+ * client does with it. A purpose in one and not the other is a migration that forgot
+ * to widen the check, and the client starts failing with 22023.
+ */
+export type DbMediaPurpose =
+  | 'avatar'
+  | 'cover'
+  | 'project-cover'
+  | 'project-image'
+  | 'post-image'
+  | 'comment-image'
+  | 'chat-image'
+  | 'product-image'
+  | 'ad-creative'
+  | 'other';
 export type DbMediaProvider = 'imgbb' | 'external' | 'supabase';
 export type DbReportStatus = 'open' | 'reviewing' | 'actioned' | 'dismissed';
 
@@ -113,6 +132,8 @@ export type MediaAssetRow = {
   bytes: number;
   mime_type: string;
   checksum: string;
+  /** What the member was uploading it for. Provenance, not a permission. */
+  purpose: DbMediaPurpose;
   created_at: string;
 };
 
@@ -2488,9 +2509,34 @@ export type Database = {
       mk_cart_set: { Args: { p_product_id: string; p_qty: number }; Returns: number };
       mk_my_cart: { Args: never; Returns: Json };
       mk_place_order: {
-        Args: { p_vendor_id: string; p_address: Json; p_items?: Json };
+        Args: {
+          p_vendor_id: string;
+          p_address: Json;
+          p_items?: Json;
+          p_address_id?: string | null;
+        };
         Returns: Json;
       };
+      mk_my_addresses: { Args: never; Returns: Json };
+      mk_save_address: {
+        Args: {
+          p_id?: string | null;
+          p_label: string;
+          p_nickname?: string | null;
+          p_recipient_name: string;
+          p_phone: string;
+          p_address_line: string;
+          p_landmark?: string | null;
+          p_place_label?: string | null;
+          p_lat: number;
+          p_lng: number;
+          p_note?: string | null;
+          p_is_default: boolean;
+        };
+        Returns: Json;
+      };
+      mk_delete_address: { Args: { p_id: string }; Returns: Json };
+      mk_vendor_set_min_order: { Args: { p_taka: number }; Returns: Json };
       mk_my_orders: { Args: { p_limit?: number }; Returns: Json };
       mk_customer_cancel_order: { Args: { p_order_id: string; p_reason?: string }; Returns: Json };
       mk_submit_review: {
@@ -2569,8 +2615,35 @@ export type Database = {
           p_bytes?: number;
           p_mime_type?: string;
           p_expires_at?: string | null;
+          p_purpose?: DbMediaPurpose;
         };
         Returns: string;
+      };
+      /** 0132. One page of the member's own library, with where each picture lives. */
+      my_gallery: {
+        Args: {
+          p_limit?: number;
+          p_before?: string | null;
+          p_before_id?: string | null;
+          p_purpose?: string;
+          p_query?: string;
+        };
+        Returns: {
+          id: string;
+          url: string;
+          thumb_url: string;
+          purpose: string;
+          width: number | null;
+          height: number | null;
+          bytes: number;
+          mime_type: string;
+          created_at: string;
+          expires_at: string | null;
+          in_use: boolean;
+          uses: number;
+          surfaces: string[];
+          alt_text: string;
+        }[];
       };
       my_media_assets: {
         Args: { p_limit?: number };

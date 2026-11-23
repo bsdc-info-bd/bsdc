@@ -23,10 +23,25 @@ export type MediaPurpose =
   | 'project-image'
   | 'post-image'
   | 'comment-image'
+  | 'chat-image'
   | 'product-image'
-  | 'ad-creative';
+  | 'ad-creative'
+  | 'other';
 
-/** Every purpose the platform will accept from a caller. */
+/**
+ * Every purpose the platform will accept from a caller.
+ *
+ * 'chat-image' replaced a lie: the message composer was passing 'comment-image'
+ * because there was nothing else for a picture sent in a conversation, so every
+ * chat photo in the library is filed under comments. Rows already written stay as
+ * they are — relabelling them would be guessing about a surface that had no way to
+ * say otherwise. 'other' is what a picture is when the caller does not know: rows
+ * from before the library existed, and any future upload path that has not been
+ * taught to say.
+ *
+ * `media_assets.purpose` checks exactly this list (0132). A value here that is not
+ * there fails at the database with 22023, which a member sees as a failed upload.
+ */
 export const MEDIA_PURPOSES: readonly MediaPurpose[] = [
   'avatar',
   'cover',
@@ -34,9 +49,35 @@ export const MEDIA_PURPOSES: readonly MediaPurpose[] = [
   'project-image',
   'post-image',
   'comment-image',
+  'chat-image',
   'product-image',
   'ad-creative',
+  'other',
 ];
+
+/**
+ * What the gallery offers as filters, in the order its chips appear.
+ *
+ * 'all' is not a purpose — it is the absence of one, and the function that reads
+ * the library treats it as such. The list is here rather than assembled from
+ * MEDIA_PURPOSES because a filter that matches nothing is worse than no filter:
+ * 'other' is deliberately not offered, since a member choosing it expects pictures
+ * and finds only rows nobody labelled.
+ */
+export const GALLERY_FILTERS = [
+  'all',
+  'post-image',
+  'chat-image',
+  'comment-image',
+  'avatar',
+  'cover',
+  'project-image',
+  'project-cover',
+  'product-image',
+  'ad-creative',
+] as const;
+
+export type GalleryFilter = (typeof GALLERY_FILTERS)[number];
 
 export function isMediaPurpose(value: unknown): value is MediaPurpose {
   return typeof value === 'string' && (MEDIA_PURPOSES as readonly string[]).includes(value);

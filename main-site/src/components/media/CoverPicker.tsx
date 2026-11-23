@@ -3,6 +3,8 @@ import { useId, useRef } from 'react';
 
 import { Button, ProgressBar } from '@/design-system';
 import { MediaImage } from '@/components/media/MediaImage';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
+import type { PickedMedia } from '@/lib/media/gallery';
 
 /**
  * Every word this control says, supplied by the surface that owns it.
@@ -43,6 +45,14 @@ export interface CoverPickerProps {
    */
   onRemoveExisting?: (() => void) | undefined;
   labels: CoverPickerLabels;
+  /**
+   * Offered beside "choose a file" when the owner can take a picture from the
+   * member's own library. The surface passes the purpose it would have uploaded
+   * under, so a reused cover and a new one land in the same place in the library.
+   */
+  onPickFromLibrary?: ((picked: PickedMedia) => void) | undefined;
+  /** What a fresh upload here is filed as. Read only when a library is offered. */
+  libraryPurpose?: 'cover' | 'project-cover';
   /** Heading element id, so a step can be labelled by what it contains. */
   headingId?: string;
   /** Renders the title as a step heading rather than a field label. */
@@ -65,6 +75,8 @@ export function CoverPicker({
   onFileChange,
   onRemoveExisting,
   labels,
+  onPickFromLibrary,
+  libraryPurpose = 'cover',
   headingId,
   asHeading = false,
 }: CoverPickerProps) {
@@ -89,7 +101,7 @@ export function CoverPicker({
             {labels.title}
           </h2>
         ) : (
-          <span id={id} className="text-body-sm font-semibold text-ink">
+          <span id={id} className="text-sm font-semibold text-text">
             {labels.title}
           </span>
         )}
@@ -145,17 +157,32 @@ export function CoverPicker({
         </button>
       )}
 
-      {previewUrl.length > 0 ? (
-        <Button
-          variant="secondary"
-          size="sm"
-          iconStart={<Upload size={15} />}
-          onClick={() => inputRef.current?.click()}
-          className="w-fit"
-        >
-          {labels.replace}
-        </Button>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {previewUrl.length > 0 ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            iconStart={<Upload size={15} />}
+            onClick={() => inputRef.current?.click()}
+            className="w-fit"
+          >
+            {labels.replace}
+          </Button>
+        ) : null}
+        {onPickFromLibrary ? (
+          <MediaSourcePicker
+            purpose={libraryPurpose}
+            showUpload={false}
+            max={1}
+            attached={previewUrl.length > 0 ? [previewUrl] : []}
+            onFiles={() => inputRef.current?.click()}
+            onPick={(picked) => {
+              const first = picked[0];
+              if (first !== undefined) onPickFromLibrary(first);
+            }}
+          />
+        ) : null}
+      </div>
 
       {progress !== null ? <ProgressBar value={progress} label={labels.uploading} /> : null}
     </div>

@@ -6,6 +6,7 @@ import {
   Loader2,
   MapPin,
   Phone,
+  Bookmark,
   PackageCheck,
   Receipt,
   ShieldCheck,
@@ -18,31 +19,45 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AddressBook, AddressEditor } from '@/components/mk/customer/AddressBook';
+import { editorFromAddress, type AddressEditorValue } from '@/lib/mk/mk-address';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import { LocationPicker, type PinnedLocation } from '@/components/mk/LocationPicker';
 import { MarketNav } from '@/components/mk/customer/MarketNav';
-import { Button, EmptyState, PageSkeleton, TextField, TextareaField } from '@/design-system';
+import {
+  Button,
+  EmptyState,
+  PageSkeleton,
+  ProgressBar,
+  TextField,
+  TextareaField,
+} from '@/design-system';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth-store';
 import { ROUTES } from '@/lib/site';
 import {
+  useDeleteAddress,
+  useMyAddresses,
   useMyCart,
   usePaymentInstructions,
   usePlaceOrder,
   useProductDetail,
+  useSaveAddress,
   useVendorPage,
 } from '@/hooks/use-mk';
 import * as repo from '@/lib/mk/mk-repository';
 import { mkCopy } from '@/lib/mk/mk-copy';
 import {
+  evaluateMinimumOrder,
   evaluateShopDelivery,
   formatTaka,
   isBdMobile,
   normaliseBdMobile,
+  savedAddressToDraft,
   type Language,
 } from '@/lib/mk/mk-logic';
-import type { MkAddress, MkPlacedOrder } from '@/lib/mk/mk-types';
+import type { MkAddress, MkAddressInput, MkPlacedOrder, MkSavedAddress } from '@/lib/mk/mk-types';
 
 interface Draft {
   name: string;
@@ -84,6 +99,19 @@ export default function MarketCheckoutPage() {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const [showErrors, setShowErrors] = useState(false);
   const [placed, setPlaced] = useState<MkPlacedOrder | null>(null);
+
+  // The address book (0131). Picking a saved door fills the form below rather than replacing it:
+  // the member can still change the note, or the pin if the flat moved, and the summary and the
+  // steps keep working off one set of fields instead of two.
+  const addresses = useMyAddresses(uid !== null);
+  const saveAddress = useSaveAddress();
+  const removeAddress = useDeleteAddress();
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [keepSaving, setKeepSaving] = useState(false);
+  const [editing, setEditing] = useState<{ open: boolean; initial: AddressEditorValue | null }>({
+    open: false,
+    initial: null,
+  });
 
   const lines = useMemo(() => {
     if (isDirect) {
@@ -133,7 +161,7 @@ export default function MarketCheckoutPage() {
           action={
             <Link
               to={ROUTES.login}
-              className="inline-flex items-center rounded-full bg-green-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-green-800"
+              className="inline-flex items-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary shadow-md hover:bg-primary-active"
             >
               {copy.buyer.signIn}
             </Link>
@@ -164,7 +192,7 @@ export default function MarketCheckoutPage() {
           action={
             <Link
               to="/marketplace"
-              className="inline-flex items-center rounded-full bg-green-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-green-800"
+              className="inline-flex items-center rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-on-primary shadow-md hover:bg-primary-active"
             >
               {copy.buyer.marketTitle} →
             </Link>
@@ -181,9 +209,28 @@ export default function MarketCheckoutPage() {
     deliveryConfig,
     draft.pin ? { lat: draft.pin.lat, lng: draft.pin.lng } : null,
   );
+  const saved = addresses.data ?? [];
+  const picked = saved.find((address) => address.id === pickedId) ?? null;
+
+  // The id is offered to `mk_place_order` only while the form still says what the row says. The
+  // routine reads the row — that is the point of sending an id — so if a member edits the pin or
+  // the text after picking, an id would order to the old door while the screen shows the new one.
+  // Dropping to "typed by hand" is the honest answer, and it costs nothing: the box can be saved
+  // again from the same place.
+  const matchesSaved =
+    picked !== null &&
+    draft.name.trim() === picked.customer_name &&
+    normaliseBdMobile(draft.phone) === picked.customer_phone &&
+    draft.address.trim() === picked.address_line &&
+    draft.landmark.trim() === picked.landmark &&
+    draft.pin !== null &&
+    draft.pin.lat === picked.lat &&
+    draft.pin.lng === picked.lng;
+  const addressId = matchesSaved ? (picked?.id ?? null) : null;
   const fee = deliveryEval.feePoisha;
   const subtotal = lines.reduce((sum, line) => sum + line.total, 0);
   const total = subtotal + fee;
+  const minimum = evaluateMinimumOrder(subtotal, deliveryConfig?.min_order_poisha);
   const shopName = shop.data?.vendor.name ?? '';
   const shopSchedule = shop.data?.vendor.schedule;
   const shopOpen = shopSchedule ? shopSchedule.is_open : true;
@@ -194,6 +241,10 @@ export default function MarketCheckoutPage() {
     address: draft.address.trim().length < 5,
     pin: draft.pin === null,
     area: !deliveryEval.withinArea,
+    // Refused here as well as in the routine, for the same reason the radius is: a member who
+    // taps "place order" and is told 200 taka are missing has been made to fill a form for
+    // nothing. The routine still refuses too — a screen is a courtesy, not a gate.
+    minimum: !minimum.met,
     closed: !shopOpen,
   };
   const contactDone = !errors.name && !errors.phone;
@@ -229,11 +280,65 @@ export default function MarketCheckoutPage() {
         vendorId,
         address,
         directItems: isDirect ? [{ product_id: directProduct, qty: directQty }] : null,
+        addressId,
       });
       setPlaced(result);
+      // Saved after the order, never before it: a member who is refused by the shop has not
+      // demonstrated that this door is deliverable, and an address book full of places a shop
+      // turned down is worse than one more keystroke.
+      if (keepSaving && addressId === null) {
+        void saveAddress
+          .mutateAsync({
+            id: null,
+            label: 'other',
+            nickname: '',
+            customer_name: address.customer_name,
+            customer_phone: address.customer_phone,
+            address_line: address.address_line,
+            landmark: address.landmark,
+            place_label: address.place_label,
+            lat: address.lat ?? 0,
+            lng: address.lng ?? 0,
+            note: '',
+            is_default: saved.length === 0,
+          } satisfies MkAddressInput)
+          .then(() => toast.success(copy.buyer.addressSaved))
+          .catch(() => undefined);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : copy.errorGeneric);
     }
+  }
+
+  function pickSaved(address: MkSavedAddress): void {
+    setPickedId(address.id);
+    setDraft(savedAddressToDraft(address));
+  }
+
+  function dropSaved(address: MkSavedAddress): void {
+    void removeAddress
+      .mutateAsync(address.id)
+      .then(() => {
+        if (pickedId === address.id) setPickedId(null);
+        toast.success(copy.buyer.addressDeleted);
+      })
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : copy.errorGeneric),
+      );
+  }
+
+  function commitEditor(input: MkAddressInput): void {
+    void saveAddress
+      .mutateAsync(input)
+      .then((result) => {
+        setEditing({ open: false, initial: null });
+        setPickedId(result.address.id);
+        setDraft(savedAddressToDraft(result.address));
+        toast.success(copy.buyer.addressSaved);
+      })
+      .catch((error: unknown) =>
+        toast.error(error instanceof Error ? error.message : copy.errorGeneric),
+      );
   }
 
   return shell(
@@ -242,30 +347,30 @@ export default function MarketCheckoutPage() {
         initial={reduce ? false : { opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35 }}
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-green-900 via-green-700 to-emerald-500 p-5 text-white shadow-lg sm:p-8"
+        className="relative overflow-hidden rounded-3xl bsdc-hero p-5 shadow-lg sm:p-8"
       >
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-white/10 blur-3xl"
+          className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-on-hero/10 blur-3xl"
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-emerald-300/20 blur-3xl"
+          className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-on-hero/20 blur-3xl"
         />
         <Link
           to={`/marketplace/shop/${slug}`}
-          className="relative inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/25 backdrop-blur hover:bg-white/25"
+          className="relative inline-flex items-center gap-1.5 rounded-full bg-on-hero/15 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-on-hero/25 backdrop-blur hover:bg-on-hero/25"
         >
           <ArrowLeft size={14} aria-hidden />
           {shopName || copy.buyer.fromShop}
         </Link>
-        <p className="relative mt-5 text-xs font-bold uppercase tracking-[0.18em] text-emerald-100">
+        <p className="relative mt-5 text-xs font-bold uppercase tracking-[0.18em] text-on-hero">
           {copy.buyer.checkoutEyebrow}
         </p>
         <h1 className="relative mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
           {copy.buyer.checkoutTitle}
         </h1>
-        <p className="relative mt-2 max-w-2xl text-sm text-green-50/90 sm:text-base">
+        <p className="relative mt-2 max-w-2xl text-sm text-on-hero/90 sm:text-base">
           {copy.buyer.checkoutLead}
         </p>
 
@@ -280,20 +385,20 @@ export default function MarketCheckoutPage() {
                 <div
                   className={cn(
                     'h-1.5 rounded-full transition-colors duration-300',
-                    step.done ? 'bg-white' : current ? 'bg-white/70' : 'bg-white/20',
+                    step.done ? 'bg-white' : current ? 'bg-on-hero/70' : 'bg-on-hero/20',
                   )}
                 />
                 <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
                   <span
                     className={cn(
                       'grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px]',
-                      step.done ? 'bg-white text-green-800' : 'bg-white/20 text-white',
+                      step.done ? 'bg-on-hero text-hero-from' : 'bg-on-hero/20 text-white',
                     )}
                     aria-hidden
                   >
                     {step.done ? <Check size={12} strokeWidth={3} /> : index + 1}
                   </span>
-                  <span className={cn('truncate', !step.done && !current && 'text-white/70')}>
+                  <span className={cn('truncate', !step.done && !current && 'text-on-hero/70')}>
                     {step.label}
                   </span>
                 </div>
@@ -305,6 +410,31 @@ export default function MarketCheckoutPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="space-y-5">
+          <FormSection
+            icon={<MapPin size={18} aria-hidden />}
+            title={copy.buyer.addressesTitle}
+            done={addressId !== null}
+            doneLabel={copy.buyer.sectionReady}
+          >
+            <p className="mb-4 text-sm text-muted">{copy.buyer.addressesLead}</p>
+            <AddressBook
+              addresses={saved}
+              selectedId={addressId}
+              copy={copy}
+              language={language}
+              delivery={deliveryConfig}
+              onPick={pickSaved}
+              onNew={() => setEditing({ open: true, initial: null })}
+              onEdit={(address) => setEditing({ open: true, initial: editorFromAddress(address) })}
+              onDelete={dropSaved}
+            />
+            {picked !== null && !matchesSaved ? (
+              <p className="mt-3 text-xs font-medium text-warn-text">
+                {copy.buyer.addressEditedFromSaved}
+              </p>
+            ) : null}
+          </FormSection>
+
           <FormSection
             icon={<UserRound size={18} aria-hidden />}
             title={copy.buyer.sectionContact}
@@ -356,6 +486,20 @@ export default function MarketCheckoutPage() {
                   onChange={(e) => setDraft({ ...draft, note: e.target.value })}
                 />
               </div>
+              {addressId === null ? (
+                <label className="flex cursor-pointer items-start gap-3 rounded-2xl bg-surface-2 p-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 size-4 accent-primary"
+                    checked={keepSaving}
+                    onChange={(event) => setKeepSaving(event.target.checked)}
+                  />
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-text">
+                    <Bookmark size={14} aria-hidden />
+                    {copy.buyer.saveThisAddress}
+                  </span>
+                </label>
+              ) : null}
             </div>
           </FormSection>
 
@@ -406,8 +550,8 @@ export default function MarketCheckoutPage() {
             done
             doneLabel={copy.buyer.sectionReady}
           >
-            <div className="flex items-start gap-4 rounded-2xl border border-green-600/25 bg-gradient-to-br from-green-50 to-emerald-50 p-4 dark:from-green-950/40 dark:to-emerald-950/30">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-green-700 text-white shadow-md">
+            <div className="flex items-start gap-4 rounded-2xl border border-primary/25 bg-success-soft p-4">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary text-on-primary shadow-md">
                 <Banknote size={22} aria-hidden />
               </span>
               <div className="min-w-0">
@@ -420,7 +564,7 @@ export default function MarketCheckoutPage() {
 
         <aside className="lg:sticky lg:top-24">
           <div className="overflow-hidden rounded-3xl border border-border bg-surface shadow-raised">
-            <div className="flex items-center gap-2 border-b border-border bg-gradient-to-r from-green-50 to-transparent px-5 py-4 dark:from-green-950/30">
+            <div className="flex items-center gap-2 border-b border-border bg-success-soft px-5 py-4">
               <Receipt size={18} className="text-green-700" aria-hidden />
               <h2 className="font-bold text-text">{copy.buyer.summaryTitle}</h2>
             </div>
@@ -441,7 +585,7 @@ export default function MarketCheckoutPage() {
                 <ul className="space-y-3">
                   {lines.map((line) => (
                     <li key={line.key} className="flex items-start gap-3">
-                      <span className="grid h-7 min-w-[1.75rem] shrink-0 place-items-center rounded-lg bg-green-100 px-1.5 text-xs font-bold text-green-800 dark:bg-green-900/50 dark:text-green-100">
+                      <span className="grid h-7 min-w-[1.75rem] shrink-0 place-items-center rounded-lg bg-success-soft px-1.5 text-xs font-bold text-success">
                         {line.qty}×
                       </span>
                       <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-text">
@@ -454,6 +598,44 @@ export default function MarketCheckoutPage() {
                   ))}
                 </ul>
               )}
+
+              {minimum.required ? (
+                <div
+                  className={cn(
+                    'rounded-2xl border p-3 text-xs font-medium',
+                    minimum.met
+                      ? 'border-success/30 bg-success-soft text-success'
+                      : 'border-warn/40 bg-warn-soft text-warn-text',
+                  )}
+                >
+                  <p>
+                    {copy.buyer.minOrder} ·{' '}
+                    {formatTaka(deliveryConfig?.min_order_poisha ?? 0, language)}
+                  </p>
+                  {minimum.met ? (
+                    <p className="mt-1">{copy.buyer.minOrderMet}</p>
+                  ) : (
+                    <>
+                      <p className="mt-1">
+                        <span className="font-bold tabular-nums">
+                          {formatTaka(minimum.shortfallPoisha, language)}
+                        </span>{' '}
+                        {copy.buyer.minOrderShort}
+                      </p>
+                      <ProgressBar
+                        label={copy.buyer.minOrder}
+                        className="mt-2"
+                        value={Math.min(
+                          100,
+                          Math.round(
+                            (subtotal / Math.max(1, deliveryConfig?.min_order_poisha ?? 1)) * 100,
+                          ),
+                        )}
+                      />
+                    </>
+                  )}
+                </div>
+              ) : null}
 
               <dl className="space-y-2 rounded-2xl bg-surface-2 p-4 text-sm">
                 <div className="flex justify-between">
@@ -470,7 +652,7 @@ export default function MarketCheckoutPage() {
                 </div>
                 <div className="flex items-baseline justify-between border-t border-border pt-3">
                   <dt className="font-bold text-text">{copy.buyer.total}</dt>
-                  <dd className="text-2xl font-extrabold tabular-nums text-green-700 dark:text-green-400">
+                  <dd className="text-2xl font-extrabold tabular-nums text-success">
                     {formatTaka(total, language)}
                   </dd>
                 </div>
@@ -479,7 +661,7 @@ export default function MarketCheckoutPage() {
               {!shopOpen ? (
                 <p
                   role="alert"
-                  className="rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-800 dark:text-rose-200"
+                  className="rounded-2xl border border-danger/30 bg-danger-soft p-3 text-xs font-medium text-danger-text"
                 >
                   {copy.schedule.closedBanner}
                 </p>
@@ -490,7 +672,7 @@ export default function MarketCheckoutPage() {
                 className="w-full rounded-2xl py-3.5 text-base shadow-lg shadow-green-700/25"
                 size="lg"
                 loading={place.isPending}
-                disabled={lines.length === 0 || !shopOpen || errors.area}
+                disabled={lines.length === 0 || !shopOpen || errors.area || errors.minimum}
                 onClick={() => void submit()}
               >
                 {copy.buyer.placeOrder}
@@ -505,13 +687,25 @@ export default function MarketCheckoutPage() {
         </aside>
       </div>
 
+      <AddressEditor
+        open={editing.open}
+        title={editing.initial === null ? copy.buyer.addressNew : copy.buyer.addressEditTitle}
+        initial={editing.initial}
+        copy={copy}
+        language={language}
+        saving={saveAddress.isPending}
+        delivery={deliveryConfig}
+        onClose={() => setEditing({ open: false, initial: null })}
+        onSave={commitEditor}
+      />
+
       <AnimatePresence>
         {place.isPending ? (
           <motion.div
             key="placing"
             role="status"
             aria-live="polite"
-            className="fixed inset-0 z-50 grid place-items-center bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 grid place-items-center bg-scrim/40 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -525,7 +719,7 @@ export default function MarketCheckoutPage() {
         {placed !== null ? (
           <motion.div
             key="placed"
-            className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 grid place-items-center bg-scrim/50 p-4 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
           >
@@ -537,10 +731,10 @@ export default function MarketCheckoutPage() {
             >
               <div
                 aria-hidden
-                className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-green-400/30 blur-2xl"
+                className="pointer-events-none absolute -top-16 left-1/2 h-40 w-40 -translate-x-1/2 rounded-full bg-on-hero/30 blur-2xl"
               />
               <motion.div
-                className="relative mx-auto mb-5 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-green-500 to-green-700 text-white shadow-lg"
+                className="relative mx-auto mb-5 grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-hero-via to-hero-from text-on-hero shadow-lg"
                 initial={reduce ? false : { scale: 0 }}
                 animate={{ scale: 1 }}
                 transition={{ delay: 0.15, type: 'spring', stiffness: 300, damping: 14 }}
@@ -551,12 +745,12 @@ export default function MarketCheckoutPage() {
                 {copy.buyer.orderPlaced}
               </h2>
               <p className="relative mt-2 text-sm text-muted">{copy.buyer.orderPlacedBody}</p>
-              <div className="relative mt-5 rounded-2xl border border-dashed border-green-600/40 bg-green-50 p-4 dark:bg-green-950/30">
+              <div className="relative mt-5 rounded-2xl border border-dashed border-primary/40 bg-success-soft p-4">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted">
                   {copy.buyer.orderCode}
                 </p>
                 <p className="mt-1 font-mono text-lg font-bold text-text">{placed.code}</p>
-                <p className="mt-1 text-sm font-semibold text-green-700 dark:text-green-400">
+                <p className="mt-1 text-sm font-semibold text-success">
                   {formatTaka(placed.total_poisha, language)}
                 </p>
               </div>
@@ -605,9 +799,7 @@ function FormSection({
         <span
           className={cn(
             'grid h-10 w-10 shrink-0 place-items-center rounded-2xl text-sm font-bold transition-colors duration-300',
-            done
-              ? 'bg-green-700 text-white shadow-md'
-              : 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-100',
+            done ? 'bg-primary text-on-primary shadow-md' : 'bg-success-soft text-success',
           )}
           aria-hidden
         >
@@ -617,7 +809,7 @@ function FormSection({
           <h2 className="font-bold text-text">{title}</h2>
         </div>
         {done ? (
-          <span className="rounded-full bg-green-100 px-2.5 py-1 text-xs font-semibold text-green-800 dark:bg-green-900/50 dark:text-green-100">
+          <span className="rounded-full bg-success-soft px-2.5 py-1 text-xs font-semibold text-success">
             {doneLabel}
           </span>
         ) : null}

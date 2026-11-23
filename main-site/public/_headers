@@ -16,6 +16,12 @@
 /sw.js
   Cache-Control: no-cache
 
+# The manifest decides whether an install is possible at all — on iOS it is the
+# difference between a home-screen web app that can be woken and a bookmark that
+# cannot — so a wrong one must not sit in a cache for a week after the fix ships.
+/manifest.webmanifest
+  Cache-Control: no-cache
+
 /index.html
   Cache-Control: no-cache
 

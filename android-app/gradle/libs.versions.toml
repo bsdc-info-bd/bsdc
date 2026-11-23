@@ -16,6 +16,9 @@ hilt = "2.52"
 hiltNavigationCompose = "1.2.0"
 ktor = "3.0.1"
 okhttp = "4.12.0"
+# Native OpenStreetMap renderer. 6.1.x is the stable line; it needs no API key and no
+# billing account, which is the whole reason the map is not on a commercial SDK.
+osmdroid = "6.1.20"
 room = "2.6.1"
 work = "2.10.0"
 datastore = "1.1.1"
@@ -111,6 +114,8 @@ zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCo
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
 androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }
+
+osmdroid-android = { module = "org.osmdroid:osmdroid-android", version.ref = "osmdroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

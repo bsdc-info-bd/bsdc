@@ -84,7 +84,7 @@ export function ShareMenu({ slug, title, onShare }: ShareMenuProps) {
           role="menu"
           tabIndex={-1}
           aria-label={t('interactions.share')}
-          className="absolute bottom-full end-0 z-30 mb-1 w-48 rounded-xl border border-line bg-surface p-1 shadow-lg"
+          className="absolute bottom-full end-0 z-30 mb-1 w-48 rounded-xl border border-border bg-surface p-1 shadow-lg"
           onKeyDown={(event) => {
             if (event.key === 'Escape') setOpen(false);
           }}

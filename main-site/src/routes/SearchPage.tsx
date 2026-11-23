@@ -78,7 +78,7 @@ export default function SearchPage() {
                       {highlight(result.title, state.text).map((segment, index) => (
                         <span
                           key={`${segment.text}-${String(index)}`}
-                          className={segment.match ? 'bg-green-100 text-green-900' : undefined}
+                          className={segment.match ? 'bg-success-soft text-green-900' : undefined}
                         >
                           {segment.text}
                         </span>

@@ -1,0 +1,48 @@
+{
+  "id": "https://www.bsdc.info.bd/",
+  "name": "Bangladesh Software Development Community",
+  "short_name": "BSDC",
+  "description": "The open community platform for Bangladeshi software developers: a social feed, blogs, questions, jobs, freelancing, a marketplace and a verification system. Bilingual, free.",
+  "lang": "bn",
+  "dir": "ltr",
+  "scope": "/",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1B4332",
+  "background_color": "#ffffff",
+  "categories": ["social", "news", "productivity", "education"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Notifications",
+      "short_name": "Notifications",
+      "url": "/notifications",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Create something",
+      "short_name": "Create",
+      "url": "/create",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

@@ -23,7 +23,7 @@ function Marked({ text, query }: { text: string; query: string }) {
     <>
       {highlightMatches(text, query).map((span, index) =>
         span.hit ? (
-          <mark key={index} className="rounded bg-amber-300/70 px-0.5 text-inherit">
+          <mark key={index} className="rounded bg-selection px-0.5 text-selection-ink">
             {span.text}
           </mark>
         ) : (
@@ -126,7 +126,7 @@ export function MessageBody({ message, highlight = '', mine = false }: MessageBo
                   key={index}
                   className={cn(
                     'my-1 block overflow-x-auto rounded-lg p-2 font-mono text-xs',
-                    mine ? 'bg-black/25' : 'bg-surface-3',
+                    mine ? 'bg-black/25' : 'bg-surface-2',
                   )}
                 >
                   {segment.language.length > 0 ? (

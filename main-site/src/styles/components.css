@@ -51,6 +51,20 @@
     white-space: nowrap;
   }
 
+  /* The list-page hero band. A gradient has no single background to measure
+     against, so it is one class carrying its own ink token rather than a
+     `bg-gradient-*` utility repeated across sixty files — which is how white
+     on a mint ramp survived a whole theme flip. */
+  .bsdc-hero {
+    background-image: linear-gradient(
+      135deg,
+      var(--bsdc-hero-from) 0%,
+      var(--bsdc-hero-via) 52%,
+      var(--bsdc-hero-to) 100%
+    );
+    color: var(--bsdc-on-hero);
+  }
+
   .bsdc-route-progress {
     position: fixed;
     inset-block-start: 0;

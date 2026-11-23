@@ -227,12 +227,98 @@ try {
     await browser.close();
     browser = undefined;
   }
+
+  /* ------------------------------------------------------------------ *
+   * The responsive matrix.
+   *
+   * The brief names nine widths and two invariants: no horizontal scroll, and a
+   * touch target you can hit. The device pass above covers one desktop and one
+   * phone; a layout can pass both and still break at 2560 or at the 768 seam
+   * where the rail stops being a rail. So the matrix sweeps the widths on the
+   * routes a stranger actually lands on, in one browser, and reads the document
+   * box rather than trusting a screenshot.
+   * ------------------------------------------------------------------ */
+  browser = await launch();
+  const matrix = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    serviceWorkers: 'block',
+    // Touch is what makes a 30px control a defect rather than a preference.
+    hasTouch: true,
+  });
+  const page = await matrix.newPage();
+  activePage = page;
+  for (const width of [320, 375, 414, 540, 768, 1024, 1440, 1920, 2560]) {
+    await check(`${width}px: no horizontal scroll on the public pages`, async () => {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ['/', '/jobs', '/events', '/marketplace', '/about']) {
+        await page.goto(server.origin + route, { waitUntil: 'networkidle' });
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth - innerWidth,
+        );
+        assert(overflow <= 0, `${route} scrolls ${overflow}px sideways at ${width}px`);
+      }
+    });
+  }
+
+  /*
+   * The touch pass runs in a phone context, not the sweep's desktop one.
+   *
+   * The 44px rule in `fabric.css` is scoped to `@media (pointer: coarse)`, and
+   * Playwright only reports a coarse primary pointer with `isMobile`. A context
+   * with `hasTouch` alone would measure a browser where the rule the site ships
+   * cannot match, and report the site as broken for the emulation's reason —
+   * the exact failure mode this whole file is trying to stop producing.
+   */
+  const touch = await browser.newContext({
+    ...devices['Pixel 7'],
+    serviceWorkers: 'block',
+  });
+  const touchPage = await touch.newPage();
+  activePage = touchPage;
+  await check('touch: the shell controls a thumb has to hit are 44x44', async () => {
+    await touchPage.goto(server.origin + '/', { waitUntil: 'networkidle' });
+    const small = await touchPage.evaluate(() => {
+      // Only the chrome — header, navigation, footer link lists — is gated.
+      // WCAG 2.5.8 exempts a target whose size is set by a line of prose, and a
+      // feed card's text link is exactly that: measuring those would produce a
+      // wall of findings nobody may act on, which is how a11y checks end up
+      // switched off.
+      const selectors = ['header a', 'header button', 'nav a', 'nav button', '[role="tab"]'];
+      const seen = new Set();
+      const out = [];
+      for (const selector of selectors) {
+        for (const el of document.querySelectorAll(selector)) {
+          if (seen.has(el)) continue;
+          seen.add(el);
+          const rect = el.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) continue;
+          if (rect.width < 44 || rect.height < 44) {
+            const name =
+              el.getAttribute('aria-label') ?? el.textContent?.trim().slice(0, 24) ?? 'unnamed';
+            out.push(`${name} ${Math.round(rect.width)}x${Math.round(rect.height)}`);
+          }
+        }
+      }
+      return out;
+    });
+    assert(small.length === 0, `targets under 44px: ${small.slice(0, 8).join(', ')}`);
+  });
+  // No `touch.close()`. Closing a context and then its browser races Playwright's
+  // own teardown and surfaced as `browserContext.close: Target page, context or
+  // browser has been closed` — a failure of the harness, after every check had
+  // passed, which is the worst kind of red: it teaches the reader to ignore the
+  // gate. `browser.close()` already disposes both contexts.
+  await browser.close();
+  browser = undefined;
 } catch (error) {
   if (activePage && !activePage.isClosed())
     await activePage
       .screenshot({ path: join(output, 'failure.png'), fullPage: true })
       .catch(() => {});
-  results.push({ passed: false, error: String(error) });
+  // Named, so the report and the workflow annotation both say *which* failure an
+  // escaping exception is. An unnamed entry in `results` was how one run came
+  // back "2 failed" with a single `FAIL` line and no way to read the other.
+  results.push({ name: 'unexpected error', passed: false, error: String(error) });
   process.exitCode = 1;
   console.error(error);
 } finally {
@@ -255,5 +341,18 @@ try {
   console.log(
     `${results.length - failed.length} passed${failed.length > 0 ? `, ${failed.length} failed` : ''}; report: ${output}`,
   );
+  // One greppable line, because CI mirrors `^FAIL` into a workflow annotation and
+  // a runner log is not readable from everywhere: without this a check that dies
+  // outside `check()` fails the job invisibly.
+  if (failed.length > 0) {
+    console.log(
+      `FAILURES ${failed
+        .map(
+          (failure) =>
+            `${failure.name ?? 'unnamed'}: ${failure.error.split('\n')[0].slice(0, 180)}`,
+        )
+        .join(' || ')}`,
+    );
+  }
   for (const failure of failed) console.log(`  ${failure.name}: ${failure.error.split('\n')[0]}`);
 }

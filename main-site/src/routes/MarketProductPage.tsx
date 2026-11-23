@@ -160,7 +160,7 @@ export default function MarketProductPage() {
           <div>
             <h1 className="text-2xl font-bold text-text sm:text-3xl">{data.name}</h1>
             <p className="mt-2 flex items-center gap-2 text-sm text-muted">
-              <Star size={14} className="fill-amber-400 text-amber-400" aria-hidden />
+              <Star size={14} className="fill-rating text-rating" aria-hidden />
               {data.rating.toFixed(1)}
             </p>
           </div>
@@ -169,13 +169,13 @@ export default function MarketProductPage() {
           </p>
 
           <p
-            className={`text-sm font-semibold ${data.in_stock ? 'text-green-700' : 'text-red-600'}`}
+            className={`text-sm font-semibold ${data.in_stock ? 'text-green-700' : 'text-danger-text'}`}
           >
             {data.in_stock ? `${data.stock} ${copy.buyer.stockLeft}` : copy.buyer.outOfStock}
           </p>
 
           {!shopOpen ? (
-            <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-sm font-medium text-rose-800 dark:text-rose-200">
+            <p className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-sm font-medium text-danger-text dark:text-danger-text">
               {copy.schedule.closedBanner}
             </p>
           ) : null}

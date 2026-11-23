@@ -3,9 +3,31 @@ name: Production-build browser smoke
 on:
   push:
     branches: ['**']
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
+    paths:
+      [
+        'main-site/**',
+        'corporate-kit/**',
+        'admin-site/**',
+        'certificate-site/**',
+        'notice-site/**',
+        'performance-site/**',
+        'vf-site/**',
+        '.github/workflows/browser.yml',
+        'scripts/lighthouse.mjs',
+      ]
   pull_request:
-    paths: ['main-site/**', 'corporate-kit/**', 'admin-site/**', 'certificate-site/**', 'notice-site/**', 'performance-site/**', 'vf-site/**', '.github/workflows/browser.yml']
+    paths:
+      [
+        'main-site/**',
+        'corporate-kit/**',
+        'admin-site/**',
+        'certificate-site/**',
+        'notice-site/**',
+        'performance-site/**',
+        'vf-site/**',
+        '.github/workflows/browser.yml',
+        'scripts/lighthouse.mjs',
+      ]
   workflow_dispatch:
 
 permissions:
@@ -33,7 +55,24 @@ jobs:
       - run: npm ci --no-audit --no-fund
       # Bundled Chromium is installed from npm. No paid device service or
       # production credentials; this does not validate provider integrations.
-      - run: npm run test:browser
+      - name: Serve the production build to a browser
+        shell: bash
+        # The same reason the messenger step below does this and the auditor
+        # step learns it the hard way: an exit code is not a finding. The suite
+        # prints `FAIL <check> — <why>` per check, and that line is the whole
+        # value of the run.
+        run: |
+          set +e
+          npm run test:browser > /tmp/browser-smoke.log 2>&1
+          status=$?
+          cat /tmp/browser-smoke.log
+          if [ "$status" -ne 0 ]; then
+            message=$(grep -E '^FAIL|^FAILURES|passed' /tmp/browser-smoke.log | tail -20 | head -c 5000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Production-build browser smoke failed::${message:-see the run log}"
+          fi
+          exit "$status"
       - name: Messenger interactions with mocked providers
         shell: bash
         run: |
@@ -82,5 +121,116 @@ jobs:
         with:
           name: corporate-browser-failure
           path: main-site/.browser-evidence/corporate-failure.png
+          include-hidden-files: true
+          retention-days: 14
+
+  lighthouse:
+    name: Lighthouse budget on every public route
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: main-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: main-site/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      # The repository does not carry Lighthouse: it is 40 MB of browser
+      # tooling this one script uses, and `--no-save` is what
+      # scripts/lighthouse.mjs asks for when it cannot resolve the module.
+      - name: Install the auditor
+        shell: bash
+        run: |
+          npm install --no-save lighthouse chrome-launcher
+          # The install above lands in main-site/node_modules, but the auditor
+          # lives at scripts/lighthouse.mjs, and a bare specifier in an ES module
+          # resolves by walking up from the *importing file* — scripts/, the repo
+          # root. NODE_PATH is ignored by the ESM loader, so instead the tree that
+          # exists is made visible where the script looks, rather than downloading
+          # 40 MB of Chromium tooling a second time into a prefix nothing reads.
+          ln -sfn "$PWD/node_modules" ../node_modules
+          # Probed from the directory the auditor actually resolves against, not
+          # from main-site — a check that passes for the wrong reason is how a
+          # green job started measuring nothing.
+          (cd .. && node --input-type=module -e "const m = await import('lighthouse'); console.log('the auditor resolves from the repo root:', typeof m.default);")
+      - name: Resolve a browser
+        id: chrome
+        shell: bash
+        # Not the @sparticuz Chromium the smoke suites use. That build needs an
+        # LD_LIBRARY_PATH pointing at its bundled shared objects, which
+        # chrome-launcher cannot be told about, and a half-loaded page is worse
+        # than no measurement — it is a low score that looks real. GitHub's
+        # runner ships a complete Chrome instead, so the number below is the
+        # one the budget was written against. A hard failure if it is ever
+        # absent: a skipped audit that reads as a green check is how this file
+        # got a table of unrun gates in the first place.
+        run: |
+          set -euo pipefail
+          for candidate in "$(command -v google-chrome-stable || true)" \
+                           "$(command -v google-chrome || true)" \
+                           "$(command -v chromium-browser || true)" \
+                           "$(command -v chromium || true)"; do
+            if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+              echo "path=$candidate" >> "$GITHUB_OUTPUT"
+              echo "Using $candidate ($("$candidate" --version | head -1))"
+              exit 0
+            fi
+          done
+          echo "::error::No Chrome on this runner. scripts/lighthouse.mjs refuses to estimate a score, so this job must not either."
+          exit 1
+      - name: Measure every route, five samples each, median must clear 95
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}
+        # The table is the artifact as well as the verdict: a score quoted in a
+        # run log cannot be re-read next quarter, and "we ran Lighthouse" without
+        # the per-route numbers is the same claim as not having run it. The
+        # status is carried out of the pipe by hand, because the exit code is the
+        # gate and `tee` would otherwise decide it.
+        shell: bash
+        run: |
+          mkdir -p .browser-evidence
+          # stderr travels with stdout into the artifact and the annotation.
+          # Without this the run said "exit code 1", the artifact was 144 bytes,
+          # and the reason was unreachable — the log endpoint on a runner is not
+          # readable from everywhere, and a measurement whose failure cannot be
+          # read is a measurement nobody can act on.
+          set +e
+          node ../scripts/lighthouse.mjs --verbose 2>&1 | tee .browser-evidence/lighthouse.txt
+          status=${PIPESTATUS[0]}
+          # Reporting never decides the verdict, and it must not die before it
+          # has reported: with Actions' default `-eo pipefail` a `grep` that finds
+          # nothing once killed this step past its own error message.
+          set +e
+          {
+            echo '### Lighthouse — median of 5 runs per route, floor 95'
+            echo
+            echo '```text'
+            cat .browser-evidence/lighthouse.txt
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"
+          if [ "$status" -ne 0 ]; then
+            # The verdict line first, then the tail. Per-route detail no longer has
+            # to fit in here — the script annotates each failing route itself — so
+            # this digest can stay short without cutting the worst route's numbers.
+            digest=$(
+              {
+                grep -E "route\(s\) below the floor" .browser-evidence/lighthouse.txt
+                tail -c 1400 .browser-evidence/lighthouse.txt
+              } | tr '\n' ' | ' | tr -s ' '
+            )
+            echo "::error title=Lighthouse failed (exit $status)::${digest:-no output}"
+          fi
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lighthouse-evidence
+          path: main-site/.browser-evidence/lighthouse*
+          if-no-files-found: ignore
           include-hidden-files: true
           retention-days: 14

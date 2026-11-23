@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DISALLOWED_PATHS,
   STATIC_ROUTES,
+  type StaticRoute,
   absoluteUrl,
   breadcrumbJsonLd,
   canonicalPath,
@@ -34,6 +35,13 @@ import {
 } from '../../../scripts/prerender.mjs';
 
 const ORIGIN = 'https://www.bsdc.info.bd';
+
+/** The hero a route claims — or a failure that says which route had none. */
+function heroOf(route: StaticRoute) {
+  const hero = route.hero;
+  if (hero === undefined) throw new Error(`${route.path} carries no hero`);
+  return hero;
+}
 
 describe('one canonical form for a URL', () => {
   it('folds the ways a link can be written into one', () => {
@@ -236,11 +244,87 @@ describe('the build-time prerender and the application agree', () => {
     // Styled with the page's own classes rather than a bare tag: the shell is
     // the no-JavaScript page and the first paint, so it has to render at the
     // size the real heading will render at. See renderShell.
-    expect(shell).toContain(`<h1 class="text-4xl">${home.heading}</h1>`);
+    expect(shell).toContain(`<h1 class="mt-2 text-4xl">${heroOf(home).title}</h1>`);
     expect(shell).toContain('class="fab-container');
     expect(shell).toContain('text-base text-muted');
     expect(shell).toContain('href="/jobs"');
     expect(shell).not.toContain(`href="${home.path}"`);
+  });
+
+  it('paints the hero the page will paint, so LCP is the words and not the script', () => {
+    // LCP compares paint *areas*, so a shell that loses to the page it stands in for
+    // hands the metric to the script: the score becomes "when did the JavaScript
+    // finish". Two quiet regressions do that — the wording drifts (the shell once
+    // carried the site's name while the page rendered a longer sentence, which wrapped
+    // to a second line and covered more), or the component changes size. So the words
+    // are checked against the English catalogue and the classes against the source of
+    // the component that owns each shape.
+    const locale = readFileSync(resolve(process.cwd(), 'src/i18n/locales/en.ts'), 'utf8');
+    const owners: Record<string, string> = {
+      home: 'src/routes/HomePage.tsx',
+      listHero: 'src/design-system/ListHero.tsx',
+      sectionHeading: 'src/design-system/SectionHeading.tsx',
+    };
+    const withHero = STATIC_ROUTES.filter((route) => route.hero !== undefined);
+    expect(withHero.map((route) => route.path).sort()).toEqual([
+      '/',
+      '/learn',
+      '/playground',
+      '/projects',
+    ]);
+    for (const route of withHero) {
+      const hero = heroOf(route);
+      const shell = renderShell(route, STATIC_ROUTES);
+      const ownerPath = owners[hero.shape];
+      if (ownerPath === undefined) throw new Error(`the ${hero.shape} shape names no owner`);
+      // The page's own file is an owner as well: a shell block that stands in for
+      // the page's editor pane is styled with the page's classes, not the heading's.
+      const owner = [
+        ownerPath,
+        `src/routes/${route.component}.tsx`,
+        'src/design-system/TextareaField.tsx',
+      ]
+        .map((one) => readFileSync(resolve(process.cwd(), one), 'utf8'))
+        .join('\n');
+
+      // The words are the page's words, not a summary of them.
+      expect(locale).toContain(`'${hero.title}'`);
+      expect(locale).toContain(`'${hero.description}'`);
+      expect(shell).toContain(`>${hero.title}</h1>`);
+      expect(shell).toContain(`>${hero.description}</p>`);
+      if (hero.snippet !== undefined) {
+        // The starter code is the page's, not an invention of the shell, and the label
+        // is the field's own word from the catalogue the page reads.
+        expect(owner).toContain(hero.snippet.code);
+        expect(locale).toContain(`'${hero.snippet.label}'`);
+        expect(shell).toContain(`>${hero.snippet.label}</p>`);
+      }
+
+      // And every class the shell puts on the hero's own elements is a class the
+      // component that owns the shape still uses.
+      // The hero block alone: the opening paragraphs and the section pills below it
+      // belong to the shell, not to the page's heading, and their classes are the
+      // shell's own business.
+      const heroStart = shell.indexOf('>', shell.indexOf('fab-container')) + 1;
+      const stops = [shell.indexOf('<nav class="mt-5"'), shell.indexOf('<div class="mt-6')].filter(
+        (index) => index >= 0,
+      );
+      const heroMarkup = shell.slice(
+        heroStart,
+        stops.length > 0 ? Math.min(...stops) : shell.length,
+      );
+      const classes = [
+        ...new Set(
+          [...heroMarkup.matchAll(/class="([^"]+)"/g)]
+            .flatMap((match) => (match[1] ?? '').split(' '))
+            .filter((one) => one !== ''),
+        ),
+      ];
+      expect(classes.length).toBeGreaterThan(3);
+      for (const one of classes) {
+        expect(owner).toContain(one);
+      }
+    }
   });
 
   it('replaces the template head and root rather than appending to them', () => {
@@ -260,7 +344,7 @@ describe('the build-time prerender and the application agree', () => {
     expect(html.match(/property="og:title"/g)).toHaveLength(1);
     expect(html.match(/name="robots"/g)).toHaveLength(1);
     expect(html).toContain('application/ld+json');
-    expect(html).toContain('<h1 class="text-4xl">Bangladesh Software Development Community</h1>');
+    expect(html).toContain('<h1 class="mt-2 text-4xl">The developer community of Bangladesh</h1>');
   });
 
   it('leaves the real template with exactly one of each head tag', () => {

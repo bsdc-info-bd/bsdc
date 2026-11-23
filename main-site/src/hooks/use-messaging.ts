@@ -247,6 +247,8 @@ export interface SendOptions {
   kind?: Message['kind'];
   mediaUrl?: string;
   mediaName?: string;
+  /** A library picture, by asset id; see `SendMessageInput.mediaAsset`. */
+  mediaAsset?: string | undefined;
   codeLanguage?: string;
 }
 
@@ -583,6 +585,14 @@ export function useConversation(conversationId: string): ConversationResult {
     kind: Message['kind'];
     mediaUrl: string;
     mediaName: string;
+    /**
+     * Absent on a retry, by necessity: the outbox holds a `Message`, and a message is
+     * a row the database wrote, not the request that made it. A retried pick therefore
+     * re-sends the address the failed attempt carried, which the first attempt had
+     * read out of the member's own asset row — the same value the id resolves to, and
+     * no weaker than the path every upload has always taken.
+     */
+    mediaAsset?: string;
     codeLanguage: string;
   };
 
@@ -928,6 +938,7 @@ export function useConversation(conversationId: string): ConversationResult {
         kind,
         mediaUrl: options?.mediaUrl ?? '',
         mediaName: options?.mediaName ?? '',
+        mediaAsset: options?.mediaAsset ?? '',
         codeLanguage: options?.codeLanguage ?? '',
       });
       clearTyping();

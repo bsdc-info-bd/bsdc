@@ -23,7 +23,12 @@ import {
 import { uint8ArrayToUrlBase64, urlBase64ToUint8Array } from '@/lib/push/webpush';
 import type { PushDevice } from '@/lib/push/push-repository';
 import { dataErrorKey } from '@/lib/supabase/errors';
-import { resolvePushConfig } from '@/lib/push/push-config';
+import {
+  clearTransportCooldowns,
+  markTransportUnavailable,
+  resolvePushConfig,
+  type ResolvedPushConfig,
+} from '@/lib/push/push-config';
 import { readyServiceWorker } from '@/lib/push/ready-worker';
 import {
   browserErrorName,
@@ -145,12 +150,12 @@ async function subscribeHere(
   }
 }
 
-async function registerCurrentBrowser(
+/** Once, on the transport it was given. Throws the stage the member should hear about. */
+async function registerOn(
   uid: string,
   language: string,
-  config: { mode: 'webpush' | 'fcm'; publicKey: string } | null,
-): Promise<boolean> {
-  if (config === null) throw new PushStageError('configUnavailable');
+  config: ResolvedPushConfig,
+): Promise<void> {
   const store = await repository();
   let stage: 'subscribeRefused' | 'fcmTokenFailed' | 'registerRpcFailed' =
     config.mode === 'fcm' ? 'fcmTokenFailed' : 'subscribeRefused';
@@ -161,6 +166,12 @@ async function registerCurrentBrowser(
       if (subscription === null) throw new PushStageError('swNotReady');
       stage = 'registerRpcFailed';
       await store.registerPushSubscription(subscription, language, globalThis.navigator.userAgent);
+      // A browser that used to be woken by Firebase has a row of its own in
+      // `fcm_tokens`, and nothing will ever retire it from there: the device list
+      // would keep counting a device that answers, and support would keep being
+      // shown a token that cannot fire. This browser knows that row's hash, so
+      // taking it over is this page's job. Best-effort and never in the way.
+      void retireStaleFcmRow(uid, store);
     } else {
       const fcm = await fcmClient();
       const registration = await readyServiceWorker();
@@ -178,12 +189,81 @@ async function registerCurrentBrowser(
       fcm.writeRegisteredFcmHash(uid, hash);
       void fcm.syncFcmTokenToFirestore(uid, hash, 'web', lang);
     }
-    recordPushAttempt(config.mode, 'registered');
+    recordPushAttempt(config.mode, `registered (${config.reason})`);
+  } catch (error) {
+    throw error instanceof PushStageError ? error : new PushStageError(stage, error);
+  }
+}
+
+/**
+ * Forgets the `fcm_tokens` row this browser left behind when it was registered
+ * through Firebase, and the cached token with it.
+ */
+async function retireStaleFcmRow(
+  uid: string,
+  store: Awaited<ReturnType<typeof repository>>,
+): Promise<void> {
+  const fcm = await fcmClient();
+  const previous = fcm.readRegisteredFcmHash(uid);
+  if (previous === null) return;
+  await store.forgetFcmDevice(previous).catch(() => undefined);
+  void fcm.removeFcmTokenFromFirestore(uid, previous);
+  void fcm.deleteFcmBrowserToken();
+  fcm.writeRegisteredFcmHash(uid, null);
+}
+
+/**
+ * Turns push on for this browser, on whichever transport the deployment can honour.
+ *
+ * One refusal is worth a second attempt in the same click and no more: a Firebase
+ * that cannot issue a token is a configuration this site does not depend on, and the
+ * other transport was already available — so the member presses the switch once and
+ * notifications work, while `recordPushAttempt` keeps both outcomes for support to
+ * read. The reverse is not true. A browser that refused the subscription refused
+ * *this site*, and a retry on another transport would only ask the member again.
+ */
+async function registerCurrentBrowser(
+  uid: string,
+  language: string,
+  config: ResolvedPushConfig | null,
+  adopted?: (next: ResolvedPushConfig) => void,
+): Promise<boolean> {
+  if (config === null) throw new PushStageError('configUnavailable');
+  try {
+    await registerOn(uid, language, config);
     return true;
   } catch (error) {
-    const failure = error instanceof PushStageError ? error : new PushStageError(stage, error);
+    // `registerOn` labels what it got wrong; anything escaping without a label came
+    // from the module or the network below it, and must still be named after the
+    // transport that was tried. A web-push browser reading "Firebase could not
+    // issue a token" is the exact confusion this whole change removed.
+    const failure =
+      error instanceof PushStageError
+        ? error
+        : new PushStageError(config.mode === 'fcm' ? 'fcmTokenFailed' : 'subscribeRefused', error);
     recordPushAttempt(config.mode, pushRegistrationErrorKey(failure), error);
-    throw failure;
+
+    // Marking is only safe for a transport the site can live without: Firebase's is
+    // optional by design, and marking web push could leave a browser with no
+    // transport at all because a member denied a permission.
+    if (config.mode !== 'fcm') throw failure;
+    markTransportUnavailable('fcm');
+    // Marked, then asked again: `resolvePushConfig` skips a transport this browser
+    // was just refused by and offers the key that was always available, so the
+    // fallback rule lives in one place instead of being decided twice.
+    const next = await resolvePushConfig();
+    if (next === null || next.mode === config.mode) throw failure;
+    try {
+      await registerOn(uid, language, next);
+    } catch (second) {
+      const both =
+        second instanceof PushStageError ? second : new PushStageError(next.reason, second);
+      recordPushAttempt(next.mode, pushRegistrationErrorKey(both), second);
+      throw both;
+    }
+    recordPushAttempt(next.mode, `registered (${next.reason})`);
+    adopted?.(next);
+    return true;
   }
 }
 
@@ -295,7 +375,9 @@ export function usePush(): PushControl {
         setErrorKey('push.errors.permissionDenied');
         return false;
       }
-      const registered = await registerCurrentBrowser(uid, i18n.language, pushConfig);
+      const registered = await registerCurrentBrowser(uid, i18n.language, pushConfig, (next) =>
+        queryClient.setQueryData<ResolvedPushConfig | null>(['push-runtime-config'], next),
+      );
       if (!registered) {
         setErrorKey('push.errors.failed');
         return false;
@@ -415,6 +497,10 @@ export function usePush(): PushControl {
     errorKey,
     dismissError,
     retryConfiguration: () => {
+      // **Retry** is the one moment a marked-broken transport is worth forgetting:
+      // an operator who has just fixed the deployment is otherwise punished for it
+      // until the cooldown expires.
+      clearTransportCooldowns();
       void runtimeQuery.refetch();
     },
     enable,

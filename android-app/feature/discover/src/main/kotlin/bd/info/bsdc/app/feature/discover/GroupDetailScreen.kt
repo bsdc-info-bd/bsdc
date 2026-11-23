@@ -23,6 +23,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.ChatBubbleOutline
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -78,6 +79,25 @@ fun GroupDetailScreen(
     onSignInRequired: () -> Unit,
     onOpenProfile: (String) -> Unit,
     onOpenExternal: (String) -> Unit,
+    /**
+     * Opens the composer aimed at one of this group's channels.
+     *
+     * Defaulted to nothing so a host that has no create surface still renders the page — but the
+     * button below is only shown when the caller can actually take the member somewhere, because a
+     * control that does nothing is the one UI sin a member never forgives.
+     */
+    onWriteInChannel: (channelId: String, channelName: String) -> Unit = { _, _ -> },
+    canWriteInChannels: Boolean = false,
+    /**
+     * Opens one room's timeline, in-app.
+     *
+     * The card is the link, as it is on the website — `CommunityChannelsSection` makes the channel name
+     * an `<a>` to `/g/{group}/c/{channel}`, so a tap on the row is not an app-side invention. It is
+     * opt-in (`canOpenChannels`) rather than always-on for the same reason the write button is: a host
+     * without a channel screen to go to must not be left with a card that swallows taps.
+     */
+    onOpenChannel: (channelSlug: String) -> Unit = {},
+    canOpenChannels: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -102,6 +122,10 @@ fun GroupDetailScreen(
     var channelSaving by remember(slug) { mutableStateOf(false) }
     var showAddChannel by remember(slug) { mutableStateOf(false) }
     var editingChannelId by remember(slug) { mutableStateOf<String?>(null) }
+    var channelCounts by remember(slug) { mutableStateOf<Map<String, Int>>(emptyMap()) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
 
     LaunchedEffect(slug, viewerUid, reloadNonce) {
         loading = true
@@ -118,11 +142,45 @@ fun GroupDetailScreen(
                 repository.fetchGroupViewer(loaded.id, uid).getOrDefault(GroupViewerState(null, null))
             }
             channels = repository.fetchGroupChannels(loaded.id).getOrDefault(emptyList())
+            channelCounts = repository.channelPostCounts(loaded.id).getOrDefault(emptyMap())
             repository.fetchGroupMembers(loaded.id)
                 .onSuccess { members = GroupDetailLogic.sortMembers(it, { m -> m.role }, { m -> m.joinedAt }); membersFailed = false }
                 .onFailure { membersFailed = true }
         }
         loading = false
+    }
+
+    /**
+     * Writes the group edit sheet's payload.
+     *
+     * The reload is a `reloadNonce` bump rather than a poke at local state: `update_group` normalises
+     * what it is given — it trims, and it refuses a name that is too short — so the page must show the
+     * row the database kept, not the text that happened to be typed.
+     */
+    fun saveGroupEdit(payload: GroupEditPayload) {
+        val current = group ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateGroup(
+                groupId = current.id,
+                name = payload.name,
+                description = payload.description,
+                rules = payload.rules,
+                privacy = payload.privacy,
+                language = payload.language,
+                avatarUrl = payload.avatarUrl,
+                coverUrl = payload.coverUrl,
+            ).onSuccess {
+                showEditSheet = false
+                notice = (if (bn) "গ্রুপ হালনাগাদ হয়েছে" else "Group updated") to BsdcTone.OK
+                reloadNonce++
+            }.onFailure { err ->
+                editError = GroupEditLogic.editFailureMessage(err, bn)
+            }
+            editSaving = false
+        }
     }
 
     fun deleteGroup(current: GroupDetailDto) {
@@ -436,11 +494,17 @@ fun GroupDetailScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(8.dp),
                                     ) {
+                                        // This used to read "Edit on the web" — an honest signpost, and
+                                        // the gap itself: `update_group` has been callable from here the
+                                        // whole time.
                                         BsdcButton(
-                                            label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                            onClick = { onOpenExternal(GroupDetailLogic.webUrl(current.slug)) },
+                                            label = if (bn) "গ্রুপ সম্পাদনা" else "Edit group",
+                                            onClick = {
+                                                editError = null
+                                                showEditSheet = true
+                                            },
                                             secondary = true,
-                                            leadingIcon = Icons.Rounded.Language,
+                                            leadingIcon = Icons.Rounded.Edit,
                                         )
                                         if (groupControls.canDelete) {
                                             BsdcButton(
@@ -520,20 +584,69 @@ fun GroupDetailScreen(
                                     }
                                 }
                                 items(channels, key = { it.id }) { channel ->
-                                    BsdcCard(modifier = Modifier.padding(horizontal = 16.dp)) {
+                                    // A room that appears, disappears or moves is a change the member
+                                    // just caused, so it is shown as movement rather than as a repaint.
+                                    BsdcCard(
+                                        modifier = Modifier
+                                            .animateItem()
+                                            .padding(horizontal = 16.dp)
+                                            .then(
+                                                if (canOpenChannels && channel.slug.isNotBlank()) {
+                                                    Modifier.clickable { onOpenChannel(channel.slug) }
+                                                } else {
+                                                    Modifier
+                                                },
+                                            ),
+                                    ) {
                                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text(
                                                 text = GroupDetailLogic.channelTitle(channel.name),
                                                 style = MaterialTheme.typography.titleSmall,
                                                 fontWeight = FontWeight.SemiBold,
+                                                color = if (canOpenChannels && channel.slug.isNotBlank()) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                },
                                                 modifier = Modifier.weight(1f),
+                                            )
+                                            val count = channelCounts[channel.id] ?: 0
+                                            // The count is the proof the room is alive. Before
+                                            // `channel_post_counts` there was nothing to put here, and
+                                            // a channel card with no number read as a broken feature
+                                            // rather than as an empty room, which is a real difference.
+                                            BsdcBadge(
+                                                label = GroupDetailLogic.postCountLabel(
+                                                    formattedCount = BanglaDigitFormatter.formatCount(count.toLong(), language),
+                                                    count = count,
+                                                    bn = bn,
+                                                ),
+                                                tone = if (count == 0) BsdcTone.NEUTRAL else BsdcTone.OK,
                                             )
                                             if (channel.isReadOnly) {
                                                 BsdcBadge(label = if (bn) "শুধু পড়া" else "Read only", tone = BsdcTone.NEUTRAL)
                                             }
+                                            // A glyph was the obvious cue here, and the one this line
+                                            // first asked for does not exist: RTL-flipped chevron
+                                            // support arrived in material-icons-extended as
+                                            // `ChevronLeft` under `Icons.AutoMirrored`, not as a
+                                            // `ChevronRight`, and the compiler named it in three
+                                            // minutes. Rather than import a symbol no other screen in
+                                            // this app uses, the room's own name carries the affordance:
+                                            // tappable is coloured like a link, not tappable is plain
+                                            // text. Nothing to translate, nothing to mirror.
                                         }
                                         channel.topic?.takeIf { it.isNotBlank() }?.let { topic ->
                                             Text(text = topic, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        if (canWriteInChannels && !channel.isReadOnly) {
+                                            BsdcButton(
+                                                label = if (bn) "এখানে লিখুন" else "Write here",
+                                                onClick = { onWriteInChannel(channel.id, channel.name) },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 8.dp),
+                                            )
                                         }
                                         if (canModerate) {
                                             ChannelRowControls(
@@ -663,6 +776,18 @@ fun GroupDetailScreen(
     }
 
     val confirmGroup = group
+    group?.let { current ->
+        MkGroupEditSheet(
+            visible = showEditSheet,
+            group = current,
+            bn = bn,
+            saving = editSaving,
+            errorMessage = editError,
+            onDismiss = { if (!editSaving) showEditSheet = false },
+            onSave = { payload -> saveGroupEdit(payload) },
+        )
+    }
+
     if (confirmGroup != null && pendingDelete) {
         BsdcConfirmDialog(
             visible = true,

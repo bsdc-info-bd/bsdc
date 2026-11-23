@@ -102,7 +102,7 @@ function linkEntities(markdown: string): string {
       .replace(/(^|[\s(])#([a-z0-9][a-z0-9-]{1,31})\b/g, '$1[#$2](/tag/$2)');
 
   // Split out fenced code blocks (``` or ~~~) and inline code spans (`...`) so
-  // decorators like `@Component` or CSS `#ff0000` inside code are preserved verbatim.
+  // decorators and CSS colour literals inside code are preserved verbatim.
   const parts = markdown.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]+`)/g);
   return parts.map((part, index) => (index % 2 === 1 ? part : linkProse(part))).join('');
 }

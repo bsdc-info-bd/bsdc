@@ -71,16 +71,16 @@ export default function MarketplacePage() {
       />
       <MarketNav copy={copy} />
 
-      <header className="relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-6 text-white shadow-lg sm:p-8">
+      <header className="relative mb-6 overflow-hidden rounded-3xl bsdc-hero p-6 shadow-lg sm:p-8">
         {/* A compositor animation rather than a motion one: this runs for as
             long as the page is open, and a library-driven loop kept the main
             thread awake for a decorative circle. */}
         <div
           aria-hidden
-          className="mk-glow pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10"
+          className="mk-glow pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-on-hero/10"
         />
         <h1 className="relative text-2xl font-bold sm:text-3xl">{copy.buyer.marketTitle}</h1>
-        <p className="relative mt-2 max-w-xl text-sm text-white/90">{copy.buyer.marketLead}</p>
+        <p className="relative mt-2 max-w-xl text-sm text-on-hero/90">{copy.buyer.marketLead}</p>
         <div className="relative mt-4 flex flex-col gap-3 sm:flex-row">
           <div className="relative flex-1">
             <Search
@@ -94,13 +94,13 @@ export default function MarketplacePage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder={copy.buyer.searchShops}
               aria-label={copy.buyer.searchShops}
-              className="w-full rounded-xl border border-white/20 bg-white px-10 py-2.5 text-sm text-text shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-white/60"
+              className="w-full rounded-xl border border-on-hero/20 bg-bg px-10 py-2.5 text-sm text-text shadow-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-on-hero/60"
             />
           </div>
           <button
             type="button"
             onClick={locate}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold backdrop-blur hover:bg-white/25"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-on-hero/15 px-4 py-2.5 text-sm font-semibold backdrop-blur hover:bg-on-hero/25"
           >
             <LocateFixed size={16} aria-hidden />
             {copy.buyer.useCurrent}
@@ -120,7 +120,7 @@ export default function MarketplacePage() {
           >
             <Link
               to={ROUTES.marketOrders}
-              className="block rounded-2xl border border-green-600/30 bg-green-600/5 p-4 transition hover:bg-green-600/10"
+              className="block rounded-2xl border border-primary/30 bg-primary/5 p-4 transition hover:bg-primary/10"
             >
               <div className="mb-3 flex items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-text">
@@ -198,7 +198,7 @@ function TypeChip({
       onClick={onClick}
       className={`shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition ${
         selected
-          ? 'border-green-700 bg-green-700 text-white shadow-sm'
+          ? 'border-primary bg-primary text-on-primary shadow-sm'
           : 'border-border bg-surface text-text hover:bg-surface-2'
       }`}
     >
@@ -248,25 +248,30 @@ function ShopCard({
         to={`/marketplace/shop/${shop.slug}`}
         className="group block overflow-hidden rounded-3xl border border-border bg-surface shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
       >
-        <div className="relative h-32 overflow-hidden bg-gradient-to-br from-green-700/80 to-green-400/60">
+        <div className="relative h-32 overflow-hidden bg-gradient-to-br from-hero-from/80 to-hero-via/60">
           {shop.cover_url ? (
             <img
               src={shop.cover_url}
               alt=""
-              loading="lazy"
+              // The same rule the feed and the other catalogues keep: the cover
+              // in the first screen is the largest painted element, so it may not
+              // wait for the lazy-load queue. `fetchpriority` is spelled in lower
+              // case because React only forwards the attribute it does not own.
+              loading={index === 0 ? 'eager' : 'lazy'}
+              {...(index === 0 ? { fetchpriority: 'high' } : {})}
               className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
             />
           ) : null}
           {sched?.enabled ? (
             <span
-              className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white backdrop-blur ${
-                isOpen ? 'bg-emerald-600/85' : 'bg-rose-600/90'
+              className={`absolute left-3 top-3 rounded-full px-2.5 py-0.5 text-xs font-semibold backdrop-blur ${
+                isOpen ? 'bg-primary text-on-primary' : 'bg-danger text-on-danger'
               }`}
             >
               {isOpen ? copy.schedule.openNow : nextOpenLabel}
             </span>
           ) : null}
-          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
+          <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-scrim/50 px-2 py-0.5 text-xs font-medium text-white backdrop-blur">
             <ShopTypeIcon type={shop.vendor_type} size={12} />
             {copy.typeLabels[shop.vendor_type]}
           </span>
@@ -295,7 +300,7 @@ function ShopCard({
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-muted">
             <span className="inline-flex items-center gap-1">
-              <Star size={12} className="fill-amber-400 text-amber-400" aria-hidden />
+              <Star size={12} className="fill-rating text-rating" aria-hidden />
               {shop.rating.toFixed(1)} · {shop.review_count} {copy.buyer.reviews}
             </span>
             {shop.distance_km !== null ? (

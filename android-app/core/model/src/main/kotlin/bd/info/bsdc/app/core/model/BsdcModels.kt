@@ -220,6 +220,15 @@ enum class NotificationKind(val wireName: String) {
 
 /** Strict ImgBB-only image upload purposes matching main-site/src/lib/storage/media-contract.ts. */
 @Serializable
+/**
+ * What a picture is for, in the words the platform files it under.
+ *
+ * The list is the website's `MEDIA_PURPOSES` and nothing else, and the numbers are its
+ * `UPLOAD_MAX_EDGE`: the edge reads the same strings, `record_media_asset` stores them
+ * in a column with a check constraint over them, and the gallery a member searches is
+ * grouped by them. An entry added on one side and not the other is a picture that is
+ * filed under a heading nobody can find, or an upload the database refuses.
+ */
 enum class MediaPurpose(val wireValue: String, val maxDimensionPx: Int) {
     @SerialName("avatar")
     AVATAR("avatar", 512),
@@ -236,14 +245,25 @@ enum class MediaPurpose(val wireValue: String, val maxDimensionPx: Int) {
     @SerialName("post-image")
     POST_IMAGE("post-image", 1600),
 
+    // A comment's picture is read inside a thread, never full screen: the website
+    // trims it to 1440 and so does the app, whatever the file was when it was chosen.
     @SerialName("comment-image")
-    COMMENT_IMAGE("comment-image", 1600),
+    COMMENT_IMAGE("comment-image", 1440),
+
+    @SerialName("chat-image")
+    CHAT_IMAGE("chat-image", 1440),
 
     @SerialName("product-image")
     PRODUCT_IMAGE("product-image", 1600),
 
     @SerialName("ad-creative")
     AD_CREATIVE("ad-creative", 1200),
+
+    // The heading for an upload whose caller never said what it was for — which is
+    // what 0132 files a legacy row under, and what a client that has not been taught
+    // the argument yet has to be able to say on purpose rather than by omission.
+    @SerialName("other")
+    OTHER("other", 1600),
 }
 
 enum class DevicePermissionKind {
@@ -408,6 +428,46 @@ data class MediaUploadResult(
     val assetId: String? = null,
 )
 
+/**
+ * One picture in the member's own library, as `my_gallery` (0132) returns it.
+ *
+ * The keys are the database's, because the row is the database's: what the picture was
+ * filed as, where it is displayed right now, and what the member called it. Nothing here
+ * decides who may read it — the function takes the owner from the caller's token, which
+ * is why no owner id is carried across the wire at all.
+ */
+@Serializable
+data class BsdcGalleryImage(
+    val id: String = "",
+    val url: String = "",
+    @SerialName("thumb_url") val thumbUrl: String = "",
+    val purpose: String = "other",
+    val width: Int? = null,
+    val height: Int? = null,
+    val bytes: Long = 0L,
+    @SerialName("mime_type") val mimeType: String = "",
+    @SerialName("created_at") val createdAt: String = "",
+    @SerialName("expires_at") val expiresAt: String? = null,
+    /** True while some surface is showing this picture. */
+    @SerialName("in_use") val inUse: Boolean = false,
+    val uses: Int = 0,
+    val surfaces: List<String> = emptyList(),
+    @SerialName("alt_text") val altText: String = "",
+)
+
+/** The pair a page resumes from. Both halves or neither: the function refuses a half. */
+data class BsdcGalleryCursor(
+    val before: String,
+    val beforeId: String,
+)
+
+/** A page of the library, plus the cursor that fetches the next one. */
+data class BsdcGalleryPage(
+    val items: List<BsdcGalleryImage>,
+    /** `null` when the library has been walked to the end, or came back empty. */
+    val nextCursor: BsdcGalleryCursor?,
+)
+
 @Serializable
 data class PostAuthorSummary(
     val uid: String,
@@ -459,6 +519,17 @@ data class FeedPost(
     val tags: List<String> = emptyList(),
     val media: List<PostMediaModel> = emptyList(),
     val poll: List<PollOptionModel> = emptyList(),
+    /**
+     * The room this post was written in, when it was written in one.
+     *
+     * Three flat fields rather than a nested type, because the card needs nothing else from the row
+     * and `null` here is the whole story: a feed post has no room. The names match what the website's
+     * `PostCard` reads (`channelName`, `groupSlug`, `groupName`), modulo the prefix that keeps them
+     * from looking like the post's own slug and name.
+     */
+    val channelName: String? = null,
+    val channelGroupSlug: String? = null,
+    val channelGroupName: String? = null,
 )
 
 enum class SyncNetworkPolicy(val wireValue: String) {

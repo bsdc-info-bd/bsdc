@@ -1,7 +1,7 @@
 import { Eye, ImagePlus, Plus, Send, X } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CoverImagePicker } from '@/components/content/CoverImagePicker';
 import { MarkdownEditor } from '@/components/content/MarkdownEditor';
@@ -32,8 +32,15 @@ import {
   visibilityAllowedInChannel,
   type ChannelPickerCopy,
 } from '@/lib/channels/channel-options';
+import {
+  CHANNEL_QUERY_PARAM,
+  applyChannelSeed,
+  seedChannelFromParam,
+  type ChannelSeedNotice,
+} from '@/lib/channels/channel-seed';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaGallery } from '@/components/media/MediaGallery';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import { MediaTray } from '@/components/media/MediaTray';
 import { useFileDrop } from '@/components/media/use-file-drop';
 import { useAttachments, type Attachment } from '@/components/media/use-attachments';
@@ -56,6 +63,7 @@ import {
 } from '@/lib/content/content-types';
 import { clearLocalDraft, loadLocalDraft } from '@/lib/content/draft-storage';
 import { classifyComposeSaveError } from '@/lib/content/compose-errors';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { extractHashtags, normalizeTag } from '@/lib/content/text';
 import { isConfigured } from '@/lib/env';
 import { ROUTES } from '@/lib/site';
@@ -130,6 +138,7 @@ export default function ComposePage() {
   const [busy, setBusy] = useState(false);
   const [errorKeys, setErrorKeys] = useState<string[]>([]);
   const [saveErrorKey, setSaveErrorKey] = useState<string | null>(null);
+  const [channelNotice, setChannelNotice] = useState<ChannelSeedNotice | null>(null);
   const [existing, setExisting] = useState<'loading' | 'ready' | 'missing' | 'forbidden'>(
     isEditing ? 'loading' : 'ready',
   );
@@ -230,6 +239,27 @@ export default function ComposePage() {
   // The rooms this member may post into. A member of no group sees the
   // composer they always had: no channel selector at all.
   const { channels } = usePostableChannels();
+  // A link from a channel page arrives as `/compose?channel=<id>`. It is read
+  // once, after the browser draft has been offered back, so a stale local copy
+  // cannot overwrite the room the member actually clicked into — and so the room
+  // cannot silently overwrite an unfinished post they were restoring.
+  const [query] = useSearchParams();
+  // The channel a link named, applied to the draft — or refused, with the
+  // reason the picker and the database would give.
+  useEffect(() => {
+    if (isEditing) return;
+    const seed = seedChannelFromParam(query.get(CHANNEL_QUERY_PARAM), channels);
+    if (seed.kind === 'none') return;
+    setDraft((current) => {
+      const applied = applyChannelSeed(current, seed);
+      setChannelNotice(applied.notice);
+      return applied.draft;
+    });
+    // Runs when the channel list arrives, not on every draft keystroke: the
+    // link is honoured once, and after that the picker owns the choice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, channels]);
+
   const pickerCopy: ChannelPickerCopy = {
     feed: t('compose.channelFeed'),
     reason: {
@@ -312,6 +342,21 @@ export default function ComposePage() {
     return result.url;
   }
 
+  /**
+   * Give the post a cover out of the member's own library.
+   *
+   * No bytes move. The address the picker hands over is one this platform wrote, and
+   * `posts.cover_url` is one of the arms `bsdc.media_references` reads, so the post
+   * keeps that picture for as long as it is published. The asset is deliberately not
+   * re-filed as a cover: `record_media_asset` writes the whole row, and a reuse has no
+   * new upload to report — inventing `bytes = 0` would overwrite the truth about a
+   * picture that is already stored. A cover picked from the library is therefore found
+   * again tomorrow under the heading it was first uploaded for.
+   */
+  function pickCover(picked: PickedMedia) {
+    update('coverUrl', picked.url);
+  }
+
   const coverCandidates = attachments.attachments
     .map((item) => ({
       url: item.url.length > 0 ? item.url : item.previewUrl,
@@ -343,6 +388,10 @@ export default function ComposePage() {
         rows={draft.kind === 'article' ? 16 : 9}
         onChange={(value) => update('body', value)}
         uploadImage={uploadBodyImage}
+        // The post's own shelf, so the body can carry a picture this member already
+        // hosted — with the caption they wrote for it — instead of a re-upload of the
+        // file they posted yesterday.
+        galleryPurpose="post-image"
       />
 
       {draft.kind === 'snippet' ? (
@@ -422,6 +471,7 @@ export default function ComposePage() {
         value={draft.coverUrl}
         onChange={(url) => update('coverUrl', url)}
         candidates={coverCandidates}
+        onPick={pickCover}
         disabled={busy}
       />
 
@@ -448,6 +498,21 @@ export default function ComposePage() {
           >
             {t('compose.addMedia')}
           </Button>
+          {/* The other half of attaching a picture: everything this member has ever
+              uploaded, picked instead of sent again. A pick skips the upload
+              entirely — `attachPicked` files the attachment as already attached,
+              with the asset id the post needs — which is why it costs nothing
+              against the member's quota and leaves one copy at the host. */}
+          <MediaSourcePicker
+            purpose="post-image"
+            showUpload={false}
+            multiple
+            max={attachments.room}
+            attached={attachments.attachments.map((item) => item.url)}
+            disabled={!attachments.canAdd || user === null}
+            onFiles={(files) => attachments.add(files)}
+            onPick={(picked) => attachments.attachPicked(picked)}
+          />
           <span className="text-2xs text-muted">
             {t('compose.mediaHint', { count: MEDIA_MAX })}
           </span>
@@ -632,6 +697,16 @@ export default function ComposePage() {
                 </Card>
               ) : null}
 
+              {channelNotice !== null ? (
+                <Alert tone="warning" title={t('compose.channelLinkTitle')} className="mt-4">
+                  {channelNotice.kind === 'blocked'
+                    ? t('compose.channelLinkBlocked', {
+                        reason: pickerCopy.reason[channelNotice.reason],
+                      })
+                    : t('compose.channelLinkUnknown')}
+                </Alert>
+              ) : null}
+
               <Card className="mt-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <SelectField
@@ -719,7 +794,7 @@ export default function ComposePage() {
       {dragging ? (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-green-950/60 p-6"
+          className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-scrim/60 p-6"
         >
           <div className="flex flex-col items-center gap-2 rounded-card border-2 border-dashed border-white/70 px-8 py-6 text-center text-white">
             <ImagePlus size={28} />

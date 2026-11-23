@@ -423,7 +423,7 @@ function DraftFunding({
   const { t } = useTranslation();
   if (latest?.status === 'approved') {
     return (
-      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-green-50 p-3 dark:bg-green-950/30">
+      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl bg-success-soft p-3">
         <Badge tone="green">{t('ads.builder.statusPaymentApproved')}</Badge>
         <p className="text-sm">{t('ads.builder.approvedHint')}</p>
         <Button size="sm" onClick={onSend} loading={busy} disabled={busy}>

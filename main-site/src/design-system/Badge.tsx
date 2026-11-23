@@ -13,7 +13,7 @@ const TONES: Record<BadgeTone, string> = {
   green: 'bg-surface-2 text-green-700 border-green-300/40',
   blue: 'bg-blue-soft text-blue-text border-blue/20',
   danger: 'bg-danger/10 text-danger border-danger/20',
-  warn: 'bg-warn/10 text-warn border-warn/30',
+  warn: 'bg-warn/10 text-warn-text border-warn/30',
 };
 
 export function Badge({ tone = 'neutral', icon, className, children, ...rest }: BadgeProps) {

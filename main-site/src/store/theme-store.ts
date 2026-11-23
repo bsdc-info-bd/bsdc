@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { paintToken, THEME_CHROME_FALLBACK } from '@/design-system/paint';
 
 export const THEME_STORAGE_KEY = 'bsdc.theme';
 
@@ -39,7 +40,16 @@ export function applyTheme(resolved: ResolvedTheme): void {
   if (typeof document === 'undefined') return;
   document.documentElement.dataset['theme'] = resolved;
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-  if (meta) meta.content = resolved === 'dark' ? '#0B1512' : '#1B4332';
+  // Read back from the palette rather than restating it: a hex written here is
+  // a second source of truth, and the first theme edit forgot this one existed.
+  if (meta) {
+    const dark = resolved === 'dark';
+    // `tokenColor` reads the token from the document; the second argument is
+    // what paints when there is no document at all, so it is a fallback and not
+    // a second copy of the palette.
+    if (dark) meta.content = paintToken('--bsdc-bg', THEME_CHROME_FALLBACK.dark);
+    else meta.content = paintToken('--bsdc-green-800', THEME_CHROME_FALLBACK.light);
+  }
 }
 
 const initialPreference = readStoredPreference();

@@ -114,12 +114,16 @@ class MkRepository(
 
     /**
      * Places one COD order for [vendorId]. Pass [directItems] to order straight from a product page,
-     * or null to use the saved cart for that vendor.
+     * or null to use the saved cart for that vendor. [addressId] names a saved address, and the
+     * routine then reads that row instead of the [address] below: the pin decides the fee, the
+     * radius test and where the rider goes, so it is not a value a screen should be trusted to copy.
+     * The typed [address] is still sent, because the note belongs to the order and not to the door.
      */
     suspend fun placeOrder(
         vendorId: String,
         address: MkAddressInput,
         directItems: List<MkDirectItem>?,
+        addressId: String? = null,
     ): Result<MkPlacedOrderDto> = call {
         val addressJson = buildJsonObject {
             put("customer_name", address.customerName)
@@ -149,6 +153,7 @@ class MkRepository(
                 put("p_vendor_id", vendorId)
                 put("p_address", addressJson)
                 if (itemsJson == null) put("p_items", JsonNull) else put("p_items", itemsJson)
+                put("p_address_id", addressId.orNullString() ?: JsonNull)
             },
         )
         supabase.wakePushDelivery("mk_place_order")
@@ -350,6 +355,58 @@ class MkRepository(
             header(HttpHeaders.Accept, "application/json")
         }.bodyAsText()
         BsdcHttpClientFactory.sharedJson.decodeFromString<List<MkPlaceDto>>(body)
+    }
+
+    /**
+     * The member's saved doorsteps, in the order `mk_my_addresses` returns them: the default first,
+     * then whatever they have actually been ordering to. Nothing here re-sorts — a client that
+     * ordered the book itself would disagree with the browser about which address comes first, and
+     "first" is the one a checkout offers.
+     */
+    suspend fun fetchMyAddresses(): Result<List<MkSavedAddressDto>> = call {
+        supabase.decode<List<MkSavedAddressDto>>(rpc("mk_my_addresses", buildJsonObject { }))
+    }
+
+    /**
+     * Insert or update one saved address. The response carries the whole book, because the routine is
+     * the only thing that knows what the default ended up being — a member's first address is the
+     * default whether or not they asked for it — and a client that re-fetched to learn that would be
+     * racing its own write.
+     */
+    suspend fun saveAddress(address: MkAddressInput): Result<MkAddressSaveDto> = call {
+        val raw = rpc(
+            "mk_save_address",
+            buildJsonObject {
+                put("p_id", address.id.orNullString() ?: JsonNull)
+                put("p_label", address.label)
+                put("p_nickname", address.nickname.trim())
+                put("p_recipient_name", address.customerName.trim())
+                put("p_phone", address.customerPhone.trim())
+                put("p_address_line", address.addressLine.trim())
+                put("p_landmark", address.landmark.trim())
+                put("p_place_label", address.placeLabel.trim())
+                put("p_lat", address.lat)
+                put("p_lng", address.lng)
+                put("p_note", address.note.trim())
+                put("p_is_default", address.isDefault)
+            },
+        )
+        supabase.decode<MkAddressSaveDto>(raw)
+    }
+
+    suspend fun deleteAddress(addressId: String): Result<MkAddressDeleteDto> = call {
+        supabase.decode<MkAddressDeleteDto>(
+            rpc("mk_delete_address", buildJsonObject { put("p_id", addressId) }),
+        )
+    }
+
+    /** Saves the signed-in vendor's minimum order, in whole taka. Zero accepts any order. */
+    suspend fun setVendorMinOrder(taka: Int): Result<Unit> = call {
+        rpc(
+            "mk_vendor_set_min_order",
+            buildJsonObject { put("p_taka", taka) },
+        )
+        Unit
     }
 
     private suspend fun rpc(

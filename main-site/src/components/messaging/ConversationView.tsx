@@ -350,7 +350,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             <span
               className={cn(
                 'inline-flex h-2 w-2 rounded-full',
-                conversation.status === 'live' ? 'bg-green-600' : 'bg-amber-500',
+                conversation.status === 'live' ? 'bg-primary' : 'bg-warn',
               )}
               aria-hidden="true"
             />
@@ -438,7 +438,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
       </header>
 
       {searching ? (
-        <div className="border-b border-line p-3">
+        <div className="border-b border-border p-3">
           <div className="flex items-center gap-2">
             <input
               ref={searchInput}
@@ -497,7 +497,7 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
       ) : null}
 
       {pin !== null ? (
-        <div className="flex items-center gap-2 border-b border-line bg-surface-2 px-3 py-2 text-xs">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-2 px-3 py-2 text-xs">
           <Pin size={13} aria-hidden="true" />
           <button
             type="button"
@@ -691,6 +691,9 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             kind: input.kind,
             mediaUrl: input.mediaUrl,
             mediaName: input.mediaName,
+            // The id, when the picture came from the library: the database resolves
+            // the address from it, so this is the value that decides what is stored.
+            mediaAsset: input.mediaAsset,
             replyTo: replyTo?.id ?? null,
           });
         }}

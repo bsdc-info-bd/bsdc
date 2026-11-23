@@ -224,7 +224,7 @@ function NotificationBell() {
         <Bell size={20} aria-hidden="true" />
       </span>
       {unread > 0 ? (
-        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
+        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-4 text-on-primary">
           {unread > 99 ? '99+' : unread}
         </span>
       ) : null}
@@ -248,7 +248,7 @@ function MessagesLink() {
         <MessageSquare size={20} aria-hidden="true" />
       </span>
       {unread > 0 ? (
-        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-green-700 px-1 text-2xs font-semibold leading-4 text-white">
+        <span className="absolute end-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-2xs font-semibold leading-4 text-on-primary">
           {unread > 99 ? '99+' : unread}
         </span>
       ) : null}

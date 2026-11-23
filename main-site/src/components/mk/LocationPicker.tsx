@@ -2,6 +2,7 @@ import { LocateFixed, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 import { Button, TextField } from '@/design-system';
+import { MAP_ACCENT_FALLBACK, paintToken } from '@/design-system/paint';
 import { BD_CENTER, isBdPoint, type Language, SYLHET_CENTER } from '@/lib/mk/mk-logic';
 
 export interface PinnedLocation {
@@ -35,7 +36,7 @@ const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
  * marker image, which does not survive the bundler and shows as a broken image.
  */
 const PIN_SVG =
-  '<svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" fill="#0f766e"/><circle cx="15" cy="15" r="6" fill="#fff"/></svg>';
+  '<svg width="30" height="40" viewBox="0 0 30 40" aria-hidden="true"><path d="M15 0C6.7 0 0 6.7 0 15c0 10.5 15 25 15 25s15-14.5 15-25C30 6.7 23.3 0 15 0z" style="fill:var(--bsdc-primary)"/><circle cx="15" cy="15" r="6" style="fill:var(--bsdc-on-primary)"/></svg>';
 
 /**
  * OpenStreetMap pin with place search and "use my location". Leaflet and its
@@ -133,7 +134,9 @@ export function LocationPicker({
       if (radiusKm === null || radiusKm <= 0 || anchor === null) return;
       circleRef.current = L.circle([anchor.lat, anchor.lng], {
         radius: radiusKm * 1000,
-        color: '#2563eb',
+        // Leaflet writes this into an SVG attribute, where var() does not
+        // resolve, so the token is read from the document instead.
+        color: paintToken('--bsdc-blue-fill', MAP_ACCENT_FALLBACK),
         weight: 2,
         fillOpacity: 0.12,
       }).addTo(map);

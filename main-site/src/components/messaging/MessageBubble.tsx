@@ -130,7 +130,7 @@ export function MessageBubble({
       className={cn(
         'group motion-safe:animate-fade-up flex scroll-mt-24 gap-2 rounded-2xl transition-colors',
         mine && 'flex-row-reverse',
-        flash && 'bg-amber-200/40',
+        flash && 'bg-warn-soft',
       )}
     >
       {showAuthor ? (
@@ -445,7 +445,7 @@ export function MessageBubble({
                     'fab-tap flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs',
                     message.myReactions.includes(reaction)
                       ? 'border-green-700 bg-green-700/10'
-                      : 'border-line bg-surface',
+                      : 'border-border bg-surface',
                   )}
                   aria-pressed={message.myReactions.includes(reaction)}
                   onClick={() => onReact(message, reaction)}

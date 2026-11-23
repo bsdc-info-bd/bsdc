@@ -2,21 +2,6 @@ package bd.info.bsdc.app.feature.market
 
 import java.util.Locale
 
-/** Allowed subresources for the Android map's small, self-contained WebView. */
-internal enum class OsmMapResource {
-    LEAFLET_JS,
-    LEAFLET_CSS,
-    OSM_TILE,
-    BLOCKED,
-}
-
-/** Visual state derived from WebView callbacks and Leaflet's tile events. */
-internal enum class OsmMapStatus {
-    LOADING,
-    READY,
-    ERROR,
-}
-
 /**
  * Pure marketplace rules shared by the customer and vendor screens.
  * Mirrors main-site/src/lib/mk/mk-logic.ts so Android and web agree on money, status and phone rules.
@@ -148,6 +133,89 @@ object MkLogic {
                 needsPinForFee = false,
             )
         }
+    }
+
+    // ---------------------------------------------------------------- the address book (0131)
+    //
+    // The numbers and the sentences here are `mk_save_address`'s and `mk_place_order`'s, in the
+    // order they check them. A form that refuses something else — or in another order — is a form
+    // that has decided to be the authority, and the routine is the authority.
+
+    val ADDRESS_LABELS: List<String> = listOf("home", "work", "other")
+    const val ADDRESS_MAX: Int = 8
+    const val ADDRESS_LINE_MIN: Int = 5
+    const val ADDRESS_LINE_MAX: Int = 240
+    const val RECIPIENT_NAME_MIN: Int = 2
+    const val RECIPIENT_NAME_MAX: Int = 80
+    const val ADDRESS_NICKNAME_MAX: Int = 40
+
+    fun addressLabel(label: String, bn: Boolean): String {
+        val pair = when (label) {
+            "work" -> "অফিস" to "Work"
+            "other" -> "অন্যান্য" to "Other"
+            else -> "বাসা" to "Home"
+        }
+        return if (bn) pair.first else pair.second
+    }
+
+    /** A card's headline: the name the member gave this door, or the kind of place it is. */
+    fun addressHeadline(address: MkSavedAddressDto, bn: Boolean): String {
+        val nickname = address.nickname.trim()
+        return if (nickname.isEmpty()) addressLabel(address.label, bn) else nickname
+    }
+
+    /**
+     * What a basket must reach at this shop, and what is missing. Zero comes back when the shop sets
+     * no minimum *and* when the basket already clears it — a caller that needs to tell the two apart
+     * reads [hasMinimumOrder].
+     *
+     * Measured against the goods and never against the total: the delivery charge is not something
+     * the customer bought, so a 150 taka ride must not be able to carry a 200 taka basket past a
+     * 300 taka minimum. `mk_place_order` compares `subtotal_poisha`, and a screen that compared the
+     * total would promise an order the routine then refuses.
+     */
+    fun minimumOrderShortfallPoisha(subtotalPoisha: Long, minOrderPoisha: Long): Long {
+        if (minOrderPoisha <= 0L) return 0L
+        return (minOrderPoisha - subtotalPoisha).coerceAtLeast(0L)
+    }
+
+    fun hasMinimumOrder(minOrderPoisha: Long): Boolean = minOrderPoisha > 0L
+
+    /**
+     * One refused field per key, so a screen marks the box rather than showing a sentence the member
+     * has to locate. The phone is judged after [normaliseBdMobile], because the routine strips the
+     * separators too — a member who types 01712-345678 has given a valid number.
+     */
+    data class MkAddressCheck(
+        val name: Boolean,
+        val phone: Boolean,
+        val line: Boolean,
+        val nickname: Boolean,
+        val pin: Boolean,
+        val label: Boolean,
+    ) {
+        val ok: Boolean get() = !(name || phone || line || nickname || pin || label)
+    }
+
+    fun checkAddressDraft(
+        name: String,
+        phone: String,
+        line: String,
+        nickname: String = "",
+        label: String = "home",
+        lat: Double? = null,
+        lng: Double? = null,
+    ): MkAddressCheck {
+        val cleanName = name.trim()
+        val cleanLine = line.trim()
+        return MkAddressCheck(
+            name = cleanName.length < RECIPIENT_NAME_MIN || cleanName.length > RECIPIENT_NAME_MAX,
+            phone = !isBdMobile(phone),
+            line = cleanLine.length < ADDRESS_LINE_MIN || cleanLine.length > ADDRESS_LINE_MAX,
+            nickname = nickname.trim().length > ADDRESS_NICKNAME_MAX,
+            pin = lat == null || lng == null || !isInsideBangladesh(lat, lng),
+            label = label !in ADDRESS_LABELS,
+        )
     }
 
     val DAY_KEYS: List<String> = listOf("0", "1", "2", "3", "4", "5", "6")
@@ -435,83 +503,6 @@ object MkLogic {
         }
     }
 
-    /** OpenStreetMap's canonical raster-tile host. */
-    const val OSM_TILE_HOST: String = "tile.openstreetmap.org"
-
-    /** The two Leaflet files are served from the app bundle through these exact virtual paths. */
-    const val OSM_MAP_JS_PATH: String = "/__bsdc_map/leaflet.js"
-    const val OSM_MAP_CSS_PATH: String = "/__bsdc_map/leaflet.css"
-    const val OSM_MAP_CONSOLE_PREFIX: String = "[BSDC_MAP]"
-
-    private val OSM_TILE_SHARDS = setOf("a.$OSM_TILE_HOST", "b.$OSM_TILE_HOST", "c.$OSM_TILE_HOST")
-    private val OSM_TILE_EVENT = Regex(
-        """^${Regex.escape(OSM_MAP_CONSOLE_PREFIX)} tile(load|error) ok=(\d+) errors=(\d+)$""",
-    )
-
-    /**
-     * Whether a request is for an OpenStreetMap raster tile.
-     *
-     * OSM may redirect the canonical host to an `a.`, `b.`, or `c.` shard. Keep the HTTPS host
-     * allowlist in one pure rule shared by the original request and every redirect hop. A
-     * non-default port is not part of the public tile service and is refused too.
-     */
-    internal fun isOsmTileRequest(scheme: String?, host: String?, port: Int? = null): Boolean {
-        if (!scheme.equals("https", ignoreCase = true) || !isHttpsPort(port)) return false
-        val clean = host?.trim()?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return false
-        return clean == OSM_TILE_HOST || clean in OSM_TILE_SHARDS
-    }
-
-    /**
-     * Only these two bundled Leaflet assets may be loaded from BSDC's virtual document origin.
-     * Keeping both host and path exact prevents a lookalike domain or another site path from
-     * becoming a general-purpose WebView asset fetch.
-     */
-    internal fun isOsmMapAssetRequest(
-        scheme: String?,
-        host: String?,
-        path: String?,
-        siteHost: String,
-        port: Int? = null,
-    ): Boolean {
-        if (!scheme.equals("https", ignoreCase = true) || !isHttpsPort(port)) return false
-        val cleanHost = host?.trim()?.trimEnd('.')?.lowercase(Locale.ROOT) ?: return false
-        val cleanSiteHost = siteHost.trim().trimEnd('.').lowercase(Locale.ROOT)
-        if (cleanHost != cleanSiteHost) return false
-        return path == OSM_MAP_JS_PATH || path == OSM_MAP_CSS_PATH
-    }
-
-    /** Classifies every WebView subresource before the client serves or blocks it. */
-    internal fun classifyOsmMapResource(
-        scheme: String?,
-        host: String?,
-        path: String?,
-        siteHost: String,
-        port: Int? = null,
-    ): OsmMapResource = when {
-        isOsmMapAssetRequest(scheme, host, path, siteHost, port) && path == OSM_MAP_JS_PATH ->
-            OsmMapResource.LEAFLET_JS
-        isOsmMapAssetRequest(scheme, host, path, siteHost, port) && path == OSM_MAP_CSS_PATH ->
-            OsmMapResource.LEAFLET_CSS
-        isOsmTileRequest(scheme, host, port) -> OsmMapResource.OSM_TILE
-        else -> OsmMapResource.BLOCKED
-    }
-
-    /**
-     * Reads the small status protocol printed by Leaflet's tile events. The WebChromeClient
-     * consumes this without adding a JavaScript bridge to read-only maps.
-     */
-    internal fun osmMapStatusFromConsoleMessage(message: String): OsmMapStatus? {
-        val match = OSM_TILE_EVENT.matchEntire(message) ?: return null
-        val successfulTiles = match.groupValues[2].toIntOrNull() ?: return null
-        match.groupValues[3].toIntOrNull() ?: return null
-        return when (match.groupValues[1]) {
-            "load" -> OsmMapStatus.READY
-            "error" -> if (successfulTiles == 0) OsmMapStatus.ERROR else null
-            else -> null
-        }
-    }
-
-    private fun isHttpsPort(port: Int?): Boolean = port == null || port == -1 || port == 443
 
     /**
      * A Google Maps directions link for a delivery pin.

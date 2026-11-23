@@ -34,6 +34,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -312,7 +315,10 @@ fun NotificationsScreen(
                             )
                         }
                         items(filtered, key = { it.id }) { item ->
+                            // Reading a notification removes its emphasis, and a filter removes the row:
+                            // both are shown as movement, so the list keeps its shape under a thumb.
                             NotificationRowCard(
+                                modifier = Modifier.animateItem(),
                                 item = item,
                                 imageLoader = imageLoader,
                                 language = language,
@@ -521,23 +527,36 @@ private fun NotificationRowCard(
     imageLoader: ImageLoader,
     language: AppLanguage,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
     val actorName = item.actor?.displayName.orEmpty()
     val summaryText = NotificationsFilterEngine.describeNotificationAction(item.kind, actorName, bn)
     val extraCount = (item.occurrences - 1).coerceAtLeast(0)
 
+    val unread = item.isUnread
+    // Marking a notification read changes two properties of the same row at once; tweening them
+    // together is what makes the row look answered rather than replaced.
+    val reducedMotion = BsdcThemeTokens.reducedMotion
+    val surfaceColor by animateColorAsState(
+        targetValue = if (unread) BsdcThemeTokens.colors.surfaceElevated else MaterialTheme.colorScheme.surfaceVariant,
+        animationSpec = if (reducedMotion) snap() else tween(220),
+        label = "notificationSurface",
+    )
+    val borderColor by animateColorAsState(
+        targetValue = if (unread) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else BsdcThemeTokens.colors.border,
+        animationSpec = if (reducedMotion) snap() else tween(220),
+        label = "notificationBorder",
+    )
+
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(16.dp),
-        color = if (item.isUnread) BsdcThemeTokens.colors.surfaceElevated else MaterialTheme.colorScheme.surfaceVariant,
-        border = BorderStroke(
-            1.dp,
-            if (item.isUnread) MaterialTheme.colorScheme.primary.copy(alpha = 0.45f) else BsdcThemeTokens.colors.border,
-        ),
+        color = surfaceColor,
+        border = BorderStroke(1.dp, borderColor),
     ) {
         Row(
             modifier = Modifier.padding(12.dp),

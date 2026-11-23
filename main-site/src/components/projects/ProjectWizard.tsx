@@ -17,6 +17,8 @@ import {
   type ProjectStep,
 } from '@/lib/create/create-types';
 import { CoverPicker } from '@/components/media/CoverPicker';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { MediaImage } from '@/components/media/MediaImage';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaTray } from '@/components/media/MediaTray';
@@ -31,6 +33,12 @@ export interface ProjectWizardProps {
   coverPreviewUrl: string;
   coverUploadProgress: number | null;
   onCoverFileChange: (file: File | null) => void;
+  /**
+   * Offered beside the cover drop zone: the member's own pictures, for an owner who
+   * has already uploaded the shot they want. Optional because the wizard is also
+   * rendered in tests and previews, where there is no signed-in member.
+   */
+  onCoverPickFromLibrary?: ((picked: PickedMedia) => void) | undefined;
   /**
    * Drops a cover that is already published. Only the editor has one to drop, so
    * only the editor passes it; a project being created has nothing published yet.
@@ -56,6 +64,7 @@ export function ProjectWizard({
   coverPreviewUrl,
   coverUploadProgress,
   onCoverFileChange,
+  onCoverPickFromLibrary,
   onCoverRemoveExisting,
   errorFor,
   screenshots,
@@ -191,6 +200,12 @@ export function ProjectWizard({
             progress={coverUploadProgress}
             onFileChange={onCoverFileChange}
             onRemoveExisting={onCoverRemoveExisting}
+            {...(onCoverPickFromLibrary
+              ? {
+                  onPickFromLibrary: onCoverPickFromLibrary,
+                  libraryPurpose: 'project-cover' as const,
+                }
+              : {})}
             labels={coverLabels}
           />
         </section>
@@ -217,6 +232,27 @@ export function ProjectWizard({
               event.target.value = '';
               if (files.length > 0) screenshots.add(files);
             }}
+          />
+
+          {/*
+            The other door to the same shelf. A screenshot is the one project picture a
+            member is most likely to have hosted already — the launch post carried it
+            last month — and a pick arrives in the queue as already uploaded, so the
+            shot costs no quota, leaves one copy at the host, and keeps the description
+            it was given the first time.
+          */}
+          <MediaSourcePicker
+            purpose="project-image"
+            showUpload={false}
+            compact
+            multiple
+            max={screenshots.room}
+            attached={screenshots.attachments.map((shot) => shot.url)}
+            disabled={!screenshots.canAdd}
+            onFiles={(files) => {
+              if (files.length > 0) screenshots.add(files);
+            }}
+            onPick={(picked) => screenshots.attachPicked(picked)}
           />
 
           {screenshots.attachments.length > 0 ? (
@@ -273,7 +309,7 @@ export function ProjectWizard({
                 />
               </div>
             ) : (
-              <div className="flex aspect-[16/7] items-center justify-center bg-gradient-to-br from-green-900 to-green-700 text-white">
+              <div className="flex aspect-[16/7] items-center justify-center bg-gradient-to-br from-hero-from to-hero-via text-on-hero">
                 <Rocket size={34} aria-hidden="true" />
               </div>
             )}

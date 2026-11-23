@@ -10,7 +10,7 @@ import { QuantityStepper } from '@/components/mk/customer/QuantityStepper';
 import { Button, Card, EmptyState, PageSkeleton } from '@/design-system';
 import { usePaymentInstructions, useMyCart, useSetCartQty } from '@/hooks/use-mk';
 import { mkCopy } from '@/lib/mk/mk-copy';
-import { formatTaka, type Language } from '@/lib/mk/mk-logic';
+import { evaluateMinimumOrder, formatTaka, type Language } from '@/lib/mk/mk-logic';
 import type { MkCartLine } from '@/lib/mk/mk-types';
 import { ROUTES } from '@/lib/site';
 
@@ -85,6 +85,10 @@ export default function MarketCartPage() {
             0,
           );
           const orderable = group.lines.some((line) => line.orderable);
+          // The shop's minimum is read off the cart line it arrives with (`mk_my_cart` joins the
+          // vendor for exactly this), so the nudge needs no second request and cannot disagree with
+          // what the checkout will enforce.
+          const minimum = evaluateMinimumOrder(subtotal, group.lines[0]?.min_order_poisha);
           const shopClosed = group.lines.some((line) => line.vendor_open === false);
           return (
             <motion.div
@@ -109,7 +113,7 @@ export default function MarketCartPage() {
                 </div>
 
                 {shopClosed ? (
-                  <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-medium text-rose-800 dark:text-rose-200">
+                  <p className="rounded-xl border border-danger/30 bg-danger-soft p-3 text-xs font-medium text-danger-text">
                     {copy.schedule.closedBanner}
                   </p>
                 ) : null}
@@ -145,7 +149,7 @@ export default function MarketCartPage() {
                             {formatTaka(line.price_poisha, language)}
                           </p>
                           {!line.orderable ? (
-                            <p className="text-xs font-semibold text-red-600">
+                            <p className="text-xs font-semibold text-danger-text">
                               {line.vendor_open === false
                                 ? copy.schedule.closedNow
                                 : copy.buyer.outOfStock}
@@ -167,7 +171,7 @@ export default function MarketCartPage() {
                           type="button"
                           aria-label={`${copy.cancel} ${line.product_name}`}
                           onClick={() => void change(line.product_id, 0)}
-                          className="rounded-lg p-2 text-muted hover:bg-red-500/10 hover:text-red-600"
+                          className="rounded-lg p-2 text-muted hover:bg-danger-soft hover:text-danger-text"
                         >
                           <Trash2 size={16} aria-hidden />
                         </button>
@@ -191,10 +195,26 @@ export default function MarketCartPage() {
                   </div>
                 </dl>
 
+                {minimum.required ? (
+                  <p
+                    className={
+                      minimum.met
+                        ? 'rounded-xl bg-success-soft p-3 text-xs font-medium text-success'
+                        : 'rounded-xl bg-warn-soft p-3 text-xs font-medium text-warn-text'
+                    }
+                  >
+                    {copy.buyer.minOrder} ·{' '}
+                    {formatTaka(group.lines[0]?.min_order_poisha ?? 0, language)}
+                    {minimum.met
+                      ? ` — ${copy.buyer.minOrderMet}`
+                      : ` — ${formatTaka(minimum.shortfallPoisha, language)} ${copy.buyer.minOrderShort}`}
+                  </p>
+                ) : null}
+
                 <Button
                   type="button"
                   className="w-full"
-                  disabled={!orderable}
+                  disabled={!orderable || !minimum.met}
                   iconEnd={<ArrowRight size={16} />}
                   onClick={() => navigate(`/marketplace/checkout/${group.slug}`)}
                 >

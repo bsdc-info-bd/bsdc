@@ -78,8 +78,11 @@ async function checkRefused(db, uid, sql, label) {
 // ---------------------------------------------------------------------------
 // Before: the deployed database has no change feed and nowhere to react
 // ---------------------------------------------------------------------------
-// The historical fixture omits 0051; 0082 requires the columns 0051 adds.
-const before = await makeDb({ skip: ['0051_', '0082_'] });
+// The historical fixture omits 0051; 0082 requires the columns 0051 adds. 0132
+// replaces a function 0082 created, so it is omitted with it — a migration that
+// edits a function this schema never had cannot be replayed here, and the changes it
+// makes to that function are proved in t92.
+const before = await makeDb({ skip: ['0051_', '0082_', '0132_'] });
 console.log('--- BEFORE 0051 ---');
 const beforeTables = (
   await before.query(`

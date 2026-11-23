@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isConfigured } from '@/lib/env';
 import { decodeImage, type EditState } from '@/lib/media/edit';
+import { isSameMedia, type PickedMedia } from '@/lib/media/gallery';
 import {
   assertUploadable,
   MediaError,
@@ -281,6 +282,56 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
     });
   }, []);
 
+  /**
+   * Pictures taken from the member's own library, attached without an upload.
+   *
+   * This is the whole point of the gallery, and it is a different operation from
+   * `add`: there are no bytes to validate, compress, or send, and no percentage to
+   * watch. The asset row already exists and already belongs to this member, so the
+   * attachment starts where an upload ends — `attached`, with the id `post_media`
+   * needs — which is also why reusing a picture costs nothing against the member's
+   * quota.
+   *
+   * A picture already on the post is skipped rather than added a second time. A
+   * composer that let the same photograph in twice produced two tiles that looked
+   * identical, and the member only noticed after publishing.
+   *
+   * The alt text travels with it. Somebody described this picture once; asking them
+   * to describe it again, on a phone, is how alt text ends up empty.
+   */
+  const attachPicked = useCallback(
+    (picked: readonly PickedMedia[]) => {
+      const room = Math.max(0, max - listRef.current.length);
+      const current = listRef.current.map((item) => item.url);
+      const fresh = picked.filter((item) => !current.some((url) => isSameMedia(url, item.url)));
+      if (fresh.length === 0) {
+        setNotice(room === 0 ? 'media.errors.tooMany' : 'media.gallery.alreadyAttached');
+        return;
+      }
+      if (fresh.length > room) setNotice('media.errors.tooMany');
+
+      const accepted: Attachment[] = fresh.slice(0, room).map((item) => ({
+        id: newId(),
+        file: null,
+        previewUrl: '',
+        altText: item.altText,
+        status: 'attached' as const,
+        progress: 100,
+        errorKey: null,
+        edit: null,
+        width: item.width,
+        height: item.height,
+        mediaId: item.mediaId,
+        uploadResult: null,
+        url: item.url,
+        thumbUrl: item.thumbUrl.length > 0 ? item.thumbUrl : item.url,
+      }));
+      if (accepted.length === 0) return;
+      setAttachments((list) => [...list, ...accepted]);
+    },
+    [max],
+  );
+
   // ---------------------------------------------------------------- actions ---
   const remove = useCallback(
     (id: string) => {
@@ -443,6 +494,7 @@ export function useAttachments({ purpose, uid, max = 10, onChange }: UseAttachme
     room: Math.max(0, max - attachments.length),
     add,
     seed,
+    attachPicked,
     remove,
     retry,
     retryAll,

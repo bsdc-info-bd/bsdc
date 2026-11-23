@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   PUSH_BLOCK_KEYS,
   describePushEnvironment,
   describeUserAgent,
   deviceCountLabel,
+  readPushEnvironment,
+  runningStandalone,
   type PushEnvironment,
 } from './support';
 
@@ -19,6 +21,8 @@ function environment(partial: Partial<PushEnvironment>): PushEnvironment {
     pushManager: true,
     notification: true,
     vapidPublicKey: KEY,
+    ios: false,
+    standalone: false,
     ...partial,
   };
 }
@@ -52,7 +56,19 @@ describe('what a browser can be asked for', () => {
 
   it('has a sentence for every reason, including the good one', () => {
     for (const key of Object.values(PUSH_BLOCK_KEYS)) expect(key.startsWith('push.')).toBe(true);
-    expect(Object.keys(PUSH_BLOCK_KEYS)).toHaveLength(6);
+    // Named rather than counted: a block added to `PushBlock` without a sentence is
+    // the bug, and a count would only say that something moved.
+    expect(Object.keys(PUSH_BLOCK_KEYS).sort()).toEqual(
+      [
+        'insecure',
+        'ios-install',
+        'no-notification',
+        'no-push',
+        'no-worker',
+        'ok',
+        'unconfigured',
+      ].sort(),
+    );
   });
 });
 
@@ -99,5 +115,84 @@ describe('naming a device from what a browser says it is', () => {
   it('admits when it cannot tell', () => {
     expect(describeUserAgent('')).toBe('');
     expect(describeUserAgent('some-crawler/1.0')).toBe('');
+  });
+});
+
+describe('iOS, which can do push but only from the home screen', () => {
+  it('asks for the install instead of offering a switch that would lie', () => {
+    // iOS 16.4+ delivers a web push to an installed web app and never to the tab,
+    // with no error anywhere: the permission asks fine, the subscription is created
+    // fine, and nothing arrives. The one honest answer is the install.
+    expect(describePushEnvironment(environment({ ios: true, standalone: false }))).toEqual({
+      block: 'ios-install',
+      supported: false,
+      blockKey: 'push.blocked.iosInstall',
+    });
+  });
+
+  it('is ready once it is installed, and on every other platform regardless', () => {
+    expect(describePushEnvironment(environment({ ios: true, standalone: true })).block).toBe('ok');
+    expect(describePushEnvironment(environment({ ios: false, standalone: false })).block).toBe(
+      'ok',
+    );
+  });
+
+  it('comes after the four things a browser may simply not have', () => {
+    expect(describePushEnvironment(environment({ ios: true, secureContext: false })).block).toBe(
+      'insecure',
+    );
+    expect(describePushEnvironment(environment({ ios: true, vapidPublicKey: '' })).block).toBe(
+      'unconfigured',
+    );
+  });
+
+  it('reads the platform out of the browser it is running in', () => {
+    const install = (userAgent: string, maxTouchPoints = 0, standalone?: boolean) => {
+      vi.stubGlobal('navigator', {
+        userAgent,
+        maxTouchPoints,
+        standalone,
+        serviceWorker: { register: () => Promise.resolve({}), ready: {} },
+      });
+      vi.stubGlobal('isSecureContext', true);
+      vi.stubGlobal('Notification', function Notification() {});
+      vi.stubGlobal('matchMedia', () => ({ matches: standalone === true }));
+      return readPushEnvironment(KEY);
+    };
+
+    expect(install('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)').ios).toBe(true);
+    // An iPad with a desktop user agent is still an iPad, and still needs the install.
+    expect(install('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5).ios).toBe(true);
+    expect(install('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0).ios).toBe(false);
+    expect(install('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/Chrome').ios).toBe(false);
+    expect(
+      install('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)', 5, true).standalone,
+    ).toBe(true);
+    expect(install('Mozilla/5.0 (Linux; Android 14)').standalone).toBe(false);
+
+    vi.unstubAllGlobals();
+  });
+
+  it('takes either signal for the installed app, because Safari disagrees about the standard one', () => {
+    vi.stubGlobal('matchMedia', () => ({ matches: true }));
+    expect(runningStandalone()).toBe(true);
+
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    vi.stubGlobal('navigator', { standalone: true });
+    expect(runningStandalone()).toBe(true);
+
+    vi.stubGlobal('matchMedia', undefined);
+    vi.stubGlobal('navigator', {});
+    expect(runningStandalone()).toBe(false);
+
+    vi.stubGlobal('matchMedia', () => {
+      throw new TypeError('matchMedia is not a function');
+    });
+    expect(runningStandalone()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

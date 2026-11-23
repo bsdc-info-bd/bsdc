@@ -442,7 +442,7 @@ fun MkShopListScreen(
                     }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(wishlist, key = { it.id }) { item ->
-                            BsdcCard(modifier = Modifier.width(150.dp)) {
+                            BsdcCard(modifier = Modifier.width(150.dp).animateItem()) {
                                 Text(
                                     text = item.name,
                                     style = MaterialTheme.typography.titleSmall,
@@ -536,19 +536,26 @@ fun MkShopListScreen(
         }
 
         items(visibleShops, key = { it.slug }) { shop ->
-            MkShopCard(shop = shop, imageLoader = imageLoader, bn = bn, onClick = { onOpenShop(shop.slug) })
+            MkShopCard(
+                modifier = Modifier.animateItem(),
+                shop = shop,
+                imageLoader = imageLoader,
+                bn = bn,
+                onClick = { onOpenShop(shop.slug) },
+            )
         }
     }
 }
 
 @Composable
 private fun MkShopCard(
+    modifier: Modifier = Modifier,
     shop: MkListedShopDto,
     imageLoader: ImageLoader,
     bn: Boolean,
     onClick: () -> Unit,
 ) {
-    BsdcCard(modifier = Modifier.fillMaxWidth(), onClick = onClick) {
+    BsdcCard(modifier = modifier.fillMaxWidth(), onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             MkImage(
                 url = shop.logo_url.ifBlank { shop.cover_url },
@@ -728,6 +735,19 @@ fun MkVendorPageScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = BsdcThemeTokens.colors.mutedText,
                     )
+                    // Said here rather than discovered at the end: a minimum that only appears in the
+                    // cart is a shop that spent the customer's attention on nothing.
+                    if (MkLogic.hasMinimumOrder(del.min_order_poisha)) {
+                        Text(
+                            text = mkText(
+                                bn,
+                                "Minimum order: " + MkLogic.formatTaka(del.min_order_poisha, bn),
+                                "সর্বনিম্ন অর্ডার: " + MkLogic.formatTaka(del.min_order_poisha, bn),
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = BsdcThemeTokens.colors.mutedText,
+                        )
+                    }
                 }
                 if (data.vendor.description.isNotBlank()) {
                     Spacer(Modifier.height(8.dp))

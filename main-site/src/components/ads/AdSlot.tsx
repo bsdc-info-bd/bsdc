@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { MediaImage } from '@/components/media/MediaImage';
 import { useAdSlot } from '@/hooks/use-ads';
 import type { AdLayout, AdPlacement } from '@/lib/ads/ads-types';
+import { readableInkOn } from '@/design-system/color';
 import { cn } from '@/lib/cn';
 import { safeExternalUrl } from '@/lib/listings/listing-schema';
 
@@ -33,8 +34,10 @@ export function AdSlot({ placement, topic, city, className }: AdSlotProps) {
   const layout: AdLayout = ad.layout ?? 'card';
   const accent = validAccent(ad.accentColor);
   const accentBorderStyle: CSSProperties | undefined = accent ? { borderColor: accent } : undefined;
+  // An advertiser types this colour into a form. Assuming white on it is how a
+  // CTA ends up as white-on-cream, so the ink is chosen by measured contrast.
   const ctaStyle: CSSProperties | undefined = accent
-    ? { backgroundColor: accent, color: '#ffffff' }
+    ? { backgroundColor: accent, color: readableInkOn(accent) }
     : undefined;
   const mediaAlt = ad.imageAlt?.trim() || ad.headline;
   const ctaText = ad.ctaLabel.length > 0 ? ad.ctaLabel : t('ads.defaultCta');
@@ -55,7 +58,7 @@ export function AdSlot({ placement, topic, city, className }: AdSlotProps) {
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted">
         <span>{t('ads.sponsored')}</span>
         {customBadge.length > 0 ? (
-          <span className="rounded bg-surface px-1.5 py-0.5 text-xs font-medium normal-case text-foreground">
+          <span className="rounded bg-surface px-1.5 py-0.5 text-xs font-medium normal-case text-text">
             {customBadge}
           </span>
         ) : null}
@@ -90,7 +93,7 @@ export function AdSlot({ placement, topic, city, className }: AdSlotProps) {
           />
         ) : null}
         <div className="min-w-0 flex-1">
-          <p className="font-semibold leading-snug text-foreground">{ad.headline}</p>
+          <p className="font-semibold leading-snug text-text">{ad.headline}</p>
           {ad.body.length > 0 ? (
             <p className={cn('mt-1 text-sm text-muted', layout === 'compact' && 'line-clamp-2')}>
               {ad.body}

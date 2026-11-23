@@ -705,7 +705,10 @@ fun DiscoverHubScreen(
                     }
                 }
                 items(groups, key = { it.id }) { g ->
-                    BsdcCard {
+                    // A directory tab is a list you filter, not scroll once: the
+                    // rows move when the filter changes, and that movement is the
+                    // answer to the tap.
+                    BsdcCard(modifier = Modifier.animateItem()) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -780,7 +783,7 @@ fun DiscoverHubScreen(
                     }
                 }
                 items(events, key = { it.id }) { ev ->
-                    BsdcCard {
+                    BsdcCard(modifier = Modifier.animateItem()) {
                         if (ev.coverUrl.isNotBlank()) {
                             BsdcImgbbImage(
                                 fullUrl = ev.coverUrl,
@@ -874,7 +877,10 @@ fun DiscoverHubScreen(
                 }
                 items(jobs, key = { it.id }) { job ->
                     val match = DiscoverSearchEngine.skillMatchPercent(job.skills, viewerSkillsSafe)
-                    BsdcCard(onClick = { onOpenJob(job.slug) }) {
+                    BsdcCard(
+                        modifier = Modifier.animateItem(),
+                        onClick = { onOpenJob(job.slug) },
+                    ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,

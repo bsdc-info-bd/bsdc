@@ -146,7 +146,7 @@ export function MediaGallery({
                 <>
                   <span
                     aria-hidden="true"
-                    className="absolute inset-0 bg-green-950/55 transition-colors duration-150 ease-app group-hover:bg-green-950/45"
+                    className="absolute inset-0 bg-scrim/55 transition-colors duration-150 ease-app group-hover:bg-scrim/45"
                   />
                   <span className="absolute inset-0 flex items-center justify-center text-2xl font-semibold text-white">
                     +{cell.overflow}

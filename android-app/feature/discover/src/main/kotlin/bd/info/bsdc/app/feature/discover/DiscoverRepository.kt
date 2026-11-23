@@ -60,6 +60,12 @@ private data class MemberPostMediaDto(
 )
 
 @Serializable
+private data class ChannelPostCountDto(
+    @SerialName("channel_id") val channelId: String = "",
+    @SerialName("post_count") val postCount: Int = 0,
+)
+
+@Serializable
 private data class MemberPollOptionDto(
     val id: String = "",
     val label: String = "",
@@ -332,7 +338,7 @@ class DiscoverRepository(
             val raw = supabase.getJsonText(
                 table = "channels",
                 queryPairs = listOf(
-                    "select" to "id,name,topic,position,is_read_only",
+                    "select" to "id,slug,name,topic,position,is_read_only",
                     "group_id" to "eq.$groupId",
                     "order" to "position.asc",
                     "limit" to "100",
@@ -340,6 +346,25 @@ class DiscoverRepository(
                 requireAuth = false,
             )
             supabase.decode<List<GroupChannelDto>>(raw)
+        }
+    }
+
+    /**
+     * How many published posts each of a group's channels holds.
+     *
+     * `channel_post_counts` (migration 0129) answers for the whole group in one call, which is the
+     * difference between a group page that shows eight live rooms and one that shows eight cards with
+     * nothing on them. A channel the member may not read is simply absent, and an absent channel means
+     * zero posts — never an error to render.
+     */
+    suspend fun channelPostCounts(groupId: String): Result<Map<String, Int>> = withContext(Dispatchers.IO) {
+        runCatching {
+            val raw = supabase.rpcText(
+                "channel_post_counts",
+                params = buildJsonObject { put("p_group_id", groupId) },
+                requireAuth = false,
+            )
+            supabase.decode<List<ChannelPostCountDto>>(raw).associate { row -> row.channelId to row.postCount }
         }
     }
 

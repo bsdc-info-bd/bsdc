@@ -44,7 +44,7 @@ export function HealthCheckCard({ check }: { check: CheckResult }) {
 
 function iconFor(state: CheckState) {
   if (state === 'ok') return <CheckCircle2 aria-hidden className="size-4 text-green-700" />;
-  if (state === 'warn') return <CircleAlert aria-hidden className="size-4 text-warn" />;
+  if (state === 'warn') return <CircleAlert aria-hidden className="size-4 text-warn-text" />;
   if (state === 'fail') return <CircleX aria-hidden className="size-4 text-danger" />;
   return <MinusCircle aria-hidden className="size-4 text-muted" />;
 }

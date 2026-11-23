@@ -141,7 +141,7 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
             <h2 className="text-xl font-bold leading-snug tracking-tight sm:text-2xl">
               <Link
                 to={`/p/${post.slug}`}
-                className="rounded-sm transition-colors duration-150 ease-app hover:text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-600 dark:hover:text-green-300"
+                className="rounded-sm transition-colors duration-150 ease-app hover:text-green-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:hover:text-green-300"
               >
                 {post.title}
               </Link>
@@ -156,7 +156,7 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
             ) : (
               <Link
                 to={`/p/${post.slug}`}
-                className="mt-1.5 line-clamp-3 block text-sm text-muted hover:text-foreground"
+                className="mt-1.5 line-clamp-3 block text-sm text-muted hover:text-text"
               >
                 {post.excerpt}
               </Link>

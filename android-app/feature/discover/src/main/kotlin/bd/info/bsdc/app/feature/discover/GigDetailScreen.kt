@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,22 +26,19 @@ import androidx.compose.material.icons.rounded.Bookmark
 import androidx.compose.material.icons.rounded.BookmarkBorder
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Work
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -63,7 +59,6 @@ import bd.info.bsdc.app.core.designsystem.BsdcCard
 import bd.info.bsdc.app.core.designsystem.BsdcConfirmDialog
 import bd.info.bsdc.app.core.designsystem.BsdcDirectorySkeletonCard
 import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
-import bd.info.bsdc.app.core.designsystem.BsdcFilterPill
 import bd.info.bsdc.app.core.designsystem.BsdcHeroBanner
 import bd.info.bsdc.app.core.designsystem.BsdcInfoPill
 import bd.info.bsdc.app.core.designsystem.BsdcResponsiveContainer
@@ -72,6 +67,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcAvatar
+import bd.info.bsdc.app.core.media.BsdcMediaRepository
 import bd.info.bsdc.app.core.model.AppLanguage
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -93,6 +89,7 @@ fun GigDetailScreen(
     onBack: () -> Unit,
     onSignInRequired: () -> Unit,
     onOpenProfile: (String) -> Unit = {},
+    mediaRepository: BsdcMediaRepository? = null,
     modifier: Modifier = Modifier,
 ) {
     val bn = language == AppLanguage.BN
@@ -112,15 +109,17 @@ fun GigDetailScreen(
     var bannerTone by remember(slug) { mutableStateOf(BsdcTone.OK) }
     var actionBusy by remember(slug) { mutableStateOf(false) }
     var showProposalSheet by remember(slug) { mutableStateOf(false) }
-    var pitch by remember(slug) { mutableStateOf("") }
-    var bid by remember(slug) { mutableStateOf("") }
-    var days by remember(slug) { mutableStateOf("7") }
+    var proposalSaving by remember(slug) { mutableStateOf(false) }
+    var proposalError by remember(slug) { mutableStateOf<String?>(null) }
     // Owner controls. Which of them are offered is decided by
     // `OwnerActionsLogic` from the row and the viewer, not guessed here; the
     // routines re-check on the write regardless.
     var pendingClose by remember(slug) { mutableStateOf(false) }
     var pendingDelete by remember(slug) { mutableStateOf(false) }
     var ownerBusy by remember(slug) { mutableStateOf(false) }
+    var showEditSheet by remember(slug) { mutableStateOf(false) }
+    var editSaving by remember(slug) { mutableStateOf(false) }
+    var editError by remember(slug) { mutableStateOf<String?>(null) }
 
     fun showInfo(message: String, tone: BsdcTone = BsdcTone.OK) {
         banner = message
@@ -149,6 +148,40 @@ fun GigDetailScreen(
             }
         }
         repository.recordJobView(current?.id.orEmpty())
+    }
+
+    /**
+     * Writes the gig editor's payload, then reloads the page.
+     *
+     * A nonce bump rather than a poke at [gig]: `update_gig` trims the brief, canonicalises the skills
+     * and hands back the slug it kept, so the page must show the row the database holds rather than the
+     * text that happened to be typed. It is also what makes a rename that changed the address visible.
+     */
+    fun saveGigEdit(payload: GigEditPayload) {
+        val current = gig ?: return
+        if (editSaving) return
+        editSaving = true
+        editError = null
+        scope.launch {
+            repository.updateGig(
+                gigId = current.id,
+                title = payload.title,
+                description = payload.description,
+                budgetMin = payload.budgetMin,
+                budgetMax = payload.budgetMax,
+                isHourly = payload.isHourly,
+                durationDays = payload.durationDays,
+                skills = payload.skills,
+                coverUrl = payload.coverUrl,
+            ).onSuccess {
+                showEditSheet = false
+                showInfo(if (bn) "গিগ সংরক্ষিত হয়েছে" else "Gig saved")
+                reloadNonce += 1
+            }.onFailure { error ->
+                editError = GigEditLogic.editFailureMessage(error, bn)
+            }
+            editSaving = false
+        }
     }
 
     fun closeGig(current: GigDto) {
@@ -203,32 +236,27 @@ fun GigDetailScreen(
         showInfo(if (bn) "লিংক কপি হয়েছে।" else "Link copied.")
     }
 
-    fun submit(current: GigDto) {
-        val bidValue = bid.trim().toIntOrNull()
-        val daysValue = days.trim().toIntOrNull()
-        val problems = DiscoverSearchEngine.proposalProblems(pitch, bidValue, daysValue)
-        if (problems.isNotEmpty()) {
-            showInfo(proposalProblemMessage(problems.first(), bn), BsdcTone.WARN)
-            return
-        }
-        if (actionBusy) return
-        actionBusy = true
+    /**
+     * Sends the proposal the sheet built.
+     *
+     * The screen does not re-check the pitch or the bid: `MkGigProposalSheet` refuses them where they are
+     * typed, and `submit_proposal` refuses them again in the database. What is worth handling here is
+     * what only the write can know — that the gig closed while the member was writing, or that the bid
+     * came from the client's own account — so those refusals are translated instead of pasted.
+     */
+    fun sendProposal(current: GigDto, pitchText: String, bidAmount: Int, deliveryDays: Int) {
+        if (proposalSaving) return
+        proposalSaving = true
+        proposalError = null
         scope.launch {
-            repository.submitProposal(current.id, pitch, bidValue ?: 0, daysValue ?: 7)
+            repository.submitProposal(current.id, pitchText, bidAmount, deliveryDays)
                 .onSuccess {
                     showProposalSheet = false
-                    pitch = ""
                     reloadNonce += 1
-                    showInfo(if (bn) "প্রস্তাব পাঠানো হয়েছে।" else "Proposal submitted.")
+                    showInfo(if (bn) "প্রস্তাব পাঠানো হয়েছে" else "Your proposal was sent")
                 }
-                .onFailure { err ->
-                    showInfo(
-                        err.localizedMessage
-                            ?: if (bn) "প্রস্তাব পাঠানো যায়নি।" else "The proposal was not sent.",
-                        BsdcTone.BAD,
-                    )
-                }
-            actionBusy = false
+                .onFailure { err -> proposalError = proposalFailureMessage(err, bn) }
+            proposalSaving = false
         }
     }
 
@@ -422,9 +450,7 @@ fun GigDetailScreen(
                             when (action) {
                                 GigDetailLogic.GigAction.SIGN_IN -> onSignInRequired()
                                 GigDetailLogic.GigAction.PROPOSE, GigDetailLogic.GigAction.WITHDRAWN -> {
-                                    bid = (current.budgetMin ?: current.budgetMax ?: 0).toString()
-                                    days = (current.durationDays ?: 7).coerceAtLeast(1).toString()
-                                    pitch = ""
+                                    proposalError = null
                                     showProposalSheet = true
                                 }
                                 GigDetailLogic.GigAction.PROPOSED -> myProposal?.let { unit ->
@@ -538,20 +564,21 @@ fun GigDetailScreen(
                                         enabled = !ownerBusy,
                                     )
                                 }
-                                BsdcButton(
-                                    label = if (bn) "ওয়েবে সম্পাদনা করুন" else "Edit on the web",
-                                    onClick = {
-                                        // The app has no multi-field editor yet; the web
-                                        // editor is the same routine and the same rules, so
-                                        // the honest control opens it rather than pretending.
-                                        val intent = Intent(
-                                            Intent.ACTION_VIEW,
-                                            Uri.parse("${GigDetailLogic.webUrl(current.slug)}"),
-                                        )
-                                        runCatching { context.startActivity(intent) }
-                                    },
-                                    secondary = true,
-                                )
+                                if (controls.canEdit) {
+                                    // This used to read "Edit on the web" — an honest signpost, and the
+                                    // gap itself: `update_gig` has been callable from this screen the
+                                    // whole time. `MkGigEditSheet` is the half that was missing.
+                                    BsdcButton(
+                                        label = if (bn) "গিগ সম্পাদনা" else "Edit gig",
+                                        onClick = {
+                                            editError = null
+                                            showEditSheet = true
+                                        },
+                                        secondary = true,
+                                        enabled = !ownerBusy && !editSaving,
+                                        leadingIcon = Icons.Rounded.Edit,
+                                    )
+                                }
                             }
                         }
                     }
@@ -747,7 +774,9 @@ fun GigDetailScreen(
                         items(2) { BsdcDirectorySkeletonCard() }
                     }
                     items(proposals, key = { it.id }) { proposal ->
-                        BsdcCard {
+                        // Accepting a proposal removes the row it was for, and the rows under it
+                        // move up. Without this the queue looks like it lost the client too.
+                        BsdcCard(modifier = Modifier.animateItem()) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -853,6 +882,20 @@ fun GigDetailScreen(
         }
     }
 
+    gig?.let { current ->
+        MkGigEditSheet(
+            visible = showEditSheet,
+            gig = current,
+            bn = bn,
+            saving = editSaving,
+            errorMessage = editError.orEmpty(),
+            imageLoader = imageLoader,
+            mediaRepository = mediaRepository,
+            onDismiss = { if (!editSaving) showEditSheet = false },
+            onSave = { payload -> saveGigEdit(payload) },
+        )
+    }
+
     val confirmGig = gig
     if (confirmGig != null && pendingClose) {
         BsdcConfirmDialog(
@@ -884,83 +927,20 @@ fun GigDetailScreen(
         )
     }
 
-    if (showProposalSheet) {
-        val current = gig
-        AlertDialog(
-            onDismissRequest = { showProposalSheet = false },
-            title = { Text(if (bn) "প্রস্তাব পাঠান" else "Send a proposal") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val problems = DiscoverSearchEngine.proposalProblems(
-                        pitch,
-                        bid.trim().toIntOrNull(),
-                        days.trim().toIntOrNull(),
-                    )
-                    OutlinedTextField(
-                        value = pitch,
-                        onValueChange = { pitch = it },
-                        label = {
-                            Text(
-                                if (bn) {
-                                    "কেন আপনি উপযুক্ত (${DiscoverSearchEngine.MIN_PITCH}+ অক্ষর)"
-                                } else {
-                                    "Why you are a fit (${DiscoverSearchEngine.MIN_PITCH}+ characters)"
-                                },
-                            )
-                        },
-                        minLines = 4,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        text = if (bn) "${pitch.trim().length} অক্ষর" else "${pitch.trim().length} characters",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = BsdcThemeTokens.colors.mutedText,
-                    )
-                    OutlinedTextField(
-                        value = bid,
-                        onValueChange = { bid = it.filter { ch -> ch.isDigit() } },
-                        label = { Text(if (bn) "আপনার মূল্য (${current?.currency ?: "BDT"})" else "Your bid (${current?.currency ?: "BDT"})") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    OutlinedTextField(
-                        value = days,
-                        onValueChange = { days = it.filter { ch -> ch.isDigit() } },
-                        label = { Text(if (bn) "ডেলিভারি (দিন)" else "Delivery days") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    val gross = bid.trim().toIntOrNull() ?: 0
-                    val payout = GigDetailLogic.payout(gross)
-                    HorizontalDivider()
-                    Text(
-                        text = if (bn) {
-                            "প্ল্যাটফর্ম ফি ${payout.feePercent}% · আপনি পাবেন ${DiscoverSearchEngine.formatBudgetShort(payout.net, payout.net, current?.currency ?: "BDT", true)}"
-                        } else {
-                            "Platform fee ${payout.feePercent}% · you receive ${DiscoverSearchEngine.formatBudgetShort(payout.net, payout.net, current?.currency ?: "BDT", false)}"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (problems.isNotEmpty()) {
-                        Text(
-                            text = proposalProblemMessage(problems.first(), bn),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = BsdcThemeTokens.colors.warn,
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = !actionBusy,
-                    onClick = { current?.let { submit(it) } },
-                ) { Text(if (bn) "পাঠান" else "Send") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showProposalSheet = false }) { Text(if (bn) "বাতিল" else "Cancel") }
+    gig?.let { current ->
+        MkGigProposalSheet(
+            visible = showProposalSheet,
+            gig = current,
+            bn = bn,
+            sending = proposalSaving,
+            errorMessage = proposalError.orEmpty(),
+            onDismiss = { if (!proposalSaving) showProposalSheet = false },
+            onSubmit = { pitchText, bidAmount, deliveryDays ->
+                sendProposal(current, pitchText, bidAmount, deliveryDays)
             },
         )
     }
+
 }
 
 @Composable
@@ -979,6 +959,33 @@ private fun PayoutColumn(label: String, value: String, bn: Boolean) {
         )
     }
     check(bn || !bn)
+}
+
+/**
+ * One sentence for a proposal the routine refused.
+ *
+ * `submit_proposal` knows three things the screen cannot: whether the member is signed in, whether the
+ * gig is still open to proposals, and whether they are the client. Each answer is worth saying plainly,
+ * because the first two read like a bug when the pitch was written ten minutes ago and the third is the
+ * one case where the button should not have been there at all.
+ */
+internal fun proposalFailureMessage(error: Throwable, bn: Boolean): String {
+    val text = error.message.orEmpty()
+    return when {
+        text.contains("authentication required") ->
+            if (bn) "প্রস্তাব পাঠাতে আবার সাইন ইন করুন।" else "Sign in again to send your proposal."
+        text.contains("not accepting proposals") ->
+            if (bn) "এই গিগ আর প্রস্তাব নিচ্ছে না।" else "This gig is not accepting proposals any more."
+        text.contains("your own gig") ->
+            if (bn) "নিজের গিগে প্রস্তাব দেওয়া যায়।" else "You cannot bid on a gig you posted."
+        text.contains("already") ->
+            if (bn) {
+                "এই গিগে আপনার প্রস্তাব আগেই জমা আছে।"
+            } else {
+                "You have already proposed to this gig."
+            }
+        else -> if (bn) "প্রস্তাব পাঠানো যায়নি। আবার চেষ্টা করুন।" else "The proposal was not sent. Try again."
+    }
 }
 
 /** One translated sentence per stable problem code from `DiscoverSearchEngine.proposalProblems`. */

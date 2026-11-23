@@ -29,6 +29,29 @@ export interface StaticRoute {
   readonly heading: string;
   readonly summary: string;
   readonly type: string;
+  /**
+   * The page's own opening block, in the shape the page renders it.
+   *
+   * Present on the pages whose hero is not the plain heading the shell writes by
+   * default. LCP compares paint *areas*, so a shell whose heading is a different size
+   * or wording than the page's is a shell that loses its paint to the script: the
+   * score then reads "when did the JavaScript finish". `engine.test.ts` fails when the
+   * words stop matching the English catalogue or the classes stop matching the
+   * component that owns the shape.
+   */
+  readonly hero?:
+    | {
+        readonly shape: string;
+        readonly eyebrow?: string | undefined;
+        readonly title: string;
+        readonly description: string;
+        /** A page whose first screen is a tool: the pane's label and its starter contents. */
+        readonly snippet?: {
+          readonly label: string;
+          readonly code: string;
+        };
+      }
+    | undefined;
 }
 
 export const STATIC_ROUTES: readonly StaticRoute[] = staticRoutes.routes;

@@ -324,6 +324,11 @@ fun FeedScreen(
                             val showFeedAdAfter =
                                 index == 3 || (visiblePosts.size in 2..3 && index == visiblePosts.lastIndex)
                             FeedPostCard(
+                                // `animateItem` is the whole answer to "the list jumps when a filter
+                                // changes": a card that leaves, arrives or reorders now slides into its
+                                // new slot instead of snapping. It works because the list already keys
+                                // rows by post id, so Compose can tell one card from another.
+                                modifier = Modifier.animateItem(),
                                 post = post,
                                 interaction = state,
                                 rankingReasons = reasonsByPostId[post.id].orEmpty(),
@@ -585,6 +590,7 @@ fun FeedScreen(
 
 @Composable
 private fun FeedPostCard(
+    modifier: Modifier = Modifier,
     post: FeedPost,
     interaction: PostInteractionState,
     rankingReasons: List<String>,
@@ -611,7 +617,7 @@ private fun FeedPostCard(
     var menuExpanded by remember { mutableStateOf(false) }
 
     BsdcCard(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onOpenPost),
     ) {
@@ -652,6 +658,18 @@ private fun FeedPostCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = tokens.mutedText,
                     )
+                    // Where it was written, when it was written in a room. Plain text, not a link:
+                    // the app has no channel page to land on yet, and a tap that goes nowhere teaches
+                    // the member that nothing here can be trusted. The website links both halves.
+                    post.attribution()?.let { attribution ->
+                        Text(
+                            text = attribution.format(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
             }
 

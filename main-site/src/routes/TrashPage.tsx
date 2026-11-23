@@ -97,7 +97,7 @@ export default function TrashPage() {
           {items.map((item) => (
             <li
               key={`${item.kind}-${item.id}`}
-              className="rounded-xl border border-line bg-surface p-4"
+              className="rounded-xl border border-border bg-surface p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">

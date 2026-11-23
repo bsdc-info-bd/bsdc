@@ -90,7 +90,7 @@ export function ReactionBar({
           <div
             role="menu"
             aria-label={t('interactions.chooseReaction')}
-            className="absolute bottom-full start-0 z-30 mb-1 flex gap-1 rounded-xl border border-line bg-surface p-1 shadow-lg"
+            className="absolute bottom-full start-0 z-30 mb-1 flex gap-1 rounded-xl border border-border bg-surface p-1 shadow-lg"
           >
             {REACTIONS.map((reaction) => {
               const Icon = REACTION_ICONS[reaction];

@@ -31,13 +31,13 @@ export function ListHero({
   return (
     <header
       className={cn(
-        'relative mb-6 overflow-hidden rounded-3xl bg-gradient-to-br from-green-800 via-green-700 to-green-500 p-5 text-white shadow-lg sm:p-8',
+        'relative mb-6 overflow-hidden rounded-3xl bsdc-hero p-5 shadow-lg sm:p-8',
         className,
       )}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10 blur-2xl"
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-on-hero/10 blur-2xl"
       />
       <div
         aria-hidden
@@ -47,20 +47,20 @@ export function ListHero({
         {icon !== undefined ? (
           <span
             aria-hidden="true"
-            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25 backdrop-blur"
+            className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-on-hero/15 ring-1 ring-on-hero/25 backdrop-blur"
           >
             {icon}
           </span>
         ) : null}
         <div className="min-w-0 flex-1">
           {eyebrow !== undefined ? (
-            <p className="text-xs font-semibold uppercase tracking-wider text-white/75">
+            <p className="text-xs font-semibold uppercase tracking-wider text-on-hero/75">
               {eyebrow}
             </p>
           ) : null}
           <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
           {description !== undefined ? (
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-white/90">{description}</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-on-hero/90">{description}</p>
           ) : null}
         </div>
       </div>

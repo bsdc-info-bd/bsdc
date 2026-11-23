@@ -12,6 +12,22 @@ export interface PrerenderRoute {
   readonly heading: string;
   readonly summary: string;
   readonly type: string;
+  /** Paragraphs from the page's own copy, shown before the script runs. */
+  readonly opening?: readonly string[] | undefined;
+  /** The hero block the page opens with, when it is not a plain heading. */
+  readonly hero?:
+    | {
+        readonly shape: string;
+        readonly eyebrow?: string | undefined;
+        readonly title: string;
+        readonly description: string;
+        /** A page whose first screen is a tool: the pane's label and its starter contents. */
+        readonly snippet?: {
+          readonly label: string;
+          readonly code: string;
+        };
+      }
+    | undefined;
 }
 
 export function escapeHtml(value: string): string;

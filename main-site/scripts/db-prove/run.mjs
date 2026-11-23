@@ -16,6 +16,7 @@
  * says so. A harness exits non-zero when any one of its checks fails.
  */
 import { spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -196,8 +197,38 @@ const HARNESSES = [
     't90.mjs',
     '0130: a channel can be built, named, ordered and closed',
   ],
+  ['t91.mjs', '0131: a marketplace remembers an address, and a shop can set a minimum order'],
+  ['t92.mjs', '0132: an uploaded picture is a picture its owner can find again'],
+  [
+    't93.mjs',
+    'the member-site rollout gate evaluates the contract it enforces, against the schema it guards',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
+
+// The header says a file that is present but unlisted is not run. That was a warning
+// to readers, which is the weakest kind of guard: `db:prove` counts the list it was
+// given, so an orphan board is a green board. The directory is now checked against the
+// registry, in both directions.
+const listed = new Set(HARNESSES.map(([file]) => file));
+const orphans = readdirSync(HERE)
+  .filter((file) => /^t\d+\.mjs$/.test(file) && !listed.has(file))
+  .sort();
+if (orphans.length > 0) {
+  console.error(
+    `db:prove: ${orphans.length} proof file(s) are not in HARNESSES and would be skipped: ${orphans.join(
+      ', ',
+    )}`,
+  );
+  process.exit(1);
+}
+const missing = HARNESSES.filter(
+  ([file]) => /^t\d+\.mjs$/.test(file) && !readdirSync(HERE).includes(file),
+);
+if (missing.length > 0) {
+  console.error(`db:prove: HARNESSES lists file(s) that are not on disk: ${missing.map(([f]) => f).join(', ')}`);
+  process.exit(1);
+}
 
 const results = [];
 for (const [file, description] of HARNESSES) {

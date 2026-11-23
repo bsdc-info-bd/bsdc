@@ -21,7 +21,7 @@ export function Stepper({ steps, current, label, className }: StepperProps) {
               aria-current={active ? 'step' : undefined}
               className={cn(
                 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-2xs font-bold',
-                done && 'bg-green-700 text-white',
+                done && 'bg-primary text-on-primary',
                 active && 'border-2 border-green-700 text-green-700',
                 !done && !active && 'border border-border text-muted',
               )}

@@ -101,7 +101,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
       aria-modal="true"
       aria-label={label ?? t('media.lightbox.title')}
       tabIndex={-1}
-      className="fixed inset-0 z-[60] flex flex-col bg-green-950/92 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex flex-col bg-scrim/95 backdrop-blur-sm"
       onTouchStart={(event) => {
         const touch = event.touches[0];
         touchStart.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
@@ -140,7 +140,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
                   setDownloading(false);
                 });
             }}
-            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10 disabled:opacity-60"
+            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-on-hero/10 disabled:opacity-60"
             aria-label={t('media.lightbox.download')}
             title={t('media.lightbox.download')}
           >
@@ -153,7 +153,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
           <button
             type="button"
             onClick={onClose}
-            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-white/10"
+            className="fab-tap inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-on-hero/10"
             aria-label={t('common.close')}
             title={t('common.close')}
           >
@@ -176,7 +176,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
             type="button"
             onClick={() => onChange((position - 1 + total) % total)}
             aria-label={t('media.lightbox.previous')}
-            className="fab-tap absolute start-1 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-green-950/50 text-white hover:bg-green-950/75 sm:start-3"
+            className="fab-tap absolute start-1 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-scrim/50 text-white hover:bg-scrim/75 sm:start-3"
           >
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
@@ -222,7 +222,7 @@ export function Lightbox({ items, index, label, onChange, onClose }: LightboxPro
             type="button"
             onClick={() => onChange((position + 1) % total)}
             aria-label={t('media.lightbox.next')}
-            className="fab-tap absolute end-1 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-green-950/50 text-white hover:bg-green-950/75 sm:end-3"
+            className="fab-tap absolute end-1 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full bg-scrim/50 text-white hover:bg-scrim/75 sm:end-3"
           >
             <ChevronRight size={22} aria-hidden="true" />
           </button>

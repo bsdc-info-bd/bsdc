@@ -6,6 +6,9 @@ import bd.info.bsdc.app.core.auth.DataAccessBootstrapManager
 import bd.info.bsdc.app.core.model.BsdcBackendConfig
 import bd.info.bsdc.app.core.model.BsdcHosts
 import bd.info.bsdc.app.core.model.MediaPurpose
+import bd.info.bsdc.app.core.model.BsdcGalleryCursor
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
+import bd.info.bsdc.app.core.model.BsdcGalleryPage
 import bd.info.bsdc.app.core.model.MediaUploadResult
 import bd.info.bsdc.app.core.network.SupabaseApiException
 import bd.info.bsdc.app.core.network.SupabaseRestClient
@@ -54,6 +57,9 @@ private data class EdgeMediaUploadResponse(
     val expiresAt: String? = null,
     val errorKey: String? = null,
 )
+
+/** How many tiles a page fills: a 4-column grid twice over, the website's own number. */
+const val GALLERY_PAGE_SIZE = 60
 
 class MediaUploadException(
     val errorKey: String,
@@ -118,9 +124,20 @@ class ImgbbEdgeMediaTransport(
         )
     }
 
+    /**
+     * Writes the row that says this member uploaded this picture.
+     *
+     * `purpose` is not a label the platform keeps for itself: it is what turns a
+     * member's uploads into a library they can search, and 0132 files a row without
+     * one under `other` — which is the one heading the gallery will never offer as a
+     * filter. So every caller says what the picture was for, and says it here and not
+     * only to the edge: the edge uses it to decide how hard to compress, while this
+     * call is the only place the answer is remembered.
+     */
     suspend fun recordMediaAsset(
         ownerUid: String,
         upload: MediaUploadResult,
+        purpose: MediaPurpose = MediaPurpose.OTHER,
     ): String {
         val rpcParams = buildJsonObject {
             put("p_provider", upload.provider)
@@ -133,6 +150,11 @@ class ImgbbEdgeMediaTransport(
             put("p_bytes", upload.bytes)
             put("p_mime_type", upload.mimeType)
             put("p_expires_at", upload.expiresAt?.let { JsonPrimitive(it) } ?: JsonNull)
+            // The tenth argument of 0132. Sent always, including by a caller that has
+            // not been taught it, because Postgres resolves an omitted defaulted
+            // argument here and a stale client elsewhere — and those are two different
+            // rows for one picture.
+            put("p_purpose", purpose.wireValue)
         }
 
         val rpcOutcome = runCatching {
@@ -161,6 +183,9 @@ class ImgbbEdgeMediaTransport(
             put("bytes", upload.bytes)
             put("mime_type", upload.mimeType)
             put("checksum", "")
+            // Same column, same value, on the path that writes it directly because the
+            // RPC call could not be resolved.
+            put("purpose", purpose.wireValue)
         }
         val insertedRaw = supabase.postJson(
             table = "media_assets",
@@ -171,6 +196,48 @@ class ImgbbEdgeMediaTransport(
         )
         return parseAssetId(insertedRaw)
             ?: throw MediaUploadException("media.errors.recordFailed")
+    }
+
+    /**
+     * One page of the member's own library.
+     *
+     * `purpose` is the shelf — a null asks for all of them — and `query` is the words
+     * the function matches inside the page rather than after it, which is why a member
+     * whose matching picture is the three-hundredth newest still finds it. Both halves
+     * of the cursor travel together or not at all, because the function answers a half
+     * cursor with 22023; and an empty page carries no cursor, so a list that keeps
+     * asking for more cannot spin.
+     *
+     * A failure is thrown rather than turned into an empty shelf. "You have no covers"
+     * and "your filter was refused" are different sentences to a member, and the second
+     * one is the only reason a bad constant in this app is findable at all.
+     */
+    suspend fun listGallery(
+        limit: Int = GALLERY_PAGE_SIZE,
+        purpose: MediaPurpose? = null,
+        query: String = "",
+        cursor: BsdcGalleryCursor? = null,
+    ): BsdcGalleryPage = withContext(Dispatchers.IO) {
+        val params = buildJsonObject {
+            put("p_limit", limit)
+            put("p_purpose", purpose?.wireValue ?: "all")
+            put("p_query", query)
+            put("p_before", cursor?.before?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("p_before_id", cursor?.beforeId?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
+        val raw = supabase.rpcText("my_gallery", params, requireAuth = true)
+        // PostgREST answers an empty library with `[]`, and a host that answers with
+        // nothing at all is the same page. A body that is present but unreadable is a
+        // bug in this client, and it propagates instead of becoming "no pictures".
+        val rows: List<BsdcGalleryImage> =
+            if (raw.isBlank()) emptyList() else json.decodeFromString<List<BsdcGalleryImage>>(raw)
+        val last = rows.lastOrNull()
+        val next = if (last == null || last.createdAt.isEmpty() || last.id.isEmpty()) {
+            null
+        } else {
+            BsdcGalleryCursor(before = last.createdAt, beforeId = last.id)
+        }
+        BsdcGalleryPage(items = rows, nextCursor = next)
     }
 
     private fun parseAssetId(raw: String): String? {
@@ -240,6 +307,22 @@ class BsdcMediaRepository(
             .build()
     }
 
+    /**
+     * The member's library, for a screen that lets them reuse a picture instead of
+     * taking it again. The app's own half of the shelf the web's picker shows.
+     */
+    suspend fun myGallery(
+        limit: Int = GALLERY_PAGE_SIZE,
+        purpose: MediaPurpose? = null,
+        query: String = "",
+        cursor: BsdcGalleryCursor? = null,
+    ): BsdcGalleryPage = transport.listGallery(
+        limit = limit,
+        purpose = purpose,
+        query = query,
+        cursor = cursor,
+    )
+
     suspend fun uploadImageUri(
         uri: Uri,
         purpose: MediaPurpose,
@@ -297,7 +380,7 @@ class BsdcMediaRepository(
                 onProgress = onProgress,
             )
         }
-        val assetId = transport.recordMediaAsset(user.uid, edgeUpload)
+        val assetId = transport.recordMediaAsset(user.uid, edgeUpload, purpose)
         edgeUpload.copy(assetId = assetId)
     }
 }

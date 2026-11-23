@@ -158,7 +158,7 @@ export function AdCreditsPanel({ language, bikashNumber, enabled }: Props) {
                 aria-pressed={parsed === value}
                 className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
                   parsed === value
-                    ? 'border-green-700 bg-green-700 text-white'
+                    ? 'border-primary bg-primary text-on-primary'
                     : 'border-border text-text hover:bg-surface-2'
                 }`}
               >

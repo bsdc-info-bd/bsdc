@@ -1,10 +1,16 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import type { To } from 'react-router-dom';
 import { cn } from '@/lib/cn';
 import type { ButtonSize, ButtonVariant } from './Button';
 
 export interface LinkButtonProps {
-  to: string;
+  /**
+   * A react-router target: a path, or `{ pathname, search, hash }`. Both reach
+   * `Link` unchanged, so a caller with query parameters does not have to
+   * assemble and encode a URL string itself.
+   */
+  to: To;
   variant?: ButtonVariant;
   size?: ButtonSize;
   block?: boolean;
@@ -14,12 +20,12 @@ export interface LinkButtonProps {
 }
 
 const VARIANTS: Record<ButtonVariant, string> = {
-  primary: 'bg-green-700 text-white hover:bg-green-500',
+  primary: 'bg-primary text-on-primary hover:bg-primary-hover',
   secondary: 'bg-surface-2 text-text border border-border hover:bg-surface',
   outline: 'border border-green-700 text-green-700 hover:bg-surface-2',
   ghost: 'text-text hover:bg-surface-2',
-  danger: 'bg-danger text-white hover:opacity-90',
-  blue: 'bg-blue text-white hover:opacity-90',
+  danger: 'bg-danger text-on-danger hover:opacity-90',
+  blue: 'bg-blue-fill text-on-blue hover:opacity-90',
 };
 
 const SIZES: Record<ButtonSize, string> = {

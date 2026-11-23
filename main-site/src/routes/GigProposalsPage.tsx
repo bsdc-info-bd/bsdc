@@ -234,7 +234,7 @@ export default function GigProposalsPage() {
             onClick={() => setFilter('all')}
             className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
               filter === 'all'
-                ? 'border-green-700 bg-green-700 text-white'
+                ? 'border-primary bg-primary text-on-primary'
                 : 'border-border text-text hover:bg-surface-2'
             }`}
           >
@@ -249,7 +249,7 @@ export default function GigProposalsPage() {
               onClick={() => setFilter(status)}
               className={`rounded-full border px-3 py-1.5 text-xs font-medium ${
                 filter === status
-                  ? 'border-green-700 bg-green-700 text-white'
+                  ? 'border-primary bg-primary text-on-primary'
                   : 'border-border text-text hover:bg-surface-2'
               }`}
             >

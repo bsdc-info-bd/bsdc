@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getSupabase } from '@/lib/supabase/client';
 import type { OrderStatus } from '@/lib/mk/mk-logic';
-import type { MkAddress } from '@/lib/mk/mk-types';
+import type { MkAddress, MkAddressInput } from '@/lib/mk/mk-types';
 import * as repo from '@/lib/mk/mk-repository';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -13,7 +13,70 @@ const KEYS = {
   application: ['mk', 'application'] as const,
   payment: ['mk', 'payment'] as const,
   shops: ['mk', 'shops'] as const,
+  addresses: ['mk', 'addresses'] as const,
 };
+
+/**
+ * The member's saved doorsteps, kept live.
+ *
+ * 0131 granted the owner a read on `mk_addresses` and put the table in the realtime publication for
+ * exactly this: an address added on a phone is on the laptop's checkout before that checkout has
+ * finished loading, with no refetch interval and no waiting for the next navigation. The write still
+ * goes through the routine, which is where the checks a policy cannot express live.
+ */
+export function useMyAddresses(enabled: boolean) {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: [...KEYS.addresses, uid],
+    queryFn: repo.fetchMyAddresses,
+    enabled: uid !== null && enabled,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (uid === null || !enabled) return undefined;
+    const channel = getSupabase()
+      .channel(`mk-addresses-${uid}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mk_addresses' }, () => {
+        void queryClient.invalidateQueries({ queryKey: KEYS.addresses });
+      })
+      .subscribe();
+    return () => {
+      void getSupabase().removeChannel(channel);
+    };
+  }, [uid, enabled, queryClient]);
+
+  return query;
+}
+
+/**
+ * Saving an address writes the book and seeds this client's cache from the response, so the
+ * checkout that just saved a door can select it without a second round trip and without a flash of
+ * "no saved addresses" while the refetch is still in the air.
+ */
+export function useSaveAddress() {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MkAddressInput) => repo.saveAddress(input),
+    onSuccess: (result) => {
+      queryClient.setQueryData([...KEYS.addresses, uid], result.addresses);
+      void queryClient.invalidateQueries({ queryKey: KEYS.addresses });
+    },
+  });
+}
+
+export function useDeleteAddress() {
+  const uid = useAuthStore((state) => state.user?.uid ?? null);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => repo.deleteAddress(id),
+    onSuccess: (addresses) => {
+      queryClient.setQueryData([...KEYS.addresses, uid], addresses);
+    },
+  });
+}
 
 export function usePaymentInstructions() {
   const uid = useAuthStore((state) => state.user?.uid ?? null);
@@ -160,6 +223,24 @@ export function useSetVendorDelivery() {
   });
 }
 
+/**
+ * The shop's minimum order, in whole taka. Its own mutation because it has its own Save button:
+ * the delivery panel's button writes the area and the charge, and one form that half-saved two
+ * rules would leave the vendor looking at a screen that no longer matches the shop.
+ */
+export function useSetVendorMinOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taka: number) => repo.setVendorMinOrder(taka),
+    // Every surface that quotes a price to a customer reads the minimum: the shop, the product
+    // page, the cart, and the console's own settings form. A number that reaches customers is not
+    // a setting one screen may be told about.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['mk'] });
+    },
+  });
+}
+
 export function useSetVendorSchedule() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -273,7 +354,8 @@ export function usePlaceOrder() {
       vendorId: string;
       address: MkAddress;
       directItems: { product_id: string; qty: number }[] | null;
-    }) => repo.placeOrder(input.vendorId, input.address, input.directItems),
+      addressId: string | null;
+    }) => repo.placeOrder(input.vendorId, input.address, input.directItems, input.addressId),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['mk', 'cart'] });
       void queryClient.invalidateQueries({ queryKey: ['mk', 'orders'] });

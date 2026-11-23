@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Edit
@@ -54,7 +55,11 @@ import bd.info.bsdc.app.core.designsystem.BsdcEmptyState
 import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
+import bd.info.bsdc.app.core.media.BsdcGalleryLogic
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.MediaPurpose
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -414,6 +419,8 @@ private fun ProductEditor(
     val scope = rememberCoroutineScope()
     var uploading by remember { mutableStateOf(false) }
     var uploadError by remember { mutableStateOf<String?>(null) }
+    var showLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
     val nameBad = draft.name.trim().length < 2
     val priceBad = MkLogic.parseTakaToPoisha(draft.priceText) == null
     val stockBad = draft.stockText.trim().toIntOrNull()?.let { it !in 0..100_000 } ?: true
@@ -421,8 +428,8 @@ private fun ProductEditor(
 
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val room = MAX_PRODUCT_IMAGES - draft.images.size
-        if (room <= 0) return@rememberLauncherForActivityResult
+        val room = BsdcGalleryLogic.roomFor(draft.images.size, MAX_PRODUCT_IMAGES)
+        if (room == 0) return@rememberLauncherForActivityResult
         scope.launch {
             uploading = true
             uploadError = null
@@ -457,7 +464,9 @@ private fun ProductEditor(
         Text(mkText(bn, "Photos (up to $MAX_PRODUCT_IMAGES)", "ছবি (সর্বোচ্চ $MAX_PRODUCT_IMAGES)"), style = MaterialTheme.typography.labelLarge)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(draft.images, key = { it }) { url ->
-                Box(modifier = Modifier.size(84.dp).clip(RoundedCornerShape(12.dp))) {
+                // The one place in the listing form where a photo is removed by
+                // hand: the strip closing the gap is the confirmation that it went.
+                Box(modifier = Modifier.size(84.dp).animateItem().clip(RoundedCornerShape(12.dp))) {
                     MkImage(
                         url = url,
                         contentDescription = null,
@@ -486,8 +495,51 @@ private fun ProductEditor(
                         }
                     }
                 }
+                // The next cell in the same strip is the shelf: a product photo the shop
+                // has already hosted is one tap away, and taking it costs no upload and
+                // no quota. `max` is the room the draft has left, so the sheet cannot
+                // answer with more pictures than the listing can hold.
+                item {
+                    OutlinedButton(
+                        onClick = { showLibrary = true },
+                        enabled = !uploading && !busy,
+                        modifier = Modifier.size(84.dp),
+                    ) {
+                        Icon(Icons.Rounded.Image, contentDescription = library.open)
+                    }
+                }
             }
         }
+        BsdcGalleryPickerSheet(
+            visible = showLibrary,
+            repository = mediaRepository,
+            imageLoader = imageLoader,
+            bn = bn,
+            max = (MAX_PRODUCT_IMAGES - draft.images.size).coerceAtLeast(1),
+            attached = draft.images,
+            initialFilter = GalleryFilter.PRODUCT_IMAGE,
+            onDismiss = { showLibrary = false },
+            onPicked = { picked ->
+                // The seller's rows are plain addresses, so the fold is the shared one: what
+                // was tapped, minus what the product already carries, cut to the eight. The
+                // comparison runs on addresses rather than strings, which is the difference
+                // between a strip of eight pictures and eight rows that hold seven — a
+                // `distinct()` would have let `https://x/y` and `https://x/y/` sit side by
+                // side, since to it they are different words.
+                val next = BsdcGalleryLogic.mergeInto(
+                    current = draft.images,
+                    picked = picked,
+                    room = BsdcGalleryLogic.roomFor(draft.images.size, MAX_PRODUCT_IMAGES),
+                    urlOf = { url -> url },
+                    create = { image -> image.url },
+                )
+                if (next.size != draft.images.size) {
+                    onChange(draft.copy(images = next))
+                }
+                showLibrary = false
+            },
+        )
+
         uploadError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
 
         OutlinedTextField(

@@ -159,7 +159,7 @@ export default function AdminPage() {
                       href={corporateHref(item.prodUrl, item.devPort)}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-medium text-foreground transition hover:border-accent hover:text-accent"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface-2 px-3 py-1.5 text-sm font-medium text-text transition hover:border-primary hover:text-primary"
                     >
                       <span>{t(`admin.corporateConsoles.${item.key}`)}</span>
                       <ExternalLink size={14} aria-hidden="true" />

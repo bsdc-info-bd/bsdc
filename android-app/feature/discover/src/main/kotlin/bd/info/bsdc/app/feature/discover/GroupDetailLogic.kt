@@ -59,6 +59,22 @@ object GroupDetailLogic {
     /** A channel row's title, e.g. "# general", so the hash and the name never drift apart. */
     fun channelTitle(name: String): String = "# ${name.trim().removePrefix("#").trim()}"
 
+    /**
+     * The count badge on a channel card, in the website's words.
+     *
+     * `channels.posts` / `channels.postsOne` say "3 posts" and "1 post"; Bengali does not inflect the
+     * noun, so `টি` carries the count and both spellings collapse into one string. The number arrives
+     * already formatted, because rendering digits for the reader's locale is a shared rule rather than
+     * this screen's business — and because a badge that counts in Bengali digits while the rest of the
+     * page does not looks like two apps.
+     */
+    fun postCountLabel(formattedCount: String, count: Int, bn: Boolean): String =
+        if (bn) {
+            "${formattedCount}টি পোস্ট"
+        } else {
+            "$formattedCount ${if (count == 1) "post" else "posts"}"
+        }
+
     /** Owners and admins first, then by how long each member has been there. */
     fun <T> sortMembers(
         members: List<T>,

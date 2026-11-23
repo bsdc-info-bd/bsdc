@@ -24,7 +24,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
         'fab-tap inline-flex items-center justify-center rounded-full transition-colors duration-150 ease-app',
         size === 'sm' ? 'h-9 w-9' : 'h-11 w-11',
         variant === 'ghost' && 'text-text hover:bg-surface-2',
-        variant === 'solid' && 'bg-green-700 text-white hover:bg-green-500',
+        variant === 'solid' && 'bg-primary text-on-primary hover:bg-primary-hover',
         variant === 'outline' && 'border border-border text-text hover:bg-surface-2',
         'disabled:cursor-not-allowed disabled:opacity-60',
         className,

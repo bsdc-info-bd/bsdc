@@ -133,7 +133,7 @@ export default function SystemCheckPage() {
 /** The icon for a state, exported so the card and any future summary agree. */
 export function StateIcon({ state }: { state: CheckState }) {
   if (state === 'ok') return <CheckCircle2 aria-hidden className="size-4 text-green-700" />;
-  if (state === 'warn') return <CircleAlert aria-hidden className="size-4 text-warn" />;
+  if (state === 'warn') return <CircleAlert aria-hidden className="size-4 text-warn-text" />;
   if (state === 'fail') return <CircleX aria-hidden className="size-4 text-danger" />;
   return <MinusCircle aria-hidden className="size-4 text-muted" />;
 }

@@ -110,7 +110,7 @@ export default function LearnPage() {
         ) : null}
 
         <ul className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {catalog.courses.map((course) => (
+          {catalog.courses.map((course, index) => (
             <Card as="li" key={course.id}>
               {course.coverUrl.trim().length > 0 ? (
                 <Link
@@ -121,7 +121,7 @@ export default function LearnPage() {
                     src={course.coverUrl}
                     alt={course.title}
                     slotWidth={420}
-                    loading="lazy"
+                    priority={index === 0}
                     decoding="async"
                     className="h-full w-full object-cover"
                   />
@@ -201,7 +201,7 @@ export default function LearnPage() {
                     </Link>
                   </p>
                   {certificate.revoked_at !== null ? (
-                    <p className="mt-1 text-xs text-red-700">{t('learn.revoked')}</p>
+                    <p className="mt-1 text-xs text-danger-text">{t('learn.revoked')}</p>
                   ) : null}
                 </Card>
               ))}

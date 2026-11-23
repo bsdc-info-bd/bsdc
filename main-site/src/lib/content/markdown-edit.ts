@@ -138,6 +138,23 @@ export function insertImage(window: EditorWindow, url: string, alt = ''): Editor
   return select(next, caret, caret);
 }
 
+/**
+ * The addresses of the pictures a body already shows, in the order it shows them.
+ *
+ * The library marks a picture that is already in the text as taken, which is the
+ * markdown equivalent of a post's own images being unavailable to pick again. A link
+ * whose label is a picture (`[![alt](src)](href)`) contributes the picture's address
+ * and not the link's: the thing on screen is the image.
+ */
+export function imageUrls(markdown: string): string[] {
+  const urls: string[] = [];
+  for (const match of markdown.matchAll(/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?/g)) {
+    const url = match[1];
+    if (url !== undefined && !urls.includes(url)) urls.push(url);
+  }
+  return urls;
+}
+
 /** A fenced code block, with the selection as its body. */
 export function insertCodeBlock(window: EditorWindow, language = ''): EditorWindow {
   const { value } = window;

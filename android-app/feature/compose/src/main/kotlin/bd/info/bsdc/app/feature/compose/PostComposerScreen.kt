@@ -3,7 +3,6 @@ package bd.info.bsdc.app.feature.compose
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,13 +29,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Drafts
-import androidx.compose.material.icons.rounded.Edit
-import androidx.compose.material.icons.rounded.Preview
 import androidx.compose.material.icons.rounded.Publish
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,13 +46,11 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,9 +58,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.common.BanglaDigitFormatter
+import bd.info.bsdc.app.core.designsystem.BsdcAnimatedEntrance
 import bd.info.bsdc.app.core.designsystem.BsdcBadge
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcCard
@@ -71,15 +71,31 @@ import bd.info.bsdc.app.core.designsystem.BsdcStatusBanner
 import bd.info.bsdc.app.core.designsystem.BsdcThemeTokens
 import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.BsdcGalleryLogic
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.AppLanguage
+import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import bd.info.bsdc.app.core.model.MediaPurpose
 import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.feature.feed.BsdcCodeSnippetBlock
 import bd.info.bsdc.app.feature.feed.PostMarkdownRenderer
 import coil3.ImageLoader
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * How many pictures one post carries.
+ *
+ * Named because the number is the contract in five places — the system picker's own limit, the
+ * room left in the strip, the disabled state of both doors, and the room a library pick may use —
+ * and the label next to it prints the Bengali digit rather than the number, so nothing here can
+ * be found by a search for `6`.
+ */
+private const val MAX_POST_IMAGES = 6
 
 private val CodeLanguages = listOf(
     "kotlin", "java", "typescript", "javascript", "python", "sql", "bash", "go", "rust", "json",
@@ -94,6 +110,16 @@ fun PostComposerScreen(
     imageLoader: ImageLoader,
     language: AppLanguage,
     initialDraft: PostComposerDraft = PostComposerDraft(language = language),
+    /**
+     * Opens a fresh composer addressed to one group channel.
+     *
+     * Applied after the draft is seeded, not instead of it, because the two are not in conflict: a
+     * draft restored for editing may already live in a channel, and a caller's target only speaks for
+     * a *new* post. Marking it touched is deliberate — the member came from the channel, so the key
+     * belongs in the payload even though they never opened the picker.
+     */
+    initialChannelId: String? = null,
+    initialChannelName: String? = null,
     onPublished: (PublishedResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -111,7 +137,19 @@ fun PostComposerScreen(
         bodyField = TextFieldValue(edit.text, TextRange(edit.start, edit.end))
         draft = draft.copy(body = edit.text)
     }
-    var previewMode by remember { mutableStateOf(false) }
+    var mode by remember { mutableStateOf(MkComposerMode.WRITE) }
+
+    /**
+     * The rooms this member may post into.
+     *
+     * A failure here is not fatal and must not look like one: the feed needs no channel list, so a
+     * member who cannot load their channels can still publish — the row simply says the list could
+     * not be read, and the pickers stay closed. Nothing about the draft changes on a fetch failure.
+     */
+    var channels by remember { mutableStateOf<List<PostableChannel>>(emptyList()) }
+    var channelsUnavailable by remember { mutableStateOf(false) }
+    var showChannelSheet by remember { mutableStateOf(false) }
+    var showVisibilitySheet by remember { mutableStateOf(false) }
     var curatedTags by remember { mutableStateOf<List<CuratedTagItem>>(emptyList()) }
     var tagInput by remember { mutableStateOf("") }
     var publishing by remember { mutableStateOf(false) }
@@ -119,11 +157,16 @@ fun PostComposerScreen(
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var statusMsg by remember { mutableStateOf<String?>(null) }
     var showSavedDraftsSheet by remember { mutableStateOf(false) }
+    var showLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
 
     val savedLocalDrafts by composeRepository.observeLocalDrafts().collectAsState(initial = emptyList())
 
     LaunchedEffect(Unit) {
         curatedTags = composeRepository.fetchCuratedTags()
+        runCatching { composeRepository.fetchPostableChannels() }
+            .onSuccess { channels = it }
+            .onFailure { channelsUnavailable = true }
     }
 
     // Room offline draft auto-save every time user stops typing for 1.5s
@@ -191,11 +234,43 @@ fun PostComposerScreen(
         }
     }
 
+    /**
+     * Attach pictures the member already hosted, without uploading them.
+     *
+     * The row carries everything an attachment needs — the stored address, the thumbnail the host
+     * made, the caption written when it was first posted and, above all, the `media_assets` id — so
+     * `isReady` is true on arrival and the publish path sees an attachment that finished rather than
+     * one to be waited for. A tile whose address is already in the strip is dropped, and a pick that
+     * would not fit the six slots is not taken: the last picture that fitted is kept, in the order
+     * it was tapped.
+     */
+    fun attachPickedFromLibrary(picked: List<BsdcGalleryImage>) {
+        val next = BsdcGalleryLogic.mergeInto(
+            current = draft.media,
+            picked = picked,
+            room = BsdcGalleryLogic.roomFor(draft.media.size, MAX_POST_IMAGES),
+            urlOf = { it.url },
+            create = { image ->
+                ComposerMediaAttachment(
+                    localUri = null,
+                    mediaId = image.id,
+                    url = image.url,
+                    thumbUrl = image.thumbUrl.ifEmpty { image.url },
+                    altText = image.altText,
+                    progressPct = 100,
+                    stage = AttachmentUploadStage.READY,
+                )
+            },
+        )
+        if (next.size == draft.media.size) return
+        draft = draft.copy(media = next)
+    }
+
     val mediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(6),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_POST_IMAGES),
     ) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val remainingSlots = (6 - draft.media.size).coerceAtLeast(0)
+        val remainingSlots = (MAX_POST_IMAGES - draft.media.size).coerceAtLeast(0)
         val picked = uris.take(remainingSlots)
         val pending = picked.map { uri ->
             ComposerMediaAttachment(localUri = uri, stage = AttachmentUploadStage.UPLOADING)
@@ -205,6 +280,28 @@ fun PostComposerScreen(
             att.localUri?.let { uri -> uploadAttachment(att.localKey, uri) }
         }
     }
+
+    LaunchedEffect(initialChannelId, initialDraft.remotePostId) {
+        if (initialChannelId.isNullOrBlank() || initialDraft.remotePostId != null) return@LaunchedEffect
+        draft = draft.copy(
+            channelId = initialChannelId,
+            channelTouched = true,
+            // A channel cannot carry `private`, so the audience moves rather than the destination.
+            visibility = ChannelRules.reconcileVisibility(
+                ComposerVisibility.fromWire(draft.visibility),
+                initialChannelId,
+            ).wire,
+        )
+        if (!initialChannelName.isNullOrBlank()) {
+            statusMsg = if (bn) {
+                "পোস্টটি #$initialChannelName চ্যানেলে যাবে।"
+            } else {
+                "This post will go in #$initialChannelName."
+            }
+        }
+    }
+
+    val markdownReport = remember(draft.body) { MarkdownInspector.analyze(draft.body) }
 
     val detectedHashtags = remember(draft.body) {
         ComposerValidationEngine.extractHashtags(draft.body)
@@ -234,20 +331,11 @@ fun PostComposerScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(
-                        selected = !previewMode,
-                        onClick = { previewMode = false },
-                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null, Modifier.size(16.dp)) },
-                        label = { Text(if (bn) "লিখুন" else "Write") },
-                    )
-                    FilterChip(
-                        selected = previewMode,
-                        onClick = { previewMode = true },
-                        leadingIcon = { Icon(Icons.Rounded.Preview, contentDescription = null, Modifier.size(16.dp)) },
-                        label = { Text(if (bn) "প্রিভিউ" else "Preview") },
-                    )
-                }
+                MkComposerModeSwitch(
+                    mode = mode,
+                    onModeChange = { next -> mode = next },
+                    bn = bn,
+                )
                 if (savedLocalDrafts.isNotEmpty()) {
                     TextButton(onClick = { showSavedDraftsSheet = true }) {
                         Icon(Icons.Rounded.Drafts, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -309,27 +397,42 @@ fun PostComposerScreen(
             }
         }
 
-        if (previewMode) {
-            item("markdown_preview") {
-                BsdcCard {
-                    if (draft.title.isNotBlank()) {
-                        Text(draft.title, style = MaterialTheme.typography.headlineMedium)
-                    }
-                    if (draft.body.isNotBlank()) {
-                        PostMarkdownRenderer(markdown = draft.body)
-                    } else {
-                        Text(
-                            text = if (bn) "প্রিভিউ দেখতে কিছু লিখুন..." else "Write Markdown content to preview here...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.mutedText,
-                        )
-                    }
-                    if (draft.kind == PostKind.SNIPPET && draft.code.isNotBlank()) {
-                        BsdcCodeSnippetBlock(code = draft.code, language = draft.codeLanguage)
-                    }
+        item("audience") {
+            val selectedChannel = channels.firstOrNull { it.id == draft.channelId }
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                MkAudienceRow(
+                    channel = selectedChannel,
+                    hasChannel = draft.channelId != null,
+                    visibility = ComposerVisibility.fromWire(draft.visibility),
+                    bn = bn,
+                    onPickChannel = { showChannelSheet = true },
+                    onPickVisibility = { showVisibilitySheet = true },
+                )
+                if (channelsUnavailable) {
+                    Text(
+                        text = if (bn) {
+                            "চ্যানেলের তালিকা আনা যায়নি — পোস্টটি ফিডে যাবে।"
+                        } else {
+                            "Channels could not be loaded — this post will go to the feed."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.danger,
+                    )
+                } else if (draft.channelId != null && selectedChannel == null && channels.isNotEmpty()) {
+                    Text(
+                        text = if (bn) {
+                            "নির্বাচিত চ্যানেলটি এখন আর পাওয়া যাচ্ছে না — আবার বেছে নিন।"
+                        } else {
+                            "The chosen channel is no longer listed. Pick again before publishing."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = tokens.danger,
+                    )
                 }
             }
-        } else {
+        }
+
+        if (mode != MkComposerMode.PREVIEW) {
             item("title_body") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
@@ -531,6 +634,41 @@ fun PostComposerScreen(
             }
         }
 
+        if (mode != MkComposerMode.PREVIEW) {
+            item("editor_inspector") {
+                MkComposerInspector(
+                    report = markdownReport,
+                    bn = bn,
+                    onJumpToLine = { line ->
+                        val (from, to) = MarkdownInspector.lineRange(draft.body, line)
+                        bodyField = TextFieldValue(draft.body, TextRange(from, to))
+                    },
+                )
+            }
+        }
+
+        if (mode != MkComposerMode.WRITE) {
+            item("markdown_preview") {
+                // `key(mode)` re-enters the card on every mode change, so SPLIT ↔ PREVIEW animates as
+                // well as the first move into preview. The editor above is deliberately *not* animated
+                // the same way: it would replay its entrance while the member is mid-thought, and a
+                // text field that fades in under the cursor feels broken rather than designed.
+                key(mode) {
+                    BsdcAnimatedEntrance {
+                        MkComposerPreviewCard(
+                            title = draft.title,
+                            body = draft.body,
+                            code = draft.code,
+                            codeLanguage = draft.codeLanguage,
+                            showCode = draft.kind == PostKind.SNIPPET && draft.code.isNotBlank(),
+                            split = mode == MkComposerMode.SPLIT,
+                            bn = bn,
+                        )
+                    }
+                }
+            }
+        }
+
         // ImgBB Gallery Attachment Block
         item("media_block") {
             BsdcCard {
@@ -543,16 +681,44 @@ fun PostComposerScreen(
                         text = if (bn) "ImgBB ছবি সংযুক্তি (${draft.media.size}/৬)" else "ImgBB Images (${draft.media.size}/6)",
                         style = MaterialTheme.typography.titleMedium,
                     )
-                    BsdcButton(
-                        label = if (bn) "ছবি যোগ করুন" else "Add Photos",
-                        onClick = {
-                            mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        },
-                        enabled = draft.media.size < 6,
-                        secondary = true,
-                        leadingIcon = Icons.Rounded.AddPhotoAlternate,
-                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        BsdcButton(
+                            label = if (bn) "ছবি যোগ করুন" else "Add Photos",
+                            onClick = {
+                                mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                            },
+                            enabled = draft.media.size < MAX_POST_IMAGES,
+                            secondary = true,
+                            leadingIcon = Icons.Rounded.AddPhotoAlternate,
+                        )
+                        // The other door to the same six slots, and the reason a member
+                        // does not save a photo to their own phone to attach it to their
+                        // own post: the shelf holds what they already uploaded, with the
+                        // caption they gave it.
+                        BsdcButton(
+                            label = library.open,
+                            onClick = { showLibrary = true },
+                            enabled = draft.media.size < MAX_POST_IMAGES,
+                            secondary = true,
+                            leadingIcon = Icons.Rounded.Image,
+                        )
+                    }
                 }
+
+                BsdcGalleryPickerSheet(
+                    visible = showLibrary,
+                    repository = mediaRepository,
+                    imageLoader = imageLoader,
+                    bn = bn,
+                    max = (MAX_POST_IMAGES - draft.media.size).coerceAtLeast(1),
+                    attached = draft.media.map { it.url },
+                    initialFilter = GalleryFilter.POST_IMAGE,
+                    onDismiss = { showLibrary = false },
+                    onPicked = { picked ->
+                        attachPickedFromLibrary(picked)
+                        showLibrary = false
+                    },
+                )
 
                 if (draft.media.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -827,6 +993,38 @@ fun PostComposerScreen(
         }
     }
 
+    MkChannelPickerSheet(
+        visible = showChannelSheet,
+        channels = channels,
+        selectedChannelId = draft.channelId,
+        visibility = ComposerVisibility.fromWire(draft.visibility),
+        bn = bn,
+        onDismiss = { showChannelSheet = false },
+        onPick = { pickedChannelId ->
+            val current = ComposerVisibility.fromWire(draft.visibility)
+            val nextVisibility = ChannelRules.reconcileVisibility(current, pickedChannelId)
+            draft = draft.copy(
+                channelId = pickedChannelId,
+                channelTouched = true,
+                visibility = nextVisibility.wire,
+            )
+            val name = channels.firstOrNull { it.id == pickedChannelId }?.let { channel ->
+                "#${channel.slug}"
+            } ?: (if (bn) "ফিড" else "the feed")
+            statusMsg = if (bn) "পোস্টটি $name-এ যাবে।" else "This post will go to $name."
+        },
+    )
+    MkVisibilityPickerSheet(
+        visible = showVisibilitySheet,
+        visibility = ComposerVisibility.fromWire(draft.visibility),
+        channelId = draft.channelId,
+        bn = bn,
+        onDismiss = { showVisibilitySheet = false },
+        onPick = { picked ->
+            draft = draft.copy(visibility = picked.wire)
+        },
+    )
+
     if (showSavedDraftsSheet) {
         ModalBottomSheet(onDismissRequest = { showSavedDraftsSheet = false }) {
             Column(
@@ -875,6 +1073,59 @@ fun PostComposerScreen(
                     }
                 }
                 Spacer(Modifier.height(20.dp))
+            }
+        }
+    }
+}
+
+/**
+ * The rendered post, exactly as a reader will see it.
+ *
+ * It is the reader's own renderer (`PostMarkdownRenderer`), not a second implementation for the
+ * composer: the moment a preview and the real post parse Markdown differently, the preview becomes
+ * the thing members blame when the post looks wrong.
+ */
+@Composable
+private fun MkComposerPreviewCard(
+    title: String,
+    body: String,
+    code: String,
+    codeLanguage: String,
+    showCode: Boolean,
+    split: Boolean,
+    bn: Boolean,
+) {
+    val tokens = BsdcThemeTokens.colors
+    BsdcCard(
+        modifier = Modifier.then(
+            if (split) {
+                // In split mode the preview is a proof, not the page: it is framed as the card the
+                // reader will see, sized down, so the two panes read as one screen rather than two.
+                Modifier.padding(top = 2.dp)
+            } else {
+                Modifier
+            },
+        ),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (title.isNotBlank()) {
+                Text(title, style = MaterialTheme.typography.headlineMedium)
+            }
+            if (body.isNotBlank()) {
+                PostMarkdownRenderer(markdown = body)
+            } else {
+                Text(
+                    text = if (bn) {
+                        "প্রিভিউ দেখতে কিছু লিখুন…"
+                    } else {
+                        "Write Markdown content to preview here…"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = tokens.mutedText,
+                )
+            }
+            if (showCode) {
+                BsdcCodeSnippetBlock(code = code, language = codeLanguage)
             }
         }
     }
