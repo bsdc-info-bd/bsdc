@@ -35,13 +35,24 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.BsdcGalleryLogic
 import bd.info.bsdc.app.core.media.GalleryCopy
 import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.AppLanguage
 import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import bd.info.bsdc.app.core.model.MediaPurpose
 import coil3.ImageLoader
+
 import kotlinx.coroutines.launch
+
+/**
+ * How many screenshots one project may show.
+ *
+ * The web's wizard caps the same strip at eight, and the number is the contract in four places
+ * here: the system picker's limit, the room left for a library pick, both doors' disabled state
+ * and the count in the button's label.
+ */
+private const val MAX_PROJECT_SHOTS = 8
 
 /**
  * The project screen, on its own.
@@ -87,12 +98,12 @@ fun MkCreateProjectScreen(
      * and a shot whose address the project already has is dropped rather than doubled.
      */
     fun attachPickedShots(picked: List<BsdcGalleryImage>) {
-        val room = (8 - screenshots.size).coerceAtLeast(0)
-        if (room <= 0) return
-        val added = picked
-            .filter { image -> screenshots.none { shot -> shot.url == image.url } }
-            .take(room)
-            .map { image ->
+        val next = BsdcGalleryLogic.mergeInto(
+            current = screenshots,
+            picked = picked,
+            room = BsdcGalleryLogic.roomFor(screenshots.size, MAX_PROJECT_SHOTS),
+            urlOf = { it.url },
+            create = { image ->
                 ComposerMediaAttachment(
                     localUri = null,
                     mediaId = image.id,
@@ -102,9 +113,10 @@ fun MkCreateProjectScreen(
                     progressPct = 100,
                     stage = AttachmentUploadStage.READY,
                 )
-            }
-        if (added.isEmpty()) return
-        screenshots = screenshots + added
+            },
+        )
+        if (next.size == screenshots.size) return
+        screenshots = next
     }
 
     val coverPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -118,9 +130,9 @@ fun MkCreateProjectScreen(
         }
     }
 
-    val shotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(8)) { uris ->
+    val shotPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(MAX_PROJECT_SHOTS)) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val pending = uris.take(8 - screenshots.size).map {
+        val pending = uris.take(MAX_PROJECT_SHOTS - screenshots.size).map {
             ComposerMediaAttachment(localUri = it, stage = AttachmentUploadStage.UPLOADING)
         }
         screenshots = screenshots + pending
@@ -187,9 +199,9 @@ fun MkCreateProjectScreen(
                         modifier = Modifier.weight(1f),
                     )
                     BsdcButton(
-                        label = "Screenshots (${screenshots.size}/8)",
+                        label = "Screenshots (${screenshots.size}/$MAX_PROJECT_SHOTS)",
                         secondary = true,
-                        enabled = screenshots.size < 8,
+                        enabled = screenshots.size < MAX_PROJECT_SHOTS,
                         onClick = { shotPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                         modifier = Modifier.weight(1f),
                     )
@@ -213,7 +225,7 @@ fun MkCreateProjectScreen(
                     BsdcButton(
                         label = library.open,
                         secondary = true,
-                        enabled = screenshots.size < 8,
+                        enabled = screenshots.size < MAX_PROJECT_SHOTS,
                         onClick = { showShotLibrary = true },
                         modifier = Modifier.weight(1f),
                         leadingIcon = Icons.Rounded.Image,
@@ -241,7 +253,7 @@ fun MkCreateProjectScreen(
                     repository = mediaRepository,
                     imageLoader = imageLoader,
                     bn = bn,
-                    max = (8 - screenshots.size).coerceAtLeast(1),
+                    max = (MAX_PROJECT_SHOTS - screenshots.size).coerceAtLeast(1),
                     attached = screenshots.map { it.url },
                     initialFilter = GalleryFilter.PROJECT_IMAGE,
                     onDismiss = { showShotLibrary = false },

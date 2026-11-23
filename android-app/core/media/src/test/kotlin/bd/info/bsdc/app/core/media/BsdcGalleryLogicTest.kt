@@ -1,6 +1,7 @@
 package bd.info.bsdc.app.core.media
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertSame
 import bd.info.bsdc.app.core.model.BsdcGalleryImage
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -321,5 +322,83 @@ class BsdcGalleryLogicTest {
             dir = dir?.parentFile
         }
         error("could not find " + parts.joinToString("/") + " above " + System.getProperty("user.dir"))
+    }
+
+    @Test
+    fun aSurfaceMergesPicksInOrderAndStopsAtItsRoom() {
+        // A strip's slot, narrowed to the two things the rule cares about: the address it
+        // shows and the label the surface would print for it.
+        val picked = listOf(
+            image("p1", "https://cdn/a.png", "2026-03-04T09:12:00Z"),
+            image("p2", "https://cdn/b.png", "2026-03-04T09:10:00Z"),
+            image("p3", "https://cdn/c.png", "2026-03-04T09:09:00Z"),
+        )
+        val current = listOf("kept" to "https://cdn/a.png")
+
+        val merged = BsdcGalleryLogic.mergeInto(
+            current = current,
+            picked = picked,
+            room = 2,
+            urlOf = { slot -> slot.second },
+            create = { image -> image.id to image.url },
+        )
+
+        // The first pick is the picture the draft already shows, so it is not added twice; the
+        // two that fit arrive in the order they were tapped; the third is refused because the
+        // surface has no room left, not because it was disliked.
+        assertEquals(
+            listOf(
+                "kept" to "https://cdn/a.png",
+                "p2" to "https://cdn/b.png",
+                "p3" to "https://cdn/c.png",
+            ),
+            merged,
+        )
+    }
+
+    @Test
+    fun aMergeRefusesToDisplaceWhatTheDraftAlreadyShows() {
+        val picked = listOf(
+            image("p1", "https://cdn/a.png", "2026-03-04T09:12:00Z"),
+            image("p2", "https://cdn/b.png", "2026-03-04T09:11:00Z"),
+        )
+        val current = listOf("https://cdn/old.png")
+
+        // Room of nothing means nothing arrives — the picture on the surface stays, rather
+        // than the oldest one being pushed out to make space for the newest tap.
+        assertEquals(current, BsdcGalleryLogic.mergeInto(current, picked, 0, { it }, { it.url }))
+        assertEquals(
+            listOf("https://cdn/old.png", "https://cdn/a.png"),
+            BsdcGalleryLogic.mergeInto(current, picked, 1, { it }, { it.url }),
+        )
+    }
+
+    @Test
+    fun aMergeComparesAddressesRatherThanStrings() {
+        val picked = listOf(
+            image("p1", "https://cdn/a", "2026-03-04T09:12:00Z"),
+            image("p2", "https://cdn/b/", "2026-03-04T09:11:00Z"),
+        )
+        val current = listOf("https://cdn/a/", "http://cdn/b")
+
+        // Two spellings of one picture, on both sides at once. And the answer is the very list
+        // the surface was given, not a copy with equal contents, so a caller can compare sizes to
+        // learn whether anything arrived.
+        assertSame(current, BsdcGalleryLogic.mergeInto(current, picked, 2, { it }, { it.url }))
+    }
+
+    @Test
+    fun aMergeWillNotAddAPictureWithoutAnAddress() {
+        val picked = listOf(
+            image("p1", "", "2026-03-04T09:12:00Z"),
+            image("p2", "  ", "2026-03-04T09:11:00Z"),
+        )
+
+        // A blank is never a duplicate of a blank, so this guard is the only thing keeping an
+        // empty row out of a strip that is still filling in.
+        assertEquals(
+            listOf("https://cdn/x.png"),
+            BsdcGalleryLogic.mergeInto(listOf("https://cdn/x.png"), picked, 2, { it }, { it.url }),
+        )
     }
 }

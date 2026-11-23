@@ -175,6 +175,40 @@ object BsdcGalleryLogic {
     }
 
     /**
+     * A surface's own merge rule: what the member chose, minus what the draft already
+     * carries, cut to the room the draft has left, in the order the tiles were tapped.
+     *
+     * Every door that accepts more than one picture needs this exact fold, and each one
+     * used to write it inline — which is how a surface ends up replacing a visible
+     * selection at the limit, or accepting the same address twice because the draft holds
+     * `https://x/y` while the library answers `https://x/y/`. Both sides are compared as
+     * addresses, with [urlOf] telling this file how the surface stores them.
+     */
+    fun <T> mergeInto(
+        current: List<T>,
+        picked: List<BsdcGalleryImage>,
+        room: Int,
+        urlOf: (T) -> String,
+        create: (BsdcGalleryImage) -> T,
+    ): List<T> {
+        if (room <= 0) return current
+        val held = HashSet<String>(current.size + picked.size).apply {
+            current.forEach { add(normaliseMediaUrl(urlOf(it))) }
+        }
+        val added = ArrayList<T>()
+        picked.forEach { image ->
+            if (added.size >= room) return@forEach
+            val key = normaliseMediaUrl(image.url)
+            // An address of nothing never matches anything, so it cannot be a duplicate —
+            // but it is not a picture either, and a slot holding one is a broken row.
+            if (key.isEmpty() || !held.add(key)) return@forEach
+            added.add(create(image))
+        }
+        if (added.isEmpty()) return current
+        return current + added
+    }
+
+    /**
      * Tiles grouped by the day they were uploaded, newest day first.
      *
      * A date above each run is the difference between a wall of thumbnails and a library. Runs are

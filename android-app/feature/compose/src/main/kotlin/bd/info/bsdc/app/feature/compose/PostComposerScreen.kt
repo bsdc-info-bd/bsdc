@@ -73,6 +73,7 @@ import bd.info.bsdc.app.core.designsystem.BsdcTone
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.BsdcGalleryLogic
 import bd.info.bsdc.app.core.media.GalleryCopy
 import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.AppLanguage
@@ -82,8 +83,19 @@ import bd.info.bsdc.app.core.model.PostKind
 import bd.info.bsdc.app.feature.feed.BsdcCodeSnippetBlock
 import bd.info.bsdc.app.feature.feed.PostMarkdownRenderer
 import coil3.ImageLoader
+
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+/**
+ * How many pictures one post carries.
+ *
+ * Named because the number is the contract in five places — the system picker's own limit, the
+ * room left in the strip, the disabled state of both doors, and the room a library pick may use —
+ * and the label next to it prints the Bengali digit rather than the number, so nothing here can
+ * be found by a search for `6`.
+ */
+private const val MAX_POST_IMAGES = 6
 
 private val CodeLanguages = listOf(
     "kotlin", "java", "typescript", "javascript", "python", "sql", "bash", "go", "rust", "json",
@@ -233,12 +245,12 @@ fun PostComposerScreen(
      * it was tapped.
      */
     fun attachPickedFromLibrary(picked: List<BsdcGalleryImage>) {
-        val remainingSlots = (6 - draft.media.size).coerceAtLeast(0)
-        if (remainingSlots <= 0) return
-        val added = picked
-            .filter { image -> draft.media.none { attached -> attached.url == image.url } }
-            .take(remainingSlots)
-            .map { image ->
+        val next = BsdcGalleryLogic.mergeInto(
+            current = draft.media,
+            picked = picked,
+            room = BsdcGalleryLogic.roomFor(draft.media.size, MAX_POST_IMAGES),
+            urlOf = { it.url },
+            create = { image ->
                 ComposerMediaAttachment(
                     localUri = null,
                     mediaId = image.id,
@@ -248,16 +260,17 @@ fun PostComposerScreen(
                     progressPct = 100,
                     stage = AttachmentUploadStage.READY,
                 )
-            }
-        if (added.isEmpty()) return
-        draft = draft.copy(media = draft.media + added)
+            },
+        )
+        if (next.size == draft.media.size) return
+        draft = draft.copy(media = next)
     }
 
     val mediaPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickMultipleVisualMedia(6),
+        contract = ActivityResultContracts.PickMultipleVisualMedia(MAX_POST_IMAGES),
     ) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val remainingSlots = (6 - draft.media.size).coerceAtLeast(0)
+        val remainingSlots = (MAX_POST_IMAGES - draft.media.size).coerceAtLeast(0)
         val picked = uris.take(remainingSlots)
         val pending = picked.map { uri ->
             ComposerMediaAttachment(localUri = uri, stage = AttachmentUploadStage.UPLOADING)
@@ -674,7 +687,7 @@ fun PostComposerScreen(
                             onClick = {
                                 mediaPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
                             },
-                            enabled = draft.media.size < 6,
+                            enabled = draft.media.size < MAX_POST_IMAGES,
                             secondary = true,
                             leadingIcon = Icons.Rounded.AddPhotoAlternate,
                         )
@@ -685,7 +698,7 @@ fun PostComposerScreen(
                         BsdcButton(
                             label = library.open,
                             onClick = { showLibrary = true },
-                            enabled = draft.media.size < 6,
+                            enabled = draft.media.size < MAX_POST_IMAGES,
                             secondary = true,
                             leadingIcon = Icons.Rounded.Image,
                         )
@@ -697,7 +710,7 @@ fun PostComposerScreen(
                     repository = mediaRepository,
                     imageLoader = imageLoader,
                     bn = bn,
-                    max = (6 - draft.media.size).coerceAtLeast(1),
+                    max = (MAX_POST_IMAGES - draft.media.size).coerceAtLeast(1),
                     attached = draft.media.map { it.url },
                     initialFilter = GalleryFilter.POST_IMAGE,
                     onDismiss = { showLibrary = false },
