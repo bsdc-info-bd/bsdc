@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { CoverPicker, type CoverPickerLabels } from './CoverPicker';
+import type { GalleryPickerDialogProps } from './GalleryPickerDialog';
+import type { PickedMedia } from '@/lib/media/gallery';
 import type * as I18nModule from 'react-i18next';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -12,6 +14,43 @@ vi.mock('react-i18next', async (importOriginal) => {
     useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
   };
 });
+
+/**
+ * The library dialog, seen from the field that opens it.
+ *
+ * The cover control owns the picker's two settings that matter to a member — what a
+ * reused picture is filed as, and which address the field already holds — and both are
+ * invisible from the outside except through what the dialog is given.
+ */
+const dialogProps: { current: GalleryPickerDialogProps | null } = { current: null };
+
+vi.mock('./GalleryPickerDialog', () => ({
+  GalleryPickerDialog: (props: GalleryPickerDialogProps) => {
+    dialogProps.current = props;
+    return (
+      <div role="dialog" aria-label="library stub">
+        <button
+          type="button"
+          onClick={() =>
+            props.onPick([
+              {
+                mediaId: 'asset-old',
+                url: 'https://i.ibb.co/old/old.webp',
+                thumbUrl: 'https://i.ibb.co/old/old-thumb.webp',
+                width: 1200,
+                height: 800,
+                altText: 'The old cover',
+                purpose: 'cover',
+              } satisfies PickedMedia,
+            ])
+          }
+        >
+          pick it
+        </button>
+      </div>
+    );
+  },
+}));
 
 const labels: CoverPickerLabels = {
   title: 'Cover image',
@@ -182,5 +221,61 @@ describe('the cover control a project and an event share', () => {
     // middle of the form.
     expect(screen.queryByRole('heading', { name: labels.title })).not.toBeInTheDocument();
     expect(screen.getByText(labels.title)).toBeInTheDocument();
+  });
+});
+
+describe('the other door on a cover field', () => {
+  it('offers the library only to a surface that can hold what it returns', () => {
+    open();
+    // No `onPickFromLibrary`, no button: a cover field that was never given a way to
+    // store a pick must not offer one, and must not lose a picture on the floor.
+    expect(screen.queryByRole('button', { name: 'media.gallery.open' })).not.toBeInTheDocument();
+
+    open({ onPickFromLibrary: () => undefined });
+    expect(screen.getByRole('button', { name: 'media.gallery.open' })).toBeInTheDocument();
+  });
+
+  it('files a reused cover where a new one would have been filed', async () => {
+    // A project's cover and an event's cover are different shelves of the same
+    // library, and the field is the only thing that knows which one it is. The dialog
+    // gets the purpose the surface would have uploaded under — so "covers" in the
+    // library finds both, and neither is filed as somebody else's picture.
+    open({ onPickFromLibrary: () => undefined, libraryPurpose: 'project-cover' });
+    fireEvent.click(screen.getByRole('button', { name: 'media.gallery.open' }));
+    await waitFor(() => expect(dialogProps.current).not.toBeNull());
+
+    expect(dialogProps.current).toMatchObject({
+      purpose: 'project-cover',
+      max: 1,
+      onDevice: undefined,
+    });
+  });
+
+  it('hands the picked picture to the field, whole', async () => {
+    const onPickFromLibrary = vi.fn<(picked: PickedMedia) => void>();
+    open({ onPickFromLibrary });
+    fireEvent.click(screen.getByRole('button', { name: 'media.gallery.open' }));
+    await waitFor(() => expect(dialogProps.current).not.toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick it' }));
+    expect(onPickFromLibrary).toHaveBeenCalledTimes(1);
+    expect(onPickFromLibrary.mock.calls[0]?.[0]).toMatchObject({
+      mediaId: 'asset-old',
+      url: 'https://i.ibb.co/old/old.webp',
+      altText: 'The old cover',
+    });
+  });
+
+  it('tells the library which cover is already hanging there', async () => {
+    open({
+      previewUrl: 'https://i.ibb.co/now/now.webp',
+      onPickFromLibrary: () => undefined,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'media.gallery.open' }));
+    await waitFor(() => expect(dialogProps.current).not.toBeNull());
+
+    // Marked, not hidden: a member who came here to replace a cover still needs to
+    // see which of their pictures is the one being replaced.
+    expect(dialogProps.current?.attached).toEqual(['https://i.ibb.co/now/now.webp']);
   });
 });

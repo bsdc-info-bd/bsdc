@@ -40,6 +40,7 @@ import {
 } from '@/lib/channels/channel-seed';
 import { ImageEditorDialog } from '@/components/media/ImageEditorDialog';
 import { MediaGallery } from '@/components/media/MediaGallery';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import { MediaTray } from '@/components/media/MediaTray';
 import { useFileDrop } from '@/components/media/use-file-drop';
 import { useAttachments, type Attachment } from '@/components/media/use-attachments';
@@ -62,6 +63,7 @@ import {
 } from '@/lib/content/content-types';
 import { clearLocalDraft, loadLocalDraft } from '@/lib/content/draft-storage';
 import { classifyComposeSaveError } from '@/lib/content/compose-errors';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { extractHashtags, normalizeTag } from '@/lib/content/text';
 import { isConfigured } from '@/lib/env';
 import { ROUTES } from '@/lib/site';
@@ -340,6 +342,21 @@ export default function ComposePage() {
     return result.url;
   }
 
+  /**
+   * Give the post a cover out of the member's own library.
+   *
+   * No bytes move. The address the picker hands over is one this platform wrote, and
+   * `posts.cover_url` is one of the arms `bsdc.media_references` reads, so the post
+   * keeps that picture for as long as it is published. The asset is deliberately not
+   * re-filed as a cover: `record_media_asset` writes the whole row, and a reuse has no
+   * new upload to report — inventing `bytes = 0` would overwrite the truth about a
+   * picture that is already stored. A cover picked from the library is therefore found
+   * again tomorrow under the heading it was first uploaded for.
+   */
+  function pickCover(picked: PickedMedia) {
+    update('coverUrl', picked.url);
+  }
+
   const coverCandidates = attachments.attachments
     .map((item) => ({
       url: item.url.length > 0 ? item.url : item.previewUrl,
@@ -450,6 +467,7 @@ export default function ComposePage() {
         value={draft.coverUrl}
         onChange={(url) => update('coverUrl', url)}
         candidates={coverCandidates}
+        onPick={pickCover}
         disabled={busy}
       />
 
@@ -476,6 +494,21 @@ export default function ComposePage() {
           >
             {t('compose.addMedia')}
           </Button>
+          {/* The other half of attaching a picture: everything this member has ever
+              uploaded, picked instead of sent again. A pick skips the upload
+              entirely — `attachPicked` files the attachment as already attached,
+              with the asset id the post needs — which is why it costs nothing
+              against the member's quota and leaves one copy at the host. */}
+          <MediaSourcePicker
+            purpose="post-image"
+            showUpload={false}
+            multiple
+            max={attachments.room}
+            attached={attachments.attachments.map((item) => item.url)}
+            disabled={!attachments.canAdd || user === null}
+            onFiles={(files) => attachments.add(files)}
+            onPick={(picked) => attachments.attachPicked(picked)}
+          />
           <span className="text-2xs text-muted">
             {t('compose.mediaHint', { count: MEDIA_MAX })}
           </span>

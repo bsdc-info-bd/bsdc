@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CommentForm } from '@/components/interactions/CommentForm';
 import { CommentThread } from '@/components/interactions/CommentThread';
 import type { CommentImage, CommentNode } from '@/lib/interactions/interaction-types';
+import type { GalleryPickerDialogProps } from '@/components/media/GalleryPickerDialog';
+import type { PickedMedia } from '@/lib/media/gallery';
 
 /**
  * A comment can carry a picture (0120). The two halves that can silently break
@@ -51,6 +53,37 @@ const recordMediaAsset = vi.fn<(uid: string, result: unknown) => Promise<unknown
 vi.mock('@/lib/data/media-repository', () => ({
   recordMediaAsset: (uid: string, result: unknown) => recordMediaAsset(uid, result),
 }));
+
+const dialogProps: { current: GalleryPickerDialogProps | null } = { current: null };
+
+/**
+ * The library the comment box opens, seen from outside it.
+ *
+ * A comment takes one picture, so the whole of what a pick has to get right fits in
+ * two props: what the dialog is asked to show, and what comes back out of it.
+ */
+vi.mock('@/components/media/GalleryPickerDialog', () => ({
+  GalleryPickerDialog: (props: GalleryPickerDialogProps) => {
+    dialogProps.current = props;
+    return (
+      <div role="dialog" aria-label="library stub">
+        <button type="button" onClick={() => props.onPick([PICKED])}>
+          pick it
+        </button>
+      </div>
+    );
+  },
+}));
+
+const PICKED: PickedMedia = {
+  mediaId: 'asset-old',
+  url: 'https://i.ibb.co/old/crack.webp',
+  thumbUrl: 'https://i.ibb.co/old/crack-medium.webp',
+  width: 900,
+  height: 1200,
+  altText: 'The crack runs down the left side of the screen',
+  purpose: 'comment-image',
+};
 
 const threadState = vi.hoisted(() => ({ current: null as unknown }));
 
@@ -187,6 +220,71 @@ describe('attaching a picture to a comment', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Post comment' })).toBeDisabled();
+  });
+
+  it('attaches a picture from the library without uploading or recording it', async () => {
+    // Typed, so what the form hands back is checked as the shape the repository takes
+    // rather than read off an `any`.
+    const onSubmit = vi.fn<(body: string, image: CommentImage | null) => Promise<void>>();
+    onSubmit.mockResolvedValue(undefined);
+    render(
+      <CommentForm
+        allowImage
+        placeholder="Add to the discussion"
+        submitLabel="Post comment"
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'From your gallery' }));
+    await screen.findByRole('dialog', { name: 'library stub' });
+    // One picture per comment, and the filing a fresh upload here would have used —
+    // which is what puts this picture back in the "comments" shelf afterwards.
+    expect(dialogProps.current).toMatchObject({ purpose: 'comment-image', max: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'pick it' }));
+
+    // The description the member wrote for this picture once comes with it: a box that
+    // asked again is a box that gets left empty.
+    const description = await screen.findByLabelText('What is in the picture?');
+    expect((description as HTMLTextAreaElement).value).toBe(PICKED.altText);
+    expect(uploadMedia).not.toHaveBeenCalled();
+    expect(recordMediaAsset).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Post comment' }));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit).toHaveBeenCalledWith('', {
+      url: PICKED.url,
+      thumbUrl: PICKED.thumbUrl,
+      alt: PICKED.altText,
+      width: 900,
+      height: 1200,
+    });
+  });
+
+  it('keeps a description the member changes after a pick', async () => {
+    const onSubmit = vi.fn<(body: string, image: CommentImage | null) => Promise<void>>();
+    onSubmit.mockResolvedValue(undefined);
+    render(
+      <CommentForm
+        allowImage
+        placeholder="Add to the discussion"
+        submitLabel="Post comment"
+        onSubmit={onSubmit}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'From your gallery' }));
+    await screen.findByRole('dialog', { name: 'library stub' });
+    fireEvent.click(screen.getByRole('button', { name: 'pick it' }));
+
+    const description = await screen.findByLabelText('What is in the picture?');
+    fireEvent.change(description, { target: { value: 'Now with a second crack' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Post comment' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // Carried across, then overwritten by what the member says here: the old words are
+    // a starting point and not a lock on what this comment means.
+    expect(onSubmit.mock.calls[0]?.[1]?.alt).toBe('Now with a second crack');
   });
 
   it('does not offer a picture where editing words only', () => {

@@ -1,5 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { MediaImage } from '@/components/media/MediaImage';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { ImagePlus, Pencil, Plus, Tag, X } from 'lucide-react';
 import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -88,8 +90,49 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
     }
   }
 
-  async function uploadImages(files: FileList | null): Promise<void> {
-    if (!files || files.length === 0 || editing === null) return;
+  /**
+   * Put pictures at the end of this product's images, with their thumbnails.
+   *
+   * Both doors a seller can bring a picture through end here, which is the point: one
+   * rule for how many a product can carry, one rule for the ~640px copy the grid
+   * should load, and neither door can leave a variant describing a picture the product
+   * no longer has.
+   */
+  function addImages(added: readonly { url: string; thumbUrl: string }[]): void {
+    setEditing((current) => {
+      if (current === null) return current;
+      const variants: Record<string, string> = { ...(current.draft.image_variants ?? {}) };
+      for (const item of added) {
+        if (item.thumbUrl.length > 0 && item.thumbUrl !== item.url) {
+          variants[item.url] = item.thumbUrl;
+        }
+      }
+      const images = [...new Set([...current.draft.images, ...added.map((item) => item.url)])];
+      const kept = images.slice(0, 8);
+      // Drop variants for pictures that the slice just removed, so the stored map
+      // cannot grow past the images it describes.
+      for (const url of Object.keys(variants)) {
+        if (!kept.includes(url)) delete variants[url];
+      }
+      return { ...current, draft: { ...current.draft, images: kept, image_variants: variants } };
+    });
+  }
+
+  /**
+   * List a picture the seller has already uploaded, instead of uploading it again.
+   *
+   * `mk_products.images` holds addresses, and the address the library hands over is
+   * the one this platform wrote when that photo first went up — the same string an
+   * upload of the same file would have produced, minus the upload, the quota and the
+   * second copy on the host. It is also why no description is asked for here: a
+   * picture keeps whatever the seller already said about it.
+   */
+  function pickImages(picked: readonly PickedMedia[]): void {
+    addImages(picked.map((item) => ({ url: item.url, thumbUrl: item.thumbUrl })));
+  }
+
+  async function uploadImages(files: readonly File[]): Promise<void> {
+    if (files.length === 0 || editing === null) return;
     setUploading(true);
     try {
       // Uploading is only half of it: the row that says who uploaded the picture
@@ -97,27 +140,14 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
       // forgets silently. See `upload-and-record`.
       const { uploadAndRecord } = await import('@/lib/storage/upload-and-record');
       const ownerUid = useAuthStore.getState().user?.uid ?? '';
-      const added: string[] = [];
-      const variants: Record<string, string> = { ...(editing.draft.image_variants ?? {}) };
-      for (const file of Array.from(files)) {
+      const added: { url: string; thumbUrl: string }[] = [];
+      for (const file of files) {
         const result = await uploadAndRecord(file, { purpose: 'product-image' }, ownerUid);
-        added.push(result.url);
         // The upload already produced a ~640px copy; discarding it here is what
         // made every catalogue thumbnail download the full-size original.
-        if (result.thumbUrl.length > 0 && result.thumbUrl !== result.url) {
-          variants[result.url] = result.thumbUrl;
-        }
+        added.push({ url: result.url, thumbUrl: result.thumbUrl });
       }
-      const images = [...new Set([...editing.draft.images, ...added])].slice(0, 8);
-      // Drop variants for pictures that the slice just removed, so the stored map
-      // cannot grow past the images it describes.
-      for (const url of Object.keys(variants)) {
-        if (!images.includes(url)) delete variants[url];
-      }
-      setEditing({
-        ...editing,
-        draft: { ...editing.draft, images, image_variants: variants },
-      });
+      addImages(added);
     } catch {
       toast.error(copy.errorGeneric);
     } finally {
@@ -349,12 +379,26 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
               />
             </div>
             <div>
-              <label
-                htmlFor={fileInputId}
-                className="mb-2 inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-sm hover:bg-surface-2"
-              >
-                <ImagePlus size={16} aria-hidden /> {uploading ? copy.loading : copy.addProduct}
-              </label>
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <label
+                  htmlFor={fileInputId}
+                  className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-dashed border-border px-3 py-2 text-sm hover:bg-surface-2"
+                >
+                  <ImagePlus size={16} aria-hidden />
+                  {uploading ? copy.loading : copy.addProduct}
+                </label>
+                <MediaSourcePicker
+                  purpose="product-image"
+                  showUpload={false}
+                  compact
+                  multiple
+                  max={Math.max(0, 8 - editing.draft.images.length)}
+                  attached={editing.draft.images}
+                  disabled={uploading}
+                  onFiles={(files) => void uploadImages(files)}
+                  onPick={pickImages}
+                />
+              </div>
               <input
                 ref={fileRef}
                 id={fileInputId}
@@ -362,7 +406,7 @@ export function CatalogPanel({ copy, language, enabled }: Props) {
                 accept="image/*"
                 multiple
                 className="sr-only"
-                onChange={(e) => void uploadImages(e.target.files)}
+                onChange={(e) => void uploadImages(Array.from(e.target.files ?? []))}
               />
               <div className="flex flex-wrap gap-2">
                 {editing.draft.images.map((url) => (

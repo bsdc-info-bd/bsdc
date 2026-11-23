@@ -258,7 +258,14 @@ export default function ProjectEditPage() {
               coverPreviewUrl={coverPreview}
               coverUploadProgress={cover.progress}
               onCoverFileChange={(file) => cover.choose(file)}
-              onCoverRemoveExisting={() => setDraft((current) => ({ ...current, coverUrl: '' }))}
+              onCoverPickFromLibrary={(picked) => cover.pick(picked)}
+              // Clearing the cover has to clear what the field itself is holding, or a
+              // cover picked from the library would still be sent on save by
+              // `cover.ensureUploaded`, behind the author's back.
+              onCoverRemoveExisting={() => {
+                cover.choose(null);
+                setDraft((current) => ({ ...current, coverUrl: '' }));
+              }}
               errorFor={errorFor}
               screenshots={screenshots}
             />

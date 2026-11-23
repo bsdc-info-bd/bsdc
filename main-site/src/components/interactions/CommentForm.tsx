@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Button, ProgressBar, TextField, TextareaField } from '@/design-system';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
 import type { CommentImage } from '@/lib/interactions/interaction-types';
 import { cn } from '@/lib/cn';
 import { useAuthStore } from '@/store/auth-store';
@@ -115,6 +116,30 @@ export function CommentForm({
       // failure — a file input that keeps its value fires no change event.
       if (fileRef.current) fileRef.current.value = '';
     }
+  }
+
+  /**
+   * Puts a picture the member already has into this box.
+   *
+   * No upload, and no `uploadAndRecord` either: the asset row exists and belongs to
+   * them, which is exactly what `prepare_comment` (0120) checks for. What is left to
+   * do is carry the description across — a picture described once should not have to
+   * be described again in the next box, which is how alt text ends up empty.
+   */
+  function attachPicked(picked: {
+    url: string;
+    thumbUrl: string;
+    width: number | null;
+    height: number | null;
+    altText: string;
+  }) {
+    setImage({
+      url: picked.url,
+      thumbUrl: picked.thumbUrl.length > 0 ? picked.thumbUrl : picked.url,
+      width: picked.width,
+      height: picked.height,
+    });
+    setAlt((current) => (current.length > 0 ? current : picked.altText.slice(0, MAX_ALT)));
   }
 
   async function submit() {
@@ -243,6 +268,20 @@ export function CommentForm({
               <ImagePlus size={14} className={cn(uploading && 'opacity-60')} />
               {t('interactions.addPicture')}
             </Button>
+            <MediaSourcePicker
+              purpose="comment-image"
+              showUpload={false}
+              max={1}
+              disabled={uploading || saving}
+              onFiles={(files) => {
+                const file = files[0];
+                if (file !== undefined) void attach(file);
+              }}
+              onPick={(picked) => {
+                const first = picked[0];
+                if (first !== undefined) attachPicked(first);
+              }}
+            />
           </>
         ) : null}
 

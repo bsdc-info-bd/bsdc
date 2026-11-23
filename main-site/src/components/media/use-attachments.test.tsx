@@ -451,3 +451,114 @@ describe('a post that already has pictures', () => {
     );
   });
 });
+
+/**
+ * A picture from the member's own library, put into the same queue.
+ *
+ * This is the half of the gallery that a member feels: the post gets its picture
+ * without a second upload, without spending quota, and without the description being
+ * asked for a second time — and the tray never shows a tile that is still waiting for
+ * bytes that will never come.
+ */
+function picked(id: string, url = `https://cdn.example/${id}.png`, thumbUrl = `${url}?thumb`) {
+  return {
+    mediaId: `asset-${id}`,
+    url,
+    thumbUrl,
+    width: 1200,
+    height: 800,
+    altText: `The ${id} picture`,
+    purpose: 'post-image' as const,
+  };
+}
+
+describe('picking a picture the member already uploaded', () => {
+  it('arrives attached, with the id the post needs and no upload in front of it', async () => {
+    render(<Harness />);
+    act(() => controller().attachPicked([picked('nine')]));
+
+    await waitFor(() => expect(status()).toBe('attached'));
+    expect(ready()).toBe('asset-nine:The nine picture');
+    expect(uploadMedia).not.toHaveBeenCalled();
+    expect(recordMediaAsset).not.toHaveBeenCalled();
+    // No object URL was made, because there were no local bytes to make one from.
+    expect(objectUrls).toHaveLength(0);
+  });
+
+  it('shows the stored thumbnail it was given, and the full address when there is none', async () => {
+    render(<Harness />);
+    act(() =>
+      controller().attachPicked([picked('nine'), picked('ten', 'https://cdn.example/ten.png', '')]),
+    );
+
+    await waitFor(() => expect(status()).toBe('attached,attached'));
+    const srcs = Array.from(document.querySelectorAll('img')).map((node) =>
+      node.getAttribute('src'),
+    );
+    expect(srcs).toContain('https://cdn.example/nine.png?thumb');
+    // A row the host never thumbnailed renders the picture itself: an empty `src` is
+    // a broken tile in the middle of the post the member is writing.
+    expect(srcs).toContain('https://cdn.example/ten.png');
+  });
+
+  it('will not put the same photograph on the post twice', async () => {
+    render(<Harness />);
+    act(() => controller().attachPicked([picked('nine')]));
+    await waitFor(() => expect(status()).toBe('attached'));
+
+    act(() => controller().attachPicked([picked('nine')]));
+    await waitFor(() => expect(controller().notice).toBe('media.gallery.alreadyAttached'));
+
+    expect(controller().attachments).toHaveLength(1);
+    expect(status()).toBe('attached');
+  });
+
+  it('knows a picture by its address, whatever scheme it was carried in', async () => {
+    render(<Harness />);
+    act(() => controller().attachPicked([picked('nine', 'http://cdn.example/nine.png/')]));
+    await waitFor(() => expect(status()).toBe('attached'));
+
+    // The library stores https, the composer holds what it was handed, and ImgBB
+    // answers both at once. Two tiles for one photograph is what a plain string
+    // comparison would have done.
+    act(() => controller().attachPicked([picked('nine')]));
+    await waitFor(() => expect(controller().notice).toBe('media.gallery.alreadyAttached'));
+    expect(controller().attachments).toHaveLength(1);
+  });
+
+  it('takes only what still has room, and says the rest was left out', async () => {
+    render(<Harness max={2} />);
+    act(() => controller().attachPicked([picked('one'), picked('two'), picked('three')]));
+
+    await waitFor(() => expect(status()).toBe('attached,attached'));
+    expect(controller().notice).toBe('media.errors.tooMany');
+    // The first two, in the order they were touched — the third is the one that
+    // would have been dropped without a word, which is the failure this guards.
+    expect(ready()).toBe('asset-one:The one picture|asset-two:The two picture');
+  });
+
+  it('says why a full tray took nothing at all', async () => {
+    render(<Harness max={1} />);
+    act(() => controller().attachPicked([picked('one')]));
+    await waitFor(() => expect(status()).toBe('attached'));
+
+    act(() => controller().attachPicked([picked('two')]));
+    await waitFor(() => expect(controller().notice).toBe('media.errors.tooMany'));
+    expect(controller().attachments).toHaveLength(1);
+    expect(controller().canAdd).toBe(false);
+    expect(controller().room).toBe(0);
+  });
+
+  it('leaves an edited description alone, and fills an empty one', async () => {
+    render(<Harness />);
+    act(() => controller().attachPicked([picked('nine')]));
+    await waitFor(() => expect(status()).toBe('attached'));
+    const id = controller().attachments[0]!.id;
+    controller().setAltText(id, 'Mine, now');
+
+    act(() => controller().attachPicked([picked('ten')]));
+    await waitFor(() => expect(controller().attachments).toHaveLength(2));
+    expect(controller().attachments[0]?.altText).toBe('Mine, now');
+    expect(controller().attachments[1]?.altText).toBe('The ten picture');
+  });
+});

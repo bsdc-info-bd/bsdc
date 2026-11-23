@@ -1,5 +1,7 @@
 import { CreditCard, ImageUp, Save, ShieldCheck, Store } from 'lucide-react';
 import { MediaImage } from '@/components/media/MediaImage';
+import { MediaSourcePicker } from '@/components/media/MediaSourcePicker';
+import type { PickedMedia } from '@/lib/media/gallery';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Alert, Badge, Button, Card, TextField, TextareaField } from '@/design-system';
@@ -28,6 +30,20 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
   const [cover, setCover] = useState(shop.cover_url);
   const [mobile, setMobile] = useState(shop.mobile);
   const [uploading, setUploading] = useState<'logo' | 'cover' | null>(null);
+
+  /**
+   * Hang a picture the seller already uploaded on the shop, without uploading it.
+   *
+   * The address is the one this platform wrote when the photo first went up, and
+   * `mk_vendors.{logo,cover}_url` are arms of `bsdc.media_references` (0132) — so the
+   * shop keeps the picture for as long as it shows it, the host keeps one copy of it,
+   * and the seller's quota is untouched. No row is written here: the row exists, and
+   * writing it again would overwrite the truth about a stored file to relabel it.
+   */
+  function pick(image: PickedMedia, which: 'logo' | 'cover'): void {
+    if (which === 'logo') setLogo(image.url);
+    else setCover(image.url);
+  }
 
   async function upload(file: File | undefined, which: 'logo' | 'cover'): Promise<void> {
     if (!file) return;
@@ -83,35 +99,71 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
           {cover ? (
             <MediaImage src={cover} alt="" slotWidth={960} className="h-full w-full object-cover" />
           ) : null}
-          <label className="absolute right-3 top-3 inline-flex cursor-pointer items-center gap-2 rounded-xl bg-scrim/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70">
-            <ImageUp size={14} aria-hidden /> {copy.coverUrl}
-            <input
-              type="file"
-              accept="image/*"
-              className="sr-only"
-              onChange={(e) => void upload(e.target.files?.[0], 'cover')}
+          <div className="absolute right-3 top-3 flex items-center gap-2">
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-scrim/50 px-3 py-1.5 text-xs font-medium text-white backdrop-blur hover:bg-black/70">
+              <ImageUp size={14} aria-hidden /> {copy.coverUrl}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => void upload(e.target.files?.[0], 'cover')}
+              />
+            </label>
+            <MediaSourcePicker
+              purpose="cover"
+              showUpload={false}
+              compact
+              attached={cover ? [cover] : []}
+              disabled={uploading !== null}
+              onFiles={(files) => void upload(files[0], 'cover')}
+              onPick={(picked) => {
+                const first = picked[0];
+                if (first !== undefined) pick(first, 'cover');
+              }}
             />
-          </label>
+          </div>
           {uploading === 'cover' ? (
             <div className="absolute inset-0 animate-pulse bg-black/20" aria-hidden />
           ) : null}
         </div>
         <div className="flex items-end gap-4 px-5 pb-5">
-          <div className="-mt-12 relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
-            {logo ? (
-              <MediaImage src={logo} alt="" slotWidth={96} className="h-full w-full object-cover" />
-            ) : (
-              <Store className="m-6 text-muted" aria-hidden />
-            )}
-            <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-scrim/50 py-1 text-center text-[10px] font-medium text-white">
-              {copy.logoUrl}
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                onChange={(e) => void upload(e.target.files?.[0], 'logo')}
-              />
-            </label>
+          {/* The badge and its library door are one control now: the seller chooses
+              which picture the shop wears, from the device or from the shelf, and the
+              door sits where the old `logoUrl` text field used to be the only way in. */}
+          <div className="flex flex-col items-start gap-1.5">
+            <div className="-mt-12 relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl border-4 border-surface bg-surface-2 shadow-md">
+              {logo ? (
+                <MediaImage
+                  src={logo}
+                  alt=""
+                  slotWidth={96}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Store className="m-6 text-muted" aria-hidden />
+              )}
+              <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-scrim/50 py-1 text-center text-[10px] font-medium text-white">
+                {copy.logoUrl}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => void upload(e.target.files?.[0], 'logo')}
+                />
+              </label>
+            </div>
+            <MediaSourcePicker
+              purpose="avatar"
+              showUpload={false}
+              compact
+              attached={logo ? [logo] : []}
+              disabled={uploading !== null}
+              onFiles={(files) => void upload(files[0], 'logo')}
+              onPick={(picked) => {
+                const first = picked[0];
+                if (first !== undefined) pick(first, 'logo');
+              }}
+            />
           </div>
           <div className="min-w-0 pb-1">
             <p className="truncate text-lg font-bold text-text">{shop.name}</p>

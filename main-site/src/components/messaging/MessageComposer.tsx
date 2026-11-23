@@ -1,5 +1,5 @@
-import { ImagePlus, Send, Smile, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ImagePlus, Images, Send, Smile, X } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { IconButton, ProgressBar } from '@/design-system';
@@ -10,6 +10,20 @@ import type { UploadResult } from '@/lib/storage/upload';
 import { previewLine } from '@/lib/messaging/message-text';
 import type { Message } from '@/lib/messaging/message-types';
 import { dataErrorKey } from '@/lib/supabase/errors';
+import type { PickedMedia } from '@/lib/media/gallery';
+
+/**
+ * The member's own picture library, loaded when they ask for it.
+ *
+ * A conversation screen has no reason to download a gallery on open, and the
+ * composer is mounted in every one, so this is the one import in the file that is
+ * not static.
+ */
+const GalleryPickerDialog = lazy(() =>
+  import('@/components/media/GalleryPickerDialog').then((module) => ({
+    default: module.GalleryPickerDialog,
+  })),
+);
 
 /**
  * Records an uploaded image against the member who uploaded it.
@@ -24,7 +38,7 @@ async function recordIfSignedIn(result: UploadResult): Promise<void> {
   if (!isConfigured.supabase) return;
   try {
     const { recordMediaAsset } = await import('@/lib/data/media-repository');
-    await recordMediaAsset(ownerUid, result);
+    await recordMediaAsset(ownerUid, result, 'chat-image');
   } catch {
     console.warn('a chat image attachment was not recorded, so it cannot be swept later');
   }
@@ -61,11 +75,20 @@ const EMOJI = [
 /** What can leave this composer as an attachment: images only (hosted on ImgBB). */
 export type AttachmentKind = 'image';
 
+/**
+ * What leaves this composer as a picture.
+ *
+ * `mediaAsset` is set when the picture came from the member's own library. Then the id
+ * is what the database is given and `mediaUrl` is only what the message is painted
+ * with before the send comes back — a pick must be named by the row it points at, so
+ * the address that is stored is one the platform read out of `media_assets` itself.
+ */
 export interface AttachmentInput {
   body: string;
   mediaUrl: string;
   mediaName: string;
   kind: AttachmentKind;
+  mediaAsset?: string;
 }
 
 export interface MessageComposerProps {
@@ -120,6 +143,7 @@ export function MessageComposer({
 }: MessageComposerProps) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
+  const [library, setLibrary] = useState(false);
   const [tray, setTray] = useState(false);
   const [sending, setSending] = useState<SendingState | null>(null);
   const imageInput = useRef<HTMLInputElement | null>(null);
@@ -145,7 +169,10 @@ export function MessageComposer({
     try {
       const { uploadMedia } = await import('@/lib/storage/upload');
       const result = await uploadMedia(file, {
-        purpose: 'comment-image',
+        // A chat picture used to be filed under comments, because the contract had
+        // nothing else for it. 'chat-image' (0132) is what lets the library offer
+        // Chat as a filter of its own instead.
+        purpose: 'chat-image',
         onProgress: (percent) =>
           setSending((current) =>
             current === null ? current : { ...current, percent: Math.round(percent) },
@@ -170,6 +197,32 @@ export function MessageComposer({
       setBusy(false);
       submitLock.current = false;
     }
+  }
+
+  /**
+   * Sends a picture the member already uploaded, by its asset id.
+   *
+   * No bytes move, no row is written, and the member's quota is not spent again: the
+   * file is already at the host and already theirs. What the server is handed is the
+   * id, and `send_message_once` (0132) reads the address out of `media_assets` for it
+   * and refuses one the sender does not own — so this path cannot put a stranger's
+   * picture, or an arbitrary host's address, into a conversation.
+   */
+  function sendPicked(picked: PickedMedia): void {
+    if (disabled || submitLock.current || editing !== null) return;
+    const delivery = onSendAttachment({
+      body: draft.trim(),
+      mediaUrl: picked.url,
+      mediaName: '',
+      kind: 'image',
+      mediaAsset: picked.mediaId,
+    });
+    onDraftChange('');
+    onCancelReply();
+    // The outbox line the send hook paints is the progress, and the lock is the
+    // composer's own: nothing here waits, because nothing here uploads. A failure
+    // lands on that line as a retry, the same as any other message.
+    void delivery.catch((error: unknown) => toast.error(t(sendErrorKey(error))));
   }
 
   async function submit(): Promise<void> {
@@ -326,6 +379,16 @@ export function MessageComposer({
               disabled={busy || disabled || editing !== null}
               onClick={() => imageInput.current?.click()}
             />
+            {/* The other half of attaching. A conversation is where reuse pays
+                most: the photo somebody just described is in the library, not in the
+                camera. */}
+            <IconButton
+              label={t('media.gallery.sendPicture')}
+              icon={<Images size={18} />}
+              size="sm"
+              disabled={busy || disabled || editing !== null}
+              onClick={() => setLibrary(true)}
+            />
           </div>
           <button
             type="submit"
@@ -351,6 +414,26 @@ export function MessageComposer({
           ? t('chat.characterCount', { count: draft.length, max: MAX_LENGTH })
           : ''}
       </p>
+
+      {library ? (
+        <Suspense fallback={null}>
+          <GalleryPickerDialog
+            open
+            onClose={() => setLibrary(false)}
+            purpose="chat-image"
+            max={1}
+            onDevice={(files) => {
+              const file = files[0];
+              if (file !== undefined) void uploadAndSend(file);
+            }}
+            onPick={(picked) => {
+              const first = picked[0];
+              setLibrary(false);
+              if (first !== undefined) sendPicked(first);
+            }}
+          />
+        </Suspense>
+      ) : null}
 
       <input
         ref={imageInput}

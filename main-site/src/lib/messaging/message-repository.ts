@@ -380,6 +380,18 @@ export interface SendMessageInput {
   kind?: MessageKind;
   mediaUrl?: string;
   mediaName?: string;
+  /**
+   * A picture from the member's own library, sent as its asset id.
+   *
+   * `send_message_once` (0132) re-reads the address from `media_assets` for that id
+   * and refuses one the sender does not own, so a reused picture is written as the
+   * row the platform holds rather than as a string the client happened to supply —
+   * and the id is inside the hash that makes a retry idempotent, without which a
+   * second send under the same key would return the first message and keep its
+   * picture. `mediaUrl` is still sent for the optimistic paint, and the database
+   * ignores it when an id arrives with it.
+   */
+  mediaAsset?: string;
   codeLanguage?: string;
   replyTo?: string | null;
 }
@@ -393,6 +405,13 @@ export async function sendMessage(input: SendMessageInput): Promise<Message> {
       p_kind: input.kind ?? 'text',
       p_media_url: input.mediaUrl ?? '',
       p_media_name: input.mediaName ?? '',
+      // Empty and absent are the same thing to this column, and only one of them is
+      // a uuid: the hook threads '' for a message that carries no pick, and Postgres
+      // would refuse the whole send for an address it cannot parse.
+      p_media_asset:
+        typeof input.mediaAsset === 'string' && input.mediaAsset.length > 0
+          ? input.mediaAsset
+          : null,
       p_code_language: input.codeLanguage ?? '',
       p_reply_to: input.replyTo ?? null,
     })

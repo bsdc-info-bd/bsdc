@@ -286,6 +286,7 @@ export default function CreatePage() {
           coverPreviewUrl={projectCover.previewUrl}
           coverUploadProgress={projectCover.progress}
           onCoverFileChange={(file) => projectCover.choose(file)}
+          onCoverPickFromLibrary={(picked) => projectCover.pick(picked)}
           errorFor={errorFor}
           screenshots={screenshots}
         />
@@ -496,6 +497,7 @@ function EventForm({ value, onChange, errorFor, cover }: EventFormProps) {
           previewUrl={cover.previewUrl}
           progress={cover.progress}
           onFileChange={(file) => cover.choose(file)}
+          onPickFromLibrary={(picked) => cover.pick(picked)}
           labels={{
             title: t('create.fields.coverImage'),
             hint: t('create.cover.hint'),

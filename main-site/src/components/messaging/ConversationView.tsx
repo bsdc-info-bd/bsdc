@@ -691,6 +691,9 @@ export function ConversationView({ conversationId, summary }: ConversationViewPr
             kind: input.kind,
             mediaUrl: input.mediaUrl,
             mediaName: input.mediaName,
+            // The id, when the picture came from the library: the database resolves
+            // the address from it, so this is the value that decides what is stored.
+            mediaAsset: input.mediaAsset,
             replyTo: replyTo?.id ?? null,
           });
         }}
