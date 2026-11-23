@@ -14,6 +14,7 @@
  *
  * Outputs (into dist/): one index.html per route, sitemap.xml, robots.txt.
  */
+import { statSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -126,31 +127,54 @@ export async function readStylesheets(template, distDir) {
  * The route components are lazy: the entry script runs, discovers `import()`,
  * and only then asks for the page. That is a second round trip in front of the
  * first screen, and the prerender step knows the answer already — it is writing
- * that page. The route's own chunk and the chunks it imports statically are
- * named in the head, so the browser fetches them alongside the entry instead of
- * after it.
+ * that page. The route's own chunk and the chunks that stand behind it are named
+ * in the head, so the browser fetches them alongside the entry instead of after
+ * it — the ten largest, because those are the downloads a first screen waits on.
  */
 export function modulePreloadHrefs(route, manifest, seen = new Set()) {
   const key = `src/routes/${route.component}.tsx`;
   const entry = manifest[key];
   if (!entry) return [];
-  const hrefs = [];
   const url = (file) => (file.startsWith('assets/') ? `/${file}` : `/assets/${file}`);
-  // Depth 1 and at most ten: the page's own chunk, plus the chunks it imports
-  // directly. Every icon in the design system is its own chunk, so following
-  // the graph further turns one round trip into forty requests, and a
-  // modulepreload costs the same as the request it is trying to save.
-  const visit = (chunk, depth) => {
-    if (!chunk || depth > 1 || hrefs.length >= 10) return;
+  // The whole static graph, then the ten biggest files in it. Depth was capped
+  // at one hop before, which sounds conservative and is not: the chunks that
+  // hurt are deeper — the Supabase client and the markdown renderer are shared,
+  // so a page imports them *through* a design-system chunk, and a one-hop walk
+  // never named them. The browser then asked for them after it had already run
+  // the page that imports them, which is one more round trip in front of the
+  // first screen on every route that reaches for them.
+  //
+  // Walking the graph fully cannot add a request, because these are static
+  // `import`s: a module's entire static graph is fetched before it runs. So the
+  // only question is whether the fetches start together or in series, and the
+  // ten-largest ranking spends the head's budget on the downloads a first
+  // screen waits on. Chunks already preloaded by the template are seeded into
+  // `seen`, so no slot is spent repeating one.
+  const pool = [];
+  const visit = (chunk) => {
+    if (!chunk || pool.length >= 400) return;
     for (const file of [chunk.file, ...(chunk.css ?? [])]) {
-      if (!file || seen.has(file) || hrefs.length >= 10) continue;
+      if (!file || seen.has(file) || pool.length >= 400) continue;
       seen.add(file);
-      hrefs.push(url(file));
+      pool.push(file);
     }
-    for (const imported of chunk.imports ?? []) visit(manifest[imported], depth + 1);
+    for (const imported of chunk.imports ?? []) visit(manifest[imported]);
   };
-  visit(entry, 0);
-  return hrefs;
+  visit(entry);
+  const bytes = (file) => {
+    try {
+      return statSync(join(distDir, file)).size;
+    } catch {
+      // A manifest without a build next to it — a unit test, mostly — has no
+      // sizes to rank by, and the walk order is the answer.
+      return 0;
+    }
+  };
+  return pool
+    .map((file, index) => ({ file, index, size: bytes(file) }))
+    .sort((a, b) => b.size - a.size || a.index - b.index)
+    .slice(0, 10)
+    .map(({ file }) => url(file));
 }
 
 /** The `<link rel="modulepreload">` tags for one page. */
@@ -387,12 +411,23 @@ async function main() {
     // entry script as the only script on the critical path.
   }
   const styles = await readStylesheets(template, distDir);
+  // The entry script's own chunks are already named in the template; a page's
+  // budget must go to what the template cannot know it will need.
+  const templatePreloads = new Set(
+    [...template.matchAll(/rel="modulepreload"[^>]*href="\/([^"]+)"/g)].map((match) =>
+      match[1].replace(/^\//, ''),
+    ),
+  );
 
   for (const route of routes) {
     // Anything the template already preloads (the entry chunk, the vendor
     // split) is not named twice.
     const preload = modulePreloadTags(
-      modulePreloadHrefs(route, manifest).filter((href) => !template.includes(href)),
+      // A copy per route: the walk marks files as seen as it goes, and a shared
+      // set would let the first page claimed every slot for the rest.
+      modulePreloadHrefs(route, manifest, new Set(templatePreloads)).filter(
+        (href) => !template.includes(href),
+      ),
     );
     const html = inlineStyles(
       renderPage(template, route, routes).replace('</head>', `  ${preload}\n  </head>`),
