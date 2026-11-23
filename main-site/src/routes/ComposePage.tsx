@@ -388,6 +388,10 @@ export default function ComposePage() {
         rows={draft.kind === 'article' ? 16 : 9}
         onChange={(value) => update('body', value)}
         uploadImage={uploadBodyImage}
+        // The post's own shelf, so the body can carry a picture this member already
+        // hosted — with the caption they wrote for it — instead of a re-upload of the
+        // file they posted yesterday.
+        galleryPurpose="post-image"
       />
 
       {draft.kind === 'snippet' ? (

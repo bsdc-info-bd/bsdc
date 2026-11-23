@@ -29,8 +29,12 @@ export interface MediaSourcePickerProps {
   purpose: MediaPurpose;
   /** How many pictures the surface can still take. */
   max?: number;
-  /** What the member chose from their device. */
-  onFiles: (files: File[]) => void;
+  /**
+   * What the member chose from their device. Omit it when the surface has its own way
+   * to take a file — a toolbar button, say — and the dialog then offers only the
+   * library, which is the whole point of `showUpload={false}`.
+   */
+  onFiles?: (files: File[]) => void;
   /** What the member chose from their library. */
   onPick: (picked: PickedMedia[]) => void;
   /** Whether the device input accepts more than one file. */
@@ -94,7 +98,7 @@ export function MediaSourcePicker({
     // Reset first, so choosing the same file after a removal fires a change event.
     event.target.value = '';
     if (files.length === 0) return;
-    onFiles(files);
+    onFiles?.(files);
   }
 
   return (
