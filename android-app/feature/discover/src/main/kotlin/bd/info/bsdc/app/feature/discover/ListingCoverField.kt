@@ -20,8 +20,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import bd.info.bsdc.app.core.designsystem.BsdcButton
 import bd.info.bsdc.app.core.designsystem.BsdcFormText
+import bd.info.bsdc.app.core.media.BsdcGalleryPickerSheet
 import bd.info.bsdc.app.core.media.BsdcImgbbImage
 import bd.info.bsdc.app.core.media.BsdcMediaRepository
+import bd.info.bsdc.app.core.media.GalleryCopy
+import bd.info.bsdc.app.core.media.GalleryFilter
 import bd.info.bsdc.app.core.model.MediaPurpose
 import coil3.ImageLoader
 import kotlinx.coroutines.launch
@@ -53,12 +56,14 @@ fun MkListingCoverField(
 ) {
     val scope = rememberCoroutineScope()
     var uploading by remember { mutableStateOf(false) }
+    var showLibrary by remember { mutableStateOf(false) }
+    val library = GalleryCopy.forLanguage(bn)
+    val repo = mediaRepository
     val trimmed = coverUrl.trim()
 
     val picker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
-        val repo = mediaRepository
         if (uri == null || repo == null) return@rememberLauncherForActivityResult
         uploading = true
         scope.launch {
@@ -89,7 +94,7 @@ fun MkListingCoverField(
             enabled = enabled && !uploading,
             singleLine = true,
         )
-        if (mediaRepository != null) {
+        if (repo != null) {
             BsdcButton(
                 label = if (uploading) {
                     if (bn) "আপলোড হচ্ছে…" else "Uploading…"
@@ -106,6 +111,17 @@ fun MkListingCoverField(
                 enabled = enabled,
                 leadingIcon = Icons.Rounded.Link,
             )
+            // The other door to the same cover. A banner the seller posted last month is
+            // already hosted, and hanging it here again costs no upload, no quota and no
+            // second copy at the image host — `assert_listing_cover` sees the same address
+            // either way, because a pick returns the stored one and not a client's guess.
+            BsdcButton(
+                label = library.open,
+                onClick = { showLibrary = true },
+                secondary = true,
+                enabled = enabled && !uploading,
+                leadingIcon = Icons.Rounded.Image,
+            )
         }
         if (trimmed.isNotBlank() && allowed) {
             BsdcImgbbImage(
@@ -120,5 +136,27 @@ fun MkListingCoverField(
                 cornerRadiusDp = 16,
             )
         }
+    }
+
+    if (repo != null) {
+        // A cover is one picture, and the shelf is opened for one: `max = 1`, so the
+        // sheet's Add button appears the moment a tile is tapped and cannot be made to
+        // answer with two. The address the seller wears today is passed in as attached,
+        // so the shelf marks it rather than offering the same banner back.
+        BsdcGalleryPickerSheet(
+            visible = showLibrary,
+            repository = repo,
+            imageLoader = imageLoader,
+            bn = bn,
+            max = 1,
+            attached = listOf(coverUrl),
+            initialFilter = GalleryFilter.COVER,
+            onDismiss = { showLibrary = false },
+            onPicked = { picked ->
+                val url = picked.firstOrNull()?.url.orEmpty()
+                if (url.isNotEmpty()) onCoverUrl(url)
+                showLibrary = false
+            },
+        )
     }
 }
