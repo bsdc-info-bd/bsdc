@@ -61,6 +61,24 @@ export const THEME_CHROME_FALLBACK = {
 export const MAP_ACCENT_FALLBACK = '#1461c9';
 
 /**
+ * The brand fill behind a map pin, for the same reason: the pin is an SVG
+ * *string* handed to Leaflet, so the colour is resolved from the token before
+ * the string is built. This is the value that paints when there is no document
+ * to read — prerender, and a test environment.
+ */
+export const MAP_PIN_FILL_FALLBACK = '#2d6a4f';
+
+/**
+ * The hole in the pin, and the halo around it.
+ *
+ * Not a white wash and not a theme choice: the pin has to read against
+ * OpenStreetMap's own tiles, which are light in the day style and which no
+ * palette token describes. A pin whose centre inverted with the theme would be
+ * invisible on the light tiles that the map actually draws.
+ */
+export const MAP_PIN_INK_FALLBACK = '#ffffff';
+
+/**
  * A token, read for an API that cannot take `var()`.
  *
  * `fallback` is the no-document floor, and the tokens below are what the app

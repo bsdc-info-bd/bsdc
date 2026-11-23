@@ -391,7 +391,7 @@ export default function MarketCheckoutPage() {
                 <div className="mt-2 flex items-center gap-1.5 text-xs font-semibold">
                   <span
                     className={cn(
-                      'grid h-5 w-5 shrink-0 place-items-center rounded-full text-[11px]',
+                      'grid h-5 w-5 shrink-0 place-items-center rounded-full text-2xs',
                       step.done ? 'bg-on-hero text-hero-from' : 'bg-on-hero/20 text-white',
                     )}
                     aria-hidden

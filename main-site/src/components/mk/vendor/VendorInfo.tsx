@@ -136,7 +136,7 @@ export function VendorInfo({ details, language }: Props) {
           {copy.schedule.title}
           {schedule?.enabled ? (
             <span
-              className={`ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isOpen ? 'bg-emerald-500 text-white' : 'bg-danger text-white'}`}
+              className={`ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${isOpen ? 'bg-success text-on-primary' : 'bg-danger text-on-danger'}`}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-white" aria-hidden />
               {isOpen ? copy.schedule.openNow : copy.schedule.closedNow}
@@ -150,7 +150,7 @@ export function VendorInfo({ details, language }: Props) {
         <p className="mt-1 text-xs text-muted">{copy.schedule.lead}</p>
 
         {!schedule?.enabled ? (
-          <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
+          <p className="mt-4 rounded-xl bg-success-soft px-4 py-3 text-sm font-medium text-success">
             {copy.schedule.alwaysOpenNote}
           </p>
         ) : (
@@ -174,16 +174,16 @@ export function VendorInfo({ details, language }: Props) {
                   >
                     {dayName}
                     {isToday ? (
-                      <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-on-primary">
+                      <span className="rounded-full bg-primary px-1.5 py-0.5 text-2xs font-bold text-on-primary">
                         {language === 'bn' ? 'আজ' : 'Today'}
                       </span>
                     ) : null}
                   </span>
                   <span
-                    className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${row?.open ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-surface-2 text-muted'}`}
+                    className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${row?.open ? 'bg-success-soft text-success' : 'bg-surface-2 text-muted'}`}
                   >
                     <span
-                      className={`h-1.5 w-1.5 rounded-full ${row?.open ? 'bg-emerald-500' : 'bg-zinc-400'}`}
+                      className={`h-1.5 w-1.5 rounded-full ${row?.open ? 'bg-online' : 'bg-border'}`}
                       aria-hidden
                     />
                     {row?.open ? copy.schedule.dayOpen : copy.schedule.dayClosed}
@@ -208,7 +208,7 @@ export function VendorInfo({ details, language }: Props) {
           </p>
         ) : null}
         {schedule?.enabled && schedule?.closes_at && isOpen ? (
-          <p className="mt-3 text-sm font-medium text-emerald-700">
+          <p className="mt-3 text-sm font-medium text-success">
             {copy.schedule.closesAtLabel(formatHhMm(schedule.closes_at, language))}
           </p>
         ) : null}

@@ -177,9 +177,7 @@ function EventCard({
             className="flex w-14 shrink-0 flex-col items-center rounded-xl bg-primary/10 py-2 text-center"
           >
             <span className="text-xl font-bold leading-none text-primary">{dayNumber}</span>
-            <span className="mt-1 text-[11px] font-semibold uppercase text-primary">
-              {monthName}
-            </span>
+            <span className="mt-1 text-2xs font-semibold uppercase text-primary">{monthName}</span>
           </div>
 
           <div className="min-w-0 flex-1">

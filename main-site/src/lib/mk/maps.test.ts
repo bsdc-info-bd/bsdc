@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { googleMapsDirectionsUrl, openStreetMapUrl } from './maps';
+import { googleMapsDirectionsUrl, googleMapsViewUrl, openStreetMapUrl } from './maps';
 
 /**
  * These two strings are a driver's one tap from a delivery address. If they are
@@ -33,8 +33,20 @@ describe('delivery map links', () => {
     expect(url).toContain('#map=17/24.894900/91.868700');
   });
 
+  it('builds a Google Maps view URL that opens the pin without navigating', () => {
+    expect(googleMapsViewUrl(24.8949, 91.8687)).toBe(
+      'https://www.google.com/maps/search/?api=1&query=24.894900,91.868700',
+    );
+    // `dir` would start a route; `search` is the one that shows the place.
+    expect(googleMapsViewUrl(24.8949, 91.8687)).not.toContain('/dir/');
+  });
+
   it('never emits a non-HTTPS or keyless third-party host', () => {
-    for (const url of [googleMapsDirectionsUrl(23.8, 90.4), openStreetMapUrl(23.8, 90.4)]) {
+    for (const url of [
+      googleMapsDirectionsUrl(23.8, 90.4),
+      googleMapsViewUrl(23.8, 90.4),
+      openStreetMapUrl(23.8, 90.4),
+    ]) {
       expect(url.startsWith('https://')).toBe(true);
       expect(url).not.toContain('key=');
       expect(url).not.toContain('api_key');

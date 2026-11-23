@@ -295,6 +295,7 @@ export function OrdersPanel({ copy, language, enabled }: Props) {
         lat={mapOrder?.lat ?? null}
         lng={mapOrder?.lng ?? null}
         language={language}
+        phone={mapOrder?.customer_phone}
         heading={
           mapOrder
             ? `${mapOrder.customer_name} · ${mapOrder.address_line}${

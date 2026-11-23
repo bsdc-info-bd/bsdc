@@ -13,6 +13,15 @@ export function googleMapsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
+/**
+ * `google.com/maps/search` for the pin: opens the place on the map itself,
+ * without starting navigation. The counterpart to a directions link — a vendor
+ * checking *where* the customer is does not always want turn-by-turn.
+ */
+export function googleMapsViewUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
 /** An `openstreetmap.org` permalink for the same pin, as a free fallback. */
 export function openStreetMapUrl(lat: number, lng: number): string {
   return `https://www.openstreetmap.org/?mlat=${lat.toFixed(6)}&mlon=${lng.toFixed(6)}#map=17/${lat.toFixed(6)}/${lng.toFixed(6)}`;

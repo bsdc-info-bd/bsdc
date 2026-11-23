@@ -142,7 +142,7 @@ export function ShopProfilePanel({ copy, shop }: ShopProps) {
               ) : (
                 <Store className="m-6 text-muted" aria-hidden />
               )}
-              <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-scrim/50 py-1 text-center text-[10px] font-medium text-white">
+              <label className="absolute inset-x-0 bottom-0 cursor-pointer bg-scrim/50 py-1 text-center text-2xs font-medium text-white">
                 {copy.logoUrl}
                 <input
                   type="file"

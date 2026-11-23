@@ -265,7 +265,7 @@ export function MarkdownEditor({
     {
       key: 'codeblock',
       label: t('compose.editor.codeBlock'),
-      icon: <span className="font-mono text-[11px] leading-none">{'{}'}</span>,
+      icon: <span className="font-mono text-2xs leading-none">{'{}'}</span>,
       run: () => {
         apply((window) => insertCodeBlock(window, ''));
       },

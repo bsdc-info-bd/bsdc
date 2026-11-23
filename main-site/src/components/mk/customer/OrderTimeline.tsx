@@ -59,7 +59,7 @@ export function OrderTimeline({ status, copy }: { status: OrderStatus; copy: MkC
               <Icon size={14} aria-hidden />
             </motion.span>
             <span
-              className={`text-[11px] leading-tight ${done ? 'font-semibold text-text' : 'text-muted'}`}
+              className={`text-2xs leading-tight ${done ? 'font-semibold text-text' : 'text-muted'}`}
             >
               {copy.statusLabels[step.status]}
             </span>
