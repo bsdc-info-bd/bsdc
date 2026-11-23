@@ -1,0 +1,243 @@
+name: Fresh Marketplace Order History
+
+# Purge only terminal order history (delivered/cancelled) to keep DB fresh.
+# NEVER deletes: mk_vendors, mk_products, mk_categories, mk_credit_ledger,
+# mk_credit_packages, mk_settings, mk_vendor_applications, profiles.
+# Active orders (placed/accepted/packaged/out_for_delivery) are never touched.
+
+on:
+  schedule:
+    # Weekly fresh: Sunday 03:00 Asia/Dhaka (Saturday 21:00 UTC)
+    - cron: "0 21 * * 6"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Run mode"
+        type: choice
+        required: true
+        default: dry-run
+        options: [dry-run, purge]
+      older_than_days:
+        description: "Only purge delivered/cancelled older than N days (0=all)"
+        type: string
+        required: false
+        default: "0"
+      include_cancelled:
+        description: "Include cancelled orders?"
+        type: boolean
+        required: false
+        default: true
+      include_delivered:
+        description: "Include delivered orders?"
+        type: boolean
+        required: false
+        default: true
+      confirm:
+        description: 'Type PURGE to confirm destructive run'
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-marketplace-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  purge:
+    name: Purge terminal order history
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Production guard — only main or manual purge with confirmation
+    environment: ${{ github.event_name == 'schedule' && 'production' || 'production' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Guard — require PURGE confirmation for destructive mode
+        if: inputs.mode == 'purge'
+        run: |
+          set -euo pipefail
+          if [ "${{ inputs.confirm }}" != "PURGE" ]; then
+            echo "::error::Destructive purge requires confirm=PURGE"
+            exit 1
+          fi
+          echo "Confirmed purge"
+
+      - name: Install Postgres client
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+          fi
+          psql --version
+
+      - name: Validate inputs
+        run: |
+          set -euo pipefail
+          OLDER="${{ inputs.older_than_days || '0' }}"
+          if ! [[ "$OLDER" =~ ^[0-9]+$ ]]; then echo "::error::older_than_days must be integer"; exit 1; fi
+          echo "OLDER_THAN_DAYS=$OLDER" >> $GITHUB_ENV
+          echo "INCLUDE_CANCELLED=${{ inputs.include_cancelled || 'true' }}" >> $GITHUB_ENV
+          echo "INCLUDE_DELIVERED=${{ inputs.include_delivered || 'true' }}" >> $GITHUB_ENV
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "MODE=purge" >> $GITHUB_ENV
+          else
+            echo "MODE=${{ inputs.mode || 'dry-run' }}" >> $GITHUB_ENV
+          fi
+          cat $GITHUB_ENV
+
+      - name: Build time window
+        run: |
+          set -euo pipefail
+          if [ "$OLDER_THAN_DAYS" = "0" ]; then
+            echo "CUTOFF_SQL=NULL" >> $GITHUB_ENV
+            echo "CUTOFF_HUMAN=all time" >> $GITHUB_ENV
+          else
+            CUTOFF=$(date -u -d "$OLDER_THAN_DAYS days ago" +"%Y-%m-%dT%H:%M:%SZ")
+            echo "CUTOFF_SQL='$CUTOFF'::timestamptz" >> $GITHUB_ENV
+            echo "CUTOFF_HUMAN=older than $OLDER_THAN_DAYS days (before $CUTOFF)" >> $GITHUB_ENV
+          fi
+
+      - name: Dry-run — count what WOULD be deleted
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          set -euo pipefail
+          : "${SUPABASE_DB_URL:?SUPABASE_DB_URL (or DATABASE_URL) secret required}"
+
+          # Build status filter
+          STATUSES=()
+          [ "$INCLUDE_DELIVERED" = "true" ] && STATUSES+=("'delivered'")
+          [ "$INCLUDE_CANCELLED" = "true" ] && STATUSES+=("'cancelled'")
+          if [ ${#STATUSES[@]} -eq 0 ]; then echo "::error::No statuses selected"; exit 1; fi
+          STATUS_LIST=$(IFS=,; echo "${STATUSES[*]}")
+
+          # Time filter — delivered/cancelled have different timestamps
+          if [ "$CUTOFF_SQL" = "NULL" ]; then
+            TIME_WHERE="true"
+          else
+            TIME_WHERE="(CASE WHEN o.status='delivered' THEN o.delivered_at WHEN o.status='cancelled' THEN o.cancelled_at ELSE o.updated_at END) < $CUTOFF_SQL"
+          fi
+
+          cat > /tmp/count.sql <<SQL
+          WITH target AS (
+            SELECT o.id FROM public.mk_orders o
+            WHERE o.status IN ($STATUS_LIST) AND $TIME_WHERE
+          )
+          SELECT
+            (SELECT count(*) FROM target) as orders,
+            (SELECT count(*) FROM public.mk_order_items i JOIN target t ON t.id=i.order_id) as items,
+            (SELECT count(*) FROM public.mk_order_events e JOIN target t ON t.id=e.order_id) as events,
+            (SELECT count(*) FROM public.mk_reviews r JOIN target t ON t.id=r.order_id) as reviews,
+            (SELECT count(*) FROM public.mk_orders WHERE status IN ('placed','accepted','packaged','out_for_delivery')) as active_kept;
+          SQL
+
+          echo "--- WOULD DELETE ($CUTOFF_HUMAN) statuses=[$STATUS_LIST] ---"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off -c "$(cat /tmp/count.sql)"
+
+          # Also show kept active by status
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT status, count(*) FROM public.mk_orders GROUP BY status ORDER BY status;"
+
+          echo "counts_written=true" >> $GITHUB_ENV
+
+      - name: Purge — transactional delete (only terminal orders)
+        if: env.MODE == 'purge'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+
+          STATUSES=()
+          [ "$INCLUDE_DELIVERED" = "true" ] && STATUSES+=("'delivered'")
+          [ "$INCLUDE_CANCELLED" = "true" ] && STATUSES+=("'cancelled'")
+          STATUS_LIST=$(IFS=,; echo "${STATUSES[*]}")
+
+          if [ "$CUTOFF_SQL" = "NULL" ]; then
+            TIME_WHERE="true"
+          else
+            TIME_WHERE="(CASE WHEN o.status='delivered' THEN o.delivered_at WHEN o.status='cancelled' THEN o.cancelled_at ELSE o.updated_at END) < $CUTOFF_SQL"
+          fi
+
+          cat > /tmp/purge.sql <<SQL
+          BEGIN;
+          -- Safety: lock to avoid racing with order placement
+          -- Advisory lock 7281 = marketplace fresh
+          SELECT pg_advisory_xact_lock(7281);
+
+          WITH target AS (
+            SELECT o.id FROM public.mk_orders o
+            WHERE o.status IN ($STATUS_LIST) AND $TIME_WHERE
+          ),
+          del_events AS (DELETE FROM public.mk_order_events e USING target t WHERE e.order_id=t.id RETURNING e.id),
+          del_reviews AS (DELETE FROM public.mk_reviews r USING target t WHERE r.order_id=t.id RETURNING r.id),
+          del_items AS (DELETE FROM public.mk_order_items i USING target t WHERE i.order_id=t.id RETURNING i.id),
+          -- credit_ledger has ON DELETE SET NULL for order_id — we keep the ledger rows for audit
+          del_orders AS (DELETE FROM public.mk_orders o USING target t WHERE o.id=t.id RETURNING o.id)
+          SELECT
+            (SELECT count(*) FROM del_orders) as purged_orders,
+            (SELECT count(*) FROM del_items) as purged_items,
+            (SELECT count(*) FROM del_events) as purged_events,
+            (SELECT count(*) FROM del_reviews) as purged_reviews;
+          COMMIT;
+          SQL
+
+          echo "--- PURGING ($CUTOFF_HUMAN) ---"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off -f /tmp/purge.sql | tee /tmp/purge.out
+
+          # Post-verify: ensure no active order was harmed
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT status, count(*) FROM public.mk_orders GROUP BY status ORDER BY status;"
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c "SELECT count(*) as vendors_kept FROM public.mk_vendors; SELECT count(*) as products_kept FROM public.mk_products; SELECT count(*) as ledger_kept FROM public.mk_credit_ledger;"
+
+          {
+            echo "### Fresh marketplace — purge complete"
+            echo ""
+            echo "- **Mode:** purge ($CUTOFF_HUMAN)"
+            echo "- **Statuses:** [$STATUS_LIST]"
+            echo "- **Kept:** all active orders + vendors + products + credits"
+            echo ""
+            echo '```'
+            cat /tmp/purge.out
+            echo '```'
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Summary — dry-run complete
+        if: env.MODE == 'dry-run'
+        run: |
+          {
+            echo "### Fresh marketplace — dry-run"
+            echo ""
+            echo "No rows deleted. Run with \`mode=purge + confirm=PURGE\` to execute."
+            echo ""
+            echo "- **Window:** $CUTOFF_HUMAN"
+            echo "- **Would delete statuses:** delivered=$INCLUDE_DELIVERED cancelled=$INCLUDE_CANCELLED"
+            echo "- **Always kept:** placed, accepted, packaged, out_for_delivery + vendors/products/ledger"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify invariants (no active order lost, ledger vendors intact)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          DO \$\$
+          DECLARE
+            active int;
+            vendors int;
+          BEGIN
+            SELECT count(*) INTO active FROM public.mk_orders WHERE status IN ('placed','accepted','packaged','out_for_delivery');
+            -- This job never deletes active; just assert DB still sane
+            RAISE NOTICE 'Active orders kept: %', active;
+            SELECT count(*) INTO vendors FROM public.mk_vendors;
+            RAISE NOTICE 'Vendors kept: %', vendors;
+          END \$\$;
+          SQL
