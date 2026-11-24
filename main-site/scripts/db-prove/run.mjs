@@ -211,6 +211,10 @@ const HARNESSES = [
     't95.mjs',
     '0135: the audit trail becomes a record \u2014 a hashed origin, a field diff, and a guard that refuses to write without one',
   ],
+  [
+    't96.mjs',
+    '0136: the command deck \u2014 every card permission-aware, self-describing and a door into the rows it counts',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
