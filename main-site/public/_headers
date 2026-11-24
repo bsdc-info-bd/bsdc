@@ -22,7 +22,20 @@
 /manifest.webmanifest
   Cache-Control: no-cache
 
+# The document names the chunks, and a chunk's name carries its content hash, so
+# a document served from cache is a document asking for files that the next
+# deployment has already deleted. Every entry point is revalidated — the
+# prerenderer writes one HTML file per route, including `about/index.html`, and
+# a rule for `/index.html` alone left `about/` and the rest of them cached.
+# See src/lib/site/chunk-recovery.ts for what a visitor used to see when they
+# were.
 /index.html
+  Cache-Control: no-cache
+
+/*.html
+  Cache-Control: no-cache
+
+/*/
   Cache-Control: no-cache
 
 # The font never changes name: a replacement ships under a new one, so a year

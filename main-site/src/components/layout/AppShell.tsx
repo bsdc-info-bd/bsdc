@@ -6,6 +6,7 @@ import { chromeFor } from '@/lib/layout/chrome';
 import { useCommandPaletteHotkey } from '@/hooks/use-command-palette-hotkey';
 import { useNotificationRealtime } from '@/hooks/use-notification-realtime';
 import { usePublishPresence } from '@/hooks/use-presence';
+import { useStaleBuildRecovery } from '@/hooks/use-stale-build-recovery';
 import { useSystemThemeSync } from '@/hooks/use-system-theme-sync';
 import { AppBar } from './AppBar';
 import { BottomNav } from './BottomNav';
@@ -44,6 +45,9 @@ export function AppShell() {
   useNotificationRealtime();
   usePublishPresence();
   useSystemThemeSync();
+  // A tab left open across a deploy asks for chunks that build no longer has.
+  // Recover there, before the router can turn a click into an error screen.
+  useStaleBuildRecovery();
   const chrome = chromeFor(useLocation().pathname);
 
   return (

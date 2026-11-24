@@ -27,7 +27,8 @@
     "lighthouse": "node ../scripts/lighthouse.mjs",
     "contrast": "node ../scripts/contrast-audit.mjs",
     "contrast:strict": "node ../scripts/contrast-audit.mjs --strict",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:stale-build": "npm run build && node scripts/browser/stale-build.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
