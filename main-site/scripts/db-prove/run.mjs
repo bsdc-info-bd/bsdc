@@ -203,6 +203,14 @@ const HARNESSES = [
     't93.mjs',
     'the member-site rollout gate evaluates the contract it enforces, against the schema it guards',
   ],
+  [
+    't94.mjs',
+    '0134: the permission spine — grants, denials, scopes and expiry, with nobody\u2019s answer changed',
+  ],
+  [
+    't95.mjs',
+    '0135: the audit trail becomes a record \u2014 a hashed origin, a field diff, and a guard that refuses to write without one',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
