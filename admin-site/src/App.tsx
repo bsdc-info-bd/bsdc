@@ -44,7 +44,9 @@ import {
 } from '@kit';
 import { Approvals } from './Approvals';
 import { Campaigns } from './Campaigns';
+import { Authority } from './Authority';
 import { Deck } from './Deck';
+import { Sessions } from './Sessions';
 import { Overview } from './Overview';
 import { Marketplace } from './Marketplace';
 import {
@@ -106,6 +108,8 @@ export function App(): ReactElement {
         // are context, and context belongs after the queues.
         { id: 'deck', label: 'Command Deck', render: () => <Deck /> },
         { id: 'overview', label: 'Overview', render: () => <Overview /> },
+        { id: 'authority', label: 'Authority', render: () => <Authority /> },
+        { id: 'sessions', label: 'Sessions', render: () => <Sessions /> },
         {
           id: 'cli',
           label: 'CLI Terminal',
