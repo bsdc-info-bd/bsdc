@@ -215,6 +215,10 @@ const HARNESSES = [
     't96.mjs',
     '0136: the command deck \u2014 every card permission-aware, self-describing and a door into the rows it counts',
   ],
+  [
+    't97.mjs',
+    '0137: a bulk operation you can look at before you run it \u2014 plans, fingerprints, and a row that moved',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
