@@ -227,6 +227,10 @@ const HARNESSES = [
     't99.mjs',
     '0139: a decision reaches the person it was made about',
   ],
+  [
+    't100.mjs',
+    '0140: a receipt for every staff action \u2014 what was done, to whom, why and by which route',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
