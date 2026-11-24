@@ -320,6 +320,15 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'media_mark_purged',
     'media_release_purge',
     'media_sweep_forgotten',
+    // 0141. The 404 recorder. Anonymous by necessity: it is called from the edge on
+    // the miss path, where there is no session to carry. What it writes is a
+    // bounded counter — path, hit count, first and last seen — keyed by a
+    // normalised path capped at 300 characters, and it cannot update an existing
+    // row's count without also refreshing when it was last seen. It cannot create
+    // a redirect, has no reader available to anon (`seo_404_hits` grants select to
+    // authenticated only, behind `seo.manage`), and swallows every error so a
+    // broken recorder cannot turn a 404 into a 500.
+    'note_missing_path',
   ];
   const unexpected = writers.filter((name) => !allowed.includes(name));
   return {

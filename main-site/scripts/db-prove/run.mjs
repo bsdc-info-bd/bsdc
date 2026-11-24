@@ -231,6 +231,10 @@ const HARNESSES = [
     't100.mjs',
     '0140: a receipt for every staff action \u2014 what was done, to whom, why and by which route',
   ],
+  [
+    't101.mjs',
+    '0141: SEO coverage, a redirect that cannot loop, and the 404s worth redirecting',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
