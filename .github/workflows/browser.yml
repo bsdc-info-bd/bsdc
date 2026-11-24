@@ -73,6 +73,23 @@ jobs:
             echo "::error title=Production-build browser smoke failed::${message:-see the run log}"
           fi
           exit "$status"
+      # The one failure real visitors kept hitting: a tab open across a deploy,
+      # clicking a link and landing on the error screen. Every route is a lazy
+      # chunk with a hashed name, so the catch is a browser test, not a unit one.
+      - name: A page clicked across a deployment
+        shell: bash
+        run: |
+          set +e
+          node scripts/browser/stale-build.mjs > /tmp/stale-build.log 2>&1
+          status=$?
+          cat /tmp/stale-build.log
+          if [ "$status" -ne 0 ]; then
+            message=$(grep -E '^FAIL|passed' /tmp/stale-build.log | tail -20 | head -c 5000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=A page clicked across a deployment failed::${message:-see the run log}"
+          fi
+          exit "$status"
       - name: Messenger interactions with mocked providers
         shell: bash
         run: |

@@ -472,6 +472,11 @@ export const en = {
     boundaryTitle: 'Something went wrong on this screen',
     boundaryBody:
       'The error has been recorded. You can retry this screen, or return to the home page.',
+    // Shown only when the page's own code could not be loaded, which in practice
+    // means the tab is older than the deployment it is talking to.
+    staleBuildTitle: 'This page needs a fresh copy',
+    staleBuildBody:
+      'BSDC was updated while this tab was open. Reloading brings in the new version — nothing you saved is lost.',
     notFoundTitle: 'This page does not exist',
     notFoundBody:
       'The address may be mistyped, or the content may have been removed. Try the home page.',
