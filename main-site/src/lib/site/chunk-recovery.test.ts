@@ -106,6 +106,12 @@ describe('recoverFromStaleBuild', () => {
    * visitor still needs the page, so a first visit is assumed — but a storage
    * that rejects writes must not throw out of the error path.
    */
+  it('reloads a visitor whose chunk failed while they were online', () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+    expect(recoverFromStaleBuild('build-a')).toBe(true);
+    online.mockRestore();
+  });
+
   it('still recovers when session storage refuses to be read', () => {
     const getItem = vi.spyOn(window.sessionStorage, 'getItem').mockImplementation(() => {
       throw new Error('SecurityError');

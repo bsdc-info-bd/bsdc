@@ -104,6 +104,11 @@ function readAttempt(): Attempt | null {
  * failure and the error screen — with its own button — is the honest answer.
  */
 export function recoverFromStaleBuild(build: string): boolean {
+  // Offline, the chunk that failed belongs to the build that is *supposed* to
+  // be running and nothing can be fetched to replace it. Reloading would only
+  // throw away whatever is on screen — a half-written post, for instance — so
+  // the error screen, which keeps it, is the better answer.
+  if (navigator.onLine === false) return false;
   try {
     const now = Date.now();
     const previous = readAttempt();
