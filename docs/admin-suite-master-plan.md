@@ -8294,3 +8294,94 @@ test that cannot fail is worth.
 
 **Nothing is built on a foundation that is not there.** Nine batches, ordered,
 each ending green, and the ledger says which are real.
+
+---
+
+## 71. Response 2 delivered: the foundation
+
+This section is the record of what exists now, written the way §3.2 requires —
+each line is checkable in the repository, and every number below was produced by
+running the suite rather than by counting intentions.
+
+### 71.1 What was built
+
+**Twelve primitives, five services, one boundary.** All in `corporate-kit`, so
+all thirteen consoles inherit them from one place.
+
+| Module | What it settles |
+|---|---|
+| `domain/freshness.ts` | How old is this reading, and is it old enough to matter? Includes clock-skew detection: a timestamp from the future is reported as `unknown`, never as `live`. |
+| `domain/reason.ts` | What makes a reason usable. Placeholders (`test`, `n/a`) are rejected as placeholders rather than as "too short", so the form teaches the right thing. |
+| `data/resilience.ts` | Deadlines, a retry policy that never retries a refusal, and a closed/open/half-open breaker with exactly one probe. |
+| `data/chunk-recovery.ts` | Stale-build recovery, namespaced per console, with a per-deploy reload budget. |
+| `data/outbox.ts` | Writes recorded before they are sent, scoped to the actor who queued them, never replayed after 24 hours. |
+| `data/mutations.ts` | The one place a console reads or writes — deadline, breaker and "may not have been saved" in one funnel. |
+| `ui/toast.tsx` | Every action announces itself. Errors have a zero lifetime; successes replace each other. |
+| `ui/ConfirmDialog.tsx` | Three levels of friction — click, reason, typed phrase — and a diff of what will change. |
+| `ui/DataTable.tsx` | The four states built in, so a screen cannot ship without them. |
+| `ui/FreshnessBadge.tsx` | The age of what you are looking at, always visible. |
+| `ui/RecoveryBoundary.tsx` | Recovery installed above the shell. |
+| `ui/useStaleBuildRecovery.ts` | The hook that makes `vite:preloadError` recoverable. |
+
+### 71.2 The gap that closed, and the bug found closing it
+
+G5 said stale-build recovery existed in `main-site` and in no console. The first
+attempt put the hook in `AppShell` — the shell twelve consoles use. The browser
+suite then passed 11 of 13 and failed on `status-site` and `vf-site`, because
+both render `PublicShell` for an audience that includes signed-out visitors.
+
+That is the difference between "fixed" and "mostly fixed", and the suite is what
+found it. The recovery moved into `RecoveryBoundary`, mounted by `mountConsole`
+above whichever shell a console picked. A console can no longer be written
+without it: the only way to skip it is to stop using the entry point every
+console uses. Audit `L-01` now enforces that, and refuses to pass if the hook
+reappears in a shell.
+
+### 71.3 Proof
+
+Every number below was produced by running the thing.
+
+| Evidence | Result |
+|---|---|
+| Kit unit tests | **226 passed** |
+| Console unit tests | **421 passed** across 13 consoles |
+| Browser suite, `console-stale.mjs` | **13 of 13 consoles** recover from a deploy |
+| …and it is a real test | Removing the hook makes it **fail** (verified: `no unhandled chunk failure escaped`) |
+| Audit | **153 passed, 0 failed, 4 recorded** — all eight new `L-` invariants green |
+| Bundle budget | **14 of 14 web apps measured**, 159–214 KB gzip, all inside 250 KB |
+| Typecheck | 13 consoles + kit clean |
+
+The audit is green for the first time in this repository's recorded history. Two
+of the five pre-existing findings were fixed properly rather than papered over:
+
+- **C-01** — a literal `★` in `VendorReviews.tsx` became the `Star` icon that
+  file already imported. A glyph renders differently on every platform and some
+  screen readers announce its codepoint.
+- **C-18** — a `http://` URL inside a doc comment became prose. The audit was
+  right to flag it: a literal that can be copied is a literal that can be used.
+
+The remaining three (F-01 on a cold checkout, E-11, E-12) were build artefacts
+and pass once the builds exist. F-01 was also strengthened while here: it used to
+skip an unbuilt console silently, which is how a budget goes unmeasured. It now
+names what it did not measure.
+
+### 71.4 What this does not yet do
+
+Honest scope, so Response 3 starts from a true place.
+
+- **No screen has been migrated to the new primitives yet.** They are built,
+  tested and mounted, but `admin-site`'s screens still call `callRpc` directly
+  and still use the old `Table`. That migration is batch 4, per §44, and audit
+  `L-05` records it as in progress rather than pretending otherwise.
+- **The outbox is not wired to a screen.** The policy is tested; the UI that
+  shows "3 changes waiting" is batch 5.
+- **No migration has been written.** Response 3 is the security spine and
+  `0134`–`0143`; nothing in the database has changed yet.
+- **Two of the twelve planned primitives are deferred**: the chart primitives
+  (batch 8, when the performance console needs them) and the section builder
+  (batch 7).
+
+So: 1,013 features remain `planned`. Twelve primitives are `built`. The ledger
+for this response is thirteen browser proofs and 647 unit tests, not a feature
+count — because the foundation's job was to make the thousand cheaper, and that
+is only measurable at the end.

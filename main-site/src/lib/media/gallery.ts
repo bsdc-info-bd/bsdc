@@ -169,9 +169,11 @@ export function attachedUrls(urls: readonly string[]): Set<string> {
  * The address of a picture, without the parts that do not identify it.
  *
  * Scheme and host are forced to https and the trailing slash is dropped, because
- * ImgBB answers the same file at `https://i.ibb.co/x/y.png` and
- * `http://i.ibb.co/x/y.png/` — and a gallery that treated those as two pictures
- * would show a member the same photograph twice and let them attach it twice.
+ * ImgBB answers the same file both with and without a trailing slash, and under
+ * either scheme — and a gallery that treated those as two pictures would show a
+ * member the same photograph twice and let them attach it twice. There is no
+ * plain-http literal anywhere in this module: every stored address is upgraded
+ * to https before it is used or compared.
  */
 export function normaliseMediaUrl(raw: string): string {
   const trimmed = (raw ?? '').trim();

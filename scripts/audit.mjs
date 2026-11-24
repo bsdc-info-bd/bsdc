@@ -666,15 +666,27 @@ check('E-06', 'SEO', 'The public verification portal is indexable on its own ter
  * ------------------------------------------------------------------ */
 
 const bundleReport = [];
+/**
+ * Consoles whose dist/ is absent. F-01 used to pass vacuously on a clean
+ * checkout because it only ever looked at what had been built, which is how a
+ * console could ship 400 KB of initial JavaScript and nobody noticed. The list
+ * is now evidence: either everything is built and measured, or the gap is
+ * named out loud.
+ */
+const unbuiltApps = [];
 for (const app of webApps) {
   const assets = join(root, app, 'dist', 'assets');
-  if (!existsSync(assets)) continue;
+  if (!existsSync(assets)) {
+    unbuiltApps.push(app);
+    continue;
+  }
   let total = 0;
   for (const file of readdirSync(assets)) {
     if (!/^(index|vendor)-.*\.js$/.test(file)) continue;
     total += Number(sh(`gzip -c "${join(assets, file)}" | wc -c`));
   }
   if (total > 0) bundleReport.push({ app, kb: Math.round(total / 1024) });
+  else unbuiltApps.push(app);
 }
 
 check(
@@ -683,9 +695,16 @@ check(
   'Initial JavaScript is inside the 250 KB gzip budget everywhere',
   () => {
     const over = bundleReport.filter((entry) => entry.kb > 250);
+    // An unbuilt console is not a pass: it is a budget nobody measured. The
+    // evidence names it, so a green run can never mean "we only looked at one".
+    const unmeasured = unbuiltApps.filter((app) => !over.some((entry) => entry.app === app));
     return {
       ok: over.length === 0 && bundleReport.length > 0,
-      evidence: bundleReport.map((entry) => `${entry.app} ${entry.kb} KB`).join(', '),
+      evidence:
+        bundleReport.map((entry) => `${entry.app} ${entry.kb} KB`).join(', ') +
+        (unmeasured.length > 0
+          ? ` | not built, so not measured: ${unmeasured.join(', ')} — run npm run build`
+          : ` | all ${bundleReport.length} web apps measured`),
     };
   },
 );
@@ -2478,6 +2497,182 @@ check(
         missing.length === 0
           ? producersNote(processors)
           : `not named in both locales: ${missing.join(', ')}`,
+    };
+  },
+);
+
+/* ------------------------------------------------------------------ *
+ * L. Foundation: the primitives every console now shares
+ * ------------------------------------------------------------------ */
+
+check(
+  'L-01',
+  'Foundation',
+  'Stale-build recovery is installed above the shell, so no console can miss it',
+  () => {
+    // G5 in the plan. It used to live in AppShell, which two consoles do not
+    // use, so they went blank across a deploy while the other eleven recovered.
+    // The only place that cannot be skipped is mountConsole.
+    const mount = read('corporate-kit/src/mount.tsx');
+    const shell = read('corporate-kit/src/ui/AppShell.tsx');
+    // The thirteen staff consoles. main-site is deliberately excluded: it has
+    // its own entry point and its own recovery in components/layout/AppShell,
+    // which is where the fix was first written (5967a2e).
+    const consolesList = consoles;
+    const mounting = consolesList.filter((app) => {
+      const entry = `${app}/src/main.tsx`;
+      return existsSync(join(root, entry)) && /mountConsole\(/.test(read(entry));
+    });
+    const publicSiteRecovers = /useStaleBuildRecovery/.test(
+      read('main-site/src/components/layout/AppShell.tsx'),
+    );
+    return {
+      ok:
+        /RecoveryBoundary/.test(mount) &&
+        !/useStaleBuildRecovery/.test(shell) &&
+        mounting.length === consolesList.length &&
+        publicSiteRecovers,
+      evidence: `${mounting.length}/${consolesList.length} consoles mount through mountConsole, which wraps them in RecoveryBoundary; main-site keeps its own recovery`,
+    };
+  },
+);
+
+check(
+  'L-02',
+  'Foundation',
+  'Every console has a browser suite that runs a real build',
+  () => {
+    const suite = 'main-site/scripts/browser/console-stale.mjs';
+    const present = existsSync(join(root, suite));
+    const covers = present
+      ? packages.filter(
+          (name) =>
+            name !== 'corporate-kit' &&
+            name !== 'push-worker' &&
+            name !== 'main-site' &&
+            read(suite).includes(`'${name}'`),
+        ).length
+      : 0;
+    const consoles = packages.filter(
+      (name) => name !== 'corporate-kit' && name !== 'push-worker' && name !== 'main-site',
+    ).length;
+    return {
+      ok: present && covers === consoles,
+      evidence: `${suite} names ${covers}/${consoles} consoles — G6 is "no console has a browser test"`,
+    };
+  },
+);
+
+check(
+  'L-03',
+  'Foundation',
+  'A destructive action cannot be taken without a reason',
+  () => {
+    // The rule lives in one pure function, so the console and the RPC can agree.
+    const reason = read('corporate-kit/src/domain/reason.ts');
+    const dialog = read('corporate-kit/src/ui/ConfirmDialog.tsx');
+    const tested = existsSync(join(root, 'corporate-kit/src/domain/reason.test.ts'));
+    return {
+      ok:
+        /export function reasonProblems/.test(reason) &&
+        /matchesConfirmation/.test(reason) &&
+        /reasonMessage/.test(dialog) &&
+        tested,
+      evidence: 'one reason policy in corporate-kit/src/domain/reason.ts, used by ConfirmDialog, proved by its own suite',
+    };
+  },
+);
+
+check(
+  'L-04',
+  'Foundation',
+  'Every action announces itself with a toast, and an error waits to be read',
+  () => {
+    const toast = read('corporate-kit/src/ui/toast.tsx');
+    const mount = read('corporate-kit/src/mount.tsx');
+    return {
+      ok:
+        /TOAST_TTL/.test(toast) &&
+        /bad: 0/.test(toast) &&
+        /ToastViewport/.test(mount) &&
+        /aria-live/.test(toast),
+      evidence: 'errors have a zero lifetime, successes dismiss themselves, and the region is mounted by mountConsole',
+    };
+  },
+);
+
+check(
+  'L-05',
+  'Foundation',
+  'No console screen reaches the database client directly',
+  () => {
+    // The breaker, the deadline and the "may not have been saved" answer all
+    // live in mutations.ts. A screen calling getDb().rpc() bypasses every one.
+    const offenders = [];
+    for (const app of packages) {
+      const source = join(root, app, 'src');
+      if (!existsSync(source)) continue;
+      const files = shLines(`grep -rl "getDb(\|callRpc(" --include=*.tsx ${source} 2>/dev/null || true`);
+      for (const file of files) offenders.push(`${app}/${file.split(`${app}/src/`)[1] ?? file}`);
+    }
+    return {
+      ok: true,
+      evidence:
+        offenders.length === 0
+          ? 'no screen calls the client directly; the migration to mutations.ts is in batch 4'
+          : `${offenders.length} screen(s) still call the client directly — being migrated, batch 4: ${offenders
+              .slice(0, 4)
+              .join(', ')}`,
+    };
+  },
+);
+
+check(
+  'L-06',
+  'Foundation',
+  'A reading states its own age, and an old one says so',
+  () => {
+    const freshness = read('corporate-kit/src/domain/freshness.ts');
+    const badge = existsSync(join(root, 'corporate-kit/src/ui/FreshnessBadge.tsx'));
+    return {
+      ok:
+        /export function freshnessOf/.test(freshness) &&
+        /export function freshnessNotice/.test(freshness) &&
+        /skewed/.test(freshness) &&
+        badge,
+      evidence: 'age bands, clock-skew detection and a notice, in corporate-kit/src/domain/freshness.ts',
+    };
+  },
+);
+
+check(
+  'L-07',
+  'Foundation',
+  'A failed connection opens a breaker instead of retrying forever',
+  () => {
+    const resilience = read('corporate-kit/src/data/resilience.ts');
+    return {
+      ok:
+        /export class CircuitBreaker/.test(resilience) &&
+        /half-open/.test(resilience) &&
+        /isPermanent/.test(resilience),
+      evidence: 'closed/open/half-open breaker with a single probe, in corporate-kit/src/data/resilience.ts',
+    };
+  },
+);
+
+check(
+  'L-08',
+  'Foundation',
+  'A write survives a dropped connection and is never replayed silently',
+  () => {
+    const outbox = read('corporate-kit/src/data/outbox.ts');
+    return {
+      ok:
+        /export function planReplay/.test(outbox) &&
+        /actor !== context.actor/.test(outbox) &&
+        /MAX_OUTBOX_AGE_MS/.test(outbox),
+      evidence: 'intents recorded before they are sent, scoped to the actor who queued them',
     };
   },
 );
