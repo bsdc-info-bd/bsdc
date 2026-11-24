@@ -219,6 +219,10 @@ const HARNESSES = [
     't97.mjs',
     '0137: a bulk operation you can look at before you run it \u2014 plans, fingerprints, and a row that moved',
   ],
+  [
+    't98.mjs',
+    '0138: the audit and authority screens \u2014 why somebody holds what they hold, and who is signed in',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
