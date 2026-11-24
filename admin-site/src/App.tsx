@@ -44,6 +44,7 @@ import {
 } from '@kit';
 import { Approvals } from './Approvals';
 import { Campaigns } from './Campaigns';
+import { Deck } from './Deck';
 import { Overview } from './Overview';
 import { Marketplace } from './Marketplace';
 import {
@@ -100,6 +101,10 @@ export function App(): ReactElement {
         },
       ]}
       tabs={[
+        // The deck leads, because it is the only screen that knows what this
+        // reader can act on. Overview follows it: the nine platform-wide totals
+        // are context, and context belongs after the queues.
+        { id: 'deck', label: 'Command Deck', render: () => <Deck /> },
         { id: 'overview', label: 'Overview', render: () => <Overview /> },
         {
           id: 'cli',

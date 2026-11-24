@@ -190,14 +190,14 @@ as $$
     -- Money ---------------------------------------------------------------
     union all
     select 'money.campaigns_pending', 'Ad campaigns waiting', 'money', 'alert',
-           (select count(*)::int from public.ad_campaigns c where c.status = 'pending_review'),
+           (select count(*)::int from public.ad_campaigns camp where camp.status = 'pending_review'),
            null,
            'ads.review', 'campaigns?status=pending_review'
 
     union all
     select 'money.credits_today', 'Credit purchases today', 'money', 'count',
-           (select count(*)::int from public.mk_credit_purchases c
-             where c.status = 'pending' and c.created_at >= date_trunc('day', cfg.at)),
+           (select count(*)::int from public.mk_credit_purchases cp
+             where cp.status = 'pending' and cp.created_at >= date_trunc('day', cfg.at)),
            null,
            'marketplace.review', 'credits?status=pending'
       from cfg
@@ -205,13 +205,13 @@ as $$
     -- Platform -------------------------------------------------------------
     union all
     select 'platform.flags_enabled', 'Features enabled', 'platform', 'count',
-           (select count(*)::int from public.feature_flags f where f.enabled),
+           (select count(*)::int from public.feature_flags flag where flag.enabled),
            null,
            'settings.read', 'flags'
 
     union all
     select 'platform.flags_total', 'Features defined', 'platform', 'count',
-           (select count(*)::int from public.feature_flags),
+           (select count(*)::int from public.feature_flags as flags_all),
            null,
            'settings.read', 'flags'
 
@@ -223,11 +223,11 @@ as $$
 
     union all
     select 'platform.certificates_week', 'Certificates issued this week', 'platform', 'count',
-           (select count(*)::int from public.certificates c
-             where c.issued_at >= cfg.at - interval '7 days'),
-           (select count(*)::int from public.certificates c
-             where c.issued_at >= cfg.at - interval '14 days'
-               and c.issued_at < cfg.at - interval '7 days'),
+           (select count(*)::int from public.certificates cert
+             where cert.issued_at >= cfg.at - interval '7 days'),
+           (select count(*)::int from public.certificates cert
+             where cert.issued_at >= cfg.at - interval '14 days'
+               and cert.issued_at < cfg.at - interval '7 days'),
            'certificates.issue', 'certificates'
       from cfg
 
@@ -251,38 +251,38 @@ as $$
            'audit.read', 'audit?action=audit.missing'
       from cfg
   )
-  select c.card,
-         c.label,
-         c.section,
-         c.kind,
-         coalesce(c.now_n, 0),
-         coalesce(c.prev_n, 0),
-         coalesce(c.now_n, 0) - coalesce(c.prev_n, 0),
+  select deck_card.card,
+         deck_card.label,
+         deck_card.section,
+         deck_card.kind,
+         coalesce(deck_card.now_n, 0),
+         coalesce(deck_card.prev_n, 0),
+         coalesce(deck_card.now_n, 0) - coalesce(deck_card.prev_n, 0),
          case
-           when c.prev_n is null then 'flat'
-           when coalesce(c.now_n, 0) > c.prev_n then 'up'
-           when coalesce(c.now_n, 0) < c.prev_n then 'down'
+           when deck_card.prev_n is null then 'flat'
+           when coalesce(deck_card.now_n, 0) > deck_card.prev_n then 'up'
+           when coalesce(deck_card.now_n, 0) < deck_card.prev_n then 'down'
            else 'flat'
          end,
-         c.permission,
+         deck_card.permission,
          -- The reader could open this card, so the card is shown. `has_permission`
          -- is what every RLS policy already uses; the deck does not invent a
          -- second notion of authority.
-         bsdc.has_permission(c.permission),
-         c.drill,
+         bsdc.has_permission(deck_card.permission),
+         deck_card.drill,
          (select at from cfg) as computed_at
-    from cards c
+    from cards deck_card
    -- A card the reader cannot act on is not shown at all. Filtering here rather
    -- than in the console means a console bug cannot reveal a queue somebody has
    -- no authority to open, and it means the deck is one call rather than a call
    -- per card.
-   where bsdc.has_permission(c.permission)
+   where bsdc.has_permission(deck_card.permission)
    order by
      -- Alerts first, because the reason to open a console at 9 a.m. is usually a
      -- queue, and then by section so the deck reads the same way twice.
-     case c.kind when 'alert' then 0 else 1 end,
-     c.section,
-     c.card;
+     case deck_card.kind when 'alert' then 0 else 1 end,
+     deck_card.section,
+     deck_card.card;
 $$;
 
 revoke all on function public.admin_deck() from public, anon;
