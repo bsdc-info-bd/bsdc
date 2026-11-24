@@ -223,6 +223,10 @@ const HARNESSES = [
     't98.mjs',
     '0138: the audit and authority screens \u2014 why somebody holds what they hold, and who is signed in',
   ],
+  [
+    't99.mjs',
+    '0139: a decision reaches the person it was made about',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
