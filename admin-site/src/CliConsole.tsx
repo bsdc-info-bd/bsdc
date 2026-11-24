@@ -23,6 +23,9 @@ import {
   cliAutocomplete,
   parseCli,
   splitMacroLines,
+  bulkApplyHint,
+  parseBulkApply,
+  parseBulkPlan,
   type CliCommandSpec,
 } from './cli-engine';
 
@@ -203,6 +206,156 @@ export function CliConsole(): ReactElement {
       }
       const csv = rowsToCsv(Object.keys(snap), [Object.values(snap)]);
       pushEntry(trimmed, 'ok', JSON.stringify(snap, null, 2), csv);
+      return;
+    }
+
+    if (verb === 'bulk') {
+      // `bulk` is the one verb family in this console that can change other
+      // people's rows, so it is the one that insists on a preview first. `bulk
+      // plan` writes nothing; `bulk apply` needs an id that only a plan printed.
+      const sub = parsed.positional[1];
+
+      if (sub === 'plan') {
+        const { request, error } = parseBulkPlan(parsed);
+        if (error || !request) {
+          pushEntry(trimmed, 'error', error ?? 'The plan could not be built.');
+          return;
+        }
+        const rows = await listRpc<{ id: string; matched: number; applicable: number }>(
+          env,
+          'bulk_plan',
+          {
+            p_subject: request.subject,
+            p_action: request.action,
+            p_selector: request.selector,
+            p_reason: request.reason,
+          },
+        );
+        const plan = rows[0];
+        if (!plan) {
+          pushEntry(trimmed, 'error', 'The plan returned no id, which means nothing was planned.');
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          [
+            `Plan ${plan.id}`,
+            `  ${String(plan.applicable)} of ${String(plan.matched)} row(s) would be ${request.action}d.`,
+            `  Nothing has been written. To run it: ${bulkApplyHint(plan.id)}`,
+            '  A row that changes before you apply is skipped, not overwritten.',
+          ].join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'apply') {
+        const { planId, error } = parseBulkApply(parsed);
+        if (error || !planId) {
+          pushEntry(trimmed, 'error', error ?? 'No plan id given.');
+          return;
+        }
+        const rows = await listRpc<{ applied: number; skipped: number; details: unknown }>(
+          env,
+          'bulk_apply',
+          { p_plan_id: planId },
+        );
+        const outcome = rows[0];
+        if (!outcome) {
+          pushEntry(trimmed, 'error', 'The apply returned no outcome.');
+          return;
+        }
+        const detail = Array.isArray(outcome.details) ? outcome.details : [];
+        const skippedLines = detail
+          .filter((item) => (item as { outcome?: string }).outcome !== 'applied')
+          .map((item) => {
+            const row = item as { label?: string; why?: string; outcome?: string };
+            return `  ${row.outcome ?? 'skipped'}: ${row.label ?? '?'} — ${row.why ?? 'no reason given'}`;
+          });
+        pushEntry(
+          trimmed,
+          // A partial apply is not a success. `info` would scroll away like one.
+          outcome.skipped > 0 ? 'error' : 'ok',
+          [
+            `${String(outcome.applied)} applied, ${String(outcome.skipped)} skipped.`,
+            ...skippedLines,
+          ].join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'plans') {
+        const limit = Number(parsed.flags['limit'] ?? 20);
+        const rows = await listRpc<{
+          id: string;
+          subject: string;
+          action: string;
+          matched: number;
+          applicable: number;
+          applied_at: string | null;
+          applied_count: number | null;
+          is_mine: boolean;
+        }>(env, 'bulk_plans_for_me', {
+          p_limit: Number.isFinite(limit) ? limit : 20,
+        });
+        if (rows.length === 0) {
+          pushEntry(trimmed, 'ok', 'No plans. Make one with `bulk plan <subject> <action> --reason <text>`.');
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          rows
+            .map(
+              (row) =>
+                `${row.id.slice(0, 8)}… | ${row.subject} ${row.action} | ${String(row.applicable)}/${String(row.matched)} | ${
+                  row.applied_at
+                    ? `applied ${String(row.applied_count ?? 0)}`
+                    : 'not applied'
+                } | ${row.is_mine ? 'mine' : 'somebody else'}`,
+            )
+            .join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'show') {
+        const id = parsed.positional[2];
+        if (!id) {
+          pushEntry(trimmed, 'error', 'Usage: bulk show <plan-id>');
+          return;
+        }
+        const rows = await listRpc<{
+          label: string;
+          from_status: string;
+          to_status: string;
+          applicable: boolean;
+          blocked: string | null;
+        }>(env, 'bulk_plan_detail', { p_plan_id: id });
+        if (rows.length === 0) {
+          pushEntry(trimmed, 'ok', '(the plan lists no rows)');
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          rows
+            .map(
+              (row) =>
+                `${row.applicable ? 'yes' : 'no '} | ${row.label} | ${row.from_status} → ${row.to_status}${
+                  row.blocked ? ` (${row.blocked})` : ''
+                }`,
+            )
+            .join('\n'),
+        );
+        return;
+      }
+
+      pushEntry(
+        trimmed,
+        'error',
+        'Usage: bulk plan <subject> <action> --reason <text> | bulk apply <id> | bulk plans | bulk show <id>',
+      );
       return;
     }
 
