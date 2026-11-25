@@ -9,7 +9,15 @@ import {
   unreadCount,
   type ChatMessage,
 } from '@kit';
-import { channelLabel, lastActivity, type ChannelRow } from './model';
+import {
+  channelLabel,
+  lastActivity,
+  type ChannelRow,
+  incidentBanner,
+  isIncidentChannelSeed,
+  statusIncidentHref,
+  type ChannelIncident,
+} from './model';
 
 const message = (over: Partial<ChatMessage> = {}): ChatMessage => ({
   id: 'm1',
@@ -138,5 +146,55 @@ describe('channel presentation', () => {
 
   it('formats a clock time in twenty-four hours', () => {
     expect(messageTime(Date.parse('2026-03-01T14:05:00Z'), 'en-GB')).toMatch(/^\d{2}:\d{2}$/);
+  });
+});
+
+describe('an incident channel links back to its record (§13.2)', () => {
+  const incident = (over: Partial<ChannelIncident> = {}): ChannelIncident => ({
+    id: 'i1',
+    public_title: 'Slower pages across the site',
+    public_slug: 'slower-pages-20261123',
+    impact: 'major',
+    started_at: '2026-11-23T09:00:00Z',
+    resolved_at: null,
+    is_drill: false,
+    ...over,
+  });
+  const now = new Date('2026-11-23T12:00:00Z').getTime();
+
+  it('says the channel is internal while the incident is open', () => {
+    const banner = incidentBanner(incident(), now);
+    expect(banner).toContain('Open');
+    expect(banner).toContain('3h ago');
+    expect(banner).toContain('internal');
+  });
+
+  it('says a resolved channel stays as the internal record', () => {
+    expect(incidentBanner(incident({ resolved_at: '2026-11-23T11:00:00Z' }), now)).toContain('Resolved');
+  });
+
+  it('says a drill is visible to nobody outside staff', () => {
+    const banner = incidentBanner(incident({ is_drill: true }), now);
+    expect(banner).toContain('drill');
+    expect(banner).toContain('public board is untouched');
+  });
+
+  it('measures an hour-old incident in minutes of silence, not days', () => {
+    expect(incidentBanner(incident({ started_at: '2026-11-23T11:30:00Z' }), now)).toContain('under an hour ago');
+    expect(incidentBanner(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain('3d ago');
+  });
+
+  it('only looks for an incident on a channel that could have one', () => {
+    expect(isIncidentChannelSeed('inc-slower-pages-20261123')).toBe(true);
+    expect(isIncidentChannelSeed('general')).toBe(false);
+  });
+
+  it('links the channel to the public entry fragment, safely encoding the slug', () => {
+    expect(statusIncidentHref('slower-pages-20261123')).toBe(
+      'https://status.site.main.bsdc.info.bd/#incident-slower-pages-20261123',
+    );
+    expect(statusIncidentHref('incident/one', 'https://status.example/')).toBe(
+      'https://status.example/#incident-incident%2Fone',
+    );
   });
 });

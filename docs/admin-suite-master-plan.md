@@ -9244,3 +9244,66 @@ Open, carried forward from §10 and §11: workload-per-moderator, duplicate clus
 with a visible count, leave requests, two-party shift swap, the 100-caller
 `claim_report` test, the appeals detail view, and one-certificate-per-member-per-course
 idempotency (§75.4). Response 8 is §13.
+
+## 77. Response 8 — Signal
+
+Response 8 implements §13 across the performance, status, verification and staff-chat
+consoles. The principle throughout is that a signal is useful only if its limits are
+visible: budgets belong to a route and metric; a measurement below its sample floor is
+not a trend; the public incident record and staff conversation are separate records; and
+a verification refusal is not the same answer as a revoked document.
+
+### 77.1 Vitals that lead to an action
+
+`0149_signal_in_detail.sql` adds editable, audited per-route/per-metric vital budgets,
+three-consecutive-breach regression detection, release-to-release metric comparison,
+and a board that shows the regression, route, metric, delta and release. Correlation to
+an error fingerprint is shown as same-window correlation, not causation. Measurements
+below the sample floor are marked insufficient. The performance console exposes the
+board, budgets, regressions, release comparison and reports as actual working surfaces.
+
+G7 is **closed**. The CI matrix already builds all 14 web apps; the weakness was that an
+empty asset set could pass without measuring anything. The gate now fails if there are
+zero initial JavaScript files, or if measured initial gzip exceeds **250,000 bytes**;
+it reports each app's measured size in the GitHub step summary. Audit `F-29` guards the
+matrix, measurement, ceiling and empty-measurement failure together. `I-03` was corrected
+to assert the 250,000-byte ceiling and the zero-file failure, instead of its stale
+256,000-byte literal.
+
+### 77.2 Incidents that survive their own resolution
+
+The status console now declares, updates, resolves and post-mortems incidents through
+separate internal and customer-facing fields. Transitions carry timestamps and authors;
+resolution requires a public summary and opens owner/date action items that can be
+completed with a recorded note. Drills do not notify or publish. `connect-site` identifies
+an incident channel, shows whether it is an open incident, a resolved record or a drill,
+and links directly to the matching public status entry. The status card owns the matching
+fragment, so the staff link does not stop at the status-board home page. The channel also
+links to its incident record through `channel_incident`; the migration adds eligible
+incident writers as channel members, because a private channel that nobody can open is
+not a coordination channel.
+
+### 77.3 Verification that answers in one query
+
+The verification desk accepts a certificate code, notice id or file hash; unknown and
+revoked remain distinct answers. Its 12-field response allow-list prevents adding data
+that is not already on the document. Rate limiting is counted in aggregate, with no
+PII-bearing history. Batch verification accepts a CSV or pasted codes, filters malformed
+codes before deduplication, applies the same limits, and offers a CSV result. The embed is
+a separate Vite entry and document, with no input, history or receipt; the ordinary
+console still denies framing. Audit `E-13` protects both sides of that boundary.
+
+### 77.4 Evidence and carry-forward
+
+The new SQL proof `t109` covers incident lifecycle, independent public/internal content,
+action ownership and closure, drills, budget behavior, verification allow-list and rate
+limits, and the channel link and membership. Full `db:prove`: **92 of 92 harnesses**.
+The audit is **154 passed, 0 failed, 4 recorded**; `sql-schema-check.py` reports **0
+problems across 149 files**. The four §13 consoles have **51 + 34 + 29 + 20 tests**
+(performance, status, verification and connect), clean TypeScript checks, and successful
+production builds. The embed is emitted separately as `dist/embed/index.html`.
+
+The gaps carried from §10 and §11 remain explicit: workload per moderator, duplicate
+clustering with a visible count, leave requests, two-party shift swap, the 100-caller
+`claim_report` test, the appeals detail view, and one-certificate-per-member-per-course
+idempotency (§75.4). Response 9 follows §14.

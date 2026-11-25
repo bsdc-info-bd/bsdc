@@ -22,7 +22,15 @@ import {
   type ChatMessage,
   type CorporateEnv,
 } from '@kit';
-import { channelLabel, lastActivity, type ChannelRow } from './model';
+import {
+  channelLabel,
+  incidentBanner,
+  isIncidentChannelSeed,
+  lastActivity,
+  statusIncidentHref,
+  type ChannelIncident,
+  type ChannelRow,
+} from './model';
 
 const HISTORY = 200;
 
@@ -86,6 +94,19 @@ function Channels(): ReactElement {
 function Channel({ channel }: { channel: ChannelRow }): ReactElement {
   const env = useCorporateEnv();
   const profile = useProfile();
+  // §13.2 — an incident channel links back to the incident, so the conversation
+  // and the public record cannot drift apart.
+  const incident = useAsync(
+    useCallback(
+      async () =>
+        isIncidentChannelSeed(channel.slug)
+          ? listRpc<ChannelIncident>(env, 'channel_incident', { p_channel_id: channel.id })
+          : [],
+      [env, channel.id, channel.slug],
+    ),
+    [env, channel.id, channel.slug],
+  );
+  const linked = incident.state.status === 'ready' ? (incident.state.data[0] ?? null) : null;
   const [messages, setMessages] = useState<readonly ChatMessage[]>([]);
   const [search, setSearch] = useState('');
   const [error, setError] = useState('');
@@ -140,6 +161,28 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
         </span>
       }
     >
+      {linked !== null && (
+        <Banner
+          tone={linked.is_drill ? 'warn' : linked.resolved_at === null ? 'bad' : 'ok'}
+          title={linked.is_drill ? 'Drill channel' : linked.public_title}
+        >
+          <p className="kit-small" style={{ margin: 0 }}>
+            {incidentBanner(linked)}
+          </p>
+          <p className="kit-small kit-muted" style={{ margin: 0 }}>
+            {linked.is_drill
+              ? 'Nothing published.'
+              : linked.resolved_at === null
+                ? 'The public board is showing a live incident. Anything a customer should know goes there, not here.'
+                : 'The incident is closed. This channel is the internal record.'}
+          </p>
+          {!linked.is_drill && (
+            <a href={statusIncidentHref(linked.public_slug)} target="_blank" rel="noopener noreferrer">
+              View the customer-facing status entry
+            </a>
+          )}
+        </Banner>
+      )}
       <div style={{ marginBottom: 'var(--sp-3)' }}>
         <Field
           label="Search messages"

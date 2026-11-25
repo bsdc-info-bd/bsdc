@@ -293,6 +293,12 @@ check('B-05', 'Database', 'Every anonymous write path is a counted exception', (
     'follow_redirect',
     'verify_certificate',
     'verify_code',
+    // 0149. The public desk's rate-limited entry point. It writes one row to
+    // `verification_attempts` per call — a throttle counter holding a hashed
+    // bucket, a count and a found/not-found flag, and nothing that identifies
+    // who asked or what they were looking at. The limit is enforced inside the
+    // function, so the write is the thing that makes the limit possible.
+    'verify_public',
     'push_mark',
     'push_kill',
     'push_content',
@@ -665,6 +671,31 @@ check('E-05', 'SEO', 'Redirects are answered with a real 301 before the app load
   evidence: 'the edge middleware answers a moved URL with 301',
 }));
 
+check('E-13', 'SEO', 'The embeddable answer is a separate page, not a relaxed console', () => {
+  // §13.3 asks for a desk that is "embeddable for a third party with no PII".
+  // The tempting implementation is to drop `frame-ancestors` for the whole app,
+  // which turns every page — including the report receipt, which is the one
+  // feature that must not be framed — into something a third party can dress up.
+  //
+  // So the property is checked as two things at once: the console still refuses
+  // to be framed, and the one path that allows it is a document of its own.
+  const headers = read('vf-site/public/_headers');
+  const [consoleBlock, ...rest] = headers.split('/embed');
+  const embedBlocks = rest.join('/embed');
+  const consoleDenies = /frame-ancestors 'none'/.test(consoleBlock) && /X-Frame-Options: DENY/.test(consoleBlock);
+  const embedAllows = /frame-ancestors \*/.test(embedBlocks);
+  const embedPage = has('vf-site/embed/index.html') && has('vf-site/embed/main.ts');
+  const config = read('vf-site/vite.config.ts');
+  const twoEntryPoints = /embed:\s*fileURLToPath/.test(config);
+  return {
+    ok: consoleDenies && embedAllows && embedPage && twoEntryPoints,
+    evidence:
+      consoleDenies && embedAllows && embedPage && twoEntryPoints
+        ? 'the console refuses framing; /embed is its own document with its own rule'
+        : `console denies framing: ${String(consoleDenies)}, embed allows it: ${String(embedAllows)}, embed page exists: ${String(embedPage)}, built as its own entry: ${String(twoEntryPoints)}`,
+  };
+});
+
 check('E-06', 'SEO', 'The public verification portal is indexable on its own terms', () => ({
   ok: has('vf-site/index.html') && /canonical/.test(read('vf-site/index.html')),
   evidence: 'vf-site ships its own title, description, canonical and JSON-LD',
@@ -676,11 +707,17 @@ check('E-06', 'SEO', 'The public verification portal is indexable on its own ter
 
 const bundleReport = [];
 /**
- * Consoles whose dist/ is absent. F-01 used to pass vacuously on a clean
- * checkout because it only ever looked at what had been built, which is how a
- * console could ship 400 KB of initial JavaScript and nobody noticed. The list
- * is now evidence: either everything is built and measured, or the gap is
- * named out loud.
+ * Consoles whose dist/ is absent.
+ *
+ * F-01 used to pass vacuously on a clean checkout because it only ever looked at
+ * what had been built, which is how a console could ship 400 KB of initial
+ * JavaScript and nobody noticed. Listing the gap was an improvement but not a
+ * fix: a green run still meant "we measured whatever happened to be on disk".
+ *
+ * §13.1 closes that at the source. The CI matrix builds every app and measures
+ * it with the same ceiling, and fails when it measures nothing — so the gate is
+ * where it belongs, per-app, in the pull request. What is left here is the
+ * report: the numbers when they exist, and an honest note when they do not.
  */
 const unbuiltApps = [];
 for (const app of webApps) {
@@ -690,30 +727,34 @@ for (const app of webApps) {
     continue;
   }
   let total = 0;
+  let files = 0;
   for (const file of readdirSync(assets)) {
     if (!/^(index|vendor)-.*\.js$/.test(file)) continue;
     total += Number(sh(`gzip -c "${join(assets, file)}" | wc -c`));
+    files += 1;
   }
-  if (total > 0) bundleReport.push({ app, kb: Math.round(total / 1024) });
+  if (total > 0 && files > 0) bundleReport.push({ app, kb: Math.round(total / 1024) });
   else unbuiltApps.push(app);
 }
 
 check(
-  'F-01',
+  'F-29',
   'Performance',
-  'Initial JavaScript is inside the 250 KB gzip budget everywhere',
+  'Every console is measured against the budget in CI, and an unmeasured build fails',
   () => {
-    const over = bundleReport.filter((entry) => entry.kb > 250);
-    // An unbuilt console is not a pass: it is a budget nobody measured. The
-    // evidence names it, so a green run can never mean "we only looked at one".
-    const unmeasured = unbuiltApps.filter((app) => !over.some((entry) => entry.app === app));
+    // The property that matters is not that a number exists but that a missing
+    // number is a failure. A gate that only checks a ceiling is satisfied by
+    // measuring nothing at all, which is exactly what happened before §13.1.
+    const ci = read('.github/workflows/ci.yml');
+    const measures = /gzip -c "\$file" \| wc -c/.test(ci);
+    const failsOnEmpty = /No initial JavaScript was found to measure/.test(ci);
+    const ceiling = /-gt 250000/.test(ci);
+    const matrix = /matrix:\s*\n\s*app:\s*\$\{\{ fromJSON\(needs\.discover\.outputs\.apps\) \}\}/.test(ci);
     return {
-      ok: over.length === 0 && bundleReport.length > 0,
-      evidence:
-        bundleReport.map((entry) => `${entry.app} ${entry.kb} KB`).join(', ') +
-        (unmeasured.length > 0
-          ? ` | not built, so not measured: ${unmeasured.join(', ')} — run npm run build`
-          : ` | all ${bundleReport.length} web apps measured`),
+      ok: measures && failsOnEmpty && ceiling && matrix,
+      evidence: matrix
+        ? `the ${webApps.length}-app matrix builds and measures each console; an empty measurement fails`
+        : 'the CI matrix no longer builds every app, so the budget covers only main-site again',
     };
   },
 );
@@ -1354,10 +1395,17 @@ check('I-02', 'CI', 'New applications are discovered rather than listed by hand'
     'the discover job builds the matrix from the tree, so a new app is gated the day it appears',
 }));
 
-check('I-03', 'CI', 'The bundle budget is enforced in CI, not merely documented', () => ({
-  ok: /256000/.test(read('.github/workflows/ci.yml')),
-  evidence: 'the build fails above 250 KB gzip of initial JavaScript',
-}));
+check('I-03', 'CI', 'The bundle budget is enforced in CI, not merely documented', () => {
+  const ci = read('.github/workflows/ci.yml');
+  // The ceiling is 250 KB. It used to be written as a byte count of 256000,
+  // which is 250.0 KiB and 0.4% more than the number every document states —
+  // small enough to be invisible and large enough that a bundle could pass here
+  // and be described as "over budget" in the record.
+  return {
+    ok: /-gt 250000/.test(ci) && /No initial JavaScript was found to measure/.test(ci),
+    evidence: 'the build fails above 250,000 bytes of gzip, and also when it measures nothing',
+  };
+});
 
 check('I-04', 'CI', 'Bookkeeping cannot break a release', () => ({
   ok: /continue-on-error: true/.test(read('.github/workflows/ci.yml')),

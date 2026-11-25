@@ -263,6 +263,10 @@ const HARNESSES = [
     't108.mjs',
     '0148: a setting that cannot be wrong, a page that cannot be published broken, and a block that cannot outlive its review',
   ],
+  [
+    't109.mjs',
+    '0149: a budget that needs three breaches, an incident that keeps its internal note private, and a verification desk that cannot enumerate',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

@@ -16,6 +16,14 @@ import {
   reportIdFromSearch,
   resultLines,
   shareUrl,
+  ANSWER_FIELDS,
+  allowedOnly,
+  parseBatch,
+  countBatch,
+  allowanceNote,
+  refusalSentence,
+  batchCsv,
+  type Answer,
 } from './model';
 
 const code = (kind: string, body: string): string => `BSDC-${kind}-${body}-${cardCheckDigit(body)}`;
@@ -165,5 +173,93 @@ describe('report receipt links', () => {
     const id = '12345678-1234-4234-8234-123456789abc';
     expect(reportIdFromSearch(`?report=${id}`)).toBe(id);
     expect(reportIdFromSearch('?report=not-a-uuid')).toBe('');
+  });
+});
+
+describe('a desk that answers in one query (§13.3)', () => {
+  const answer = (over: Partial<Answer> = {}): Answer => ({
+    kind: 'certificate',
+    found: true,
+    code: 'BSDC-CT-4A7C21B9-6',
+    recipient_name: 'Rumana Haque',
+    subject: 'Signals',
+    issued_on: '2026-10-24',
+    expires_on: '2027-10-24',
+    state: 'valid',
+    reason: '',
+    superseded_by: null,
+    hash_matches: true,
+    checked_at: '2026-11-23T12:00:00Z',
+    ...over,
+  });
+
+  it('drops any field the published list does not carry', () => {
+    const row = allowedOnly({ ...answer(), recipient_email: 'rumana@example.com', recipient_uid: 'u1' });
+    expect(Object.keys(row).sort()).toEqual([...ANSWER_FIELDS].sort());
+    expect(JSON.stringify(row)).not.toContain('rumana@example.com');
+    expect(JSON.stringify(row)).not.toContain('"u1"');
+  });
+
+  it('keeps every field on the list, including the ones that are null', () => {
+    const row = allowedOnly({ ...answer(), subject: null });
+    expect(row.subject).toBeNull();
+    expect(row.code).toBe('BSDC-CT-4A7C21B9-6');
+  });
+
+  it('reads a pasted column in whatever shape a spreadsheet produced it', () => {
+    const parsed = parseBatch('BSDC-CT-4A7C21B9-6\nBSDC-CT-9Z9Z9Z9Z-4, BSDC-CT-11112222-3;bogus\n');
+    expect(parsed).toEqual(['BSDC-CT-4A7C21B9-6', 'BSDC-CT-9Z9Z9Z9Z-4', 'BSDC-CT-11112222-3']);
+  });
+
+  it('does not count the same code twice, because checking it twice is one check', () => {
+    expect(parseBatch('BSDC-CT-4A7C21B9-6\nBSDC-CT-4A7C21B9-6')).toHaveLength(1);
+  });
+
+  it('stops at the batch ceiling instead of building an unbounded request', () => {
+    const many = Array.from({ length: 300 }, (_, i) => `BSDC-CT-${String(i).padStart(8, '0')}-1`).join('\n');
+    expect(parseBatch(many)).toHaveLength(200);
+    expect(parseBatch(many, 10)).toHaveLength(10);
+  });
+
+  it('counts what a batch found, in the terms the person pasting it cares about', () => {
+    const count = countBatch([
+      answer(),
+      answer({ code: 'a', state: 'revoked', found: true }),
+      answer({ code: 'b', state: 'not_found', found: false }),
+    ]);
+    expect(count.valid).toBe(1);
+    expect(count.revoked).toBe(1);
+    expect(count.notFound).toBe(1);
+    expect(count.summary).toContain('1 of 3 are in force');
+  });
+
+  it('says all of them are in force when that is the answer', () => {
+    expect(countBatch([answer(), answer({ code: 'c' })]).summary).toBe('All 2 are in force.');
+  });
+
+  it('says nothing was checked rather than "0 of 0 are in force"', () => {
+    expect(countBatch([]).summary).toBe('No codes were checked.');
+  });
+
+  it('warns before the allowance runs out, not after', () => {
+    expect(allowanceNote(30)).toBe('');
+    expect(allowanceNote(3)).toContain('3 checks left');
+    expect(allowanceNote(1)).toContain('1 check left');
+    expect(allowanceNote(0)).toContain('used its checks');
+  });
+
+  it('does not let a rate limit read as a verdict about a document', () => {
+    const sentence = refusalSentence('53400');
+    expect(sentence).toContain('says nothing about the document');
+    expect(refusalSentence(null)).toBe('');
+  });
+
+  it('writes a batch file that says which ones are no longer in force', () => {
+    const csv = batchCsv([answer(), answer({ code: 'b', state: 'revoked', found: true, reason: 'Did not complete' })]);
+    const lines = csv.trim().split('\r\n');
+    expect(lines[0]).toContain('in_force');
+    expect(lines[1]).toContain('yes');
+    expect(lines[2]).toContain('no');
+    expect(lines[2]).toContain('Did not complete');
   });
 });

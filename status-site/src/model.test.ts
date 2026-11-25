@@ -21,6 +21,15 @@ import {
   type IncidentRow,
   type UptimeRow,
   uptimeOf,
+  publicTitle,
+  boardSentence,
+  declareProblems,
+  actionState,
+  openActions,
+  postmortemProblem,
+  drillLabel,
+  type IncidentRowV2,
+  type IncidentAction,
 } from './model';
 
 const service = (over: Partial<UptimeRow> = {}): UptimeRow => ({
@@ -242,5 +251,118 @@ describe('a service check', () => {
     expect(checkIsHumanEntered({ serviceKey: 'api', ok: true, latencyMs: 0 })).toBe(true);
     expect(checkIsHumanEntered({ serviceKey: '', ok: true, latencyMs: 12 })).toBe(true);
     expect(checkIsHumanEntered({ serviceKey: 'api', ok: true, latencyMs: 87 })).toBe(false);
+  });
+});
+
+describe('an incident that survives its own resolution (§13.2)', () => {
+  const incident = (over: Partial<IncidentRowV2> = {}): IncidentRowV2 => ({
+    id: 'i1',
+    service_key: 'main-site',
+    title: 'Cache cluster degraded (internal)',
+    impact: 'major',
+    started_at: '2026-11-23T09:00:00Z',
+    resolved_at: null,
+    updates: [],
+    public_title: 'Slower pages across the site',
+    public_slug: 'slower-pages-20261123',
+    summary: '',
+    postmortem: '',
+    postmortem_at: null,
+    is_drill: false,
+    declared_at: '2026-11-23T09:00:00Z',
+    channel_id: 'c1',
+    updates_v2: [],
+    ...over,
+  });
+  const now = new Date('2026-11-23T12:00:00Z').getTime();
+
+  it('shows the public title, not the internal one', () => {
+    expect(publicTitle(incident())).toBe('Slower pages across the site');
+  });
+
+  it('falls back to the internal title rather than showing nothing', () => {
+    expect(publicTitle(incident({ public_title: '' }))).toContain('internal');
+  });
+
+  it('says what is affected and for how long, instead of "investigating"', () => {
+    const sentence = boardSentence(incident(), now);
+    expect(sentence).toContain('Parts of the service are unavailable');
+    expect(sentence).toContain('3 hours');
+    expect(sentence).not.toContain('Investing');
+  });
+
+  it('counts in days once an incident is old enough', () => {
+    expect(boardSentence(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain('3 days');
+  });
+
+  it('says when the last update was, because silence is information', () => {
+    const withUpdate = incident({ updates_v2: [{ body: 'Restarting', state: 'degraded', at: '2026-11-23T11:20:00Z' }] });
+    expect(boardSentence(withUpdate, now)).toContain('40 minutes ago');
+  });
+
+  it('does not claim a customer impact for an impact of none', () => {
+    expect(boardSentence(incident({ impact: 'none' }), now)).toContain('no customer impact');
+  });
+
+  it('labels a drill wherever it appears', () => {
+    expect(drillLabel(incident({ is_drill: true }))).toContain('Drill');
+    expect(drillLabel(incident())).toBe('');
+    expect(boardSentence(incident({ is_drill: true }), now)).toContain('(drill)');
+  });
+
+  it('needs a public title and a public body before it can be declared', () => {
+    const problems = declareProblems({ title: 'Cache', publicTitle: '', publicBody: 'Down' });
+    expect(problems.length).toBe(2);
+    expect(problems[0]).toContain('public title');
+    expect(problems[1]).toContain('Investigating');
+  });
+
+  it('accepts a declaration a customer could read', () => {
+    expect(
+      declareProblems({
+        title: 'Cache cluster degraded',
+        publicTitle: 'Slower pages across the site',
+        publicBody: 'Pages are taking longer than usual while we restart the cache.',
+      }),
+    ).toEqual([]);
+  });
+
+  const action = (over: Partial<IncidentAction> = {}): IncidentAction => ({
+    id: 'a1',
+    body: 'Move the cache to a managed cluster',
+    owner_uid: 'u1',
+    due_on: '2026-11-25',
+    done_at: null,
+    done_note: '',
+    ...over,
+  });
+
+  it('calls an action late only after its due date has passed', () => {
+    const today = new Date('2026-11-23T08:00:00Z');
+    expect(actionState(action({ due_on: '2026-11-22' }), today)).toBe('late');
+    expect(actionState(action({ due_on: '2026-11-23' }), today)).toBe('due');
+    expect(actionState(action({ due_on: '2026-11-30' }), today)).toBe('open');
+    expect(actionState(action({ done_at: '2026-11-22T00:00:00Z' }), today)).toBe('done');
+  });
+
+  it('lists what is open, soonest due first, and hides what is done', () => {
+    const rows = openActions([
+      action({ id: 'a', due_on: '2026-12-10' }),
+      action({ id: 'b', due_on: '2026-11-24' }),
+      action({ id: 'c', due_on: '2026-11-01', done_at: '2026-11-02T00:00:00Z' }),
+    ]);
+    expect(rows.map((r) => r.id)).toEqual(['b', 'a']);
+  });
+
+  it('refuses a post-mortem during the incident and one that says nothing', () => {
+    expect(postmortemProblem('Long enough but too early', null)).toContain('after the incident is resolved');
+    expect(postmortemProblem('It broke.', '2026-11-23T14:00:00Z')).toContain('not a post-mortem');
+    expect(postmortemProblem('', '2026-11-23T14:00:00Z')).toContain('what happened');
+    expect(
+      postmortemProblem(
+        'The cache ran on a single node since October. A config rollout doubled the key count and saturated it.',
+        '2026-11-23T14:00:00Z',
+      ),
+    ).toBe('');
   });
 });

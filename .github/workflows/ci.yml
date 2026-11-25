@@ -142,18 +142,32 @@ jobs:
       - name: Build
         run: npm run build
 
+      # §13.1's bundle watch, closing G7. Every console is built by the matrix
+      # above, so every console is measured here — which is the part that was
+      # missing: the audit's F-01 only ever saw apps whose dist/ existed, and CI
+      # built one app, so the budget "passed" over an empty set for a year.
+      #
+      # The gate fails on two things, not one: a bundle over the ceiling, and a
+      # run that measured nothing at all. An absent measurement is not a pass.
       - name: Bundle size budget (250 KB gzip of initial JS)
         shell: bash
         run: |
           total=0
+          files=0
           for file in dist/assets/index-*.js dist/assets/vendor-*.js; do
             [ -f "$file" ] || continue
             size=$(gzip -c "$file" | wc -c)
             total=$((total + size))
+            files=$((files + 1))
             echo "$(basename "$file"): $((size / 1024)) KB gzip"
           done
-          echo "Initial JS total: $((total / 1024)) KB gzip"
-          if [ "$total" -gt 256000 ]; then
+          if [ "$files" -eq 0 ]; then
+            echo "::error::No initial JavaScript was found to measure, so the budget is unverified"
+            exit 1
+          fi
+          echo "Initial JS total: $((total / 1024)) KB gzip across $files files"
+          echo "- ${{ matrix.app }}: $((total / 1024)) KB gzip (${files} files)" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$total" -gt 250000 ]; then
             echo "::error::Initial JavaScript exceeds the 250 KB gzip budget"
             exit 1
           fi
