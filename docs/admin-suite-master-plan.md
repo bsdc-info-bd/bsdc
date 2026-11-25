@@ -5507,7 +5507,7 @@ a test asserts equals the sum.
 the divergence is caught. The trigger and the reconciliation test ship with the
 column, in one file, so they cannot be separated.
 
-### 49.11 Renumbered — see §73.1
+### 49.11 Renumbered — see §73.1 and §74.1
 
 This slot was `0144_appeals.sql`. Response 4 needed `0144` for telemetry, because
 §8.1 is ahead of appeals in the response order, and a migration number is a
@@ -8712,3 +8712,184 @@ So the count is unchanged where it counts: 1,013 features `planned`, 26 permissi
 with a spine under them, and the measures that matter are that every number on the
 telemetry page names where it came from, and that a palette cannot reach a visitor
 because one person clicked once.
+
+---
+
+## 74. Response 5 — people and safety: the record, the appeal, the changeover
+
+Response 5 was specified in §10 as three consoles sharing one domain: a person and
+what has happened to them. This is the record of building it — one migration, three
+screens, and the four faults the harnesses found, two of which were mine and one of
+which was a duplicate of a mechanism that already existed.
+
+### 74.1 The migration taken
+
+`0146_a_person_record_an_appeal_and_a_ladder.sql`. It also absorbs the appeals
+migration planned in §49.11: the numbering below `0144` no longer maps to the plan's
+table, and §49.11 has been annotated to say so. The short version:
+
+| planned | actually |
+| --- | --- |
+| `0144_appeals` | folded into `0146` — an appeal table with no person record to appeal from would have been half a feature |
+| `0145_ladder` | folded into `0146`, for the same reason |
+| `0146_sla_policies` | taken by telemetry in `0144` |
+
+So Response 5 shipped one migration where the plan expected three, because the three
+were one subject and splitting them would have meant three migrations that could not
+be reviewed apart.
+
+### 74.2 The person record (§10.1)
+
+`person_timeline_full(uid, limit)` merges seven sources — reports filed, reports
+about, moderation actions, standing movements, certificates, role changes, cases and
+appeals — into one list, newest first. The interesting part is not the union but the
+**clock**: every source carries a real timestamp, so none of them needs a precision
+flag. That is a fact about this schema rather than a general truth, and the function
+says so, because the day a source arrives with only a date the honest answer is to
+refuse it rather than to pretend the event happened at midnight.
+
+`person_open_items(uid)` answers "what needs somebody today" as counts rather than as
+a list, because the list is the timeline and the count is what belongs on a card.
+
+Three rules the screen gets from the kit rather than inventing:
+
+- **A zero is not mentioned.** `openItemsSummary` says "2 open reports" and never
+  "0 open cases", because a card that always shows six things teaches a reader to
+  skim all six.
+- **A family filter does not reorder.** `filterTimeline` keeps the order it was
+  given, and `families` is ordered by a canonical list rather than by which kinds
+  happen to be present — otherwise the filter buttons move as the data changes.
+- **A kind reads as a sentence.** `describeKind` turns `moderation.hide_content` into
+  "Content hidden". Members read their own record, so an underscore leaking into a
+  timeline is a bug with a person on the other end of it.
+
+### 74.3 The ladder (§10.1)
+
+`warning_policy` is one row per severity, naming the rung, the points, the duration,
+the ledger rule it writes, and the sentence in both languages. `warning_ladder()`
+derives the *next* rung from the ordering rather than storing it, because a stored
+copy is the thing that goes stale when somebody reorders the ladder.
+
+`apply_warning_ladder` writes three things in one call — the moderation action, the
+standing entry, and the message — so no caller can do two of the three. Two
+decisions inside it worth naming:
+
+- **A nudge writes no ledger row.** Zero points would put a no-op in the ledger, and a
+  ledger full of no-ops is a ledger nobody reconciles.
+- **The message names the next rung.** The plan's reason is exact: a member who can
+  see the next step argues with a decision, and a member who cannot argues with the
+  system.
+
+### 74.4 Appeals (§10.2)
+
+`appeals` carries the original decider copied at filing time, which is the column
+that makes the two-person rule enforceable: a later change to the action's actor
+cannot launder the conflict. Three partial unique indexes give one appeal per
+subject per person, because the subject columns are nullable and a composite unique
+would treat every NULL as distinct.
+
+The rule is enforced in **three** places, and the duplication is the point:
+
+1. `claim_appeal` refuses the original decider and the appellant;
+2. `decide_appeal` refuses them again, so claiming is not the only guard;
+3. `reviewBlocker` in the kit puts the same sentence on the screen, so the button is
+   absent rather than failing after somebody has read the appeal.
+
+An upheld appeal writes a `restore_account` or `restore_content` row rather than
+editing the original, so a reader can always see that it was once suspended.
+
+### 74.5 Signals and reliability (§10.2)
+
+`person_signals` links accounts by device hash and — when the marketplace grows one —
+payment instrument, and **never by display name**. `t106` asserts that two accounts
+sharing a display name produce no signal, because that is the case where a
+name-based suggestion would suspend an innocent member with a common name.
+
+`signalSentence` keeps the gap between fact and conclusion open: "2 other accounts
+have signed in from this device. A shared browser produces this too."
+
+`reporter_reliability` returns a null rate when nothing has been decided, and the
+console renders that as "No decision yet on 3 reports" rather than "0%". A rate over
+no decisions is not zero, and a screen that shows it as zero libels every new
+reporter.
+
+### 74.6 The shift console (§10.3)
+
+`shifts` and `shift_assignments` replace the roster's projection of
+`staff_records.shift`. The important addition is `handover`, and `shift_board` returns
+the **previous** shift's note alongside this one, because the note a person needs when
+they sit down at 04:00 is the one written by the shift that just ended.
+
+`ShiftBoard.tsx` puts the handover at the top rather than at the bottom of a note
+field. An uncovered shift and a missing handover are both banners, not rows: a roster
+exists to make "nobody is on tonight" visible before the shift starts rather than
+after.
+
+### 74.7 The four faults the harnesses found
+
+1. **`standing_rules` has a foreign key, and the ladder invented keys.** A ladder step
+   wrote `rule_key = 'ladder.<severity>'` and the insert failed on the FK. The fix is a
+   `rule_key` column on the policy, seeded rows in `standing_rules`, and a check
+   constraint that points and rule key must agree — so a rung cannot take standing
+   under a rule nothing can explain.
+2. **`format('%s%d points')` is a runtime error** — `%d` is not a specifier `format()`
+   accepts. The third time this class of bug has appeared in this suite.
+3. **A summary shorter than its own column floor.** `grounds_summary` requires ten
+   characters and the default was `left(grounds, 180)`, so a short summary produced a
+   constraint violation the caller could not act on. The default is now extended from
+   the grounds.
+4. **`notifications_unique_idx` collapsed two different ladder steps into one.** The
+   first fix added a `notice_key` column — and `t100` failed ten checks about
+   *receipts*, because the index it replaced was already carrying a discriminator.
+   `subject_key` has existed since `0139` for exactly this purpose. The column was
+   deleted and the existing one used. This is the most useful of the four: the
+   mechanism was already there, and a harness about a different feature found the
+   duplicate.
+
+One more, in the console rather than the database: `slaTone` and `orderByLatency`
+lived in `admin-site` and the moderation console needed the same answer. They moved
+to `corporate-kit` rather than being copied, and `admin-site`'s 31 SLA tests still
+pass against the kit's implementation — which is the proof that moving them changed
+nothing.
+
+### 74.8 Where this leaves the plan
+
+**Verified at the close of this response:** 89 of 89 database harnesses, `t106` 99/0,
+`corporate-kit` 311 → **399 tests** (88 of them new in `people.test.ts`), `admin-site`
+349, `users-admin-site` 34, `moderator-site` 33, `users-moderator-site` 18, audit
+**153 passed with 0 failed and 4 recorded** across every console built, and initial
+JavaScript at users-admin **243 KB**, moderator **195 KB**, users-moderator **192 KB**
+— all inside the 250 KB budget.
+
+**Done from §10, in the plan's own terms:**
+
+| | what |
+| --- | --- |
+| §10.1 record | timeline over seven sources, open-items strip, standing derived not stored |
+| §10.1 ladder | `warning_policy`, `warning_ladder` with a derived next rung, `apply_warning_ladder` writing action + ledger + message in one call |
+| §10.2 appeal | `appeals` with the original decider copied, one per subject, enforced in three places, upheld undoes rather than edits |
+| §10.2 signals | device and instrument, never a name; `t106` asserts the negative |
+| §10.2 reliability | derived on read, null rather than zero over no decisions |
+| §10.2 claim | `claim_report` was already atomic via `for update` — **no change made**, and §10.2's concurrency test is not written |
+| §10.3 shifts | `shifts`, `shift_assignments`, `shift_board` carrying the previous handover |
+
+**Not done, and honest about it:**
+
+- **The one-hundred-caller concurrency test for `claim_report` (§10.2)** is not
+  written. The function is atomic by `for update`, but "atomic by inspection" is the
+  weaker claim the plan explicitly refuses. `t106` does not prove it.
+- **Duplicate clustering of near-identical reports** is not built.
+- **The workload view** — open, claimed, overdue per moderator — is not built.
+- **Leave requests and shift swaps** (§10.3) are not built: the board shows who is on
+  and carries the handover, but a swap still happens in a chat message.
+- **The appeals screen has no detail view.** The queue lists the summary and decides
+  on it; the member's full grounds are written and not yet rendered, which is the one
+  place in this response where the console does not show everything the database
+  stores.
+- **`0147_ladder` and `0148_appeals` from the plan do not exist** because their
+  contents are in `0146`; the next free number is `0147`.
+
+So the count is: 1,013 features still `planned`, 26 permissions, and the measure of
+this response is that a member who is warned is told what comes next, a member who
+appeals is heard by somebody who did not decide against them, and a shift that ends
+leaves the next one a note.

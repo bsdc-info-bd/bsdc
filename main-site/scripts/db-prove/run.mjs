@@ -251,6 +251,10 @@ const HARNESSES = [
     't105.mjs',
     '0145: a brand theme is published by somebody who meant to publish it',
   ],
+  [
+    't106.mjs',
+    '0146: a person record, an appeal nobody judges alone, and a ladder that says what comes next',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

@@ -8,30 +8,11 @@
  * still coming, and reporting "overdue" without saying by how much.
  */
 
-export type SlaState = 'ok' | 'watching' | 'breached' | 'met';
+import type { SlaRow } from '@kit';
+import { worstState, slaTone, orderByLatency, breachedCount } from '@kit';
 
-export interface SlaRow {
-  severity: string;
-  age_minutes: number;
-  respond_within: number;
-  resolve_within: number;
-  respond_state: string;
-  resolve_state: string;
-}
-
-/** The worst of the two clocks. A row that has breached its respond target is late, whatever its resolve target says. */
-export function worstState(row: SlaRow): SlaState {
-  const rank = (state: string): number =>
-    state === 'breached' ? 3 : state === 'watching' ? 2 : state === 'met' ? 1 : 0;
-  return rank(row.respond_state) >= rank(row.resolve_state)
-    ? normalise(row.respond_state)
-    : normalise(row.resolve_state);
-}
-
-function normalise(state: string): SlaState {
-  if (state === 'breached' || state === 'watching' || state === 'met') return state;
-  return 'ok';
-}
+export type { SlaRow, SlaState } from '@kit';
+export { worstState, slaTone, orderByLatency, breachedCount };
 
 /**
  * How long is left, in words.
@@ -66,41 +47,6 @@ export function budgetUsed(row: SlaRow): number {
   return Math.max(0, Number(row.age_minutes) / budget);
 }
 
-/**
- * The tone a tile takes.
- *
- * `met` is deliberately `ok` rather than a separate green: a closed case is not an
- * achievement to celebrate on a queue screen, it is simply no longer waiting.
- */
-export function slaTone(state: SlaState): 'neutral' | 'ok' | 'warn' | 'bad' {
-  if (state === 'breached') return 'bad';
-  if (state === 'watching') return 'warn';
-  return 'neutral';
-}
-
-/**
- * The order a queue is read in: breached first, then watching, then by age.
- *
- * Arrival order is the wrong default for a queue with a clock, because the row that
- * has been waiting longest is not always the one closest to its deadline — a
- * critical item that arrived an hour ago can be later than a low one from yesterday.
- */
-export function orderByLatency<T extends SlaRow>(rows: readonly T[]): T[] {
-  const weight = (row: T): number => {
-    const state = worstState(row);
-    return state === 'breached' ? 0 : state === 'watching' ? 1 : 2;
-  };
-  return [...rows].sort((a, b) => {
-    if (weight(a) !== weight(b)) return weight(a) - weight(b);
-    if (a.age_minutes !== b.age_minutes) return b.age_minutes - a.age_minutes;
-    return 0;
-  });
-}
-
-/** How many rows are past their respond target — the number the tab badge shows. */
-export function breachedCount(rows: readonly SlaRow[]): number {
-  return rows.filter((row) => worstState(row) === 'breached').length;
-}
 
 /**
  * One sentence for the top of the queue.

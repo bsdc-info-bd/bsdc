@@ -24,6 +24,7 @@ export * from './domain/seo';
 export * from './domain/brand';
 export * from './domain/perf';
 export * from './domain/moderation';
+export * from './domain/people';
 export * from './domain/portals';
 export * from './domain/telemetry';
 export * from './domain/freshness';

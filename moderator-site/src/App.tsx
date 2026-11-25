@@ -43,6 +43,7 @@ import {
   type Decision,
 } from './model';
 import { Reports } from './Reports';
+import { Appeals } from './Appeals';
 
 /**
  * The moderation panel.
@@ -59,6 +60,7 @@ export function App(): ReactElement {
       tabs={[
         { id: 'queue', label: 'Queue', render: () => <Queue /> },
         { id: 'reports', label: 'Reports', render: () => <Reports /> },
+        { id: 'appeals', label: 'Appeals', render: () => <Appeals /> },
         { id: 'patterns', label: 'Patterns', render: () => <Patterns /> },
       ]}
     />
