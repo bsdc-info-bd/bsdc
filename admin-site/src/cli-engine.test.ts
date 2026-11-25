@@ -122,3 +122,51 @@ describe('bulk plan parsing', () => {
     expect(apply?.destructive).toBe(true);
   });
 });
+
+describe('the governance verbs added by 0140–0143 are reachable from the terminal', () => {
+  const commands = CLI_COMMANDS.map((spec) => spec.command);
+
+  it('offers every read the last four migrations added', () => {
+    for (const expected of [
+      'case queue',
+      'case show',
+      'case note',
+      'case close',
+      'standing',
+      'standing reconcile',
+      'receipt',
+      'seo coverage',
+      'seo missing',
+    ]) {
+      expect(commands).toContain(expected);
+    }
+  });
+
+  it('marks only the two verbs that write as destructive', () => {
+    const writers = CLI_COMMANDS.filter(
+      (spec) => spec.destructive && /^(case|standing|receipt|seo)/.test(spec.command),
+    ).map((spec) => spec.command);
+    // Only closing is destructive. A note appends to a timeline that cannot be
+    // edited, so it changes nothing that existed before it — marking it destructive
+    // would teach a reader to click through the warning that matters.
+    expect(writers).toEqual(['case close']);
+  });
+
+  it('finds them by prefix, because a command nobody can find is not shipped', () => {
+    const caseVerbs = cliAutocomplete('case').map((spec) => spec.command);
+    expect(caseVerbs).toContain('case close');
+    const seoVerbs = cliAutocomplete('seo').map((spec) => spec.command);
+    expect(seoVerbs).toContain('seo coverage');
+  });
+
+  it('parses a case close with its outcome and reason as words, not as an invented flag', () => {
+    const parsed = parseCli('case close abc123 warned --reason "Warned about the thread"');
+    expect(parsed.positional).toEqual(['case', 'close', 'abc123', 'warned']);
+    expect(parsed.flags['reason']).toBe('Warned about the thread');
+  });
+
+  it('parses a standing read with no subcommand as the member form', () => {
+    const parsed = parseCli('standing 00000000-0000-4000-8000-000000000001');
+    expect(parsed.positional).toEqual(['standing', '00000000-0000-4000-8000-000000000001']);
+  });
+});

@@ -391,6 +391,254 @@ export function CliConsole(): ReactElement {
       return;
     }
 
+    if (verb === 'case') {
+      // The case family. `case note` and `case close` write; both are refused by
+      // the database without `moderation.resolve`, so the terminal does not need a
+      // second permission check — it needs to say so when the refusal comes.
+      if (sub === 'queue') {
+        const status = typeof parsed.flags['status'] === 'string' ? parsed.flags['status'] : 'open';
+        const rows = await listRpc<{
+          id: string;
+          subject_name: string;
+          status: string;
+          reports: number;
+          reopened_count: number;
+          age_hours: number;
+        }>(env, 'case_queue', { p_status: status, p_limit: 100 });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.id.slice(0, 8)} | ${(r.subject_name || 'unnamed').padEnd(20, ' ')} | ${String(r.reports).padStart(3)} reports | ${String(r.age_hours).padStart(4)} h | ${r.reopened_count > 0 ? `reopened ${String(r.reopened_count)}` : '—'}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || '(0 cases in this queue)');
+        return;
+      }
+
+      if (sub === 'show') {
+        const id = parsed.positional[2];
+        if (!id) {
+          pushEntry(trimmed, 'error', 'Usage: case show <id>');
+          return;
+        }
+        const [one] = await listRpc<{
+          id: string;
+          subject_name: string;
+          status: string;
+          outcome: string;
+          reopened_count: number;
+          reports: { reason: string; status: string }[];
+          events: { kind: string; body: string; created_at: string }[];
+        }>(env, 'admin_case', { p_case_id: id });
+        if (!one) {
+          pushEntry(trimmed, 'error', 'No case with that id, or it is not yours to read.');
+          return;
+        }
+        const lines = [
+          `case ${one.id} · ${one.subject_name || 'unnamed'} · ${one.status}`,
+          `outcome: ${one.outcome === '' ? 'none yet' : one.outcome}${
+            one.reopened_count > 0 ? ` · reopened ${String(one.reopened_count)}×` : ''
+          }`,
+          '',
+          `reports (${String(one.reports.length)}):`,
+          ...one.reports.map((r) => `  - ${r.reason} [${r.status}]`),
+          '',
+          'timeline (newest first):',
+          ...[...one.events]
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))
+            .map(
+              (e) =>
+                `  ${e.created_at.slice(0, 16).replace('T', ' ')} ${e.kind.padEnd(14, ' ')} ${e.body}`,
+            ),
+        ];
+        pushEntry(trimmed, 'ok', lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'note') {
+        const id = parsed.positional[2];
+        const body = parsed.positional.slice(3).join(' ');
+        if (!id || body.trim().length < 2) {
+          pushEntry(trimmed, 'error', 'Usage: case note <id> "<text>"');
+          return;
+        }
+        await callRpc(env, 'add_case_note', {
+          p_case_id: id,
+          p_body: body.trim(),
+          p_kind: 'note',
+          p_metadata: {},
+        });
+        pushEntry(
+          trimmed,
+          'ok',
+          'Note added. A timeline entry cannot be edited, so a correction is another note.',
+        );
+        return;
+      }
+
+      if (sub === 'close') {
+        const id = parsed.positional[2];
+        const outcome = parsed.positional[3];
+        const reason = typeof parsed.flags['reason'] === 'string' ? parsed.flags['reason'] : '';
+        if (!id || !outcome) {
+          pushEntry(
+            trimmed,
+            'error',
+            `Usage: case close <id> <outcome> --reason "<text>"\nOutcomes: no_action, content_removed, account_suspended, account_banned, warned, referred, duplicate`,
+          );
+          return;
+        }
+        const quiet = outcome === 'no_action' || outcome === 'duplicate';
+        if (!quiet && reason.trim().length < 12) {
+          pushEntry(
+            trimmed,
+            'error',
+            'The member is told about this outcome, so --reason needs at least twelve characters.',
+          );
+          return;
+        }
+        await callRpc(env, 'close_case', {
+          p_case_id: id,
+          p_outcome: outcome,
+          p_outcome_message_key: quiet ? '' : outcome,
+          p_note: reason.trim(),
+        });
+        pushEntry(
+          trimmed,
+          'ok',
+          quiet
+            ? 'Closed. Nothing is announced, because nothing was done.'
+            : 'Closed. The member has been told, with your note.',
+        );
+        return;
+      }
+
+      pushEntry(trimmed, 'error', 'Usage: case queue | case show <id> | case note <id> "<text>" | case close <id> <outcome> --reason "<text>"');
+      return;
+    }
+
+    if (verb === 'standing') {
+      if (sub === 'reconcile') {
+        const rows = await listRpc<{
+          uid: string;
+          cached_points: number;
+          ledger_points: number;
+          difference: number;
+        }>(env, 'standing_reconcile', { p_limit: 200 });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.uid.slice(0, 12)} | cached ${String(r.cached_points).padStart(5)} | ledger ${String(r.ledger_points).padStart(5)} | off by ${String(r.difference)}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || 'The cache agrees with the ledger for every member.');
+        return;
+      }
+
+      const uid = parsed.positional[1];
+      if (!uid) {
+        pushEntry(trimmed, 'error', 'Usage: standing <uid> | standing reconcile');
+        return;
+      }
+      const [one] = await listRpc<{
+        display_name: string;
+        cached_points: number;
+        ledger_points: number;
+        agrees: boolean;
+        entries: number;
+        counted_entries: number;
+      }>(env, 'admin_standing', { p_uid: uid });
+      if (!one) {
+        pushEntry(trimmed, 'error', 'No such member.');
+        return;
+      }
+      pushEntry(
+        trimmed,
+        one.agrees ? 'ok' : 'error',
+        [
+          `${one.display_name || uid}: ${String(one.ledger_points)} points`,
+          `cache: ${String(one.cached_points)} — ${one.agrees ? 'agrees with the ledger' : 'DISAGREES with the ledger'}`,
+          `entries: ${String(one.entries)}, of which ${String(one.counted_entries)} count`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    if (verb === 'receipt') {
+      const id = parsed.positional[1];
+      if (!id) {
+        pushEntry(trimmed, 'error', 'Usage: receipt <id>');
+        return;
+      }
+      const [one] = await listRpc<{
+        action: string;
+        subject: string;
+        reason: string;
+        via: string;
+        actor_name: string;
+        created_at: string;
+        purge_after: string;
+      }>(env, 'admin_receipt', { p_id: id });
+      if (!one) {
+        pushEntry(trimmed, 'error', 'No receipt with that id, or it is not yours to read.');
+        return;
+      }
+      pushEntry(
+        trimmed,
+        'ok',
+        [
+          `${one.action} on ${one.subject}`,
+          `by ${one.actor_name} via ${one.via} at ${one.created_at.slice(0, 16).replace('T', ' ')}`,
+          one.reason === '' ? 'no reason recorded' : `reason: ${one.reason}`,
+          `kept until ${one.purge_after.slice(0, 10)}`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    if (verb === 'seo') {
+      if (sub === 'coverage') {
+        const limit = Number(parsed.flags['limit'] ?? 50);
+        const rows = await listRpc<{
+          path: string;
+          problem: string;
+          title_length: number;
+          description_length: number;
+        }>(env, 'seo_coverage', {
+          p_limit: Number.isFinite(limit) ? limit : 50,
+          p_only_problems: true,
+        });
+        const formatted = rows
+          .map((r) => `${r.path.padEnd(40, ' ')} ${r.problem}`)
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || 'Every page that matters has an override that holds up.');
+        return;
+      }
+
+      if (sub === 'missing') {
+        const limit = Number(parsed.flags['limit'] ?? 50);
+        const rows = await listRpc<{
+          path: string;
+          hits: number;
+          last_seen: string;
+          covered_by: string | null;
+        }>(env, 'redirect_404_sources', {
+          p_limit: Number.isFinite(limit) ? limit : 50,
+        });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.path.padEnd(40, ' ')} ${String(r.hits).padStart(6)} hits | last seen ${r.last_seen.slice(0, 10)} | ${r.covered_by === null ? 'no redirect' : `→ ${r.covered_by}`}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || 'No path is being missed.');
+        return;
+      }
+
+      pushEntry(trimmed, 'error', 'Usage: seo coverage [--limit <n>] | seo missing [--limit <n>]');
+      return;
+    }
+
     if (verb === 'approvals' && sub === 'list') {
       const [shops, campaigns] = await Promise.all([
         listRpc<{ id: string; name: string; city: string; owner_name: string }>(

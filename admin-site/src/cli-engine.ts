@@ -60,6 +60,64 @@ export const CLI_COMMANDS: readonly CliCommandSpec[] = [
     summary: 'Query the immutable Postgres audit ledger with structured filters',
   },
   {
+    signature: 'case queue [--status <open|pending|closed>]',
+    command: 'case queue',
+    category: 'governance',
+    summary: 'Read the case queue: reopened first, then the oldest',
+  },
+  {
+    signature: 'case show <id>',
+    command: 'case show',
+    category: 'governance',
+    summary: 'Read one case: its reports, its timeline and its outcome',
+  },
+  {
+    signature: 'case note <id> "<text>"',
+    command: 'case note',
+    category: 'governance',
+    // Not destructive: it adds an entry and can alter nothing that exists. The
+    // timeline's append-only guarantee is what makes that true, so this is the one
+    // write in the family that needs no confirmation.
+    summary: 'Add an immutable note to a case timeline',
+  },
+  {
+    signature: 'case close <id> <outcome> [--reason "<text>"]',
+    command: 'case close',
+    category: 'governance',
+    summary: 'Close a case with an outcome, and tell the member unless nothing was done',
+    destructive: true,
+  },
+  {
+    signature: 'standing <uid>',
+    command: 'standing',
+    category: 'governance',
+    summary: 'Read a member standing: the cached number, the ledger number, and whether they agree',
+  },
+  {
+    signature: 'standing reconcile',
+    command: 'standing reconcile',
+    category: 'governance',
+    summary: 'List every member whose cached standing disagrees with the ledger',
+  },
+  {
+    signature: 'receipt <id>',
+    command: 'receipt',
+    category: 'governance',
+    summary: 'Read one action receipt by id',
+  },
+  {
+    signature: 'seo coverage [--limit <n>]',
+    command: 'seo coverage',
+    category: 'telemetry',
+    summary: 'List pages whose SEO override is missing, thin or stale',
+  },
+  {
+    signature: 'seo missing [--limit <n>]',
+    command: 'seo missing',
+    category: 'telemetry',
+    summary: 'List paths that are being asked for and are not there',
+  },
+  {
     signature: 'approvals list',
     command: 'approvals list',
     category: 'governance',

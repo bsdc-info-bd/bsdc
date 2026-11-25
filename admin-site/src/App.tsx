@@ -46,6 +46,7 @@ import { Approvals } from './Approvals';
 import { Campaigns } from './Campaigns';
 import { Authority } from './Authority';
 import { Deck } from './Deck';
+import { Cases } from './Cases';
 import { Sessions } from './Sessions';
 import { Overview } from './Overview';
 import { Marketplace } from './Marketplace';
@@ -110,6 +111,7 @@ export function App(): ReactElement {
         { id: 'overview', label: 'Overview', render: () => <Overview /> },
         { id: 'authority', label: 'Authority', render: () => <Authority /> },
         { id: 'sessions', label: 'Sessions', render: () => <Sessions /> },
+        { id: 'cases', label: 'Cases', render: () => <Cases /> },
         {
           id: 'cli',
           label: 'CLI Terminal',
