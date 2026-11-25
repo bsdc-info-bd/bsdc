@@ -255,6 +255,10 @@ const HARNESSES = [
     't106.mjs',
     '0146: a person record, an appeal nobody judges alone, and a ladder that says what comes next',
   ],
+  [
+    't107.mjs',
+    '0147: a certificate that reproduces byte for byte, a code that survives a hundred callers, and a notice that says it was withdrawn',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

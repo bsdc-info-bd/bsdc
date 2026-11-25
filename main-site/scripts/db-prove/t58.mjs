@@ -160,12 +160,51 @@ try {
     `select public.restore_issued_certificate($1, 'Audit reinstatement') as rev`,
     [code],
   );
-  eq(restored.rows[0]?.rev, 4, 'restore_issued_certificate increments revision and clears revocation');
+  // §11.1: "restoring a revoked certificate writes a new row rather than editing the
+  // old, so a reader can always see that it was once revoked." This assertion used to
+  // read "increments revision and clears revocation" — it was green, and it was wrong:
+  // `restore_issued_certificate` cleared `revoked_at` and `revoke_reason` in place, so
+  // a certificate that had been revoked for cause verified afterwards as though
+  // nothing had happened. 0147 keeps the revocation in `revoked_history` and writes the
+  // revoked state into `certificate_revisions` first, so the chain reads
+  // issued → revoked → restored. The revision number is unchanged by the fix.
+  eq(restored.rows[0]?.rev, 4, 'restore_issued_certificate increments the revision');
   eq(
     (await caller('admin-u', 'admin', `select status from public.certificate_detail($1)`, [code]))
       .rows[0]?.status,
     'issued',
     'restored certificate has status issued',
+  );
+  const kept = (
+    await caller(
+      'admin-u',
+      'admin',
+      `select revoked_history, status, revoked_at from public.issued_certificates where code = $1`,
+      [code],
+    )
+  ).rows[0];
+  eq(kept?.status, 'issued', 'restore leaves the row live');
+  eq(kept?.revoked_at, null, 'restore clears the live revocation column');
+  eq(kept?.revoked_history?.length, 1, 'restore keeps exactly one revocation in history');
+  ok(
+    typeof kept?.revoked_history?.[0]?.reason === 'string' &&
+      kept.revoked_history[0].reason.length > 0,
+    'the kept revocation still carries the reason it was revoked for',
+  );
+  ok(
+    kept?.revoked_history?.[0]?.restore_reason === 'Audit reinstatement',
+    'the kept revocation records why it was restored',
+  );
+  const chainRows = (
+    await caller('admin-u', 'admin', `select * from public.certificate_chain($1)`, [code])
+  ).rows;
+  ok(
+    chainRows.some((r) => r.status === 'revoked'),
+    'the amendment chain still shows the certificate was revoked',
+  );
+  ok(
+    chainRows.some((r) => r.changes?.some((c) => c.field === 'status' && c.to === 'issued')),
+    'the chain names the revoked-to-issued change rather than hiding it',
   );
 
   // Bulk extend expiry & bulk revoke

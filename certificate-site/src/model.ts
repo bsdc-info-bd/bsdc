@@ -38,6 +38,11 @@ export type RegistryRow = {
   readonly updated_at?: string | undefined;
   readonly edit_reason?: string | undefined;
   readonly superseded_by?: string | null | undefined;
+  /**
+   * Every revocation this certificate has carried, kept rather than erased when it was
+   * restored. Absent on rows issued before 0147 and on any read that does not select it.
+   */
+  readonly revoked_history?: unknown;
   readonly verifications: number;
 };
 
@@ -437,4 +442,217 @@ export function formatCertificateError(cause: unknown): string {
     return 'No member account matches that member UID. Leave the field blank if the recipient does not have an account.';
   }
   return msg;
+}
+
+// ---------------------------------------------------------------------------
+// §11.1 The amendment chain
+// ---------------------------------------------------------------------------
+// A certificate's history is not a list of revisions to open three at a time. The
+// database already returns each link with the fields that differ from the next one
+// (`certificate_chain`); this turns that into the two things a reader needs: what
+// changed, and why it is still visible that it was once revoked.
+export type ChainLink = {
+  readonly code: string;
+  readonly revision: number;
+  readonly status: string;
+  readonly issued_on: string;
+  readonly expires_on: string | null;
+  readonly recipient_name: string;
+  readonly subject: string;
+  readonly reason: string;
+  readonly edited_by: string;
+  readonly edited_at: string | null;
+  readonly changes: readonly ChainChange[];
+};
+
+export type ChainChange = {
+  readonly field: string;
+  readonly from: string | null;
+  readonly to: string | null;
+};
+
+/** One row of the revocation ledger a reader is shown. */
+export type RevocationRecord = {
+  readonly revoked_at: string;
+  readonly reason: string;
+  readonly restored_at: string;
+  readonly restored_by: string;
+  readonly restore_reason: string;
+};
+
+/**
+ * Reads the `revoked_history` column defensively.
+ *
+ * The column is JSONB written by a trigger-free RPC, so it can arrive as an array, as
+ * a JSON string (a driver that hands back text), or as null on rows issued before
+ * 0147. A card is not allowed to throw because one row predates a migration, and it is
+ * not allowed to silently show "never revoked" for a row whose history failed to
+ * parse — so a malformed value is reported as a problem, not as an empty list.
+ */
+export function parseRevocationHistory(raw: unknown): {
+  readonly records: readonly RevocationRecord[];
+  readonly malformed: boolean;
+} {
+  if (raw === null || raw === undefined || raw === '') return { records: [], malformed: false };
+  let value: unknown = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return { records: [], malformed: true };
+    }
+  }
+  if (!Array.isArray(value)) return { records: [], malformed: true };
+  const records: RevocationRecord[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object') return { records: [], malformed: true };
+    const row = entry as Record<string, unknown>;
+    const revokedAt = String(row['revoked_at'] ?? '');
+    if (revokedAt === '') continue;
+    records.push({
+      revoked_at: revokedAt,
+      reason: String(row['reason'] ?? ''),
+      restored_at: String(row['restored_at'] ?? ''),
+      restored_by: String(row['restored_by'] ?? ''),
+      restore_reason: String(row['restore_reason'] ?? ''),
+    });
+  }
+  // Oldest first, because that is the order they happened in and the order somebody
+  // reading a dispute expects.
+  return {
+    records: records.sort((a, b) => a.revoked_at.localeCompare(b.revoked_at)),
+    malformed: false,
+  };
+}
+
+/** A sentence for the top of a restored certificate, or '' when it never was revoked. */
+export function revocationSummary(records: readonly RevocationRecord[]): string {
+  if (records.length === 0) return '';
+  const last = records[records.length - 1];
+  if (last === undefined) return '';
+  const times = records.length === 1 ? 'once' : `${records.length} times`;
+  const why = last.reason.trim() === '' ? 'no reason recorded' : last.reason.trim();
+  const back =
+    last.restore_reason.trim() === ''
+      ? 'restored'
+      : `restored: ${last.restore_reason.trim()}`;
+  return `This certificate has been revoked ${times}. It was revoked ${why}, then ${back}.`;
+}
+
+/**
+ * The chain newest-first, with the revision number a reader is looking at and a
+ * human field name for each change.
+ *
+ * `changes` from the database is already a diff against the next (newer) link, so it
+ * needs no recomputation here — recomputing it in the client is what produced a card
+ * that compared every revision against the *current* row and therefore reported the
+ * same three differences eight times.
+ */
+const CHAIN_FIELD_LABELS: Readonly<Record<string, string>> = {
+  recipient_name: 'Recipient',
+  subject: 'Subject',
+  status: 'Status',
+  expires_on: 'Expiry',
+};
+
+export function chainFieldLabel(field: string): string {
+  return CHAIN_FIELD_LABELS[field] ?? field.replace(/_/g, ' ');
+}
+
+export type ChainEntry = {
+  readonly revision: number;
+  readonly status: string;
+  readonly at: string | null;
+  readonly reason: string;
+  readonly actor: string;
+  readonly changes: readonly { readonly label: string; readonly from: string; readonly to: string }[];
+  /** True for the link that is the certificate as it stands now. */
+  readonly current: boolean;
+};
+
+export function describeChain(links: readonly ChainLink[]): readonly ChainEntry[] {
+  return links.map((link, index) => ({
+    revision: link.revision,
+    status: link.status,
+    at: link.edited_at,
+    reason: link.reason,
+    actor: link.edited_by,
+    current: index === 0,
+    changes: (link.changes ?? []).map((c) => ({
+      label: chainFieldLabel(c.field),
+      from: c.from === null || c.from === '' ? '—' : c.from,
+      to: c.to === null || c.to === '' ? '—' : c.to,
+    })),
+  }));
+}
+
+/** Whether a certificate's stored hash still describes its own content. */
+export type VerificationState = {
+  readonly kind: string;
+  readonly found: boolean;
+  readonly state: string;
+  readonly reason: string;
+  readonly supersededBy: string;
+  readonly hashMatches: boolean | null;
+};
+
+export function describeVerification(row: {
+  readonly kind: string;
+  readonly found: boolean;
+  readonly state: string;
+  readonly reason: string | null;
+  readonly superseded_by: string | null;
+  readonly hash_matches: boolean | null;
+}): VerificationState {
+  return {
+    kind: row.kind,
+    found: row.found,
+    state: row.state,
+    reason: row.reason ?? '',
+    supersededBy: row.superseded_by ?? '',
+    hashMatches: row.hash_matches,
+  };
+}
+
+/**
+ * The one line a person holding a printed document came to read.
+ *
+ * `not_found` and `revoked` are deliberately different sentences: a revoked
+ * certificate is one we issued and then withdrew, and telling somebody their document
+ * is "not ours" when we revoked it would be a false accusation of forgery.
+ */
+export function verificationSentence(v: VerificationState): string {
+  switch (v.state) {
+    case 'valid':
+      return v.hashMatches === false
+        ? 'This certificate is current, but its stored text no longer matches the record it was issued from. Ask the registry to reissue it.'
+        : 'This certificate is current and matches the record it was issued from.';
+    case 'revoked':
+      return v.reason === ''
+        ? 'We issued this certificate and have since revoked it.'
+        : `We issued this certificate and have since revoked it: ${v.reason}`;
+    case 'withdrawn':
+      return v.reason === ''
+        ? 'This notice was published and has since been withdrawn.'
+        : `This notice was published and has since been withdrawn: ${v.reason}`;
+    case 'published':
+      return 'This notice is current.';
+    case 'draft':
+      return 'This notice has not been published.';
+    case 'not_found':
+    default:
+      return 'No document with that code is in our registry. Check the code printed on it.';
+  }
+}
+
+/** Restoring a certificate needs a reason the reader will eventually be shown. */
+export function restoreProblems(reason: string): readonly string[] {
+  const problems: string[] = [];
+  const trimmed = reason.trim();
+  if (trimmed.length < 3) {
+    problems.push('Give a reason for the restoration — it is shown beside the revocation.');
+  } else if (trimmed.length > 300) {
+    problems.push(`Keep the restoration reason to ${MAX_REVOKE_REASON} characters or fewer.`);
+  }
+  return problems;
 }

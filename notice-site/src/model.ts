@@ -22,6 +22,11 @@ export type NoticeRow = {
   readonly acknowledgements: number;
   readonly staff_total: number;
   readonly version?: number | undefined;
+  /** 0147: the paper trail. Absent on a read that does not select it. */
+  readonly withdraw_reason?: string | undefined;
+  readonly withdrawn_at?: string | null | undefined;
+  readonly legal_hold?: boolean | undefined;
+  readonly legal_hold_scope?: string | undefined;
 };
 
 export type NoticeRevisionRow = {
@@ -272,4 +277,129 @@ export function filterNotices(
       row.category.toLowerCase().includes(q)
     );
   });
+}
+
+// ---------------------------------------------------------------------------
+// §11.2 Notices with a paper trail
+// ---------------------------------------------------------------------------
+
+/** Added to a notice row by 0147: the paper trail a reader can be shown. */
+export type NoticeWithdrawal = {
+  readonly withdraw_reason?: string | undefined;
+  readonly withdrawn_at?: string | null | undefined;
+  readonly legal_hold?: boolean | undefined;
+  readonly legal_hold_scope?: string | undefined;
+};
+
+/**
+ * The complete roster, not the staff-only one.
+ *
+ * `notice_ack_roster` counts `staff_records`, so a notice addressed to members shows a
+ * denominator of the staff who must sign it — which is the right question for a policy
+ * bulletin and the wrong one for a fire drill. `notice_ack_roster_full` counts the
+ * audience the notice was actually addressed to, and adds the reminder count.
+ */
+export type NoticeRosterFullRow = {
+  readonly uid: string;
+  readonly display_name: string;
+  readonly acknowledged: boolean;
+  readonly acknowledged_at: string | null;
+  readonly reminders_sent: number;
+  readonly last_reminded_at: string | null;
+};
+
+export type RosterSummary = {
+  readonly total: number;
+  readonly acknowledged: number;
+  readonly outstanding: number;
+  /** Percentage acknowledged, rounded down so 99.6% never reads as 100%. */
+  readonly percent: number;
+  /** How many reminder rounds the notice has been through. */
+  readonly rounds: number;
+  readonly canRemind: boolean;
+};
+
+export function summariseRoster(rows: readonly NoticeRosterFullRow[]): RosterSummary {
+  const total = rows.length;
+  const acknowledged = rows.filter((r) => r.acknowledged).length;
+  const outstanding = total - acknowledged;
+  return {
+    total,
+    acknowledged,
+    outstanding,
+    percent: total === 0 ? 0 : Math.floor((acknowledged / total) * 100),
+    rounds: rows.reduce((max, r) => (r.reminders_sent > max ? r.reminders_sent : max), 0),
+    // A reminder to nobody is refused by the database; offering the button anyway
+    // would teach the operator that the control is decorative.
+    canRemind: outstanding > 0,
+  };
+}
+
+/** The sentence a reminder action promises, so the operator knows what will happen. */
+export function reminderPlan(summary: RosterSummary, nextRound: number): string {
+  if (!summary.canRemind) return 'Everybody has acknowledged this notice. There is nobody to remind.';
+  const people = summary.outstanding === 1 ? 'one person' : `${summary.outstanding} people`;
+  const past = summary.rounds === 0 ? 'This is the first reminder' : `This would be reminder ${nextRound}`;
+  return `${past}: ${people} will be notified, and the round is recorded against the notice.`;
+}
+
+export const MAX_WITHDRAW_REASON = 300;
+export const MIN_WITHDRAW_REASON = 10;
+
+/** Withdrawal needs a reason the reader will be shown, so the floor is not decoration. */
+export function withdrawProblems(reason: string, status: string): readonly string[] {
+  const problems: string[] = [];
+  const trimmed = reason.trim();
+  if (status !== 'published') {
+    problems.push('Only a published notice can be withdrawn. A draft is deleted instead.');
+  }
+  if (trimmed.length < MIN_WITHDRAW_REASON) {
+    problems.push(
+      `Say why in at least ${MIN_WITHDRAW_REASON} characters — the reader is shown this sentence, not a dead link.`,
+    );
+  } else if (trimmed.length > MAX_WITHDRAW_REASON) {
+    problems.push(`Keep the withdrawal reason to ${MAX_WITHDRAW_REASON} characters or fewer.`);
+  }
+  return problems;
+}
+
+export const MIN_LEGAL_HOLD_SCOPE = 10;
+
+/**
+ * A hold names its scope. "Everything" is a hold nobody can release, so the scope is
+ * required both when it is set and when it is lifted — the reason for lifting is what
+ * a dispute reads years later.
+ */
+export function legalHoldProblems(scope: string, holding: boolean): readonly string[] {
+  const trimmed = scope.trim();
+  if (trimmed.length < MIN_LEGAL_HOLD_SCOPE) {
+    return [
+      holding
+        ? `Name what this hold covers, in at least ${MIN_LEGAL_HOLD_SCOPE} characters. A hold nobody can describe is a hold nobody can lift.`
+        : `Say why the hold is being released, in at least ${MIN_LEGAL_HOLD_SCOPE} characters.`,
+    ];
+  }
+  return [];
+}
+
+/** Why a notice cannot be deleted, or '' when it can. */
+export function deleteBlockedReason(row: NoticeRow & NoticeWithdrawal): string {
+  if (row.legal_hold === true) {
+    const scope = (row.legal_hold_scope ?? '').trim();
+    return scope === ''
+      ? 'This notice is under a legal hold.'
+      : `This notice is under a legal hold: ${scope}`;
+  }
+  if (row.status !== 'draft' && row.publish_at !== null) {
+    return 'This notice has been published. Readers saw it, so it is withdrawn rather than deleted.';
+  }
+  return '';
+}
+
+/** What a reader is told when a notice they saw has since been withdrawn. */
+export function withdrawnNoticeBanner(reason: string): string {
+  const trimmed = reason.trim();
+  return trimmed === ''
+    ? 'This notice has been withdrawn. The desk did not record a reason.'
+    : `This notice has been withdrawn: ${trimmed}`;
 }

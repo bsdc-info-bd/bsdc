@@ -6,15 +6,22 @@ import {
   audienceLabel,
   draftProblems,
   draftToRow,
+  deleteBlockedReason,
   filterNotices,
+  legalHoldProblems,
   liveState,
   liveStateTone,
   noticeFilename,
   noticeRevisionArgs,
   paragraphs,
+  reminderPlan,
   rowToDraft,
   scheduleSummary,
   sortNotices,
+  summariseRoster,
+  withdrawProblems,
+  withdrawnNoticeBanner,
+  type NoticeRosterFullRow,
   type NoticeRow,
 } from './model';
 import { buildNoticePdf, printFromRow } from './notice-pdf';
@@ -296,5 +303,129 @@ describe('notice filtering and revisioned save payload', () => {
     });
     expect(args['p_id']).toBe('n1');
     expect(args['p_edit_note']).toBe('Clarified effective date');
+  });
+});
+
+describe('the acknowledgement roster (§11.2)', () => {
+  const person = (over: Partial<NoticeRosterFullRow>): NoticeRosterFullRow => ({
+    uid: 'u1',
+    display_name: 'Someone',
+    acknowledged: false,
+    acknowledged_at: null,
+    reminders_sent: 0,
+    last_reminded_at: null,
+    ...over,
+  });
+
+  it('counts the whole audience and what is outstanding', () => {
+    const summary = summariseRoster([
+      person({ uid: 'a', acknowledged: true, acknowledged_at: '2026-01-01' }),
+      person({ uid: 'b', acknowledged: true, acknowledged_at: '2026-01-02' }),
+      person({ uid: 'c' }),
+    ]);
+    expect(summary.total).toBe(3);
+    expect(summary.acknowledged).toBe(2);
+    expect(summary.outstanding).toBe(1);
+  });
+
+  it('rounds the percentage DOWN so 99.6% never reads as 100%', () => {
+    const rows = Array.from({ length: 250 }, (_, i) =>
+      person({ uid: `u${i}`, acknowledged: i < 249 }),
+    );
+    expect(summariseRoster(rows).percent).toBe(99);
+  });
+
+  it('treats an empty roster as nothing to remind, not as 100% done', () => {
+    const summary = summariseRoster([]);
+    expect(summary).toMatchObject({ total: 0, percent: 0, canRemind: false });
+  });
+
+  it('takes the round number from the highest reminder already sent', () => {
+    expect(
+      summariseRoster([person({ reminders_sent: 1 }), person({ reminders_sent: 2 })]).rounds,
+    ).toBe(2);
+  });
+
+  it('refuses to offer a reminder when everybody has acknowledged', () => {
+    const summary = summariseRoster([person({ acknowledged: true })]);
+    expect(summary.canRemind).toBe(false);
+    expect(reminderPlan(summary, summary.rounds + 1)).toContain('nobody to remind');
+  });
+
+  it('tells the operator what the reminder will do before they press it', () => {
+    const summary = summariseRoster([person({ uid: 'a' }), person({ uid: 'b', acknowledged: true })]);
+    const plan = reminderPlan(summary, 1);
+    expect(plan).toContain('first reminder');
+    expect(plan).toContain('one person');
+    // A second round is named as a round, so it reads as a decision.
+    expect(reminderPlan({ ...summary, rounds: 1 }, 2)).toContain('reminder 2');
+  });
+});
+
+describe('withdrawal rather than deletion (§11.2)', () => {
+  it('needs a reason long enough to be shown to a reader', () => {
+    expect(withdrawProblems('oops', 'published')).toHaveLength(1);
+    expect(withdrawProblems('   ', 'published')).toHaveLength(1);
+    expect(withdrawProblems('The drill was postponed to next term', 'published')).toEqual([]);
+  });
+
+  it('refuses to withdraw a draft, which is deleted instead', () => {
+    expect(withdrawProblems('The drill was postponed', 'draft')[0]).toContain('deleted instead');
+  });
+
+  it('caps the reason at the column width', () => {
+    expect(withdrawProblems('x'.repeat(301), 'published')).toHaveLength(1);
+  });
+
+  it('tells the reader it was withdrawn, and why', () => {
+    expect(withdrawnNoticeBanner('postponed')).toContain('postponed');
+    expect(withdrawnNoticeBanner('  ')).toContain('did not record a reason');
+  });
+});
+
+describe('legal hold (§11.2)', () => {
+  const base: NoticeRow = {
+    id: 'n1',
+    code: 'BSDC-NT-ABCDEFGH-1',
+    title: 'T',
+    summary: 's',
+    body: 'b',
+    category: 'safety',
+    audience: 'members',
+    priority: 'routine',
+    status: 'published',
+    pinned: false,
+    requires_ack: false,
+    publish_at: '2026-01-01T00:00:00Z',
+    expires_at: null,
+    updated_at: '2026-01-01T00:00:00Z',
+    acknowledgements: 0,
+    staff_total: 0,
+  };
+
+  it('requires a scope both to set and to release a hold', () => {
+    expect(legalHoldProblems('', true)).toHaveLength(1);
+    expect(legalHoldProblems('short', true)).toHaveLength(1);
+    expect(legalHoldProblems('', false)[0]).toContain('released');
+    expect(legalHoldProblems('Dispute 2026-114 until hearing', true)).toEqual([]);
+  });
+
+  it('blocks deletion under a hold and names the scope', () => {
+    expect(
+      deleteBlockedReason({ ...base, legal_hold: true, legal_hold_scope: 'Dispute 2026-114' }),
+    ).toContain('Dispute 2026-114');
+    expect(deleteBlockedReason({ ...base, legal_hold: true, legal_hold_scope: '' })).toContain(
+      'legal hold',
+    );
+  });
+
+  it('blocks deleting anything a reader has seen, hold or no hold', () => {
+    expect(deleteBlockedReason({ ...base, status: 'archived' })).toContain('withdrawn rather than deleted');
+  });
+
+  it('allows deleting a draft nobody saw', () => {
+    expect(
+      deleteBlockedReason({ ...base, status: 'draft', publish_at: null }),
+    ).toBe('');
   });
 });

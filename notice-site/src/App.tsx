@@ -40,10 +40,19 @@ import {
   noticeFilename,
   noticeRevisionArgs,
   paragraphs,
+  MAX_WITHDRAW_REASON,
+  MIN_LEGAL_HOLD_SCOPE,
+  MIN_WITHDRAW_REASON,
+  deleteBlockedReason,
+  legalHoldProblems,
+  reminderPlan,
   rowToDraft,
   scheduleSummary,
   sortNotices,
-  type NoticeAckRosterRow,
+  summariseRoster,
+  withdrawProblems,
+  withdrawnNoticeBanner,
+  type NoticeRosterFullRow,
   type NoticeAudience,
   type NoticeDraft,
   type NoticePriority,
@@ -72,7 +81,7 @@ export function App(): ReactElement {
 function Notices(): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
-    () => listRpc<NoticeRow>(env, 'notice_registry', { p_limit: 200 }),
+    () => listRpc<NoticeRow>(env, 'notice_registry_v2', { p_limit: 200 }),
     [env],
   );
   const { state, reload } = useAsync(load, [env]);
@@ -360,6 +369,18 @@ function NoticeCard({
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
   const [when, setWhen] = useState('');
+  // §11.2: unpublishing sends a withdrawal. The reason is typed here rather than
+  // hard-coded in the call, because the reader is shown it and a fixed sentence would
+  // be a sentence nobody chose.
+  const [withdrawReason, setWithdrawReason] = useState('');
+  const [holdScope, setHoldScope] = useState('');
+  const [panel, setPanel] = useState<'none' | 'withdraw' | 'hold'>('none');
+  const extended = row as NoticeRow & {
+    readonly withdraw_reason?: string;
+    readonly withdrawn_at?: string | null;
+    readonly legal_hold?: boolean;
+    readonly legal_hold_scope?: string;
+  };
   const state = liveState(row);
   const progress = ackProgress(row);
   const portal = env.verificationUrl;
@@ -376,14 +397,77 @@ function NoticeCard({
       .finally(() => setBusy(false));
   };
 
-  const unpublish = (): void => {
+  const withdrawProblemList = withdrawProblems(withdrawReason, row.status);
+
+  /**
+   * Withdrawal, not unpublishing.
+   *
+   * `unpublish_notice` returns the notice to draft, so a member who read it yesterday
+   * finds a dead link and no explanation. `withdraw_notice` keeps the row, records why,
+   * and leaves it in the reader's feed marked withdrawn — the notice itself becomes the
+   * explanation.
+   */
+  const withdraw = (): void => {
+    if (withdrawProblemList.length > 0) {
+      setError(withdrawProblemList[0] ?? 'Say why the notice is being withdrawn.');
+      return;
+    }
     setError('');
     setBusy(true);
-    callRpc(env, 'unpublish_notice', {
+    callRpc(env, 'withdraw_notice', { p_id: row.id, p_reason: withdrawReason.trim() })
+      .then(() => {
+        setPanel('none');
+        setWithdrawReason('');
+        onChanged();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setBusy(false));
+  };
+
+  const holdProblemList = legalHoldProblems(holdScope, !(extended.legal_hold === true));
+
+  const toggleHold = (): void => {
+    if (holdProblemList.length > 0) {
+      setError(holdProblemList[0] ?? 'Name the scope of the hold.');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    callRpc(env, 'set_legal_hold', {
       p_id: row.id,
-      p_reason: 'Withdrawn to draft by notice desk operator',
+      p_hold: extended.legal_hold !== true,
+      p_scope: holdScope.trim(),
     })
-      .then(onChanged)
+      .then(() => {
+        setPanel('none');
+        setHoldScope('');
+        onChanged();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setBusy(false));
+  };
+
+  const deleteBlocker = deleteBlockedReason(extended);
+
+  const removeDraft = (): void => {
+    if (deleteBlocker !== '') {
+      setError(deleteBlocker);
+      return;
+    }
+    const reason = withdrawReason.trim();
+    if (reason.length < 10) {
+      setPanel('withdraw');
+      setError('Deleting a draft needs a reason of at least ten characters.');
+      return;
+    }
+    setError('');
+    setBusy(true);
+    callRpc(env, 'delete_notice', { p_id: row.id, p_reason: reason })
+      .then(() => {
+        setPanel('none');
+        setWithdrawReason('');
+        onChanged();
+      })
       .catch((cause: unknown) => setError(messageOf(cause)))
       .finally(() => setBusy(false));
   };
@@ -459,6 +543,21 @@ function NoticeCard({
         </div>
       )}
 
+      {extended.withdrawn_at != null && (
+        <Banner tone="warn" title="Withdrawn">
+          {withdrawnNoticeBanner(extended.withdraw_reason ?? '')}
+        </Banner>
+      )}
+
+      {extended.legal_hold === true && (
+        <Banner tone="bad" title="Legal hold">
+          This notice cannot be deleted while the hold is in force
+          {(extended.legal_hold_scope ?? '').trim() === ''
+            ? '.'
+            : `: ${String(extended.legal_hold_scope)}`}
+        </Banner>
+      )}
+
       <details>
         <summary className="kit-small">Read full notice body</summary>
         {paragraphs(row.body).map((block) => (
@@ -483,9 +582,14 @@ function NoticeCard({
             </Button>
           </>
         )}
-        {(state === 'live' || state === 'scheduled') && (
-          <Button size="small" variant="quiet" disabled={busy} onClick={unpublish}>
-            Unpublish
+        {row.status === 'published' && (
+          <Button
+            size="small"
+            variant="quiet"
+            disabled={busy}
+            onClick={() => setPanel(panel === 'withdraw' ? 'none' : 'withdraw')}
+          >
+            Withdraw
           </Button>
         )}
         <Button size="small" variant="quiet" onClick={onEdit}>
@@ -522,12 +626,107 @@ function NoticeCard({
         >
           {printing ? 'Preparing…' : 'PDF'}
         </Button>
+        <Button
+          size="small"
+          variant="quiet"
+          disabled={busy}
+          onClick={() => setPanel(panel === 'hold' ? 'none' : 'hold')}
+        >
+          {extended.legal_hold === true ? 'Release Hold' : 'Legal Hold'}
+        </Button>
         {row.status !== 'archived' && (
           <Button size="small" variant="danger" disabled={busy} onClick={archive}>
             Archive
           </Button>
         )}
+        {row.status === 'draft' && (
+          <Button
+            size="small"
+            variant="danger"
+            disabled={busy || deleteBlocker !== ''}
+            title={deleteBlocker === '' ? 'Delete this never-published draft' : deleteBlocker}
+            onClick={removeDraft}
+          >
+            Delete draft
+          </Button>
+        )}
       </div>
+
+      {panel === 'withdraw' && (
+        <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
+          <Banner tone="warn" title="Withdrawal keeps the notice">
+            The notice stays in the reader&apos;s feed, marked withdrawn, with this
+            sentence beside it. Members who saw it learn what happened instead of
+            finding a dead link.
+          </Banner>
+          <Field
+            label={row.status === 'draft' ? 'Reason for deleting this draft' : 'Why it is being withdrawn'}
+            hint={`${String(withdrawReason.trim().length)} / ${String(MAX_WITHDRAW_REASON)} characters · at least ${String(MIN_WITHDRAW_REASON)}`}
+            value={withdrawReason}
+            onChange={(event) => setWithdrawReason(event.target.value)}
+          />
+          <div className="kit-row">
+            {row.status === 'draft' ? (
+              <Button
+                size="small"
+                variant="danger"
+                disabled={busy || deleteBlocker !== '' || withdrawProblemList.length > 0}
+                onClick={removeDraft}
+              >
+                Delete this draft
+              </Button>
+            ) : (
+              <Button
+                size="small"
+                variant="danger"
+                disabled={busy || withdrawProblemList.length > 0}
+                onClick={withdraw}
+              >
+                Withdraw notice
+              </Button>
+            )}
+            <Button size="small" variant="quiet" onClick={() => setPanel('none')}>
+              Cancel
+            </Button>
+          </div>
+          {withdrawProblemList.length > 0 && (
+            <p className="kit-small kit-muted">{withdrawProblemList[0]}</p>
+          )}
+        </div>
+      )}
+
+      {panel === 'hold' && (
+        <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
+          <Banner tone="warn" title="A hold must name its scope">
+            A hold that covers &quot;everything&quot; is a hold nobody can release. Say what this
+            one covers, or why it is being lifted — that sentence is what a dispute reads
+            years later.
+          </Banner>
+          <Field
+            label={
+              extended.legal_hold === true
+                ? 'Why the hold is being released'
+                : 'What this hold covers'
+            }
+            hint={`At least ${String(MIN_LEGAL_HOLD_SCOPE)} characters`}
+            value={holdScope}
+            onChange={(event) => setHoldScope(event.target.value)}
+          />
+          <div className="kit-row">
+            <Button
+              size="small"
+              variant={extended.legal_hold === true ? 'primary' : 'danger'}
+              disabled={busy || holdProblemList.length > 0}
+              onClick={toggleHold}
+            >
+              {extended.legal_hold === true ? 'Release the hold' : 'Place under legal hold'}
+            </Button>
+            <Button size="small" variant="quiet" onClick={() => setPanel('none')}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
 
       {state === 'live' && <Share code={row.code} portal={portal} />}
     </Card>
@@ -855,23 +1054,30 @@ function NoticeHistoryDrawer({
 
 function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
   const env = useCorporateEnv();
+  // §11.2: the roster is complete, which means the audience the notice was addressed
+  // to — not the staff list. `notice_ack_roster` answers "which staff signed", which is
+  // the right question for a policy bulletin and the wrong one for a fire drill.
   const load = useCallback(
-    () =>
-      listRpc<NoticeAckRosterRow>(env, 'notice_ack_roster', { p_notice_id: row.id, p_limit: 250 }),
+    () => listRpc<NoticeRosterFullRow>(env, 'notice_ack_roster_full', { p_notice_id: row.id }),
     [env, row.id],
   );
-  const { state } = useAsync(load, [env, row.id]);
+  const { state, reload } = useAsync(load, [env, row.id]);
   const [filter, setFilter] = useState<'all' | 'pending' | 'ack'>('all');
+  const [note, setNote] = useState('');
+  const [reminding, setReminding] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState('');
 
-  if (state.status === 'loading') return <Loading label="Loading staff roster." />;
+  if (state.status === 'loading') return <Loading label="Loading the acknowledgement roster." />;
   if (state.status === 'error') {
     return (
-      <Banner tone="bad" title="Could not load roster">
+      <Banner tone="bad" title="Could not load the roster">
         {state.message}
       </Banner>
     );
   }
 
+  const summary = summariseRoster(state.data);
   const rows = state.data.filter((r) => {
     if (filter === 'pending') return !r.acknowledged;
     if (filter === 'ack') return r.acknowledged;
@@ -880,14 +1086,13 @@ function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
 
   const exportCsv = (): void => {
     const csv = rowsToCsv(
-      ['staff_no', 'display_name', 'department', 'role', 'acknowledged', 'acknowledged_at'],
+      ['display_name', 'acknowledged', 'acknowledged_at', 'reminders_sent', 'last_reminded_at'],
       rows.map((r) => [
-        r.staff_no,
         r.display_name,
-        r.department,
-        r.role,
         r.acknowledged,
         r.acknowledged_at ?? '',
+        r.reminders_sent,
+        r.last_reminded_at ?? '',
       ]),
     );
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -901,22 +1106,94 @@ function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
+  const remind = (): void => {
+    setError('');
+    setSent('');
+    setReminding(true);
+    callRpc<number>(env, 'remind_notice', {
+      p_notice_id: row.id,
+      p_note: note.trim(),
+    })
+      .then((count) => {
+        // The count is what the database actually did, not what the button promised.
+        // If somebody acknowledged between the read and the click, this says so.
+        setSent(
+          `Reminder round ${String(summary.rounds + 1)} sent to ${String(count)} ${
+            count === 1 ? 'person' : 'people'
+          }.`,
+        );
+        setNote('');
+        reload();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setReminding(false));
+  };
+
   return (
     <div className="kit-stack">
+      <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+        <Badge tone={summary.outstanding === 0 ? 'ok' : 'warn'}>
+          {summary.acknowledged} of {summary.total} acknowledged ({summary.percent}%)
+        </Badge>
+        <Badge tone="neutral">
+          {summary.rounds === 0
+            ? 'no reminders sent'
+            : `${String(summary.rounds)} reminder ${summary.rounds === 1 ? 'round' : 'rounds'}`}
+        </Badge>
+      </div>
+
+      <div
+        className="kit-bars"
+        role="img"
+        aria-label={`${String(summary.percent)} percent acknowledged`}
+        style={{ height: '8px' }}
+      >
+        <span
+          className="kit-bar kit-bar--good"
+          style={{ flex: `${String(Math.max(summary.percent, 1))} 1 0` }}
+        />
+        <span className="kit-bar" style={{ flex: `${String(100 - summary.percent)} 1 0` }} />
+      </div>
+
+      {error !== '' && (
+        <Banner tone="bad" title="Reminder refused">
+          {error}
+        </Banner>
+      )}
+      {sent !== '' && (
+        <Banner tone="ok" title="Reminder recorded">
+          {sent}
+        </Banner>
+      )}
+
+      <Card title="Remind the people who have not read it" description={reminderPlan(summary, summary.rounds + 1)}>
+        <div className="kit-stack">
+          <Field
+            label="Note for the reminder log"
+            hint="Optional. Stored with the round so a second reminder reads as a decision, not an accident."
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+          />
+          <Button
+            size="small"
+            disabled={reminding || !summary.canRemind}
+            onClick={remind}
+          >
+            {reminding
+              ? 'Sending…'
+              : `Send reminder round ${String(summary.rounds + 1)} to ${String(summary.outstanding)}`}
+          </Button>
+        </div>
+      </Card>
+
       <div className="kit-row" style={{ justifyContent: 'space-between' }}>
         <Select
           label="Status Filter"
           value={filter}
           options={[
-            { value: 'all', label: `All active staff (${state.data.length})` },
-            {
-              value: 'ack',
-              label: `Acknowledged (${state.data.filter((x) => x.acknowledged).length})`,
-            },
-            {
-              value: 'pending',
-              label: `Pending (${state.data.filter((x) => !x.acknowledged).length})`,
-            },
+            { value: 'all', label: `Everyone (${String(state.data.length)})` },
+            { value: 'ack', label: `Acknowledged (${String(summary.acknowledged)})` },
+            { value: 'pending', label: `Outstanding (${String(summary.outstanding)})` },
           ]}
           onChange={(e) => setFilter(e.target.value as 'all' | 'pending' | 'ack')}
         />
@@ -926,21 +1203,31 @@ function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
       </div>
 
       {rows.length === 0 ? (
-        <Empty>No staff entries match this filter.</Empty>
+        <Empty>Nobody matches this filter.</Empty>
       ) : (
         <Table
-          caption="Active staff sign-off state"
-          head={['Staff No', 'Name', 'Department', 'Status']}
+          caption="The people this notice was addressed to"
+          head={['Name', 'Status', 'Acknowledged', 'Reminders']}
         >
           {rows.map((member) => (
             <tr key={member.uid}>
-              <td className="kit-mono kit-small">{member.staff_no}</td>
               <td>{member.display_name}</td>
-              <td className="kit-small">{member.department}</td>
               <td>
                 <Badge tone={member.acknowledged ? 'ok' : 'warn'}>
-                  {member.acknowledged ? 'signed' : 'pending'}
+                  {member.acknowledged ? 'acknowledged' : 'outstanding'}
                 </Badge>
+              </td>
+              <td className="kit-small kit-muted">
+                {member.acknowledged_at === null ? '—' : relativeTimeLabel(member.acknowledged_at)}
+              </td>
+              <td className="kit-small kit-muted">
+                {member.reminders_sent === 0
+                  ? '—'
+                  : `${String(member.reminders_sent)}×${
+                      member.last_reminded_at === null
+                        ? ''
+                        : ` · last ${relativeTimeLabel(member.last_reminded_at)}`
+                    }`}
               </td>
             </tr>
           ))}

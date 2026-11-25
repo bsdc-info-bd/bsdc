@@ -2128,6 +2128,15 @@ expensive failure in a 24-hour operation is context lost at the changeover.
 
 ## 11. Documents in detail
 
+> **Built as response 6 — see §75.** `0147_documents_that_outlive_us.sql` implements
+> §11.1's reproducibility, amendment chains and non-erasing restore, and §11.2's
+> withdrawal, legal hold, complete roster and reminder rounds. Two things here are not
+> what the schema does and §75 says why: **idempotency for one member and course**
+> (§75.4 — the issue path mints a code per call and cannot be made to yield exactly
+> one without a product decision about resits), and the **100-caller concurrency
+> proof**, which is run and passes for distinct codes but which cannot pass for
+> "exactly one certificate" until that decision is taken.
+
 Response 6 covers `certificate-site` and `notice-site`. Both produce artifacts
 that outlive the platform's memory of producing them, so both get the same
 treatment: reproducible output, an immutable chain, and a public verification
@@ -8893,3 +8902,154 @@ So the count is: 1,013 features still `planned`, 26 permissions, and the measure
 this response is that a member who is warned is told what comes next, a member who
 appeals is heard by somebody who did not decide against them, and a shift that ends
 leaves the next one a note.
+
+---
+
+## §75. Response 6 recorded — documents that outlive us (§11)
+
+### 75.1 The migration taken
+
+`0147_documents_that_outlive_us.sql`, 11 sections. It takes `0147` from the §49.11
+table; `0148` is the next free number.
+
+| section | what it adds |
+| --- | --- |
+| 1 | `template_snapshot` / `content_hash` / `hashed_at` / `revoked_history` on `issued_certificates`; `bsdc.certificate_render_string` and `bsdc.certificate_hash`; a rewritten `issue_certificate` that stamps both |
+| 2 | `certificate_chain` — every link, newest first, with the fields that changed |
+| 3 | `verify_document` — one door for certificates and notices, anonymous, hash recomputed |
+| 4 | `restore_issued_certificate` keeps the revocation in `revoked_history` |
+| 4b | `edit_issued_certificate` restamps the hash |
+| 5 | `withdraw_notice`, `notice_feed_with_withdrawn`, `set_legal_hold`, `delete_notice` |
+| 6 | `notice_reminders`, `notice_ack_roster_full`, `remind_notice`, the `notice_reminder` notification kind |
+| 7 | `certificate_registry_v3` and `notice_registry_v2` carry the paper trail to the screens |
+
+### 75.2 A hash is only evidence if it is recomputed (§11.1)
+
+`certificate_render_string(code, name, subject, body, issued_on, expires_on,
+template_key)` returns `bsdc-cert-v1` followed by seven newline-joined fields. It reads
+no clock and no random source, so two renders of one row are byte-identical and
+`certificate_hash` is a hash of the document rather than of the moment. The version
+line is the point: the day the format changes, every old hash must be *visibly*
+comparable rather than quietly wrong for the rest of the record's life.
+
+`verify_document` recomputes rather than reads. A stored hash nobody ever checks is a
+decoration; the check is what makes it evidence. A mismatch is reported as
+`hash_matches: false` rather than as a refusal, because a desk needs to know a record
+disagrees with itself — refusing the document would punish the person holding the
+paper.
+
+The snapshot is `to_jsonb(template) - 'updated_at'`. Leaving `updated_at` inside would
+mean touching a template changed the hash of documents nobody edited.
+
+### 75.3 The four faults this response found, three of them in code that was green
+
+**The restore erased the revocation.** `restore_issued_certificate` set
+`status='issued', revoked_at=null, revoke_reason=''` in place. A certificate revoked
+for cause verified afterwards as though nothing had happened — the exact sentence
+§11.1 forbids. `t58.mjs:163` asserted this behaviour and passed, so the test had
+encoded the defect. The test moved: it now checks that `revoked_history` holds the
+revocation with its reason, and that the chain still shows a revoked link. The
+revision number it asserts is unchanged, which is why the regression was invisible.
+
+**The edit left a stale hash.** 0091's `edit_issued_certificate` wrote new fields and
+raised the revision without touching `content_hash` — so an honest correction would
+have been reported as a tampered document, the worst false accusation available here
+because it lands on the person holding the paper. §4b stamps it.
+
+**`t107` caught its own bug, and that is the reason to write it this way.** The
+harness reads `.code` off the result of a hundred parallel calls. Every one was
+`undefined` because the SELECT had no alias, and the check "a hundred distinct codes"
+failed with `1`. A test that had been written to pass would have compared `undefined`
+to `undefined` and gone green.
+
+**Two console reads had no room for the paper trail.** `certificate_registry_v2` and
+`notice_registry` return fixed column lists, and neither held the withdrawal or the
+hold. The screens could therefore not show that a notice was withdrawn, and the
+revocation ledger would always render empty — the same defect as the restore, one
+layer up. Hence `certificate_registry_v3` and `notice_registry_v2`; a changed result
+shape gets a new name, because PostgREST resolves by name and a destructuring client
+would break silently.
+
+### 75.4 A hundred callers, honestly reported (§11.1)
+
+The spec asks for 100 parallel issues for one member and course to yield exactly one
+certificate, and 100 across 100 members to yield 100 distinct codes. The harness runs
+both as 100 concurrent `Promise`s.
+
+The second is the real concurrency proof and it passes: 100 distinct codes, no two
+sharing a body, zero duplicates in the table. The first — one member, one course,
+exactly one certificate — is **not** what the database does: the issue path mints a
+code per call and has no uniqueness rule on `(recipient_uid, subject)`, so a hundred
+callers produce a hundred certificates. `t107` asserts the truth (all 100 served, 100
+distinct codes, 100 real rows) and the gap is recorded here rather than papered over
+with a test that passes because it does not look. Enforcing one-per-person-per-course
+is a product decision — resitting a course legitimately issues a second certificate —
+and belongs in the open list, not in a silent index.
+
+What *is* proved about codes is what the spec actually cares about: forty bits of
+entropy from `gen_random_bytes`, a Luhn-style check character, the printed shape
+`BSDC-CT-[0-9A-Z]{8}-[0-9]`, no I/L/O/U, and a three-attempt `unique_violation`
+handler so a lost race is retried rather than surfaced to the operator as a raw
+constraint error. 0091's loop only asked "is this code free"; it could not see the
+race between the question and the insert.
+
+### 75.5 Withdrawal is a sentence, not a 404 (§11.2)
+
+`unpublish_notice` returns a notice to draft. A member who read it yesterday finds a
+dead link and no explanation. `withdraw_notice` keeps the row, requires a reason of at
+least ten characters, and `notice_feed_with_withdrawn` returns it marked withdrawn
+with that sentence beside it. The floor is ten characters because the reader is shown
+this text; a reason too short to explain is a reason that should not be accepted.
+
+`delete_notice` refuses anything a reader has seen — published once means withdrawn,
+never deleted, so `notice_receipts` keeps meaning something. A legal hold blocks it
+outright and the refusal names the scope, which is what makes a hold releasable at
+all: `set_legal_hold` demands a ten-character scope when set *and* when released,
+because "we lifted the hold" without "and why" is how a document disappears from a
+dispute.
+
+### 75.6 A reminder round is a decision (§11.2)
+
+`notice_reminders(notice_id, uid, round, sent_by, sent_at, note)` — `uid` null means
+"everybody outstanding", which is what makes two rounds distinguishable from one
+resent. `remind_notice` derives the round rather than accepting one, refuses when
+nobody is outstanding, and keys each notification `'notice:' || id || ':' || round` so
+round two is a second line in the inbox rather than one that keeps moving. `t107`
+proves both rounds land, that each is its own notification key, and that the third
+call is refused.
+
+The roster's denominator is the audience, not the staff list. `notice_ack_roster`
+counts `staff_records`, which is the right question for a policy bulletin and the
+wrong one for a fire drill; `notice_ack_roster_full` counts the people the notice was
+addressed to. `summariseRoster` rounds the percentage **down**, so 249 of 250 never
+reads as 100%.
+
+### 75.7 The console
+
+`certificate-site` gained a **revocation ledger** card and an **amendment chain** card.
+The chain replaces a history card that computed its own diff against the *current* row,
+so every past revision reported the same three differences — the database now returns
+the real diff against the next link and `describeChain` only relabels it. A link with
+no field changes says so rather than showing an empty list, because a revocation
+changes state without changing a field.
+
+`notice-site` gained withdraw, legal-hold and delete-draft panels, and a rebuilt roster
+drawer: the full roster, the reminder action with its round number and plan sentence,
+per-person reminder counts, and CSV export of the audience rather than the staff.
+
+Two rules stated in the model rather than the screen: `withdrawProblems` refuses a
+draft ("A draft is deleted instead"), and `deleteBlockedReason` returns the reason a
+delete button is disabled so the tooltip and the refusal are the same sentence.
+
+### 75.8 Where this leaves the plan
+
+Response 6 is complete and proved: `db:prove` **90 of 90** (including the new `t107`,
+95 checks), `t58` **40/0** with its restore assertion rewritten, audit
+**153 passed / 0 failed / 4 recorded**, kit 399 tests, certificate-site 56,
+notice-site 44, all fourteen bundles inside the 250 KB gzip budget (certificate 201 KB,
+notice 200 KB).
+
+Open, carried forward: workload-per-moderator, duplicate clustering with a visible
+count, leave requests, two-party shift swap, the 100-caller `claim_report` test, the
+appeals detail view, and now **one-per-person-per-course idempotency**, which §11.1
+asks for and the schema deliberately does not enforce (§75.4).
