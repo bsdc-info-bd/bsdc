@@ -243,6 +243,14 @@ const HARNESSES = [
     't103.mjs',
     '0143: a standing ledger, a derived cache, and the read that proves they agree',
   ],
+  [
+    't104.mjs',
+    '0144: telemetry with its own age, a delta and its source, and a clock on every queue',
+  ],
+  [
+    't105.mjs',
+    '0145: a brand theme is published by somebody who meant to publish it',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

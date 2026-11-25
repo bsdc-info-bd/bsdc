@@ -5507,21 +5507,32 @@ a test asserts equals the sum.
 the divergence is caught. The trigger and the reconciliation test ship with the
 column, in one file, so they cannot be separated.
 
-### 49.11 `0144_appeals.sql`
+### 49.11 Renumbered — see §73.1
 
-**Creates** `public.appeals` with the "decider cannot be the original decider"
-constraint, and two RPCs.
+This slot was `0144_appeals.sql`. Response 4 needed `0144` for telemetry, because
+§8.1 is ahead of appeals in the response order, and a migration number is a
+position in a history rather than a promise about its subject. The three planned
+migrations shift by one:
 
-### 49.12 `0145_ladder.sql`
+| was | now | what |
+| --- | --- | --- |
+| `0144_appeals` | `0146_appeals` | `public.appeals`, the "decider cannot be the original decider" constraint, two RPCs |
+| `0145_ladder` | `0147_ladder` | `public.warning_steps`, `person_warning_step`, `profiles.warning_rung` |
+| `0146_sla_policies` | *(taken)* | folded into `0144`; the queue clock and the telemetry page that reads it shipped together |
 
-**Creates** `public.warning_steps` (policy rows) and `person_warning_step`,
-plus `profiles.warning_rung`.
+The numbering actually taken:
 
-### 49.13 `0146_sla_policies.sql`
+- **`0144`** telemetry, metric registry and the queue clock (§8.1, §8.2). This
+  absorbed what §49.13 planned as `0146_sla_policies`: `sla_policies`,
+  `sla_status` and its seeded four queues × four severities all live there now,
+  because a clock with no telemetry page to read it on is half a feature and the
+  two were built in one pass.
+- **`0145`** a brand theme is published on purpose (§8.7): the `brand.publish`
+  permission, `bsdc.brand_token_diff`, `brand_theme_diff`,
+  `brand_publish_readiness`, and `activate_brand_theme` restated with the second
+  permission check and a diff in its audit row.
 
-**Creates** `public.sla_policies` and seeds it for four queues across three
-severities. **Adds** `bsdc.sla_due(queue, severity, created_at)` so the due time
-is computed in one place by the RPC and the screen.
+`0146_appeals` and `0147_ladder` remain unbuilt and keep their place in the queue.
 
 ### 49.14 `0147_certificate_identity.sql`
 
@@ -8482,3 +8493,222 @@ them, and 500 database checks standing behind ten migrations. The point of this
 response was to make it safe to hand the thing to a colleague, and the measure of
 whether that worked is not the line count — it is that the eleven faults above were
 found before a member was affected by any of them.
+
+---
+
+## 73. Response 4 — depth: the screens that were already there, made honest
+
+Response 4 was specified in §8.1–§8.7 as seven upgrades to screens that already
+existed. This is the record of building them: what was added, the six faults the
+harnesses caught, and three places where the plan's wording and the codebase's
+reality disagreed and the codebase won.
+
+### 73.1 The migrations taken
+
+`0144` (telemetry and the queue clock) and `0145` (publishing a brand theme) are
+new. §49.11–49.13 have been renumbered to match; the short version is that two
+planned migrations moved down one number and the third was absorbed into `0144`,
+because a clock with no page to read it on would have been half a feature.
+
+### 73.2 Telemetry that is honest about itself (§8.1)
+
+`0144` creates `public.metric_definitions` — a registry in which every number the
+console shows names a table or an RPC and carries a definition of at least ten
+characters. `bsdc.metric_value(key, since, until)` is the only place a key's
+meaning lives, and an undefined key raises `P0002` naming the table to add it to,
+rather than returning zero. Zero is the dangerous answer: a number that is zero
+because nothing happened and a number that is zero because the query was wrong look
+identical on a dashboard.
+
+`admin_telemetry_delta(window_minutes)` returns current, previous and delta over
+equal adjacent windows, with **one `measured_at` for the whole page** — two rows
+disagreeing about when "now" was is how a panel starts lying without anyone
+noticing. `admin_telemetry_snapshot` was rewritten to read through
+`bsdc.metric_value` while keeping its twelve-column signature, so an old console and
+a new one cannot report different numbers for the same page.
+
+`admin-site/src/telemetry.ts` carries the presentation logic with 31 tests:
+freshness (`STALE_AFTER_SECONDS = 300`, and a page-level banner when the whole page
+is stale), the delta arrow, provenance, and ordering.
+
+### 73.3 A clock on every queue (§8.2)
+
+`sla_policies` is keyed on `(queue, severity)`, refuses a `resolve` target shorter
+than its `respond` target, and seeds sixteen rows across four queues and four
+severities. `sla_status` answers `breached`, `watching` (at half budget) or `ok`,
+and `approvals_with_sla` returns the approvals queue with that clock attached,
+sorted breached-first then oldest.
+
+The Approvals screen gained a `Clock` card at the top that reads
+`approvals_with_sla`. It does **not** recompute lateness: `sla_status` already
+answered that question, and a console that recomputed it would be the third opinion
+in a two-opinion argument.
+
+### 73.4 A dry run is the same resolver with a flag (§8.3, §8.4)
+
+`admin-site/src/dry-run.ts` plans `bulk plan`, `bulk apply`, `case close`,
+`case note`, `standing adjust` and `approvals` decisions without calling anything,
+and `renderPlan` prints the plan with "nothing has been written" as its first line.
+Two decisions worth naming:
+
+- **An unpreviewable destructive verb returns a refusal, not an empty plan.** An
+  empty plan reads as "nothing changes", which is the opposite of the truth.
+- **`unknowns[]` names what a preview cannot know** without the database: how many
+  rows match, whether a plan's window has moved, what a rule's default points are.
+  A preview that presented guesses as facts would be worse than no preview.
+
+The terminal gained `--dry-run` as a branch that runs **before every other handler**,
+so a destructive verb cannot slip past it by matching an earlier branch. And
+destructive verbs now require their **subject id typed back** (`--confirm <id>`)
+instead of `--yes`: typing an id forces the operator to look at which record they
+are about to change, and the id is compared exactly so a near miss is a refusal.
+
+### 73.5 SEO without guessing (§8.5)
+
+The preview lives in `corporate-kit/src/domain/seo.ts`, not in the console, and this
+is the one place where the plan's wording and the codebase disagreed in a way worth
+recording. The console already had `serpPreview`, and it counts JavaScript
+characters — the right unit for a database limit and the wrong unit for a Bengali
+title, where forty combining marks can occupy the room of sixty Latin glyphs. A
+second module was written in `admin-site` with a 160-character description limit
+against the kit's 155, which is exactly the contradiction §5 forbids. It was
+deleted and the kit was extended instead: `displayLength` applies a width factor to
+Bangla, `cutToWidth` cuts at a width and never severs a word where a word boundary
+exists, and `previewOverride` returns the search result and the share card from one
+call, because they cut at different widths and an operator who sees only the wider
+one ships a card with half a sentence in it.
+
+Validation grew the two contradictions §8.5 asks for: a page listed in the sitemap
+and marked `noindex` is blocked, because the sitemap invites the crawler the robots
+tag turns away; and a canonical naming its own path is blocked, because it is not an
+override at all. Both are computed by the same function that renders the preview, so
+the sentence under the field and the disabled button cannot disagree.
+
+**Coverage is generated, not typed.** `admin-site/scripts/sync-routes.mjs` reads
+`main-site/src/lib/seo/static-routes.json` — the file the prerenderer itself reads —
+and writes `src/routes.generated.ts`. `npm run routes` regenerates; `npm run
+routes:check` fails the test suite when it is stale, so a route added to the site
+cannot leave the console confidently reporting the old sixteen. The five route
+families that exist per database row are listed separately and never counted
+towards coverage, because a family with ten thousand members cannot be "covered".
+
+### 73.6 Redirects that explain themselves (§8.6)
+
+The database side was already complete in `0141` — `redirect_cycle_check`,
+`redirect_404_sources`, `resolve_missing_path`. What was missing was the console and
+the import path, both of which are in the kit:
+
+- `chainFrom` follows a chain and stops the moment it revisits a path, so a loop is
+  *reported* rather than surfacing as "too long" after twenty steps;
+- `collapseSuggestion` names the destination the operator meant, with the trail that
+  led there, so the suggestion is checkable rather than authoritative;
+- `explainLoop` writes `a → b → a — a visitor would be sent round forever` as one
+  line, and says how to break it;
+- `exportRedirects` / `parseRedirects` are quoted-field CSV, tested by round trip:
+  export, parse, export again is the same bytes;
+- `planRedirectImport` reports created / updated / unchanged **and every refusal,
+  with its line number** — and judges each row against the table as it would be
+  *after the rows above it in the same file*, so a file that builds its own loop
+  (`/a→/b` then `/b→/a`) is caught even though neither row is wrong alone.
+
+The Redirects screen gained three cards: the chain and loop report, the top-404 list
+with one-click prefill, and the import/export with the dry-run in front of the write.
+
+### 73.7 Branding that shows the difference (§8.7)
+
+`0145` splits publishing from editing. `brand.publish` is a new permission, seeded
+to exactly the roles that already held `brand.manage`, so nobody lost a power they
+had — asserted by a guard in the migration rather than trusted. The consequence is
+the design: a manager given `brand.manage` as an individual grant can prepare a
+palette and cannot ship it, which is the two-person arrangement expressed with
+grants that already existed.
+
+`activate_brand_theme` keeps its signature and its return type and gains one
+permission check and a **receipt**: which theme it replaced, how many tokens moved,
+and the diff itself, token by token with before and after. `brand_theme_diff` and
+`brand_publish_readiness` give the console the same answers without the write, so
+the button is disabled for the reason the database would refuse it.
+
+The Branding screen now renders `SampleScreen` twice at one size — the *same*
+markup from two palettes, because a preview that drew a different composition for
+the draft would be comparing two designs rather than two palettes — with each
+contrast pair shown in both palettes at once.
+
+### 73.8 The six faults the harnesses caught
+
+1. **`client_errors` has no `created_at`.** It is keyed by `fingerprint` with
+   `first_seen`/`last_seen`. The guess made `admin_telemetry_delta` return **zero
+   rows rather than an error**, which is precisely the failure mode §8.1 exists to
+   prevent.
+2. **`format()` with a bare `%` is a runtime error**, not a parse error:
+   `unrecognized format() type specifier " "`. It only surfaced when
+   `set_sla_target` first ran.
+3. **A `RETURNS TABLE` column name that collides with a table column is ambiguous
+   inside plpgsql** — `sla_status` returning `severity` while selecting it. The
+   fix is `#variable_conflict use_column` *inside* `AS $$`; a pragma in the header
+   is a syntax error at the `#`.
+4. **`ad_campaigns.status` has no `'pending'`** — the pending state is
+   `pending_review`.
+5. **The `key` and `name` output columns of `brand_publish_readiness` shadow
+   `brand_themes.key` and `.name`** — the same ambiguity as (3), found by the same
+   kind of harness, in a function written after the lesson had been learned. That
+   is the strongest argument in this document for proving every function by running
+   it rather than by reading it.
+6. **`t98` hardcoded the size of the permission catalogue** — twice, at 25. Adding
+   `brand.publish` failed two checks that were not about publishing at all. Both now
+   compare against `count(*) from permission_catalogue`, because a test that must be
+   edited whenever the catalogue grows is a test that will one day be edited to the
+   wrong number.
+
+Two more were caught in the test fixtures rather than in the code, and are worth
+naming because both were the test being wrong rather than the function: a three-hour
+case against a 1440-minute respond budget is `ok`, not `watching` (the expectation
+now derives from the policy row); and an "over-strict" word-boundary assertion
+rejected a *correct* cut that happened to end on a complete word.
+
+### 73.9 Where this leaves the plan
+
+**Verified at the close of this response:** 88 of 88 database harnesses (662 s),
+`admin-site` 349 tests across 14 files with a clean typecheck and lint,
+`corporate-kit` 311 tests across 21 files, audit 153 passed with 0 failed and 4
+recorded, `main-site` builds and prerenders 16 routes, and the admin console's
+initial JavaScript is **241.5 KB gzipped against a 250 KB budget**.
+
+That last number is the one to watch. It has gone 237 → 241.5 in one response, and
+the two screens that finished it were built by adding cards to screens that already
+existed. The next response that adds a screen rather than a card will need a route
+split, not a bigger budget.
+
+**Done from §8, in the plan's own terms:**
+
+| | what |
+| --- | --- |
+| §8.1 | registry, age, delta, provenance, stale banner — `0144` + `telemetry.ts` |
+| §8.2 | `sla_policies`, clock from `created_at`, breached-first, mandatory reason — `0144` + `sla.ts` |
+| §8.3 | dry run is the same resolver with a flag; refusals and unknowns named — `dry-run.ts` |
+| §8.4 | `--dry-run` on every destructive verb, typed-id confirmation — `CliConsole.tsx` |
+| §8.5 | width-aware SERP + share card, sitemap/noindex contradiction, generated coverage — kit + `sync-routes.mjs` |
+| §8.6 | loop/chain with the cycle shown, collapse suggestion, top-404 prefill, round-trippable import/export — kit + screen |
+| §8.7 | draft beside live, live contrast per pair, AA blocks publish, `brand.publish`, token-diff audit — `0145` + screen |
+
+**Not done, and honest about it:**
+
+- **The two-person rule for payouts and ad credit (§8.2)** is not built. The plan
+  asks for a second approver above a threshold on money decisions; the clock and the
+  permission split are in place, and a `money.approve` permission with the same
+  shape as `brand.publish` is the obvious next step, but nothing guards a payment
+  yet.
+- **The creative preview in the approvals drawer (§8.2)** is not built. The
+  `PendingCreativePreviewRow` type and the read exist; the drawer does not render
+  them.
+- **A receipt per decision (§8.2)** is not built. `case_events` and the audit log
+  carry the record; there is no per-decision receipt a member can be shown.
+- **`0146_appeals` and `0147_ladder` remain unwritten**, as they were before this
+  response.
+- **The console screens still call `callRpc` directly**, and `/admin` still
+  duplicates consoles (G11).
+
+So the count is unchanged where it counts: 1,013 features `planned`, 26 permissions
+with a spine under them, and the measures that matter are that every number on the
+telemetry page names where it came from, and that a palette cannot reach a visitor
+because one person clicked once.

@@ -1,3 +1,4 @@
+import { confirmationTarget, planCommand, renderPlan, requiresTypedId } from './dry-run';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Badge,
@@ -127,6 +128,43 @@ export function CliConsole(): ReactElement {
       return;
     }
 
+    // `--dry-run` resolves the command and prints the plan without calling
+    // anything. It runs before every other branch, so a destructive verb cannot
+    // slip past it by matching an earlier handler — the check is on the flag, not
+    // on a list of verbs that has to be kept in step.
+    if (parsed.flags['dry-run'] === true || parsed.flags['dry-run'] === 'true') {
+      const plan = planCommand(parsed.positional, parsed.flags);
+      pushEntry(trimmed, plan.ok ? 'info' : 'error', renderPlan(plan));
+      return;
+    }
+
+    // A destructive verb needs its subject id typed back, not the word "confirm".
+    // Typing an id forces the operator to look at which record they are about to
+    // change; typing "yes" forces them to look at nothing. The id is compared
+    // exactly, so a near miss is a refusal rather than a decision about the wrong
+    // row. `--confirm <id>` carries it, because a prompt that blocks the terminal
+    // cannot be tested and cannot be pasted into an incident review.
+    if (requiresTypedId(trimmed)) {
+      const expected = confirmationTarget(trimmed);
+      const typed = typeof parsed.flags['confirm'] === 'string' ? parsed.flags['confirm'] : '';
+      if (expected !== null && typed !== expected) {
+        pushEntry(
+          trimmed,
+          'error',
+          [
+            `This command changes a record. Type its id to confirm:`,
+            `  ${trimmed} --confirm ${expected}`,
+            '',
+            typed === ''
+              ? 'Nothing was called.'
+              : `You typed "${typed}", which is not the id. Nothing was called.`,
+            'Add --dry-run to see what it would do first.',
+          ].join('\n'),
+        );
+        return;
+      }
+    }
+
     const [verb, sub, ...rest] = parsed.positional;
     if (!verb) return;
 
@@ -137,7 +175,10 @@ export function CliConsole(): ReactElement {
 
     if (verb === 'help') {
       const lines = CLI_COMMANDS.map(
-        (c) => `${c.signature.padEnd(54, ' ')} — ${c.summary}${c.destructive ? ' [--yes]' : ''}`,
+        (c) =>
+          `${c.signature.padEnd(54, ' ')} — ${c.summary}${
+            c.destructive ? ' [--dry-run to preview; the subject id is typed to confirm]' : ''
+          }`,
       );
       pushEntry(trimmed, 'info', lines.join('\n'));
       return;

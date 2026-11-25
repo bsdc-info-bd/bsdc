@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Empty,
+  Table,
   Loading,
   TextArea,
   callRpc,
@@ -26,6 +27,7 @@ import {
   type PendingCampaignRow,
   type PendingShopRow,
 } from './approvals';
+import { breachedCount, orderByLatency, queueSummary, remainingLabel, slaTone, worstState, type SlaRow } from './sla';
 import {
   LAYOUT_LABELS,
   PLACEMENT_LABELS,
@@ -75,12 +77,93 @@ export function Approvals(): ReactElement {
           log with your name on them.
         </p>
       </Banner>
+      <Clock />
       <Shops />
       <Campaigns />
       <AdCreditPurchases />
       <MarketplaceCreditPurchases />
       <AdPayments />
     </div>
+  );
+}
+
+interface ClockRow extends SlaRow {
+  readonly kind: string;
+  readonly id: string;
+  readonly title: string;
+  readonly who: string;
+}
+
+/**
+ * How late the two queues are, in one line and one list.
+ *
+ * This reads `approvals_with_sla`, which returns the same rows the two queues
+ * below return plus the clock attached. That is deliberate: the number at the top
+ * of the screen cannot drift from the rows underneath it, because the database
+ * computes both from `sla_policies` in the same call.
+ *
+ * Nothing here decides whether an item is late. `sla_status` already answered
+ * that, and a console that recomputed it would be the third opinion in a
+ * two-opinion argument.
+ */
+function Clock(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    async () => orderByLatency(await listRpc<ClockRow>(env, 'approvals_with_sla', { p_limit: 100 })),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  return (
+    <Card
+      title="How late are we?"
+      description="Each item's clock comes from the policy for its queue and severity. The most overdue item is first."
+      actions={
+        <Button variant="quiet" size="small" onClick={reload}>
+          Refresh
+        </Button>
+      }
+    >
+      {state.status === 'loading' ? <Loading label="Reading the clock." /> : null}
+      {state.status === 'error' ? (
+        <Banner tone="bad" title="The clock did not load">
+          <p className="kit-small">{state.message}</p>
+        </Banner>
+      ) : null}
+      {state.status === 'ready' ? (
+        <div className="kit-stack">
+          <p className="kit-small" style={{ margin: 0 }}>
+            {queueSummary(state.data)}
+          </p>
+          {breachedCount(state.data) > 0 ? (
+            <Banner tone="bad" title="Past the target">
+              {breachedCount(state.data)} item{breachedCount(state.data) === 1 ? ' is' : 's are'} past
+              the time the policy allows. The oldest is first in the list below.
+            </Banner>
+          ) : null}
+          {state.data.length === 0 ? (
+            <Empty>Both queues are empty, so there is nothing to be late.</Empty>
+          ) : (
+            <Table caption="Waiting items, most overdue first" head={['Item', 'Kind', 'Waiting', 'Clock', 'Left']}>
+              {state.data.map((row) => {
+                const clock = worstState(row);
+                return (
+                  <tr key={`${row.kind}-${row.id}`}>
+                    <td>{row.title}</td>
+                    <td>{row.kind === 'shop' ? 'vendor application' : 'campaign'}</td>
+                    <td>{row.who}</td>
+                    <td>
+                      <Badge tone={slaTone(clock)}>{clock}</Badge>
+                    </td>
+                    <td>{remainingLabel(row)}</td>
+                  </tr>
+                );
+              })}
+            </Table>
+          )}
+        </div>
+      ) : null}
+    </Card>
   );
 }
 

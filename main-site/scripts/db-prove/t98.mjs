@@ -97,7 +97,15 @@ async function asSystem(sql) {
 // ===========================================================================
 const ownerMatrix = await as(OWNER, `select * from public.person_authority('${OWNER}')`);
 check(ownerMatrix.error === null, 'an owner reads their own matrix', ownerMatrix.error?.message ?? '');
-check(ownerMatrix.rows.length === 25, 'the matrix covers every catalogued permission', `${ownerMatrix.rows.length}`);
+// Compared against the catalogue rather than against a number: 0145 added one
+// permission, and a test that has to be edited every time the catalogue grows is a
+// test that will one day be edited to the wrong number.
+const catalogueSize = await asSystem(`select count(*)::integer as n from public.permission_catalogue`);
+check(
+  ownerMatrix.rows.length === catalogueSize.rows[0]?.n,
+  'the matrix covers every catalogued permission',
+  `${ownerMatrix.rows.length} of ${catalogueSize.rows[0]?.n}`,
+);
 
 const ownerRoutes = new Set(ownerMatrix.rows.map((row) => row.via));
 check(ownerRoutes.has('owner'), 'the owner holds them through the wildcard');
@@ -390,7 +398,13 @@ check(Number(capped.rows[0]?.n) <= 500, 'the page size is capped rather than tru
 // ===========================================================================
 const copy = await asSystem(`select * from bsdc_permission_copy()`);
 check(copy.error === null, 'the copy table reads', copy.error?.message ?? '');
-check(copy.rows.length === 25, 'and covers every permission', `${copy.rows.length}`);
+// Same reasoning as the matrix above: measured against the catalogue, so adding a
+// permission without translating it fails here rather than in a Bangla console.
+check(
+  copy.rows.length === catalogueSize.rows[0]?.n,
+  'and covers every permission',
+  `${copy.rows.length} of ${catalogueSize.rows[0]?.n}`,
+);
 check(
   copy.rows.every((row) => /[\u0980-\u09FF]/.test(row.label_bn)),
   'every Bangla label is actually in Bangla script',
