@@ -239,6 +239,10 @@ const HARNESSES = [
     't102.mjs',
     '0142: a case joins the reports that belong together, and its timeline cannot be edited',
   ],
+  [
+    't103.mjs',
+    '0143: a standing ledger, a derived cache, and the read that proves they agree',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
