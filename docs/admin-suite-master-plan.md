@@ -8385,3 +8385,100 @@ So: 1,013 features remain `planned`. Twelve primitives are `built`. The ledger
 for this response is thirteen browser proofs and 647 unit tests, not a feature
 count — because the foundation's job was to make the thousand cheaper, and that
 is only measurable at the end.
+
+---
+
+## 72. Response 3 delivered: the security spine
+
+Response 2 built the foundation. This response was the part that had to be right
+before anything could safely be given to a real staff member: permissions that
+compose, an audit trail that cannot be written around, a way to do the boring task
+in bulk without losing the preview, and the four things a decision produces —
+a notification, a receipt, a case, a change in standing.
+
+Ten migrations, `0134`–`0143`. Nine harnesses, `t94`–`t103`, 500 checks between
+them. The proof suite went from 79 harnesses to 86.
+
+### 72.1 What each migration is for
+
+| Migration | The thing it makes true |
+|---|---|
+| `0134` | A permission is a grant with a scope and an expiry, and deny beats everything. |
+| `0135` | Every write to a guarded table leaves an audit row or is refused. |
+| `0136` | The command deck describes itself, card by card, and refuses a caller with no permissions. |
+| `0137` | A bulk operation is stored as a plan, previewed, and applied once. |
+| `0138` | Why somebody holds what they hold, and who is signed in where. |
+| `0139` | A decision reaches the person it was made about, in both languages. |
+| `0140` | Every staff action leaves a receipt the member can read. |
+| `0141` | SEO coverage, a redirect that cannot loop, and the 404s worth redirecting. |
+| `0142` | A case joins the reports that belong together, and its timeline cannot be edited. |
+| `0143` | Standing is a ledger; the profile column is a cache the reconciliation checks. |
+
+### 72.2 Four bugs the harness found that a review would not have
+
+These are worth recording because each one is the kind of fault that looks like
+correct code.
+
+**A restore was swallowed by the suspension before it.** `notifications_unique_idx`
+keys on (recipient, actor, kind, post, comment). A suspension and a restore match
+that key exactly, so the restore's row collided and the member was never told their
+account worked again. Two obvious fixes do not work — a partial index cannot be an
+`ON CONFLICT` arbiter, and borrowing the FK-free `comment_id` would lie in every
+query that reads it — so the key joins the existing index as one more coalesced
+column.
+
+**A trigger cannot see a row written after it.** `set_account_status` does the
+UPDATE first and the audit insert second, so the notification trigger could never
+read the reason and every suspension said "not stated". The caller now declares the
+reason first, through a transaction-local setting.
+
+**Two notifications for one decision.** The first draft of `0139` added a shop
+decision trigger beside `0127`'s, which already fired on the same transition. Every
+message doubled. `t66` caught it in one run. The right shape was to upgrade the
+existing trigger, not to add a second one — the gap was never "there is no
+notification", it was "the notification does not say why".
+
+**A parameter accepted and ignored.** `notify_report_outcome` took a note and never
+used it, so `close_case` passed a reason and the member never saw it. It now leads
+the message rather than trailing it, because `bilingual()` caps at 280 characters
+and a note appended after the Bangla half is truncated away entirely.
+
+A fifth is worth naming because it is a rule about rewrites: restating
+`set_redirect` to add loop detection silently dropped `0068`'s open-redirector
+guards. `t41` caught it within one run. A function rewritten to add one rule loses
+the rules it had, and the only defence is a harness that already tests them.
+
+### 72.3 What the console gained
+
+`Authority`, `Sessions`, `Cases`, and nine new terminal verbs. The terminal now
+reaches every read in the last four migrations, because a screen nobody can find is
+not shipped.
+
+`cases.ts` carries 29 tests for the logic behind the Cases screen. One of them
+caught a mislabelling: a case note was marked `destructive` in the command spec,
+which is wrong — it appends to a timeline that cannot be edited and changes nothing
+that existed before it. A warning that fires on the safe action teaches a reader to
+click through the warning that matters.
+
+### 72.4 Where this leaves the plan
+
+**Verified at the last commit of this response:** 86 of 86 database harnesses,
+`admin-site` 242 tests and a clean typecheck, 237 KB of initial JavaScript against
+a 250 KB budget, audit 153 passed with 0 failed and 4 recorded.
+
+**Not done, and honest about it:**
+
+- **The console screens still call `callRpc` directly.** The primitives exist and
+  are used, but the wholesale migration of every screen is still batch 4.
+- **`/admin` still duplicates consoles.** Gap G11 remains open; it is a routing
+  problem, not a data one.
+- **`0144`–`0162` are not written.** Appeals, the warning ladder, SLA policy,
+  IP rules — planned in §50, untouched here.
+- **No screen exists yet for receipts or standing.** The RPCs are there and the
+  terminal reaches them; the dedicated screens are batch 5.
+
+So the count is: 1,013 features still `planned`, 25 permissions with a spine under
+them, and 500 database checks standing behind ten migrations. The point of this
+response was to make it safe to hand the thing to a colleague, and the measure of
+whether that worked is not the line count — it is that the eleven faults above were
+found before a member was affected by any of them.
