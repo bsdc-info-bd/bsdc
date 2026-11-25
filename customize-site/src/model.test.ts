@@ -8,7 +8,19 @@ import {
   slugify,
   type PageSection,
 } from '@kit';
-import { fieldText, fieldsFor, sectionSummary, toSection, withField } from './model';
+import {
+  describeVersions,
+  fieldText,
+  fieldsFor,
+  localSlugCheck,
+  publishProblems,
+  publishSummary,
+  sectionProblem,
+  sectionSummary,
+  toSection,
+  windowSummary,
+  withField,
+} from './model';
 
 const section = (id: string, position: number): PageSection => ({
   id,
@@ -134,5 +146,173 @@ describe('section payload editing', () => {
       is_visible: true,
     });
     expect(mapped).toEqual({ id: 'id', kind: 'hero', position: 3, payload: { heading: 'Hi' } });
+  });
+});
+
+describe('a section that fails its own validation (§12.2)', () => {
+  it('refuses a hero with no heading', () => {
+    expect(sectionProblem('hero', { heading: '' })).toContain('heading');
+  });
+
+  it('refuses a hero image with no alt text, and says why it matters', () => {
+    const problem = sectionProblem('hero', { heading: 'Welcome', src: 'https://cdn/x.jpg' });
+    expect(problem).toContain('alt text');
+    expect(problem).toContain('half the audience cannot see');
+  });
+
+  it('accepts a hero image that has alt text', () => {
+    expect(
+      sectionProblem('hero', { heading: 'Welcome', src: 'https://cdn/x.jpg', alt: 'The team' }),
+    ).toBeNull();
+  });
+
+  it('refuses an empty cards section and a card with no title', () => {
+    expect(sectionProblem('cards', { items: [] })).toContain('at least one card');
+    expect(sectionProblem('cards', { items: [{ title: '' }] })).toContain('title');
+    expect(sectionProblem('cards', { items: [{ title: 'One' }] })).toBeNull();
+  });
+
+  it('caps the cards at twelve', () => {
+    const items = Array.from({ length: 13 }, (_, i) => ({ title: `Card ${String(i)}` }));
+    expect(sectionProblem('cards', { items })).toContain('twelve');
+  });
+
+  it('needs both halves of an FAQ entry', () => {
+    expect(sectionProblem('faq', { items: [{ q: 'Why?', a: '' }] })).toContain('answer');
+    expect(sectionProblem('faq', { items: [{ q: 'Why?', a: 'Because.' }] })).toBeNull();
+  });
+
+  it('refuses a gallery picture with no source or no description', () => {
+    expect(sectionProblem('gallery', { items: [{ alt: 'x' }] })).toContain('source');
+    expect(sectionProblem('gallery', { items: [{ src: 'https://cdn/x.jpg' }] })).toContain('alt');
+    expect(sectionProblem('gallery', { items: [{ src: 'https://cdn/x.jpg', alt: 'x' }] })).toBeNull();
+  });
+
+  it('refuses an embed over plain http', () => {
+    expect(sectionProblem('embed', { url: 'http://example.com/x' })).toContain('https://');
+    expect(sectionProblem('embed', { url: 'https://example.com/x' })).toBeNull();
+  });
+
+  it('refuses a call to action with nowhere to go', () => {
+    expect(sectionProblem('cta', { heading: 'Join us' })).toContain('somewhere to go');
+    expect(sectionProblem('cta', { heading: 'Join us', href: '/signup' })).toBeNull();
+  });
+
+  it('names every broken section, in page order', () => {
+    const problems = publishProblems([
+      { kind: 'hero', position: 2, payload: { heading: '' } },
+      { kind: 'rich_text', position: 0, payload: { body: 'Fine.' } },
+      { kind: 'embed', position: 1, payload: { url: 'http://x' } },
+    ]);
+    expect(problems.map((p) => p.position)).toEqual([1, 2]);
+  });
+
+  it('ignores a hidden section, which is not published either', () => {
+    const problems = publishProblems([
+      { kind: 'hero', position: 0, payload: { heading: '' }, is_visible: false },
+    ]);
+    expect(problems).toHaveLength(0);
+  });
+});
+
+describe('what a publish will do (§12.2)', () => {
+  it('refuses to describe publishing an empty page', () => {
+    expect(publishSummary([], 0, '')).toContain('nothing to publish');
+  });
+
+  it('names the first broken section rather than the page', () => {
+    const summary = publishSummary(
+      [{ position: 3, kind: 'gallery', problem: 'Every gallery picture needs alt text.' }],
+      5,
+      '',
+    );
+    expect(summary).toContain('Section 4');
+    expect(summary).toContain('alt text');
+  });
+
+  it('says when the page will unpublish itself', () => {
+    expect(publishSummary([], 2, '2026-12-01T10:00')).toContain('unpublish itself');
+  });
+
+  it('says a page with no end stays published', () => {
+    expect(publishSummary([], 2, '')).toContain('stay published');
+  });
+});
+
+describe('the reserved-path guard (§12.2)', () => {
+  it('refuses a slug that is a route', () => {
+    expect(localSlugCheck('settings').available).toBe(false);
+    expect(localSlugCheck('settings').reason).toContain('already owns');
+  });
+
+  it('refuses a slug under a reserved prefix, not only an exact match', () => {
+    expect(localSlugCheck('auth/anything').available).toBe(false);
+  });
+
+  it('allows a free slug', () => {
+    expect(localSlugCheck('our-story')).toEqual({ available: true, reason: '' });
+  });
+
+  it('refuses an invalid slug before it reaches the server', () => {
+    expect(localSlugCheck('Our Story').available).toBe(false);
+    expect(localSlugCheck('').available).toBe(false);
+  });
+
+  it('matches the route list case-insensitively', () => {
+    expect(localSlugCheck('Settings').available).toBe(false);
+  });
+});
+
+describe('publishing history (§12.2)', () => {
+  it('marks exactly one version as current', () => {
+    const views = describeVersions(
+      [
+        { version: 1, created_at: '2026-01-01', note: '', sections: [] },
+        { version: 2, created_at: '2026-02-01', note: '', sections: [{}, {}] },
+        { version: 3, created_at: '2026-03-01', note: '', sections: [{}] },
+      ],
+      2,
+    );
+    expect(views.filter((v) => v.current).map((v) => v.version)).toEqual([2]);
+  });
+
+  it('lists newest first', () => {
+    const views = describeVersions(
+      [
+        { version: 1, created_at: '2026-01-01', note: '', sections: [] },
+        { version: 3, created_at: '2026-03-01', note: '', sections: [] },
+      ],
+      3,
+    );
+    expect(views.map((v) => v.version)).toEqual([3, 1]);
+  });
+
+  it('counts the sections each version held', () => {
+    const views = describeVersions(
+      [{ version: 1, created_at: '2026-01-01', note: '', sections: [{}, {}, {}] }],
+      1,
+    );
+    expect(views[0]?.sectionCount).toBe(3);
+  });
+});
+
+describe('a publishing window (§12.2)', () => {
+  const now = new Date('2026-11-23T12:00:00Z');
+
+  it('says a page with no end has no end', () => {
+    expect(windowSummary(null, null, now)).toContain('no end date');
+  });
+
+  it('counts down in days, then hours', () => {
+    expect(windowSummary(null, '2026-11-26T12:00:00Z', now)).toContain('3 days');
+    expect(windowSummary(null, '2026-11-23T15:00:00Z', now)).toContain('3 hours');
+  });
+
+  it('says the window has ended rather than showing a negative count', () => {
+    expect(windowSummary(null, '2026-11-20T12:00:00Z', now)).toContain('has ended');
+  });
+
+  it('admits when the date cannot be read', () => {
+    expect(windowSummary(null, 'nonsense', now)).toContain('could not be read');
   });
 });

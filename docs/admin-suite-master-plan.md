@@ -2194,7 +2194,8 @@ only thing that makes a hold real rather than aspirational.
 
 ## 12. Runtime and edge in detail
 
-Response 7 covers `config-site`, `customize-site`, and `ip-site`.
+Response 7 covers `config-site`, `customize-site`, and `ip-site`. It is built — see
+**§76** for what shipped, what it cost, and the audit bug it exposed.
 
 ### 12.1 Settings that cannot be wrong
 
@@ -9053,3 +9054,193 @@ Open, carried forward: workload-per-moderator, duplicate clustering with a visib
 count, leave requests, two-party shift swap, the 100-caller `claim_report` test, the
 appeals detail view, and now **one-per-person-per-course idempotency**, which §11.1
 asks for and the schema deliberately does not enforce (§75.4).
+
+## 76. Response 7, built: a setting that cannot be wrong, a page that cannot be broken, a block that cannot outlive its review
+
+Response 7 is `0148_runtime_and_edge.sql`, eleven sections, three consoles. The
+question all three answer is the same one: **who decided this, and what else does it
+move?** A setting with no source, a page published with an image nobody can see, and
+a block nobody remembers adding are the same defect wearing different clothes. So the
+work went into the places where a row is written, and the screens were built to say
+what the database already refuses.
+
+### 76.1 The setting console reads the console, not the table
+
+`config-site` used to read `site_config` directly. That table holds secret values, so a
+console reading it would have had to be trusted not to render them — and PostgREST row
+filtering is not a redaction strategy. It reads `site_config_console()`, which returns
+`is_secret` plus `secret_set_at` and `secret_rotated_at` and **never the value**, and
+which computes `source` from the three things that can produce a value: `database`
+(set here), `environment` (set by the deploy), `default` (set by the schema). The
+screen renders that as a provenance line above the control, because "why is this on" is
+answered by the source and never by the value.
+
+`provenanceOf` names the four cases in words an operator can act on: **Never changed**,
+**Set here**, **From the deploy**, **Forced**. A `Forced` value is an environment
+variable and the screen disables the control rather than offering a save that would be
+overwritten at the next deploy — a save that appears to work and does not is worse than
+a control that says no.
+
+Secrets stay write-only through the whole path. `save_config_setting(..., p_secret =>
+true)` records `secret_set_at`; `site_config_history` stores `null` in place of the
+value; `secretState` in the model only ever reads timestamps. Rotating a secret is its
+own action (`retire_config_secret`) with its own audit row, so "when was this last
+rotated" has an answer that is not a guess.
+
+**The route is decided by the database and echoed by the screen.** A save returns
+which route it took: `staged` when the key requires approval, `scheduled` when an
+apply-at was given, `direct` otherwise, in that priority order. The button label
+follows the *plan* (Save / Propose / Schedule) but the confirmation reports the route
+*the database returned*. The two disagreeing is exactly the case worth seeing: a key
+that needs approval answers `staged`, and a screen that assumed `direct` would have
+told the operator their change was live when it was waiting for somebody else.
+
+The reason field is the kit's `reasonProblems`, not a local copy. A previous version of
+this console had its own ten-character rule next to the kit's twelve and next to five
+SQL sites that said "ten characters", which is three definitions of one rule. The kit's
+is the rule: length, banned placeholders, and no-substance verbs, so `fixed`, `test`
+and `n/a` are refused by name rather than by being short.
+
+### 76.2 Blast radius, and the setting nobody reads
+
+`config_usage` is a build-time map from key to the screens and jobs that read it, and
+`config_blast_radius(key)` returns it. The disclosure sits above the save button, not
+in a help panel, because the sentence "changing this stops checkout callbacks" is only
+useful before the click.
+
+The same map produces the inverse: a setting with no readers is flagged and
+`propose_removal` records the proposal. An unread setting is not harmless — it is a
+control that appears to change behaviour and does not, which is how an incident ends
+with somebody toggling the wrong switch for twenty minutes.
+
+### 76.3 Staging, approving, and the constraint that says who may decide
+
+`config_staged_changes` carries a `config_staged_not_self` constraint: for a row that
+is `applied`, `decided_by <> proposed_by`. The constraint is scoped to the decision and
+not to every write, because the proposer legitimately writes to their own row to cancel
+it. A check that fired on every write would have made cancelling your own proposal
+illegal, which is the opposite of what a two-person rule is for.
+
+`config_pending_changes(p_limit)` returns the staged rows **plus `scheduled`,
+`can_decide` and `blocker`**, computed from `bsdc.current_uid()` inside the function.
+This replaced a `useCurrentUid()` that could not work: the shell has no `uid`, so the
+screen could not answer "may this person decide this" and was reduced to rendering an
+Approve button and letting the RPC refuse it. The fix is not a better client check — it
+is that the same call must feed the button and the refusal. `can_decide` is false for
+the proposer with `blocker = 'You proposed this, so a second person has to decide it.'`,
+and true for everybody else with no blocker. A **schedule** is the exception and is
+deliberately a different kind of thing: nothing is being approved, the clock applies it,
+so anybody on shift may cancel it — including the person who scheduled it.
+
+### 76.4 A page cannot be published broken
+
+`publish_custom_page` runs `bsdc.section_problem` over every visible section and
+refuses with `Section N: <problem>`. The problems are structural, not stylistic: a
+hero image without alt text reads as "half the audience cannot see this", a heading that
+skips a level is named as a skip, an embed that is not https is named as insecure, and a
+custom colour pair below the contrast floor is refused in those words. The section
+number is in the message because "this page has a problem" sends an editor hunting
+through eleven sections.
+
+The client mirrors the same rules in `sectionProblem`/`publishProblems` so the panel can
+list the blockers *before* the publish click. Two implementations of one rule is a
+liability, so the client's set is deliberately a subset that only ever refuses earlier:
+when the two disagree, the client is stricter and the database is authoritative.
+
+`reserved_paths` seeds 49 routes and `bsdc.reserved_path_conflict` refuses a colliding
+slug — case-insensitively and by prefix, because `/join` and `/join-us` are the same
+collision. `localSlugCheck` gives the editor that answer as they type, and `NewPage`
+disables Create with the reserved reason inline rather than surfacing it on submit.
+
+**Scheduling has an end.** `custom_pages.unpublish_at` plus `expire_scheduled_pages()`
+takes a page down on time; `published_page` was replaced with a time-aware version so a
+reader sees the page only inside its window. `windowSummary` renders the window in days,
+then hours, then "has ended", and says "could not be read" rather than inventing a date
+when the column is malformed.
+
+**A revert writes forward.** `revert_custom_page` creates version N+1 from the older
+content and sets the page back to `draft`; nothing is erased, so a revert of a revert is
+just another version. `page_versions` is defined **before** the publish function that
+writes to it, which is the kind of ordering that only fails in production if it fails at
+all. `custom_page_versions(p_page_id)` returns the list with `section_count` and a
+`current` flag — the flag has to come from a join against `custom_pages.current_version`,
+and a screen doing that join itself can show a revert button beside the version it is
+already on. A page id that does not exist returns an empty list rather than an error to
+decode.
+
+### 76.5 The simulator is the engine
+
+`ip_simulate` does not reimplement the ordering. It evaluates the same rules in the
+same order as `ip_decision`, and returns **every rule it considered** with `step`,
+`decision` (null when passed over), `matched`, `matched_kind`, `matched_label`,
+`reason`, `shadow` and `skipped_why`. Exactly one row carries `block` or `allow`; the
+rest say why they were passed over. `t108` asserts the two agree for the same address,
+because a simulator that disagrees with production is worse than no simulator: it turns
+a five-minute investigation into a wrong answer delivered quickly. The console previously
+evaluated the list in the browser, which made that agreement a hope rather than a test.
+
+`verdictOf` separates the answer from the working: the winner first, in one sentence,
+with the rule range and its label; then the table of everything else. A wall of rows with
+one badge buried in it is not an answer.
+
+**Shadow mode** is a column, not a convention. A shadow rule returns `would block`/
+`would allow` and never `block` — in production *and in the simulator*. `arm_ip_rule`
+requires a note of what the shadow period showed and a future review date, refuses a
+rule that is already armed, and refuses to arm anything that could become permanent by
+being forgotten. `verdictOf` reports `shadowDiffers` when a shadow rule would have
+decided differently from today's real answer, which is the one signal that makes a
+shadow period worth running.
+
+**The dry run is evidence only when the candidate changes an outcome.** `ip_dry_run`
+counts the requests in the last N days whose decision would flip, and groups them by
+address and by action. An empty result is reported as "this rule would not have changed
+the outcome of a single request in the window" — and `windowNote` adds the honest half:
+a quiet window is also what a wrong rule looks like. The harness had to pick a range no
+rule had touched (`192.0.2.0/24`), because a dry run over an address that is already
+blocked correctly returns nothing and measures nothing.
+
+**The tracer** is `ip_trace(request_id)`, and `ip_events` gained `request_id`,
+`decision` and `matched_rule` to carry it. `record_ip_decision(...)` returns `bigint`
+rather than void so the caller can log the id it just wrote.
+
+**A rule has a label, a reason and a review date.** `save_ip_rule` refuses a block
+without a reason of at least ten characters and refuses a rule with no label, because a
+list of ranges with no names is a list nobody reads. A missing review date defaults to
+thirty days rather than being refused — the constraint is `ip_rules_block_needs_review`
+and it is satisfied either way, which keeps the path that works in an incident fast
+without making permanence the default. A review date in the past is refused:
+"disable the rule instead". `ip_rules_needing_review` lists what is overdue and by how
+much. `disable_ip_rule` records *why*, and a disabled rule blocks nobody and drops off
+the review list — a rule is disabled rather than deleted, so the next person can see why
+it was there.
+
+`ruleHealth` turns those columns into the one sentence an operator needs: overdue by
+N days, in shadow mode and would have matched N, or armed and has never matched
+anything. A block that has never decided a request is not a security control, it is a
+block to question.
+
+### 76.6 The audits learned something
+
+`scripts/sql-schema-check.py` had a real bug, and this response is what exposed it.
+`table_columns()` scans with SQL comments intact, and the `ALTER TABLE ... ADD COLUMN`
+match is `([^;]*);` — so the sentence *"Every rule gets a review date; the date is not
+advisory"* inside the statement terminated the match early and every column after it
+disappeared from the vocabulary. The consequence was not a false alarm: it meant the
+checker **had no columns at all for `ip_rules`, `ip_events`, `custom_pages` or
+`site_config` beyond what the original migrations created**, so it could not have caught
+a misspelled new column in any of them. Two fixes: comments are stripped before
+scanning, and `columns_for` unions the corpus with the file under test instead of
+preferring the corpus with `or`, which had silently discarded every column the file adds.
+`J-05` now passes for the right reason rather than by not looking.
+
+### 76.7 Where this leaves the plan
+
+Response 7 is complete and proved: `db:prove` **91 of 91** harnesses (including `t108`
+at **158 checks**), audit **153 passed / 0 failed / 4 recorded**, `config-site` **43**
+tests, `customize-site` **43**, `ip-site` **42**, all three `tsc --noEmit` clean, all
+three builds green at **190 KB gzip** each against the 250 KB gate.
+
+Open, carried forward from §10 and §11: workload-per-moderator, duplicate clustering
+with a visible count, leave requests, two-party shift swap, the 100-caller
+`claim_report` test, the appeals detail view, and one-certificate-per-member-per-course
+idempotency (§75.4). Response 8 is §13.

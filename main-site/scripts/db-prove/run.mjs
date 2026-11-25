@@ -259,6 +259,10 @@ const HARNESSES = [
     't107.mjs',
     '0147: a certificate that reproduces byte for byte, a code that survives a hundred callers, and a notice that says it was withdrawn',
   ],
+  [
+    't108.mjs',
+    '0148: a setting that cannot be wrong, a page that cannot be published broken, and a block that cannot outlive its review',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
