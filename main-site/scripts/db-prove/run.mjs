@@ -235,6 +235,10 @@ const HARNESSES = [
     't101.mjs',
     '0141: SEO coverage, a redirect that cannot loop, and the 404s worth redirecting',
   ],
+  [
+    't102.mjs',
+    '0142: a case joins the reports that belong together, and its timeline cannot be edited',
+  ],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 

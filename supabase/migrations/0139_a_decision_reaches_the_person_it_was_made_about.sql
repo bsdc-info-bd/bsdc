@@ -260,7 +260,28 @@ begin
     return;
   end if;
 
-  if p_resolved then
+  -- `p_note` used to be accepted and ignored, which is worse than not having the
+  -- parameter: a caller passes the reason it decided, the signature suggests the
+  -- member will be told, and nothing happens. 0142's `close_case` passes it and
+  -- t102 caught the silence.
+  --
+  -- It goes *first*, not last. `bsdc.bilingual` caps the body at the column's own
+  -- 280 characters, and the fixed sentence plus its Bangla half already runs to
+  -- much of that — so a note appended to the end loses its second half to
+  -- truncation and the member reads a decision with the reason cut off.
+  if btrim(coalesce(p_note, '')) <> '' then
+    if p_resolved then
+      v_body := bsdc.bilingual(
+        btrim(p_note) || ' — your report was reviewed and acted on.',
+        btrim(p_note) || ' — আপনার পাঠানো রিপোর্ট পর্যালোচনা করে ব্যবস্থা নেওয়া হয়েছে।'
+      );
+    else
+      v_body := bsdc.bilingual(
+        btrim(p_note) || ' — your report was reviewed and closed.',
+        btrim(p_note) || ' — আপনার পাঠানো রিপোর্ট পর্যালোচনা করে বন্ধ করা হয়েছে।'
+      );
+    end if;
+  elsif p_resolved then
     v_body := bsdc.bilingual(
       'Thank you — the report you sent was reviewed and acted on.',
       'ধন্যবাদ — আপনার পাঠানো রিপোর্ট পর্যালোচনা করে ব্যবস্থা নেওয়া হয়েছে।'
