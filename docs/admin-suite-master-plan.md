@@ -9384,6 +9384,66 @@ These are still required before Response 9 can be called complete:
   requirements. Keep the existing 250KB initial-JS CI gate and 200ms transition
   ceiling.
 
-These are tracked rather than silently declared done. Response 10 must carry the
-acceptance matrix with an honest state for each §14 item; it must not turn the
-unproven requirements above into green checkboxes.
+These are tracked rather than silently declared done. Response 10 carries a
+generated acceptance matrix with an honest state for each inventoried feature;
+it must not turn the unproven requirements above into green checkboxes.
+
+## 79. Response 10 — Execution and proof (inventory, schedule and evidence baseline)
+
+Response 10 is delivered as a reproducible planning and acceptance artifact,
+not as a claim that the 1,013 product requirements are implemented. The
+canonical generated ledger is [`admin-suite-feature-ledger.md`](admin-suite-feature-ledger.md).
+It contains the ordered batch plan, the six-gate matrix for every feature, the
+feature-by-feature scope/proof mapping, generated tier and batch counts, and a
+risk register with role owners, triggers and contingencies.
+
+### 79.1 Reproducible inventory and gates
+
+`scripts/response10-ledger.mjs` derives feature IDs, tiers, area, acceptance
+text and implementation/proof mapping from §§3.1 and 67. It fails closed on
+missing/duplicate IDs, a broken `A-001`–`A-1013` sequence, mismatched source
+inventories, changed tier totals, malformed evidence records or stale generated
+output. The sparse evidence store is `docs/response10-evidence.json`; absent
+entries are `UNVERIFIED`. CI runs the generator in `--check` mode, so a source
+inventory or evidence change cannot silently leave the checked-in matrix stale.
+
+The baseline reconciles **1,013 unique features** and the declared tier totals:
+**428 T1**, **467 T2**, **118 T3**. It assigns every feature once to the
+nine ordered batches in §15.1 and emits **6,078 feature-level gates**: rule,
+authority, screen, proof, audit and copy. A feature row closes only when all
+six gates have reviewed evidence. A blocked gate requires a reason, owner and
+next review date; a verified gate requires an immutable reference, full commit
+SHA, reviewer and review date.
+
+### 79.2 Current state — intentionally conservative
+
+At this baseline, the evidence store contains no feature-level attestations:
+**0 gates verified; 6,078 unverified; 0 fully verified feature rows; 1,013
+feature rows remain unverified.** This is specifically a statement about what
+this ledger has linked and reviewed, not a claim that none of the described
+functionality exists in the repository. Earlier response evidence is not
+promoted automatically to feature evidence: Response 9's browser run proves the
+shared shell and initial screen, not every route/state nor the uncompleted §14
+language, accessibility, mobile, resilience and performance obligations.
+
+No production delivery schedule dates are invented here. The nine batches are
+ordered dependencies, not calendar commitments. Batch owners must be named at
+kickoff, estimates and dates must be based on reviewed scope and capacity, and
+release acceptance must link evidence to the exact commit. The generated ledger
+makes remaining scope countable; it does not manufacture delivery evidence.
+
+### 79.3 Verification performed for this response
+
+- Inventory reconciled to **1,013 unique IDs** in both §3.1 and §67, sequential
+  from `A-001` through `A-1013`, with no missing or duplicate IDs.
+- Tier totals checked against §3.4: **428 / 467 / 118**.
+- All features assigned to exactly one of nine ordered batches; generated
+  acceptance matrix contains **6,078** gates.
+- Evidence-store schema validation and stale-output check run via
+  `node scripts/response10-ledger.mjs --check`.
+- CI gate added so future source/evidence changes must regenerate the artifact.
+
+This completes the Response 10 **execution and proof framework**. It does not
+complete any feature solely by creating the matrix. §14 and the feature-level
+acceptance work remain open until evidence is added and reviewed; the ledger is
+the release accounting boundary, not a substitute for implementation.

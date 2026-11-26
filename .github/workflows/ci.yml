@@ -14,6 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  response10-ledger:
+    name: Response 10 ledger integrity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Validate inventory, evidence records and generated matrix
+        run: node scripts/response10-ledger.mjs --check
+
   secrets-scan:
     name: Secret scan
     runs-on: ubuntu-latest
