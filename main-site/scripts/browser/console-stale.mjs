@@ -196,14 +196,18 @@ async function buildSecond(consoleDir, outputDir) {
   assert.notEqual(next, original, `${consoleDir}: the deploy marker was inserted into main.tsx`);
   try {
     await writeFile(candidate, next);
-    const built = spawnSync('npx', ['vite', 'build', '--outDir', outputDir], {
+    const viteEntrypoint = join(consoleDir, 'node_modules', 'vite', 'bin', 'vite.js');
+    assert.ok(existsSync(viteEntrypoint), `${consoleDir}: local Vite entrypoint is installed`);
+    const built = spawnSync(process.execPath, [viteEntrypoint, 'build', '--outDir', outputDir], {
       cwd: consoleDir,
       encoding: 'utf8',
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
     });
     assert.equal(
       built.status,
       0,
-      `second build of ${consoleDir} succeeds: ${(built.stderr ?? '').slice(-300)}`,
+      `second build of ${consoleDir} succeeds: ${`${built.stdout ?? ''}${built.stderr ?? ''}`.slice(-600)}`,
     );
   } finally {
     await writeFile(candidate, original);
