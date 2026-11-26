@@ -212,7 +212,12 @@ describe('groupDeck', () => {
     const groups = groupDeck(
       [
         card({ card: 'people.total', section: 'people', kind: 'count', count_now: 900 }),
-        card({ card: 'marketplace.shops_pending', section: 'marketplace', kind: 'alert', count_now: 0 }),
+        card({
+          card: 'marketplace.shops_pending',
+          section: 'marketplace',
+          kind: 'alert',
+          count_now: 0,
+        }),
       ],
       DEFINITIONS,
     );
@@ -223,7 +228,12 @@ describe('groupDeck', () => {
     const groups = groupDeck(
       [
         card({ card: 'people.total', section: 'moderation', kind: 'count', count_now: 1 }),
-        card({ card: 'moderation.open_reports', section: 'moderation', kind: 'alert', count_now: 50 }),
+        card({
+          card: 'moderation.open_reports',
+          section: 'moderation',
+          kind: 'alert',
+          count_now: 50,
+        }),
       ],
       DEFINITIONS,
     );

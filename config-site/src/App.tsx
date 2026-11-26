@@ -83,7 +83,15 @@ function useEntries(): ReturnType<typeof useAsync<readonly ConfigEntry[]>> {
   } as ReturnType<typeof useAsync<readonly ConfigEntry[]>>;
 }
 
-function Setting({ entry, row, onSaved }: { entry: ConfigEntry; row: ConsoleRow; onSaved: () => void }): ReactElement {
+function Setting({
+  entry,
+  row,
+  onSaved,
+}: {
+  entry: ConfigEntry;
+  row: ConsoleRow;
+  onSaved: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [text, setText] = useState(() => (row.is_secret ? '' : editableText(entry)));
   const [reason, setReason] = useState('');
@@ -264,7 +272,13 @@ function Setting({ entry, row, onSaved }: { entry: ConfigEntry; row: ConsoleRow;
 
       <div className="kit-row">
         <Button size="small" disabled={!dirty || busy || reasonIssue !== null} onClick={save}>
-          {busy ? 'Saving' : route === 'direct' ? 'Save' : route === 'staged' ? 'Propose' : 'Schedule'}
+          {busy
+            ? 'Saving'
+            : route === 'direct'
+              ? 'Save'
+              : route === 'staged'
+                ? 'Propose'
+                : 'Schedule'}
         </Button>
         {dirty && (
           <Button
@@ -359,9 +373,7 @@ function Settings(): ReactElement {
       )}
       {orphans.length > 0 && (
         <Banner tone="warn" title={`${String(orphans.length)} setting(s) nothing reads`}>
-          <p className="kit-small">
-            {orphans.map((row) => row.key).join(', ')}
-          </p>
+          <p className="kit-small">{orphans.map((row) => row.key).join(', ')}</p>
           <p className="kit-small kit-muted">
             This is a proposal to review, not a cleanup: a reader that has not been mapped looks
             exactly like a reader that does not exist.

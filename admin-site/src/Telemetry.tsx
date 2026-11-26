@@ -81,7 +81,9 @@ export function Telemetry(): ReactElement {
     <div className="kit-stack">
       <Banner
         tone={page.stale ? 'warn' : 'neutral'}
-        title={page.stale ? `These numbers are ${page.label}` : 'Every number here says how old it is'}
+        title={
+          page.stale ? `These numbers are ${page.label}` : 'Every number here says how old it is'
+        }
       >
         <p className="kit-small">
           {page.stale
@@ -178,9 +180,7 @@ export function Telemetry(): ReactElement {
                             : 'no direction: read it'}
                       </td>
                       <td>
-                        {row.alert_above === null
-                          ? 'none'
-                          : `above ${String(row.alert_above)}`}
+                        {row.alert_above === null ? 'none' : `above ${String(row.alert_above)}`}
                       </td>
                     </tr>
                   ))}

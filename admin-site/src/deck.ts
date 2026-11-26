@@ -321,7 +321,9 @@ export function hiddenCardsNote(
 }
 
 /** The section headings, for a legend that does not have to re-derive them. */
-export function sectionHeadings(language: 'en' | 'bn' = 'en'): readonly { key: string; label: string }[] {
+export function sectionHeadings(
+  language: 'en' | 'bn' = 'en',
+): readonly { key: string; label: string }[] {
   return SECTION_ORDER.map((section) => ({
     key: section,
     label: (SECTION_HEADINGS[section] ?? { en: section, bn: section })[language],

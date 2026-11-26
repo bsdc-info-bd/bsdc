@@ -212,17 +212,23 @@ describe('planCommand — a destructive verb with no builder', () => {
 
 describe('renderPlan', () => {
   it('says nothing was written, first', () => {
-    const text = renderPlan(planFor('bulk plan shops approve --reason "Both trade licences verified"'));
+    const text = renderPlan(
+      planFor('bulk plan shops approve --reason "Both trade licences verified"'),
+    );
     expect(text.split('\n')[0]).toContain('nothing has been written');
   });
 
   it('shows the audit action the call would write', () => {
-    const text = renderPlan(planFor('bulk plan shops approve --reason "Both trade licences verified"'));
+    const text = renderPlan(
+      planFor('bulk plan shops approve --reason "Both trade licences verified"'),
+    );
     expect(text).toContain('audit: bulk.plan');
   });
 
   it('lists the refusals and says nothing would be called', () => {
-    const text = renderPlan(planFor('bulk plan wizards approve --reason "Both trade licences verified"'));
+    const text = renderPlan(
+      planFor('bulk plan wizards approve --reason "Both trade licences verified"'),
+    );
     expect(text).toContain('would be refused');
     expect(text).toContain('Nothing would be called');
   });

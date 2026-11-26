@@ -34,7 +34,8 @@ export function minutesLabel(minutes: number): string {
   if (m < 60) return `${String(m)} min`;
   const hours = Math.floor(m / 60);
   const rest = m % 60;
-  if (hours < 24) return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
+  if (hours < 24)
+    return rest === 0 ? `${String(hours)} h` : `${String(hours)} h ${String(rest)} min`;
   const days = Math.floor(hours / 24);
   const restHours = hours % 24;
   return restHours === 0 ? `${String(days)} d` : `${String(days)} d ${String(restHours)} h`;
@@ -46,7 +47,6 @@ export function budgetUsed(row: SlaRow): number {
   if (!Number.isFinite(budget) || budget <= 0) return 0;
   return Math.max(0, Number(row.age_minutes) / budget);
 }
-
 
 /**
  * One sentence for the top of the queue.

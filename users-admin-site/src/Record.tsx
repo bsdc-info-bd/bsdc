@@ -185,7 +185,9 @@ function Timeline({ uid }: { uid: string }): ReactElement {
                   variant={active ? 'primary' : 'quiet'}
                   title={family.explanation}
                   onClick={() =>
-                    setChosen(active ? chosen.filter((key) => key !== family.key) : [...chosen, family.key])
+                    setChosen(
+                      active ? chosen.filter((key) => key !== family.key) : [...chosen, family.key],
+                    )
                   }
                 >
                   {familyLabel(family.key)} ({count})
@@ -194,10 +196,15 @@ function Timeline({ uid }: { uid: string }): ReactElement {
             })}
           </div>
 
-          <Table caption={`${shown.length} events, newest first`} head={['When', 'What', 'Detail', '']}>
+          <Table
+            caption={`${shown.length} events, newest first`}
+            head={['When', 'What', 'Detail', '']}
+          >
             {shown.map((event) => (
               <tr key={`${event.occurred_at}-${event.reference}-${event.kind}`}>
-                <td className="kit-small kit-muted">{new Date(event.occurred_at).toLocaleString()}</td>
+                <td className="kit-small kit-muted">
+                  {new Date(event.occurred_at).toLocaleString()}
+                </td>
                 <td>{describeKind(event.kind)}</td>
                 <td className="kit-small">
                   {event.summary}
@@ -347,7 +354,10 @@ function Ladder({ uid }: { uid: string }): ReactElement {
 
 function Signals({ uid }: { uid: string }): ReactElement {
   const env = useCorporateEnv();
-  const load = useCallback(() => listRpc<PersonSignal>(env, 'person_signals', { p_uid: uid }), [env, uid]);
+  const load = useCallback(
+    () => listRpc<PersonSignal>(env, 'person_signals', { p_uid: uid }),
+    [env, uid],
+  );
   const { state } = useAsync(load, [env, uid]);
 
   const shown = state.status === 'ready' ? state.data.filter(signalWorthShowing) : [];
@@ -389,7 +399,8 @@ function Signals({ uid }: { uid: string }): ReactElement {
 function Reliability({ uid }: { uid: string }): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
-    async () => (await listRpc<Reliability>(env, 'reporter_reliability', { p_uid: uid }))[0] ?? null,
+    async () =>
+      (await listRpc<Reliability>(env, 'reporter_reliability', { p_uid: uid }))[0] ?? null,
     [env, uid],
   );
   const { state } = useAsync(load, [env, uid]);

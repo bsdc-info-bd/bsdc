@@ -114,7 +114,14 @@ function Notices(): ReactElement {
 
   const runBulk = async (
     action:
-      'publish' | 'archive' | 'unpublish' | 'pin' | 'unpin' | 'urgent' | 'important' | 'routine',
+      | 'publish'
+      | 'archive'
+      | 'unpublish'
+      | 'pin'
+      | 'unpin'
+      | 'urgent'
+      | 'important'
+      | 'routine',
   ): Promise<void> => {
     if (selected.length === 0) return;
     setBulkBusy(true);

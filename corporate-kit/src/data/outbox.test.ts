@@ -131,7 +131,19 @@ describe('readOutbox', () => {
   it('discards individual rows that are not intents', () => {
     storage.setItem(
       'bsdc:outbox:bsdc-mod',
-      JSON.stringify([{ id: 'a', rpc: 'x', args: {}, actor: 'u', label: 'l', queuedAt: 1, attempts: 0, status: 'pending' }, { broken: true }]),
+      JSON.stringify([
+        {
+          id: 'a',
+          rpc: 'x',
+          args: {},
+          actor: 'u',
+          label: 'l',
+          queuedAt: 1,
+          attempts: 0,
+          status: 'pending',
+        },
+        { broken: true },
+      ]),
     );
     expect(readOutbox('bsdc-mod', storage)).toHaveLength(1);
   });
@@ -199,13 +211,17 @@ describe('outboxSummary', () => {
 
   it('names the single waiting change, because that is actionable', () => {
     const created = enqueue('bsdc-mod', intent(), storage);
-    expect(outboxSummary([created])).toBe('1 change is waiting to be sent: Hide listing “Brass lamp”');
+    expect(outboxSummary([created])).toBe(
+      '1 change is waiting to be sent: Hide listing “Brass lamp”',
+    );
   });
 
   it('counts several without listing them', () => {
     enqueue('bsdc-mod', intent(), storage);
     enqueue('bsdc-mod', intent(), storage);
-    expect(outboxSummary(readOutbox('bsdc-mod', storage))).toBe('2 changes are waiting to be sent.');
+    expect(outboxSummary(readOutbox('bsdc-mod', storage))).toBe(
+      '2 changes are waiting to be sent.',
+    );
   });
 
   it('does not count a change that already went through', () => {

@@ -50,21 +50,25 @@ describe('isChunkLoadFailure', () => {
 
   it('recognises a named export that no longer exists', () => {
     expect(
-      isChunkLoadFailure(new SyntaxError("The requested module does not provide an export named 'x'")),
+      isChunkLoadFailure(
+        new SyntaxError("The requested module does not provide an export named 'x'"),
+      ),
     ).toBe(true);
   });
 
   it('does not swallow a genuine bug in a screen', () => {
     // This is the whole point of the distinction: a real bug must still reach
     // the error screen so somebody learns about it.
-    expect(isChunkLoadFailure(new TypeError("Cannot read properties of undefined (reading 'id')"))).toBe(
-      false,
-    );
+    expect(
+      isChunkLoadFailure(new TypeError("Cannot read properties of undefined (reading 'id')")),
+    ).toBe(false);
   });
 
   it('handles a thrown string and a thrown object', () => {
     expect(isChunkLoadFailure('Importing a module script failed.')).toBe(true);
-    expect(isChunkLoadFailure({ message: 'failed to fetch dynamically imported module' })).toBe(true);
+    expect(isChunkLoadFailure({ message: 'failed to fetch dynamically imported module' })).toBe(
+      true,
+    );
   });
 
   it('handles nothing at all', () => {
@@ -106,7 +110,12 @@ describe('attemptStaleBuildRecovery', () => {
   it('does not reload twice within two seconds', () => {
     const storage = memoryStorage();
     const reload = vi.fn();
-    attemptStaleBuildRecovery('bsdc-admin', 'build-a', { storage, reload, now: () => 1_000_000, online: () => true });
+    attemptStaleBuildRecovery('bsdc-admin', 'build-a', {
+      storage,
+      reload,
+      now: () => 1_000_000,
+      online: () => true,
+    });
     const second = attemptStaleBuildRecovery('bsdc-admin', 'build-a', {
       storage,
       reload,
@@ -120,7 +129,11 @@ describe('attemptStaleBuildRecovery', () => {
   it('never reloads while offline', () => {
     // Reloading offline would discard a half-written note and fix nothing.
     const reload = vi.fn();
-    const outcome = attemptStaleBuildRecovery('bsdc-admin', 'build-a', deps({ reload, online: () => false }));
+    const outcome = attemptStaleBuildRecovery(
+      'bsdc-admin',
+      'build-a',
+      deps({ reload, online: () => false }),
+    );
     expect(outcome).toEqual({ recovered: false, reason: 'offline' });
     expect(reload).not.toHaveBeenCalled();
   });
@@ -150,7 +163,12 @@ describe('attemptStaleBuildRecovery', () => {
     let now = 1_000_000;
     const reload = vi.fn();
     const run = (scope: string): unknown =>
-      attemptStaleBuildRecovery(scope, 'build-a', { storage, reload, now: () => now, online: () => true });
+      attemptStaleBuildRecovery(scope, 'build-a', {
+        storage,
+        reload,
+        now: () => now,
+        online: () => true,
+      });
     run('bsdc-admin');
     now += 10_000;
     run('bsdc-admin');

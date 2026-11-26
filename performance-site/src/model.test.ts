@@ -370,7 +370,9 @@ describe('a board that leads to an action (§13.1)', () => {
   });
 
   it('says plainly when a metric has no budget and is therefore unwatched', () => {
-    expect(boardSentence(row({ rating: 'no budget', target: null, over_budget: false }))).toContain('nothing is being watched');
+    expect(boardSentence(row({ rating: 'no budget', target: null, over_budget: false }))).toContain(
+      'nothing is being watched',
+    );
   });
 
   it('says inside budget with the number it beat', () => {
@@ -399,7 +401,13 @@ describe('a board that leads to an action (§13.1)', () => {
       row({ route: '/fine', over_budget: false, rating: 'within budget' }),
       row({ route: '/alert', open_regression: 'r1' }),
       row({ route: '/near' }),
-      row({ route: '/thin', insufficient: true, over_budget: false, samples: 3, rating: 'insufficient' }),
+      row({
+        route: '/thin',
+        insufficient: true,
+        over_budget: false,
+        samples: 3,
+        rating: 'insufficient',
+      }),
     ]);
     expect(sections.map((s) => s.title.split(' (')[0])).toEqual([
       'Alerting',
@@ -410,15 +418,29 @@ describe('a board that leads to an action (§13.1)', () => {
   });
 
   it('does not invent a blind section out of routes that were never measured', () => {
-    const sections = boardSections([row({ samples: 0, insufficient: true, over_budget: false, rating: 'insufficient' })]);
+    const sections = boardSections([
+      row({ samples: 0, insufficient: true, over_budget: false, rating: 'insufficient' }),
+    ]);
     expect(sections.some((s) => s.title.startsWith('Not enough'))).toBe(false);
   });
 
   it('names the release and the correlation in a regression sentence', () => {
     const sentence = regressionSentence({
-      id: 'r1', app: 'main-site', route: '/shop', metric: 'LCP', target: 2500, observed: 3600,
-      delta_share: 0.44, samples: 900, streak: 4, build: 'b9', error_fingerprint: 'fp1',
-      first_seen: '', last_seen: '', acknowledged_at: null, ack_note: '',
+      id: 'r1',
+      app: 'main-site',
+      route: '/shop',
+      metric: 'LCP',
+      target: 2500,
+      observed: 3600,
+      delta_share: 0.44,
+      samples: 900,
+      streak: 4,
+      build: 'b9',
+      error_fingerprint: 'fp1',
+      first_seen: '',
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
     });
     expect(sentence).toContain('release b9');
     expect(sentence).toContain('+44%');
@@ -428,9 +450,21 @@ describe('a board that leads to an action (§13.1)', () => {
 
   it('does not claim a correlation when there is no error to point at', () => {
     const sentence = regressionSentence({
-      id: 'r1', app: 'main-site', route: '/shop', metric: 'LCP', target: 2500, observed: 3600,
-      delta_share: 0.44, samples: 900, streak: 4, build: '', error_fingerprint: null,
-      first_seen: '', last_seen: '', acknowledged_at: null, ack_note: '',
+      id: 'r1',
+      app: 'main-site',
+      route: '/shop',
+      metric: 'LCP',
+      target: 2500,
+      observed: 3600,
+      delta_share: 0.44,
+      samples: 900,
+      streak: 4,
+      build: '',
+      error_fingerprint: null,
+      first_seen: '',
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
     });
     expect(sentence).toContain('unrecorded release');
     expect(sentence).not.toContain('correlated');
@@ -439,13 +473,30 @@ describe('a board that leads to an action (§13.1)', () => {
   it('says how long a regression has been open', () => {
     const now = new Date('2026-11-23T12:00:00Z');
     const base = {
-      id: 'r1', app: 'main-site', route: '/', metric: 'LCP' as Vital, target: 1, observed: 2,
-      delta_share: 1, samples: 1, streak: 1, build: '', error_fingerprint: null,
-      last_seen: '', acknowledged_at: null, ack_note: '',
+      id: 'r1',
+      app: 'main-site',
+      route: '/',
+      metric: 'LCP' as Vital,
+      target: 1,
+      observed: 2,
+      delta_share: 1,
+      samples: 1,
+      streak: 1,
+      build: '',
+      error_fingerprint: null,
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
     };
-    expect(regressionAge({ ...base, first_seen: '2026-11-23T11:30:00Z' }, now)).toBe('started within the hour');
-    expect(regressionAge({ ...base, first_seen: '2026-11-23T06:00:00Z' }, now)).toBe('open for 6 hours');
-    expect(regressionAge({ ...base, first_seen: '2026-11-20T12:00:00Z' }, now)).toBe('open for 3 days');
+    expect(regressionAge({ ...base, first_seen: '2026-11-23T11:30:00Z' }, now)).toBe(
+      'started within the hour',
+    );
+    expect(regressionAge({ ...base, first_seen: '2026-11-23T06:00:00Z' }, now)).toBe(
+      'open for 6 hours',
+    );
+    expect(regressionAge({ ...base, first_seen: '2026-11-20T12:00:00Z' }, now)).toBe(
+      'open for 3 days',
+    );
   });
 
   it('asks for a note that explains what was done, not one that dismisses it', () => {

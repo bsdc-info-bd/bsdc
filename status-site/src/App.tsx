@@ -98,7 +98,13 @@ async function loadBoard(env: CorporateEnv): Promise<Board> {
 }
 
 /** §13.2 — declaring: two titles, two bodies, and a drill that tells nobody. */
-function Declare({ services, onDeclared }: { services: readonly UptimeRow[]; onDeclared: () => void }): ReactElement {
+function Declare({
+  services,
+  onDeclared,
+}: {
+  services: readonly UptimeRow[];
+  onDeclared: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [serviceKey, setServiceKey] = useState(services[0]?.service_key ?? '');
   const [title, setTitle] = useState('');
@@ -218,7 +224,11 @@ function Declare({ services, onDeclared }: { services: readonly UptimeRow[]; onD
         }}
       />
       <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
-        <Button variant={drill ? 'quiet' : 'danger'} disabled={busy || problems.length > 0} onClick={declare}>
+        <Button
+          variant={drill ? 'quiet' : 'danger'}
+          disabled={busy || problems.length > 0}
+          onClick={declare}
+        >
           {busy ? 'Declaring' : drill ? 'Run the drill' : 'Declare incident'}
         </Button>
         {problems.length > 0 && <span className="kit-hint">{problems[0]}</span>}
@@ -228,7 +238,13 @@ function Declare({ services, onDeclared }: { services: readonly UptimeRow[]; onD
 }
 
 /** §13.2 — the action list, tracked to closure, with who and when. */
-function Actions({ incidentId, onChanged }: { incidentId: string; onChanged: () => void }): ReactElement {
+function Actions({
+  incidentId,
+  onChanged,
+}: {
+  incidentId: string;
+  onChanged: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
     () => listRpc<IncidentAction>(env, 'incident_actions_for', { p_incident_id: incidentId }),
@@ -268,7 +284,9 @@ function Actions({ incidentId, onChanged }: { incidentId: string; onChanged: () 
         return (
           <div key={action.id}>
             <p className="kit-small" style={{ margin: 0 }}>
-              <Badge tone={state === 'late' ? 'bad' : state === 'done' ? 'ok' : 'warn'}>{state}</Badge>{' '}
+              <Badge tone={state === 'late' ? 'bad' : state === 'done' ? 'ok' : 'warn'}>
+                {state}
+              </Badge>{' '}
               {action.body}{' '}
               <span className="kit-muted">
                 due {action.due_on}
@@ -289,7 +307,10 @@ function Actions({ incidentId, onChanged }: { incidentId: string; onChanged: () 
                   size="small"
                   disabled={note.trim().length < 5 || busyId !== action.id}
                   onClick={() => {
-                    callRpc(env, 'complete_incident_action', { p_id: action.id, p_note: note.trim() })
+                    callRpc(env, 'complete_incident_action', {
+                      p_id: action.id,
+                      p_note: note.trim(),
+                    })
                       .then(() => {
                         setNote('');
                         setBusyId('');
@@ -314,7 +335,13 @@ function Actions({ incidentId, onChanged }: { incidentId: string; onChanged: () 
 
 function actionStateLabel(action: IncidentAction): string {
   const state = actionState(action);
-  return state === 'done' ? 'done' : state === 'late' ? 'late' : state === 'due' ? 'due today' : 'open';
+  return state === 'done'
+    ? 'done'
+    : state === 'late'
+      ? 'late'
+      : state === 'due'
+        ? 'due today'
+        : 'open';
 }
 
 function Status(): ReactElement {
@@ -400,9 +427,7 @@ function Status(): ReactElement {
         )}
       </Card>
 
-      {canResolve && (
-        <Declare services={state.data.services} onDeclared={reload} />
-      )}
+      {canResolve && <Declare services={state.data.services} onDeclared={reload} />}
 
       {meetsRole(profile, 'moderator') && (
         <Operations services={state.data.services} onChanged={reload} />
@@ -488,7 +513,11 @@ function Incident({
     }
     setBusy(true);
     setError('');
-    callRpc(env, 'resolve_with_summary', { p_incident_id: incident.id, p_summary: note.trim(), p_actions: [] })
+    callRpc(env, 'resolve_with_summary', {
+      p_incident_id: incident.id,
+      p_summary: note.trim(),
+      p_actions: [],
+    })
       .then(() => {
         setNote('');
         onChanged();
@@ -548,9 +577,7 @@ function Incident({
         <Actions incidentId={incident.id} onChanged={onChanged} />
       </details>
 
-      {canResolve && (
-        <Postmortem incident={incident} onChanged={onChanged} />
-      )}
+      {canResolve && <Postmortem incident={incident} onChanged={onChanged} />}
 
       {incident.resolved_at === null && canResolve ? (
         <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
@@ -580,7 +607,13 @@ function Incident({
 }
 
 /** §13.2 — a post-mortem after the fact, and a sentence about what would have caught it. */
-function Postmortem({ incident, onChanged }: { incident: IncidentRowV2; onChanged: () => void }): ReactElement {
+function Postmortem({
+  incident,
+  onChanged,
+}: {
+  incident: IncidentRowV2;
+  onChanged: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [body, setBody] = useState('');
   const [error, setError] = useState('');
@@ -592,7 +625,9 @@ function Postmortem({ incident, onChanged }: { incident: IncidentRowV2; onChange
     <details className="kit-small" style={{ marginTop: 'var(--sp-2)' }}>
       <summary>{written ? 'Post-incident review' : 'Write a post-incident review'}</summary>
       {written ? (
-        <p className="kit-small" style={{ whiteSpace: 'pre-wrap' }}>{incident.postmortem}</p>
+        <p className="kit-small" style={{ whiteSpace: 'pre-wrap' }}>
+          {incident.postmortem}
+        </p>
       ) : (
         <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
           {error !== '' && (
@@ -614,7 +649,10 @@ function Postmortem({ incident, onChanged }: { incident: IncidentRowV2; onChange
               onClick={() => {
                 setBusy(true);
                 setError('');
-                callRpc(env, 'record_postmortem', { p_incident_id: incident.id, p_body: body.trim() })
+                callRpc(env, 'record_postmortem', {
+                  p_incident_id: incident.id,
+                  p_body: body.trim(),
+                })
                   .then(onChanged)
                   .catch((cause: unknown) => {
                     setError(messageOf(cause));

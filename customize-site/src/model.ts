@@ -231,7 +231,12 @@ function itemFilled(item: unknown, name: string): boolean {
 
 /** Every section that would stop a publish, in page order. */
 export function publishProblems(
-  sections: readonly { readonly kind: SectionKind; readonly position: number; readonly payload: Record<string, unknown>; readonly is_visible?: boolean }[],
+  sections: readonly {
+    readonly kind: SectionKind;
+    readonly position: number;
+    readonly payload: Record<string, unknown>;
+    readonly is_visible?: boolean;
+  }[],
 ): readonly PublishProblem[] {
   return sections
     .filter((s) => s.is_visible !== false)
@@ -269,11 +274,42 @@ export function publishSummary(
  * server is still the authority — a copy is a courtesy, not a rule.
  */
 export const RESERVED_PREFIXES: readonly string[] = [
-  'about', 'account-deletion', 'admin', 'api', 'auth', 'bookmarks', 'cart', 'checkout',
-  'compose', 'contact', 'create', 'events', 'feed', 'freelance', 'g', 'groups', 'guidelines',
-  'jobs', 'marketplace', 'messages', 'notifications', 'onboarding', 'orders', 'playground',
-  'privacy', 'profile', 'projects', 'robots.txt', 'search', 'settings', 'shop', 'sitemap.xml',
-  'system-check', 'terms', 'trash', 'verify',
+  'about',
+  'account-deletion',
+  'admin',
+  'api',
+  'auth',
+  'bookmarks',
+  'cart',
+  'checkout',
+  'compose',
+  'contact',
+  'create',
+  'events',
+  'feed',
+  'freelance',
+  'g',
+  'groups',
+  'guidelines',
+  'jobs',
+  'marketplace',
+  'messages',
+  'notifications',
+  'onboarding',
+  'orders',
+  'playground',
+  'privacy',
+  'profile',
+  'projects',
+  'robots.txt',
+  'search',
+  'settings',
+  'shop',
+  'sitemap.xml',
+  'system-check',
+  'terms',
+  'trash',
+  'verify',
 ];
 
 export type SlugCheck = {
@@ -322,7 +358,12 @@ export type VersionView = {
 };
 
 export function describeVersions(
-  rows: readonly { readonly version: number; readonly created_at: string; readonly note: string; readonly sections: readonly unknown[] }[],
+  rows: readonly {
+    readonly version: number;
+    readonly created_at: string;
+    readonly note: string;
+    readonly sections: readonly unknown[];
+  }[],
   currentVersion: number,
 ): readonly VersionView[] {
   return [...rows]

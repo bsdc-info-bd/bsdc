@@ -137,7 +137,8 @@ export function provenanceOf(row: ConsoleRow): Provenance {
       return {
         source: row.source,
         label: 'Forced',
-        detail: 'Forced by an override that the deploy controls. A change here will not survive it.',
+        detail:
+          'Forced by an override that the deploy controls. A change here will not survive it.',
         chosen: false,
       };
     case 'default':
@@ -215,10 +216,16 @@ export type SecretState = {
 
 export function secretState(row: ConsoleRow, now = new Date()): SecretState {
   if (!row.secret_is_set || row.secret_set_at === null) {
-    return { isSet: false, summary: 'No secret is set for this key.', ageDays: null, rotationDue: false };
+    return {
+      isSet: false,
+      summary: 'No secret is set for this key.',
+      ageDays: null,
+      rotationDue: false,
+    };
   }
   const setAt = new Date(row.secret_set_at).getTime();
-  const rotatedAt = row.secret_rotated_at === null ? setAt : new Date(row.secret_rotated_at).getTime();
+  const rotatedAt =
+    row.secret_rotated_at === null ? setAt : new Date(row.secret_rotated_at).getTime();
   const ageDays = Number.isFinite(rotatedAt)
     ? Math.floor((now.getTime() - rotatedAt) / 86_400_000)
     : null;
@@ -230,8 +237,7 @@ export function secretState(row: ConsoleRow, now = new Date()): SecretState {
       rotationDue: false,
     };
   }
-  const when =
-    ageDays <= 0 ? 'today' : ageDays === 1 ? 'yesterday' : `${String(ageDays)} days ago`;
+  const when = ageDays <= 0 ? 'today' : ageDays === 1 ? 'yesterday' : `${String(ageDays)} days ago`;
   return {
     isSet: true,
     summary: `A secret is set, last rotated ${when}.`,
@@ -309,7 +315,10 @@ export type StagedRow = {
 };
 
 /** Whether a staged change is waiting, and what it is waiting for. */
-export function stagedState(row: StagedRow, viewerUid: string | null): {
+export function stagedState(
+  row: StagedRow,
+  viewerUid: string | null,
+): {
   readonly waiting: boolean;
   readonly needsApprovalFrom: 'anybody-else' | 'nobody';
   readonly sentence: string;

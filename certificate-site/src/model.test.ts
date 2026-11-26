@@ -595,7 +595,10 @@ describe('the revocation a restore must keep (§11.1)', () => {
   });
 
   it('SKIPS an entry with no revocation date rather than dating it today', () => {
-    const parsed = parseRevocationHistory([{ reason: 'no date' }, { revoked_at: '2026-04-01T00:00:00Z' }]);
+    const parsed = parseRevocationHistory([
+      { reason: 'no date' },
+      { revoked_at: '2026-04-01T00:00:00Z' },
+    ]);
     expect(parsed.records).toHaveLength(1);
   });
 
@@ -651,9 +654,9 @@ describe('what a person holding the paper is told (§11.1)', () => {
   });
 
   it('tells a revoked document apart from one we never issued', () => {
-    expect(verificationSentence(state({ state: 'revoked', reason: 'not substantiated' }))).toContain(
-      'revoked it: not substantiated',
-    );
+    expect(
+      verificationSentence(state({ state: 'revoked', reason: 'not substantiated' })),
+    ).toContain('revoked it: not substantiated');
     expect(verificationSentence(state({ state: 'not_found', found: false }))).toContain(
       'No document with that code',
     );
@@ -670,9 +673,9 @@ describe('what a person holding the paper is told (§11.1)', () => {
   });
 
   it('says a withdrawn notice was withdrawn', () => {
-    expect(verificationSentence(state({ kind: 'notice', state: 'withdrawn', reason: 'postponed' }))).toContain(
-      'postponed',
-    );
+    expect(
+      verificationSentence(state({ kind: 'notice', state: 'withdrawn', reason: 'postponed' })),
+    ).toContain('postponed');
   });
 
   it('normalises nulls from the RPC', () => {

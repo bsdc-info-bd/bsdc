@@ -121,19 +121,25 @@ describe('isAlarming', () => {
 describe('needsAttention', () => {
   it('does not raise a neutral metric that moved a lot', () => {
     expect(
-      needsAttention(metric({ direction: 'neutral', current_value: 200, previous_value: 100, delta: 100 })),
+      needsAttention(
+        metric({ direction: 'neutral', current_value: 200, previous_value: 100, delta: 100 }),
+      ),
     ).toBe(false);
   });
 
   it('raises a bad-up metric that moved by a tenth', () => {
     expect(
-      needsAttention(metric({ direction: 'up_is_bad', current_value: 12, previous_value: 10, delta: 2 })),
+      needsAttention(
+        metric({ direction: 'up_is_bad', current_value: 12, previous_value: 10, delta: 2 }),
+      ),
     ).toBe(true);
   });
 
   it('does not raise a bad-up metric that barely moved', () => {
     expect(
-      needsAttention(metric({ direction: 'up_is_bad', current_value: 1001, previous_value: 1000, delta: 1 })),
+      needsAttention(
+        metric({ direction: 'up_is_bad', current_value: 1001, previous_value: 1000, delta: 1 }),
+      ),
     ).toBe(false);
   });
 
@@ -156,14 +162,22 @@ describe('provenance', () => {
   });
 
   it('says so rather than inventing a source', () => {
-    expect(provenance(metric({ source_table: null, source_rpc: null }))).toBe('source not recorded');
+    expect(provenance(metric({ source_table: null, source_rpc: null }))).toBe(
+      'source not recorded',
+    );
   });
 });
 
 describe('orderMetrics', () => {
   it('puts an alarming metric above one that merely moved', () => {
     const ordered = orderMetrics([
-      metric({ key: 'b.moved', direction: 'up_is_bad', current_value: 12, previous_value: 10, delta: 2 }),
+      metric({
+        key: 'b.moved',
+        direction: 'up_is_bad',
+        current_value: 12,
+        previous_value: 10,
+        delta: 2,
+      }),
       metric({ key: 'a.alarm', alert_above: 0, current_value: 1 }),
     ]);
     expect(ordered.map((r) => r.key)).toEqual(['a.alarm', 'b.moved']);

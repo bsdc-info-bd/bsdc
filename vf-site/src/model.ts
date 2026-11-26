@@ -248,7 +248,8 @@ export function refusalSentence(code: string | null): string {
 
 /** A batch download: what was checked and what it said, for the file. */
 export function batchCsv(answers: readonly Answer[]): string {
-  const escape = (value: string): string => (/[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value);
+  const escape = (value: string): string =>
+    /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
   const lines = ['code,kind,state,in_force,recipient,subject,issued,expires,reason'];
   for (const answer of answers) {
     lines.push(

@@ -111,7 +111,11 @@ function Board(): ReactElement {
         title="Budget board"
         description="Ordered by whether somebody needs to do something, not by traffic. A metric under the sample floor is reported as unknown rather than as good."
         actions={
-          alerting > 0 ? <Badge tone="bad">{`${String(alerting)} alerting`}</Badge> : <Badge tone="ok">nothing alerting</Badge>
+          alerting > 0 ? (
+            <Badge tone="bad">{`${String(alerting)} alerting`}</Badge>
+          ) : (
+            <Badge tone="ok">nothing alerting</Badge>
+          )
         }
       >
         <div className="kit-grid">
@@ -237,7 +241,9 @@ function Budgets(): ReactElement {
                   <td className="kit-small">{VITAL_SPECS[budget.metric].label}</td>
                   <td className="kit-small">{formatVital(budget.metric, budget.target)}</td>
                   <td className="kit-small">{budget.consecutive} windows</td>
-                  <td className="kit-small">{budget.window_days === 1 ? 'daily' : `${String(budget.window_days)} days`}</td>
+                  <td className="kit-small">
+                    {budget.window_days === 1 ? 'daily' : `${String(budget.window_days)} days`}
+                  </td>
                   <td className="kit-small">{budget.min_samples}</td>
                   <td className="kit-small">{budget.note === '' ? '—' : budget.note}</td>
                   <td>
@@ -392,8 +398,7 @@ function BudgetForm({ app, onSaved }: { app: string; onSaved: () => void }): Rea
 function Regressions(): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
-    () =>
-      listRpc<RegressionRow>(env, 'vital_regressions_open', { p_limit: 50 }),
+    () => listRpc<RegressionRow>(env, 'vital_regressions_open', { p_limit: 50 }),
     [env],
   );
   const { state, reload } = useAsync(load, [env]);
@@ -408,8 +413,13 @@ function Regressions(): ReactElement {
   }
   if (state.data.length === 0) {
     return (
-      <Card title="Regressions" description="A regression closes when a person says what was done, not when the number drops.">
-        <Empty>Nothing is on the board. No metric has been over its budget for long enough to fire.</Empty>
+      <Card
+        title="Regressions"
+        description="A regression closes when a person says what was done, not when the number drops."
+      >
+        <Empty>
+          Nothing is on the board. No metric has been over its budget for long enough to fire.
+        </Empty>
       </Card>
     );
   }
@@ -428,7 +438,13 @@ function Regressions(): ReactElement {
   );
 }
 
-function RegressionCard({ row, onAcknowledged }: { row: RegressionRow; onAcknowledged: () => void }): ReactElement {
+function RegressionCard({
+  row,
+  onAcknowledged,
+}: {
+  row: RegressionRow;
+  onAcknowledged: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
@@ -498,7 +514,12 @@ function Releases(): ReactElement {
   const [app, setApp] = useState('main-site');
   const [route, setRoute] = useState('*');
   const load = useCallback(
-    () => listRpc<ReleaseRow>(env, 'vitals_release_compare', { p_app: app, p_route: route, p_days: 14 }),
+    () =>
+      listRpc<ReleaseRow>(env, 'vitals_release_compare', {
+        p_app: app,
+        p_route: route,
+        p_days: 14,
+      }),
     [env, app, route],
   );
   const { state } = useAsync(load, [env, app, route]);
@@ -538,23 +559,33 @@ function Releases(): ReactElement {
         (state.data.length === 0 ? (
           <Empty>
             No build has been recorded with measurements in the last fortnight, so there is nothing
-            to compare. A release comparison needs builds to carry a build id when they report vitals.
+            to compare. A release comparison needs builds to carry a build id when they report
+            vitals.
           </Empty>
         ) : (
-          <Table caption="Largest change first." head={['Metric', 'This build', 'p75', 'Previous', 'p75', 'Change', 'Verdict']}>
+          <Table
+            caption="Largest change first."
+            head={['Metric', 'This build', 'p75', 'Previous', 'p75', 'Change', 'Verdict']}
+          >
             {state.data.map((row) => (
               <tr key={row.metric}>
                 <td className="kit-small">{VITAL_SPECS[row.metric].label}</td>
                 <td className="kit-mono kit-small">{row.build}</td>
                 <td className="kit-small">{formatVital(row.metric, row.p75)}</td>
                 <td className="kit-mono kit-small">{row.previous_build ?? '—'}</td>
-                <td className="kit-small">{row.previous_p75 === null ? '—' : formatVital(row.metric, row.previous_p75)}</td>
                 <td className="kit-small">
-                  {row.delta === null ? '—' : `${row.delta > 0 ? '+' : ''}${formatVital(row.metric, Math.abs(row.delta))}`}
+                  {row.previous_p75 === null ? '—' : formatVital(row.metric, row.previous_p75)}
+                </td>
+                <td className="kit-small">
+                  {row.delta === null
+                    ? '—'
+                    : `${row.delta > 0 ? '+' : ''}${formatVital(row.metric, Math.abs(row.delta))}`}
                 </td>
                 <td className="kit-small">
                   {row.enough ? (
-                    <span className="kit-muted">{row.delta !== null && row.delta > 0 ? 'slower' : 'no worse'}</span>
+                    <span className="kit-muted">
+                      {row.delta !== null && row.delta > 0 ? 'slower' : 'no worse'}
+                    </span>
                   ) : (
                     <Badge tone="warn">too few samples</Badge>
                   )}

@@ -98,9 +98,9 @@ export function Sessions(): ReactElement {
     <div className="kit-stack">
       <Banner tone="neutral" title="Every live console session">
         <p className="kit-small">
-          A flag here is a question, not a verdict. Two origins for one account inside ninety minutes
-          looks exactly like a phone switching from wi-fi to mobile data, so the screen reports the
-          pair and leaves the judgement to a person who knows the account.
+          A flag here is a question, not a verdict. Two origins for one account inside ninety
+          minutes looks exactly like a phone switching from wi-fi to mobile data, so the screen
+          reports the pair and leaves the judgement to a person who knows the account.
         </p>
         <div className="kit-row">
           <Button size="small" variant="quiet" onClick={reload}>
@@ -131,7 +131,9 @@ export function Sessions(): ReactElement {
       )}
       {state.status === 'ready' && state.data.length === 0 && (
         <Empty>
-          <strong>{flaggedOnly ? 'Nothing is flagged.' : 'Nobody is signed in to a console.'}</strong>{' '}
+          <strong>
+            {flaggedOnly ? 'Nothing is flagged.' : 'Nobody is signed in to a console.'}
+          </strong>{' '}
           {flaggedOnly
             ? 'That is the state this screen wants to be in.'
             : 'Sessions appear here the moment somebody opens a console.'}
@@ -211,7 +213,9 @@ export function Sessions(): ReactElement {
               : 'The person is signed out of that device. They can sign in again; nothing about their account changes.'
         }
         confirmLabel={
-          pending && endAction(pending, profile?.uid ?? '') === 'revoke' ? 'End session' : 'Sign out'
+          pending && endAction(pending, profile?.uid ?? '') === 'revoke'
+            ? 'End session'
+            : 'Sign out'
         }
         onCancel={() => {
           setPending(null);

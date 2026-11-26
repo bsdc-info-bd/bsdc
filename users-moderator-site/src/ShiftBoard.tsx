@@ -41,7 +41,8 @@ export function ShiftBoard(): ReactElement {
   const { state, reload } = useAsync(load, [env, date]);
 
   const uncovered = state.status === 'ready' ? uncoveredShifts(state.data) : [];
-  const due = state.status === 'ready' ? state.data.filter((row) => handoverDue(row, new Date())) : [];
+  const due =
+    state.status === 'ready' ? state.data.filter((row) => handoverDue(row, new Date())) : [];
 
   return (
     <div className="kit-stack">
@@ -73,16 +74,16 @@ export function ShiftBoard(): ReactElement {
 
       {uncovered.length > 0 ? (
         <Banner tone="bad" title="A shift has nobody on it">
-          {uncovered.map((row) => row.shift_name).join(', ')} {uncovered.length === 1 ? 'has' : 'have'}{' '}
-          no assignment. A roster exists to make this visible before the shift starts rather than
-          after.
+          {uncovered.map((row) => row.shift_name).join(', ')}{' '}
+          {uncovered.length === 1 ? 'has' : 'have'} no assignment. A roster exists to make this
+          visible before the shift starts rather than after.
         </Banner>
       ) : null}
 
       {due.length > 0 ? (
         <Banner tone="warn" title="A handover is due">
-          {due.map((row) => row.shift_name).join(', ')} {due.length === 1 ? 'has' : 'have'} started and
-          nobody has written a handover. The next shift reads that note first.
+          {due.map((row) => row.shift_name).join(', ')} {due.length === 1 ? 'has' : 'have'} started
+          and nobody has written a handover. The next shift reads that note first.
         </Banner>
       ) : null}
 
@@ -105,7 +106,13 @@ export function ShiftBoard(): ReactElement {
   );
 }
 
-function ShiftCard({ row, onChanged }: { row: ShiftBoardRow; onChanged: () => void }): ReactElement {
+function ShiftCard({
+  row,
+  onChanged,
+}: {
+  row: ShiftBoardRow;
+  onChanged: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [note, setNote] = useState(row.handover);
   const [busy, setBusy] = useState(false);
@@ -138,7 +145,11 @@ function ShiftCard({ row, onChanged }: { row: ShiftBoardRow; onChanged: () => vo
       description={shiftSentence(row)}
       actions={
         <Badge tone={row.headcount === 0 ? 'bad' : row.breached > 0 ? 'warn' : 'ok'}>
-          {row.headcount === 0 ? 'uncovered' : row.breached > 0 ? `${row.breached} late` : 'covered'}
+          {row.headcount === 0
+            ? 'uncovered'
+            : row.breached > 0
+              ? `${row.breached} late`
+              : 'covered'}
         </Badge>
       }
     >

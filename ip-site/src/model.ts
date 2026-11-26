@@ -177,7 +177,7 @@ export type SimulatedStep = {
   readonly skipped_why: string | null;
 };
 
- export type Verdict = {
+export type Verdict = {
   readonly decision: string;
   /** True when a shadow rule would have decided differently from the real answer. */
   readonly shadowDiffers: boolean;
@@ -281,13 +281,16 @@ export function windowNote(days: number, rows: readonly DryRunRow[]): string {
 export const MIN_RULE_REASON = 10;
 
 /** A rule needs a reason, a label and a review date — in that order of importance. */
-export function ruleProblems(input: {
-  readonly cidr: string;
-  readonly reason: string;
-  readonly label: string;
-  readonly kind: IpRuleKind;
-  readonly reviewAt: string;
-}, now = new Date()): readonly string[] {
+export function ruleProblems(
+  input: {
+    readonly cidr: string;
+    readonly reason: string;
+    readonly label: string;
+    readonly kind: IpRuleKind;
+    readonly reviewAt: string;
+  },
+  now = new Date(),
+): readonly string[] {
   const problems: string[] = [];
 
   if (input.label.trim().length < 2) {
@@ -318,12 +321,19 @@ export function ruleProblems(input: {
 }
 
 /** What saving will do, before it is saved. */
-export function saveSummary(shadow: boolean, reviewAt: string, dryRun: DryRunSummary | null): string {
+export function saveSummary(
+  shadow: boolean,
+  reviewAt: string,
+  dryRun: DryRunSummary | null,
+): string {
   const mode = shadow
     ? 'It will be created in shadow mode: it blocks nobody and records what it would have done.'
     : 'It will be armed immediately.';
-  const review = reviewAt.trim() === '' ? ' It defaults to a review in thirty days.' : ` Review on ${reviewAt}.`;
+  const review =
+    reviewAt.trim() === '' ? ' It defaults to a review in thirty days.' : ` Review on ${reviewAt}.`;
   const evidence =
-    dryRun === null ? '' : ` ${dryRun.affected === 0 ? 'No request in the last week would have been affected.' : `In the last week it would have affected ${String(dryRun.affected)} request(s).`}`;
+    dryRun === null
+      ? ''
+      : ` ${dryRun.affected === 0 ? 'No request in the last week would have been affected.' : `In the last week it would have affected ${String(dryRun.affected)} request(s).`}`;
   return `${mode}${review}${evidence}`;
 }

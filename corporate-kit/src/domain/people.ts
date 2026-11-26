@@ -42,13 +42,22 @@ const FAMILIES: readonly KindFamily[] = [
   {
     key: 'report',
     label: 'Reports',
-    explanation: 'Reports they filed, and reports filed about them. Both are this person’s history.',
+    explanation:
+      'Reports they filed, and reports filed about them. Both are this person’s history.',
   },
   { key: 'moderation', label: 'Actions taken', explanation: 'What was done to them, and by whom.' },
-  { key: 'standing', label: 'Standing', explanation: 'Every movement of their score, with the rule behind it.' },
+  {
+    key: 'standing',
+    label: 'Standing',
+    explanation: 'Every movement of their score, with the rule behind it.',
+  },
   { key: 'appeal', label: 'Appeals', explanation: 'Decisions they asked to have looked at again.' },
   { key: 'case', label: 'Cases', explanation: 'Cases opened about them.' },
-  { key: 'certificate', label: 'Certificates', explanation: 'Documents they hold, and any that were revoked.' },
+  {
+    key: 'certificate',
+    label: 'Certificates',
+    explanation: 'Documents they hold, and any that were revoked.',
+  },
   { key: 'role', label: 'Role changes', explanation: 'Changes to what they are allowed to do.' },
 ];
 
@@ -107,11 +116,14 @@ export function describeKind(kind: string): string {
     }
   }
   if (family === 'standing') {
-    return detail.startsWith('ladder.') ? `Ladder step (${detail.slice(7)})` : `Standing: ${detail}`;
+    return detail.startsWith('ladder.')
+      ? `Ladder step (${detail.slice(7)})`
+      : `Standing: ${detail}`;
   }
   if (family === 'appeal') return detail === 'filed' ? 'Appealed a decision' : `Appeal ${detail}`;
   if (family === 'case') return detail === 'opened' ? 'A case was opened' : `Case ${detail}`;
-  if (family === 'certificate') return detail === 'revoked' ? 'Certificate revoked' : 'Certificate issued';
+  if (family === 'certificate')
+    return detail === 'revoked' ? 'Certificate revoked' : 'Certificate issued';
   if (family === 'role') return 'Their role changed';
   return kind;
 }
@@ -156,8 +168,10 @@ export interface OpenItems {
 export function openItemsSummary(items: OpenItems): string {
   const parts: string[] = [];
   if (items.is_suspended) parts.push('suspended');
-  if (items.open_reports > 0) parts.push(`${items.open_reports} open report${items.open_reports === 1 ? '' : 's'}`);
-  if (items.open_cases > 0) parts.push(`${items.open_cases} open case${items.open_cases === 1 ? '' : 's'}`);
+  if (items.open_reports > 0)
+    parts.push(`${items.open_reports} open report${items.open_reports === 1 ? '' : 's'}`);
+  if (items.open_cases > 0)
+    parts.push(`${items.open_cases} open case${items.open_cases === 1 ? '' : 's'}`);
   if (items.open_appeals > 0)
     parts.push(`${items.open_appeals} open appeal${items.open_appeals === 1 ? '' : 's'}`);
   if (items.active_standing !== 0)
@@ -174,10 +188,7 @@ export function openItemsSummary(items: OpenItems): string {
 /** Whether anything in the strip needs somebody today. */
 export function needsAttention(items: OpenItems): boolean {
   return (
-    items.is_suspended ||
-    items.open_reports > 0 ||
-    items.open_cases > 0 ||
-    items.open_appeals > 0
+    items.is_suspended || items.open_reports > 0 || items.open_cases > 0 || items.open_appeals > 0
   );
 }
 
@@ -305,8 +316,7 @@ export function canClaim(appeal: AppealRow, reviewerUid: string): boolean {
  * database computed.
  */
 export function orderAppeals(rows: readonly AppealRow[]): readonly AppealRow[] {
-  const band = (state: string): number =>
-    state === 'breached' ? 0 : state === 'watching' ? 1 : 2;
+  const band = (state: string): number => (state === 'breached' ? 0 : state === 'watching' ? 1 : 2);
   return [...rows].sort((a, b) => {
     const delta = band(a.respond_state) - band(b.respond_state);
     if (delta !== 0) return delta;
@@ -345,7 +355,11 @@ export function appealOutcomeMessage(upheld: boolean, outcome: string): string {
 }
 
 /** Why a decision cannot be submitted yet. */
-export function decisionBlocker(outcome: string, reviewerUid: string, appeal: AppealRow): string | null {
+export function decisionBlocker(
+  outcome: string,
+  reviewerUid: string,
+  appeal: AppealRow,
+): string | null {
   const blocked = reviewBlocker(appeal, reviewerUid);
   if (blocked !== null) return blocked;
   if (outcome.trim().length < 12) {
@@ -390,7 +404,10 @@ export const RELIABILITY_FLOOR = 5;
 export function reliabilityIsMeaningful(reliability: Reliability): boolean {
   // Five decisions is the floor below which a percentage is noise. It is a
   // judgement, and it is written down so it can be argued with.
-  return reliability.upheld + reliability.dismissed >= RELIABILITY_FLOOR && reliability.upheld_rate !== null;
+  return (
+    reliability.upheld + reliability.dismissed >= RELIABILITY_FLOOR &&
+    reliability.upheld_rate !== null
+  );
 }
 
 export interface PersonSignal {
@@ -467,14 +484,20 @@ export function handoverDue(row: ShiftBoardRow, now: Date): boolean {
 }
 
 /** The note the person opening a shift needs to read first, or why there is none. */
-export function handoverFor(row: ShiftBoardRow): { readonly note: string | null; readonly reason: string } {
+export function handoverFor(row: ShiftBoardRow): {
+  readonly note: string | null;
+  readonly reason: string;
+} {
   if (row.previous_handover !== null && row.previous_handover.trim() !== '') {
     return { note: row.previous_handover, reason: 'Written by the shift before this one.' };
   }
   if (row.handover.trim() !== '') {
     return { note: row.handover, reason: 'Written for this shift.' };
   }
-  return { note: null, reason: 'No handover has been written for this shift or the one before it.' };
+  return {
+    note: null,
+    reason: 'No handover has been written for this shift or the one before it.',
+  };
 }
 
 /** Shifts in reading order, which is the order somebody works through them. */

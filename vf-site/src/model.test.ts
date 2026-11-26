@@ -194,7 +194,11 @@ describe('a desk that answers in one query (§13.3)', () => {
   });
 
   it('drops any field the published list does not carry', () => {
-    const row = allowedOnly({ ...answer(), recipient_email: 'rumana@example.com', recipient_uid: 'u1' });
+    const row = allowedOnly({
+      ...answer(),
+      recipient_email: 'rumana@example.com',
+      recipient_uid: 'u1',
+    });
     expect(Object.keys(row).sort()).toEqual([...ANSWER_FIELDS].sort());
     expect(JSON.stringify(row)).not.toContain('rumana@example.com');
     expect(JSON.stringify(row)).not.toContain('"u1"');
@@ -216,7 +220,10 @@ describe('a desk that answers in one query (§13.3)', () => {
   });
 
   it('stops at the batch ceiling instead of building an unbounded request', () => {
-    const many = Array.from({ length: 300 }, (_, i) => `BSDC-CT-${String(i).padStart(8, '0')}-1`).join('\n');
+    const many = Array.from(
+      { length: 300 },
+      (_, i) => `BSDC-CT-${String(i).padStart(8, '0')}-1`,
+    ).join('\n');
     expect(parseBatch(many)).toHaveLength(200);
     expect(parseBatch(many, 10)).toHaveLength(10);
   });
@@ -255,7 +262,10 @@ describe('a desk that answers in one query (§13.3)', () => {
   });
 
   it('writes a batch file that says which ones are no longer in force', () => {
-    const csv = batchCsv([answer(), answer({ code: 'b', state: 'revoked', found: true, reason: 'Did not complete' })]);
+    const csv = batchCsv([
+      answer(),
+      answer({ code: 'b', state: 'revoked', found: true, reason: 'Did not complete' }),
+    ]);
     const lines = csv.trim().split('\r\n');
     expect(lines[0]).toContain('in_force');
     expect(lines[1]).toContain('yes');

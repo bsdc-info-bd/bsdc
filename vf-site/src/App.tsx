@@ -488,14 +488,21 @@ function Batch(): ReactElement {
 
       {answers.length > 0 && (
         <Card title="Result" description={count.summary}>
-          <Table caption="In the order the codes were pasted." head={['Code', 'Document', 'State', 'Holder or title', 'Reason']}>
+          <Table
+            caption="In the order the codes were pasted."
+            head={['Code', 'Document', 'State', 'Holder or title', 'Reason']}
+          >
             {answers.map((answer) => (
               <tr key={answer.code}>
                 <td className="kit-mono kit-small">{answer.code}</td>
                 <td className="kit-small">{docKindLabel(answer.kind)}</td>
                 <td>
                   <Badge tone={answer.state === 'valid' ? 'ok' : answer.found ? 'bad' : 'warn'}>
-                    {answer.state === 'valid' ? 'in force' : answer.found ? answer.state : 'not found'}
+                    {answer.state === 'valid'
+                      ? 'in force'
+                      : answer.found
+                        ? answer.state
+                        : 'not found'}
                   </Badge>
                 </td>
                 <td className="kit-small">{answer.recipient_name ?? answer.subject ?? '—'}</td>
@@ -508,10 +515,10 @@ function Batch(): ReactElement {
 
       <Card title="What this list does and does not say">
         <p className="kit-small">
-          Each answer comes from the registry and carries only the fields printed on the document.
-          A code that is not in the registry and a document that was withdrawn are different
-          answers, and the state column never merges them. Checks are counted in aggregate only: the
-          desk records that a check happened and what it found, never who asked.
+          Each answer comes from the registry and carries only the fields printed on the document. A
+          code that is not in the registry and a document that was withdrawn are different answers,
+          and the state column never merges them. Checks are counted in aggregate only: the desk
+          records that a check happened and what it found, never who asked.
         </p>
       </Card>
     </div>

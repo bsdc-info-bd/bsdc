@@ -137,7 +137,9 @@ describe('withRetry', () => {
     const work = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
-    await expect(withRetry(work, { attempts: 3, sleep: instant })).rejects.toBeInstanceOf(TypeError);
+    await expect(withRetry(work, { attempts: 3, sleep: instant })).rejects.toBeInstanceOf(
+      TypeError,
+    );
     expect(work).toHaveBeenCalledTimes(3);
   });
 

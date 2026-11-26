@@ -143,9 +143,9 @@ export function Cases(): ReactElement {
     <div className="kit-stack">
       <Banner tone="neutral" title="One incident, however many reports it took">
         <p className="kit-small">
-          A case collects the reports that are about the same thing. The timeline cannot be edited or
-          deleted — a correction is a new note that says what changed. A reopened case sits at the top
-          of the queue, because it was closed and was wrong.
+          A case collects the reports that are about the same thing. The timeline cannot be edited
+          or deleted — a correction is a new note that says what changed. A reopened case sits at
+          the top of the queue, because it was closed and was wrong.
         </p>
         <div className="kit-row">
           {['open', 'pending', 'closed'].map((value) => (
@@ -213,7 +213,9 @@ export function Cases(): ReactElement {
         </Card>
       )}
 
-      {selected !== null && detail.state.status === 'loading' && <Loading label="Reading the case." />}
+      {selected !== null && detail.state.status === 'loading' && (
+        <Loading label="Reading the case." />
+      )}
       {selected !== null && detail.state.status === 'error' && (
         <Banner tone="bad" title="The case could not be read">
           <p className="kit-small">{detail.state.message}</p>
@@ -285,7 +287,8 @@ export function Cases(): ReactElement {
             <h3 className="kit-small">Reports joined to this case</h3>
             {openCase.reports.length === 0 ? (
               <p className="kit-small">
-                No reports are joined yet. A case can start as a pattern before it has a single report.
+                No reports are joined yet. A case can start as a pattern before it has a single
+                report.
               </p>
             ) : (
               <ul>
@@ -306,7 +309,10 @@ export function Cases(): ReactElement {
               title="Add a note"
               description="Notes cannot be edited afterwards. To correct one, write another saying what changed."
             >
-              <Field label="Note" hint="What you saw, what you decided, or what you are waiting for.">
+              <Field
+                label="Note"
+                hint="What you saw, what you decided, or what you are waiting for."
+              >
                 <textarea
                   className="kit-input"
                   rows={3}

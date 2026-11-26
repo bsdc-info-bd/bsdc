@@ -189,7 +189,9 @@ export function Authority(): ReactElement {
             ? 'This is a destructive permission: it lets the account change other people’s standing or hand the platform over. Only the owner may grant it.'
             : undefined
         }
-        confirmLabel={pending?.kind === 'revoke' ? 'Revoke' : pending?.kind === 'deny' ? 'Deny' : 'Grant'}
+        confirmLabel={
+          pending?.kind === 'revoke' ? 'Revoke' : pending?.kind === 'deny' ? 'Deny' : 'Grant'
+        }
         onCancel={() => {
           setPending(null);
         }}
@@ -294,7 +296,11 @@ function columnsFor(
         // The tone drives the row's colour through the class name, so the word
         // and the colour cannot disagree.
         const tone = authorityTone(row);
-        return <span className={`kit-authority kit-authority--${tone}`}>{expiry ? `${word} · ${expiry}` : word}</span>;
+        return (
+          <span className={`kit-authority kit-authority--${tone}`}>
+            {expiry ? `${word} · ${expiry}` : word}
+          </span>
+        );
       },
       sortValue: (row) => (row.effective ? 0 : 1),
     },
@@ -345,7 +351,12 @@ function columnsFor(
                   kind: 'grant',
                   permission: row.permission,
                   destructive: canGrantFrom(
-                    { role_rank: row.role_rank, via: row.via, effective: true, grant_rank: row.grant_rank },
+                    {
+                      role_rank: row.role_rank,
+                      via: row.via,
+                      effective: true,
+                      grant_rank: row.grant_rank,
+                    },
                     { is_destructive: row.is_destructive, grant_rank: row.grant_rank },
                   )
                     ? row.is_destructive

@@ -533,9 +533,7 @@ export function revocationSummary(records: readonly RevocationRecord[]): string 
   const times = records.length === 1 ? 'once' : `${records.length} times`;
   const why = last.reason.trim() === '' ? 'no reason recorded' : last.reason.trim();
   const back =
-    last.restore_reason.trim() === ''
-      ? 'restored'
-      : `restored: ${last.restore_reason.trim()}`;
+    last.restore_reason.trim() === '' ? 'restored' : `restored: ${last.restore_reason.trim()}`;
   return `This certificate has been revoked ${times}. It was revoked ${why}, then ${back}.`;
 }
 
@@ -565,7 +563,11 @@ export type ChainEntry = {
   readonly at: string | null;
   readonly reason: string;
   readonly actor: string;
-  readonly changes: readonly { readonly label: string; readonly from: string; readonly to: string }[];
+  readonly changes: readonly {
+    readonly label: string;
+    readonly from: string;
+    readonly to: string;
+  }[];
   /** True for the link that is the certificate as it stands now. */
   readonly current: boolean;
 };

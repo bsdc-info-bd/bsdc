@@ -128,10 +128,7 @@ describe('orderByLatency', () => {
   });
 
   it('then orders by age, oldest first', () => {
-    const ordered = orderByLatency([
-      row({ age_minutes: 10 }),
-      row({ age_minutes: 90 }),
-    ]);
+    const ordered = orderByLatency([row({ age_minutes: 10 }), row({ age_minutes: 90 })]);
     expect(ordered.map((r) => r.age_minutes)).toEqual([90, 10]);
   });
 

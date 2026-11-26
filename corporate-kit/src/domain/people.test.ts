@@ -150,7 +150,11 @@ describe('describeKind', () => {
   });
 
   it('never leaks an underscore into a member-facing line', () => {
-    for (const kind of ['moderation.hide_content', 'moderation.restore_account', 'moderation.warn']) {
+    for (const kind of [
+      'moderation.hide_content',
+      'moderation.restore_account',
+      'moderation.warn',
+    ]) {
       expect(describeKind(kind)).not.toContain('_');
     }
   });
@@ -201,13 +205,21 @@ describe('orderTimeline', () => {
 
   it('breaks a tie by reference, so two events in one second do not swap between renders', () => {
     const same = '2026-01-01T00:00:00Z';
-    const a = [event({ occurred_at: same, reference: 'a' }), event({ occurred_at: same, reference: 'b' })];
+    const a = [
+      event({ occurred_at: same, reference: 'a' }),
+      event({ occurred_at: same, reference: 'b' }),
+    ];
     const b = [a[1] as TimelineEvent, a[0] as TimelineEvent];
-    expect(orderTimeline(a).map((r) => r.reference)).toEqual(orderTimeline(b).map((r) => r.reference));
+    expect(orderTimeline(a).map((r) => r.reference)).toEqual(
+      orderTimeline(b).map((r) => r.reference),
+    );
   });
 
   it('does not mutate the input', () => {
-    const rows = [event({ occurrence: 'x' } as never), event({ occurred_at: '2020-01-01T00:00:00Z' })];
+    const rows = [
+      event({ occurrence: 'x' } as never),
+      event({ occurred_at: '2020-01-01T00:00:00Z' }),
+    ];
     const before = rows.map((r) => r.occurred_at);
     orderTimeline(rows);
     expect(rows.map((r) => r.occurred_at)).toEqual(before);
@@ -216,7 +228,9 @@ describe('orderTimeline', () => {
 
 describe('openItemsSummary', () => {
   it('says nothing is open when something has happened but nothing is outstanding', () => {
-    expect(openItemsSummary(items({ last_action_at: '2026-01-01T00:00:00Z' }))).toContain('Nothing is open');
+    expect(openItemsSummary(items({ last_action_at: '2026-01-01T00:00:00Z' }))).toContain(
+      'Nothing is open',
+    );
   });
 
   it('does not mention a zero, because a zero is noise on a card', () => {
@@ -277,7 +291,11 @@ describe('the ladder', () => {
   });
 
   it('orders lightest first, which is how a moderator reads it', () => {
-    const rows = [rung({ rung: 'suspension_review' }), rung({ rung: 'nudge' }), rung({ rung: 'warning' })];
+    const rows = [
+      rung({ rung: 'suspension_review' }),
+      rung({ rung: 'nudge' }),
+      rung({ rung: 'warning' }),
+    ];
     expect(orderLadder(rows).map((r) => r.rung)).toEqual(['nudge', 'warning', 'suspension_review']);
   });
 
@@ -327,11 +345,15 @@ describe('ladderBlocker', () => {
 
 describe('reviewBlocker', () => {
   it('blocks the original decider, which is the rule the table exists for', () => {
-    expect(reviewBlocker(appeal({ original_actor: 'mod' }), 'mod')).toContain('You made the decision');
+    expect(reviewBlocker(appeal({ original_actor: 'mod' }), 'mod')).toContain(
+      'You made the decision',
+    );
   });
 
   it('blocks the appellant from reviewing their own appeal', () => {
-    expect(reviewBlocker(appeal({ appellant_uid: 'member' }), 'member')).toContain('your own appeal');
+    expect(reviewBlocker(appeal({ appellant_uid: 'member' }), 'member')).toContain(
+      'your own appeal',
+    );
   });
 
   it('blocks a decided appeal', () => {
@@ -339,7 +361,9 @@ describe('reviewBlocker', () => {
   });
 
   it('blocks a second reviewer when somebody has it', () => {
-    expect(reviewBlocker(appeal({ reviewer_uid: 'someone' }), 'other')).toContain('already reviewing');
+    expect(reviewBlocker(appeal({ reviewer_uid: 'someone' }), 'other')).toContain(
+      'already reviewing',
+    );
   });
 
   it('allows the reviewer who already holds it to continue', () => {
@@ -407,7 +431,9 @@ describe('appealQueueSummary', () => {
 
 describe('breachedAppeals', () => {
   it('counts only breached rows', () => {
-    expect(breachedAppeals([appeal({ respond_state: 'breached' }), appeal({ respond_state: 'ok' })])).toBe(1);
+    expect(
+      breachedAppeals([appeal({ respond_state: 'breached' }), appeal({ respond_state: 'ok' })]),
+    ).toBe(1);
   });
 
   it('is zero for an empty queue', () => {
@@ -429,7 +455,9 @@ describe('appealOutcomeMessage', () => {
 
 describe('decisionBlocker', () => {
   it('blocks the original decider before it blocks the text', () => {
-    expect(decisionBlocker('short', 'mod', appeal({ original_actor: 'mod' }))).toContain('You made');
+    expect(decisionBlocker('short', 'mod', appeal({ original_actor: 'mod' }))).toContain(
+      'You made',
+    );
   });
 
   it('blocks a short explanation', () => {
@@ -443,15 +471,21 @@ describe('decisionBlocker', () => {
 
 describe('reliability', () => {
   it('never shows a percentage over no decisions', () => {
-    const text = reliabilityLabel({ filed: 3, upheld: 0, dismissed: 0, open: 3, upheld_rate: null });
+    const text = reliabilityLabel({
+      filed: 3,
+      upheld: 0,
+      dismissed: 0,
+      open: 3,
+      upheld_rate: null,
+    });
     expect(text).toContain('No decision yet');
     expect(text).not.toContain('0%');
   });
 
   it('says a person has never reported anything when they have not', () => {
-    expect(reliabilityLabel({ filed: 0, upheld: 0, dismissed: 0, open: 0, upheld_rate: null })).toContain(
-      'never reported',
-    );
+    expect(
+      reliabilityLabel({ filed: 0, upheld: 0, dismissed: 0, open: 0, upheld_rate: null }),
+    ).toContain('never reported');
   });
 
   it('gives the rate and the base it was computed over', () => {
@@ -479,7 +513,9 @@ describe('reliability', () => {
   });
 
   it('is not meaningful without a rate however many decisions there are', () => {
-    expect(reliabilityIsMeaningful({ filed: 9, upheld: 0, dismissed: 0, open: 9, upheld_rate: null })).toBe(false);
+    expect(
+      reliabilityIsMeaningful({ filed: 9, upheld: 0, dismissed: 0, open: 9, upheld_rate: null }),
+    ).toBe(false);
   });
 });
 
@@ -543,23 +579,32 @@ describe('the shift board', () => {
   });
 
   it('says a handover is due for a started shift nobody wrote one for', () => {
-    expect(handoverDue(shift({ on_date: '2026-01-01' }), new Date('2026-01-02T00:00:00Z'))).toBe(true);
+    expect(handoverDue(shift({ on_date: '2026-01-01' }), new Date('2026-01-02T00:00:00Z'))).toBe(
+      true,
+    );
   });
 
   it('does not say a handover is due for a future shift', () => {
-    expect(handoverDue(shift({ on_date: '2026-06-01' }), new Date('2026-01-02T00:00:00Z'))).toBe(false);
+    expect(handoverDue(shift({ on_date: '2026-06-01' }), new Date('2026-01-02T00:00:00Z'))).toBe(
+      false,
+    );
   });
 
   it('does not say a handover is due once one is written', () => {
     expect(
-      handoverDue(shift({ on_date: '2026-01-01', handover: 'Two open' }), new Date('2026-01-02T00:00:00Z')),
+      handoverDue(
+        shift({ on_date: '2026-01-01', handover: 'Two open' }),
+        new Date('2026-01-02T00:00:00Z'),
+      ),
     ).toBe(false);
   });
 });
 
 describe('handoverFor', () => {
   it('prefers the previous shift, because that is the context at a changeover', () => {
-    const result = handoverFor(shift({ previous_handover: 'From last night', handover: 'For today' }));
+    const result = handoverFor(
+      shift({ previous_handover: 'From last night', handover: 'For today' }),
+    );
     expect(result.note).toBe('From last night');
     expect(result.reason).toContain('shift before');
   });

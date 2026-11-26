@@ -250,12 +250,13 @@ try {
         const after = await assetsOf(buildB);
         const added = after.filter((file) => !before.includes(file));
         assert.ok(added.length > 0, `${name}: the second build names at least one new chunk`);
-        const indexB = await readFile(
-          join(buildB, 'assets', after.find((f) => f.startsWith('index-')) ?? ''),
-          'utf8',
-        ).catch(() => '');
+        const markerFound = await Promise.all(
+          after.map(async (file) =>
+            (await readFile(join(buildB, 'assets', file), 'utf8').catch(() => '')).includes(marker),
+          ),
+        );
         assert.ok(
-          indexB.includes(marker),
+          markerFound.some(Boolean),
           `${name}: the second build really is the one just compiled (marker present)`,
         );
 

@@ -108,20 +108,28 @@ describe('daysUntil and expiryNote', () => {
 
   it('states a sub-day expiry in hours, because "tomorrow" would understate it', () => {
     // Eight hours left must not read as a whole day of slack.
-    expect(expiryNote(row({ grant_expires_at: '2026-05-01T20:00:00Z' }), now)).toBe('expires in 8h');
+    expect(expiryNote(row({ grant_expires_at: '2026-05-01T20:00:00Z' }), now)).toBe(
+      'expires in 8h',
+    );
     expect(expiryNote(row({ grant_expires_at: '2026-05-01T12:30:00Z' }), now)).toBe(
       'expires within the hour',
     );
   });
 
   it('says tomorrow only when a whole day remains', () => {
-    expect(expiryNote(row({ grant_expires_at: '2026-05-02T18:00:00Z' }), now)).toBe('expires tomorrow');
+    expect(expiryNote(row({ grant_expires_at: '2026-05-02T18:00:00Z' }), now)).toBe(
+      'expires tomorrow',
+    );
   });
 
   it('counts whole days beyond that', () => {
-    expect(expiryNote(row({ grant_expires_at: '2026-05-20T12:00:00Z' }), now)).toBe('expires in 19 days');
+    expect(expiryNote(row({ grant_expires_at: '2026-05-20T12:00:00Z' }), now)).toBe(
+      'expires in 19 days',
+    );
     // 7 days minus a second is not 7 days, and must not round up to it.
-    expect(expiryNote(row({ grant_expires_at: '2026-05-08T11:59:00Z' }), now)).toBe('expires in 6 days');
+    expect(expiryNote(row({ grant_expires_at: '2026-05-08T11:59:00Z' }), now)).toBe(
+      'expires in 6 days',
+    );
   });
 
   it('has a named threshold the UI can use', () => {
@@ -244,7 +252,12 @@ describe('flagSummary', () => {
 
   it('adds the consequence when the role changed since sign-in', () => {
     const summary = flagSummary(
-      session({ is_flagged: true, flag_reason: 'role changed since sign-in', role_at_start: 'manager', role_now: 'moderator' }),
+      session({
+        is_flagged: true,
+        flag_reason: 'role changed since sign-in',
+        role_at_start: 'manager',
+        role_now: 'moderator',
+      }),
     );
     expect(summary).toContain('role changed since sign-in');
     expect(summary).toContain('stale controls');
@@ -269,7 +282,7 @@ describe('endAction', () => {
     expect(endAction(session({ uid: 'me' }), 'me')).toBe('sign-out');
   });
 
-  it('is a revocation when it is somebody else\'s', () => {
+  it("is a revocation when it is somebody else's", () => {
     expect(endAction(session({ uid: 'them' }), 'me')).toBe('revoke');
   });
 });

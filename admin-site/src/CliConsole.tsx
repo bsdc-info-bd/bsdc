@@ -340,7 +340,11 @@ export function CliConsole(): ReactElement {
           p_limit: Number.isFinite(limit) ? limit : 20,
         });
         if (rows.length === 0) {
-          pushEntry(trimmed, 'ok', 'No plans. Make one with `bulk plan <subject> <action> --reason <text>`.');
+          pushEntry(
+            trimmed,
+            'ok',
+            'No plans. Make one with `bulk plan <subject> <action> --reason <text>`.',
+          );
           return;
         }
         pushEntry(
@@ -350,9 +354,7 @@ export function CliConsole(): ReactElement {
             .map(
               (row) =>
                 `${row.id.slice(0, 8)}… | ${row.subject} ${row.action} | ${String(row.applicable)}/${String(row.matched)} | ${
-                  row.applied_at
-                    ? `applied ${String(row.applied_count ?? 0)}`
-                    : 'not applied'
+                  row.applied_at ? `applied ${String(row.applied_count ?? 0)}` : 'not applied'
                 } | ${row.is_mine ? 'mine' : 'somebody else'}`,
             )
             .join('\n'),
@@ -554,7 +556,11 @@ export function CliConsole(): ReactElement {
         return;
       }
 
-      pushEntry(trimmed, 'error', 'Usage: case queue | case show <id> | case note <id> "<text>" | case close <id> <outcome> --reason "<text>"');
+      pushEntry(
+        trimmed,
+        'error',
+        'Usage: case queue | case show <id> | case note <id> "<text>" | case close <id> <outcome> --reason "<text>"',
+      );
       return;
     }
 
@@ -649,10 +655,12 @@ export function CliConsole(): ReactElement {
           p_limit: Number.isFinite(limit) ? limit : 50,
           p_only_problems: true,
         });
-        const formatted = rows
-          .map((r) => `${r.path.padEnd(40, ' ')} ${r.problem}`)
-          .join('\n');
-        pushEntry(trimmed, 'ok', formatted || 'Every page that matters has an override that holds up.');
+        const formatted = rows.map((r) => `${r.path.padEnd(40, ' ')} ${r.problem}`).join('\n');
+        pushEntry(
+          trimmed,
+          'ok',
+          formatted || 'Every page that matters has an override that holds up.',
+        );
         return;
       }
 

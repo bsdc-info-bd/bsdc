@@ -55,7 +55,13 @@ export function incidentBanner(incident: ChannelIncident, now = Date.now()): str
   const started = new Date(incident.started_at).getTime();
   const hours = Number.isNaN(started) ? null : Math.floor((now - started) / 3_600_000);
   const span =
-    hours === null ? '' : hours < 1 ? ' under an hour ago' : hours < 24 ? ` ${String(hours)}h ago` : ` ${String(Math.floor(hours / 24))}d ago`;
+    hours === null
+      ? ''
+      : hours < 1
+        ? ' under an hour ago'
+        : hours < 24
+          ? ` ${String(hours)}h ago`
+          : ` ${String(Math.floor(hours / 24))}d ago`;
   if (incident.is_drill) {
     return `This is a drill. Nothing here is visible to anybody outside staff, and the public board is untouched.`;
   }

@@ -30,19 +30,16 @@ export function FreshnessBadge({
   useEffect(() => {
     // Re-render on the boundary the text changes at, not every second: at most
     // four times a minute for a fresh reading, once a minute after that.
-    const interval = setInterval(
-      () => {
-        const current = Date.now();
-        setNow((previous) => {
-          const age = current - previous;
-          // Only update state when the displayed string would actually change.
-          const bucketBefore = Math.floor(previous / 30_000);
-          const bucketNow = Math.floor(current / 30_000);
-          return age >= 30_000 && bucketBefore !== bucketNow ? current : previous;
-        });
-      },
-      10_000,
-    );
+    const interval = setInterval(() => {
+      const current = Date.now();
+      setNow((previous) => {
+        const age = current - previous;
+        // Only update state when the displayed string would actually change.
+        const bucketBefore = Math.floor(previous / 30_000);
+        const bucketNow = Math.floor(current / 30_000);
+        return age >= 30_000 && bucketBefore !== bucketNow ? current : previous;
+      });
+    }, 10_000);
     return () => clearInterval(interval);
   }, []);
 

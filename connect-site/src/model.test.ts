@@ -170,7 +170,9 @@ describe('an incident channel links back to its record (§13.2)', () => {
   });
 
   it('says a resolved channel stays as the internal record', () => {
-    expect(incidentBanner(incident({ resolved_at: '2026-11-23T11:00:00Z' }), now)).toContain('Resolved');
+    expect(incidentBanner(incident({ resolved_at: '2026-11-23T11:00:00Z' }), now)).toContain(
+      'Resolved',
+    );
   });
 
   it('says a drill is visible to nobody outside staff', () => {
@@ -180,8 +182,12 @@ describe('an incident channel links back to its record (§13.2)', () => {
   });
 
   it('measures an hour-old incident in minutes of silence, not days', () => {
-    expect(incidentBanner(incident({ started_at: '2026-11-23T11:30:00Z' }), now)).toContain('under an hour ago');
-    expect(incidentBanner(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain('3d ago');
+    expect(incidentBanner(incident({ started_at: '2026-11-23T11:30:00Z' }), now)).toContain(
+      'under an hour ago',
+    );
+    expect(incidentBanner(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain(
+      '3d ago',
+    );
   });
 
   it('only looks for an incident on a channel that could have one', () => {

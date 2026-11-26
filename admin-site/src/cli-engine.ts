@@ -230,7 +230,8 @@ export const CLI_COMMANDS: readonly CliCommandSpec[] = [
   // first half is the part people skip: nothing is written until a plan has been
   // printed and its id has been handed back to `bulk apply`.
   {
-    signature: 'bulk plan <subject> <action> --reason <text> [--status <s>] [--search <text>] [--older-than <days>]',
+    signature:
+      'bulk plan <subject> <action> --reason <text> [--status <s>] [--search <text>] [--older-than <days>]',
     command: 'bulk plan',
     category: 'governance',
     summary:
@@ -446,7 +447,9 @@ export function parseBulkPlan(input: ParsedCliInput): BulkPlanParse {
   if (typeof input.flags['older-than'] === 'string') {
     const days = Number(input.flags['older-than']);
     if (!Number.isFinite(days) || days < 0) {
-      return { error: '--older-than takes a number of days, and a negative number of days is not a thing.' };
+      return {
+        error: '--older-than takes a number of days, and a negative number of days is not a thing.',
+      };
     }
     selector.olderThanDays = Math.floor(days);
   }

@@ -233,9 +233,10 @@ describe('a rule that is still earning its place (§12.3)', () => {
   });
 
   it('treats a null count as never matched rather than as a fault', () => {
-    expect(ruleHealth(rule({ match_count: null as unknown as number }), now).neverMatched).toBe(true);
+    expect(ruleHealth(rule({ match_count: null as unknown as number }), now).neverMatched).toBe(
+      true,
+    );
   });
-
 });
 
 describe('what the simulator decided (§12.3)', () => {
@@ -269,7 +270,12 @@ describe('what the simulator decided (§12.3)', () => {
 
   it('says the default applied when nothing matched', () => {
     const v = verdictOf([
-      step({ decision: 'allow', matched: null, skipped_why: 'default: no rule matched', reason: 'No rule matches.' }),
+      step({
+        decision: 'allow',
+        matched: null,
+        skipped_why: 'default: no rule matched',
+        reason: 'No rule matches.',
+      }),
     ]);
     expect(v.sentence).toContain('default');
   });
@@ -302,7 +308,13 @@ describe('what the simulator decided (§12.3)', () => {
 describe('the dry run (§12.3)', () => {
   it('counts affected requests and lists what they were doing', () => {
     const summary = summariseDryRun([
-      { ip: '203.0.113.42', hits: 9, last_seen: '', actions: ['checkout.callback', 'auth.login'], would_change: 4 },
+      {
+        ip: '203.0.113.42',
+        hits: 9,
+        last_seen: '',
+        actions: ['checkout.callback', 'auth.login'],
+        would_change: 4,
+      },
       { ip: '203.0.113.43', hits: 2, last_seen: '', actions: ['feed.read'], would_change: 1 },
     ]);
     expect(summary.addresses).toBe(2);

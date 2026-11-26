@@ -46,7 +46,8 @@ export type PersonStatus = (typeof STATUSES)[number];
 
 /** Why a control is unavailable, in the words of the person who cannot use it. */
 export type Refusal =
-  { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
+  | { readonly allowed: true }
+  | { readonly allowed: false; readonly reason: string };
 
 export const ALLOWED: Refusal = { allowed: true };
 

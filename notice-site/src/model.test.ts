@@ -353,7 +353,10 @@ describe('the acknowledgement roster (§11.2)', () => {
   });
 
   it('tells the operator what the reminder will do before they press it', () => {
-    const summary = summariseRoster([person({ uid: 'a' }), person({ uid: 'b', acknowledged: true })]);
+    const summary = summariseRoster([
+      person({ uid: 'a' }),
+      person({ uid: 'b', acknowledged: true }),
+    ]);
     const plan = reminderPlan(summary, 1);
     expect(plan).toContain('first reminder');
     expect(plan).toContain('one person');
@@ -420,12 +423,12 @@ describe('legal hold (§11.2)', () => {
   });
 
   it('blocks deleting anything a reader has seen, hold or no hold', () => {
-    expect(deleteBlockedReason({ ...base, status: 'archived' })).toContain('withdrawn rather than deleted');
+    expect(deleteBlockedReason({ ...base, status: 'archived' })).toContain(
+      'withdrawn rather than deleted',
+    );
   });
 
   it('allows deleting a draft nobody saw', () => {
-    expect(
-      deleteBlockedReason({ ...base, status: 'draft', publish_at: null }),
-    ).toBe('');
+    expect(deleteBlockedReason({ ...base, status: 'draft', publish_at: null })).toBe('');
   });
 });

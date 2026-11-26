@@ -104,7 +104,9 @@ function Rules(): ReactElement {
             {reviews.map((entry) => (
               <li key={entry.row.id}>
                 <span className="kit-mono">{entry.row.range}</span>
-                {entry.row.label === undefined || entry.row.label === '' ? '' : ` (${entry.row.label})`}
+                {entry.row.label === undefined || entry.row.label === ''
+                  ? ''
+                  : ` (${entry.row.label})`}
                 {' — '}
                 {entry.health.summary}
               </li>
@@ -134,7 +136,16 @@ function Rules(): ReactElement {
               variant="quiet"
               onClick={() => {
                 const csv = rowsToCsv(
-                  ['range', 'kind', 'label', 'reason', 'shadow', 'review_at', 'expires_at', 'match_count'],
+                  [
+                    'range',
+                    'kind',
+                    'label',
+                    'reason',
+                    'shadow',
+                    'review_at',
+                    'expires_at',
+                    'match_count',
+                  ],
                   state.data.map((r) => [
                     r.range,
                     r.kind,
@@ -187,9 +198,7 @@ function Rules(): ReactElement {
                     {health.shadow && <Badge tone="warn">shadow</Badge>}
                     {health.idle && !health.shadow && <Badge tone="warn">never matched</Badge>}
                     {!health.reviewOverdue && !health.shadow && !health.idle && (
-                      <span className="kit-muted">
-                        {row.match_count ?? 0} matched
-                      </span>
+                      <span className="kit-muted">{row.match_count ?? 0} matched</span>
                     )}
                   </td>
                   <td className="kit-small">{lifetime(rule)}</td>
@@ -389,19 +398,29 @@ function NewRule({ onSaved }: { onSaved: () => void }): ReactElement {
               }}
             />
           </div>
-          {dryState.state.status === 'loading' && <Loading label="Reading the last week of edge decisions." />}
+          {dryState.state.status === 'loading' && (
+            <Loading label="Reading the last week of edge decisions." />
+          )}
           {dryState.state.status === 'error' && (
             <Banner tone="bad" title="The dry run failed">
               {dryState.state.message}
             </Banner>
           )}
           {dry !== null && (
-            <Banner tone={dry.affected === 0 ? 'neutral' : 'warn'} title="Dry run against recorded history">
+            <Banner
+              tone={dry.affected === 0 ? 'neutral' : 'warn'}
+              title="Dry run against recorded history"
+            >
               <p className="kit-small">{dry.sentence}</p>
               {dry.actions.length > 0 && (
                 <p className="kit-small kit-mono">Actions affected: {dry.actions.join(', ')}</p>
               )}
-              <p className="kit-small kit-muted">{windowNote(Number(days) || 7, dryState.state.status === 'ready' ? dryState.state.data : [])}</p>
+              <p className="kit-small kit-muted">
+                {windowNote(
+                  Number(days) || 7,
+                  dryState.state.status === 'ready' ? dryState.state.data : [],
+                )}
+              </p>
             </Banner>
           )}
           <p className="kit-small kit-muted">{saveSummary(shadow, reviewAt, dry)}</p>
@@ -471,7 +490,11 @@ function Simulator(): ReactElement {
       {verdict !== null && (
         <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
           <p>
-            <Badge tone={verdict.decision === 'block' ? 'bad' : verdict.decision === 'allow' ? 'ok' : 'warn'}>
+            <Badge
+              tone={
+                verdict.decision === 'block' ? 'bad' : verdict.decision === 'allow' ? 'ok' : 'warn'
+              }
+            >
               {verdict.decision}
             </Badge>{' '}
             <span className="kit-small">{verdict.sentence}</span>
@@ -486,7 +509,9 @@ function Simulator(): ReactElement {
             head={['#', 'Range', 'Kind', 'Label', 'Outcome']}
           >
             {steps.map((step) => (
-              <tr key={`${String(step.step)}-${String(step.matched ?? 'default')}-${String(step.decision ?? 'skip')}`}>
+              <tr
+                key={`${String(step.step)}-${String(step.matched ?? 'default')}-${String(step.decision ?? 'skip')}`}
+              >
                 <td className="kit-mono kit-small">{step.step}</td>
                 <td className="kit-mono kit-small">{step.matched ?? '—'}</td>
                 <td className="kit-small">{step.matched_kind ?? '—'}</td>
@@ -495,7 +520,15 @@ function Simulator(): ReactElement {
                   {step.decision === null ? (
                     <span className="kit-muted">{step.skipped_why ?? 'passed over'}</span>
                   ) : (
-                    <Badge tone={step.decision === 'block' ? 'bad' : step.decision === 'allow' ? 'ok' : 'warn'}>
+                    <Badge
+                      tone={
+                        step.decision === 'block'
+                          ? 'bad'
+                          : step.decision === 'allow'
+                            ? 'ok'
+                            : 'warn'
+                      }
+                    >
                       {step.decision}
                     </Badge>
                   )}
@@ -572,12 +605,14 @@ function Tracer(): ReactElement {
               <td className="kit-mono kit-small">{row.ip}</td>
               <td className="kit-small">{row.action}</td>
               <td>
-                <Badge tone={row.decision === 'block' ? 'bad' : 'ok'}>
-                  {row.decision}
-                </Badge>
+                <Badge tone={row.decision === 'block' ? 'bad' : 'ok'}>{row.decision}</Badge>
               </td>
               <td className="kit-mono kit-small">
-                {row.rule_range === null ? <span className="kit-muted">no rule</span> : row.rule_range}
+                {row.rule_range === null ? (
+                  <span className="kit-muted">no rule</span>
+                ) : (
+                  row.rule_range
+                )}
                 {row.rule_kind === null ? '' : ` (${row.rule_kind})`}
               </td>
               <td className="kit-small">{row.rule_reason ?? '—'}</td>

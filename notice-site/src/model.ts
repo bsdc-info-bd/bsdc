@@ -337,9 +337,11 @@ export function summariseRoster(rows: readonly NoticeRosterFullRow[]): RosterSum
 
 /** The sentence a reminder action promises, so the operator knows what will happen. */
 export function reminderPlan(summary: RosterSummary, nextRound: number): string {
-  if (!summary.canRemind) return 'Everybody has acknowledged this notice. There is nobody to remind.';
+  if (!summary.canRemind)
+    return 'Everybody has acknowledged this notice. There is nobody to remind.';
   const people = summary.outstanding === 1 ? 'one person' : `${summary.outstanding} people`;
-  const past = summary.rounds === 0 ? 'This is the first reminder' : `This would be reminder ${nextRound}`;
+  const past =
+    summary.rounds === 0 ? 'This is the first reminder' : `This would be reminder ${nextRound}`;
   return `${past}: ${people} will be notified, and the round is recorded against the notice.`;
 }
 

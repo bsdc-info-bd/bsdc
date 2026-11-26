@@ -8,7 +8,13 @@
  */
 
 export type SeoSource =
-  'override' | 'post' | 'product' | 'course' | 'group' | 'profile' | 'default';
+  | 'override'
+  | 'post'
+  | 'product'
+  | 'course'
+  | 'group'
+  | 'profile'
+  | 'default';
 
 export interface SeoEntry {
   readonly path: string;
@@ -380,9 +386,7 @@ export const SOCIAL_DESCRIPTION_CUT = 110;
  */
 export function displayLength(text: string): number {
   const clusters = [...(text ?? '')].length;
-  return /[\u0980-\u09FF]/.test(text ?? '')
-    ? Math.round(clusters * BANGLA_WIDTH_FACTOR)
-    : clusters;
+  return /[\u0980-\u09FF]/.test(text ?? '') ? Math.round(clusters * BANGLA_WIDTH_FACTOR) : clusters;
 }
 
 export interface Cut {
@@ -481,7 +485,9 @@ export function previewOverride(draft: OverrideDraft, origin = 'bsdc.info.bd'): 
     );
   }
   if (title !== '' && description === '') {
-    notes.push('There is a title and no description, so the engine will assemble one from the page body.');
+    notes.push(
+      'There is a title and no description, so the engine will assemble one from the page body.',
+    );
   }
   if (draft.robots === 'noindex' && draft.inSitemap) {
     notes.push(
@@ -493,7 +499,8 @@ export function previewOverride(draft: OverrideDraft, origin = 'bsdc.info.bd'): 
   if (draft.robots === 'noindex' && draft.inSitemap) {
     blocker = 'A page cannot be listed in the sitemap and withheld from indexing at the same time.';
   } else if (canonical !== '' && normalisePath(canonical) === path) {
-    blocker = 'The canonical names this page itself, which changes nothing. Leave it empty or point it elsewhere.';
+    blocker =
+      'The canonical names this page itself, which changes nothing. Leave it empty or point it elsewhere.';
   }
 
   return {
@@ -541,7 +548,11 @@ export interface CoverageRow {
  */
 export function coverage(
   routes: readonly string[],
-  overrides: readonly { readonly path: string; readonly title: string; readonly description: string }[],
+  overrides: readonly {
+    readonly path: string;
+    readonly title: string;
+    readonly description: string;
+  }[],
 ): readonly CoverageRow[] {
   const byPath = new Map(overrides.map((o) => [normalisePath(o.path), o]));
   const rows: CoverageRow[] = [];
@@ -809,7 +820,11 @@ export interface RedirectPlan {
   readonly updated: number;
   readonly unchanged: number;
   /** Rows in the file that would be refused, with the reason and the line. */
-  readonly refused: readonly { readonly line: number; readonly from: string; readonly reason: string }[];
+  readonly refused: readonly {
+    readonly line: number;
+    readonly from: string;
+    readonly reason: string;
+  }[];
   readonly problems: readonly { readonly line: number; readonly message: string }[];
 }
 

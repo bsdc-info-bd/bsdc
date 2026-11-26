@@ -20,6 +20,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import prettier from 'prettier';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const manifestPath = resolve(here, '../../main-site/src/lib/seo/static-routes.json');
@@ -108,10 +109,16 @@ export const DYNAMIC_ROUTES: readonly DynamicRoute[] = ${JSON.stringify(DYNAMIC_
 export const ROUTES_SOURCE = 'main-site/src/lib/seo/static-routes.json';
 `;
 
+const prettierConfig = (await prettier.resolveConfig(outPath)) ?? {};
+const formattedBody = await prettier.format(body, {
+  ...prettierConfig,
+  filepath: outPath,
+});
+
 const check = process.argv.includes('--check');
 if (check) {
   const current = await readFile(outPath, 'utf8').catch(() => '');
-  if (current !== body) {
+  if (current !== formattedBody) {
     console.error(
       'admin-site/src/routes.generated.ts is out of date with the prerender manifest.\nRun `npm run routes` in admin-site and commit the result.',
     );
@@ -119,6 +126,8 @@ if (check) {
   }
   console.log(`routes.generated.ts is current (${staticRoutes.length} static routes).`);
 } else {
-  await writeFile(outPath, body, 'utf8');
-  console.log(`Wrote ${outPath} (${staticRoutes.length} static routes, ${DYNAMIC_ROUTES.length} dynamic families).`);
+  await writeFile(outPath, formattedBody, 'utf8');
+  console.log(
+    `Wrote ${outPath} (${staticRoutes.length} static routes, ${DYNAMIC_ROUTES.length} dynamic families).`,
+  );
 }

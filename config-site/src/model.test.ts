@@ -287,7 +287,9 @@ describe('secrets are write-only (§12.1)', () => {
   });
 
   it('does not silently claim a fresh secret when the date is unreadable', () => {
-    const s = secretState(consoleRow({ is_secret: true, secret_is_set: true, secret_set_at: 'nonsense' }));
+    const s = secretState(
+      consoleRow({ is_secret: true, secret_is_set: true, secret_set_at: 'nonsense' }),
+    );
     expect(s.rotationDue).toBe(false);
     expect(s.summary).toContain('could not be read');
   });
@@ -302,7 +304,9 @@ describe('secrets are write-only (§12.1)', () => {
 
 describe('which route a save takes (§12.1)', () => {
   it('stages a production setting even when a time was given', () => {
-    expect(plannedRoute(consoleRow({ requires_approval: true }), '2026-12-01T10:00')).toBe('staged');
+    expect(plannedRoute(consoleRow({ requires_approval: true }), '2026-12-01T10:00')).toBe(
+      'staged',
+    );
   });
 
   it('schedules a change with a future time', () => {

@@ -130,9 +130,7 @@ export function planCommand(
       const action = positional[3] ?? '';
       const reason = flag('reason');
       if (!(subject in BULK_SUBJECTS)) {
-        problems.push(
-          `The subject must be one of: ${Object.keys(BULK_SUBJECTS).join(', ')}.`,
-        );
+        problems.push(`The subject must be one of: ${Object.keys(BULK_SUBJECTS).join(', ')}.`);
       } else if (!(BULK_SUBJECTS[subject as BulkSubject] as readonly string[]).includes(action)) {
         problems.push(
           `${subject} can be ${BULK_SUBJECTS[subject as BulkSubject].join(' or ')}, not "${action}".`,
@@ -257,7 +255,9 @@ export function planCommand(
     const target = hasKind ? (positional[2] ?? '') : kind;
     const action = hasKind ? (positional[3] ?? '') : (positional[2] ?? '');
     if (!target) {
-      problems.push('Which application? approvals <id> <approve|refuse>, or approvals shop <id> <approve|refuse>.');
+      problems.push(
+        'Which application? approvals <id> <approve|refuse>, or approvals shop <id> <approve|refuse>.',
+      );
     }
     if (action !== 'approve' && action !== 'refuse') {
       problems.push('The action is approve or refuse.');

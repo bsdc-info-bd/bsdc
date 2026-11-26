@@ -155,10 +155,7 @@ export function reasonQuality(raw: string | null | undefined): ReasonQuality {
  * space and unforgiving about everything else: a typo must fail, because the
  * only purpose is to make the operator's hands slow down.
  */
-export function matchesConfirmation(
-  typed: string | null | undefined,
-  expected: string,
-): boolean {
+export function matchesConfirmation(typed: string | null | undefined, expected: string): boolean {
   const target = expected.trim();
   if (target.length === 0) return false;
   return (typed ?? '').trim().toLowerCase() === target.toLowerCase();

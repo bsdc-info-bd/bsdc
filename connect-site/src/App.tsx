@@ -177,7 +177,11 @@ function Channel({ channel }: { channel: ChannelRow }): ReactElement {
                 : 'The incident is closed. This channel is the internal record.'}
           </p>
           {!linked.is_drill && (
-            <a href={statusIncidentHref(linked.public_slug)} target="_blank" rel="noopener noreferrer">
+            <a
+              href={statusIncidentHref(linked.public_slug)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               View the customer-facing status entry
             </a>
           )}

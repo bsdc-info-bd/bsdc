@@ -146,25 +146,22 @@ export function ToastProvider({ children }: { readonly children: ReactNode }): R
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const announce = useCallback(
-    (input: ToastInput) => {
-      setToasts((current) => {
-        const next = pushToast(current, input);
-        const created = next.at(-1);
-        if (created && created.ttl > 0 && !timers.current.has(created.id)) {
-          timers.current.set(
-            created.id,
-            setTimeout(() => {
-              timers.current.delete(created.id);
-              setToasts((live) => live.filter((toast) => toast.id !== created.id));
-            }, created.ttl),
-          );
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const announce = useCallback((input: ToastInput) => {
+    setToasts((current) => {
+      const next = pushToast(current, input);
+      const created = next.at(-1);
+      if (created && created.ttl > 0 && !timers.current.has(created.id)) {
+        timers.current.set(
+          created.id,
+          setTimeout(() => {
+            timers.current.delete(created.id);
+            setToasts((live) => live.filter((toast) => toast.id !== created.id));
+          }, created.ttl),
+        );
+      }
+      return next;
+    });
+  }, []);
 
   const api = useMemo<ToastApi>(
     () => ({

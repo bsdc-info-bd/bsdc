@@ -163,7 +163,8 @@ export function attemptStaleBuildRecovery(
   } = {},
 ): RecoveryOutcome {
   const now = deps.now ?? (() => Date.now());
-  const online = deps.online ?? (() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  const online =
+    deps.online ?? (() => (typeof navigator === 'undefined' ? true : navigator.onLine));
   const reload = deps.reload ?? (() => window.location.reload());
   const storage = deps.storage === undefined ? safeStorage() : deps.storage;
 

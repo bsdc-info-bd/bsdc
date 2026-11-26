@@ -258,7 +258,14 @@ export function publicTitle(incident: IncidentRowV2): string {
 export function boardSentence(incident: IncidentRowV2, now = Date.now()): string {
   const started = new Date(incident.started_at).getTime();
   const hours = Number.isNaN(started) ? null : Math.floor((now - started) / 3_600_000);
-  const span = hours === null ? 'for a while' : hours < 1 ? 'for less than an hour' : hours < 24 ? `for ${String(hours)} hour${hours === 1 ? '' : 's'}` : `for ${String(Math.floor(hours / 24))} day${Math.floor(hours / 24) === 1 ? '' : 's'}`;
+  const span =
+    hours === null
+      ? 'for a while'
+      : hours < 1
+        ? 'for less than an hour'
+        : hours < 24
+          ? `for ${String(hours)} hour${hours === 1 ? '' : 's'}`
+          : `for ${String(Math.floor(hours / 24))} day${Math.floor(hours / 24) === 1 ? '' : 's'}`;
   const scope =
     incident.impact === 'critical'
       ? 'The service is unavailable'
@@ -269,9 +276,7 @@ export function boardSentence(incident: IncidentRowV2, now = Date.now()): string
           : 'There is no customer impact';
   const last = (incident.updates_v2 ?? [])[(incident.updates_v2 ?? []).length - 1];
   const trailing =
-    last === undefined
-      ? '.'
-      : `. The last update was ${relativeSpan(last.at, now)}.`;
+    last === undefined ? '.' : `. The last update was ${relativeSpan(last.at, now)}.`;
   return `${scope}${incident.is_drill === true ? ' (drill)' : ''} ${span}${trailing}`;
 }
 
@@ -294,10 +299,14 @@ export function declareProblems(input: {
 }): readonly string[] {
   const problems: string[] = [];
   if (input.title.trim().length < 4) {
-    problems.push('Give the incident an internal title, so the staff channel says what it is about.');
+    problems.push(
+      'Give the incident an internal title, so the staff channel says what it is about.',
+    );
   }
   if (input.publicTitle.trim().length < 4) {
-    problems.push('Give it a public title. The status board shows it without any context around it.');
+    problems.push(
+      'Give it a public title. The status board shows it without any context around it.',
+    );
   }
   if (input.publicBody.trim().length < 10) {
     problems.push('Write the sentence a customer will read. "Investigating" is not one.');
@@ -309,7 +318,10 @@ export function declareProblems(input: {
  * An action is late when its due date has passed and nobody has closed it. It
  * is not "overdue" the day before, and it is not late because it is old.
  */
-export function actionState(action: IncidentAction, now = new Date()): 'done' | 'late' | 'due' | 'open' {
+export function actionState(
+  action: IncidentAction,
+  now = new Date(),
+): 'done' | 'late' | 'due' | 'open' {
   if (action.done_at !== null) return 'done';
   const due = new Date(`${action.due_on.slice(0, 10)}T23:59:59Z`).getTime();
   if (Number.isNaN(due)) return 'open';
@@ -334,7 +346,8 @@ export function postmortemProblem(body: string, resolvedAt: string | null): stri
   }
   const trimmed = body.trim();
   if (trimmed.length === 0) return 'Write what happened, why, and what would have caught it.';
-  if (trimmed.length < 40) return 'That is a sentence, not a post-mortem. What would have caught it?';
+  if (trimmed.length < 40)
+    return 'That is a sentence, not a post-mortem. What would have caught it?';
   return '';
 }
 

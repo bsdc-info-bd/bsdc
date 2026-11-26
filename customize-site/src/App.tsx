@@ -277,7 +277,10 @@ function PublishPanel({ page, onChanged }: { page: PageRow; onChanged: () => voi
         )}
 
         {problems.length > 0 && (
-          <Banner tone="warn" title={`${String(problems.length)} section(s) would stop the publish`}>
+          <Banner
+            tone="warn"
+            title={`${String(problems.length)} section(s) would stop the publish`}
+          >
             <ul className="kit-small">
               {problems.map((problem) => (
                 <li key={`${String(problem.position)}-${problem.kind}`}>
@@ -289,9 +292,7 @@ function PublishPanel({ page, onChanged }: { page: PageRow; onChanged: () => voi
           </Banner>
         )}
 
-        <p className="kit-small">
-          {publishSummary(problems, sectionCount, unpublishAt)}
-        </p>
+        <p className="kit-small">{publishSummary(problems, sectionCount, unpublishAt)}</p>
 
         <div className="kit-grid kit-grid--2">
           <Field
@@ -316,8 +317,8 @@ function PublishPanel({ page, onChanged }: { page: PageRow; onChanged: () => voi
         </div>
 
         <p className="kit-hint">
-          Publishing writes a version. Every version is kept, and reverting writes a new one
-          rather than deleting the ones after it — so a wrong revert is itself revertible.
+          Publishing writes a version. Every version is kept, and reverting writes a new one rather
+          than deleting the ones after it — so a wrong revert is itself revertible.
         </p>
 
         {versions.state.status === 'error' && (
@@ -331,11 +332,7 @@ function PublishPanel({ page, onChanged }: { page: PageRow; onChanged: () => voi
         {views.length > 0 && (
           <div className="kit-stack">
             {views.map((view) => (
-              <div
-                key={view.version}
-                className="kit-card"
-                style={{ padding: 'var(--sp-3)' }}
-              >
+              <div key={view.version} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
                 <div className="kit-row" style={{ justifyContent: 'space-between' }}>
                   <Badge tone={view.current ? 'ok' : 'neutral'}>
                     Version {view.version}
@@ -440,10 +437,7 @@ function NewPage({ onCreated }: { onCreated: () => void }): ReactElement {
         />
       </div>
       <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
-        <Button
-          disabled={busy || title.trim().length < 2 || !local.available}
-          onClick={create}
-        >
+        <Button disabled={busy || title.trim().length < 2 || !local.available} onClick={create}>
           {busy ? 'Creating' : 'Create page'}
         </Button>
       </div>

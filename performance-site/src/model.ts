@@ -280,7 +280,8 @@ export function boardSections(rows: readonly BoardRow[], required = 3): readonly
   if (alerting.length > 0) {
     sections.push({
       title: `Alerting (${String(alerting.length)})`,
-      detail: 'Over budget for the required number of consecutive windows. Somebody should say what they are doing about it.',
+      detail:
+        'Over budget for the required number of consecutive windows. Somebody should say what they are doing about it.',
       rows: alerting,
     });
   }
@@ -294,7 +295,8 @@ export function boardSections(rows: readonly BoardRow[], required = 3): readonly
   if (blind.length > 0) {
     sections.push({
       title: `Not enough measurements (${String(blind.length)})`,
-      detail: 'Under the sample floor. Reported as unknown rather than as good, because a quiet route is not a fast one.',
+      detail:
+        'Under the sample floor. Reported as unknown rather than as good, because a quiet route is not a fast one.',
       rows: blind,
     });
   }
@@ -335,7 +337,8 @@ export function regressionAge(row: RegressionRow, now = new Date()): string {
 /** Why an acknowledgement needs a sentence, said before the field is filled in. */
 export function ackProblem(note: string): string {
   const trimmed = note.trim();
-  if (trimmed.length === 0) return 'Say what was done, so the next person does not repeat the investigation.';
+  if (trimmed.length === 0)
+    return 'Say what was done, so the next person does not repeat the investigation.';
   if (trimmed.length < 10) return 'A few more words, please. What was done about it?';
   return '';
 }

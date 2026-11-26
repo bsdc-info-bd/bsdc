@@ -185,7 +185,9 @@ describe('a section that fails its own validation (§12.2)', () => {
   it('refuses a gallery picture with no source or no description', () => {
     expect(sectionProblem('gallery', { items: [{ alt: 'x' }] })).toContain('source');
     expect(sectionProblem('gallery', { items: [{ src: 'https://cdn/x.jpg' }] })).toContain('alt');
-    expect(sectionProblem('gallery', { items: [{ src: 'https://cdn/x.jpg', alt: 'x' }] })).toBeNull();
+    expect(
+      sectionProblem('gallery', { items: [{ src: 'https://cdn/x.jpg', alt: 'x' }] }),
+    ).toBeNull();
   });
 
   it('refuses an embed over plain http', () => {

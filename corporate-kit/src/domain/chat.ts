@@ -77,7 +77,8 @@ export function groupMessages(messages: readonly ChatMessage[]): readonly Messag
 export const MESSAGE_MAX = 2000;
 
 export type DraftCheck =
-  { readonly ok: true; readonly body: string } | { readonly ok: false; readonly reason: string };
+  | { readonly ok: true; readonly body: string }
+  | { readonly ok: false; readonly reason: string };
 
 /** Trims a draft and explains why an unsendable one cannot be sent. */
 export function checkDraft(raw: string): DraftCheck {

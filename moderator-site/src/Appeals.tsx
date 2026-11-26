@@ -76,15 +76,17 @@ export function Appeals(): ReactElement {
           </Banner>
         ) : null}
         {state.status === 'ready' && state.data.length === 0 ? (
-          <Empty>No appeal is waiting. Every decision somebody asked about has been answered.</Empty>
+          <Empty>
+            No appeal is waiting. Every decision somebody asked about has been answered.
+          </Empty>
         ) : null}
         {state.status === 'ready' && state.data.length > 0 ? (
           <div className="kit-stack">
             {breachedAppeals(state.data) > 0 ? (
               <Banner tone="bad" title="Past the target">
                 {breachedAppeals(state.data)} appeal
-                {breachedAppeals(state.data) === 1 ? ' is' : 's are'} past the time the policy allows.
-                Somebody is waiting on a decision about their own account.
+                {breachedAppeals(state.data) === 1 ? ' is' : 's are'} past the time the policy
+                allows. Somebody is waiting on a decision about their own account.
               </Banner>
             ) : null}
             <Table
@@ -100,7 +102,9 @@ export function Appeals(): ReactElement {
                   </td>
                   <td>{hoursLabel(appeal.age_minutes)}</td>
                   <td>
-                    <Badge tone={slaTone(toState(appeal.respond_state))}>{appeal.respond_state}</Badge>
+                    <Badge tone={slaTone(toState(appeal.respond_state))}>
+                      {appeal.respond_state}
+                    </Badge>
                   </td>
                   <td className="kit-small kit-muted">
                     {appeal.reviewer_uid === null
@@ -140,7 +144,13 @@ function hoursLabel(minutes: number): string {
   return hours < 48 ? `${hours} h` : `${Math.round(hours / 24)} d`;
 }
 
-function ClaimButton({ appeal, onClaimed }: { appeal: AppealRow; onClaimed: () => void }): ReactElement {
+function ClaimButton({
+  appeal,
+  onClaimed,
+}: {
+  appeal: AppealRow;
+  onClaimed: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -185,7 +195,10 @@ function DecideForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const blocker = upheld === null ? 'Choose whether the appeal is upheld.' : decisionBlocker(outcome, reviewerUid, appeal);
+  const blocker =
+    upheld === null
+      ? 'Choose whether the appeal is upheld.'
+      : decisionBlocker(outcome, reviewerUid, appeal);
 
   const decide = (): void => {
     if (upheld === null) return;
@@ -232,7 +245,11 @@ function DecideForm({
         <Button size="small" onClick={() => setUpheld(true)} disabled={busy}>
           Upheld
         </Button>
-        <Button size="small" onClick={decide} disabled={busy || blocker !== null || upheld === null}>
+        <Button
+          size="small"
+          onClick={decide}
+          disabled={busy || blocker !== null || upheld === null}
+        >
           {busy ? 'Deciding' : 'Decide'}
         </Button>
       </div>

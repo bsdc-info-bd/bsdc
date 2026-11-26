@@ -83,7 +83,12 @@ export function verificationUrl(siteUrl: string, code: string): string {
 }
 
 export type VerificationState =
-  'valid' | 'revoked' | 'expired' | 'withdrawn' | 'unknown' | 'malformed';
+  | 'valid'
+  | 'revoked'
+  | 'expired'
+  | 'withdrawn'
+  | 'unknown'
+  | 'malformed';
 
 export type VerificationResult = {
   readonly code: string;

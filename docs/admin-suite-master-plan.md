@@ -9442,6 +9442,15 @@ makes remaining scope countable; it does not manufacture delivery evidence.
 - Evidence-store schema validation and stale-output check run via
   `node scripts/response10-ledger.mjs --check`.
 - CI gate added so future source/evidence changes must regenerate the artifact.
+- PR CI failures were corrected rather than waived: source formatting now uses
+  a pinned Prettier version and passes consistently; the generated route module
+  is formatted by its generator; the stale-deploy browser proof checks the
+  marker across emitted chunks (including multi-entry builds); and migration
+  `0150` gives four internal-only tables explicit deny-all policies, covered by
+  a new four-assertion database-proof harness.
+- Full repository audit: **154 passed, 0 failed, 4 recorded**; database proofs:
+  **93 harnesses passed**; cross-console stale-deploy browser proof: **13/13**.
+  All package typechecks, lint, tests and builds passed locally.
 
 This completes the Response 10 **execution and proof framework**. It does not
 complete any feature solely by creating the matrix. §14 and the feature-level

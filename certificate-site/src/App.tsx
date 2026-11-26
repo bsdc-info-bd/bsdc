@@ -1009,9 +1009,9 @@ function CertificateInspector({
 
       {ledger.malformed && (
         <Banner tone="warn" title="Revocation history unreadable">
-          This certificate&apos;s revocation history could not be read, so this card cannot
-          say whether it was ever revoked. Do not treat the absence below as proof it
-          was not — check the amendment chain instead.
+          This certificate&apos;s revocation history could not be read, so this card cannot say
+          whether it was ever revoked. Do not treat the absence below as proof it was not — check
+          the amendment chain instead.
         </Banner>
       )}
 
@@ -1025,11 +1025,7 @@ function CertificateInspector({
           </Banner>
           <div className="kit-stack">
             {ledger.records.map((record) => (
-              <div
-                key={record.revoked_at}
-                className="kit-card"
-                style={{ padding: 'var(--sp-3)' }}
-              >
+              <div key={record.revoked_at} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
                 <div className="kit-row" style={{ justifyContent: 'space-between' }}>
                   <Badge tone="bad">Revoked</Badge>
                   <span className="kit-small kit-muted">

@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { OfflineError, breakerFor, isRefusal, resetBreakers, unknownOutcomeMessage } from './mutations';
+import {
+  OfflineError,
+  breakerFor,
+  isRefusal,
+  resetBreakers,
+  unknownOutcomeMessage,
+} from './mutations';
 import { DataError } from './rpc';
 import { RefusedError } from './resilience';
 

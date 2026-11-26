@@ -596,7 +596,10 @@ function Pages(): ReactElement {
             generated per row and are not counted here.
           </Empty>
         ) : (
-          <Table caption="Prerendered routes with no editorial override" head={['Path', 'Missing', '']}>
+          <Table
+            caption="Prerendered routes with no editorial override"
+            head={['Path', 'Missing', '']}
+          >
             {covered.map((row) => (
               <tr key={row.path}>
                 <td className="kit-mono">{row.path}</td>
@@ -637,7 +640,11 @@ interface MissingPath {
 /** What the chains in the current table do that a single row does not show. */
 function chainFindings(rows: readonly RedirectRow[]): {
   readonly loops: readonly { readonly trail: readonly string[] }[];
-  readonly chains: readonly { readonly from: string; readonly to: string; readonly finalTarget: string }[];
+  readonly chains: readonly {
+    readonly from: string;
+    readonly to: string;
+    readonly finalTarget: string;
+  }[];
 } {
   const loops: { trail: readonly string[] }[] = [];
   const chains: { from: string; to: string; finalTarget: string }[] = [];
@@ -700,7 +707,10 @@ function RedirectHealth(): ReactElement {
           </Banner>
         ))}
         {findings.chains.length > 0 && (
-          <Table caption="Redirects that point at another redirect" head={['From', 'Points at', 'Should point at']}>
+          <Table
+            caption="Redirects that point at another redirect"
+            head={['From', 'Points at', 'Should point at']}
+          >
             {findings.chains.map((chain) => (
               <tr key={chain.from}>
                 <td className="kit-mono">{chain.from}</td>
@@ -786,7 +796,13 @@ function Missing({ onPrefill }: { onPrefill: (from: string) => void }): ReactEle
  * 0 to update, 40 unchanged" before anything is sent. That sentence is the whole
  * point of the feature: without it, re-importing an export is a leap of faith.
  */
-function RedirectTransfer({ rows, onImported }: { rows: readonly RedirectRow[]; onImported: () => void }): ReactElement {
+function RedirectTransfer({
+  rows,
+  onImported,
+}: {
+  rows: readonly RedirectRow[];
+  onImported: () => void;
+}): ReactElement {
   const env = useCorporateEnv();
   const [text, setText] = useState('');
   const [plan, setPlan] = useState<RedirectPlan | null>(null);
@@ -896,7 +912,10 @@ function RedirectTransfer({ rows, onImported }: { rows: readonly RedirectRow[]; 
 
         {plan !== null && (
           <div className="kit-stack">
-            <Banner tone={plan.refused.length > 0 ? 'warn' : 'neutral'} title="Nothing has been written">
+            <Banner
+              tone={plan.refused.length > 0 ? 'warn' : 'neutral'}
+              title="Nothing has been written"
+            >
               {describePlan(plan)}
             </Banner>
             {plan.refused.length > 0 && (
@@ -919,7 +938,11 @@ function RedirectTransfer({ rows, onImported }: { rows: readonly RedirectRow[]; 
                   <td>
                     <Badge
                       tone={
-                        row.change === 'created' ? 'ok' : row.change === 'updated' ? 'warn' : 'neutral'
+                        row.change === 'created'
+                          ? 'ok'
+                          : row.change === 'updated'
+                            ? 'warn'
+                            : 'neutral'
                       }
                     >
                       {row.change}
@@ -929,10 +952,7 @@ function RedirectTransfer({ rows, onImported }: { rows: readonly RedirectRow[]; 
                 </tr>
               ))}
             </Table>
-            <Button
-              onClick={apply}
-              disabled={busy || plan.created + plan.updated === 0}
-            >
+            <Button onClick={apply} disabled={busy || plan.created + plan.updated === 0}>
               {busy
                 ? 'Writing'
                 : `Write ${plan.created + plan.updated} change${plan.created + plan.updated === 1 ? '' : 's'}`}
@@ -1228,7 +1248,13 @@ function SampleScreen({ tokens, label }: { tokens: BrandTokens; label: string })
         <p style={{ margin: '0 0 var(--sp-2)', fontSize: '0.9rem' }}>
           Body text, which is what most readers read most of the time.
         </p>
-        <p style={{ margin: '0 0 var(--sp-3)', fontSize: '0.85rem', color: token('text-muted', '#4b5563') }}>
+        <p
+          style={{
+            margin: '0 0 var(--sp-3)',
+            fontSize: '0.85rem',
+            color: token('text-muted', '#4b5563'),
+          }}
+        >
           Secondary text, which is what most palettes get wrong.
         </p>
         <div style={{ display: 'flex', gap: 'var(--sp-2)', flexWrap: 'wrap' }}>
@@ -1255,7 +1281,13 @@ function SampleScreen({ tokens, label }: { tokens: BrandTokens; label: string })
             Accent
           </span>
         </div>
-        <p style={{ margin: 'var(--sp-2) 0 0', fontSize: '0.85rem', color: token('danger', '#b91c1c') }}>
+        <p
+          style={{
+            margin: 'var(--sp-2) 0 0',
+            fontSize: '0.85rem',
+            color: token('danger', '#b91c1c'),
+          }}
+        >
           Something went wrong.
         </p>
       </div>
@@ -1283,7 +1315,9 @@ function SideBySide({
 }): ReactElement {
   return (
     <div className="kit-stack">
-      <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div
+        style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap', alignItems: 'flex-start' }}
+      >
         <SampleScreen tokens={draft} label="This draft" />
         {live === null ? (
           <div className="kit-card" style={{ maxWidth: 360, padding: 'var(--sp-3)' }}>
@@ -1297,7 +1331,10 @@ function SideBySide({
         )}
       </div>
       {live !== null && (
-        <Table caption="Contrast, both palettes, by WCAG 2.1" head={['Pair', 'Draft', 'Live', 'Needs']}>
+        <Table
+          caption="Contrast, both palettes, by WCAG 2.1"
+          head={['Pair', 'Draft', 'Live', 'Needs']}
+        >
           {CONTRAST_PAIRS.map((pair) => {
             const draftRatio = contrastRatio(
               draft[pair.foreground] ?? '#000000',
@@ -1612,12 +1649,14 @@ function Branding(): ReactElement {
             </Button>
           )}
         </div>
-        {readiness.status === 'ready' && readiness.data !== null && readiness.data.can_publish === false && (
-          <Banner tone="warn" title="You can edit this theme but not publish it">
-            Publishing needs <code>brand.publish</code>, which is separate from the right to edit a
-            palette. Ask an owner to publish it, or to grant you the permission.
-          </Banner>
-        )}
+        {readiness.status === 'ready' &&
+          readiness.data !== null &&
+          readiness.data.can_publish === false && (
+            <Banner tone="warn" title="You can edit this theme but not publish it">
+              Publishing needs <code>brand.publish</code>, which is separate from the right to edit
+              a palette. Ask an owner to publish it, or to grant you the permission.
+            </Banner>
+          )}
         {readiness.status === 'ready' && readiness.data !== null && readiness.data.can_publish && (
           <p className="kit-small kit-muted" style={{ margin: 0 }}>
             {readiness.data.tokens_changed === 0

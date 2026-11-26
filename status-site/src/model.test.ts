@@ -292,11 +292,15 @@ describe('an incident that survives its own resolution (§13.2)', () => {
   });
 
   it('counts in days once an incident is old enough', () => {
-    expect(boardSentence(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain('3 days');
+    expect(boardSentence(incident({ started_at: '2026-11-20T09:00:00Z' }), now)).toContain(
+      '3 days',
+    );
   });
 
   it('says when the last update was, because silence is information', () => {
-    const withUpdate = incident({ updates_v2: [{ body: 'Restarting', state: 'degraded', at: '2026-11-23T11:20:00Z' }] });
+    const withUpdate = incident({
+      updates_v2: [{ body: 'Restarting', state: 'degraded', at: '2026-11-23T11:20:00Z' }],
+    });
     expect(boardSentence(withUpdate, now)).toContain('40 minutes ago');
   });
 
@@ -355,7 +359,9 @@ describe('an incident that survives its own resolution (§13.2)', () => {
   });
 
   it('refuses a post-mortem during the incident and one that says nothing', () => {
-    expect(postmortemProblem('Long enough but too early', null)).toContain('after the incident is resolved');
+    expect(postmortemProblem('Long enough but too early', null)).toContain(
+      'after the incident is resolved',
+    );
     expect(postmortemProblem('It broke.', '2026-11-23T14:00:00Z')).toContain('not a post-mortem');
     expect(postmortemProblem('', '2026-11-23T14:00:00Z')).toContain('what happened');
     expect(

@@ -27,7 +27,15 @@ import {
   type PendingCampaignRow,
   type PendingShopRow,
 } from './approvals';
-import { breachedCount, orderByLatency, queueSummary, remainingLabel, slaTone, worstState, type SlaRow } from './sla';
+import {
+  breachedCount,
+  orderByLatency,
+  queueSummary,
+  remainingLabel,
+  slaTone,
+  worstState,
+  type SlaRow,
+} from './sla';
 import {
   LAYOUT_LABELS,
   PLACEMENT_LABELS,
@@ -109,7 +117,8 @@ interface ClockRow extends SlaRow {
 function Clock(): ReactElement {
   const env = useCorporateEnv();
   const load = useCallback(
-    async () => orderByLatency(await listRpc<ClockRow>(env, 'approvals_with_sla', { p_limit: 100 })),
+    async () =>
+      orderByLatency(await listRpc<ClockRow>(env, 'approvals_with_sla', { p_limit: 100 })),
     [env],
   );
   const { state, reload } = useAsync(load, [env]);
@@ -137,14 +146,17 @@ function Clock(): ReactElement {
           </p>
           {breachedCount(state.data) > 0 ? (
             <Banner tone="bad" title="Past the target">
-              {breachedCount(state.data)} item{breachedCount(state.data) === 1 ? ' is' : 's are'} past
-              the time the policy allows. The oldest is first in the list below.
+              {breachedCount(state.data)} item{breachedCount(state.data) === 1 ? ' is' : 's are'}{' '}
+              past the time the policy allows. The oldest is first in the list below.
             </Banner>
           ) : null}
           {state.data.length === 0 ? (
             <Empty>Both queues are empty, so there is nothing to be late.</Empty>
           ) : (
-            <Table caption="Waiting items, most overdue first" head={['Item', 'Kind', 'Waiting', 'Clock', 'Left']}>
+            <Table
+              caption="Waiting items, most overdue first"
+              head={['Item', 'Kind', 'Waiting', 'Clock', 'Left']}
+            >
               {state.data.map((row) => {
                 const clock = worstState(row);
                 return (

@@ -42,9 +42,7 @@ describe('reasonProblems', () => {
   it('accepts a real sentence that happens to contain a banned word', () => {
     // The rule is about what the reason *is*, not what it contains.
     expect(reasonProblems('Test account created for the new vendor onboarding')).toEqual([]);
-    expect(reasonProblems('None of the documents matched, so the listing was removed')).toEqual(
-      [],
-    );
+    expect(reasonProblems('None of the documents matched, so the listing was removed')).toEqual([]);
   });
 
   it('rejects a reason that only restates the action', () => {
@@ -101,9 +99,9 @@ describe('reasonQuality', () => {
 
   it('counts a concrete detail as a sign of a good reason', () => {
     // Eight words and a number or a name: something a reader can follow up on.
-    expect(reasonQuality('Refunded order 99120 after the courier confirmed the parcel was lost')).toBe(
-      'good',
-    );
+    expect(
+      reasonQuality('Refunded order 99120 after the courier confirmed the parcel was lost'),
+    ).toBe('good');
   });
 
   it('does not reward length alone', () => {

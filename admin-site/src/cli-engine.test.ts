@@ -54,7 +54,9 @@ describe('bulk plan parsing', () => {
   });
 
   it('refuses an action the subject does not have', () => {
-    const { error } = parseBulkPlan(parseCli('bulk plan shops delete --reason "a long enough reason"'));
+    const { error } = parseBulkPlan(
+      parseCli('bulk plan shops delete --reason "a long enough reason"'),
+    );
     expect(error).toContain('Allowed');
     // The message names what is allowed, so the operator does not have to guess.
     expect(error).toContain('approve');
@@ -62,13 +64,17 @@ describe('bulk plan parsing', () => {
 
   it('has no bulk delete at all', () => {
     for (const subject of ['shops', 'campaigns', 'reports', 'posts']) {
-      const { error } = parseBulkPlan(parseCli(`bulk plan ${subject} delete --reason "a long enough reason"`));
+      const { error } = parseBulkPlan(
+        parseCli(`bulk plan ${subject} delete --reason "a long enough reason"`),
+      );
       expect(error).toBeDefined();
     }
   });
 
   it('refuses an unknown subject and lists the real ones', () => {
-    const { error } = parseBulkPlan(parseCli('bulk plan everything approve --reason "a long enough reason"'));
+    const { error } = parseBulkPlan(
+      parseCli('bulk plan everything approve --reason "a long enough reason"'),
+    );
     expect(error).toContain('Unknown subject');
     expect(error).toContain('shops');
   });

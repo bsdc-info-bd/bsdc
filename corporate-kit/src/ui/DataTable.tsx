@@ -1,6 +1,11 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { Button, Loading } from './primitives';
-import { describeAge, freshnessNotice, freshnessOf, type FreshnessPolicy } from '../domain/freshness';
+import {
+  describeAge,
+  freshnessNotice,
+  freshnessOf,
+  type FreshnessPolicy,
+} from '../domain/freshness';
 
 /**
  * The table every console screen uses.
@@ -150,7 +155,9 @@ export function DataTable<Row>({
 
       {rows.length === 0 ? (
         <p className="kit-empty">
-          {filtered ? (emptyFiltered ?? 'Nothing matches those filters.') : (empty ?? 'Nothing to show yet.')}
+          {filtered
+            ? (emptyFiltered ?? 'Nothing matches those filters.')
+            : (empty ?? 'Nothing to show yet.')}
         </p>
       ) : (
         <>
@@ -166,9 +173,7 @@ export function DataTable<Row>({
                       <th
                         key={column.key}
                         scope="col"
-                        aria-sort={
-                          active ? (sort.descending ? 'descending' : 'ascending') : 'none'
-                        }
+                        aria-sort={active ? (sort.descending ? 'descending' : 'ascending') : 'none'}
                         data-align={column.align ?? 'start'}
                         data-hide={column.hideBelow}
                       >
@@ -227,7 +232,11 @@ export function DataTable<Row>({
                           })}
                     >
                       {columns.map((column) => (
-                        <td key={column.key} data-align={column.align ?? 'start'} data-hide={column.hideBelow}>
+                        <td
+                          key={column.key}
+                          data-align={column.align ?? 'start'}
+                          data-hide={column.hideBelow}
+                        >
                           {column.render(row)}
                         </td>
                       ))}

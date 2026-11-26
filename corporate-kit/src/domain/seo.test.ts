@@ -120,7 +120,9 @@ describe('previewOverride — what a reader sees', () => {
   });
 
   it('honours an origin other than the default', () => {
-    expect(previewOverride(draft(), 'staging.bsdc.info.bd').breadcrumb).toBe('staging.bsdc.info.bd/about');
+    expect(previewOverride(draft(), 'staging.bsdc.info.bd').breadcrumb).toBe(
+      'staging.bsdc.info.bd/about',
+    );
   });
 
   it('cuts the share card shorter than the result row, because the card is narrower', () => {
@@ -230,10 +232,7 @@ describe('coverage', () => {
   });
 
   it('lists only the field that is missing', () => {
-    const rows = coverage(
-      ['/blog'],
-      [{ path: '/blog', title: 'The blog', description: '' }],
-    );
+    const rows = coverage(['/blog'], [{ path: '/blog', title: 'The blog', description: '' }]);
     expect(rows).toEqual([{ path: '/blog', missing: ['description'] }]);
   });
 
@@ -248,7 +247,10 @@ describe('coverage', () => {
   });
 
   it('matches routes and overrides regardless of how the path was typed', () => {
-    const rows = coverage(['/Blog/'], [{ path: '/blog', title: 'The blog', description: 'Posts.' }]);
+    const rows = coverage(
+      ['/Blog/'],
+      [{ path: '/blog', title: 'The blog', description: 'Posts.' }],
+    );
     expect(rows).toEqual([]);
   });
 
@@ -363,7 +365,9 @@ describe('collapseSuggestion', () => {
   });
 
   it('has nothing to suggest when the destination is already final', () => {
-    expect(collapseSuggestion('/newest', [redirect({ from_path: '/old', to_path: '/newest' })])).toBeNull();
+    expect(
+      collapseSuggestion('/newest', [redirect({ from_path: '/old', to_path: '/newest' })]),
+    ).toBeNull();
   });
 
   it('has nothing to suggest for an off-site destination', () => {
@@ -421,7 +425,10 @@ describe('exportRedirects', () => {
 
 describe('parseRedirects', () => {
   it('reads back an export with no change', () => {
-    const rows = [redirect({ note: 'moved, permanently' }), redirect({ from_path: '/x', to_path: '/y', status: 302, note: '' })];
+    const rows = [
+      redirect({ note: 'moved, permanently' }),
+      redirect({ from_path: '/x', to_path: '/y', status: 302, note: '' }),
+    ];
     const result = parseRedirects(exportRedirects(rows));
     expect(result.problems).toEqual([]);
     expect(result.rows).toHaveLength(2);
@@ -466,12 +473,23 @@ describe('parseRedirects', () => {
   });
 
   it('round-trips: export, parse, export again is the same bytes', () => {
-    const rows = [redirect({ note: 'a "quoted", note' }), redirect({ from_path: '/x', to_path: '/y', status: 308 })];
+    const rows = [
+      redirect({ note: 'a "quoted", note' }),
+      redirect({ from_path: '/x', to_path: '/y', status: 308 }),
+    ];
     const once = exportRedirects(rows);
     const parsed = parseRedirects(once);
     expect(parsed.problems).toEqual([]);
     const rebuilt = exportRedirects(
-      parsed.rows.map((row, i) => redirect({ from_path: row.from, to_path: row.to, status: row.status, note: row.note, hits: i })),
+      parsed.rows.map((row, i) =>
+        redirect({
+          from_path: row.from,
+          to_path: row.to,
+          status: row.status,
+          note: row.note,
+          hits: i,
+        }),
+      ),
     );
     expect(rebuilt).toBe(once);
   });
@@ -481,19 +499,25 @@ describe('planRedirectImport', () => {
   const current = [redirect({ from_path: '/a', to_path: '/b', note: 'kept' })];
 
   it('counts a new row as created', () => {
-    const plan = planRedirectImport(current, [{ line: 2, from: '/c', to: '/d', status: 301, note: '' }]);
+    const plan = planRedirectImport(current, [
+      { line: 2, from: '/c', to: '/d', status: 301, note: '' },
+    ]);
     expect(plan.created).toBe(1);
     expect(plan.rows[0]?.change).toBe('created');
   });
 
   it('calls an identical row unchanged, which is what makes a round trip reassuring', () => {
-    const plan = planRedirectImport(current, [{ line: 2, from: '/a', to: '/b', status: 301, note: 'kept' }]);
+    const plan = planRedirectImport(current, [
+      { line: 2, from: '/a', to: '/b', status: 301, note: 'kept' },
+    ]);
     expect(plan.unchanged).toBe(1);
     expect(plan.rows[0]?.differences).toEqual([]);
   });
 
   it('says exactly what would change on an updated row', () => {
-    const plan = planRedirectImport(current, [{ line: 2, from: '/a', to: '/z', status: 302, note: 'new' }]);
+    const plan = planRedirectImport(current, [
+      { line: 2, from: '/a', to: '/z', status: 302, note: 'new' },
+    ]);
     expect(plan.updated).toBe(1);
     const differences = plan.rows[0]?.differences.join(' ');
     expect(differences).toContain('/b → /z');
@@ -501,13 +525,19 @@ describe('planRedirectImport', () => {
   });
 
   it('notices a row that was disabled would come back on', () => {
-    const disabled = [redirect({ from_path: '/a', to_path: '/b', note: 'kept', is_enabled: false })];
-    const plan = planRedirectImport(disabled, [{ line: 2, from: '/a', to: '/b', status: 301, note: 'kept' }]);
+    const disabled = [
+      redirect({ from_path: '/a', to_path: '/b', note: 'kept', is_enabled: false }),
+    ];
+    const plan = planRedirectImport(disabled, [
+      { line: 2, from: '/a', to: '/b', status: 301, note: 'kept' },
+    ]);
     expect(plan.rows[0]?.differences.join(' ')).toContain('enabled again');
   });
 
   it('matches paths regardless of how they were typed', () => {
-    const plan = planRedirectImport(current, [{ line: 2, from: '/A/', to: '/b', status: 301, note: 'kept' }]);
+    const plan = planRedirectImport(current, [
+      { line: 2, from: '/A/', to: '/b', status: 301, note: 'kept' },
+    ]);
     expect(plan.unchanged).toBe(1);
   });
 
@@ -553,10 +583,13 @@ describe('planRedirectImport — refusals', () => {
 
   it('refuses a loop the file builds between two of its own rows', () => {
     // Neither row is a problem against the empty table; together they are.
-    const plan = planRedirectImport([], [
-      { line: 2, from: '/a', to: '/b', status: 301, note: '' },
-      { line: 3, from: '/b', to: '/a', status: 301, note: '' },
-    ]);
+    const plan = planRedirectImport(
+      [],
+      [
+        { line: 2, from: '/a', to: '/b', status: 301, note: '' },
+        { line: 3, from: '/b', to: '/a', status: 301, note: '' },
+      ],
+    );
     expect(plan.refused).toHaveLength(1);
     expect(plan.refused[0]?.line).toBe(3);
     expect(plan.created).toBe(1);
@@ -568,7 +601,10 @@ describe('planRedirectImport — refusals', () => {
   });
 
   it('refuses redirecting the home page away', () => {
-    const plan = planRedirectImport([], [{ line: 2, from: '/', to: '/home', status: 301, note: '' }]);
+    const plan = planRedirectImport(
+      [],
+      [{ line: 2, from: '/', to: '/home', status: 301, note: '' }],
+    );
     expect(plan.refused[0]?.reason).toContain('home page');
   });
 
@@ -578,10 +614,13 @@ describe('planRedirectImport — refusals', () => {
   });
 
   it('does not let a refused row change the table the next row is judged against', () => {
-    const plan = planRedirectImport([], [
-      { line: 2, from: '/a', to: '/a', status: 301, note: '' },
-      { line: 3, from: '/a', to: '/b', status: 301, note: '' },
-    ]);
+    const plan = planRedirectImport(
+      [],
+      [
+        { line: 2, from: '/a', to: '/a', status: 301, note: '' },
+        { line: 3, from: '/a', to: '/b', status: 301, note: '' },
+      ],
+    );
     expect(plan.created).toBe(1);
     expect(plan.refused).toHaveLength(1);
   });

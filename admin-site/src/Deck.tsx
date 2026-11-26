@@ -79,8 +79,8 @@ export function Deck(): ReactElement {
     return (
       <Empty>
         <strong>Nothing here is yours to act on.</strong> Your account holds no permission that any
-        card on this deck needs. That is a deliberate state, not a fault: ask an owner for a grant if
-        you expected a queue.
+        card on this deck needs. That is a deliberate state, not a fault: ask an owner for a grant
+        if you expected a queue.
       </Empty>
     );
   }
@@ -135,9 +135,7 @@ export function Deck(): ReactElement {
           }
         >
           <DataTable<DeckTile>
-            caption={
-              language === 'bn' ? `${group.headingBn} সূচক` : `${group.heading} measures`
-            }
+            caption={language === 'bn' ? `${group.headingBn} সূচক` : `${group.heading} measures`}
             columns={columnsFor(language)}
             rows={group.tiles}
             rowKey={(tile) => tile.key}

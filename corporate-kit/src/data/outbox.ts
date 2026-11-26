@@ -229,7 +229,9 @@ export function planReplay(
 
 /** The summary a shell shows before replaying anything. */
 export function outboxSummary(intents: readonly OutboxIntent[]): string {
-  const waiting = intents.filter((intent) => intent.status === 'pending' || intent.status === 'failed');
+  const waiting = intents.filter(
+    (intent) => intent.status === 'pending' || intent.status === 'failed',
+  );
   if (waiting.length === 0) return '';
   if (waiting.length === 1) return `1 change is waiting to be sent: ${waiting[0]?.label ?? ''}`;
   return `${waiting.length} changes are waiting to be sent.`;

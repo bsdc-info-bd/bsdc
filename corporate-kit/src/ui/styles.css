@@ -83,8 +83,8 @@ body {
   margin: 0;
   background: var(--c-bg);
   color: var(--c-text);
-  font-family:
-    ui-sans-serif, system-ui, 'Segoe UI', 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', 'Noto Sans Bengali', 'Hind Siliguri',
+    sans-serif;
   font-size: clamp(13px, 0.35vw + 12.5px, 15.5px);
   line-height: 1.55;
   -webkit-text-size-adjust: 100%;

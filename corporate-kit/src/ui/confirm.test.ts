@@ -3,7 +3,10 @@ import { diffRows } from './ConfirmDialog';
 
 describe('diffRows', () => {
   it('shows only what actually changes', () => {
-    const rows = diffRows({ role: 'member', status: 'active' }, { role: 'moderator', status: 'active' });
+    const rows = diffRows(
+      { role: 'member', status: 'active' },
+      { role: 'moderator', status: 'active' },
+    );
     expect(rows).toHaveLength(1);
     expect(rows[0]).toEqual({ field: 'role', before: 'member', after: 'moderator' });
   });
