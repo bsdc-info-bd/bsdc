@@ -278,9 +278,11 @@ await asSystem(`
 `);
 // The second session is given a different origin hash and country directly,
 // because the harness has no way to spoof a header through the RPC.
-const secondForManager = await asSystem(
-  `select id from public.staff_sessions where uid = '${MANAGER}' and ended_at is null limit 1`,
+const firstForManager = await asSystem(
+  `select id from public.staff_sessions where uid = '${MANAGER}' and device_hash = 'screen-dev-3' and ended_at is null`,
 );
+check(firstForManager.rows.length === 1, 'the first session fixture exists exactly once');
+const firstSessionId = firstForManager.rows[0]?.id;
 // Two live sessions for one account, from different countries, seen minutes
 // apart — the impossible-travel shape. The update is scoped to one device on
 // purpose: `where uid = ... and ended_at is null` would touch the row inserted
@@ -289,7 +291,7 @@ const secondForManager = await asSystem(
 await asSystem(`
   update public.staff_sessions
      set origin_hash = 'aabbccdd11223344', country = 'GB', last_seen_at = now()
-   where uid = '${MANAGER}' and device_hash = 'screen-dev-3';
+   where id = '${firstSessionId}' and uid = '${MANAGER}';
   insert into public.staff_sessions (uid, device_hash, device_label, origin_hash, country, last_seen_at, role_at_start)
   values ('${MANAGER}', 'screen-dev-4', 'Chrome on Windows', 'eeff00112233aabb', 'DE', now(), 'manager');
 `);

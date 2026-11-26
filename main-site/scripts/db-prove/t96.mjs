@@ -296,7 +296,7 @@ check(before.error === null, 'the fixture dependencies are readable', before.err
 //
 // Each needs its own owner. `mk_applications_one_open_per_owner` allows one open
 // application per member, which is a rule worth not working around.
-async function applyAs(uid, shopName, age) {
+async function applyAs(uid, shopName) {
   return as(uid, `select public.mk_submit_vendor_application($json$${JSON.stringify({
     full_name: 'Queue Applicant',
     shop_name: shopName,

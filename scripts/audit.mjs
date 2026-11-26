@@ -2597,25 +2597,42 @@ check(
 check(
   'L-02',
   'Foundation',
-  'Every console has a browser suite that runs a real build',
+  'Every console gets a non-skippable keyboard, responsive and stale-deploy browser gate',
   () => {
-    const suite = 'main-site/scripts/browser/console-stale.mjs';
-    const present = existsSync(join(root, suite));
-    const covers = present
-      ? packages.filter(
-          (name) =>
-            name !== 'corporate-kit' &&
-            name !== 'push-worker' &&
-            name !== 'main-site' &&
-            read(suite).includes(`'${name}'`),
-        ).length
-      : 0;
-    const consoles = packages.filter(
+    const suitePath = 'main-site/scripts/browser/console-stale.mjs';
+    const present = existsSync(join(root, suitePath));
+    const suite = present ? read(suitePath) : '';
+    const workflow = read('.github/workflows/browser.yml');
+    const consoleNames = packages.filter(
       (name) => name !== 'corporate-kit' && name !== 'push-worker' && name !== 'main-site',
-    ).length;
+    );
+    const missingFromSuite = consoleNames.filter((name) => !suite.includes(`'${name}'`));
+    const buildSection = workflow
+      .split('Build every console for the cross-console browser gate')[1]
+      ?.split('Keyboard, viewport and stale-deploy checks')[0] ?? '';
+    const missingFromBuildLoop = consoleNames.filter((name) => !buildSection.includes(name));
+    const executedInCi = workflow.includes('node main-site/scripts/browser/console-stale.mjs');
+    const buildsBeforeTest = buildSection.includes('npm run build');
+    const refusesToSkip = /the browser gate must never skip an unbuilt console/.test(suite);
+    const checksKeyboard = /Tab reaches every visible control/.test(suite) && /visible focus ring/.test(suite);
+    const checksWidths = suite.includes('[250, 320, 375, 640, 768, 1024, 1440, 2560, 3840]');
+    const checksReducedMotion = /every animation and transition respects reduced motion/.test(suite);
+    const failures = [
+      ...(!present ? ['suite missing'] : []),
+      ...(missingFromSuite.length ? [`not in suite: ${missingFromSuite.join(', ')}`] : []),
+      ...(missingFromBuildLoop.length ? [`not built by browser CI: ${missingFromBuildLoop.join(', ')}`] : []),
+      ...(!executedInCi ? ['suite not invoked by CI'] : []),
+      ...(!buildsBeforeTest ? ['build does not precede browser execution'] : []),
+      ...(!refusesToSkip ? ['a missing dist can pass by skipping'] : []),
+      ...(!checksKeyboard ? ['keyboard traversal/focus not asserted'] : []),
+      ...(!checksWidths ? ['nine-width responsive sweep not asserted'] : []),
+      ...(!checksReducedMotion ? ['reduced motion not asserted'] : []),
+    ];
     return {
-      ok: present && covers === consoles,
-      evidence: `${suite} names ${covers}/${consoles} consoles — G6 is "no console has a browser test"`,
+      ok: failures.length === 0,
+      evidence: failures.length === 0
+        ? `${consoleNames.length}/${consoleNames.length} consoles are built and tested in CI: keyboard order/focus, 250–3840px overflow, reduced motion, forced colours and stale deployments`
+        : failures.join('; '),
     };
   },
 );

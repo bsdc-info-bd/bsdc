@@ -147,6 +147,10 @@ a:hover {
 .kit-skip:focus {
   left: var(--sp-2);
   top: var(--sp-2);
+  /* This is the first keyboard stop; a visible position without a visible
+     focus indicator would make the skip link a dead end for low-vision users. */
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
 }
 
 /* ---------------------------- frame & header ----------------------------- */

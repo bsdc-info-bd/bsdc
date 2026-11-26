@@ -543,7 +543,7 @@ function NoticeCard({
         </div>
       )}
 
-      {extended.withdrawn_at != null && (
+      {extended.withdrawn_at !== null && extended.withdrawn_at !== undefined && (
         <Banner tone="warn" title="Withdrawn">
           {withdrawnNoticeBanner(extended.withdraw_reason ?? '')}
         </Banner>
@@ -655,12 +655,15 @@ function NoticeCard({
       {panel === 'withdraw' && (
         <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
           <Banner tone="warn" title="Withdrawal keeps the notice">
-            The notice stays in the reader&apos;s feed, marked withdrawn, with this
-            sentence beside it. Members who saw it learn what happened instead of
-            finding a dead link.
+            The notice stays in the reader&apos;s feed, marked withdrawn, with this sentence beside
+            it. Members who saw it learn what happened instead of finding a dead link.
           </Banner>
           <Field
-            label={row.status === 'draft' ? 'Reason for deleting this draft' : 'Why it is being withdrawn'}
+            label={
+              row.status === 'draft'
+                ? 'Reason for deleting this draft'
+                : 'Why it is being withdrawn'
+            }
             hint={`${String(withdrawReason.trim().length)} / ${String(MAX_WITHDRAW_REASON)} characters · at least ${String(MIN_WITHDRAW_REASON)}`}
             value={withdrawReason}
             onChange={(event) => setWithdrawReason(event.target.value)}
@@ -699,8 +702,8 @@ function NoticeCard({
         <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
           <Banner tone="warn" title="A hold must name its scope">
             A hold that covers &quot;everything&quot; is a hold nobody can release. Say what this
-            one covers, or why it is being lifted — that sentence is what a dispute reads
-            years later.
+            one covers, or why it is being lifted — that sentence is what a dispute reads years
+            later.
           </Banner>
           <Field
             label={
@@ -1166,7 +1169,10 @@ function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
         </Banner>
       )}
 
-      <Card title="Remind the people who have not read it" description={reminderPlan(summary, summary.rounds + 1)}>
+      <Card
+        title="Remind the people who have not read it"
+        description={reminderPlan(summary, summary.rounds + 1)}
+      >
         <div className="kit-stack">
           <Field
             label="Note for the reminder log"
@@ -1174,11 +1180,7 @@ function AckRosterDrawer({ row }: { readonly row: NoticeRow }): ReactElement {
             value={note}
             onChange={(event) => setNote(event.target.value)}
           />
-          <Button
-            size="small"
-            disabled={reminding || !summary.canRemind}
-            onClick={remind}
-          >
+          <Button size="small" disabled={reminding || !summary.canRemind} onClick={remind}>
             {reminding
               ? 'Sending…'
               : `Send reminder round ${String(summary.rounds + 1)} to ${String(summary.outstanding)}`}

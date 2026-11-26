@@ -9307,3 +9307,83 @@ The gaps carried from §10 and §11 remain explicit: workload per moderator, dup
 clustering with a visible count, leave requests, two-party shift swap, the 100-caller
 `claim_report` test, the appeals detail view, and one-certificate-per-member-per-course
 idempotency (§75.4). Response 9 follows §14.
+
+## 78. Response 9 — Cross-cutting craft (foundation landed; acceptance still open)
+
+This response strengthens the shared layer that every staff console depends on,
+and replaces several claims that used to be aspirational with gates that run.
+It is deliberately **not marked complete**: §14 is a product-wide contract, and
+the current evidence below proves the shared shell and initial console states,
+not every route, every data call, or both languages across every screen.
+
+### 78.1 A browser gate that cannot pass by omission
+
+`main-site/scripts/browser/console-stale.mjs` now runs against all thirteen
+staff consoles. The browser suite builds an alternate, content-hashed deploy into
+an isolated temporary directory (never overwriting the working `dist/`), swaps
+it under a tab that is already open, and asserts recovery. A missing build is a
+failure, not a `SKIP`. Chromium comes from the pinned browser dependency used by
+the other browser suites, with its shared libraries loaded explicitly.
+
+On each console's initial screen the same real-browser pass checks Tab order and
+a visible focus ring for every focus stop, horizontal overflow at nine widths
+from 250 to 3,840 pixels, reduced-motion behavior, and forced-colors operation.
+The skip link's focus style is explicit; it is the first keyboard stop and must
+not disappear into the negative margin when focused. `browser.yml` now builds
+all thirteen before executing the suite and uploads the per-console screenshots.
+Audit `L-02` verifies the complete suite list, the CI invocation, the build
+preceding the test, the no-skip behavior, and the asserted viewport/keyboard/motion
+checks. It can no longer pass merely because a script names thirteen directories.
+
+Measured locally against current production builds: **13/13 consoles passed**
+the cross-console browser suite. This proves their shared shell and initial
+screen only; it does not prove that every deep route has an accessible tab order.
+
+### 78.2 Shared foundations and proof
+
+`corporate-kit` now contains tested boundaries for timeouts, retry policy,
+refusal-vs-transport classification, single-probe circuit breakers, queued
+write intents, stale-read age, reason-required destructive confirmations,
+recoverable lazy-chunk failures, consistent error/success announcements, and
+shared screen primitives. The common stylesheet supplies keyboard focus, reduced
+motion, and 44-pixel targets. `mountConsole` installs stale-build recovery and
+feedback above every console shell; `main-site` keeps its separate recovery
+boundary. These are common building blocks, not a claim that every screen has
+already migrated to every building block.
+
+Current full proof: **2,831 tests passed** across all sixteen packages; all
+fourteen web applications type-check and build, the push worker tests, type-checks
+and dry-run build; the cross-console browser suite passes 13/13; `db:prove` is
+**92/92**; audit is **154 passed, 0 failed, 4 recorded**; SQL schema check is
+**0 problems across 149 files**. The accessibility/browser suite has no skipped
+console.
+
+### 78.3 Remaining §14 acceptance — not waived
+
+These are still required before Response 9 can be called complete:
+
+- **Language (14.2):** the corporate consoles do not yet have a complete shared
+  Bengali/English message catalog and toggle with key-set parity. The member
+  site's locale tests do not stand in for console copy. Bengali digit formatting,
+  collation and date parsing, and measured Bangla line-height need to be delivered
+  and tested across the console suite.
+- **Accessibility (14.1):** the browser proof is the initial screen, not every
+  route and state. Add route-level keyboard traversal, live-region behavior,
+  accessible names/shortcut hints, non-colour-only status shapes and words, 200%
+  zoom, high-contrast behavior, and required chart twins. Keep WCAG 2.2 AA as the
+  release gate rather than substituting a shared stylesheet for an audit.
+- **Mobile (14.3):** the nine-width test currently checks horizontal overflow of
+  the initial state. Tables-to-cards fidelity, thumb-reach action placement,
+  drawer/sheet Escape and browser-back behavior, and offline-banner/action-bar
+  separation still need route-level checks.
+- **Resilience and budgets (14.4–14.5):** the retry/breaker/timeout primitives
+  are tested, but most screens still use the older RPC wrappers. Wire every read
+  and write through a classified, bounded path; do not retry an ambiguous write.
+  Add the thirty-second frozen-tab heartbeat and the six-call-per-screen budget,
+  then measure the 70ms local feedback, 5,000-row/1.5-second render and zero-shift
+  requirements. Keep the existing 250KB initial-JS CI gate and 200ms transition
+  ceiling.
+
+These are tracked rather than silently declared done. Response 10 must carry the
+acceptance matrix with an honest state for each §14 item; it must not turn the
+unproven requirements above into green checkboxes.

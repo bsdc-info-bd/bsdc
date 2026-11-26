@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* global document, window, getComputedStyle, HTMLElement, matchMedia */
 /**
  * A console left open across a deploy.
  *
@@ -30,8 +31,11 @@ import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { brotliDecompressSync } from 'node:zlib';
 import { serveBuild } from './server.mjs';
 
+const require = createRequire(import.meta.url);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const repo = resolve(root, '..');
 const output = resolve(process.env.BROWSER_REPORT_DIR ?? join(root, '.browser-evidence'));
@@ -86,18 +90,46 @@ async function launchBrowser() {
       if (inner) executablePath = inner;
     }
   }
-  // Shared objects for the sandbox build, if it was unpacked beside the binary.
+
+  let args = ['--no-sandbox', '--disable-dev-shm-usage'];
   let libraryPath = process.env.LD_LIBRARY_PATH ?? '';
-  for (const libs of ['/tmp/bsdclibs/lib', '/tmp/crlibs/lib']) {
-    if (existsSync(libs)) {
-      libraryPath = libraryPath.includes(libs) ? libraryPath : `${libs}:${libraryPath}`;
-      break;
+  if (!executablePath) {
+    // Use the same pinned Chromium as the other repository browser suites. A
+    // runner with no system browser must not silently skip the console gate.
+    const bundled = (await import('@sparticuz/chromium')).default;
+    executablePath = await bundled.executablePath();
+    args = bundled.args.filter(
+      (arg) =>
+        !arg.includes('disable-web-security') &&
+        !arg.includes('allow-running-insecure-content') &&
+        !arg.includes('disable-site-isolation-trials'),
+    );
+    if (process.platform === 'linux') {
+      const bin = resolve(dirname(require.resolve('@sparticuz/chromium')), '../bin');
+      const target = join(tmpdir(), 'bsdc-console-browser-libs');
+      await mkdir(target, { recursive: true });
+      const tar = join(target, 'libs.tar');
+      await writeFile(tar, brotliDecompressSync(await readFile(join(bin, 'al2023.tar.br'))));
+      const unpacked = spawnSync('tar', ['-xf', tar, '-C', target], { encoding: 'utf8' });
+      assert.equal(unpacked.status, 0, `Chromium shared libraries unpack: ${unpacked.stderr}`);
+      libraryPath = `${target}/lib:${libraryPath}`;
+    }
+  } else {
+    for (const libs of [
+      '/tmp/bsdc-console-browser-libs/lib',
+      '/tmp/bsdclibs/lib',
+      '/tmp/crlibs/lib',
+    ]) {
+      if (existsSync(libs)) {
+        libraryPath = libraryPath.includes(libs) ? libraryPath : `${libs}:${libraryPath}`;
+        break;
+      }
     }
   }
   return {
     browser: await chromium.launch({
-      ...(executablePath ? { executablePath } : {}),
-      args: ['--no-sandbox', '--disable-dev-shm-usage'],
+      executablePath,
+      args,
       env: { ...process.env, LD_LIBRARY_PATH: libraryPath },
       headless: true,
     }),
@@ -110,11 +142,6 @@ function isDirectory(path) {
   } catch {
     return false;
   }
-}
-
-function existsAt(path) {
-  // Synchronous on purpose: this runs once, before anything else.
-  return existsSync(path);
 }
 
 const results = [];
@@ -158,7 +185,7 @@ const FIXTURE = `
  * is set on `documentElement` in `main.tsx`, which every console has and which
  * touches no screen's behaviour.
  */
-async function buildSecond(consoleDir) {
+async function buildSecond(consoleDir, outputDir) {
   const candidate = join(consoleDir, 'src', 'main.tsx');
   const original = await readFile(candidate, 'utf8');
   const marker = `bsdc-deploy-${Date.now()}`;
@@ -169,7 +196,10 @@ async function buildSecond(consoleDir) {
   assert.notEqual(next, original, `${consoleDir}: the deploy marker was inserted into main.tsx`);
   try {
     await writeFile(candidate, next);
-    const built = spawnSync('npx', ['vite', 'build'], { cwd: consoleDir, encoding: 'utf8' });
+    const built = spawnSync('npx', ['vite', 'build', '--outDir', outputDir], {
+      cwd: consoleDir,
+      encoding: 'utf8',
+    });
     assert.equal(
       built.status,
       0,
@@ -193,7 +223,13 @@ try {
       built = false;
     }
     if (!built) {
-      console.log(`SKIP ${name} — no dist/. Run: npm run build --workspace=${name}`);
+      results.push({
+        name,
+        passed: false,
+        error: 'missing dist/index.html; the browser gate must never skip an unbuilt console',
+      });
+      console.log(`FAIL ${name} — no dist/index.html; build the console before running this gate`);
+      process.exitCode = 1;
       continue;
     }
 
@@ -204,18 +240,20 @@ try {
       const live = join(work, 'live');
       try {
         await cp(dist, buildA, { recursive: true });
-        const marker = await buildSecond(consoleDir);
-        await cp(join(consoleDir, 'dist'), buildB, { recursive: true });
-        // Put the original build back, so the workspace is left as it was found.
-        await rm(join(consoleDir, 'dist'), { recursive: true, force: true });
-        await cp(buildA, join(consoleDir, 'dist'), { recursive: true });
+        const marker = await buildSecond(consoleDir, buildB);
+        // The second deployment is built into the isolated temp directory.
+        // The real dist/ is never overwritten, even if a build fails midway.
 
-        const assetsOf = async (build) => (await readdir(join(build, 'assets'))).filter((file) => file.endsWith('.js'));
+        const assetsOf = async (build) =>
+          (await readdir(join(build, 'assets'))).filter((file) => file.endsWith('.js'));
         const before = await assetsOf(buildA);
         const after = await assetsOf(buildB);
         const added = after.filter((file) => !before.includes(file));
         assert.ok(added.length > 0, `${name}: the second build names at least one new chunk`);
-        const indexB = await readFile(join(buildB, 'assets', after.find((f) => f.startsWith('index-')) ?? ''), 'utf8').catch(() => '');
+        const indexB = await readFile(
+          join(buildB, 'assets', after.find((f) => f.startsWith('index-')) ?? ''),
+          'utf8',
+        ).catch(() => '');
         assert.ok(
           indexB.includes(marker),
           `${name}: the second build really is the one just compiled (marker present)`,
@@ -244,6 +282,108 @@ try {
             `${name}: the document loaded and the fixture ran`,
           );
 
+          // A real narrow screen, not a screenshot at one convenient width.
+          // These nine points cover the plan's 250px–4K range and common breakpoints.
+          for (const width of [250, 320, 375, 640, 768, 1024, 1440, 2560, 3840]) {
+            await page.setViewportSize({ width, height: 900 });
+            await page.waitForTimeout(40);
+            const overflow = await page.evaluate(
+              () => document.documentElement.scrollWidth > window.innerWidth,
+            );
+            assert.equal(overflow, false, `${name}: horizontal overflow at ${width}px`);
+          }
+          await page.setViewportSize({ width: 1280, height: 900 });
+
+          const focusableSelector =
+            'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+          const expectedTabStops = await page.locator(focusableSelector).evaluateAll((nodes) => {
+            let index = 0;
+            return nodes
+              .filter((node) => {
+                const style = getComputedStyle(node);
+                return (
+                  !node.hasAttribute('disabled') &&
+                  style.visibility !== 'hidden' &&
+                  style.display !== 'none' &&
+                  node.getClientRects().length > 0 &&
+                  node.tabIndex >= 0
+                );
+              })
+              .map((node) => {
+                node.setAttribute('data-craft-tab-stop', String(index));
+                index += 1;
+                return index - 1;
+              });
+          });
+          assert.ok(
+            expectedTabStops.length > 0,
+            `${name}: the first screen exposes keyboard controls`,
+          );
+          const reached = new Set();
+          const focusProblems = [];
+          for (let step = 0; step < expectedTabStops.length + 2; step += 1) {
+            await page.keyboard.press('Tab');
+            const focus = await page.evaluate(() => {
+              const element = document.activeElement;
+              if (!(element instanceof HTMLElement)) return null;
+              const style = getComputedStyle(element);
+              return {
+                stop: element.getAttribute('data-craft-tab-stop'),
+                outline: style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0,
+                outlineStyle: style.outlineStyle,
+                outlineWidth: style.outlineWidth,
+                focusVisible: element.matches(':focus-visible'),
+                label: `${element.tagName}.${String(element.className)}[${element.getAttribute('aria-label') ?? ''}] ${element.textContent?.trim().slice(0, 48) ?? ''}`,
+              };
+            });
+            if (focus?.stop !== null && focus?.stop !== undefined) {
+              reached.add(Number(focus.stop));
+              if (!focus.outline)
+                focusProblems.push(
+                  `${focus.label} [focus-visible=${String(focus.focusVisible)}, ${focus.outlineStyle} ${focus.outlineWidth}]`,
+                );
+            }
+          }
+          assert.deepEqual(
+            [...reached].sort((a, b) => a - b),
+            expectedTabStops,
+            `${name}: Tab reaches every visible control in DOM order`,
+          );
+          assert.deepEqual(
+            focusProblems,
+            [],
+            `${name}: every visited control has a visible focus ring: ${focusProblems.join(', ')}`,
+          );
+          await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
+          const mediaProof = await page.evaluate(() => {
+            const ms = (value) =>
+              value.trim().endsWith('ms')
+                ? Number.parseFloat(value)
+                : Number.parseFloat(value) * 1_000;
+            const motion = [...document.querySelectorAll('*')].flatMap((element) => {
+              const style = getComputedStyle(element);
+              return [style.animationDuration, style.transitionDuration]
+                .flatMap((value) => value.split(','))
+                .filter((value) => ms(value) > 0.01)
+                .map((value) => `${element.tagName}.${String(element.className)}:${value.trim()}`);
+            });
+            return {
+              visible: document.body.getClientRects().length > 0,
+              reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+              forcedColors: matchMedia('(forced-colors: active)').matches,
+              motion,
+            };
+          });
+          assert.ok(mediaProof.visible, `${name}: the app remains visible in forced-colors mode`);
+          assert.ok(mediaProof.reducedMotion, `${name}: reduced-motion media mode is active`);
+          assert.ok(mediaProof.forcedColors, `${name}: forced-colors media mode is active`);
+          assert.deepEqual(
+            mediaProof.motion,
+            [],
+            `${name}: every animation and transition respects reduced motion`,
+          );
+          await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
+
           // Swap the deployment underneath the open tab, then ask for a chunk
           // that only exists in the old build. This is exactly the production
           // sequence; a plain reload would not reproduce it because the reload
@@ -251,7 +391,9 @@ try {
           await rm(live, { recursive: true, force: true });
           await cp(buildB, live, { recursive: true });
           missing.length = 0;
-          const staleChunk = before.find((file) => file.startsWith('index-') || file.includes('CommandPalette'));
+          const staleChunk = before.find(
+            (file) => file.startsWith('index-') || file.includes('CommandPalette'),
+          );
           assert.ok(staleChunk, `${name}: found a chunk name to ask for`);
           // Importing the removed chunk is exactly what a lazily-loaded tab
           // does when the operator clicks it. The import is not caught, so the
@@ -271,7 +413,9 @@ try {
             `${name}: the console is still mounted after the deploy`,
           );
           assert.ok(
-            !pageErrors.some((message) => /Failed to fetch dynamically imported module/i.test(message)),
+            !pageErrors.some((message) =>
+              /Failed to fetch dynamically imported module/i.test(message),
+            ),
             `${name}: no unhandled chunk failure escaped to the page`,
           );
 
@@ -299,5 +443,7 @@ try {
 
 const failed = results.filter((result) => !result.passed);
 const skipped = consoles.length - results.length;
-console.log(`\n${results.length - failed.length} passed, ${failed.length} failed${skipped > 0 ? `, ${skipped} skipped` : ''}`);
+console.log(
+  `\n${results.length - failed.length} passed, ${failed.length} failed${skipped > 0 ? `, ${skipped} skipped` : ''}`,
+);
 if (failed.length > 0) process.exitCode = 1;

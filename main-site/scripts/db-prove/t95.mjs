@@ -133,7 +133,12 @@ const gap = await asSystem(`
   select action, subject, metadata from public.audit_log
    where action = 'audit.missing' and subject = 'table:profiles'
 `);
-check(gap.rows.length === 1, 'but the trail is not silent about it: one gap row is written', JSON.stringify(gap.rows.length));
+const afterGaps = await asSystem(`select count(*)::int as n from public.audit_log where action = 'audit.missing'`);
+check(
+  Number(afterGaps.rows[0]?.n) === Number(before.rows[0]?.n) + 1 && gap.rows.length === 1,
+  'but the trail is not silent about it: exactly one gap row is written',
+  JSON.stringify({ before: before.rows[0]?.n, after: afterGaps.rows[0]?.n, profileGaps: gap.rows.length }),
+);
 check(gap.rows[0]?.metadata?.table === 'profiles', 'the gap names the table');
 check(
   String(gap.rows[0]?.metadata?.detail ?? '').includes('allowed'),

@@ -159,6 +159,7 @@ check(unknownSubject.error !== null, 'a case about a member who does not exist i
 // ===========================================================================
 const reportOnPost = reportIds.find((r) => r.subjectId === postId);
 const reportOnOther = reportIds.find((r) => r.subjectId === otherPostId);
+check(reportOnPost !== undefined && reportOnOther !== undefined, 'the fixture reports one shared post and a different post');
 
 for (const r of reportIds) {
   const attached = await as(MOD, `select public.attach_report_to_case('${caseId}', '${r.id}') as added`);
