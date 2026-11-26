@@ -121,6 +121,12 @@ def statement_body(src, open_index):
 
 def table_columns(src):
     """{table: {columns}} for CREATE TABLE and ADD COLUMN in a chunk of SQL."""
+    # Comments are stripped first, because a `;` inside one ends the ALTER TABLE
+    # match below. A real migration here had the sentence "Every rule gets a
+    # review date; the date is not advisory" between the ALTER and its clauses,
+    # which silently dropped every column after it from the vocabulary and made
+    # the file's own correct references read as missing columns.
+    src = re.sub(r'--[^\n]*', '', src)
     out = collections.defaultdict(set)
     for match in re.finditer(
         r'create\s+table\s+(?:if\s+not\s+exists\s+)?([a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*)\s*\(',
@@ -177,7 +183,10 @@ def check(path, vocab, problems):
         r'create\s+(?:or\s+replace\s+)?function\s+((?:public|bsdc)\.[a-z_][a-z0-9_]*)\s*\(', code, re.I))
 
     def columns_for(table):
-        return vocab['columns'].get(table) or own_columns.get(table)
+        # Union rather than `or`: a table defined by an earlier migration and
+        # extended by this one must offer both sets of columns. Preferring the
+        # corpus silently discarded every column the file under test adds.
+        return (vocab['columns'].get(table) or set()) | (own_columns.get(table) or set())
 
     for block in blocks_of(code):
         if not block.strip():

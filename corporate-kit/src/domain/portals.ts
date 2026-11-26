@@ -1,7 +1,14 @@
 import { roleRank } from './staff';
 
 export type PortalCategory =
-  'command' | 'trust' | 'people' | 'platform' | 'content' | 'security' | 'comms' | 'public';
+  | 'command'
+  | 'trust'
+  | 'people'
+  | 'platform'
+  | 'content'
+  | 'security'
+  | 'comms'
+  | 'public';
 
 export type PortalIconKey =
   | 'command'

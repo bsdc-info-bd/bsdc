@@ -101,8 +101,14 @@ const restore = (db, uid, table, id) =>
 // reads bsdc.can_read_channel (defined in 0068); omit all of them only in this
 // historical pre-trash, pre-channel-rules fixture. The real database always
 // has both.
+//
+// 0139 is skipped for the same reason rather than because it is new: it recreates
+// `bsdc.notify_path` against an index that includes a column 0139 adds, and it
+// depends on 0090, which this fixture leaves out. Without the skip the replay
+// raised "there is no unique or exclusion constraint matching the ON CONFLICT
+// specification" from a body that was never meant to be applied to this history.
 const before = await makeDb({
-  skip: ['0050_', '0052_', '0053_', '0068_', '0085_', '0088_', '0092_', '0106_', '0129_'],
+  skip: ['0050_', '0052_', '0053_', '0068_', '0085_', '0088_', '0092_', '0106_', '0129_', '0139_'],
 });
 await before.exec(`
   insert into public.profiles (uid, display_name, username) values

@@ -25,7 +25,8 @@ const COLOR = /^#[0-9a-fA-F]{6}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type ValidationResult =
-  { readonly ok: true } | { readonly ok: false; readonly reason: string };
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
 
 const ok: ValidationResult = { ok: true };
 const fail = (reason: string): ValidationResult => ({ ok: false, reason });

@@ -19,6 +19,7 @@ import {
   useCorporateEnv,
   useProfile,
 } from '@kit';
+import { Record } from './Record';
 import {
   ROLES,
   STATUSES,
@@ -48,6 +49,10 @@ export function People(): ReactElement {
   const [bulkReason, setBulkReason] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkMsg, setBulkMsg] = useState('');
+  // Which record is open, if any. The record is a whole view of a person rather
+  // than an expandable row, because it is read in an escalation and an escalation
+  // is a thing somebody sits down to do.
+  const [openRecord, setOpenRecord] = useState<string | null>(null);
 
   const load = useCallback(
     () => listRpc<PersonRow>(env, 'admin_people', { p_search: term, p_limit: 120 }),
@@ -196,6 +201,20 @@ export function People(): ReactElement {
         </Empty>
       ) : null}
 
+      {openRecord !== null ? (
+        <Card
+          title={`Record: ${allPeople.find((p) => p.uid === openRecord)?.display_name ?? openRecord}`}
+          description="What they did, what was done about it, and what is open right now — in that order, because that is the order an escalation asks."
+          actions={
+            <Button size="small" variant="quiet" onClick={() => setOpenRecord(null)}>
+              Close the record
+            </Button>
+          }
+        >
+          <Record uid={openRecord} />
+        </Card>
+      ) : null}
+
       {state.status === 'ready' && people.length > 0 ? (
         <Card
           title={`${String(people.length)} account${people.length === 1 ? '' : 's'}`}
@@ -215,6 +234,7 @@ export function People(): ReactElement {
                 canSelect={canActOn(profile?.role ?? 'member', profile?.uid ?? '', person).allowed}
                 onToggleSelect={() => toggle(person.uid)}
                 onChanged={reload}
+                onOpenRecord={() => setOpenRecord(person.uid)}
               />
             ))}
           </Table>
@@ -273,6 +293,7 @@ function PersonTableRow({
   canSelect,
   onToggleSelect,
   onChanged,
+  onOpenRecord,
 }: {
   person: PersonRow;
   actorRole: string;
@@ -281,6 +302,7 @@ function PersonTableRow({
   canSelect: boolean;
   onToggleSelect: () => void;
   onChanged: () => void;
+  onOpenRecord: () => void;
 }): ReactElement {
   const env = useCorporateEnv();
   const [busy, setBusy] = useState(false);
@@ -355,6 +377,12 @@ function PersonTableRow({
         <div className="kit-small kit-muted kit-mono">
           {person.username === null ? person.uid.slice(0, 12) : `@${person.username}`}
         </div>
+        {/* The way into the record, on the row rather than on a separate screen:
+            an escalation starts with a name and the next thing wanted is the
+            history, not a different page. */}
+        <Button size="small" variant="quiet" onClick={onOpenRecord}>
+          Open record
+        </Button>
         {error !== '' ? <div className="kit-error kit-small">{error}</div> : null}
         {note !== '' ? <div className="kit-small kit-muted">{note}</div> : null}
       </td>

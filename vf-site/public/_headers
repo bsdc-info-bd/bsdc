@@ -1,3 +1,5 @@
+# The console itself is never framed, anywhere. A verification portal inside
+# somebody else's page is a portal that can be dressed up to look like theirs.
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: DENY
@@ -7,9 +9,32 @@
   Cross-Origin-Opener-Policy: same-origin
   Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ibb.co https://*.ibb.co https://i.ibb.co.com https://*.googleusercontent.com; font-src 'self' data:; frame-src 'self' https://bsdc-second.firebaseapp.com https://bsdc-second.web.app; connect-src 'self' https://bsdc.info.bd https://*.bsdc.info.bd https://bsdc.pages.dev https://*.bsdc.pages.dev https://*.supabase.co wss://*.supabase.co https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app https://bsdc-second.firebaseapp.com https://bsdc-second.web.app https://*.googleapis.com; form-action 'self'; manifest-src 'self'; upgrade-insecure-requests
 
+# §13.3's fourth property: embeddable for a third party with no PII.
+#
+# This is a separate path with its own rules rather than a relaxation of the
+# one above, because the two are answering different questions. `/embed` is a
+# single-answer page: no search, no batch, no history, no report receipt, just
+# `verify_public` for one code. Nothing that identifies anybody is on it, so
+# there is nothing for a framer to harvest — and that is the property that
+# makes framing acceptable here and nowhere else in this app.
+/embed
+  X-Frame-Options: ALLOWALL
+  Cross-Origin-Resource-Policy: cross-origin
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors *; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://bsdc.info.bd https://*.bsdc.info.bd; form-action 'self'; upgrade-insecure-requests
+
+/embed/*
+  X-Frame-Options: ALLOWALL
+  Cross-Origin-Resource-Policy: cross-origin
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors *; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self' https://*.supabase.co https://bsdc.info.bd https://*.bsdc.info.bd; form-action 'self'; upgrade-insecure-requests
+
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
 /index.html
+  Cache-Control: no-cache
+
+/embed/index.html
   Cache-Control: no-cache

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MIN_SAMPLES,
   VITAL_SPECS,
+  type Vital,
   bundleVerdict,
   errorUrgency,
   forecastSentence,
@@ -30,6 +31,15 @@ import {
   targetLabel,
   trendBounds,
   windowLabel,
+  boardSentence,
+  streakLabel,
+  deltaLabel,
+  boardSections,
+  regressionSentence,
+  regressionAge,
+  ackProblem,
+  trendHonesty,
+  type BoardRow,
 } from './model';
 
 const vital = (over: Partial<VitalRow> = {}): VitalRow => ({
@@ -323,5 +333,181 @@ describe('capacity', () => {
     });
     expect(sentence).toContain('rising');
     expect(sentence).toContain('400 a day');
+  });
+});
+
+describe('a board that leads to an action (§13.1)', () => {
+  const row = (over: Partial<BoardRow> = {}): BoardRow => ({
+    route: '/',
+    metric: 'LCP',
+    samples: 400,
+    p75: 3100,
+    p95: 5200,
+    rating: 'over budget',
+    target: 2500,
+    over_budget: true,
+    insufficient: false,
+    streak: 1,
+    build: 'b1',
+    open_regression: null,
+    ...over,
+  });
+
+  it('says when a metric is over but has not reached the streak', () => {
+    const sentence = boardSentence(row({ streak: 1 }));
+    expect(sentence).toContain('not yet an alert');
+    expect(sentence).toContain('1 of the required windows');
+  });
+
+  it('says when there is an open regression, because that is a different job', () => {
+    expect(boardSentence(row({ open_regression: 'r1' }))).toContain('open regression');
+  });
+
+  it('refuses to call a thin window a trend', () => {
+    const sentence = boardSentence(row({ samples: 4, insufficient: true, rating: 'insufficient' }));
+    expect(sentence).toContain('Too few');
+    expect(sentence).not.toContain('over');
+  });
+
+  it('says plainly when a metric has no budget and is therefore unwatched', () => {
+    expect(boardSentence(row({ rating: 'no budget', target: null, over_budget: false }))).toContain(
+      'nothing is being watched',
+    );
+  });
+
+  it('says inside budget with the number it beat', () => {
+    const sentence = boardSentence(row({ over_budget: false, rating: 'within budget', p75: 900 }));
+    expect(sentence).toContain('Inside its budget');
+    expect(sentence).toContain('2.50 s');
+  });
+
+  it('counts down to the alert rather than saying "over"', () => {
+    expect(streakLabel(row({ streak: 1 }), 3)).toBe('2 more windows');
+    expect(streakLabel(row({ streak: 2 }), 3)).toBe('one more window');
+    expect(streakLabel(row({ streak: 3 }), 3)).toBe('alerting');
+    expect(streakLabel(row({ open_regression: 'r1', streak: 1 }), 3)).toBe('alerting');
+    expect(streakLabel(row({ over_budget: false }), 3)).toBe('');
+  });
+
+  it('states the delta as a signed share of the budget', () => {
+    expect(deltaLabel(row({ p75: 3100, target: 2500 }))).toBe('+24%');
+    expect(deltaLabel(row({ p75: 2000, target: 2500 }))).toBe('-20%');
+    expect(deltaLabel(row({ p75: 2500, target: 2500 }))).toBe('on budget');
+    expect(deltaLabel(row({ target: null }))).toBe('');
+  });
+
+  it('puts alerting before approaching before blind before fine', () => {
+    const sections = boardSections([
+      row({ route: '/fine', over_budget: false, rating: 'within budget' }),
+      row({ route: '/alert', open_regression: 'r1' }),
+      row({ route: '/near' }),
+      row({
+        route: '/thin',
+        insufficient: true,
+        over_budget: false,
+        samples: 3,
+        rating: 'insufficient',
+      }),
+    ]);
+    expect(sections.map((s) => s.title.split(' (')[0])).toEqual([
+      'Alerting',
+      'Approaching',
+      'Not enough measurements',
+      'Inside budget',
+    ]);
+  });
+
+  it('does not invent a blind section out of routes that were never measured', () => {
+    const sections = boardSections([
+      row({ samples: 0, insufficient: true, over_budget: false, rating: 'insufficient' }),
+    ]);
+    expect(sections.some((s) => s.title.startsWith('Not enough'))).toBe(false);
+  });
+
+  it('names the release and the correlation in a regression sentence', () => {
+    const sentence = regressionSentence({
+      id: 'r1',
+      app: 'main-site',
+      route: '/shop',
+      metric: 'LCP',
+      target: 2500,
+      observed: 3600,
+      delta_share: 0.44,
+      samples: 900,
+      streak: 4,
+      build: 'b9',
+      error_fingerprint: 'fp1',
+      first_seen: '',
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
+    });
+    expect(sentence).toContain('release b9');
+    expect(sentence).toContain('+44%');
+    expect(sentence).toContain('correlated');
+    expect(sentence).toContain('not the same as caused');
+  });
+
+  it('does not claim a correlation when there is no error to point at', () => {
+    const sentence = regressionSentence({
+      id: 'r1',
+      app: 'main-site',
+      route: '/shop',
+      metric: 'LCP',
+      target: 2500,
+      observed: 3600,
+      delta_share: 0.44,
+      samples: 900,
+      streak: 4,
+      build: '',
+      error_fingerprint: null,
+      first_seen: '',
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
+    });
+    expect(sentence).toContain('unrecorded release');
+    expect(sentence).not.toContain('correlated');
+  });
+
+  it('says how long a regression has been open', () => {
+    const now = new Date('2026-11-23T12:00:00Z');
+    const base = {
+      id: 'r1',
+      app: 'main-site',
+      route: '/',
+      metric: 'LCP' as Vital,
+      target: 1,
+      observed: 2,
+      delta_share: 1,
+      samples: 1,
+      streak: 1,
+      build: '',
+      error_fingerprint: null,
+      last_seen: '',
+      acknowledged_at: null,
+      ack_note: '',
+    };
+    expect(regressionAge({ ...base, first_seen: '2026-11-23T11:30:00Z' }, now)).toBe(
+      'started within the hour',
+    );
+    expect(regressionAge({ ...base, first_seen: '2026-11-23T06:00:00Z' }, now)).toBe(
+      'open for 6 hours',
+    );
+    expect(regressionAge({ ...base, first_seen: '2026-11-20T12:00:00Z' }, now)).toBe(
+      'open for 3 days',
+    );
+  });
+
+  it('asks for a note that explains what was done, not one that dismisses it', () => {
+    expect(ackProblem('')).toContain('Say what was done');
+    expect(ackProblem('ok')).toContain('A few more words');
+    expect(ackProblem('Reverted the image change')).toBe('');
+  });
+
+  it('states the sample floor rather than implying a trend from four points', () => {
+    expect(trendHonesty(4, 30)).toContain('under the 30');
+    expect(trendHonesty(0, 30)).toContain('No measurements');
+    expect(trendHonesty(120, 30)).toBe('');
   });
 });

@@ -23,6 +23,9 @@ import {
   MAX_TEMPLATE_NAME,
   MAX_TEMPLATE_PURPOSE,
   certificateFilename,
+  chainFieldLabel,
+  describeChain,
+  describeVerification,
   draftProblems,
   draftToArgs,
   editCertificateProblems,
@@ -30,11 +33,16 @@ import {
   formatCertificateError,
   longDate,
   parseBatch,
+  parseRevocationHistory,
   registryState,
+  restoreProblems,
+  revocationSummary,
   resolvedBody,
   resolvedEditBody,
   revokeCertificateProblems,
   templateDraftProblems,
+  verificationSentence,
+  type ChainLink,
   type RegistryRow,
   type TemplateRow,
 } from './model';
@@ -485,5 +493,208 @@ describe('live certificate editing and template studio validation', () => {
         ),
       ),
     ).toContain('No member account matches');
+  });
+});
+
+describe('the amendment chain (§11.1)', () => {
+  const link = (over: Partial<ChainLink>): ChainLink => ({
+    code: 'BSDC-CT-ABCDEFGH-1',
+    revision: 1,
+    status: 'issued',
+    issued_on: '2026-03-01',
+    expires_on: '2027-03-01',
+    recipient_name: 'Rafiul Hasan',
+    subject: 'Full Stack',
+    reason: '',
+    edited_by: 'admin-uid',
+    edited_at: '2026-03-01T10:00:00Z',
+    changes: [],
+    ...over,
+  });
+
+  it('names each changed field in words a reader recognises', () => {
+    expect(chainFieldLabel('recipient_name')).toBe('Recipient');
+    expect(chainFieldLabel('expires_on')).toBe('Expiry');
+    expect(chainFieldLabel('template_key')).toBe('template key');
+  });
+
+  it('marks only the newest link as current', () => {
+    const chain = describeChain([
+      link({ revision: 3, status: 'issued' }),
+      link({ revision: 2, status: 'revoked' }),
+      link({ revision: 1, status: 'issued' }),
+    ]);
+    expect(chain.map((c) => c.current)).toEqual([true, false, false]);
+  });
+
+  it('turns an empty value into a dash rather than the word null', () => {
+    const chain = describeChain([
+      link({
+        revision: 2,
+        changes: [{ field: 'expires_on', from: null, to: '2028-01-01' }],
+      }),
+    ]);
+    expect(chain[0]?.changes[0]).toEqual({
+      label: 'Expiry',
+      from: '—',
+      to: '2028-01-01',
+    });
+  });
+
+  it('carries the reason and the actor with every link', () => {
+    const chain = describeChain([link({ reason: 'Distinction recorded', edited_by: 'mod-1' })]);
+    expect(chain[0]?.reason).toBe('Distinction recorded');
+    expect(chain[0]?.actor).toBe('mod-1');
+  });
+
+  it('does not invent a diff when the database supplied none', () => {
+    expect(describeChain([link({ changes: [] })])[0]?.changes).toEqual([]);
+  });
+});
+
+describe('the revocation a restore must keep (§11.1)', () => {
+  it('accepts a missing history as empty, not as a failure', () => {
+    expect(parseRevocationHistory(null)).toEqual({ records: [], malformed: false });
+    expect(parseRevocationHistory('')).toEqual({ records: [], malformed: false });
+  });
+
+  it('reads the array the database writes', () => {
+    const parsed = parseRevocationHistory([
+      {
+        revoked_at: '2026-04-01T00:00:00Z',
+        reason: 'Course completion not substantiated',
+        restored_at: '2026-05-01T00:00:00Z',
+        restored_by: 'admin-1',
+        restore_reason: 'Appeal upheld',
+      },
+    ]);
+    expect(parsed.malformed).toBe(false);
+    expect(parsed.records).toHaveLength(1);
+    expect(parsed.records[0]?.reason).toBe('Course completion not substantiated');
+  });
+
+  it('reads a JSON string, because a text driver hands one back', () => {
+    const parsed = parseRevocationHistory(
+      JSON.stringify([{ revoked_at: '2026-04-01T00:00:00Z', reason: 'r' }]),
+    );
+    expect(parsed.records).toHaveLength(1);
+  });
+
+  it('reports a malformed history rather than claiming never revoked', () => {
+    expect(parseRevocationHistory('{not json').malformed).toBe(true);
+    expect(parseRevocationHistory({ nope: true }).malformed).toBe(true);
+    expect(parseRevocationHistory([null]).malformed).toBe(true);
+  });
+
+  it('orders the ledger by when it happened', () => {
+    const parsed = parseRevocationHistory([
+      { revoked_at: '2026-06-01T00:00:00Z', reason: 'second' },
+      { revoked_at: '2026-04-01T00:00:00Z', reason: 'first' },
+    ]);
+    expect(parsed.records.map((r) => r.reason)).toEqual(['first', 'second']);
+  });
+
+  it('SKIPS an entry with no revocation date rather than dating it today', () => {
+    const parsed = parseRevocationHistory([
+      { reason: 'no date' },
+      { revoked_at: '2026-04-01T00:00:00Z' },
+    ]);
+    expect(parsed.records).toHaveLength(1);
+  });
+
+  it('says nothing when the certificate was never revoked', () => {
+    expect(revocationSummary([])).toBe('');
+  });
+
+  it('says how many times and why, in one sentence', () => {
+    const summary = revocationSummary([
+      {
+        revoked_at: '2026-04-01T00:00:00Z',
+        reason: 'not substantiated',
+        restored_at: '2026-05-01T00:00:00Z',
+        restored_by: 'admin-1',
+        restore_reason: 'Appeal upheld',
+      },
+    ]);
+    expect(summary).toContain('revoked once');
+    expect(summary).toContain('not substantiated');
+    expect(summary).toContain('Appeal upheld');
+  });
+
+  it('admits when a revocation carried no reason', () => {
+    const summary = revocationSummary([
+      {
+        revoked_at: '2026-04-01T00:00:00Z',
+        reason: '  ',
+        restored_at: '',
+        restored_by: '',
+        restore_reason: '',
+      },
+    ]);
+    expect(summary).toContain('no reason recorded');
+  });
+
+  it('needs a real reason to restore', () => {
+    expect(restoreProblems('')).toHaveLength(1);
+    expect(restoreProblems('  ok ')).toHaveLength(1);
+    expect(restoreProblems('Appeal upheld by the panel')).toEqual([]);
+    expect(restoreProblems('x'.repeat(301))).toHaveLength(1);
+  });
+});
+
+describe('what a person holding the paper is told (§11.1)', () => {
+  const state = (over: Partial<ReturnType<typeof describeVerification>>) => ({
+    kind: 'certificate',
+    found: true,
+    state: 'valid',
+    reason: '',
+    supersededBy: '',
+    hashMatches: true,
+    ...over,
+  });
+
+  it('tells a revoked document apart from one we never issued', () => {
+    expect(
+      verificationSentence(state({ state: 'revoked', reason: 'not substantiated' })),
+    ).toContain('revoked it: not substantiated');
+    expect(verificationSentence(state({ state: 'not_found', found: false }))).toContain(
+      'No document with that code',
+    );
+    // The two sentences must not be the same sentence.
+    expect(verificationSentence(state({ state: 'revoked' }))).not.toBe(
+      verificationSentence(state({ state: 'not_found', found: false })),
+    );
+  });
+
+  it('flags a record that no longer matches its own hash, without calling it a forgery', () => {
+    const sentence = verificationSentence(state({ hashMatches: false }));
+    expect(sentence).toContain('no longer matches');
+    expect(sentence).not.toContain('forg');
+  });
+
+  it('says a withdrawn notice was withdrawn', () => {
+    expect(
+      verificationSentence(state({ kind: 'notice', state: 'withdrawn', reason: 'postponed' })),
+    ).toContain('postponed');
+  });
+
+  it('normalises nulls from the RPC', () => {
+    expect(
+      describeVerification({
+        kind: 'certificate',
+        found: true,
+        state: 'valid',
+        reason: null,
+        superseded_by: null,
+        hash_matches: null,
+      }),
+    ).toEqual({
+      kind: 'certificate',
+      found: true,
+      state: 'valid',
+      reason: '',
+      supersededBy: '',
+      hashMatches: null,
+    });
   });
 });

@@ -63,8 +63,13 @@ function Histogram({
             onClick={() => onSelect(isSelected ? null : star)}
             className={`flex w-full items-center gap-2 rounded-lg px-1 py-0.5 text-left transition hover:bg-surface-2 ${isSelected ? 'bg-primary/10 ring-1 ring-primary/20' : ''}`}
           >
-            <span className="w-8 shrink-0 text-xs font-medium text-muted" aria-hidden>
-              {star} ★
+            <span className="flex w-8 shrink-0 items-center gap-0.5 text-xs font-medium text-muted">
+              {star}
+              {/* A drawn star, not a glyph: audit C-01 forbids emoji and
+                  font-dependent symbols in the interface, because they render
+                  differently on every platform and some of them are announced
+                  by screen readers as their codepoint. */}
+              <Star size={10} className="fill-rating text-rating" aria-hidden />
             </span>
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
               <div

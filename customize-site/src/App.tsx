@@ -14,8 +14,12 @@ import {
   callRpc,
   getDb,
   isValidSlug,
+  listRpc,
+  messageOf,
   moveSection,
   publishBlockers,
+  reasonMessage,
+  relativeTimeLabel,
   sectionKindLabel,
   slugify,
   toDataError,
@@ -26,11 +30,16 @@ import {
   type SectionKind,
 } from '@kit';
 import {
+  describeVersions,
   fieldText,
+  localSlugCheck,
   fieldsFor,
   newPayload,
+  publishProblems,
+  publishSummary,
   sectionSummary,
   toSection,
+  windowSummary,
   withField,
   type PageRow,
   type SectionRow,
@@ -53,7 +62,9 @@ export function App(): ReactElement {
 async function loadPages(env: CorporateEnv): Promise<readonly PageRow[]> {
   const { data, error } = await getDb(env)
     .from('custom_pages')
-    .select('id, slug, title, description, status, noindex, updated_at')
+    .select(
+      'id, slug, title, description, status, noindex, updated_at, current_version, publish_at, unpublish_at',
+    )
     .order('updated_at', { ascending: false });
   if (error) throw toDataError(error);
   return (data ?? []) as PageRow[];
@@ -137,9 +148,227 @@ function Pages(): ReactElement {
         </Card>
       )}
       {open && <Composer page={open} onChanged={reload} />}
+      {open && <PublishPanel page={open} onChanged={reload} />}
     </div>
   );
 }
+
+/**
+ * §12.2's publish panel.
+ *
+ * Publishing is the moment a page stops being a draft and starts being what a
+ * stranger sees, so the panel answers three questions before the button is pressed
+ * rather than after: what would stop it, when does it stop being published by itself,
+ * and what did the last three publishes look like.
+ */
+function PublishPanel({ page, onChanged }: { page: PageRow; onChanged: () => void }): ReactElement {
+  const env = useCorporateEnv();
+  const [unpublishAt, setUnpublishAt] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+  const [result, setResult] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const versions = useAsync(
+    useCallback(
+      () => listRpc<VersionRow>(env, 'custom_page_versions', { p_page_id: page.id }),
+      [env, page.id],
+    ),
+    [env, page.id],
+  );
+
+  const raw = useAsync(
+    useCallback(async () => {
+      const { data, error: cause } = await getDb(env)
+        .from('page_sections')
+        .select('kind, position, payload, is_visible')
+        .eq('page_id', page.id)
+        .order('position', { ascending: true });
+      if (cause) throw toDataError(cause);
+      return (data ?? []) as readonly {
+        kind: SectionKind;
+        position: number;
+        payload: Record<string, unknown>;
+        is_visible: boolean;
+      }[];
+    }, [env, page.id]),
+    [env, page.id],
+  );
+
+  const problems = raw.state.status === 'ready' ? publishProblems(raw.state.data) : [];
+  const sectionCount = raw.state.status === 'ready' ? raw.state.data.length : 0;
+  const canPublish = raw.state.status === 'ready' && problems.length === 0 && sectionCount > 0;
+
+  const publish = (): void => {
+    setError('');
+    setResult('');
+    setBusy(true);
+    callRpc(env, 'publish_custom_page', {
+      p_page_id: page.id,
+      p_publish_at: null,
+      p_unpublish_at: unpublishAt === '' ? null : new Date(unpublishAt).toISOString(),
+    })
+      .then(() => {
+        setResult(
+          unpublishAt === ''
+            ? 'Published. It stays published until somebody changes it.'
+            : `Published, and it will unpublish itself at ${unpublishAt}.`,
+        );
+        onChanged();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setBusy(false));
+  };
+
+  const revert = (version: number): void => {
+    const issue = reasonMessage(reason);
+    if (issue !== null) {
+      setError(issue);
+      return;
+    }
+    setError('');
+    setResult('');
+    setBusy(true);
+    callRpc(env, 'revert_custom_page', {
+      p_page_id: page.id,
+      p_version: version,
+      p_reason: reason.trim(),
+    })
+      .then(() => {
+        // A revert deliberately leaves the page as a draft: republishing it through
+        // the validator is a separate decision, because a version that was valid in
+        // March is not automatically valid now.
+        setResult(
+          `Reverted to version ${String(version)}. The page is a draft again — publish it to put it back on the site.`,
+        );
+        setReason('');
+        onChanged();
+      })
+      .catch((cause: unknown) => setError(messageOf(cause)))
+      .finally(() => setBusy(false));
+  };
+
+  const views =
+    versions.state.status === 'ready'
+      ? describeVersions(versions.state.data, page.current_version ?? 0)
+      : [];
+
+  return (
+    <Card
+      title="Publish"
+      description="A page goes live only when every section passes its own check, and it can be given an end date so it takes itself down."
+    >
+      <div className="kit-stack">
+        {error !== '' && (
+          <Banner tone="bad" title="Not published">
+            {error}
+          </Banner>
+        )}
+        {result !== '' && (
+          <Banner tone="ok" title="Done">
+            {result}
+          </Banner>
+        )}
+
+        {page.status === 'published' && (
+          <Banner tone="ok" title="This page is live">
+            {windowSummary(page.publish_at ?? null, page.unpublish_at ?? null)}
+          </Banner>
+        )}
+
+        {problems.length > 0 && (
+          <Banner
+            tone="warn"
+            title={`${String(problems.length)} section(s) would stop the publish`}
+          >
+            <ul className="kit-small">
+              {problems.map((problem) => (
+                <li key={`${String(problem.position)}-${problem.kind}`}>
+                  Section {String(problem.position + 1)} ({sectionKindLabel(problem.kind)}):{' '}
+                  {problem.problem}
+                </li>
+              ))}
+            </ul>
+          </Banner>
+        )}
+
+        <p className="kit-small">{publishSummary(problems, sectionCount, unpublishAt)}</p>
+
+        <div className="kit-grid kit-grid--2">
+          <Field
+            label="Unpublish at (optional)"
+            type="datetime-local"
+            hint="A page with an end takes itself down. A page without one stays up until somebody remembers."
+            value={unpublishAt}
+            onChange={(event) => setUnpublishAt(event.target.value)}
+          />
+          <Field
+            label="Reason (for a revert)"
+            hint="Stored with the new version. At least twelve characters, and about something specific."
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
+
+        <div className="kit-row">
+          <Button size="small" disabled={busy || !canPublish} onClick={publish}>
+            {busy ? 'Working' : page.status === 'published' ? 'Republish' : 'Publish'}
+          </Button>
+        </div>
+
+        <p className="kit-hint">
+          Publishing writes a version. Every version is kept, and reverting writes a new one rather
+          than deleting the ones after it — so a wrong revert is itself revertible.
+        </p>
+
+        {versions.state.status === 'error' && (
+          <Banner tone="bad" title="Could not read the version history">
+            {versions.state.message}
+          </Banner>
+        )}
+        {views.length === 0 && versions.state.status === 'ready' && (
+          <Empty>This page has never been published.</Empty>
+        )}
+        {views.length > 0 && (
+          <div className="kit-stack">
+            {views.map((view) => (
+              <div key={view.version} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+                <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+                  <Badge tone={view.current ? 'ok' : 'neutral'}>
+                    Version {view.version}
+                    {view.current ? ' · current' : ''}
+                  </Badge>
+                  <span className="kit-small kit-muted">{relativeTimeLabel(view.at)}</span>
+                </div>
+                <p className="kit-small kit-muted">
+                  {view.sectionCount} section{view.sectionCount === 1 ? '' : 's'}
+                  {view.note === '' ? '' : ` · ${view.note}`}
+                </p>
+                {!view.current && (
+                  <Button
+                    size="small"
+                    variant="quiet"
+                    disabled={busy}
+                    onClick={() => revert(view.version)}
+                  >
+                    Revert to this version
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+type VersionRow = {
+  readonly version: number;
+  readonly created_at: string;
+  readonly note: string;
+  readonly sections: readonly unknown[];
+};
 
 function NewPage({ onCreated }: { onCreated: () => void }): ReactElement {
   const env = useCorporateEnv();
@@ -149,6 +378,9 @@ function NewPage({ onCreated }: { onCreated: () => void }): ReactElement {
   const [busy, setBusy] = useState(false);
 
   const effectiveSlug = slug === '' ? slugify(title) : slug;
+  // §12.2's reserved-path guard, checked here so an editor sees the collision as they
+  // type. The database holds the authoritative list and refuses again on save.
+  const local = localSlugCheck(effectiveSlug);
   const slugProblem = effectiveSlug !== '' && !isValidSlug(effectiveSlug);
 
   const create = (): void => {
@@ -190,7 +422,13 @@ function NewPage({ onCreated }: { onCreated: () => void }): ReactElement {
         <Field
           label="Address"
           hint={effectiveSlug === '' ? 'Lower-case words joined by hyphens.' : `/${effectiveSlug}`}
-          error={slugProblem ? 'Use lower-case words joined by single hyphens.' : undefined}
+          error={
+            slugProblem
+              ? 'Use lower-case words joined by single hyphens.'
+              : effectiveSlug !== '' && !local.available
+                ? local.reason
+                : undefined
+          }
           value={slug}
           placeholder={slugify(title)}
           onChange={(event) => {
@@ -199,10 +437,7 @@ function NewPage({ onCreated }: { onCreated: () => void }): ReactElement {
         />
       </div>
       <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
-        <Button
-          disabled={busy || title.trim().length < 2 || !isValidSlug(effectiveSlug)}
-          onClick={create}
-        >
+        <Button disabled={busy || title.trim().length < 2 || !local.available} onClick={create}>
           {busy ? 'Creating' : 'Create page'}
         </Button>
       </div>

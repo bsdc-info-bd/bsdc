@@ -83,8 +83,8 @@ body {
   margin: 0;
   background: var(--c-bg);
   color: var(--c-text);
-  font-family:
-    ui-sans-serif, system-ui, 'Segoe UI', 'Noto Sans Bengali', 'Hind Siliguri', sans-serif;
+  font-family: ui-sans-serif, system-ui, 'Segoe UI', 'Noto Sans Bengali', 'Hind Siliguri',
+    sans-serif;
   font-size: clamp(13px, 0.35vw + 12.5px, 15.5px);
   line-height: 1.55;
   -webkit-text-size-adjust: 100%;
@@ -147,6 +147,10 @@ a:hover {
 .kit-skip:focus {
   left: var(--sp-2);
   top: var(--sp-2);
+  /* This is the first keyboard stop; a visible position without a visible
+     focus indicator would make the skip link a dead end for low-vision users. */
+  outline: 2px solid var(--c-accent);
+  outline-offset: 2px;
 }
 
 /* ---------------------------- frame & header ----------------------------- */
@@ -983,6 +987,28 @@ a:hover {
   border-color: var(--c-danger);
 }
 
+/* --------------------------- recovery banner ---------------------------- */
+/* A deploy that broke this tab is worth a line above the workspace, not a
+   modal: the operator should be able to keep reading what is already on screen
+   while they decide to reload. */
+.kit-recovery-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  margin: var(--sp-2) var(--sp-4) 0;
+}
+
+.kit-recovery-banner > .kit-banner {
+  flex: 1 1 auto;
+}
+
+@media (max-width: 40rem) {
+  .kit-recovery-banner {
+    margin-inline: var(--sp-2);
+    flex-direction: column;
+  }
+}
+
 /* ------------------------------- tables --------------------------------- */
 .kit-tablewrap {
   overflow-x: auto;
@@ -1200,6 +1226,354 @@ a:hover {
   border-radius: 999px;
   border: 2px solid var(--c-accent);
   background: #ffffff;
+}
+
+/* ------------------------------- datatable ------------------------------ */
+.kit-datatable {
+  display: grid;
+  gap: var(--sp-2);
+}
+
+.kit-datatable-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+.kit-table td[data-align='end'],
+.kit-table th[data-align='end'] {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.kit-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.kit-sort-mark {
+  opacity: 0.55;
+  font-size: 0.7em;
+}
+
+.kit-sort:hover .kit-sort-mark {
+  opacity: 1;
+}
+
+.kit-table tbody tr[role='button'] {
+  cursor: pointer;
+}
+
+.kit-table tbody tr[role='button']:hover {
+  background: var(--c-surface-2);
+}
+
+.kit-table tbody tr.kit-row-selected {
+  background: var(--c-accent-soft);
+  box-shadow: inset 3px 0 0 var(--c-accent);
+}
+
+.kit-table-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-danger);
+  background: var(--c-surface-2);
+  flex-wrap: wrap;
+}
+
+.kit-pagebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+/* Below 40rem the secondary columns go: a table that scrolls sideways on a
+   phone is a table nobody reads. The identifying column always survives. */
+@media (max-width: 40rem) {
+  .kit-table [data-hide='md'],
+  .kit-table [data-hide='sm'] {
+    display: none;
+  }
+}
+
+/* -------------------------------- toasts -------------------------------- */
+/* Two live regions, stacked bottom-end. Errors sit above successes because a
+   refusal is the thing the operator must not miss; both are anchored to the
+   same corner so the eye knows where feedback appears. */
+.kit-toast-region {
+  position: fixed;
+  inset-block-end: var(--sp-4);
+  inset-inline-end: var(--sp-4);
+  z-index: 60;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--sp-2);
+  max-width: min(28rem, calc(100vw - 2 * var(--sp-4)));
+  pointer-events: none;
+}
+
+/* The error region is offset upward when a success toast is present, so the
+   two lists never overlap. */
+.kit-toast-region--polite {
+  inset-block-end: var(--sp-4);
+  z-index: 59;
+}
+
+.kit-toast-list {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kit-toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--c-line);
+  border-inline-start: 3px solid var(--c-muted);
+  background: var(--c-surface);
+  box-shadow: var(--shadow);
+  animation: kit-toast-in 160ms ease-out;
+}
+
+@keyframes kit-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.kit-toast--ok {
+  border-inline-start-color: var(--c-ok);
+}
+
+.kit-toast--warn {
+  border-inline-start-color: var(--c-warn);
+}
+
+.kit-toast--bad {
+  border-inline-start-color: var(--c-danger);
+}
+
+.kit-toast--info {
+  border-inline-start-color: var(--c-accent);
+}
+
+.kit-toast-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.kit-toast-message {
+  margin: 0;
+  font-weight: 600;
+  /* Long ids and names must wrap rather than widen the toast past its max. */
+  overflow-wrap: anywhere;
+}
+
+.kit-toast-detail {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--c-muted);
+  overflow-wrap: anywhere;
+}
+
+.kit-toast-close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--c-muted);
+  cursor: pointer;
+}
+
+.kit-toast-close:hover {
+  background: var(--c-surface-2);
+  color: var(--c-text);
+}
+
+/* --------------------------------- modal -------------------------------- */
+.kit-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-4);
+  background: color-mix(in srgb, #000000 45%, transparent);
+  overflow-y: auto;
+}
+
+.kit-modal {
+  width: min(38rem, 100%);
+  max-height: calc(100dvh - 2 * var(--sp-4));
+  overflow-y: auto;
+  display: grid;
+  gap: var(--sp-3);
+  padding: var(--sp-5);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--c-line);
+  background: var(--c-surface);
+  box-shadow: var(--shadow);
+}
+
+.kit-modal-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.kit-modal-summary {
+  margin: 0;
+  color: var(--c-muted);
+}
+
+.kit-modal-warning {
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  border: 1px solid var(--c-danger);
+  background: var(--c-surface-2);
+}
+
+.kit-modal-field {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.kit-modal-diff {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.kit-modal-diff .kit-table {
+  min-width: 0;
+}
+
+.kit-modal-body {
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.kit-diff-before {
+  color: var(--c-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--c-muted);
+  overflow-wrap: anywhere;
+}
+
+.kit-diff-after {
+  color: var(--c-text);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.kit-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  padding-block-start: var(--sp-2);
+  border-block-start: 1px solid var(--c-line);
+}
+
+/* ------------------------------ freshness ------------------------------- */
+.kit-fresh {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: 0.75rem;
+  color: var(--c-muted);
+}
+
+.kit-fresh-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--c-muted);
+  flex: none;
+}
+
+.kit-fresh--live .kit-fresh-dot {
+  background: var(--c-ok);
+}
+
+.kit-fresh--aging .kit-fresh-dot {
+  background: var(--c-warn);
+}
+
+.kit-fresh--stale .kit-fresh-dot,
+.kit-fresh--unknown .kit-fresh-dot {
+  background: var(--c-danger);
+}
+
+.kit-fresh--aging,
+.kit-fresh--stale {
+  color: var(--c-text);
+}
+
+/* --------------------------- narrow screens ----------------------------- */
+/* At 250px a toast must not become a column of clipped messages, and a modal
+   must not be wider than the screen it is on. */
+@media (max-width: 30rem) {
+  .kit-toast-region,
+  .kit-toast-region--polite {
+    inset-inline: var(--sp-2);
+    inset-block-end: var(--sp-2);
+    max-width: none;
+  }
+
+  .kit-modal-backdrop {
+    padding: var(--sp-2);
+    place-items: end stretch;
+  }
+
+  .kit-modal {
+    width: 100%;
+    padding: var(--sp-4);
+    border-radius: var(--r-md);
+  }
+
+  .kit-modal-actions {
+    /* Full-width buttons: a 44px target is a rule, not a preference. */
+    flex-direction: column-reverse;
+  }
+
+  .kit-modal-actions > * {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

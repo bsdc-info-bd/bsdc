@@ -60,6 +60,64 @@ export const CLI_COMMANDS: readonly CliCommandSpec[] = [
     summary: 'Query the immutable Postgres audit ledger with structured filters',
   },
   {
+    signature: 'case queue [--status <open|pending|closed>]',
+    command: 'case queue',
+    category: 'governance',
+    summary: 'Read the case queue: reopened first, then the oldest',
+  },
+  {
+    signature: 'case show <id>',
+    command: 'case show',
+    category: 'governance',
+    summary: 'Read one case: its reports, its timeline and its outcome',
+  },
+  {
+    signature: 'case note <id> "<text>"',
+    command: 'case note',
+    category: 'governance',
+    // Not destructive: it adds an entry and can alter nothing that exists. The
+    // timeline's append-only guarantee is what makes that true, so this is the one
+    // write in the family that needs no confirmation.
+    summary: 'Add an immutable note to a case timeline',
+  },
+  {
+    signature: 'case close <id> <outcome> [--reason "<text>"]',
+    command: 'case close',
+    category: 'governance',
+    summary: 'Close a case with an outcome, and tell the member unless nothing was done',
+    destructive: true,
+  },
+  {
+    signature: 'standing <uid>',
+    command: 'standing',
+    category: 'governance',
+    summary: 'Read a member standing: the cached number, the ledger number, and whether they agree',
+  },
+  {
+    signature: 'standing reconcile',
+    command: 'standing reconcile',
+    category: 'governance',
+    summary: 'List every member whose cached standing disagrees with the ledger',
+  },
+  {
+    signature: 'receipt <id>',
+    command: 'receipt',
+    category: 'governance',
+    summary: 'Read one action receipt by id',
+  },
+  {
+    signature: 'seo coverage [--limit <n>]',
+    command: 'seo coverage',
+    category: 'telemetry',
+    summary: 'List pages whose SEO override is missing, thin or stale',
+  },
+  {
+    signature: 'seo missing [--limit <n>]',
+    command: 'seo missing',
+    category: 'telemetry',
+    summary: 'List paths that are being asked for and are not there',
+  },
+  {
     signature: 'approvals list',
     command: 'approvals list',
     category: 'governance',
@@ -168,6 +226,36 @@ export const CLI_COMMANDS: readonly CliCommandSpec[] = [
     summary: 'Delete a saved macro by UUID',
     destructive: true,
   },
+  // Bulk verbs. Every one of them is two commands in one grammar, because the
+  // first half is the part people skip: nothing is written until a plan has been
+  // printed and its id has been handed back to `bulk apply`.
+  {
+    signature:
+      'bulk plan <subject> <action> --reason <text> [--status <s>] [--search <text>] [--older-than <days>]',
+    command: 'bulk plan',
+    category: 'governance',
+    summary:
+      'Preview a bulk decision without writing anything, and print the plan id that `bulk apply` needs',
+  },
+  {
+    signature: 'bulk apply <plan-id>',
+    command: 'bulk apply',
+    category: 'governance',
+    summary: 'Run a plan that was previewed, skipping any row that changed since',
+    destructive: true,
+  },
+  {
+    signature: 'bulk plans [--limit <n>]',
+    command: 'bulk plans',
+    category: 'governance',
+    summary: 'List recent plans, who made them, and what they did',
+  },
+  {
+    signature: 'bulk show <plan-id>',
+    command: 'bulk show',
+    category: 'governance',
+    summary: 'Read every row a plan would touch, with the reason each one is or is not applicable',
+  },
 ];
 
 export interface ParsedCliInput {
@@ -274,4 +362,140 @@ export function splitMacroLines(script: string): readonly string[] {
     .split(/\r?\n|;/)
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.startsWith('#'));
+}
+
+/** The subjects a bulk verb accepts, and the actions each one allows. */
+export const BULK_SUBJECTS = {
+  shops: ['approve', 'refuse'],
+  campaigns: ['approve', 'refuse'],
+  reports: ['resolve', 'dismiss'],
+  posts: ['hide', 'restore'],
+} as const;
+
+export type BulkSubject = keyof typeof BULK_SUBJECTS;
+export type BulkAction = (typeof BULK_SUBJECTS)[BulkSubject][number];
+
+/** What `bulk plan` resolved to, ready to hand to `bulk_plan`. */
+export interface BulkPlanRequest {
+  readonly subject: BulkSubject;
+  readonly action: BulkAction;
+  readonly reason: string;
+  readonly selector: Record<string, unknown>;
+}
+
+export interface BulkPlanParse {
+  readonly request?: BulkPlanRequest | undefined;
+  readonly error?: string | undefined;
+}
+
+/**
+ * Turns a `bulk plan` line into the arguments the RPC takes, or explains why it
+ * cannot.
+ *
+ * Written as a pure function with its own errors rather than letting the console
+ * make the round trip and report the database's refusal, for one reason: half of
+ * these mistakes are knowable before any network call, and a tool that asks the
+ * database whether `bulk plan shops delete` is spelled correctly is a tool that
+ * feels slow for no gain. The database still checks everything — this only avoids
+ * the pointless trip.
+ *
+ * The reason floor is twelve characters, matching the database exactly. A console
+ * that accepted ten would produce a plan the server then refuses, which reads to
+ * the operator as the tool being broken.
+ */
+export const BULK_REASON_MIN = 12;
+
+export function parseBulkPlan(input: ParsedCliInput): BulkPlanParse {
+  // `positional` is [bulk, plan, <subject>, <action>]: the grammar is two words
+  // before the arguments, and an earlier draft read one word too few.
+  const [verb, sub, subjectRaw, actionRaw] = input.positional;
+  if (verb !== 'bulk' || sub !== 'plan') {
+    return { error: 'Usage: bulk plan <subject> <action> --reason <text>' };
+  }
+  if (subjectRaw === undefined || actionRaw === undefined) {
+    return { error: 'Usage: bulk plan <subject> <action> --reason <text>' };
+  }
+
+  const subject = subjectRaw.toLowerCase();
+  if (!(subject in BULK_SUBJECTS)) {
+    return {
+      error: `Unknown subject "${subjectRaw}". One of: ${Object.keys(BULK_SUBJECTS).join(', ')}.`,
+    };
+  }
+  const typedSubject = subject as BulkSubject;
+
+  const action = actionRaw.toLowerCase();
+  const allowed: readonly string[] = BULK_SUBJECTS[typedSubject];
+  if (!allowed.includes(action)) {
+    return {
+      // The refusal lists what the subject does allow, because "invalid action"
+      // makes the operator guess and guessing is what a CLI should remove.
+      error: `"${actionRaw}" is not something you can do to ${typedSubject}. Allowed: ${allowed.join(', ')}.`,
+    };
+  }
+
+  const reason = typeof input.flags.reason === 'string' ? input.flags.reason.trim() : '';
+  if (reason.length < BULK_REASON_MIN) {
+    return {
+      error: `A reason of at least ${String(BULK_REASON_MIN)} characters is required, and it is read by somebody who was not here.`,
+    };
+  }
+
+  const selector: Record<string, unknown> = {};
+  if (typeof input.flags.status === 'string') selector.status = input.flags.status;
+  if (typeof input.flags.search === 'string') selector.search = input.flags.search;
+  if (typeof input.flags['older-than'] === 'string') {
+    const days = Number(input.flags['older-than']);
+    if (!Number.isFinite(days) || days < 0) {
+      return {
+        error: '--older-than takes a number of days, and a negative number of days is not a thing.',
+      };
+    }
+    selector.olderThanDays = Math.floor(days);
+  }
+  if (typeof input.flags.limit === 'string') {
+    const limit = Number(input.flags.limit);
+    if (!Number.isFinite(limit) || limit < 1) {
+      return { error: '--limit takes a positive whole number.' };
+    }
+    selector.limit = Math.floor(limit);
+  }
+
+  return {
+    request: {
+      subject: typedSubject,
+      action: action as BulkAction,
+      reason,
+      selector,
+    },
+  };
+}
+
+/**
+ * The command that would apply a plan, printed after the plan is made.
+ *
+ * The point is that the operator copies one line rather than remembering an id.
+ * A tool that says "plan 7f3a-…" and leaves the operator to construct the apply
+ * command is a tool that gets an apply command wrong.
+ */
+export function bulkApplyHint(planId: string): string {
+  return `bulk apply ${planId}`;
+}
+
+/**
+ * Whether a `bulk apply` line is complete enough to send.
+ *
+ * Deliberately not a uuid check: the RPC takes a uuid and Postgres validates it
+ * better than a regex this file would have to keep in step with. What is checked
+ * is the thing the server cannot: that an id was given at all.
+ */
+export function parseBulkApply(input: ParsedCliInput): {
+  readonly planId?: string | undefined;
+  readonly error?: string | undefined;
+} {
+  const [, sub, id] = input.positional;
+  if (sub !== 'apply' || id === undefined || id.trim() === '' || id.startsWith('--')) {
+    return { error: 'Usage: bulk apply <plan-id>. The id is printed by `bulk plan`.' };
+  }
+  return { planId: id.trim() };
 }

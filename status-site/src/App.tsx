@@ -29,15 +29,23 @@ import {
   type ServiceSummary,
 } from '@kit';
 import {
+  actionState,
+  boardSentence,
   buildTimelines,
   byCategory,
+  declareProblems,
+  drillLabel,
   impactTone,
   openFor,
+  postmortemProblem,
+  publicTitle,
   resolutionProblems,
   sortIncidents,
   uptimeOf,
   type CheckRow,
+  type IncidentAction,
   type IncidentRow,
+  type IncidentRowV2,
   type UptimeRow,
 } from './model';
 
@@ -78,12 +86,262 @@ async function loadBoard(env: CorporateEnv): Promise<Board> {
     .select('service_key, day, ok_count, fail_count')
     .gte('day', since.toISOString().slice(0, 10));
   if (error) throw toDataError(error);
-  const incidents = await listRpc<IncidentRow>(env, 'status_incidents', { p_limit: 25 });
+  // `status_incidents` predates the public/internal split, so the console reads
+  // the function that carries both. A screen using the old one could not show a
+  // public title, and would silently fall back to the internal one.
+  const incidents = await listRpc<IncidentRowV2>(env, 'incidents_with_updates', { p_limit: 25 });
   return {
     services,
     timelines: buildTimelines(services, (data ?? []) as CheckRow[], WINDOW_DAYS),
     incidents,
   };
+}
+
+/** §13.2 — declaring: two titles, two bodies, and a drill that tells nobody. */
+function Declare({
+  services,
+  onDeclared,
+}: {
+  services: readonly UptimeRow[];
+  onDeclared: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [serviceKey, setServiceKey] = useState(services[0]?.service_key ?? '');
+  const [title, setTitle] = useState('');
+  const [publicTitle, setPublicTitle] = useState('');
+  const [impact, setImpact] = useState('major');
+  const [publicBody, setPublicBody] = useState('');
+  const [internal, setInternal] = useState('');
+  const [drill, setDrill] = useState(false);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const problems = declareProblems({ title, publicTitle, publicBody });
+
+  const declare = (): void => {
+    if (problems.length > 0) return;
+    setBusy(true);
+    setError('');
+    callRpc(env, 'declare_incident', {
+      p_service_key: serviceKey,
+      p_title: title.trim(),
+      p_public_title: publicTitle.trim(),
+      p_impact: impact,
+      p_public_body: publicBody.trim(),
+      p_internal: internal.trim(),
+      p_drill: drill,
+    })
+      .then(() => {
+        setTitle('');
+        setPublicTitle('');
+        setPublicBody('');
+        setInternal('');
+        onDeclared();
+      })
+      .catch((cause: unknown) => {
+        setError(messageOf(cause));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  return (
+    <Card
+      title="Declare an incident"
+      description="Two boxes, never one: the sentence a customer reads is a different field from the note for staff. Declaring also opens a private staff channel and notifies whoever may write incidents."
+    >
+      {error !== '' && (
+        <Banner tone="bad" title="The incident was not declared">
+          {error}
+        </Banner>
+      )}
+      <div className="kit-grid">
+        <Select
+          label="Service"
+          value={serviceKey}
+          onChange={(event) => {
+            setServiceKey(event.target.value);
+          }}
+          options={services.map((row) => ({ value: row.service_key, label: row.service_key }))}
+        />
+        <Select
+          label="Impact"
+          value={impact}
+          onChange={(event) => {
+            setImpact(event.target.value);
+          }}
+          options={[
+            { value: 'none', label: 'None' },
+            { value: 'minor', label: 'Minor' },
+            { value: 'major', label: 'Major' },
+            { value: 'critical', label: 'Critical' },
+          ]}
+        />
+        <Select
+          label="Rehearsal?"
+          hint="A drill runs the whole flow and notifies nobody."
+          value={drill ? 'drill' : 'real'}
+          onChange={(event) => {
+            setDrill(event.target.value === 'drill');
+          }}
+          options={[
+            { value: 'real', label: 'A real incident' },
+            { value: 'drill', label: 'A drill' },
+          ]}
+        />
+        <Field
+          label="Internal title"
+          hint="For staff. Names the system, not the customer experience."
+          value={title}
+          onChange={(event) => {
+            setTitle(event.target.value);
+          }}
+        />
+        <Field
+          label="Public title"
+          hint="Shown on the status board without context, so it has to stand alone."
+          value={publicTitle}
+          onChange={(event) => {
+            setPublicTitle(event.target.value);
+          }}
+        />
+      </div>
+      <TextArea
+        label="What customers should read"
+        hint="At least a sentence. This is the only thing the public board shows."
+        value={publicBody}
+        onChange={(event) => {
+          setPublicBody(event.target.value);
+        }}
+      />
+      <TextArea
+        label="Internal note"
+        hint="Staff only. Speculation belongs here, and is never copied to the public body automatically."
+        value={internal}
+        onChange={(event) => {
+          setInternal(event.target.value);
+        }}
+      />
+      <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
+        <Button
+          variant={drill ? 'quiet' : 'danger'}
+          disabled={busy || problems.length > 0}
+          onClick={declare}
+        >
+          {busy ? 'Declaring' : drill ? 'Run the drill' : 'Declare incident'}
+        </Button>
+        {problems.length > 0 && <span className="kit-hint">{problems[0]}</span>}
+      </div>
+    </Card>
+  );
+}
+
+/** §13.2 — the action list, tracked to closure, with who and when. */
+function Actions({
+  incidentId,
+  onChanged,
+}: {
+  incidentId: string;
+  onChanged: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    () => listRpc<IncidentAction>(env, 'incident_actions_for', { p_incident_id: incidentId }),
+    [env, incidentId],
+  );
+  const { state, reload } = useAsync(load, [env, incidentId]);
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState('');
+
+  if (state.status === 'loading') return <Loading label="Loading actions." />;
+  if (state.status === 'error') {
+    return (
+      <Banner tone="bad" title="Actions did not load">
+        {state.message}
+      </Banner>
+    );
+  }
+  if (state.data.length === 0) {
+    return (
+      <p className="kit-small kit-muted">
+        No action was opened. An incident that closes with nothing to do next is either trivial or
+        was not understood.
+      </p>
+    );
+  }
+
+  return (
+    <div className="kit-stack">
+      {error !== '' && (
+        <Banner tone="bad" title="The action was not closed">
+          {error}
+        </Banner>
+      )}
+      {state.data.map((action) => {
+        const state = actionStateLabel(action);
+        return (
+          <div key={action.id}>
+            <p className="kit-small" style={{ margin: 0 }}>
+              <Badge tone={state === 'late' ? 'bad' : state === 'done' ? 'ok' : 'warn'}>
+                {state}
+              </Badge>{' '}
+              {action.body}{' '}
+              <span className="kit-muted">
+                due {action.due_on}
+                {action.done_at === null ? '' : ` — ${action.done_note}`}
+              </span>
+            </p>
+            {action.done_at === null && (
+              <div className="kit-row" style={{ marginTop: 'var(--sp-1)' }}>
+                <Field
+                  label="What closing it delivered"
+                  value={busyId === action.id ? note : note}
+                  onChange={(event) => {
+                    setBusyId(action.id);
+                    setNote(event.target.value);
+                  }}
+                />
+                <Button
+                  size="small"
+                  disabled={note.trim().length < 5 || busyId !== action.id}
+                  onClick={() => {
+                    callRpc(env, 'complete_incident_action', {
+                      p_id: action.id,
+                      p_note: note.trim(),
+                    })
+                      .then(() => {
+                        setNote('');
+                        setBusyId('');
+                        reload();
+                        onChanged();
+                      })
+                      .catch((cause: unknown) => {
+                        setError(messageOf(cause));
+                      });
+                  }}
+                >
+                  Close it
+                </Button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function actionStateLabel(action: IncidentAction): string {
+  const state = actionState(action);
+  return state === 'done'
+    ? 'done'
+    : state === 'late'
+      ? 'late'
+      : state === 'due'
+        ? 'due today'
+        : 'open';
 }
 
 function Status(): ReactElement {
@@ -169,6 +427,8 @@ function Status(): ReactElement {
         )}
       </Card>
 
+      {canResolve && <Declare services={state.data.services} onDeclared={reload} />}
+
       {meetsRole(profile, 'moderator') && (
         <Operations services={state.data.services} onChanged={reload} />
       )}
@@ -236,7 +496,7 @@ function Incident({
   onChanged,
   canResolve,
 }: {
-  incident: IncidentRow;
+  incident: IncidentRowV2;
   onChanged: () => void;
   canResolve: boolean;
 }): ReactElement {
@@ -253,7 +513,11 @@ function Incident({
     }
     setBusy(true);
     setError('');
-    callRpc(env, 'resolve_incident', { p_incident_id: incident.id, p_body: note.trim() })
+    callRpc(env, 'resolve_with_summary', {
+      p_incident_id: incident.id,
+      p_summary: note.trim(),
+      p_actions: [],
+    })
       .then(() => {
         setNote('');
         onChanged();
@@ -267,16 +531,29 @@ function Incident({
   };
 
   return (
-    <article className="kit-card">
+    <article
+      id={incident.public_slug ? `incident-${encodeURIComponent(incident.public_slug)}` : undefined}
+      className="kit-card"
+    >
       <div className="kit-row" style={{ justifyContent: 'space-between' }}>
-        <strong>{incident.title}</strong>
+        <strong>{publicTitle(incident)}</strong>
         <span className="kit-row">
+          {incident.is_drill === true && <Badge tone="warn">{drillLabel(incident)}</Badge>}
           <Badge tone={impactTone(incident.impact)}>{incident.impact}</Badge>
           <Badge tone={incident.resolved_at === null ? 'bad' : 'ok'}>
             {incident.resolved_at === null ? 'open' : 'resolved'}
           </Badge>
         </span>
       </div>
+      <p className="kit-small" style={{ marginBlock: 'var(--sp-1)' }}>
+        {boardSentence(incident)}
+      </p>
+      {incident.summary !== undefined && incident.summary !== '' && (
+        <p className="kit-small" style={{ marginBlock: 'var(--sp-1)' }}>
+          <strong>Resolution: </strong>
+          {incident.summary}
+        </p>
+      )}
       <p className="kit-small kit-muted">
         {new Date(incident.started_at).toLocaleString('en-GB')} —{' '}
         {incident.resolved_at === null
@@ -294,6 +571,13 @@ function Incident({
           </li>
         ))}
       </ol>
+
+      <details className="kit-small" style={{ marginTop: 'var(--sp-2)' }}>
+        <summary>Action list</summary>
+        <Actions incidentId={incident.id} onChanged={onChanged} />
+      </details>
+
+      {canResolve && <Postmortem incident={incident} onChanged={onChanged} />}
 
       {incident.resolved_at === null && canResolve ? (
         <div className="kit-stack" style={{ marginTop: 'var(--sp-3)' }}>
@@ -319,6 +603,72 @@ function Incident({
         </div>
       ) : null}
     </article>
+  );
+}
+
+/** §13.2 — a post-mortem after the fact, and a sentence about what would have caught it. */
+function Postmortem({
+  incident,
+  onChanged,
+}: {
+  incident: IncidentRowV2;
+  onChanged: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [body, setBody] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const problem = postmortemProblem(body, incident.resolved_at ?? null);
+  const written = (incident.postmortem ?? '') !== '';
+
+  return (
+    <details className="kit-small" style={{ marginTop: 'var(--sp-2)' }}>
+      <summary>{written ? 'Post-incident review' : 'Write a post-incident review'}</summary>
+      {written ? (
+        <p className="kit-small" style={{ whiteSpace: 'pre-wrap' }}>
+          {incident.postmortem}
+        </p>
+      ) : (
+        <div className="kit-stack" style={{ marginTop: 'var(--sp-2)' }}>
+          {error !== '' && (
+            <Banner tone="bad" title="The review was not saved">
+              {error}
+            </Banner>
+          )}
+          <TextArea
+            label="What happened, why, and what would have caught it"
+            value={body}
+            onChange={(event) => {
+              setBody(event.target.value);
+            }}
+          />
+          <div className="kit-row">
+            <Button
+              size="small"
+              disabled={busy || problem !== ''}
+              onClick={() => {
+                setBusy(true);
+                setError('');
+                callRpc(env, 'record_postmortem', {
+                  p_incident_id: incident.id,
+                  p_body: body.trim(),
+                })
+                  .then(onChanged)
+                  .catch((cause: unknown) => {
+                    setError(messageOf(cause));
+                  })
+                  .finally(() => {
+                    setBusy(false);
+                  });
+              }}
+            >
+              {busy ? 'Saving' : 'Save the review'}
+            </Button>
+            {problem !== '' && <span className="kit-hint">{problem}</span>}
+          </div>
+        </div>
+      )}
+    </details>
   );
 }
 

@@ -15,7 +15,6 @@ import {
   Table,
   TextArea,
   callRpc,
-  computeFieldDiff,
   formatDocCode,
   listRpc,
   qrSvg,
@@ -34,17 +33,22 @@ import {
   MAX_REVOKE_REASON,
   MAX_SUBJECT,
   certificateFilename,
+  describeChain,
   draftProblems,
   draftToArgs,
   editCertificateProblems,
   formatCertificateError,
   longDate,
   parseBatch,
+  parseRevocationHistory,
   registryState,
+  restoreProblems,
+  revocationSummary,
   resolvedBody,
   resolvedEditBody,
   revokeCertificateProblems,
   type CertificateRevisionRow,
+  type ChainLink,
   type EditCertificateDraft,
   type IssueDraft,
   type RegistryRow,
@@ -436,7 +440,7 @@ function Registry(): ReactElement {
 
   const load = useCallback(async () => {
     try {
-      return await listRpc<RegistryRow>(env, 'certificate_registry_v2', {
+      return await listRpc<RegistryRow>(env, 'certificate_registry_v3', {
         p_search: search,
         p_status: statusFilter,
         p_template: templateFilter,
@@ -753,6 +757,15 @@ function CertificateInspector({
     [env, row.code],
   );
   const historyState = useAsync(loadHistory, [env, row.code]);
+  const loadChain = useCallback(
+    () => listRpc<ChainLink>(env, 'certificate_chain', { p_code: row.code }),
+    [env, row.code],
+  );
+  const chainState = useAsync(loadChain, [env, row.code]);
+  const ledger = parseRevocationHistory(
+    (row as RegistryRow & { readonly revoked_history?: unknown }).revoked_history,
+  );
+  const restoreProblemList = restoreProblems(draft.reason);
 
   const currentTemplate = templates.find((t) => t.key === row.template_key) ?? null;
   const reissueTemplate = templates.find((t) => t.key === newTemplateKey) ?? null;
@@ -823,8 +836,8 @@ function CertificateInspector({
       setError(revokeProblems[0] ?? 'Enter an audit reason first.');
       return;
     }
-    if (row.status === 'revoked' && draft.reason.trim().length < 3) {
-      setError('Enter an audit reason (minimum 3 characters) first.');
+    if (row.status === 'revoked' && restoreProblemList.length > 0) {
+      setError(restoreProblemList[0] ?? 'Enter a reason for the restoration first.');
       return;
     }
     setBusy(true);
@@ -834,7 +847,12 @@ function CertificateInspector({
     void callRpc(env, rpcName, { p_code: row.code, p_reason: draft.reason.trim() })
       .then(() =>
         onChanged(
-          row.status === 'revoked' ? `Restored ${row.code} to issued.` : `Revoked ${row.code}.`,
+          // The message names what the restore kept, because "restored" alone reads as
+          // though the revocation never happened — which is exactly the defect this
+          // migration fixed on the database side.
+          row.status === 'revoked'
+            ? `Restored ${row.code}. The revocation stays on the record and on the verification page.`
+            : `Revoked ${row.code}.`,
         ),
       )
       .catch((cause: unknown) => setError(formatCertificateError(cause)))
@@ -978,7 +996,7 @@ function CertificateInspector({
               disabled={
                 busy ||
                 (row.status === 'revoked'
-                  ? draft.reason.trim().length < 3
+                  ? restoreProblemList.length > 0
                   : revokeProblems.length > 0)
               }
               onClick={toggleStanding}
@@ -989,61 +1007,117 @@ function CertificateInspector({
         </div>
       </Card>
 
+      {ledger.malformed && (
+        <Banner tone="warn" title="Revocation history unreadable">
+          This certificate&apos;s revocation history could not be read, so this card cannot say
+          whether it was ever revoked. Do not treat the absence below as proof it was not — check
+          the amendment chain instead.
+        </Banner>
+      )}
+
+      {ledger.records.length > 0 && (
+        <Card
+          title="Revocation ledger"
+          description="Kept after a restoration rather than erased, so this certificate always says it was once revoked."
+        >
+          <Banner tone="warn" title="This certificate has been revoked">
+            {revocationSummary(ledger.records)}
+          </Banner>
+          <div className="kit-stack">
+            {ledger.records.map((record) => (
+              <div key={record.revoked_at} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
+                <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+                  <Badge tone="bad">Revoked</Badge>
+                  <span className="kit-small kit-muted">
+                    {longDate(record.revoked_at.slice(0, 10))}
+                  </span>
+                </div>
+                <p className="kit-small" style={{ marginTop: 'var(--sp-1)' }}>
+                  <strong>Because:</strong> {record.reason.trim() || 'no reason recorded'}
+                </p>
+                {record.restore_reason.trim() !== '' && (
+                  <p className="kit-small">
+                    <strong>Restored:</strong> {record.restore_reason.trim()}
+                    {record.restored_at !== '' && (
+                      <span className="kit-muted">
+                        {' '}
+                        on {longDate(record.restored_at.slice(0, 10))}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {record.restored_by.trim() !== '' && (
+                  <p className="kit-small kit-muted kit-mono">by {record.restored_by}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       <Card
-        title="Revision Audit History & Diff"
-        description="Every prior revision captured before mutation."
+        title="Amendment chain"
+        description="Every link from the first issue to the state now, with the fields each one changed and the reason recorded at the time."
       >
-        {historyState.state.status === 'loading' && <Loading label="Loading revision history." />}
-        {historyState.state.status === 'error' && (
-          <Banner tone="bad" title="Could not load history">
-            {historyState.state.message}
+        {chainState.state.status === 'loading' && <Loading label="Loading the amendment chain." />}
+        {chainState.state.status === 'error' && (
+          <Banner tone="bad" title="Could not load the chain">
+            {chainState.state.message}
           </Banner>
         )}
-        {historyState.state.status === 'ready' && historyState.state.data.length === 0 && (
-          <Empty>No edits yet — currently on original issued revision #1.</Empty>
+        {chainState.state.status === 'ready' && chainState.state.data.length === 0 && (
+          <Empty>This certificate has a single link — it has never been amended.</Empty>
+        )}
+        {chainState.state.status === 'ready' && chainState.state.data.length > 0 && (
+          <div className="kit-stack">
+            {describeChain(chainState.state.data).map((entry) => (
+              <div
+                key={`${entry.revision}-${String(entry.at ?? '')}-${entry.status}`}
+                className="kit-card"
+                style={{ padding: 'var(--sp-3)' }}
+              >
+                <div className="kit-row" style={{ justifyContent: 'space-between' }}>
+                  <Badge tone={entry.status === 'revoked' ? 'bad' : 'neutral'}>
+                    Revision #{entry.revision}
+                    {entry.current ? ' · current' : ''}
+                  </Badge>
+                  <span className="kit-small kit-muted">
+                    {entry.status}
+                    {entry.at !== null && ` · ${relativeTimeLabel(entry.at)}`}
+                  </span>
+                </div>
+                {entry.reason.trim() !== '' && (
+                  <p className="kit-small" style={{ marginTop: 'var(--sp-1)' }}>
+                    <strong>Why:</strong> {entry.reason}
+                  </p>
+                )}
+                {entry.changes.length > 0 ? (
+                  <ul className="kit-small kit-mono">
+                    {entry.changes.map((change) => (
+                      <li key={change.label}>
+                        {change.label}: &quot;{change.from}&quot; → &quot;{change.to}&quot;
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="kit-small kit-muted">
+                    {entry.current
+                      ? 'This is the certificate as it stands.'
+                      : 'No field changed — this link records a state change such as a revocation.'}
+                  </p>
+                )}
+                {entry.actor.trim() !== '' && (
+                  <p className="kit-small kit-muted kit-mono">by {entry.actor}</p>
+                )}
+              </div>
+            ))}
+          </div>
         )}
         {historyState.state.status === 'ready' && historyState.state.data.length > 0 && (
-          <div className="kit-stack">
-            {historyState.state.data.map((rev) => {
-              const diffs = computeFieldDiff(
-                {
-                  recipient_name: rev.recipient_name,
-                  subject: rev.subject,
-                  issued_on: rev.issued_on,
-                  expires_on: rev.expires_on ?? '',
-                  status: rev.status,
-                },
-                {
-                  recipient_name: row.recipient_name,
-                  subject: row.subject,
-                  issued_on: row.issued_on,
-                  expires_on: row.expires_on ?? '',
-                  status: row.status,
-                },
-                ['recipient_name', 'subject', 'issued_on', 'expires_on', 'status'],
-              ).filter((d) => d.changed);
-              return (
-                <div key={rev.id} className="kit-card" style={{ padding: 'var(--sp-3)' }}>
-                  <div className="kit-row" style={{ justifyContent: 'space-between' }}>
-                    <Badge>Before Revision #{rev.revision}</Badge>
-                    <span className="kit-small kit-muted">{relativeTimeLabel(rev.created_at)}</span>
-                  </div>
-                  <p className="kit-small" style={{ marginTop: 'var(--sp-1)' }}>
-                    <strong>Reason:</strong> {rev.reason || '—'}
-                  </p>
-                  {diffs.length > 0 && (
-                    <ul className="kit-small kit-mono">
-                      {diffs.map((d) => (
-                        <li key={d.field}>
-                          {d.field}: "{d.before || '—'}" → "{d.after || '—'}"
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <p className="kit-small kit-muted" style={{ marginTop: 'var(--sp-3)' }}>
+            {historyState.state.data.length} prior revision
+            {historyState.state.data.length === 1 ? '' : 's'} held in certificate_revisions.
+          </p>
         )}
       </Card>
     </div>

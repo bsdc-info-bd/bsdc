@@ -26,6 +26,7 @@ import {
   type SortKey,
   type StaffRow,
 } from './model';
+import { ShiftBoard } from './ShiftBoard';
 
 /**
  * People operations. This console reads the staff directory and no more:
@@ -39,6 +40,7 @@ export function App(): ReactElement {
       note="Directory access is logged."
       tabs={[
         { id: 'directory', label: 'Directory', render: () => <Directory /> },
+        { id: 'board', label: 'Shift board', render: () => <ShiftBoard /> },
         { id: 'roster', label: 'Shift roster', render: () => <Roster /> },
       ]}
     />

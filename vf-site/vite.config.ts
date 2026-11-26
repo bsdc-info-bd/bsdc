@@ -21,6 +21,13 @@ export default defineConfig({
     target: 'es2022',
     sourcemap: false,
     rollupOptions: {
+      // Two documents, two entry points. §13.3's embeddable answer is a
+      // separate page rather than a route, so that it can carry its own
+      // frame-ancestors rule and none of the portal's features.
+      input: {
+        main: fileURLToPath(new URL('./index.html', import.meta.url)),
+        embed: fileURLToPath(new URL('./embed/index.html', import.meta.url)),
+      },
       output: {
         manualChunks: (id: string) => (id.includes('node_modules') ? 'vendor' : undefined),
         entryFileNames: 'assets/index-[hash].js',

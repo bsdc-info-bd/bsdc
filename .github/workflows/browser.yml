@@ -9,8 +9,16 @@ on:
         'corporate-kit/**',
         'admin-site/**',
         'certificate-site/**',
+        'config-site/**',
+        'connect-site/**',
+        'customize-site/**',
+        'ip-site/**',
+        'moderator-site/**',
         'notice-site/**',
         'performance-site/**',
+        'status-site/**',
+        'users-admin-site/**',
+        'users-moderator-site/**',
         'vf-site/**',
         '.github/workflows/browser.yml',
         'scripts/lighthouse.mjs',
@@ -22,8 +30,16 @@ on:
         'corporate-kit/**',
         'admin-site/**',
         'certificate-site/**',
+        'config-site/**',
+        'connect-site/**',
+        'customize-site/**',
+        'ip-site/**',
+        'moderator-site/**',
         'notice-site/**',
         'performance-site/**',
+        'status-site/**',
+        'users-admin-site/**',
+        'users-moderator-site/**',
         'vf-site/**',
         '.github/workflows/browser.yml',
         'scripts/lighthouse.mjs',
@@ -116,7 +132,9 @@ jobs:
   corporate:
     name: Corporate document and reporting flows (mocked providers)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Build-and-exercise every console sequentially in the stale-deploy suite;
+    # this gate needs room for the 13 isolated second builds on hosted runners.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -127,9 +145,38 @@ jobs:
       - name: Install browser tools and application dependencies
         run: |
           cd main-site && npm ci --no-audit --no-fund && cd ..
-          for app in corporate-kit performance-site vf-site admin-site certificate-site notice-site; do
+          for app in corporate-kit admin-site users-admin-site users-moderator-site moderator-site certificate-site notice-site config-site customize-site ip-site performance-site connect-site status-site vf-site; do
             (cd "$app" && npm install --no-audit --no-fund)
           done
+      - name: Build every console for the cross-console browser gate
+        run: |
+          set -euo pipefail
+          for app in admin-site users-admin-site users-moderator-site moderator-site certificate-site notice-site config-site customize-site ip-site performance-site connect-site status-site vf-site; do
+            (cd "$app" && npm run build)
+          done
+      - name: Keyboard, viewport and stale-deploy checks on every console
+        shell: bash
+        run: |
+          set +e
+          node main-site/scripts/browser/console-stale.mjs > /tmp/console-stale.log 2>&1
+          status=$?
+          cat /tmp/console-stale.log
+          if [ "$status" -ne 0 ]; then
+            message=$(tail -60 /tmp/console-stale.log | head -c 6000)
+            message=${message//'%'/'%25'}
+            message=${message//$'\r'/'%0D'}
+            message=${message//$'\n'/'%0A'}
+            echo "::error title=Cross-console browser gate failed::$message"
+          fi
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cross-console-browser-evidence
+          path: main-site/.browser-evidence/console-stale-*.png
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Exercise production bundles against mock providers
         working-directory: main-site
         run: npm run test:corporate-browser

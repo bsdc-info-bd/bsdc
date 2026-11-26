@@ -193,16 +193,66 @@ const HARNESSES = [
     't89.mjs',
     '0129: a post can be placed in a channel, read from it, attributed by the feed and refused with a reason',
   ],
-  [
-    't90.mjs',
-    '0130: a channel can be built, named, ordered and closed',
-  ],
+  ['t90.mjs', '0130: a channel can be built, named, ordered and closed'],
   ['t91.mjs', '0131: a marketplace remembers an address, and a shop can set a minimum order'],
   ['t92.mjs', '0132: an uploaded picture is a picture its owner can find again'],
   [
     't93.mjs',
     'the member-site rollout gate evaluates the contract it enforces, against the schema it guards',
   ],
+  [
+    't94.mjs',
+    '0134: the permission spine — grants, denials, scopes and expiry, with nobody\u2019s answer changed',
+  ],
+  [
+    't95.mjs',
+    '0135: the audit trail becomes a record \u2014 a hashed origin, a field diff, and a guard that refuses to write without one',
+  ],
+  [
+    't96.mjs',
+    '0136: the command deck \u2014 every card permission-aware, self-describing and a door into the rows it counts',
+  ],
+  [
+    't97.mjs',
+    '0137: a bulk operation you can look at before you run it \u2014 plans, fingerprints, and a row that moved',
+  ],
+  [
+    't98.mjs',
+    '0138: the audit and authority screens \u2014 why somebody holds what they hold, and who is signed in',
+  ],
+  ['t99.mjs', '0139: a decision reaches the person it was made about'],
+  [
+    't100.mjs',
+    '0140: a receipt for every staff action \u2014 what was done, to whom, why and by which route',
+  ],
+  ['t101.mjs', '0141: SEO coverage, a redirect that cannot loop, and the 404s worth redirecting'],
+  [
+    't102.mjs',
+    '0142: a case joins the reports that belong together, and its timeline cannot be edited',
+  ],
+  ['t103.mjs', '0143: a standing ledger, a derived cache, and the read that proves they agree'],
+  [
+    't104.mjs',
+    '0144: telemetry with its own age, a delta and its source, and a clock on every queue',
+  ],
+  ['t105.mjs', '0145: a brand theme is published by somebody who meant to publish it'],
+  [
+    't106.mjs',
+    '0146: a person record, an appeal nobody judges alone, and a ladder that says what comes next',
+  ],
+  [
+    't107.mjs',
+    '0147: a certificate that reproduces byte for byte, a code that survives a hundred callers, and a notice that says it was withdrawn',
+  ],
+  [
+    't108.mjs',
+    '0148: a setting that cannot be wrong, a page that cannot be published broken, and a block that cannot outlive its review',
+  ],
+  [
+    't109.mjs',
+    '0149: a budget that needs three breaches, an incident that keeps its internal note private, and a verification desk that cannot enumerate',
+  ],
+  ['t110.mjs', '0150: internal catalogs carry explicit deny-all row policies'],
   ['rls-proof-run.mjs', "the repository's own scripts/rls-proof.sql, the CI gate"],
 ];
 
@@ -226,7 +276,9 @@ const missing = HARNESSES.filter(
   ([file]) => /^t\d+\.mjs$/.test(file) && !readdirSync(HERE).includes(file),
 );
 if (missing.length > 0) {
-  console.error(`db:prove: HARNESSES lists file(s) that are not on disk: ${missing.map(([f]) => f).join(', ')}`);
+  console.error(
+    `db:prove: HARNESSES lists file(s) that are not on disk: ${missing.map(([f]) => f).join(', ')}`,
+  );
   process.exit(1);
 }
 

@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx --max-warnings 0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "test": "vitest run"
+    "test": "vitest run",
+    "routes": "node scripts/sync-routes.mjs",
+    "routes:check": "node scripts/sync-routes.mjs --check"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
@@ -26,7 +28,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "@vitejs/plugin-react": "^4.3.2",
     "eslint": "^8.57.1",
-    "prettier": "^3.3.3",
+    "prettier": "3.3.3",
     "typescript": "^5.5.4",
     "vite": "^5.4.8",
     "vitest": "^2.1.2"

@@ -7,6 +7,7 @@ import {
   Card,
   Empty,
   Loading,
+  Field,
   Select,
   Table,
   VITAL_SPECS,
@@ -30,6 +31,7 @@ import {
   type ErrorRow,
   type Forecast,
   type TrendPoint,
+  type Vital,
   type VitalRow,
   type VitalOverall,
 } from '@kit';
@@ -48,7 +50,17 @@ import {
   targetLabel,
   trendBounds,
   windowLabel,
+  ackProblem,
+  boardSections,
+  boardSentence,
+  deltaLabel,
+  regressionAge,
+  regressionSentence,
+  streakLabel,
+  type BoardRow,
+  type BudgetRow,
   type EdgeRow,
+  type RegressionRow,
 } from './model';
 import { Reports } from './Reports';
 
@@ -68,11 +80,535 @@ export function App(): ReactElement {
         { id: 'edge', label: 'Edge', render: () => <Edge /> },
         { id: 'errors', label: 'Errors', render: () => <Errors /> },
         { id: 'weight', label: 'Weight', render: () => <Weight /> },
+        { id: 'board', label: 'Board', render: () => <Board /> },
+        { id: 'budgets', label: 'Budgets', render: () => <Budgets /> },
+        { id: 'releases', label: 'Releases', render: () => <Releases /> },
         { id: 'reports', label: 'Reports', render: () => <Reports /> },
       ]}
     />
   );
 }
+
+/** §13.1 — the budget list, and the regressions it produces. */
+/** §13.1 — the one board a person reads in the morning. */
+function Board(): ReactElement {
+  const env = useCorporateEnv();
+  const [app, setApp] = useState('main-site');
+  const [days, setDays] = useState('7');
+  const load = useCallback(
+    () => listRpc<BoardRow>(env, 'vitals_board', { p_app: app, p_days: Number(days) }),
+    [env, app, days],
+  );
+  const { state } = useAsync(load, [env, app, days]);
+
+  const rows = state.status === 'ready' ? state.data : [];
+  const sections = boardSections(rows);
+  const alerting = rows.filter((r) => r.open_regression !== null).length;
+
+  return (
+    <div className="kit-stack">
+      <Card
+        title="Budget board"
+        description="Ordered by whether somebody needs to do something, not by traffic. A metric under the sample floor is reported as unknown rather than as good."
+        actions={
+          alerting > 0 ? (
+            <Badge tone="bad">{`${String(alerting)} alerting`}</Badge>
+          ) : (
+            <Badge tone="ok">nothing alerting</Badge>
+          )
+        }
+      >
+        <div className="kit-grid">
+          <Select
+            label="App"
+            value={app}
+            onChange={(event) => {
+              setApp(event.target.value);
+            }}
+            options={APPS.map((entry) => ({ value: entry.id, label: entry.label }))}
+          />
+          <Select
+            label="Window"
+            value={days}
+            onChange={(event) => {
+              setDays(event.target.value);
+            }}
+            options={[
+              { value: '1', label: 'Last day' },
+              { value: '7', label: 'Last 7 days' },
+              { value: '28', label: 'Last 28 days' },
+            ]}
+          />
+        </div>
+      </Card>
+
+      {state.status === 'loading' && <Loading label="Comparing measurements against budgets." />}
+      {state.status === 'error' && (
+        <Banner tone="bad" title="The board did not load">
+          {state.message}
+        </Banner>
+      )}
+      {state.status === 'ready' && rows.length === 0 && (
+        <Empty>
+          No measurements arrived in this window, so there is nothing to compare. That is not the
+          same as nothing being wrong.
+        </Empty>
+      )}
+
+      {sections.map((section) => (
+        <Card key={section.title} title={section.title} description={section.detail}>
+          <Table
+            caption="A route under its sample floor is reported as unknown, not as good."
+            head={['Route', 'Metric', 'p75', 'Budget', 'Change', 'State', 'Said plainly']}
+          >
+            {section.rows.map((row) => (
+              <tr key={`${row.route}-${row.metric}`}>
+                <td className="kit-mono kit-small">{row.route}</td>
+                <td className="kit-small">{VITAL_SPECS[row.metric].label}</td>
+                <td className="kit-small">
+                  {row.p75 === null ? '—' : formatVital(row.metric, row.p75)}
+                </td>
+                <td className="kit-small">
+                  {row.target === null ? 'none' : formatVital(row.metric, row.target)}
+                </td>
+                <td className="kit-small">{deltaLabel(row)}</td>
+                <td className="kit-small">
+                  {streakLabel(row, 3) === '' ? (
+                    <span className="kit-muted">{row.insufficient ? 'unknown' : 'fine'}</span>
+                  ) : (
+                    <Badge tone={streakLabel(row, 3) === 'alerting' ? 'bad' : 'warn'}>
+                      {streakLabel(row, 3)}
+                    </Badge>
+                  )}
+                </td>
+                <td className="kit-small">{boardSentence(row)}</td>
+              </tr>
+            ))}
+          </Table>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function Budgets(): ReactElement {
+  const env = useCorporateEnv();
+  const [app, setApp] = useState('main-site');
+  const load = useCallback(
+    () => listRpc<BudgetRow>(env, 'vital_budget_list', { p_app: app }),
+    [env, app],
+  );
+  const { state, reload } = useAsync(load, [env, app]);
+
+  return (
+    <div className="kit-stack">
+      <Card
+        title="Budgets"
+        description="A budget is data: an owner, a reason, and a history. A route budget beats the site-wide one, and that is the only precedence to remember."
+      >
+        <Select
+          label="App"
+          value={app}
+          onChange={(event) => {
+            setApp(event.target.value);
+          }}
+          options={APPS.map((entry) => ({ value: entry.id, label: entry.label }))}
+        />
+      </Card>
+
+      {state.status === 'loading' && <Loading label="Loading budgets." />}
+      {state.status === 'error' && (
+        <Banner tone="bad" title="Budgets did not load">
+          {state.message}
+        </Banner>
+      )}
+      {state.status === 'ready' && (
+        <>
+          <BudgetForm app={app} onSaved={reload} />
+          {state.data.length === 0 ? (
+            <Empty>
+              No budget is set for this app, so no metric can fire. Set one below, or every
+              measurement on the Experience tab is a number nobody is comparing against anything.
+            </Empty>
+          ) : (
+            <Table
+              caption={`${String(state.data.length)} budget${state.data.length === 1 ? '' : 's'}.`}
+              head={['Route', 'Metric', 'Target', 'Streak', 'Window', 'Sample floor', 'Note', '']}
+            >
+              {state.data.map((budget) => (
+                <tr key={budget.id}>
+                  <td className="kit-mono kit-small">{budget.route}</td>
+                  <td className="kit-small">{VITAL_SPECS[budget.metric].label}</td>
+                  <td className="kit-small">{formatVital(budget.metric, budget.target)}</td>
+                  <td className="kit-small">{budget.consecutive} windows</td>
+                  <td className="kit-small">
+                    {budget.window_days === 1 ? 'daily' : `${String(budget.window_days)} days`}
+                  </td>
+                  <td className="kit-small">{budget.min_samples}</td>
+                  <td className="kit-small">{budget.note === '' ? '—' : budget.note}</td>
+                  <td>
+                    <Button
+                      size="small"
+                      variant="quiet"
+                      onClick={() => {
+                        callRpc(env, 'delete_vital_budget', { p_id: budget.id })
+                          .then(reload)
+                          .catch(() => {
+                            // The list reloads either way; a failed delete leaves the row.
+                          });
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          )}
+          <Regressions />
+        </>
+      )}
+    </div>
+  );
+}
+
+function BudgetForm({ app, onSaved }: { app: string; onSaved: () => void }): ReactElement {
+  const env = useCorporateEnv();
+  const [route, setRoute] = useState('*');
+  const [metric, setMetric] = useState('LCP');
+  const [target, setTarget] = useState('');
+  const [consecutive, setConsecutive] = useState('3');
+  const [minSamples, setMinSamples] = useState('30');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const targetNumber = Number(target);
+  const problem =
+    target.trim() === ''
+      ? 'Give a target. A budget with no number is a note.'
+      : !Number.isFinite(targetNumber) || targetNumber <= 0
+        ? 'A target has to be a positive number.'
+        : metric === 'CLS' && targetNumber > 10
+          ? 'CLS is a score between 0 and 1. That target can never be exceeded.'
+          : Number(consecutive) < 3
+            ? 'Three consecutive windows is the floor.'
+            : '';
+
+  const save = (): void => {
+    if (problem !== '') return;
+    setBusy(true);
+    setError('');
+    callRpc(env, 'save_vital_budget', {
+      p_app: app,
+      p_route: route.trim() === '' ? '*' : route.trim(),
+      p_metric: metric,
+      p_target: targetNumber,
+      p_consecutive: Number(consecutive),
+      p_window_days: 1,
+      p_min_samples: Number(minSamples),
+      p_note: note.trim(),
+    })
+      .then(() => {
+        setTarget('');
+        setNote('');
+        onSaved();
+      })
+      .catch((cause: unknown) => {
+        setError(messageOf(cause));
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  return (
+    <Card
+      title="Set a budget"
+      description="Saving a budget that already exists replaces it, and the change is audited."
+    >
+      {error !== '' && (
+        <Banner tone="bad" title="The budget was not saved">
+          {error}
+        </Banner>
+      )}
+      <div className="kit-grid">
+        <Field
+          label="Route"
+          hint="A path, or * for the whole site."
+          placeholder="*"
+          value={route}
+          onChange={(event) => {
+            setRoute(event.target.value);
+          }}
+        />
+        <Select
+          label="Metric"
+          value={metric}
+          onChange={(event) => {
+            setMetric(event.target.value);
+          }}
+          options={metricOptions()}
+        />
+        <Field
+          label={metric === 'CLS' ? 'Target (score)' : 'Target (ms)'}
+          inputMode="decimal"
+          value={target}
+          onChange={(event) => {
+            setTarget(event.target.value);
+          }}
+        />
+        <Field
+          label="Consecutive windows"
+          hint="Below three the console refuses it: one slow window is not a regression."
+          inputMode="numeric"
+          value={consecutive}
+          onChange={(event) => {
+            setConsecutive(event.target.value);
+          }}
+        />
+        <Field
+          label="Sample floor"
+          hint="Under this, a window is reported as unknown rather than as a trend."
+          inputMode="numeric"
+          value={minSamples}
+          onChange={(event) => {
+            setMinSamples(event.target.value);
+          }}
+        />
+        <Field
+          label="Note"
+          hint="Why this number. Shown beside the budget."
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+          }}
+        />
+      </div>
+      <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
+        <Button disabled={busy || problem !== ''} onClick={save}>
+          {busy ? 'Saving' : 'Save budget'}
+        </Button>
+        {problem !== '' && <span className="kit-hint">{problem}</span>}
+      </div>
+    </Card>
+  );
+}
+
+function Regressions(): ReactElement {
+  const env = useCorporateEnv();
+  const load = useCallback(
+    () => listRpc<RegressionRow>(env, 'vital_regressions_open', { p_limit: 50 }),
+    [env],
+  );
+  const { state, reload } = useAsync(load, [env]);
+
+  if (state.status === 'loading') return <Loading label="Loading regressions." />;
+  if (state.status === 'error') {
+    return (
+      <Banner tone="bad" title="Regressions did not load">
+        {state.message}
+      </Banner>
+    );
+  }
+  if (state.data.length === 0) {
+    return (
+      <Card
+        title="Regressions"
+        description="A regression closes when a person says what was done, not when the number drops."
+      >
+        <Empty>
+          Nothing is on the board. No metric has been over its budget for long enough to fire.
+        </Empty>
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      title={`Open regressions (${String(state.data.length)})`}
+      description="Each one names the release that was live and, where there is one, the error that appeared in the same window."
+    >
+      <div className="kit-stack">
+        {state.data.map((row) => (
+          <RegressionCard key={row.id} row={row} onAcknowledged={reload} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function RegressionCard({
+  row,
+  onAcknowledged,
+}: {
+  row: RegressionRow;
+  onAcknowledged: () => void;
+}): ReactElement {
+  const env = useCorporateEnv();
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const problem = ackProblem(note);
+
+  return (
+    <div
+      style={{
+        borderInlineStart: '3px solid var(--bad)',
+        paddingInlineStart: 'var(--sp-3)',
+      }}
+    >
+      <p className="kit-small" style={{ margin: 0 }}>
+        <Badge tone="bad">{VITAL_SPECS[row.metric].label}</Badge>{' '}
+        <span className="kit-mono">{row.route}</span>{' '}
+        <span className="kit-muted">{regressionAge(row)}</span>
+      </p>
+      <p className="kit-small" style={{ marginBlock: 'var(--sp-1)' }}>
+        {regressionSentence(row)}
+      </p>
+      {row.error_fingerprint !== null && (
+        <p className="kit-small kit-mono kit-muted" style={{ margin: 0 }}>
+          error fingerprint {row.error_fingerprint}
+        </p>
+      )}
+      {error !== '' && (
+        <Banner tone="bad" title="The acknowledgement was not saved">
+          {error}
+        </Banner>
+      )}
+      <div className="kit-row" style={{ marginTop: 'var(--sp-2)' }}>
+        <Field
+          label="What was done"
+          placeholder="Reverted the image optimisation change in build 42"
+          value={note}
+          onChange={(event) => {
+            setNote(event.target.value);
+          }}
+        />
+        <Button
+          size="small"
+          disabled={busy || problem !== ''}
+          onClick={() => {
+            setBusy(true);
+            setError('');
+            callRpc(env, 'acknowledge_regression', { p_id: row.id, p_note: note.trim() })
+              .then(onAcknowledged)
+              .catch((cause: unknown) => {
+                setError(messageOf(cause));
+              })
+              .finally(() => {
+                setBusy(false);
+              });
+          }}
+        >
+          {busy ? 'Saving' : 'Acknowledge'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** §13.1 — this build against the last, per metric, with a floor on both sides. */
+function Releases(): ReactElement {
+  const env = useCorporateEnv();
+  const [app, setApp] = useState('main-site');
+  const [route, setRoute] = useState('*');
+  const load = useCallback(
+    () =>
+      listRpc<ReleaseRow>(env, 'vitals_release_compare', {
+        p_app: app,
+        p_route: route,
+        p_days: 14,
+      }),
+    [env, app, route],
+  );
+  const { state } = useAsync(load, [env, app, route]);
+
+  return (
+    <div className="kit-stack">
+      <Card
+        title="This build against the last"
+        description="Both sides need at least thirty measurements before the comparison is shown as a finding."
+      >
+        <div className="kit-grid">
+          <Select
+            label="App"
+            value={app}
+            onChange={(event) => {
+              setApp(event.target.value);
+            }}
+            options={APPS.map((entry) => ({ value: entry.id, label: entry.label }))}
+          />
+          <Field
+            label="Route"
+            hint="* compares the whole app."
+            value={route}
+            onChange={(event) => {
+              setRoute(event.target.value);
+            }}
+          />
+        </div>
+      </Card>
+      {state.status === 'loading' && <Loading label="Comparing builds." />}
+      {state.status === 'error' && (
+        <Banner tone="bad" title="The comparison failed">
+          {state.message}
+        </Banner>
+      )}
+      {state.status === 'ready' &&
+        (state.data.length === 0 ? (
+          <Empty>
+            No build has been recorded with measurements in the last fortnight, so there is nothing
+            to compare. A release comparison needs builds to carry a build id when they report
+            vitals.
+          </Empty>
+        ) : (
+          <Table
+            caption="Largest change first."
+            head={['Metric', 'This build', 'p75', 'Previous', 'p75', 'Change', 'Verdict']}
+          >
+            {state.data.map((row) => (
+              <tr key={row.metric}>
+                <td className="kit-small">{VITAL_SPECS[row.metric].label}</td>
+                <td className="kit-mono kit-small">{row.build}</td>
+                <td className="kit-small">{formatVital(row.metric, row.p75)}</td>
+                <td className="kit-mono kit-small">{row.previous_build ?? '—'}</td>
+                <td className="kit-small">
+                  {row.previous_p75 === null ? '—' : formatVital(row.metric, row.previous_p75)}
+                </td>
+                <td className="kit-small">
+                  {row.delta === null
+                    ? '—'
+                    : `${row.delta > 0 ? '+' : ''}${formatVital(row.metric, Math.abs(row.delta))}`}
+                </td>
+                <td className="kit-small">
+                  {row.enough ? (
+                    <span className="kit-muted">
+                      {row.delta !== null && row.delta > 0 ? 'slower' : 'no worse'}
+                    </span>
+                  ) : (
+                    <Badge tone="warn">too few samples</Badge>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </Table>
+        ))}
+    </div>
+  );
+}
+
+type ReleaseRow = {
+  readonly metric: Vital;
+  readonly build: string;
+  readonly samples: number;
+  readonly p75: number | null;
+  readonly previous_build: string | null;
+  readonly previous_p75: number | null;
+  readonly previous_samples: number | null;
+  readonly delta: number | null;
+  readonly enough: boolean;
+};
 
 function download(filename: string, body: string, type: string): void {
   const blob = new Blob([body], { type });

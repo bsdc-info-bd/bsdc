@@ -7,6 +7,8 @@ import {
   Field,
   Loading,
   PublicShell,
+  Table,
+  TextArea,
   callPublicRpc,
   docKindLabel,
   formatDocCode,
@@ -21,11 +23,18 @@ import {
 } from '@kit';
 import {
   advice,
+  allowanceNote,
+  allowedOnly,
+  batchCsv,
+  countBatch,
+  parseBatch,
+  refusalSentence,
   codeFromSearch,
   pushRecent,
   reportIdFromSearch,
   resultLines,
   shareUrl,
+  type Answer,
   type VerifiedReport,
 } from './model';
 
@@ -198,6 +207,8 @@ export function App(): ReactElement {
 
         {result && !busy && <Result result={result} />}
 
+        <Batch />
+
         {recent.length > 1 && (
           <Card title="Checked from this device">
             <div className="kit-row">
@@ -368,6 +379,149 @@ function Result({ result }: { result: VerificationResult }): ReactElement {
         </p>
       )}
     </Card>
+  );
+}
+
+/**
+ * §13.3 — a column of codes, checked in one call.
+ *
+ * This is the shape the trust desk actually uses: somebody sends a spreadsheet
+ * of certificates to confirm before a hiring decision. One call, one file back,
+ * and a count that names how many are no longer in force — which is the finding
+ * the exercise exists to produce.
+ */
+function Batch(): ReactElement {
+  const env = useCorporateEnv();
+  const [raw, setRaw] = useState('');
+  const [answers, setAnswers] = useState<readonly Answer[]>([]);
+  const [remaining, setRemaining] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [refusal, setRefusal] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const codes = parseBatch(raw);
+  const count = countBatch(answers);
+
+  const check = (): void => {
+    if (codes.length === 0) return;
+    setBusy(true);
+    setError('');
+    setRefusal('');
+    callPublicRpc<{ results: Record<string, unknown>[]; remaining: number }>(env, 'verify_public', {
+      p_codes: codes,
+      p_address: '',
+    })
+      .then((payload) => {
+        setAnswers((payload.results ?? []).map((row) => allowedOnly(row)));
+        setRemaining(payload.remaining ?? null);
+      })
+      .catch((cause: unknown) => {
+        const message = messageOf(cause);
+        // A refusal is not a verdict about the codes, and the two must not look
+        // alike on a page whose whole purpose is to be trusted.
+        const refusalText = refusalSentence(message.includes('53400') ? '53400' : null);
+        if (refusalText !== '') setRefusal(refusalText);
+        else setError(message);
+      })
+      .finally(() => {
+        setBusy(false);
+      });
+  };
+
+  const download = (): void => {
+    const blob = new Blob([batchCsv(answers)], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'bsdc-verification.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  return (
+    <div className="kit-stack">
+      <Card
+        title="Check a list of documents"
+        description="Paste a column of codes, one per line or separated by commas. Up to 200 at a time, and sixty checks an hour from one connection."
+      >
+        <TextArea
+          label="Codes"
+          hint={
+            codes.length === 0
+              ? 'A code looks like BSDC-CT-4A7C21B9-6.'
+              : `${String(codes.length)} code${codes.length === 1 ? '' : 's'} read.`
+          }
+          value={raw}
+          onChange={(event) => {
+            setRaw(event.target.value);
+          }}
+        />
+        <div className="kit-row" style={{ marginTop: 'var(--sp-3)' }}>
+          <Button disabled={busy || codes.length === 0} onClick={check}>
+            {busy ? 'Checking' : `Check ${String(codes.length)}`}
+          </Button>
+          {answers.length > 0 && (
+            <Button variant="quiet" onClick={download}>
+              Download CSV
+            </Button>
+          )}
+        </div>
+        {remaining !== null && allowanceNote(remaining) !== '' && (
+          <p className="kit-hint" style={{ marginTop: 'var(--sp-2)' }}>
+            {allowanceNote(remaining)}
+          </p>
+        )}
+      </Card>
+
+      {refusal !== '' && (
+        <Banner tone="warn" title="The desk is busy">
+          <p className="kit-small">{refusal}</p>
+        </Banner>
+      )}
+      {error !== '' && (
+        <Banner tone="bad" title="The list could not be checked">
+          <p className="kit-small">{error}</p>
+        </Banner>
+      )}
+
+      {answers.length > 0 && (
+        <Card title="Result" description={count.summary}>
+          <Table
+            caption="In the order the codes were pasted."
+            head={['Code', 'Document', 'State', 'Holder or title', 'Reason']}
+          >
+            {answers.map((answer) => (
+              <tr key={answer.code}>
+                <td className="kit-mono kit-small">{answer.code}</td>
+                <td className="kit-small">{docKindLabel(answer.kind)}</td>
+                <td>
+                  <Badge tone={answer.state === 'valid' ? 'ok' : answer.found ? 'bad' : 'warn'}>
+                    {answer.state === 'valid'
+                      ? 'in force'
+                      : answer.found
+                        ? answer.state
+                        : 'not found'}
+                  </Badge>
+                </td>
+                <td className="kit-small">{answer.recipient_name ?? answer.subject ?? '—'}</td>
+                <td className="kit-small">{answer.reason === '' ? '—' : answer.reason}</td>
+              </tr>
+            ))}
+          </Table>
+        </Card>
+      )}
+
+      <Card title="What this list does and does not say">
+        <p className="kit-small">
+          Each answer comes from the registry and carries only the fields printed on the document. A
+          code that is not in the registry and a document that was withdrawn are different answers,
+          and the state column never merges them. Checks are counted in aggregate only: the desk
+          records that a check happened and what it found, never who asked.
+        </p>
+      </Card>
+    </div>
   );
 }
 

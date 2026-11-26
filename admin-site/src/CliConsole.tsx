@@ -1,3 +1,4 @@
+import { confirmationTarget, planCommand, renderPlan, requiresTypedId } from './dry-run';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Badge,
@@ -23,6 +24,9 @@ import {
   cliAutocomplete,
   parseCli,
   splitMacroLines,
+  bulkApplyHint,
+  parseBulkApply,
+  parseBulkPlan,
   type CliCommandSpec,
 } from './cli-engine';
 
@@ -124,6 +128,43 @@ export function CliConsole(): ReactElement {
       return;
     }
 
+    // `--dry-run` resolves the command and prints the plan without calling
+    // anything. It runs before every other branch, so a destructive verb cannot
+    // slip past it by matching an earlier handler — the check is on the flag, not
+    // on a list of verbs that has to be kept in step.
+    if (parsed.flags['dry-run'] === true || parsed.flags['dry-run'] === 'true') {
+      const plan = planCommand(parsed.positional, parsed.flags);
+      pushEntry(trimmed, plan.ok ? 'info' : 'error', renderPlan(plan));
+      return;
+    }
+
+    // A destructive verb needs its subject id typed back, not the word "confirm".
+    // Typing an id forces the operator to look at which record they are about to
+    // change; typing "yes" forces them to look at nothing. The id is compared
+    // exactly, so a near miss is a refusal rather than a decision about the wrong
+    // row. `--confirm <id>` carries it, because a prompt that blocks the terminal
+    // cannot be tested and cannot be pasted into an incident review.
+    if (requiresTypedId(trimmed)) {
+      const expected = confirmationTarget(trimmed);
+      const typed = typeof parsed.flags['confirm'] === 'string' ? parsed.flags['confirm'] : '';
+      if (expected !== null && typed !== expected) {
+        pushEntry(
+          trimmed,
+          'error',
+          [
+            `This command changes a record. Type its id to confirm:`,
+            `  ${trimmed} --confirm ${expected}`,
+            '',
+            typed === ''
+              ? 'Nothing was called.'
+              : `You typed "${typed}", which is not the id. Nothing was called.`,
+            'Add --dry-run to see what it would do first.',
+          ].join('\n'),
+        );
+        return;
+      }
+    }
+
     const [verb, sub, ...rest] = parsed.positional;
     if (!verb) return;
 
@@ -134,7 +175,10 @@ export function CliConsole(): ReactElement {
 
     if (verb === 'help') {
       const lines = CLI_COMMANDS.map(
-        (c) => `${c.signature.padEnd(54, ' ')} — ${c.summary}${c.destructive ? ' [--yes]' : ''}`,
+        (c) =>
+          `${c.signature.padEnd(54, ' ')} — ${c.summary}${
+            c.destructive ? ' [--dry-run to preview; the subject id is typed to confirm]' : ''
+          }`,
       );
       pushEntry(trimmed, 'info', lines.join('\n'));
       return;
@@ -206,6 +250,158 @@ export function CliConsole(): ReactElement {
       return;
     }
 
+    if (verb === 'bulk') {
+      // `bulk` is the one verb family in this console that can change other
+      // people's rows, so it is the one that insists on a preview first. `bulk
+      // plan` writes nothing; `bulk apply` needs an id that only a plan printed.
+      const sub = parsed.positional[1];
+
+      if (sub === 'plan') {
+        const { request, error } = parseBulkPlan(parsed);
+        if (error || !request) {
+          pushEntry(trimmed, 'error', error ?? 'The plan could not be built.');
+          return;
+        }
+        const rows = await listRpc<{ id: string; matched: number; applicable: number }>(
+          env,
+          'bulk_plan',
+          {
+            p_subject: request.subject,
+            p_action: request.action,
+            p_selector: request.selector,
+            p_reason: request.reason,
+          },
+        );
+        const plan = rows[0];
+        if (!plan) {
+          pushEntry(trimmed, 'error', 'The plan returned no id, which means nothing was planned.');
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          [
+            `Plan ${plan.id}`,
+            `  ${String(plan.applicable)} of ${String(plan.matched)} row(s) would be ${request.action}d.`,
+            `  Nothing has been written. To run it: ${bulkApplyHint(plan.id)}`,
+            '  A row that changes before you apply is skipped, not overwritten.',
+          ].join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'apply') {
+        const { planId, error } = parseBulkApply(parsed);
+        if (error || !planId) {
+          pushEntry(trimmed, 'error', error ?? 'No plan id given.');
+          return;
+        }
+        const rows = await listRpc<{ applied: number; skipped: number; details: unknown }>(
+          env,
+          'bulk_apply',
+          { p_plan_id: planId },
+        );
+        const outcome = rows[0];
+        if (!outcome) {
+          pushEntry(trimmed, 'error', 'The apply returned no outcome.');
+          return;
+        }
+        const detail = Array.isArray(outcome.details) ? outcome.details : [];
+        const skippedLines = detail
+          .filter((item) => (item as { outcome?: string }).outcome !== 'applied')
+          .map((item) => {
+            const row = item as { label?: string; why?: string; outcome?: string };
+            return `  ${row.outcome ?? 'skipped'}: ${row.label ?? '?'} — ${row.why ?? 'no reason given'}`;
+          });
+        pushEntry(
+          trimmed,
+          // A partial apply is not a success. `info` would scroll away like one.
+          outcome.skipped > 0 ? 'error' : 'ok',
+          [
+            `${String(outcome.applied)} applied, ${String(outcome.skipped)} skipped.`,
+            ...skippedLines,
+          ].join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'plans') {
+        const limit = Number(parsed.flags['limit'] ?? 20);
+        const rows = await listRpc<{
+          id: string;
+          subject: string;
+          action: string;
+          matched: number;
+          applicable: number;
+          applied_at: string | null;
+          applied_count: number | null;
+          is_mine: boolean;
+        }>(env, 'bulk_plans_for_me', {
+          p_limit: Number.isFinite(limit) ? limit : 20,
+        });
+        if (rows.length === 0) {
+          pushEntry(
+            trimmed,
+            'ok',
+            'No plans. Make one with `bulk plan <subject> <action> --reason <text>`.',
+          );
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          rows
+            .map(
+              (row) =>
+                `${row.id.slice(0, 8)}… | ${row.subject} ${row.action} | ${String(row.applicable)}/${String(row.matched)} | ${
+                  row.applied_at ? `applied ${String(row.applied_count ?? 0)}` : 'not applied'
+                } | ${row.is_mine ? 'mine' : 'somebody else'}`,
+            )
+            .join('\n'),
+        );
+        return;
+      }
+
+      if (sub === 'show') {
+        const id = parsed.positional[2];
+        if (!id) {
+          pushEntry(trimmed, 'error', 'Usage: bulk show <plan-id>');
+          return;
+        }
+        const rows = await listRpc<{
+          label: string;
+          from_status: string;
+          to_status: string;
+          applicable: boolean;
+          blocked: string | null;
+        }>(env, 'bulk_plan_detail', { p_plan_id: id });
+        if (rows.length === 0) {
+          pushEntry(trimmed, 'ok', '(the plan lists no rows)');
+          return;
+        }
+        pushEntry(
+          trimmed,
+          'ok',
+          rows
+            .map(
+              (row) =>
+                `${row.applicable ? 'yes' : 'no '} | ${row.label} | ${row.from_status} → ${row.to_status}${
+                  row.blocked ? ` (${row.blocked})` : ''
+                }`,
+            )
+            .join('\n'),
+        );
+        return;
+      }
+
+      pushEntry(
+        trimmed,
+        'error',
+        'Usage: bulk plan <subject> <action> --reason <text> | bulk apply <id> | bulk plans | bulk show <id>',
+      );
+      return;
+    }
+
     if (verb === 'audit') {
       const action = typeof parsed.flags['action'] === 'string' ? parsed.flags['action'] : '';
       const actor = typeof parsed.flags['actor'] === 'string' ? parsed.flags['actor'] : '';
@@ -235,6 +431,260 @@ export function CliConsole(): ReactElement {
         )
         .join('\n');
       pushEntry(trimmed, 'ok', formatted || '(0 audit events matched)', csv);
+      return;
+    }
+
+    if (verb === 'case') {
+      // The case family. `case note` and `case close` write; both are refused by
+      // the database without `moderation.resolve`, so the terminal does not need a
+      // second permission check — it needs to say so when the refusal comes.
+      if (sub === 'queue') {
+        const status = typeof parsed.flags['status'] === 'string' ? parsed.flags['status'] : 'open';
+        const rows = await listRpc<{
+          id: string;
+          subject_name: string;
+          status: string;
+          reports: number;
+          reopened_count: number;
+          age_hours: number;
+        }>(env, 'case_queue', { p_status: status, p_limit: 100 });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.id.slice(0, 8)} | ${(r.subject_name || 'unnamed').padEnd(20, ' ')} | ${String(r.reports).padStart(3)} reports | ${String(r.age_hours).padStart(4)} h | ${r.reopened_count > 0 ? `reopened ${String(r.reopened_count)}` : '—'}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || '(0 cases in this queue)');
+        return;
+      }
+
+      if (sub === 'show') {
+        const id = parsed.positional[2];
+        if (!id) {
+          pushEntry(trimmed, 'error', 'Usage: case show <id>');
+          return;
+        }
+        const [one] = await listRpc<{
+          id: string;
+          subject_name: string;
+          status: string;
+          outcome: string;
+          reopened_count: number;
+          reports: { reason: string; status: string }[];
+          events: { kind: string; body: string; created_at: string }[];
+        }>(env, 'admin_case', { p_case_id: id });
+        if (!one) {
+          pushEntry(trimmed, 'error', 'No case with that id, or it is not yours to read.');
+          return;
+        }
+        const lines = [
+          `case ${one.id} · ${one.subject_name || 'unnamed'} · ${one.status}`,
+          `outcome: ${one.outcome === '' ? 'none yet' : one.outcome}${
+            one.reopened_count > 0 ? ` · reopened ${String(one.reopened_count)}×` : ''
+          }`,
+          '',
+          `reports (${String(one.reports.length)}):`,
+          ...one.reports.map((r) => `  - ${r.reason} [${r.status}]`),
+          '',
+          'timeline (newest first):',
+          ...[...one.events]
+            .sort((a, b) => b.created_at.localeCompare(a.created_at))
+            .map(
+              (e) =>
+                `  ${e.created_at.slice(0, 16).replace('T', ' ')} ${e.kind.padEnd(14, ' ')} ${e.body}`,
+            ),
+        ];
+        pushEntry(trimmed, 'ok', lines.join('\n'));
+        return;
+      }
+
+      if (sub === 'note') {
+        const id = parsed.positional[2];
+        const body = parsed.positional.slice(3).join(' ');
+        if (!id || body.trim().length < 2) {
+          pushEntry(trimmed, 'error', 'Usage: case note <id> "<text>"');
+          return;
+        }
+        await callRpc(env, 'add_case_note', {
+          p_case_id: id,
+          p_body: body.trim(),
+          p_kind: 'note',
+          p_metadata: {},
+        });
+        pushEntry(
+          trimmed,
+          'ok',
+          'Note added. A timeline entry cannot be edited, so a correction is another note.',
+        );
+        return;
+      }
+
+      if (sub === 'close') {
+        const id = parsed.positional[2];
+        const outcome = parsed.positional[3];
+        const reason = typeof parsed.flags['reason'] === 'string' ? parsed.flags['reason'] : '';
+        if (!id || !outcome) {
+          pushEntry(
+            trimmed,
+            'error',
+            `Usage: case close <id> <outcome> --reason "<text>"\nOutcomes: no_action, content_removed, account_suspended, account_banned, warned, referred, duplicate`,
+          );
+          return;
+        }
+        const quiet = outcome === 'no_action' || outcome === 'duplicate';
+        if (!quiet && reason.trim().length < 12) {
+          pushEntry(
+            trimmed,
+            'error',
+            'The member is told about this outcome, so --reason needs at least twelve characters.',
+          );
+          return;
+        }
+        await callRpc(env, 'close_case', {
+          p_case_id: id,
+          p_outcome: outcome,
+          p_outcome_message_key: quiet ? '' : outcome,
+          p_note: reason.trim(),
+        });
+        pushEntry(
+          trimmed,
+          'ok',
+          quiet
+            ? 'Closed. Nothing is announced, because nothing was done.'
+            : 'Closed. The member has been told, with your note.',
+        );
+        return;
+      }
+
+      pushEntry(
+        trimmed,
+        'error',
+        'Usage: case queue | case show <id> | case note <id> "<text>" | case close <id> <outcome> --reason "<text>"',
+      );
+      return;
+    }
+
+    if (verb === 'standing') {
+      if (sub === 'reconcile') {
+        const rows = await listRpc<{
+          uid: string;
+          cached_points: number;
+          ledger_points: number;
+          difference: number;
+        }>(env, 'standing_reconcile', { p_limit: 200 });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.uid.slice(0, 12)} | cached ${String(r.cached_points).padStart(5)} | ledger ${String(r.ledger_points).padStart(5)} | off by ${String(r.difference)}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || 'The cache agrees with the ledger for every member.');
+        return;
+      }
+
+      const uid = parsed.positional[1];
+      if (!uid) {
+        pushEntry(trimmed, 'error', 'Usage: standing <uid> | standing reconcile');
+        return;
+      }
+      const [one] = await listRpc<{
+        display_name: string;
+        cached_points: number;
+        ledger_points: number;
+        agrees: boolean;
+        entries: number;
+        counted_entries: number;
+      }>(env, 'admin_standing', { p_uid: uid });
+      if (!one) {
+        pushEntry(trimmed, 'error', 'No such member.');
+        return;
+      }
+      pushEntry(
+        trimmed,
+        one.agrees ? 'ok' : 'error',
+        [
+          `${one.display_name || uid}: ${String(one.ledger_points)} points`,
+          `cache: ${String(one.cached_points)} — ${one.agrees ? 'agrees with the ledger' : 'DISAGREES with the ledger'}`,
+          `entries: ${String(one.entries)}, of which ${String(one.counted_entries)} count`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    if (verb === 'receipt') {
+      const id = parsed.positional[1];
+      if (!id) {
+        pushEntry(trimmed, 'error', 'Usage: receipt <id>');
+        return;
+      }
+      const [one] = await listRpc<{
+        action: string;
+        subject: string;
+        reason: string;
+        via: string;
+        actor_name: string;
+        created_at: string;
+        purge_after: string;
+      }>(env, 'admin_receipt', { p_id: id });
+      if (!one) {
+        pushEntry(trimmed, 'error', 'No receipt with that id, or it is not yours to read.');
+        return;
+      }
+      pushEntry(
+        trimmed,
+        'ok',
+        [
+          `${one.action} on ${one.subject}`,
+          `by ${one.actor_name} via ${one.via} at ${one.created_at.slice(0, 16).replace('T', ' ')}`,
+          one.reason === '' ? 'no reason recorded' : `reason: ${one.reason}`,
+          `kept until ${one.purge_after.slice(0, 10)}`,
+        ].join('\n'),
+      );
+      return;
+    }
+
+    if (verb === 'seo') {
+      if (sub === 'coverage') {
+        const limit = Number(parsed.flags['limit'] ?? 50);
+        const rows = await listRpc<{
+          path: string;
+          problem: string;
+          title_length: number;
+          description_length: number;
+        }>(env, 'seo_coverage', {
+          p_limit: Number.isFinite(limit) ? limit : 50,
+          p_only_problems: true,
+        });
+        const formatted = rows.map((r) => `${r.path.padEnd(40, ' ')} ${r.problem}`).join('\n');
+        pushEntry(
+          trimmed,
+          'ok',
+          formatted || 'Every page that matters has an override that holds up.',
+        );
+        return;
+      }
+
+      if (sub === 'missing') {
+        const limit = Number(parsed.flags['limit'] ?? 50);
+        const rows = await listRpc<{
+          path: string;
+          hits: number;
+          last_seen: string;
+          covered_by: string | null;
+        }>(env, 'redirect_404_sources', {
+          p_limit: Number.isFinite(limit) ? limit : 50,
+        });
+        const formatted = rows
+          .map(
+            (r) =>
+              `${r.path.padEnd(40, ' ')} ${String(r.hits).padStart(6)} hits | last seen ${r.last_seen.slice(0, 10)} | ${r.covered_by === null ? 'no redirect' : `→ ${r.covered_by}`}`,
+          )
+          .join('\n');
+        pushEntry(trimmed, 'ok', formatted || 'No path is being missed.');
+        return;
+      }
+
+      pushEntry(trimmed, 'error', 'Usage: seo coverage [--limit <n>] | seo missing [--limit <n>]');
       return;
     }
 
