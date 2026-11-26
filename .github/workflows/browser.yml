@@ -132,7 +132,9 @@ jobs:
   corporate:
     name: Corporate document and reporting flows (mocked providers)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Build-and-exercise every console sequentially in the stale-deploy suite;
+    # this gate needs room for the 13 isolated second builds on hosted runners.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
