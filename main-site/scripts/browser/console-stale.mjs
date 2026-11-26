@@ -215,235 +215,233 @@ async function buildSecond(consoleDir, outputDir) {
   return marker;
 }
 
-const { browser } = await launchBrowser();
-try {
-  for (const name of consoles) {
-    const consoleDir = join(repo, name);
-    const dist = join(consoleDir, 'dist');
-    let built = true;
+for (const name of consoles) {
+  const consoleDir = join(repo, name);
+  const dist = join(consoleDir, 'dist');
+  let built = true;
+  try {
+    await stat(join(dist, 'index.html'));
+  } catch {
+    built = false;
+  }
+  if (!built) {
+    results.push({
+      name,
+      passed: false,
+      error: 'missing dist/index.html; the browser gate must never skip an unbuilt console',
+    });
+    console.log(`FAIL ${name} — no dist/index.html; build the console before running this gate`);
+    process.exitCode = 1;
+    continue;
+  }
+
+  await check(`${name}: a deploy does not blank the console`, async () => {
+    const work = await mkdtemp(join(tmpdir(), `bsdc-${name}-`));
+    let browser;
+    const buildA = join(work, 'a');
+    const buildB = join(work, 'b');
+    const live = join(work, 'live');
     try {
-      await stat(join(dist, 'index.html'));
-    } catch {
-      built = false;
-    }
-    if (!built) {
-      results.push({
-        name,
-        passed: false,
-        error: 'missing dist/index.html; the browser gate must never skip an unbuilt console',
-      });
-      console.log(`FAIL ${name} — no dist/index.html; build the console before running this gate`);
-      process.exitCode = 1;
-      continue;
-    }
+      ({ browser } = await launchBrowser());
+      await cp(dist, buildA, { recursive: true });
+      const marker = await buildSecond(consoleDir, buildB);
+      // The second deployment is built into the isolated temp directory.
+      // The real dist/ is never overwritten, even if a build fails midway.
 
-    await check(`${name}: a deploy does not blank the console`, async () => {
-      const work = await mkdtemp(join(tmpdir(), `bsdc-${name}-`));
-      const buildA = join(work, 'a');
-      const buildB = join(work, 'b');
-      const live = join(work, 'live');
+      const assetsOf = async (build) =>
+        (await readdir(join(build, 'assets'))).filter((file) => file.endsWith('.js'));
+      const before = await assetsOf(buildA);
+      const after = await assetsOf(buildB);
+      const added = after.filter((file) => !before.includes(file));
+      assert.ok(added.length > 0, `${name}: the second build names at least one new chunk`);
+      const markerFound = await Promise.all(
+        after.map(async (file) =>
+          (await readFile(join(buildB, 'assets', file), 'utf8').catch(() => '')).includes(marker),
+        ),
+      );
+      assert.ok(
+        markerFound.some(Boolean),
+        `${name}: the second build really is the one just compiled (marker present)`,
+      );
+
+      await cp(buildA, live, { recursive: true });
+      const server = await serveBuild(live);
       try {
-        await cp(dist, buildA, { recursive: true });
-        const marker = await buildSecond(consoleDir, buildB);
-        // The second deployment is built into the isolated temp directory.
-        // The real dist/ is never overwritten, even if a build fails midway.
+        const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+        await context.addInitScript(FIXTURE);
+        const page = await context.newPage();
+        const missing = [];
+        const pageErrors = [];
+        page.on('response', (response) => {
+          if (response.url().includes('/assets/') && response.status() === 404) {
+            missing.push(response.url().split('/').pop());
+          }
+        });
+        page.on('pageerror', (error) => pageErrors.push(error.message));
 
-        const assetsOf = async (build) =>
-          (await readdir(join(build, 'assets'))).filter((file) => file.endsWith('.js'));
-        const before = await assetsOf(buildA);
-        const after = await assetsOf(buildB);
-        const added = after.filter((file) => !before.includes(file));
-        assert.ok(added.length > 0, `${name}: the second build names at least one new chunk`);
-        const markerFound = await Promise.all(
-          after.map(async (file) =>
-            (await readFile(join(buildB, 'assets', file), 'utf8').catch(() => '')).includes(marker),
-          ),
-        );
+        // Load build A.
+        await page.goto(server.origin + '/', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(1_000);
         assert.ok(
-          markerFound.some(Boolean),
-          `${name}: the second build really is the one just compiled (marker present)`,
+          await page.locator('[data-test-harness="console-stale"]').count(),
+          `${name}: the document loaded and the fixture ran`,
         );
 
-        await cp(buildA, live, { recursive: true });
-        const server = await serveBuild(live);
-        try {
-          const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-          await context.addInitScript(FIXTURE);
-          const page = await context.newPage();
-          const missing = [];
-          const pageErrors = [];
-          page.on('response', (response) => {
-            if (response.url().includes('/assets/') && response.status() === 404) {
-              missing.push(response.url().split('/').pop());
-            }
-          });
-          page.on('pageerror', (error) => pageErrors.push(error.message));
-
-          // Load build A.
-          await page.goto(server.origin + '/', { waitUntil: 'domcontentloaded' });
-          await page.waitForTimeout(1_000);
-          assert.ok(
-            await page.locator('[data-test-harness="console-stale"]').count(),
-            `${name}: the document loaded and the fixture ran`,
+        // A real narrow screen, not a screenshot at one convenient width.
+        // These nine points cover the plan's 250px–4K range and common breakpoints.
+        for (const width of [250, 320, 375, 640, 768, 1024, 1440, 2560, 3840]) {
+          await page.setViewportSize({ width, height: 900 });
+          await page.waitForTimeout(40);
+          const overflow = await page.evaluate(
+            () => document.documentElement.scrollWidth > window.innerWidth,
           );
+          assert.equal(overflow, false, `${name}: horizontal overflow at ${width}px`);
+        }
+        await page.setViewportSize({ width: 1280, height: 900 });
 
-          // A real narrow screen, not a screenshot at one convenient width.
-          // These nine points cover the plan's 250px–4K range and common breakpoints.
-          for (const width of [250, 320, 375, 640, 768, 1024, 1440, 2560, 3840]) {
-            await page.setViewportSize({ width, height: 900 });
-            await page.waitForTimeout(40);
-            const overflow = await page.evaluate(
-              () => document.documentElement.scrollWidth > window.innerWidth,
-            );
-            assert.equal(overflow, false, `${name}: horizontal overflow at ${width}px`);
-          }
-          await page.setViewportSize({ width: 1280, height: 900 });
-
-          const focusableSelector =
-            'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
-          const expectedTabStops = await page.locator(focusableSelector).evaluateAll((nodes) => {
-            let index = 0;
-            return nodes
-              .filter((node) => {
-                const style = getComputedStyle(node);
-                return (
-                  !node.hasAttribute('disabled') &&
-                  style.visibility !== 'hidden' &&
-                  style.display !== 'none' &&
-                  node.getClientRects().length > 0 &&
-                  node.tabIndex >= 0
-                );
-              })
-              .map((node) => {
-                node.setAttribute('data-craft-tab-stop', String(index));
-                index += 1;
-                return index - 1;
-              });
-          });
-          assert.ok(
-            expectedTabStops.length > 0,
-            `${name}: the first screen exposes keyboard controls`,
-          );
-          const reached = new Set();
-          const focusProblems = [];
-          for (let step = 0; step < expectedTabStops.length + 2; step += 1) {
-            await page.keyboard.press('Tab');
-            const focus = await page.evaluate(() => {
-              const element = document.activeElement;
-              if (!(element instanceof HTMLElement)) return null;
-              const style = getComputedStyle(element);
-              return {
-                stop: element.getAttribute('data-craft-tab-stop'),
-                outline: style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0,
-                outlineStyle: style.outlineStyle,
-                outlineWidth: style.outlineWidth,
-                focusVisible: element.matches(':focus-visible'),
-                label: `${element.tagName}.${String(element.className)}[${element.getAttribute('aria-label') ?? ''}] ${element.textContent?.trim().slice(0, 48) ?? ''}`,
-              };
+        const focusableSelector =
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+        const expectedTabStops = await page.locator(focusableSelector).evaluateAll((nodes) => {
+          let index = 0;
+          return nodes
+            .filter((node) => {
+              const style = getComputedStyle(node);
+              return (
+                !node.hasAttribute('disabled') &&
+                style.visibility !== 'hidden' &&
+                style.display !== 'none' &&
+                node.getClientRects().length > 0 &&
+                node.tabIndex >= 0
+              );
+            })
+            .map((node) => {
+              node.setAttribute('data-craft-tab-stop', String(index));
+              index += 1;
+              return index - 1;
             });
-            if (focus?.stop !== null && focus?.stop !== undefined) {
-              reached.add(Number(focus.stop));
-              if (!focus.outline)
-                focusProblems.push(
-                  `${focus.label} [focus-visible=${String(focus.focusVisible)}, ${focus.outlineStyle} ${focus.outlineWidth}]`,
-                );
-            }
-          }
-          assert.deepEqual(
-            [...reached].sort((a, b) => a - b),
-            expectedTabStops,
-            `${name}: Tab reaches every visible control in DOM order`,
-          );
-          assert.deepEqual(
-            focusProblems,
-            [],
-            `${name}: every visited control has a visible focus ring: ${focusProblems.join(', ')}`,
-          );
-          await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
-          const mediaProof = await page.evaluate(() => {
-            const ms = (value) =>
-              value.trim().endsWith('ms')
-                ? Number.parseFloat(value)
-                : Number.parseFloat(value) * 1_000;
-            const motion = [...document.querySelectorAll('*')].flatMap((element) => {
-              const style = getComputedStyle(element);
-              return [style.animationDuration, style.transitionDuration]
-                .flatMap((value) => value.split(','))
-                .filter((value) => ms(value) > 0.01)
-                .map((value) => `${element.tagName}.${String(element.className)}:${value.trim()}`);
-            });
+        });
+        assert.ok(
+          expectedTabStops.length > 0,
+          `${name}: the first screen exposes keyboard controls`,
+        );
+        const reached = new Set();
+        const focusProblems = [];
+        for (let step = 0; step < expectedTabStops.length + 2; step += 1) {
+          await page.keyboard.press('Tab');
+          const focus = await page.evaluate(() => {
+            const element = document.activeElement;
+            if (!(element instanceof HTMLElement)) return null;
+            const style = getComputedStyle(element);
             return {
-              visible: document.body.getClientRects().length > 0,
-              reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-              forcedColors: matchMedia('(forced-colors: active)').matches,
-              motion,
+              stop: element.getAttribute('data-craft-tab-stop'),
+              outline: style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0,
+              outlineStyle: style.outlineStyle,
+              outlineWidth: style.outlineWidth,
+              focusVisible: element.matches(':focus-visible'),
+              label: `${element.tagName}.${String(element.className)}[${element.getAttribute('aria-label') ?? ''}] ${element.textContent?.trim().slice(0, 48) ?? ''}`,
             };
           });
-          assert.ok(mediaProof.visible, `${name}: the app remains visible in forced-colors mode`);
-          assert.ok(mediaProof.reducedMotion, `${name}: reduced-motion media mode is active`);
-          assert.ok(mediaProof.forcedColors, `${name}: forced-colors media mode is active`);
-          assert.deepEqual(
-            mediaProof.motion,
-            [],
-            `${name}: every animation and transition respects reduced motion`,
-          );
-          await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
-
-          // Swap the deployment underneath the open tab, then ask for a chunk
-          // that only exists in the old build. This is exactly the production
-          // sequence; a plain reload would not reproduce it because the reload
-          // fetches a fresh index.html.
-          await rm(live, { recursive: true, force: true });
-          await cp(buildB, live, { recursive: true });
-          missing.length = 0;
-          const staleChunk = before.find(
-            (file) => file.startsWith('index-') || file.includes('CommandPalette'),
-          );
-          assert.ok(staleChunk, `${name}: found a chunk name to ask for`);
-          // Importing the removed chunk is exactly what a lazily-loaded tab
-          // does when the operator clicks it. The import is not caught, so the
-          // rejection reaches the page's own `unhandledrejection` listener —
-          // which is the listener under test.
-          await page.evaluate((chunk) => {
-            void import(`/assets/${chunk}`);
-          }, staleChunk);
-          await page.waitForTimeout(3_000);
-
-          // Recovery may have reloaded the page. Either way the console must be
-          // alive: no error screen, and the document is the new build.
-          const text = await page.evaluate(() => document.body.innerText ?? '');
-          assert.ok(!/Something went wrong on this screen/i.test(text), `${name}: no error screen`);
-          assert.ok(
-            await page.locator('[data-test-harness="console-stale"]').count(),
-            `${name}: the console is still mounted after the deploy`,
-          );
-          assert.ok(
-            !pageErrors.some((message) =>
-              /Failed to fetch dynamically imported module/i.test(message),
-            ),
-            `${name}: no unhandled chunk failure escaped to the page`,
-          );
-
-          // And it still works afterwards: a second load must succeed outright.
-          await page.goto(server.origin + '/', { waitUntil: 'domcontentloaded' });
-          await page.waitForTimeout(800);
-          assert.ok(
-            await page.locator('[data-test-harness="console-stale"]').count(),
-            `${name}: the console opens on the new build`,
-          );
-
-          await page.screenshot({ path: join(output, `console-stale-${name}.png`) });
-          await context.close();
-        } finally {
-          await server.close();
+          if (focus?.stop !== null && focus?.stop !== undefined) {
+            reached.add(Number(focus.stop));
+            if (!focus.outline)
+              focusProblems.push(
+                `${focus.label} [focus-visible=${String(focus.focusVisible)}, ${focus.outlineStyle} ${focus.outlineWidth}]`,
+              );
+          }
         }
+        assert.deepEqual(
+          [...reached].sort((a, b) => a - b),
+          expectedTabStops,
+          `${name}: Tab reaches every visible control in DOM order`,
+        );
+        assert.deepEqual(
+          focusProblems,
+          [],
+          `${name}: every visited control has a visible focus ring: ${focusProblems.join(', ')}`,
+        );
+        await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
+        const mediaProof = await page.evaluate(() => {
+          const ms = (value) =>
+            value.trim().endsWith('ms')
+              ? Number.parseFloat(value)
+              : Number.parseFloat(value) * 1_000;
+          const motion = [...document.querySelectorAll('*')].flatMap((element) => {
+            const style = getComputedStyle(element);
+            return [style.animationDuration, style.transitionDuration]
+              .flatMap((value) => value.split(','))
+              .filter((value) => ms(value) > 0.01)
+              .map((value) => `${element.tagName}.${String(element.className)}:${value.trim()}`);
+          });
+          return {
+            visible: document.body.getClientRects().length > 0,
+            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            forcedColors: matchMedia('(forced-colors: active)').matches,
+            motion,
+          };
+        });
+        assert.ok(mediaProof.visible, `${name}: the app remains visible in forced-colors mode`);
+        assert.ok(mediaProof.reducedMotion, `${name}: reduced-motion media mode is active`);
+        assert.ok(mediaProof.forcedColors, `${name}: forced-colors media mode is active`);
+        assert.deepEqual(
+          mediaProof.motion,
+          [],
+          `${name}: every animation and transition respects reduced motion`,
+        );
+        await page.emulateMedia({ reducedMotion: 'no-preference', forcedColors: 'none' });
+
+        // Swap the deployment underneath the open tab, then ask for a chunk
+        // that only exists in the old build. This is exactly the production
+        // sequence; a plain reload would not reproduce it because the reload
+        // fetches a fresh index.html.
+        await rm(live, { recursive: true, force: true });
+        await cp(buildB, live, { recursive: true });
+        missing.length = 0;
+        const staleChunk = before.find(
+          (file) => file.startsWith('index-') || file.includes('CommandPalette'),
+        );
+        assert.ok(staleChunk, `${name}: found a chunk name to ask for`);
+        // Importing the removed chunk is exactly what a lazily-loaded tab
+        // does when the operator clicks it. The import is not caught, so the
+        // rejection reaches the page's own `unhandledrejection` listener —
+        // which is the listener under test.
+        await page.evaluate((chunk) => {
+          void import(`/assets/${chunk}`);
+        }, staleChunk);
+        await page.waitForTimeout(3_000);
+
+        // Recovery may have reloaded the page. Either way the console must be
+        // alive: no error screen, and the document is the new build.
+        const text = await page.evaluate(() => document.body.innerText ?? '');
+        assert.ok(!/Something went wrong on this screen/i.test(text), `${name}: no error screen`);
+        assert.ok(
+          await page.locator('[data-test-harness="console-stale"]').count(),
+          `${name}: the console is still mounted after the deploy`,
+        );
+        assert.ok(
+          !pageErrors.some((message) =>
+            /Failed to fetch dynamically imported module/i.test(message),
+          ),
+          `${name}: no unhandled chunk failure escaped to the page`,
+        );
+
+        // And it still works afterwards: a second load must succeed outright.
+        await page.goto(server.origin + '/', { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(800);
+        assert.ok(
+          await page.locator('[data-test-harness="console-stale"]').count(),
+          `${name}: the console opens on the new build`,
+        );
+
+        await page.screenshot({ path: join(output, `console-stale-${name}.png`) });
+        await context.close();
       } finally {
-        await rm(work, { recursive: true, force: true });
+        await server.close();
       }
-    });
-  }
-} finally {
-  await browser.close();
+    } finally {
+      await rm(work, { recursive: true, force: true });
+      await browser?.close();
+    }
+  });
 }
 
 const failed = results.filter((result) => !result.passed);
