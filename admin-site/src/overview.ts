@@ -22,11 +22,16 @@ export interface Overview {
 
 /** A row of `admin_audit(p_limit)`. */
 export interface AuditRow {
-  actor_uid: string;
+  actor_uid: string | null;
   action: string;
   subject: string;
   metadata: Record<string, unknown> | null;
   created_at: string;
+}
+
+/** An audit event with no authenticated actor is a system action. */
+export function actorLabel(actorUid: string | null): string {
+  return actorUid === null || actorUid === '' ? 'System' : actorUid.slice(0, 12);
 }
 
 /** One number on the dashboard, with the sentence under it. */
