@@ -1,4 +1,5 @@
 import { confirmationTarget, planCommand, renderPlan, requiresTypedId } from './dry-run';
+import { actorLabel } from './overview';
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
 import {
   Badge,
@@ -409,7 +410,7 @@ export function CliConsole(): ReactElement {
       const limit = Number(parsed.flags['limit'] ?? 25);
       const rows = await listRpc<{
         id: number;
-        actor_uid: string;
+        actor_uid: string | null;
         action: string;
         subject: string;
         metadata: unknown;
@@ -427,7 +428,7 @@ export function CliConsole(): ReactElement {
       const formatted = rows
         .map(
           (r) =>
-            `${r.created_at.slice(0, 19)} | ${r.action.padEnd(24, ' ')} | ${r.actor_uid.slice(0, 12)} | ${r.subject}`,
+            `${r.created_at.slice(0, 19)} | ${r.action.padEnd(24, ' ')} | ${actorLabel(r.actor_uid)} | ${r.subject}`,
         )
         .join('\n');
       pushEntry(trimmed, 'ok', formatted || '(0 audit events matched)', csv);

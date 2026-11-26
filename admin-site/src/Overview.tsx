@@ -20,6 +20,7 @@ import {
   type TelemetrySnapshot,
 } from '@kit';
 import {
+  actorLabel,
   describeAction,
   describeMetadata,
   formatCount,
@@ -231,7 +232,7 @@ function AuditInspector(): ReactElement {
                 <div className="kit-mono">{row.created_at.slice(0, 19).replace('T', ' ')}</div>
                 <span className="kit-muted">{relativeTimeLabel(row.created_at)}</span>
               </td>
-              <td className="kit-mono kit-small">{row.actor_uid.slice(0, 12)}</td>
+              <td className="kit-mono kit-small">{actorLabel(row.actor_uid)}</td>
               <td className="kit-small">
                 <strong>{describeAction(row.action)}</strong>
                 <div className="kit-mono kit-muted">{row.action}</div>
@@ -285,7 +286,7 @@ function AuditTrail(): ReactElement {
                 {group.rows.map((row, index) => (
                   <tr key={`${row.created_at}-${row.action}-${String(index)}`}>
                     <td className="kit-mono kit-small">{row.created_at.slice(11, 19)}</td>
-                    <td className="kit-mono kit-small">{row.actor_uid.slice(0, 12)}</td>
+                    <td className="kit-mono kit-small">{actorLabel(row.actor_uid)}</td>
                     <td>
                       {describeAction(row.action)}
                       <div className="kit-small kit-muted kit-mono">{row.action}</div>

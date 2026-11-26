@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  actorLabel,
   dayOf,
   describeAction,
   describeMetadata,
@@ -68,6 +69,12 @@ describe('what needs a person', () => {
 });
 
 describe('an audit action', () => {
+  it('labels a missing actor as a system action rather than assuming a uid exists', () => {
+    expect(actorLabel(null)).toBe('System');
+    expect(actorLabel('')).toBe('System');
+    expect(actorLabel('aaaaaaaa-bbbb-cccc')).toBe('aaaaaaaa-bbb');
+  });
+
   it('is described in words an operator can read', () => {
     expect(describeAction('people.role')).toBe("Changed somebody's role");
     expect(describeAction('shop.approve')).toBe('Approved a shop');
