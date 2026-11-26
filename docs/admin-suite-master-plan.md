@@ -9447,7 +9447,9 @@ makes remaining scope countable; it does not manufacture delivery evidence.
   is formatted by its generator; the stale-deploy browser proof checks the
   marker across emitted chunks (including multi-entry builds); and migration
   `0150` gives four internal-only tables explicit deny-all policies, covered by
-  a new four-assertion database-proof harness.
+  a new four-assertion database-proof harness. CI also skips the web-JavaScript
+  budget for non-web packages and its browser failure output is now annotated;
+  corporate browser mocks cover the current certificate and notice RPC versions.
 - Full repository audit: **154 passed, 0 failed, 4 recorded**; database proofs:
   **93 harnesses passed**; cross-console stale-deploy browser proof: **13/13**.
   All package typechecks, lint, tests and builds passed locally.

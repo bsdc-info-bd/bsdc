@@ -161,6 +161,7 @@ jobs:
       # The gate fails on two things, not one: a bundle over the ceiling, and a
       # run that measured nothing at all. An absent measurement is not a pass.
       - name: Bundle size budget (250 KB gzip of initial JS)
+        if: matrix.app != 'corporate-kit' && matrix.app != 'push-worker'
         shell: bash
         run: |
           total=0
