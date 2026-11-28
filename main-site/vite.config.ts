@@ -22,6 +22,15 @@ function pushServiceWorkerPlugin(): Plugin {
           'import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY': JSON.stringify(
             process.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '',
           ),
+          __BSDC_FIREBASE_CONFIG__: JSON.stringify({
+            apiKey: process.env.VITE_FB_API_KEY ?? '',
+            authDomain: process.env.VITE_FB_AUTH_DOMAIN ?? '',
+            projectId: process.env.VITE_FB_PROJECT_ID ?? '',
+            storageBucket: process.env.VITE_FB_STORAGE_BUCKET ?? '',
+            messagingSenderId: process.env.VITE_FB_MSG_SENDER_ID ?? '',
+            appId: process.env.VITE_FB_APP_ID ?? '',
+            databaseURL: process.env.VITE_FB_DATABASE_URL ?? '',
+          }),
         },
         build: {
           outDir: fileURLToPath(new URL('./dist', import.meta.url)),

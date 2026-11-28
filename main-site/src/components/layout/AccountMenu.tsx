@@ -79,19 +79,16 @@ export function AccountMenu() {
           aria-label={name}
           className="absolute end-0 z-40 mt-1 w-56 rounded-card border border-border bg-surface p-1 shadow-raised"
         >
-          <p className="fab-truncate px-3 py-2 text-xs text-muted">
-            {username ? `@${username}` : user.email}
-          </p>
-          {username ? (
-            <Link
-              role="menuitem"
-              to={profilePath(username)}
-              className="fab-tap flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2"
-            >
-              <UserIcon size={16} aria-hidden="true" />
-              {t('profile.tabs.about')}
-            </Link>
-          ) : (
+          <p className="fab-truncate px-3 py-2 text-xs text-muted">@{username || user.uid}</p>
+          <Link
+            role="menuitem"
+            to={profilePath(username ?? '', user.uid)}
+            className="fab-tap flex items-center gap-2 rounded-lg px-3 py-2 text-sm hover:bg-surface-2"
+          >
+            <UserIcon size={16} aria-hidden="true" />
+            {t('profile.tabs.about')}
+          </Link>
+          {!username ? (
             <Link
               role="menuitem"
               to={ROUTES.onboarding}
@@ -100,7 +97,7 @@ export function AccountMenu() {
               <UserIcon size={16} aria-hidden="true" />
               {t('onboarding.title')}
             </Link>
-          )}
+          ) : null}
           <Link
             role="menuitem"
             to={ROUTES.myJobApplications}

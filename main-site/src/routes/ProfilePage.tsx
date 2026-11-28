@@ -1,8 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { Award, BadgeCheck, FileText, Lock, MessageSquare, Users } from 'lucide-react';
-import { useState } from 'react';
+import {
+  Award,
+  BadgeCheck,
+  FileText,
+  ImagePlus,
+  Lock,
+  Maximize2,
+  MessageSquare,
+  Users,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Seo } from '@/components/seo/Seo';
 import {
@@ -20,6 +29,9 @@ import {
   type TabItem,
 } from '@/design-system';
 import { PostCard } from '@/components/content/PostCard';
+import { Lightbox } from '@/components/media/Lightbox';
+import { MediaImage } from '@/components/media/MediaImage';
+import type { GalleryItem } from '@/components/media/MediaGallery';
 import { FollowButton } from '@/components/social/FollowButton';
 import { usePresence } from '@/hooks/use-presence';
 import {
@@ -30,7 +42,7 @@ import {
 } from '@/lib/data/follow-repository';
 import { formatAbsoluteDate, formatNumber } from '@/lib/format';
 import {
-  fetchProfileByUsername,
+  fetchProfileByIdentifier,
   fetchProfileStats,
   type Profile,
 } from '@/lib/profile/profile-service';
@@ -38,6 +50,80 @@ import { isConfigured } from '@/lib/env';
 import { conversationPath, profilePath, ROUTES, SITE } from '@/lib/site';
 import { dataErrorKey } from '@/lib/supabase/errors';
 import { useAuthStore } from '@/store/auth-store';
+
+function ProfileCover({ url, displayName }: { url: string; displayName: string }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const items = useMemo<GalleryItem[]>(
+    () =>
+      url.length === 0
+        ? []
+        : [
+            {
+              id: 'profile-cover',
+              url,
+              thumbUrl: url,
+              altText: `${displayName} — ${t('compose.cover.label')}`,
+              width: null,
+              height: null,
+            },
+          ],
+    [displayName, t, url],
+  );
+
+  return (
+    <>
+      <div className="relative isolate aspect-[16/7] max-h-[340px] overflow-hidden bg-surface-2 sm:aspect-[3/1]">
+        {url.length > 0 ? (
+          <button
+            type="button"
+            aria-label={`${displayName} — ${t('media.lightbox.title')}`}
+            onClick={() => setOpen(true)}
+            className="group absolute inset-0 block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+          >
+            <MediaImage
+              src={url}
+              alt={`${displayName} — ${t('compose.cover.label')}`}
+              priority
+              sizesAttribute="(max-width: 640px) 100vw, 960px"
+              className="h-full w-full object-cover transition-transform duration-500 ease-app group-hover:scale-[1.015]"
+            />
+            <span
+              aria-hidden="true"
+              className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-black/10 opacity-70 transition-opacity group-hover:opacity-100"
+            />
+            <span className="absolute bottom-3 end-3 flex h-9 w-9 items-center justify-center rounded-full border border-white/30 bg-black/40 text-white opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+              <Maximize2 size={16} aria-hidden="true" />
+            </span>
+          </button>
+        ) : (
+          <div className="absolute inset-0 overflow-hidden bg-[radial-gradient(ellipse_at_20%_20%,rgba(134,239,172,0.42),transparent_48%),radial-gradient(ellipse_at_85%_70%,rgba(59,130,246,0.24),transparent_46%),linear-gradient(125deg,#0b3b31,#123d55_58%,#182445)]">
+            <span
+              aria-hidden="true"
+              className="absolute -end-10 -top-24 h-64 w-64 rounded-full border border-white/10 bg-white/5 blur-2xl"
+            />
+            <span
+              aria-hidden="true"
+              className="absolute -bottom-28 start-[18%] h-72 w-72 rounded-full border border-white/10 bg-emerald-300/10 blur-3xl"
+            />
+            <span className="absolute inset-0 flex items-center justify-center text-white/35">
+              <ImagePlus size={34} strokeWidth={1.4} aria-hidden="true" />
+            </span>
+          </div>
+        )}
+      </div>
+      {open ? (
+        <Lightbox
+          items={items}
+          index={0}
+          label={`${displayName} — ${t('compose.cover.label')}`}
+          onChange={() => undefined}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
+    </>
+  );
+}
 
 function AboutPanel({ profile }: { profile: Profile }) {
   const { t } = useTranslation();
@@ -204,10 +290,7 @@ function FollowersModal({
         <div className="space-y-2">
           <ul className="max-h-[55dvh] space-y-2 overflow-y-auto pr-1">
             {items.map((member) => {
-              const target =
-                member.username.trim().length > 0
-                  ? profilePath(member.username)
-                  : `/u/${member.uid}`;
+              const target = profilePath(member.username, member.uid);
               return (
                 <li
                   key={member.uid}
@@ -290,12 +373,14 @@ export default function ProfilePage() {
   }
   const [tab, setTab] = useState('posts');
 
-  const handle = (params['handle'] ?? '').replace(/^@/, '').toLowerCase();
+  // Keep the UID's original case for its exact database lookup; usernames are
+  // normalized only inside fetchProfileByIdentifier.
+  const identifier = (params['handle'] ?? '').replace(/^@/, '').trim();
 
   const { data, isPending, isError } = useQuery({
-    queryKey: ['profile', currentUser?.uid ?? 'anon', handle],
-    queryFn: () => fetchProfileByUsername(handle),
-    enabled: handle.length > 0 && isConfigured.firebase,
+    queryKey: ['profile', currentUser?.uid ?? 'anon', identifier],
+    queryFn: () => fetchProfileByIdentifier(identifier),
+    enabled: identifier.length > 0 && isConfigured.firebase,
     staleTime: 60_000,
   });
 
@@ -326,7 +411,7 @@ export default function ProfilePage() {
         <Seo
           title={`${t('profile.notFoundTitle')} — ${t('common.brand')}`}
           description={t('profile.notFoundBody')}
-          path={handle ? profilePath(handle) : '/'}
+          path={identifier ? profilePath('', identifier) : '/'}
           noindex
         />
         <div className="fab-container py-10">
@@ -344,7 +429,7 @@ export default function ProfilePage() {
         <Seo
           title={`${t('profile.notFoundTitle')} — ${t('common.brand')}`}
           description={t('profile.notFoundBody')}
-          path={profilePath(handle)}
+          path={profilePath('', identifier)}
           noindex
         />
         <EmptyState
@@ -364,6 +449,11 @@ export default function ProfilePage() {
   const profile = data;
   const isSelf = currentUser?.uid === profile.uid;
   const joined = formatAbsoluteDate(new Date(profile.createdAt), language);
+  const profileIdentifier = profile.username.trim() || profile.uid;
+  const profilePermalink = profilePath(profile.username, profile.uid);
+  if (identifier !== profileIdentifier) {
+    return <Navigate to={profilePermalink} replace />;
+  }
 
   const items: TabItem[] = [
     {
@@ -411,20 +501,21 @@ export default function ProfilePage() {
     },
   ];
 
-  const profileCanonical = `${SITE.url}${profilePath(profile.username)}`;
+  const profileCanonical = `${SITE.url}${profilePermalink}`;
+  const profileName = profile.username.trim() || profile.uid;
   const profileAvatar = profile.avatarUrl.trim();
   const profileWebsite = profile.website.trim();
 
   return (
     <>
       <Seo
-        title={`${profile.displayName} (@${profile.username}) — ${t('common.brand')}`}
+        title={`${profile.displayName} (@${profileName}) — ${t('common.brand')}`}
         description={
           profile.bio.length > 0
             ? profile.bio
             : t('profile.metaDescription', { name: profile.displayName })
         }
-        path={profilePath(profile.username)}
+        path={profilePermalink}
         type="profile"
         {...(profileAvatar.length > 0 ? { image: profileAvatar } : {})}
         noindex={!profile.privacy.discoverable}
@@ -437,7 +528,8 @@ export default function ProfilePage() {
                   mainEntity: {
                     '@type': 'Person',
                     name: profile.displayName,
-                    alternateName: profile.username,
+                    alternateName: profileName,
+                    identifier: profile.uid,
                     description: profile.bio,
                     url: profileCanonical,
                     ...(profileAvatar.length > 0 ? { image: profileAvatar } : {}),
@@ -451,17 +543,20 @@ export default function ProfilePage() {
       />
 
       <div className="fab-container py-6 sm:py-10">
-        <Card className="overflow-hidden">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            <Avatar
-              src={profile.avatarUrl}
-              name={profile.displayName}
-              size="xl"
-              online={presence === 'online'}
-            />
-            <div className="min-w-0 flex-1">
+        <Card padded={false} className="overflow-hidden">
+          <ProfileCover url={profile.coverUrl.trim()} displayName={profile.displayName} />
+          <div className="flex flex-col gap-4 px-4 pb-5 sm:flex-row sm:items-start sm:px-6 sm:pb-6">
+            <div className="-mt-10 shrink-0 rounded-full border-4 border-surface shadow-raised sm:-mt-12">
+              <Avatar
+                src={profile.avatarUrl}
+                name={profile.displayName}
+                size="xl"
+                online={presence === 'online'}
+              />
+            </div>
+            <div className="min-w-0 flex-1 sm:pt-2">
               <h1 className="fab-truncate text-2xl">{profile.displayName}</h1>
-              <p className="text-sm text-muted">@{profile.username}</p>
+              <p className="text-sm text-muted">@{profileName}</p>
               {profile.bio.length > 0 ? <p className="mt-2 text-sm">{profile.bio}</p> : null}
               <p className="mt-2 text-xs text-muted">{t('profile.joined', { date: joined })}</p>
             </div>

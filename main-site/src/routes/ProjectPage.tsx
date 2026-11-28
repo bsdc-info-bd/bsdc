@@ -249,33 +249,24 @@ export default function ProjectPage() {
 
               {project.owner ? (
                 <div className="flex items-center gap-3 border-y border-border py-3">
-                  {project.owner.username ? (
-                    <Link to={profilePath(project.owner.username)} className="shrink-0">
-                      <Avatar
-                        src={project.owner.avatarUrl}
-                        name={project.owner.displayName}
-                        size="md"
-                      />
-                    </Link>
-                  ) : (
+                  <Link
+                    to={profilePath(project.owner.username ?? '', project.owner.uid)}
+                    className="shrink-0"
+                  >
                     <Avatar
                       src={project.owner.avatarUrl}
                       name={project.owner.displayName}
                       size="md"
                     />
-                  )}
+                  </Link>
                   <div className="min-w-0">
                     <p className="text-xs text-muted">{t('projects.owner')}</p>
-                    {project.owner.username ? (
-                      <Link
-                        to={profilePath(project.owner.username)}
-                        className="fab-truncate block font-semibold hover:underline"
-                      >
-                        {project.owner.displayName}
-                      </Link>
-                    ) : (
-                      <p className="fab-truncate font-semibold">{project.owner.displayName}</p>
-                    )}
+                    <Link
+                      to={profilePath(project.owner.username ?? '', project.owner.uid)}
+                      className="fab-truncate block font-semibold hover:underline"
+                    >
+                      {project.owner.displayName}
+                    </Link>
                   </div>
                 </div>
               ) : null}

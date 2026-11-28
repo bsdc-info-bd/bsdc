@@ -175,6 +175,21 @@ export function pauseReasonKey(
   return 'ads.reasons.ended';
 }
 
+/** Why a live campaign has no creative eligible for the website feed. */
+export function webFeedDeliveryIssueKey(creatives: readonly CampaignCreative[]): string | null {
+  if (creatives.length === 0) return 'ads.delivery.noCreatives';
+  const enabled = creatives.filter((creative) => creative.isEnabled);
+  if (enabled.length === 0) return 'ads.delivery.noEnabledCreatives';
+  return enabled.some(
+    (creative) =>
+      creative.placement === 'feed' &&
+      // An omitted platform list is treated as the legacy all-platform default.
+      (creative.platforms === undefined || creative.platforms.includes('web')),
+  )
+    ? null
+    : 'ads.delivery.noWebFeedCreative';
+}
+
 /** The owner may only pause a live campaign, or resume a paused one. */
 export function canPause(status: AdStatus): boolean {
   return status === 'active';

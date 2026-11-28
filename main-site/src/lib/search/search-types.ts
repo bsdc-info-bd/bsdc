@@ -99,7 +99,7 @@ export function resultPath(result: SearchResult): string {
     case 'post':
       return postPath(result.slug);
     case 'person':
-      return result.slug.length > 0 ? profilePath(result.slug) : `/u/${result.id}`;
+      return profilePath(result.slug, result.id);
     case 'group':
       return groupPath(result.slug);
     case 'course':

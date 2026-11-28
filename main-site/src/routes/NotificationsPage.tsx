@@ -156,7 +156,7 @@ export default function NotificationsPage() {
                   </Link>
                 ) : item.actor && item.kind === 'follow' ? (
                   <Link
-                    to={profilePath(item.actor.username)}
+                    to={profilePath(item.actor.username, item.actor.uid)}
                     className={rowClass}
                     onClick={() => read(item.id)}
                   >

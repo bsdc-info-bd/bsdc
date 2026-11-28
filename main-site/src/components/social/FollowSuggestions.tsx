@@ -110,18 +110,18 @@ function SuggestionRow({ suggestion, language, onDismiss }: SuggestionRowProps) 
 
   return (
     <li className="flex items-start gap-3">
-      <Link to={profilePath(suggestion.username)} className="shrink-0">
+      <Link to={profilePath(suggestion.username, suggestion.uid)} className="shrink-0">
         <Avatar src={suggestion.avatarUrl} name={suggestion.displayName} size="md" />
       </Link>
 
       <div className="min-w-0 flex-1">
         <Link
-          to={profilePath(suggestion.username)}
+          to={profilePath(suggestion.username, suggestion.uid)}
           className="block truncate text-sm font-semibold hover:underline"
         >
           {suggestion.displayName}
         </Link>
-        <p className="truncate text-2xs text-muted">@{suggestion.username}</p>
+        <p className="truncate text-2xs text-muted">@{suggestion.username || suggestion.uid}</p>
         <p className="mt-1 text-2xs text-muted">{reason}</p>
       </div>
 

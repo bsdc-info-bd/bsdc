@@ -57,6 +57,8 @@ export interface CoverPickerProps {
   headingId?: string;
   /** Renders the title as a step heading rather than a field label. */
   asHeading?: boolean;
+  /** Disables the control while its owning form is saving. */
+  disabled?: boolean;
 }
 
 /**
@@ -79,6 +81,7 @@ export function CoverPicker({
   libraryPurpose = 'cover',
   headingId,
   asHeading = false,
+  disabled = false,
 }: CoverPickerProps) {
   const generatedId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +117,7 @@ export function CoverPicker({
         type="file"
         accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
         aria-label={labels.choose}
+        disabled={disabled}
         className="fab-sr-only"
         onChange={(event) => {
           const chosen = event.target.files?.[0] ?? null;
@@ -139,7 +143,13 @@ export function CoverPicker({
               {file ? file.name : labels.existing}
             </span>
             {remove ? (
-              <Button variant="ghost" size="sm" iconStart={<X size={14} />} onClick={remove}>
+              <Button
+                variant="ghost"
+                size="sm"
+                iconStart={<X size={14} />}
+                disabled={disabled}
+                onClick={remove}
+              >
                 {labels.remove}
               </Button>
             ) : null}
@@ -148,6 +158,7 @@ export function CoverPicker({
       ) : (
         <button
           type="button"
+          disabled={disabled}
           onClick={() => inputRef.current?.click()}
           className="fab-tap flex min-h-48 flex-col items-center justify-center gap-2 rounded-card border border-dashed border-border bg-surface-2/40 px-4 text-center hover:bg-surface-2"
         >
@@ -163,6 +174,7 @@ export function CoverPicker({
             variant="secondary"
             size="sm"
             iconStart={<Upload size={15} />}
+            disabled={disabled}
             onClick={() => inputRef.current?.click()}
             className="w-fit"
           >
@@ -175,6 +187,7 @@ export function CoverPicker({
             showUpload={false}
             max={1}
             attached={previewUrl.length > 0 ? [previewUrl] : []}
+            disabled={disabled}
             onFiles={() => inputRef.current?.click()}
             onPick={(picked) => {
               const first = picked[0];

@@ -9,7 +9,9 @@
  * When upgrading from an earlier offline-caching worker, `install` and
  * `activate` delete any leftover Workbox/image/font caches immediately.
  */
-import { readPushPayload } from '@/lib/push/payload';
+import { getMessaging } from 'firebase/messaging/sw';
+import { initializeApp } from 'firebase/app';
+import { isFirebasePushPayload, readPushPayload } from '@/lib/push/payload';
 import {
   notificationBody,
   notificationTag,
@@ -21,6 +23,15 @@ import {
 import { urlBase64ToUint8Array } from '@/lib/push/webpush';
 
 declare let self: ServiceWorkerGlobalScope;
+declare const __BSDC_FIREBASE_CONFIG__: {
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket: string;
+  messagingSenderId: string;
+  appId: string;
+  databaseURL: string;
+};
 
 const CONTENT_URL = '/api/push/content';
 const ICON = '/icons/icon-192.png';
@@ -28,6 +39,25 @@ const BADGE = '/icons/maskable-512.png';
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_PUSH_VAPID_PUBLIC_KEY ?? '';
 
 const LEGACY_CACHE_PREFIXES: readonly string[] = ['bsdc-images', 'bsdc-fonts', 'workbox-'];
+
+// Firebase's service-worker messaging integration is what understands FCM's
+// envelope and owns its background notification/click lifecycle. Do not claim
+// FCM capability unless this SDK was actually initialized in the installed SW.
+let fcmEnabled = false;
+try {
+  if (
+    __BSDC_FIREBASE_CONFIG__.apiKey &&
+    __BSDC_FIREBASE_CONFIG__.projectId &&
+    __BSDC_FIREBASE_CONFIG__.messagingSenderId &&
+    __BSDC_FIREBASE_CONFIG__.appId
+  ) {
+    const app = initializeApp(__BSDC_FIREBASE_CONFIG__, 'bsdc-push-worker');
+    getMessaging(app);
+    fcmEnabled = true;
+  }
+} catch {
+  // Web Push remains available if this deployment lacks usable Firebase config.
+}
 
 async function purgeLegacyOfflineCaches(): Promise<void> {
   try {
@@ -131,6 +161,28 @@ async function notifyOpenClients(url: string, tag: string): Promise<void> {
 }
 
 async function handlePush(event: PushEvent): Promise<void> {
+  // The Firebase SDK owns FCM pushes while no tab is visible (including its
+  // background notification and click handling). In a visible tab, it forwards
+  // the message to the page; show the same BSDC notification style used by
+  // Web Push and notify the page so its inbox can refresh.
+  if (fcmEnabled && isFirebasePushPayload(event.data)) {
+    const payload = readPushPayload(event.data, self.location.origin);
+    if (payload === null) return;
+    const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    if (!windows.some((client) => client.visibilityState === 'visible')) return;
+    await Promise.all([
+      show(
+        payload.title,
+        payload.body,
+        payload.url,
+        payload.tag || `bsdc-fcm-${Date.now()}`,
+        payload.icon,
+      ),
+      notifyOpenClients(payload.url, payload.tag),
+    ]);
+    return;
+  }
+
   const payload = readPushPayload(event.data, self.location.origin);
   if (payload !== null) {
     await Promise.all([
@@ -216,12 +268,12 @@ self.addEventListener('push', (event: PushEvent) => {
  * cannot know what the *installed* worker was compiled with, and a worker is not
  * replaced the moment a new build ships. So the question goes to the worker: the
  * answer decides whether `VITE_PUSH_TRANSPORT=fcm` is honoured or declined with a
- * reason. Web push is what this worker has always handled — an `importScripts` of
- * the Firebase compat SDKs would add `fcm` to this list, and until it does, asking
- * the browser for an FCM subscription would produce exactly the silent, working-looking
- * failure this exchange exists to prevent.
+ * reason. Web Push stays supported in every build. Firebase Messaging is bundled
+ * into this worker and initialized only when the production Firebase config
+ * exists; asking for an FCM subscription without that listener would produce
+ * exactly the silent, working-looking failure this exchange exists to prevent.
  */
-const CAPABILITIES: readonly string[] = ['webpush'];
+const CAPABILITIES: readonly string[] = fcmEnabled ? ['webpush', 'fcm'] : ['webpush'];
 
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   const data = event.data as { type?: unknown } | null;
@@ -276,6 +328,10 @@ async function openTarget(url: string): Promise<void> {
 }
 
 self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  const data = event.notification.data as Record<string, unknown> | null;
+  // Firebase wraps its notification payload in FCM_MSG and handles its own
+  // click target. Leave that event to the SDK rather than navigating twice.
+  if (fcmEnabled && data !== null && typeof data === 'object' && 'FCM_MSG' in data) return;
   const url = urlOf(event.notification);
   event.notification.close();
   event.waitUntil(openTarget(url));

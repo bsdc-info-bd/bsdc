@@ -3075,6 +3075,17 @@ export const en = {
       notStarted: 'This campaign has not started yet.',
       ended: 'This campaign has ended.',
     },
+    delivery: {
+      title: 'Website feed delivery check',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      noCreatives:
+        'This campaign has no creative yet. Ask BSDC staff to add one for the website feed.',
+      noEnabledCreatives:
+        'Every creative is disabled. Ask BSDC staff to enable a website-feed creative.',
+      noWebFeedCreative:
+        'No enabled creative is set for both the website platform and feed placement. Ask BSDC staff to review its platform and placement settings.',
+    },
     errors: {
       name: 'A name needs 3 to 120 characters.',
       bid: 'A bid must be between 1 and 100,000 taka.',

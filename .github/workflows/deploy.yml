@@ -175,6 +175,9 @@ jobs:
           # required.
           VITE_PUSH_VAPID_PUBLIC_KEY: ${{ secrets.VITE_PUSH_VAPID_PUBLIC_KEY || secrets.PUSH_VAPID_PUBLIC_KEY }}
           VITE_FIREBASE_VAPID_PUBLIC_KEY: ${{ secrets.VITE_FIREBASE_VAPID_PUBLIC_KEY }}
+          # Ask for FCM on browsers when its public VAPID key and Firebase worker
+          # config are present; the client policy safely falls back to Web Push.
+          VITE_PUSH_TRANSPORT: fcm
           VITE_ONESIGNAL_APP_ID: ${{ secrets.VITE_ONESIGNAL_APP_ID }}
           VITE_SITE_URL: https://www.bsdc.info.bd
           VITE_BUILD_SHA: ${{ github.sha }}

@@ -12,11 +12,13 @@ import {
   forecastEvents,
   isServable,
   pauseReasonKey,
+  webFeedDeliveryIssueKey,
   takaToPoisha,
   validateCampaign,
   validateCreative,
   validateCopy,
   type Campaign,
+  type CampaignCreative,
   type CampaignDraft,
   type CreativeDraft,
 } from '@/lib/ads/ads-types';
@@ -151,6 +153,41 @@ describe('serving eligibility', () => {
   it('respects the schedule at both ends', () => {
     expect(isServable(campaign({ startsAt: '2026-07-01T00:00:00.000Z' }), NOW)).toBe(false);
     expect(isServable(campaign({ endsAt: '2026-05-30T00:00:00.000Z' }), NOW)).toBe(false);
+  });
+});
+
+describe('website feed delivery diagnostics', () => {
+  const feedCreative = (patch: Partial<CampaignCreative> = {}): CampaignCreative => ({
+    id: 'creative-1',
+    placement: 'feed' as const,
+    headline: 'Community event',
+    body: '',
+    imageUrl: '',
+    ctaLabel: 'Learn more',
+    targetUrl: 'https://example.test/',
+    isEnabled: true,
+    impressions: 0,
+    clicks: 0,
+    spend: 0,
+    ...patch,
+  });
+
+  it('distinguishes missing, disabled and non-web-feed creatives', () => {
+    expect(webFeedDeliveryIssueKey([])).toBe('ads.delivery.noCreatives');
+    expect(webFeedDeliveryIssueKey([feedCreative({ isEnabled: false })])).toBe(
+      'ads.delivery.noEnabledCreatives',
+    );
+    expect(webFeedDeliveryIssueKey([feedCreative({ platforms: ['android'] })])).toBe(
+      'ads.delivery.noWebFeedCreative',
+    );
+    expect(webFeedDeliveryIssueKey([feedCreative({ placement: 'sidebar' })])).toBe(
+      'ads.delivery.noWebFeedCreative',
+    );
+  });
+
+  it('treats omitted platform metadata as the legacy all-platform default', () => {
+    expect(webFeedDeliveryIssueKey([feedCreative()])).toBeNull();
+    expect(webFeedDeliveryIssueKey([feedCreative({ platforms: ['web'] })])).toBeNull();
   });
 });
 

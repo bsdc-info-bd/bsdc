@@ -186,7 +186,7 @@ export default function OnboardingPage() {
       const saved = await saveProfile(user.uid, draft);
       setProfile(saved);
       toast.success(t('onboarding.saved'));
-      navigate(profilePath(saved.username), { replace: true });
+      navigate(profilePath(saved.username, saved.uid), { replace: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'profile/username-taken') {
         setAvailability('taken');
@@ -221,8 +221,7 @@ export default function OnboardingPage() {
 
   // Already-onboarded users never get stuck in setup even if navigated here directly.
   if (isProfileOnboarded(profile)) {
-    const target =
-      profile && profile.username.trim().length > 0 ? profilePath(profile.username) : ROUTES.home;
+    const target = profile ? profilePath(profile.username, profile.uid) : ROUTES.home;
     return <Navigate to={target} replace />;
   }
 

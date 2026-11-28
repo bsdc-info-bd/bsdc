@@ -33,6 +33,7 @@ import {
   clickThroughRate,
   effectiveCostPerClick,
   pauseReasonKey,
+  webFeedDeliveryIssueKey,
   validateCopy,
   type CampaignCreative,
   type CreativeCopy,
@@ -352,6 +353,20 @@ function Dashboard() {
                   {detail.isError ? <Alert tone="danger" title={t('ads.detailsFailed')} /> : null}
                   {!detail.isLoading && !detail.isError ? (
                     <>
+                      {campaign.status === 'active'
+                        ? (() => {
+                            const issue = webFeedDeliveryIssueKey(detail.creatives);
+                            return issue ? (
+                              <Alert
+                                tone="warning"
+                                title={t('ads.delivery.title')}
+                                className="mb-4"
+                              >
+                                {t(issue)}
+                              </Alert>
+                            ) : null;
+                          })()
+                        : null}
                       <h3 className="text-sm font-semibold">{t('ads.dailyTitle')}</h3>
                       {detail.daily.length === 0 ? (
                         <p className="mt-2 text-sm text-muted">{t('ads.noDaily')}</p>
@@ -509,6 +524,10 @@ function Creative({
       <p className="mt-1 text-xs text-muted">
         {t(`ads.placements.${creative.placement}`)}
         {creative.layout ? ` · ${t(`ads.layouts.${creative.layout}`)}` : ''} ·{' '}
+        {(creative.platforms ?? ['web', 'android'])
+          .map((platform) => t(`ads.builder.platform.${platform}`))
+          .join(', ')}{' '}
+        · {t(creative.isEnabled ? 'ads.delivery.enabled' : 'ads.delivery.disabled')} ·{' '}
         {t('ads.counted', {
           impressions: formatNumber(creative.impressions, language),
           clicks: formatNumber(creative.clicks, language),

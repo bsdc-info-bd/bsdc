@@ -193,7 +193,7 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
     >
       <div className="flex items-start gap-2">
         {node.author ? (
-          <Link to={profilePath(node.author.username)} className="shrink-0">
+          <Link to={profilePath(node.author.username, node.author.uid)} className="shrink-0">
             <Avatar src={node.author.avatarUrl} name={node.author.displayName} size="sm" />
           </Link>
         ) : (
@@ -204,7 +204,7 @@ function CommentItem({ node, thread, postAuthorUid, isQuestion }: CommentItemPro
           <div className="flex flex-wrap items-center gap-2">
             {node.author ? (
               <Link
-                to={profilePath(node.author.username)}
+                to={profilePath(node.author.username, node.author.uid)}
                 className="text-sm font-semibold hover:underline"
               >
                 {node.author.displayName}

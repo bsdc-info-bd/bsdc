@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { AvatarUploader } from '@/components/media/AvatarUploader';
+import { CoverPicker } from '@/components/media/CoverPicker';
+import { useCoverUpload } from '@/components/media/use-cover-upload';
 import { PushCard } from '@/components/notifications/PushCard';
 import { HandleCard } from '@/components/profile/HandleCard';
 import { LocationField } from '@/components/profile/LocationField';
@@ -57,6 +59,9 @@ function AccountPanel() {
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [location, setLocation] = useState(profile?.location ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl ?? user?.photoURL ?? '');
+  const [coverUrl, setCoverUrl] = useState(profile?.coverUrl ?? '');
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const cover = useCoverUpload('cover');
   const [saving, setSaving] = useState(false);
 
   async function onAvatarUploaded(url: string) {
@@ -81,10 +86,13 @@ function AccountPanel() {
     if (!user) return;
     setSaving(true);
     try {
+      const uploadedCover = await cover.ensureUploaded(user.uid);
+      const nextCoverUrl = uploadedCover ?? (coverRemoved ? '' : coverUrl);
       await updateProfileFields(user.uid, {
         displayName: displayName.trim(),
         bio: bio.trim(),
         location: location.trim(),
+        coverUrl: nextCoverUrl,
       });
       // The database holds the name that matters; Firebase's copy is the
       // cache the very first sign-in reads from.
@@ -95,8 +103,12 @@ function AccountPanel() {
           displayName: displayName.trim(),
           bio: bio.trim(),
           location: location.trim(),
+          coverUrl: nextCoverUrl,
         });
       }
+      setCoverUrl(nextCoverUrl);
+      setCoverRemoved(false);
+      cover.reset();
       toast.success(t('settings.saved'));
     } catch (error) {
       toast.error(t(profileErrorKey(error)));
@@ -138,6 +150,32 @@ function AccountPanel() {
               onUploaded={(url) => void onAvatarUploaded(url)}
             />
           ) : null}
+          <CoverPicker
+            file={cover.file}
+            previewUrl={cover.previewUrl || (coverRemoved ? '' : coverUrl)}
+            progress={cover.progress}
+            disabled={saving}
+            onFileChange={(file) => cover.choose(file)}
+            onPickFromLibrary={(picked) => {
+              cover.pick(picked);
+              setCoverRemoved(false);
+            }}
+            onRemoveExisting={() => {
+              cover.reset();
+              setCoverUrl('');
+              setCoverRemoved(true);
+            }}
+            labels={{
+              title: t('compose.cover.label'),
+              hint: t('media.hint'),
+              choose: t('create.cover.choose'),
+              replace: t('create.cover.replace'),
+              remove: t('create.cover.remove'),
+              existing: t('create.cover.existing'),
+              uploading: t('create.cover.uploading'),
+              previewAlt: t('create.cover.preview'),
+            }}
+          />
           <TextField
             label={t('auth.fields.displayName')}
             value={displayName}
