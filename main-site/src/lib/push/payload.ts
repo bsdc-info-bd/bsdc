@@ -20,6 +20,7 @@ interface RawPushPayload {
     link?: unknown;
     icon?: unknown;
     tag?: unknown;
+    sent_at?: unknown;
   };
   fcmOptions?: {
     link?: unknown;
@@ -46,6 +47,24 @@ function normalizeTargetPath(raw: string, origin: string): string {
     // Invalid URL; fall back safely.
   }
   return '/notifications';
+}
+
+/** FCM web messages have a notification block plus string-valued custom data. */
+export function isFirebasePushPayload(data: { json(): unknown } | null): boolean {
+  if (data === null) return false;
+  try {
+    const raw = data.json();
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return false;
+    const payload = raw as RawPushPayload;
+    return (
+      payload.notification !== undefined &&
+      payload.data !== undefined &&
+      typeof payload.data.sent_at === 'string' &&
+      typeof payload.data.url === 'string'
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function readPushPayload(

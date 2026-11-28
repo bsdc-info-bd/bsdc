@@ -177,9 +177,10 @@ them and not for the member who signed out.
 Two of the three push variables are for the browser and two are for the sender, and the
 browser's is `VITE_PUSH_VAPID_PUBLIC_KEY` — this site's own VAPID public key, which is
 what a browser hands to its push service when it subscribes. `VITE_FIREBASE_VAPID_PUBLIC_KEY`
-belongs to a transport this site does not use for browsers (see section 9), and
-`VITE_PUSH_TRANSPORT` exists to say so out loud: `webpush` (the default behaviour, and
-the safe value), or `fcm` to ask for the Firebase path where a worker can hear it.
+is Firebase's browser subscription key. The main-site worker includes Firebase
+Messaging; `VITE_PUSH_TRANSPORT=fcm` asks for FCM first and safely falls back to
+this site's Web Push key if the key, Firebase config, or installed worker capability
+is missing. Production builds request FCM while retaining that fallback.
 
 ```bash
 cd main-site
@@ -433,19 +434,18 @@ editor). Within the scheduler's interval the device should wake.
   is the primary path. The Pages Function sends an empty wake-up, which costs one
   extra request when a device wakes and is the path that keeps working when the
   Worker is not there. Both are shipped; neither is dead code.
-- **Firebase Cloud Messaging (FCM HTTP v1) alongside Web Push.**
-  `public.fcm_tokens` and `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` deliver Android over
-  FCM HTTP v1 (`https://fcm.googleapis.com/v1/projects/bsdc-bd/messages:send`) from
-  `push-worker/`, and that is where FCM's use lies. `VITE_FIREBASE_VAPID_PUBLIC_KEY`
-  is *not* a browser subscription request: FCM frames a push in its own format, so a
-  browser can only be woken that way by a worker containing `firebase/messaging`, and
-  this site's `/sw.js` does not contain it. A browser is therefore subscribed over this
-  site's VAPID key, `VITE_PUSH_TRANSPORT=fcm` is honoured only when the installed worker
-  answers the capability ping with `fcm`, and a web row that was registered under FCM
-  earlier is retired the first time that browser takes over on its own key.
-  A deployment that genuinely wants FCM on the web adds the compat `importScripts` to
-  `src/sw.ts`, reports `fcm` in `CAPABILITIES`, and gets the `fcm` reason in the
-  attempt log the moment either half is missing.
+- **FCM HTTP v1 for browser and native devices, with Web Push fallback.**
+  `public.fcm_tokens` and `FIREBASE_SERVICE_ACCOUNT_BSDC_BD` deliver browser and
+  native tokens from `push-worker/`. The main-site worker bundles Firebase Messaging,
+  initializes it from the public Firebase web config, and reports `fcm` only when
+  that integration is installed. Production asks for FCM using
+  `VITE_PUSH_TRANSPORT=fcm`; the browser subscribes with
+  `VITE_FIREBASE_VAPID_PUBLIC_KEY` when Firebase config and worker capability are
+  available, otherwise it falls back to the site's own Web Push VAPID key. The FCM
+  SDK owns background FCM notification/click handling, while the BSDC worker keeps
+  its custom notification style for visible clients and for Web Push. Android
+  delivery remains a separate data-only high-priority payload; do not add a
+  top-level notification block to the Android request.
 - **No OneSignal.** `VITE_ONESIGNAL_APP_ID` predates this and is not used.
 - **No per-kind filtering of push.** The switches in Settings → Notifications
   decide which notifications are written at all; push delivers what was written.
