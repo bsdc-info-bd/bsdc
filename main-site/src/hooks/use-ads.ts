@@ -80,8 +80,14 @@ export function useAdSlot(placement: AdPlacement, options: AdSlotOptions = {}): 
         ...(city.length > 0 ? { city } : {}),
       }),
     enabled: isConfigured.supabase,
-    staleTime: 120_000,
-    retry: false,
+    // Delivery eligibility can change after a campaign is approved, paused,
+    // capped, or funded. Keep an open feed fresh without requiring a reload;
+    // hidden tabs pause polling and reconnect/focus also trigger a fresh read.
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: 'always',
+    retry: 2,
   });
 
   const ad = query.data?.[0] ?? null;

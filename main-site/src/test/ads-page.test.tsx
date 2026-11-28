@@ -160,6 +160,16 @@ describe('advertiser dashboard', () => {
     );
   });
 
+  it('explains when a live campaign has no enabled website-feed creative', () => {
+    useAuthStore.getState().setSession({ uid: 'advertiser-1' } as User, DEFAULT_CLAIMS);
+    mocks.creatives = [{ ...creative, platforms: ['android'] }];
+    page();
+    fireEvent.click(screen.getByRole('button', { name: 'ads.viewDetails' }));
+    expect(screen.getByText('ads.delivery.title')).toBeInTheDocument();
+    expect(screen.getByText('ads.delivery.noWebFeedCreative')).toBeInTheDocument();
+    expect(screen.getByText(/ads\.builder\.platform\.android/)).toBeInTheDocument();
+  });
+
   it('pauses active campaigns and resumes only paused campaigns', async () => {
     useAuthStore.getState().setSession({ uid: 'advertiser-1' } as User, DEFAULT_CLAIMS);
     page();
