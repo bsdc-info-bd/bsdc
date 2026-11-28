@@ -110,6 +110,7 @@ describe('rowToProfile', () => {
 describe('profile paths', () => {
   it('builds a permalink for a claimed handle', () => {
     expect(profilePath('rafi_dev')).toBe('/@rafi_dev');
+    expect(profilePath('', 'agy8CtdeZCeOlsUv1CxJcR1r8K52')).toBe('/@agy8CtdeZCeOlsUv1CxJcR1r8K52');
   });
 
   it('sends a member without a handle home rather than to /@', () => {

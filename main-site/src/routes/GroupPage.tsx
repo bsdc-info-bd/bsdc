@@ -433,7 +433,7 @@ function MemberList({ members }: { members: GroupMemberEntry[] }) {
       {members.map((member) => (
         <Card as="li" key={member.uid} padded={false} className="flex items-center gap-2 p-3">
           <Avatar src={member.avatarUrl} name={member.displayName} size="sm" />
-          <Link to={profilePath(member.username)} className="min-w-0 flex-1">
+          <Link to={profilePath(member.username, member.uid)} className="min-w-0 flex-1">
             <span className="fab-truncate block text-sm font-semibold hover:underline">
               {member.displayName}
             </span>

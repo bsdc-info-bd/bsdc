@@ -47,6 +47,16 @@ export async function fetchProfileByUsername(username: string): Promise<Profile 
   return (await backend()).fetchProfileByUsername(username);
 }
 
+/** Resolve a public permalink by handle first, then by the exact case-sensitive UID. */
+export async function fetchProfileByIdentifier(identifier: string): Promise<Profile | null> {
+  const value = identifier.trim().replace(/^@/, '');
+  if (value.length === 0) return null;
+  const active = await backend();
+  const byUsername = await active.fetchProfileByUsername(value.toLowerCase());
+  if (byUsername !== null) return byUsername;
+  return active.fetchProfile(value);
+}
+
 export async function isUsernameAvailable(username: string): Promise<boolean> {
   return (await backend()).isUsernameAvailable(username);
 }

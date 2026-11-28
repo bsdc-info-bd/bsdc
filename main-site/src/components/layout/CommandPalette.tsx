@@ -165,7 +165,7 @@ export function CommandPalette() {
   function suggestionPath(suggestion: RichSearchSuggestion): string {
     switch (suggestion.kind) {
       case 'person':
-        return suggestion.slug.length > 0 ? profilePath(suggestion.slug) : `/u/${suggestion.id}`;
+        return profilePath(suggestion.slug, suggestion.id);
       case 'group':
         return groupPath(suggestion.slug);
       case 'course':

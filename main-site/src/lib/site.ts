@@ -187,14 +187,15 @@ export function tagPath(slug: string): string {
 }
 
 /**
- * Profile permalink: /@username (SEO title pattern "bsdc • username").
- *
- * A member who has not claimed a handle has no profile page to link to, so
- * the link goes home rather than to `/@`, which would 404.
+ * Profile permalink: /@username, or /@uid until the member claims a handle.
+ * The UID fallback keeps an uncustomized profile directly addressable without
+ * changing the stable username URL once one is claimed.
  */
-export function profilePath(username: string): string {
+export function profilePath(username: string, uid = ''): string {
   const handle = username.trim();
-  return handle.length > 0 ? `/@${handle}` : ROUTES.home;
+  if (handle.length > 0) return `/@${encodeURIComponent(handle)}`;
+  const id = uid.trim();
+  return id.length > 0 ? `/@${encodeURIComponent(id)}` : ROUTES.home;
 }
 
 export type RouteKey = keyof typeof ROUTES;

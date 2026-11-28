@@ -444,14 +444,12 @@ export default function JobApplicationsPage() {
                             />
                           ) : null}
                         </p>
-                        {application.username ? (
-                          <Link
-                            to={profilePath(application.username)}
-                            className="text-xs text-green-700 hover:underline"
-                          >
-                            @{application.username}
-                          </Link>
-                        ) : null}
+                        <Link
+                          to={profilePath(application.username, application.applicantUid)}
+                          className="text-xs text-green-700 hover:underline"
+                        >
+                          @{application.username || application.applicantUid}
+                        </Link>
                       </div>
                     </div>
                     <Badge tone={STATUS_TONE[application.status]}>

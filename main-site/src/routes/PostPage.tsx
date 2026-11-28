@@ -266,12 +266,12 @@ export default function PostPage() {
 
           {post.author ? (
             <div className="mt-4 flex items-center gap-3">
-              <Link to={profilePath(post.author.username)} className="shrink-0">
+              <Link to={profilePath(post.author.username, post.author.uid)} className="shrink-0">
                 <Avatar src={post.author.avatarUrl} name={post.author.displayName} size="md" />
               </Link>
               <div className="min-w-0">
                 <Link
-                  to={profilePath(post.author.username)}
+                  to={profilePath(post.author.username, post.author.uid)}
                   className="fab-truncate block font-semibold hover:underline"
                 >
                   {post.author.displayName}

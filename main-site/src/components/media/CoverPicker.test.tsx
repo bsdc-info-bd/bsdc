@@ -94,6 +94,12 @@ describe('the cover control a project and an event share', () => {
     expect(screen.getByRole('button', { name: /Choose a cover image/ })).toBeInTheDocument();
   });
 
+  it('locks file selection while the owning form is committing', () => {
+    open({ disabled: true });
+    expect(screen.getByLabelText(labels.choose)).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Choose a cover image/ })).toBeDisabled();
+  });
+
   it('accepts only the image types the contract routes, and says so', () => {
     open();
     const input = screen.getByLabelText(labels.choose);

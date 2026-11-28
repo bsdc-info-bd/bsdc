@@ -137,6 +137,7 @@ describe('matching an address', () => {
       pattern: '/jobs/:slug',
     });
     expect(isEdgeNoindexPath('/SEARCH')).toBe(true);
+    expect(isEdgeNoindexPath('/u/old-member-id')).toBe(true);
     expect(isEdgeNoindexPath('/projects/edit')).toBe(false);
     expect(isEdgeNoindexPath('/projects/my-app/edit')).toBe(true);
   });

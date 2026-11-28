@@ -73,7 +73,7 @@ describe('resultPath', () => {
   });
 
   it('falls back to an id for a member without a username', () => {
-    expect(resultPath(result({ kind: 'person', slug: '', id: 'uid-9' }))).toBe('/u/uid-9');
+    expect(resultPath(result({ kind: 'person', slug: '', id: 'uid-9' }))).toBe('/@uid-9');
   });
 });
 

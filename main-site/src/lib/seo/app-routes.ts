@@ -82,6 +82,7 @@ export const APP_ROUTES: readonly string[] = [
   '/verify/:code',
   '/p/:slug',
   '/tag/:slug',
+  '/u/:uid',
 ];
 
 /** The bare member permalink: /username, which the app also accepts as /@username. */
@@ -159,6 +160,7 @@ const NOINDEX_PREFIXES: readonly string[] = [
   '/auth',
   '/search',
   '/system-check',
+  '/u',
 ];
 
 /**

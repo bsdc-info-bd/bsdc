@@ -103,12 +103,12 @@ export function PostCard({ post, priority = false }: { post: Post; priority?: bo
         <div className="flex items-center gap-2">
           {post.author ? (
             <>
-              <Link to={profilePath(post.author.username)} className="shrink-0">
+              <Link to={profilePath(post.author.username, post.author.uid)} className="shrink-0">
                 <Avatar src={post.author.avatarUrl} name={post.author.displayName} size="sm" />
               </Link>
               <div className="min-w-0">
                 <Link
-                  to={profilePath(post.author.username)}
+                  to={profilePath(post.author.username, post.author.uid)}
                   className="block truncate text-sm font-semibold hover:text-green-700 hover:underline dark:hover:text-green-300"
                 >
                   {post.author.displayName}

@@ -1,11 +1,11 @@
 import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
 import { RequireAuth } from '@/components/auth/RequireAuth';
 import { RequireGuest } from '@/components/auth/RequireGuest';
 import { AppShell } from '@/components/layout/AppShell';
 import { PageSkeleton } from '@/design-system';
-import { ROUTES } from '@/lib/site';
+import { profilePath, ROUTES } from '@/lib/site';
 import RouteErrorBoundary from '@/routes/RouteErrorBoundary';
 
 /* Route-level code splitting keeps the initial bundle small. */
@@ -79,6 +79,11 @@ function Loader() {
 
 function withSuspense(element: JSX.Element): JSX.Element {
   return <Suspense fallback={<Loader />}>{element}</Suspense>;
+}
+
+function LegacyProfileUidRedirect() {
+  const { uid = '' } = useParams();
+  return <Navigate to={profilePath('', uid)} replace />;
 }
 
 const router = createBrowserRouter([
@@ -219,7 +224,10 @@ const router = createBrowserRouter([
       { path: '/p/:slug', element: withSuspense(<PostPage />) },
       { path: '/tag/:slug', element: withSuspense(<TagPage />) },
 
-      // Public member permalink: /@username
+      // Legacy links for members without usernames now resolve to the public UID permalink.
+      { path: '/u/:uid', element: <LegacyProfileUidRedirect /> },
+
+      // Public member permalink: /@username or /@uid until a handle is claimed.
       { path: ':handle', element: withSuspense(<ProfilePage />) },
       { path: '*', element: withSuspense(<NotFoundPage />) },
     ],

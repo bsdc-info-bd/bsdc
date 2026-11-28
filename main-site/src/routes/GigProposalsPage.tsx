@@ -18,7 +18,7 @@ import {
 import { useGigDetail, useGigProposals } from '@/hooks/use-opportunities';
 import { formatNumber, formatRelativeTime } from '@/lib/format';
 import type { GigProposal, ProposalStatus } from '@/lib/opportunities/opportunity-types';
-import { ROUTES, gigPath } from '@/lib/site';
+import { profilePath, ROUTES, gigPath } from '@/lib/site';
 import { selectIsSignedIn } from '@/store/auth-store';
 import { useAuthStore } from '@/store/auth-store';
 
@@ -292,14 +292,12 @@ export default function GigProposalsPage() {
                           />
                         ) : null}
                       </p>
-                      {proposal.username.length > 0 ? (
-                        <Link
-                          to={`/u/${proposal.username}`}
-                          className="text-xs text-green-700 hover:underline"
-                        >
-                          @{proposal.username}
-                        </Link>
-                      ) : null}
+                      <Link
+                        to={profilePath(proposal.username, proposal.freelancerUid)}
+                        className="text-xs text-green-700 hover:underline"
+                      >
+                        @{proposal.username || proposal.freelancerUid}
+                      </Link>
                     </div>
                     <Badge tone={STATUS_TONE[proposal.status]}>
                       {t(`jobs.statuses.${proposal.status}`, { defaultValue: proposal.status })}
